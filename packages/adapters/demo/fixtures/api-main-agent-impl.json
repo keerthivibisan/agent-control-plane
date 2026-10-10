@@ -1,0 +1,116 @@
+{
+  "source": "api-main-agent-impl",
+  "providerSessionId": "d1000000-0000-4000-8000-000000000001",
+  "providerAgentId": "ademo02",
+  "cwd": "/home/user/demo-api",
+  "records": [
+    {
+      "id": "r001",
+      "t": 14,
+      "eventType": "subagent.spawned",
+      "payload": {
+        "parentProviderSessionId": "d1000000-0000-4000-8000-000000000001",
+        "agentId": "ademo02",
+        "agentType": "general-purpose",
+        "description": "Implement the token bucket limiter",
+        "spawnToolUseId": "toolu_demo_0002",
+        "spawnDepth": 1,
+        "model": "claude-demo-small"
+      }
+    },
+    {
+      "id": "r002",
+      "t": 14,
+      "eventType": "session.observed",
+      "payload": {
+        "cwd": "/home/user/demo-api",
+        "gitBranch": "main",
+        "entrypoint": "claude-desktop"
+      }
+    },
+    {
+      "id": "r003",
+      "t": 14,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0151", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r004",
+      "t": 40,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0151",
+        "parentUuid": "demo-u-0151",
+        "messageId": "msg_demo_0151",
+        "requestId": "req_demo_0151",
+        "model": "claude-demo-small",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r005",
+      "t": 40,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0151",
+        "requestId": "req_demo_0151",
+        "model": "claude-demo-small",
+        "tokens": { "input": 15, "output": 95, "cacheCreation": 512, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r006",
+      "t": 40,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0151",
+        "toolName": "Edit",
+        "messageId": "msg_demo_0151"
+      }
+    },
+    {
+      "id": "r007",
+      "t": 62,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0152", "parentUuid": "demo-a-0151", "isMeta": false }
+    },
+    {
+      "id": "r008",
+      "t": 62,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0151", "isError": true }
+    },
+    {
+      "id": "r009",
+      "t": 300,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0152",
+        "parentUuid": "demo-u-0152",
+        "messageId": "msg_demo_0152",
+        "requestId": "req_demo_0152",
+        "model": "claude-demo-small",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r010",
+      "t": 300,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0152",
+        "requestId": "req_demo_0152",
+        "model": "claude-demo-small",
+        "tokens": { "input": 25, "output": 120, "cacheCreation": 0, "cacheRead": 3072 }
+      }
+    },
+    {
+      "id": "r011",
+      "t": 305,
+      "eventType": "subagent.stopped",
+      "payload": { "agentId": "ademo02", "agentType": "general-purpose" }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "source": "api-main-agent-explore",
+  "providerSessionId": "d1000000-0000-4000-8000-000000000001",
+  "providerAgentId": "ademo01",
+  "cwd": "/home/user/demo-api",
+  "records": [
+    {
+      "id": "r001",
+      "t": 13,
+      "eventType": "subagent.spawned",
+      "payload": {
+        "parentProviderSessionId": "d1000000-0000-4000-8000-000000000001",
+        "agentId": "ademo01",
+        "agentType": "Explore",
+        "description": "Survey the existing middleware",
+        "spawnToolUseId": "toolu_demo_0001",
+        "spawnDepth": 1,
+        "model": "claude-demo-small"
+      }
+    },
+    {
+      "id": "r002",
+      "t": 13,
+      "eventType": "session.observed",
+      "payload": {
+        "cwd": "/home/user/demo-api",
+        "gitBranch": "main",
+        "entrypoint": "claude-desktop"
+      }
+    },
+    {
+      "id": "r003",
+      "t": 13,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0101", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r004",
+      "t": 20,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0101",
+        "parentUuid": "demo-u-0101",
+        "messageId": "msg_demo_0101",
+        "requestId": "req_demo_0101",
+        "model": "claude-demo-small",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r005",
+      "t": 20,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0101",
+        "requestId": "req_demo_0101",
+        "model": "claude-demo-small",
+        "tokens": { "input": 20, "output": 120, "cacheCreation": 1024, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r006",
+      "t": 20,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0101",
+        "toolName": "Grep",
+        "messageId": "msg_demo_0101"
+      }
+    },
+    {
+      "id": "r007",
+      "t": 24,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0102", "parentUuid": "demo-a-0101", "isMeta": false }
+    },
+    {
+      "id": "r008",
+      "t": 24,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0101", "isError": false }
+    },
+    {
+      "id": "r009",
+      "t": 135,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0102",
+        "parentUuid": "demo-u-0102",
+        "messageId": "msg_demo_0102",
+        "requestId": "req_demo_0102",
+        "model": "claude-demo-small",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r010",
+      "t": 135,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0102",
+        "requestId": "req_demo_0102",
+        "model": "claude-demo-small",
+        "tokens": { "input": 25, "output": 210, "cacheCreation": 0, "cacheRead": 3072 }
+      }
+    },
+    {
+      "id": "r011",
+      "t": 139,
+      "eventType": "subagent.stopped",
+      "payload": { "agentId": "ademo01", "agentType": "Explore" }
+    }
+  ]
+}

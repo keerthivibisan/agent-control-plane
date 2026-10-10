@@ -1,0 +1,126 @@
+{
+  "source": "web-main",
+  "providerSessionId": "d2000000-0000-4000-8000-000000000003",
+  "providerAgentId": null,
+  "cwd": "/home/user/demo-web",
+  "records": [
+    {
+      "id": "r001",
+      "t": 600,
+      "eventType": "session.observed",
+      "payload": {
+        "cwd": "/home/user/demo-web",
+        "gitBranch": "feature/dark-mode",
+        "entrypoint": "claude-vscode"
+      }
+    },
+    {
+      "id": "r002",
+      "t": 600,
+      "eventType": "record.unrecognized",
+      "payload": { "recordType": "file-history-snapshot" }
+    },
+    {
+      "id": "r003",
+      "t": 602,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0301", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r004",
+      "t": 610,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0301",
+        "parentUuid": "demo-u-0301",
+        "messageId": "msg_demo_0301",
+        "requestId": null,
+        "model": "claude-demo-medium",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r005",
+      "t": 610,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0301",
+        "requestId": null,
+        "model": "claude-demo-medium",
+        "tokens": { "input": 18, "output": 75, "cacheCreation": null, "cacheRead": null }
+      }
+    },
+    {
+      "id": "r006",
+      "t": 610,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0301",
+        "toolName": "Bash",
+        "messageId": "msg_demo_0301"
+      }
+    },
+    {
+      "id": "r007",
+      "t": 640,
+      "eventType": "session.cwd_changed",
+      "payload": { "from": "/home/user/demo-web", "to": "/home/user/demo-web/packages/ui" }
+    },
+    {
+      "id": "r008",
+      "t": 640,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0302", "parentUuid": "demo-a-0301", "isMeta": false }
+    },
+    {
+      "id": "r009",
+      "t": 640,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0301", "isError": false }
+    },
+    {
+      "id": "r010",
+      "t": 700,
+      "eventType": "provider.error",
+      "payload": { "kind": "overloaded_error", "httpStatus": 529 }
+    },
+    {
+      "id": "r011",
+      "t": 760,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0302",
+        "parentUuid": "demo-u-0302",
+        "messageId": "msg_demo_0302",
+        "requestId": "req_demo_0302",
+        "model": "claude-demo-medium",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r012",
+      "t": 760,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0302",
+        "requestId": "req_demo_0302",
+        "model": "claude-demo-medium",
+        "tokens": { "input": null, "output": 240, "cacheCreation": null, "cacheRead": null }
+      }
+    },
+    {
+      "id": "r013",
+      "t": 762,
+      "eventType": "session.titled",
+      "payload": { "title": "Dark mode toggle for the settings page", "titleSource": "ai" }
+    },
+    {
+      "id": "r014",
+      "t": 763,
+      "eventType": "session.turn_ended",
+      "payload": {}
+    }
+  ]
+}

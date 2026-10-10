@@ -1,0 +1,170 @@
+{
+  "source": "api-fork",
+  "providerSessionId": "d1000000-0000-4000-8000-000000000002",
+  "providerAgentId": null,
+  "cwd": "/home/user/demo-api",
+  "records": [
+    {
+      "id": "r001",
+      "t": 5,
+      "eventType": "session.observed",
+      "payload": {
+        "cwd": "/home/user/demo-api",
+        "gitBranch": "main",
+        "entrypoint": "claude-desktop"
+      }
+    },
+    {
+      "id": "r002",
+      "t": 5,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0001", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r003",
+      "t": 12,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0003",
+        "parentUuid": "demo-a-0002",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r004",
+      "t": 12,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "tokens": { "input": 12, "output": 260, "cacheCreation": 2048, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r005",
+      "t": 330,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0004",
+        "parentUuid": "demo-u-0003",
+        "messageId": "msg_demo_0002",
+        "requestId": "req_demo_0002",
+        "model": "claude-demo-large",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r006",
+      "t": 330,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0002",
+        "requestId": "req_demo_0002",
+        "model": "claude-demo-large",
+        "tokens": { "input": 30, "output": 420, "cacheCreation": 512, "cacheRead": 4096 }
+      }
+    },
+    {
+      "id": "r007",
+      "t": 1200,
+      "eventType": "session.started",
+      "payload": { "startSource": "resume", "model": "claude-demo-large" }
+    },
+    {
+      "id": "r008",
+      "t": 1201,
+      "eventType": "session.titled",
+      "payload": { "title": "Rate limiter follow-up: per-route limits", "titleSource": "ai" }
+    },
+    {
+      "id": "r009",
+      "t": 1205,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0201", "parentUuid": "demo-a-0004", "isMeta": false }
+    },
+    {
+      "id": "r010",
+      "t": 1214,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0201",
+        "parentUuid": "demo-u-0201",
+        "messageId": "msg_demo_0201",
+        "requestId": "req_demo_0201",
+        "model": "claude-demo-large",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r011",
+      "t": 1214,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0201",
+        "requestId": "req_demo_0201",
+        "model": "claude-demo-large",
+        "tokens": { "input": 8, "output": 150, "cacheCreation": 300, "cacheRead": 6600 }
+      }
+    },
+    {
+      "id": "r012",
+      "t": 1214,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0201",
+        "toolName": "Bash",
+        "messageId": "msg_demo_0201"
+      }
+    },
+    {
+      "id": "r013",
+      "t": 1236,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0202", "parentUuid": "demo-a-0201", "isMeta": false }
+    },
+    {
+      "id": "r014",
+      "t": 1236,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0201", "isError": false }
+    },
+    {
+      "id": "r015",
+      "t": 1250,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0202",
+        "parentUuid": "demo-u-0202",
+        "messageId": "msg_demo_0202",
+        "requestId": "req_demo_0202",
+        "model": "claude-demo-large",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r016",
+      "t": 1250,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0202",
+        "requestId": "req_demo_0202",
+        "model": "claude-demo-large",
+        "tokens": { "input": 10, "output": 310, "cacheCreation": 120, "cacheRead": 6900 }
+      }
+    },
+    {
+      "id": "r017",
+      "t": 1251,
+      "eventType": "session.turn_ended",
+      "payload": {}
+    }
+  ]
+}

@@ -1,0 +1,216 @@
+{
+  "source": "api-main",
+  "providerSessionId": "d1000000-0000-4000-8000-000000000001",
+  "providerAgentId": null,
+  "cwd": "/home/user/demo-api",
+  "records": [
+    {
+      "id": "r001",
+      "t": 0,
+      "eventType": "session.started",
+      "payload": { "startSource": "startup", "model": "claude-demo-large" }
+    },
+    {
+      "id": "r002",
+      "t": 1,
+      "eventType": "session.observed",
+      "payload": {
+        "cwd": "/home/user/demo-api",
+        "gitBranch": "main",
+        "entrypoint": "claude-desktop"
+      }
+    },
+    {
+      "id": "r003",
+      "t": 2,
+      "eventType": "session.titled",
+      "payload": { "title": "Add rate limiting to the public API", "titleSource": "user" }
+    },
+    {
+      "id": "r004",
+      "t": 5,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0001", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r005",
+      "t": 9,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0001",
+        "parentUuid": "demo-u-0001",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "stopReason": null
+      }
+    },
+    {
+      "id": "r006",
+      "t": 9,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "tokens": { "input": 12, "output": 40, "cacheCreation": 2048, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r007",
+      "t": 11,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0002",
+        "parentUuid": "demo-a-0001",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "stopReason": null
+      }
+    },
+    {
+      "id": "r008",
+      "t": 11,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "tokens": { "input": 12, "output": 180, "cacheCreation": 2048, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r009",
+      "t": 11,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0001",
+        "toolName": "Agent",
+        "messageId": "msg_demo_0001"
+      }
+    },
+    {
+      "id": "r010",
+      "t": 12,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0003",
+        "parentUuid": "demo-a-0002",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r011",
+      "t": 12,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0001",
+        "requestId": "req_demo_0001",
+        "model": "claude-demo-large",
+        "tokens": { "input": 12, "output": 260, "cacheCreation": 2048, "cacheRead": 0 }
+      }
+    },
+    {
+      "id": "r012",
+      "t": 12,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0002",
+        "toolName": "Agent",
+        "messageId": "msg_demo_0001"
+      }
+    },
+    {
+      "id": "r013",
+      "t": 140,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0002", "parentUuid": "demo-a-0003", "isMeta": false }
+    },
+    {
+      "id": "r014",
+      "t": 140,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0001", "isError": false }
+    },
+    {
+      "id": "r015",
+      "t": 310,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0003", "parentUuid": "demo-u-0002", "isMeta": false }
+    },
+    {
+      "id": "r016",
+      "t": 310,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0002", "isError": false }
+    },
+    {
+      "id": "r017",
+      "t": 330,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0004",
+        "parentUuid": "demo-u-0003",
+        "messageId": "msg_demo_0002",
+        "requestId": "req_demo_0002",
+        "model": "claude-demo-large",
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "id": "r018",
+      "t": 330,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0002",
+        "requestId": "req_demo_0002",
+        "model": "claude-demo-large",
+        "tokens": { "input": 30, "output": 420, "cacheCreation": 512, "cacheRead": 4096 }
+      }
+    },
+    {
+      "id": "r019",
+      "t": 331,
+      "eventType": "session.turn_ended",
+      "payload": {}
+    },
+    {
+      "id": "r020",
+      "t": 332,
+      "eventType": "usage.snapshot",
+      "payload": {
+        "kind": "cumulative-snapshot",
+        "scope": "unknown",
+        "byModel": {
+          "claude-demo-large": {
+            "input": 42,
+            "output": 680,
+            "cacheCreation": 2560,
+            "cacheRead": 4096
+          },
+          "claude-demo-small": {
+            "input": 85,
+            "output": 545,
+            "cacheCreation": 1536,
+            "cacheRead": 6144
+          }
+        },
+        "reportedCostUsd": 0.4213
+      }
+    },
+    {
+      "id": "r021",
+      "t": 900,
+      "eventType": "session.ended",
+      "payload": { "reason": "prompt_input_exit" }
+    }
+  ]
+}

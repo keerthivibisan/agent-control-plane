@@ -1,0 +1,110 @@
+{
+  "source": "web-live",
+  "providerSessionId": "d2000000-0000-4000-8000-000000000004",
+  "providerAgentId": null,
+  "cwd": "/home/user/demo-web",
+  "records": [
+    {
+      "id": "r001",
+      "t": 12600,
+      "eventType": "session.started",
+      "payload": { "startSource": "startup", "model": "claude-demo-large" }
+    },
+    {
+      "id": "r002",
+      "t": 12601,
+      "eventType": "session.observed",
+      "payload": { "cwd": "/home/user/demo-web", "gitBranch": "main", "entrypoint": "sdk-cli" }
+    },
+    {
+      "id": "r003",
+      "t": 12602,
+      "eventType": "session.titled",
+      "payload": { "title": "Fix flaky checkout e2e test", "titleSource": "user" }
+    },
+    {
+      "id": "r004",
+      "t": 12605,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0401", "parentUuid": null, "isMeta": false }
+    },
+    {
+      "id": "r005",
+      "t": 12620,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0401",
+        "parentUuid": "demo-u-0401",
+        "messageId": "msg_demo_0401",
+        "requestId": "req_demo_0401",
+        "model": "claude-demo-large",
+        "stopReason": "tool_use"
+      }
+    },
+    {
+      "id": "r006",
+      "t": 12620,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0401",
+        "requestId": "req_demo_0401",
+        "model": "claude-demo-large",
+        "tokens": { "input": 9, "output": 130, "cacheCreation": 1800, "cacheRead": 12000 }
+      }
+    },
+    {
+      "id": "r007",
+      "t": 12620,
+      "eventType": "tool.called",
+      "payload": {
+        "toolUseId": "toolu_demo_0401",
+        "toolName": "Bash",
+        "messageId": "msg_demo_0401"
+      }
+    },
+    {
+      "id": "r008",
+      "t": 12621,
+      "eventType": "session.attention",
+      "payload": { "notificationType": "permission_prompt" }
+    },
+    {
+      "id": "r009",
+      "t": 14300,
+      "eventType": "message.user",
+      "payload": { "uuid": "demo-u-0402", "parentUuid": "demo-a-0401", "isMeta": false }
+    },
+    {
+      "id": "r010",
+      "t": 14300,
+      "eventType": "tool.result",
+      "payload": { "toolUseId": "toolu_demo_0401", "isError": false }
+    },
+    {
+      "id": "r011",
+      "t": 14340,
+      "eventType": "message.assistant",
+      "payload": {
+        "uuid": "demo-a-0402",
+        "parentUuid": "demo-u-0402",
+        "messageId": "msg_demo_0402",
+        "requestId": "req_demo_0402",
+        "model": "claude-demo-large",
+        "stopReason": null
+      }
+    },
+    {
+      "id": "r012",
+      "t": 14340,
+      "eventType": "usage.reported",
+      "payload": {
+        "kind": "per-turn",
+        "messageId": "msg_demo_0402",
+        "requestId": "req_demo_0402",
+        "model": "claude-demo-large",
+        "tokens": { "input": 4, "output": 60, "cacheCreation": 220, "cacheRead": 13800 }
+      }
+    }
+  ]
+}
