@@ -2,10 +2,10 @@
 
 **Owner:** work package P1-B (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
 
-**Status:** **Partially implemented.** Connection setup (`openDatabase`), the migration runner, the
-Phase 1 schema (`0001_observability.sql`), and the repositories (`createRepositories`) exist and are
-tested, as does the transaction helper (`withTransaction`). The Phase 1 queries are still in
-progress in P1-B.
+**Status:** **Implemented (P1-B).** Connection setup (`openDatabase`), the migration runner, the
+Phase 1 schema (`0001_observability.sql`), the repositories (`createRepositories`), the transaction
+helper (`withTransaction`), and the Phase 1 queries (`createQueries`) exist and are tested against
+temp-file databases. Nothing calls them yet: the ingestion pipeline and API are P1-D.
 
 ## Responsibility
 
@@ -65,3 +65,79 @@ Enum-like columns are validated with Zod in TypeScript, not with `CHECK`, becaus
 | `ingestion_checkpoints` | `source_path`                                                          | written in the same transaction as its events                                             |
 
 There are no Phase 3 tables (domain-model §3).
+
+## Usage
+
+```ts
+import { createQueries, createRepositories, openDatabase, withTransaction } from '@acp/db';
+
+const db = openDatabase(`${dataDir}/acp.sqlite`); // migrates on open
+const repos = createRepositories(db); // { projects, sessions, edges, events, usage, snapshots, checkpoints }
+const queries = createQueries(db);
+
+withTransaction(db, () => {
+  for (const event of batch.events) {
+    const { inserted, id } = repos.events.insertIfNew({ event, sessionId, projectId });
+    if (!inserted) continue; // projections only for newly inserted events
+    // ... project sessions, edges, usage observations/records, snapshots
+  }
+  repos.checkpoints.set(batch.nextCheckpoint); // same transaction as the events
+});
+```
+
+### Repositories
+
+- **projects**: `insert`, `getById`, `getByRootPath`, `list`, `rename`, `remove`. A duplicate root
+  throws `DbError` with code `conflict`.
+- **sessions**: `upsert` by `SessionKey` returns `{ id, created }`. Merge rules:
+  - `firstSeenAt` takes the MIN; `lastObservedAt` takes the MAX;
+  - `lastEventAt`, `endedAt`, and `lastAttentionAt` take the MAX and ignore nulls;
+  - for `launchCwd`, `entrypoint`, `agentType`, `description`, and `projectId`, the first non-null
+    value wins (use `setProject` to reassign);
+  - for `title`, `gitBranch`, and `providerVersion`, the latest non-null value wins;
+  - `endReason` follows the latest `endedAt`;
+  - `metadata` is merged as a JSON merge-patch;
+  - `null` never clears a stored value.
+
+  Also `getById`, `getByKey`, `getByIds`, `listByProviderSession`, `listUnassigned`, `setProject`.
+
+- **edges**: `upsert` by `(kind, child)` validates against core's `SessionEdgeSchema` rules. It
+  unions evidence (`observed` beats `derived`) and returns `inserted | evidence-added | unchanged |
+conflict`. A different parent is recorded in `edge_conflicts`, and the edge is left unchanged.
+  Also `getByChild`, `listChildren`, `listForSessions`, `listConflicts`.
+- **events**: `insertIfNew` returns `{ inserted, id }` (`ON CONFLICT(dedup_key) DO NOTHING`).
+  Also `getById`, `getByDedupKey`, `listRecent` (newest first, `beforeId` cursor), `listAfter`
+  (SSE replay), `maxId`. Events are validated with `NormalizedEventSchema` on write and read.
+  Unknown payload keys are stripped.
+- **usage**: `insertObservation`, `listObservationsByMessage` (each row carries its session's
+  `SessionKey` for attribution), `upsertRecord` (stable id), `getRecord`, `deleteRecord`,
+  `listRecordsForSession`.
+- **snapshots**: `insert`, `latestForSession`, `listForSession`. The cost is returned as
+  `Sourced<number>`: `estimated`, or `unavailable` when not reported.
+- **checkpoints**: implements core's `CheckpointStore` (`get`), plus `set`, `list`, `remove`.
+
+All timestamps are normalized to UTC `...Z` (millisecond precision) on write. Inputs that fail
+validation throw `DbError('invalid_input')`. Stored values that fail validation on read throw
+`StoredValueError`.
+
+### Queries
+
+- `listSessions(filter, { limit, cursor })` uses keyset pagination ordered by
+  `(COALESCE(last_event_at, '') DESC, id DESC)`. Sessions without a last event come last.
+  - Filters: `projectId` (or `null` for no project), `provider`, `model` (sessions with a usage
+    record of that model), `search` (an id substring; LIKE wildcards are literal), and
+    `topLevelOnly`.
+  - Status inputs: `lastEventAfter`, `lastEventBefore`, and `ended`.
+  - Status is derived in TypeScript from the evidence columns on each row.
+- `modelsBySession(ids)`: the distinct models in each session's records.
+- `sessionTree(rootId)`: a recursive CTE over `subagent` edges. It returns the root first, with
+  `depth` and `parentSessionId`, and is safe against cycles.
+- `directUsage(id)` and `directUsageBySession(ids)`: per-category `SUM`. A category stays `null`
+  when every value is null, or when there are no records. `recordsWithUnavailable` is
+  `COUNT(*) - COUNT(col)`.
+- `aggregateUsage(rootId)`: the direct usage of the session and its `subagent` descendants.
+  Continuation children are excluded.
+- `usageSummary(groupBy, filter)`: grouped by `project`, `session`, `model`, or UTC `day`. Every
+  group sums records directly, so children are never double-counted. The `null` key groups records
+  with no project, model, or time.
+- Recent events: `repos.events.listRecent` / `listAfter`.
