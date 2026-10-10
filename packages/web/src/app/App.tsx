@@ -1,10 +1,16 @@
+import { ButtonLink } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
 import { CommandCenter } from '../features/command-center/CommandCenter';
+import { DataHealthPage } from '../features/health/DataHealthPage';
 import { ProjectPage } from '../features/project/ProjectPage';
+import { ProjectsList } from '../features/projects/ProjectsList';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
+import { SetupPage } from '../features/setup/SetupPage';
+import { EMPTY, PAGES } from '../lib/copy';
 import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
-import { useRoute, type Route } from '../lib/router';
+import { href, useRoute, type Route } from '../lib/router';
 import { browserEventSource, useEventStream, type EventSourceFactory } from '../lib/useEventStream';
 import { UsageAnalytics } from '../features/usage/UsageAnalytics';
 import { Shell } from './Shell';
@@ -17,15 +23,27 @@ function Screen({ route }: { route: Route }) {
       return <SessionExplorer search={route.params} />;
     case 'session':
       return <SessionDetail key={route.id} id={route.id} />;
+    case 'projects':
+      return <ProjectsList />;
     case 'project':
       return <ProjectPage key={route.id} id={route.id} />;
+    case 'setup':
+      return <SetupPage />;
+    case 'health':
+      return <DataHealthPage />;
     case 'usage':
       return <UsageAnalytics search={route.params} />;
-    default:
+    case 'not-found':
       return (
-        <p className="text-dim">
-          No screen at this address. <a href="#/">Go to the Command Center</a>.
-        </p>
+        <EmptyState
+          title={EMPTY.notFound.title}
+          text={EMPTY.notFound.text}
+          action={
+            <ButtonLink href={href.home()} variant="primary">
+              Go to {PAGES.overview.title}
+            </ButtonLink>
+          }
+        />
       );
   }
 }

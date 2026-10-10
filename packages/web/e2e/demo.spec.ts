@@ -73,10 +73,10 @@ async function open(page: Page, hash: string) {
   await expect(page.getByTestId('demo-banner')).toBeVisible();
 }
 
-test('DEMO banner and demo mode are always visible', async ({ page }) => {
-  for (const hash of ['/', '/sessions', '/usage']) {
+test('sample-data banner and demo mode are always visible', async ({ page }) => {
+  for (const hash of ['/', '/sessions', '/usage', '/projects', '/setup', '/health']) {
     await open(page, hash);
-    await expect(page.getByTestId('demo-banner')).toContainText('DEMO DATA');
+    await expect(page.getByTestId('demo-banner')).toContainText("You're looking at sample data");
     await expect(page.getByTestId('server-status')).toContainText('demo mode');
   }
 });
