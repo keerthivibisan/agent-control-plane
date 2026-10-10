@@ -13,6 +13,7 @@ import type {
 import type { StreamNoticeDto } from '@acp/core/api';
 import { createQueries, createRepositories, openDatabase, type AcpDatabase } from '@acp/db';
 import { silentLogger } from '../src/logger.js';
+import { createNotifier } from '../src/notifier.js';
 import { createPipeline } from '../src/pipeline/ingest.js';
 
 const cleanups: (() => void)[] = [];
@@ -37,14 +38,19 @@ export function setupPipeline(dbPath = join(tempDir(), 'acp.sqlite')) {
   const repos = createRepositories(db);
   const queries = createQueries(db);
   const notices: StreamNoticeDto[] = [];
+  const notifier = createNotifier();
+  const publish = (n: StreamNoticeDto) => {
+    notices.push(n);
+    notifier.publish(n);
+  };
   const pipeline = createPipeline({
     db,
     repos,
     logger: silentLogger,
     now: () => new Date(at(3600)),
-    publish: (n) => notices.push(n),
+    publish,
   });
-  return { db, dbPath, repos, queries, pipeline, notices };
+  return { db, dbPath, repos, queries, pipeline, notices, notifier, publish };
 }
 
 export type TestEnvelope = {
@@ -166,7 +172,11 @@ export const API_NOW = new Date('2026-10-10T08:05:00.000Z');
 
 /** The full app over a temp database, with the demo adapter available but nothing ingested yet. */
 export async function setupApp(
-  options: { ingestDemo?: boolean; normalizeRoot?: (p: string) => Promise<string> } = {},
+  options: {
+    ingestDemo?: boolean;
+    normalizeRoot?: (p: string) => Promise<string>;
+    hookAdapter?: ObservationAdapter;
+  } = {},
 ) {
   const { createApp } = await import('../src/app.js');
   const { loadConfig } = await import('../src/config.js');
@@ -194,10 +204,27 @@ export async function setupApp(
     hookState,
     claudeDir: config.claudeDir,
     normalizeRoot: options.normalizeRoot ?? ((p) => Promise.resolve(p)),
-    publish: (n) => base.notices.push(n),
+    publish: base.publish,
     requestPoll: () => void polls.push(1),
   });
-  const app = createApp({ config, logger: silentLogger, services });
+  const notifier = base.notifier;
+  const hookToken = 'a'.repeat(64);
+  const hookAdapter = options.hookAdapter;
+  const app = createApp({
+    config,
+    logger: silentLogger,
+    services,
+    stream: { repos: base.repos, notifier, heartbeatMs: 20 },
+    hooks: {
+      token: hookToken,
+      adapter: hookAdapter,
+      pipeline: base.pipeline,
+      hookState,
+      requestPoll: () => void polls.push(1),
+      logger: silentLogger,
+      now: () => API_NOW,
+    },
+  });
 
   if (options.ingestDemo !== false) {
     base.repos.projects.insert({ name: 'demo-api', rootPath: '/home/user/demo-api' });
@@ -209,5 +236,5 @@ export async function setupApp(
       base.pipeline.ingestBatch(b);
     base.notices.length = 0;
   }
-  return { ...base, app, config, adapter, polls, hookState, services };
+  return { ...base, app, config, adapter, polls, hookState, services, hookToken };
 }
