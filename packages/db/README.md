@@ -4,7 +4,8 @@
 
 **Status:** **Partially implemented.** Connection setup (`openDatabase`), the migration runner, the
 Phase 1 schema (`0001_observability.sql`), and the repositories (`createRepositories`) exist and are
-tested. The transaction helper and queries are still in progress in P1-B.
+tested, as does the transaction helper (`withTransaction`). The Phase 1 queries are still in
+progress in P1-B.
 
 ## Responsibility
 
