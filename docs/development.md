@@ -55,7 +55,15 @@ Scripts: `"build": "tsc -p tsconfig.build.json"`, `"typecheck": "tsc -p tsconfig
 - **The `development` export condition** lets TypeScript (`customConditions` in the base tsconfig),
   Vite, and Vitest resolve workspace packages to their TypeScript source. You don't need to build
   dependencies first. In package `vitest.config.ts` and `vite.config.ts`, set
-  `resolve.conditions: ['development', ...]` explicitly when importing workspace packages.
+  `resolve.conditions: ['development', ...]` explicitly when importing workspace packages. Verify
+  this with a test that imports the dependency.
+- **Build configs resolve to `dist`.** A package that depends on another workspace package sets
+  `"customConditions": []` in its `tsconfig.build.json`. Otherwise `tsc` pulls the dependency's `.ts`
+  source into the program and fails with "not under rootDir". Root `pnpm build` runs in dependency
+  order. For one package, use `pnpm --filter @acp/<name>... build` (the trailing `...` builds its
+  dependencies first).
+- **Node packages** (`db`, `adapters/*`, `server`) set `"types": ["node"]` in `tsconfig.json`.
+  `core` keeps `"types": []`.
 - **Server:** dev runs `node --conditions=development --import tsx src/main.ts`. Build compiles with
   `tsc` to `dist`, and production runs on the built `dist` of the workspace libraries.
 - **Web:** Vite dev server on port 5173, which proxies `/api` to the server. The production build is
