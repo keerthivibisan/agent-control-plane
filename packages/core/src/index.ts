@@ -7,3 +7,6 @@ export * from './events/normalized-event.js';
 export * from './usage/usage.js';
 export * from './sessions/session.js';
 export type * from './adapters/contract.js';
+export * from './sessions/session-key.js';
+export * from './usage/selection.js';
+export * from './usage/attribution.js';
