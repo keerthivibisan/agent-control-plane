@@ -53,7 +53,7 @@ describe('usage params', () => {
     expect(toUsageQuery({ ...p, to: '2026-10-02' }, 'day')).toEqual({
       groupBy: 'day',
       from: '2026-10-01T00:00:00.000Z',
-      to: '2026-10-02T23:59:59.999Z',
+      to: '2026-10-03T00:00:00.000Z',
       projectId: undefined,
     });
   });

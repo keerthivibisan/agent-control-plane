@@ -30,12 +30,17 @@ export function usageHref(p: UsageParams): string {
   return href.usage({ ...p });
 }
 
+/** Start of the UTC day after `day`. The server's `to` bound is exclusive. */
+function nextDayStart(day: string): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + 86_400_000).toISOString();
+}
+
 /** The range is inclusive of both UTC days. */
 export function toUsageQuery(p: UsageParams, groupBy: UsageQuery['groupBy']): UsageQuery {
   return {
     groupBy,
     from: p.from ? `${p.from}T00:00:00.000Z` : undefined,
-    to: p.to ? `${p.to}T23:59:59.999Z` : undefined,
+    to: p.to ? nextDayStart(p.to) : undefined,
     projectId: p.projectId,
   };
 }
