@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { UsageTotalsDtoSchema } from '../src/api/index.js';
 import type {
   CumulativeUsageSnapshot,
   SessionEdge,
@@ -231,5 +232,19 @@ describe('aggregateUsage (usage-accounting §6, A3)', () => {
     const edges = chain.map((child, i) => subagent(i === 0 ? root : (chain[i - 1] ?? root), child));
     const agg = aggregateUsage(root, direct(chain.map((k) => [k, t(1, 1)])), edges);
     expect(agg.tokens.output).toBe(20_000);
+  });
+});
+
+describe('API compatibility (@acp/core/api)', () => {
+  it('UsageTotals and AggregateUsage map onto UsageTotalsDto by adding derived provenance', () => {
+    const totals = sumTokenCounts([
+      allNull,
+      { input: 1, output: 2, cacheCreation: 3, cacheRead: 4 },
+    ]);
+    const agg = aggregateUsage(key('root'), direct([[key('root'), totals]]), []);
+    const expected = { ...totals, provenance: 'derived' };
+    expect(UsageTotalsDtoSchema.parse({ ...totals, provenance: 'derived' })).toEqual(expected);
+    // Extra diagnostic fields (sessionCount, cycleDetected) are stripped by the DTO schema.
+    expect(UsageTotalsDtoSchema.parse({ ...agg, provenance: 'derived' })).toEqual(expected);
   });
 });
