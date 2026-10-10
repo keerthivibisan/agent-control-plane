@@ -1,3 +1,5 @@
+import type { AdapterDiagnostics } from '@acp/core';
+
 /**
  * Per-file problems and record counts (docs/provider-adapters.md §8). The core `Checkpoint` has no
  * error field, so file-level errors are surfaced here instead; the server exposes them in its
@@ -27,8 +29,12 @@ export interface VersionRecordCounts {
   unrecognized: number;
 }
 
-export interface ClaudeCodeDiagnostics {
-  /** Known record types skipped on purpose (core `AdapterDiagnostics.ignoredRecords`). */
+/** The core `AdapterDiagnostics` (ADR-0011) plus per-version record counts. */
+export interface ClaudeCodeDiagnostics extends AdapterDiagnostics {
+  /**
+   * Records of known types skipped on purpose, by record type, since the adapter was created (core
+   * `AdapterDiagnostics.ignoredRecords`). They are also counted in `recordsByVersion.total`.
+   */
   ignoredRecords: Record<string, number>;
   /** Problems found by the most recent poll or discovery scan. */
   fileIssues: FileIssue[];
@@ -41,6 +47,7 @@ export interface ClaudeCodeDiagnostics {
 export class DiagnosticsCollector {
   private issues = new Map<string, FileIssue>();
   private readonly versions = new Map<string, VersionRecordCounts>();
+  private readonly ignored = new Map<string, number>();
   private parseErrorCount = 0;
 
   /** Starts a new scan; issues from the previous scan are dropped. */
@@ -60,6 +67,11 @@ export class DiagnosticsCollector {
     this.versions.set(key, counts);
   }
 
+  /** A record of a known, deliberately ignored type (record-types.ts `IGNORED_RECORD_TYPES`). */
+  ignoredRecord(recordType: string): void {
+    this.ignored.set(recordType, (this.ignored.get(recordType) ?? 0) + 1);
+  }
+
   parseError(): void {
     this.parseErrorCount += 1;
   }
@@ -77,7 +89,9 @@ export class DiagnosticsCollector {
           .map(([k, v]) => [k, { ...v }]),
       ),
       parseErrors: this.parseErrorCount,
-      ignoredRecords: {},
+      ignoredRecords: Object.fromEntries(
+        [...this.ignored.entries()].sort(([a], [b]) => (a < b ? -1 : 1)),
+      ),
     };
   }
 }

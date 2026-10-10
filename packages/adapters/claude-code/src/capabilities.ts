@@ -5,7 +5,7 @@ import type { ProviderCapabilities } from '@acp/core';
  * adapter cannot see or has not verified; none describes planned behavior as working.
  */
 export const CLAUDE_CODE_LIMITATIONS: readonly string[] = Object.freeze([
-  'The transcript format is internal to Claude Code and not a stable API. Only allowlisted record types are read; unrecognized records are counted per runtime version and never interpreted.',
+  'The transcript format is internal to Claude Code and not a stable API. Only allowlisted record types are read; known record types that carry nothing the control plane uses are counted as ignored, and unrecognized records are counted per runtime version; neither is interpreted.',
   'Hooks are opt-in. Without them a session never reaches "ended" and becomes "stale" instead. Hook payload field names (notification_type, old_cwd/new_cwd, agent_id, agent_transcript_path) come from documentation and synthetic fixtures; real payloads have not been captured.',
   'Hook deliveries with an identical body and no tool_use_id share one key and are stored once, so a repeated identical Stop or Notification does not add a new event.',
   'The scope of cumulative cost-state snapshots (main thread only, or including subagents and auxiliary calls) is unknown, and their per-model field names are unverified. Snapshots are shown, never summed.',

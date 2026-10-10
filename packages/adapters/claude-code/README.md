@@ -24,7 +24,7 @@ await adapter.capabilities();
 await adapter.discoverCandidates(roots);
 for await (const batch of adapter.poll(roots, checkpoints)) { /* commit events + nextCheckpoint */ }
 adapter.normalizeHook(body, receivedAt); // throws HookPayloadError on a bad body
-adapter.diagnostics(); // per-file issues, records by runtime version, parse errors
+adapter.diagnostics(); // core AdapterDiagnostics (file issues, ignored records by type, parse errors) + records by version
 hookSettingsSnippet({ port, tokenEnvVar }); // JSON text for the user to paste; writes nothing
 ```
 

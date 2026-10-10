@@ -155,6 +155,41 @@ describe('scenario 8: unknown record types', () => {
     expect(observed.map((e) => (e.payload as { cwd: string }).cwd)).toEqual(['/home/user/project']);
     expect(events.some((e) => e.eventType === 'session.cwd_changed')).toBe(false);
   });
+
+  it('counts known, ignored types in diagnostics and reports only the rest (ADR-0011)', async () => {
+    const { events, diagnostics } = await ingestScenario('08-unknown-record-types');
+    const reported = events
+      .flatMap((e) => (e.eventType === 'record.unrecognized' ? [e.payload.recordType] : []))
+      .sort();
+    // Uncertain types stay unrecognized (docs/provider-adapters.md §4.4).
+    expect(reported).toEqual([
+      'agent-name',
+      'atis-latch',
+      'brand-new-type-from-the-future',
+      'bridge-session',
+      'frame-link',
+      'mode',
+      'relocated',
+      'summary',
+      'system:compact_boundary',
+    ]);
+    expect(diagnostics.snapshot().ignoredRecords).toEqual({
+      'artifact-autoreact-ledger': 1,
+      'artifact-comment-monitor': 1,
+      attachment: 1,
+      'file-history-delta': 1,
+      'file-history-snapshot': 1,
+      'last-prompt': 1,
+      'queue-operation': 1,
+      'system:stop_hook_summary': 1,
+    });
+    // Ignored records emit nothing at all, so none of their fields can leak.
+    const counts = diagnostics.snapshot().recordsByVersion;
+    const total = Object.values(counts).reduce((n, c) => n + c.total, 0);
+    const unrecognized = Object.values(counts).reduce((n, c) => n + c.unrecognized, 0);
+    expect(total).toBe(18);
+    expect(unrecognized).toBe(9);
+  });
 });
 
 describe('scenario 9: cost-state', () => {

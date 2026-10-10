@@ -95,10 +95,41 @@ The adapter never writes to the Claude data directory and never edits Claude Cod
    | `cost-state`                       | `usage.snapshot` (`scope: unknown`)                                                                                        |
    | first record with `cwd`            | `session.observed`; a later different `cwd` gives `session.cwd_changed`                                                    |
    | `custom-title` / `ai-title`        | `session.titled` (redacted, at most 200 chars; `titleSource` user or ai)                                                   |
+   | known, ignored types (below)       | no event; counted by type in `diagnostics().ignoredRecords` (ADR-0011)                                                     |
    | **anything else**                  | `record.unrecognized` with `recordType` only                                                                               |
 
    Records such as `bridge-session` and `artifact-autoreact-ledger` contain account and organization
-   ids. They fall into the last row and **their fields are never read**.
+   ids. They fall into the last two rows and **their fields are never read**.
+
+   **Known, ignored record types [implemented].** The P1-F real-data run counted 12,601
+   `record.unrecognized` events across 14 types ([research note](research/p1-f-real-data-2026-10-10.md)).
+   Each type was classified from its **name, its count, the fact that usage totals matched the
+   reference without it, and public knowledge of Claude Code features only**. No record content was
+   read to decide (assumption: the names mean what they say). A type is ignored only when it clearly
+   carries no usage, no session lifecycle, and no relationship; anything uncertain stays
+   unrecognized, so a change in meaning stays visible. Ignored records are read for `type` only (a
+   `system` record still applies its envelope `cwd`/`version`), emit no event, and are counted in
+   `recordsByVersion.total` and `ignoredRecords`.
+
+   | Type (count in P1-F)             | Decision         | Why                                                                                                                 |
+   | -------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+   | `attachment` (7,860)             | ignored          | Context attached to a user turn (files, reminders, hook output): content only; the turn itself is the `user` record |
+   | `last-prompt` (2,089)            | ignored          | The last prompt text kept for resume: content only                                                                  |
+   | `queue-operation` (1,208)        | ignored          | Queued-input bookkeeping (enqueue/dequeue of typed input): content, no usage or lifecycle the control plane uses    |
+   | `file-history-snapshot` (333)    | ignored          | File checkpoint backups for rewind: file state, no usage                                                            |
+   | `file-history-delta` (267)       | ignored          | Incremental file checkpoint data, same feature as above                                                             |
+   | `system:stop_hook_summary` (410) | ignored          | Summary of Stop hooks that ran; turn end is already visible from the transcript and the `Stop` hook                 |
+   | `artifact-comment-monitor` (2)   | ignored          | Artifact comment subscription state; carries account ids; unrelated to sessions                                     |
+   | `artifact-autoreact-ledger` (1)  | ignored          | Artifact auto-reaction ledger; carries account ids; unrelated to sessions                                           |
+   | `frame-link` (401)               | **unrecognized** | Meaning unknown; a "link" may express a relationship between sessions or frames                                     |
+   | `system:compact_boundary` (7)    | **unrecognized** | Marks a compaction, a session lifecycle point that a later WP may want to show                                      |
+   | `relocated` (2)                  | **unrecognized** | Suggests the session or transcript moved: possible lifecycle or continuation evidence                               |
+   | `agent-name` (6)                 | **unrecognized** | Possibly a session or agent name, close to titles                                                                   |
+   | `mode` (5)                       | **unrecognized** | Probably a permission or plan mode switch, but not confirmed                                                        |
+   | `atis-latch` (10)                | **unrecognized** | Meaning unknown                                                                                                     |
+
+   With this list, the P1-F project would have shown 431 unrecognized records instead of 12,601
+   (computed from the counts above, not re-run).
 
 5. **Content minimization.** Message text, thinking, tool inputs, and tool outputs are never copied
    into events (ADR-0009). Only identifiers, names, counts, model, and timestamps are copied.
@@ -214,10 +245,14 @@ settings JSON as text. Both come from `src/index.ts`. Goldens for scenarios 1-16
 - **Titles and descriptions** use the core `redact()`, whitespace collapse, and a 200 code point cap.
 - **Non-`user`/`assistant`/`system` records** are identified by `type` only. Their other fields,
   including a `cwd`, are never read. A `system` record that is not `api_error` becomes
-  `record.unrecognized` with `recordType: system:<subtype>`.
-- **Diagnostics.** The core `Checkpoint` has no error field, so per-file issues (size cap, symlink
-  escape, I/O error, `invalid-meta`) are exposed through `adapter.diagnostics()`, with paths relative
-  to the Claude data root. Schema-invalid complete lines are added to the checkpoint's `parseErrors`.
+  `record.unrecognized` with `recordType: system:<subtype>`, unless the type is a known, ignored one
+  (§4.4).
+- **Diagnostics** (core `AdapterDiagnostics`, ADR-0011). The core `Checkpoint` has no error field, so
+  per-file issues (size cap, symlink escape, I/O error, `invalid-meta`) are exposed through
+  `adapter.diagnostics()`, with paths relative to the Claude data root. It also returns
+  `ignoredRecords` (counts by type, §4.4), `parseErrors`, and the Claude-specific
+  `recordsByVersion`. Schema-invalid complete lines are added to the checkpoint's `parseErrors`.
+  Counts are in memory since the adapter was created.
 - **Meta and unchanged files** are skipped by checkpoint (identity, size, mtime).
 
 ### 10.2 Unverified assumptions (all synthetic-fixture based)

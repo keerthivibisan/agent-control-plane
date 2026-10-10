@@ -179,6 +179,7 @@ export class TranscriptIngestor {
           continue;
         }
         d.record(result.version, result.unrecognized);
+        if (result.ignored !== undefined) d.ignoredRecord(result.ignored);
         events.push(...result.events);
       }
       for (let i = readerErrors; i < batch.nextCheckpoint.parseErrors; i++) d.parseError();

@@ -38,7 +38,8 @@ These cover docs/usage-accounting.md §7 and provider-adapters §5:
 5. A nested subagent, `spawnDepth: 2` (**synthetic**; not observed in real data).
 6. A partial last line (no trailing newline).
 7. A truncated or replaced file (two versions, `v1/` and `v2/`).
-8. Unknown record types, including a `bridge-session`-like record whose fields must not be read.
+8. Unknown record types, including a `bridge-session`-like record whose fields must not be read,
+   and known, ignored types that emit no event and are counted in `diagnostics().ignoredRecords`.
 9. `cost-state` cumulative snapshots.
 10. A `cwd` change within a session.
 11. An `api_error` system record; an assistant line without `requestId`; a `<synthetic>` model line.

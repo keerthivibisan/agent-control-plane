@@ -1,7 +1,12 @@
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { deriveSubagentEdge, NormalizedEventSchema } from '@acp/core';
-import type { NormalizedEvent, SubagentMetaEvidence, ToolCallSighting } from '@acp/core';
+import type {
+  AdapterDiagnostics,
+  NormalizedEvent,
+  SubagentMetaEvidence,
+  ToolCallSighting,
+} from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { createClaudeCodeAdapter, hookSettingsSnippet, HookPayloadError } from '../src/index.js';
 import {
@@ -165,6 +170,20 @@ describe('diagnostics', () => {
     await drain(adapter);
     const counts = adapter.diagnostics().recordsByVersion;
     expect(Object.values(counts).reduce((n, c) => n + c.unrecognized, 0)).toBeGreaterThan(0);
+  });
+
+  it('satisfies the core AdapterDiagnostics shape with ignored record counts', async () => {
+    const { adapter } = await adapterFor('08-unknown-record-types');
+    expect(adapter.diagnostics().ignoredRecords).toEqual({});
+    const { store } = await drain(adapter);
+    const core: AdapterDiagnostics = adapter.diagnostics();
+    expect(core.parseErrors).toBe(0);
+    expect(core.fileIssues).toEqual([]);
+    expect(core.ignoredRecords.attachment).toBe(1);
+    expect(Object.keys(core.ignoredRecords)).toHaveLength(8);
+    // A second poll from the committed checkpoints reads nothing new; the counts do not grow.
+    await drain(adapter, store);
+    expect(adapter.diagnostics().ignoredRecords).toEqual(core.ignoredRecords);
   });
 
   it('skips files over the size cap and reports them without content or absolute paths', async () => {

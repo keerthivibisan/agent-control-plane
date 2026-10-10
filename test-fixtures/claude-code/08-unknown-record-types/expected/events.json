@@ -12,79 +12,13 @@
       "channel": "transcript",
       "providerVersion": null,
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 0,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:8716d6eff8bfda116f789ddec04b196d5aa5767d1598968e86c33c58182b6938#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "file-history-snapshot"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": null,
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 210,
+      "byteOffset": 369,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:5bf1286f82730c3554f278d1ed57123ceeba16b7e564a298338aa22db7d98d7b#unrecognized",
     "eventType": "record.unrecognized",
     "payload": {
       "recordType": "bridge-session"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": null,
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 475,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:8a412a118c7ad6d870fe4fb57888f5b92eb41d1116a786024c87095482fd0ae3#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "artifact-autoreact-ledger"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": null,
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 620,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:465dce8d99fc8a4923cd60a117d4fd2aca290da17531d9781d04f4f423d0ec17#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "queue-operation"
     }
   },
   {
@@ -100,7 +34,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 782,
+      "byteOffset": 941,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:08000002-0000-4000-8000-000000000002#session",
@@ -124,7 +58,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 782,
+      "byteOffset": 941,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:08000002-0000-4000-8000-000000000002#user",
@@ -148,51 +82,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1139,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:9c48862c591a635348a74fa38b1763fa8b80f6bf392a5be988cb0fcf2c55172b#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "attachment"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": "2.1.263",
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1509,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:7e7e221fe4eb7bff66baaa01f6e58f37e3feee5b48ad771558ee6a2954cdea34#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "last-prompt"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": "2.1.263",
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1609,
+      "byteOffset": 1768,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:ff6472a84530b2ecf75c73fa825ce90ab5167e36ec000c79fca96c52be7cec8b#unrecognized",
@@ -214,7 +104,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1707,
+      "byteOffset": 1866,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:26a16a0d07adf4856265759cbe3a5af8b7141e48640750aa60be76df85cbcdc7#unrecognized",
@@ -236,7 +126,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1791,
+      "byteOffset": 1950,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:e536af19ef325c12a9399d005c59c423c47b659c4914b3ef3563667bd3920fbd#unrecognized",
@@ -258,7 +148,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1887,
+      "byteOffset": 2046,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:e9318b9bfeeda34f3227700dfa684121259adee0d68e91c0344ef0595065ea1b#unrecognized",
@@ -280,35 +170,13 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 1990,
+      "byteOffset": 2149,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:dba0bf661fba0a05f49906aa495430d0ba9e5e70eb3f0f76bbec8542fc1e2327#unrecognized",
     "eventType": "record.unrecognized",
     "payload": {
       "recordType": "atis-latch"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": null,
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": null,
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": "2.1.263",
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 2063,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:d881e18334afb8948a4b41f79ff2ec31971a38168317d5a15ee3108f4a90a551#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "artifact-comment-monitor"
     }
   },
   {
@@ -324,35 +192,13 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 2152,
+      "byteOffset": 2311,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:08000004-0000-4000-8000-000000000004#unrecognized",
     "eventType": "record.unrecognized",
     "payload": {
       "recordType": "system:compact_boundary"
-    }
-  },
-  {
-    "schemaVersion": 1,
-    "provider": "claude-code",
-    "sourceEventId": "08000005-0000-4000-8000-000000000005",
-    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
-    "providerAgentId": null,
-    "occurredAt": "2026-10-01T10:00:18.000Z",
-    "observedAt": "2026-10-10T12:00:00.000Z",
-    "provenance": "observed",
-    "source": {
-      "channel": "transcript",
-      "providerVersion": "2.1.263",
-      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 2533,
-      "hookEvent": null
-    },
-    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:08000005-0000-4000-8000-000000000005#unrecognized",
-    "eventType": "record.unrecognized",
-    "payload": {
-      "recordType": "system:stop_hook_summary"
     }
   },
   {
@@ -368,7 +214,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 2913,
+      "byteOffset": 3072,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:762f2d8c3d85ad367c626dd61cf7cdcb3a56d088f723e3fc8fa5641cb227badc#unrecognized",
@@ -390,7 +236,7 @@
       "channel": "transcript",
       "providerVersion": "2.1.263",
       "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
-      "byteOffset": 3005,
+      "byteOffset": 3164,
       "hookEvent": null
     },
     "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:h:e97abcec1c8391d070d0fcace11efa8f8cf6218f43ad492d18b0c46ba73fcf51#unrecognized",

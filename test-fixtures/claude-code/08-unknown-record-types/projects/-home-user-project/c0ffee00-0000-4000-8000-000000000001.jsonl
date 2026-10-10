@@ -1,4 +1,5 @@
 {"type":"file-history-snapshot","messageId":"08000001-0000-4000-8000-000000000001","snapshot":{"messageId":"<redacted>","trackedFileBackups":{},"timestamp":"2026-10-01T10:00:03.000Z"},"isSnapshotUpdate":false}
+{"type":"file-history-delta","messageId":"08000001-0000-4000-8000-000000000001","delta":{"path":"/home/user/never-read/file.ts","backup":"<redacted-SECRET>"}}
 {"type":"bridge-session","accountUuid":"acc00000-fake-4000-8000-00000000acc0","organizationUuid":"0rg00000-fake-4000-8000-0000000000rg","cwd":"/home/user/never-read","sessionId":"c0ffee00-0000-4000-8000-000000000001","bridgeToken":"<redacted-SECRET-bridge-token>"}
 {"type":"artifact-autoreact-ledger","accountUuid":"acc00000-fake-4000-8000-00000000acc0","entries":["<redacted>"],"cwd":"/home/user/never-read"}
 {"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-01T10:00:06.000Z","content":"<redacted>","sessionId":"c0ffee00-0000-4000-8000-000000000001"}

@@ -8,6 +8,7 @@ import { cleanFreeText } from './redact.js';
 import {
   COST_STATE_RECORD_TYPE,
   ENVELOPE_RECORD_TYPES,
+  IGNORED_RECORD_TYPES,
   TITLE_RECORD_TYPES,
 } from './record-types.js';
 
@@ -39,6 +40,8 @@ export type LineResult =
       /** Runtime version attributed to the record, for diagnostics. */
       version: string | null;
       unrecognized: boolean;
+      /** Set for a known, deliberately ignored record type (ADR-0011); no events are emitted. */
+      ignored?: string;
     }
   | { ok: false };
 
@@ -158,6 +161,10 @@ export function normalizeLine(line: ParsedLine, ctx: LineContext, state: FileSta
   if (ENVELOPE_RECORD_TYPES.has(type)) return normalizeEnvelopeRecord(type, line, ctx, state);
   if (type === COST_STATE_RECORD_TYPE) return normalizeCostState(line, ctx, state);
   if (TITLE_RECORD_TYPES.has(type)) return normalizeTitle(type, line, ctx, state);
+  // Only `type` was read, as for unrecognized records; the version is the last one seen.
+  if (IGNORED_RECORD_TYPES.has(type)) {
+    return { ok: true, events: [], version: state.lastVersion, unrecognized: false, ignored: type };
+  }
   return unrecognized(type, line, ctx, state.lastVersion);
 }
 
@@ -188,6 +195,7 @@ function normalizeEnvelopeRecord(
   // Validate the type-specific part before touching state, so an invalid line changes nothing.
   let body: NormalizedEvent[];
   let unrecognizedRecord = false;
+  let ignored: string | null = null;
   if (type === 'user') {
     const user = UserSchema.safeParse(line.value);
     if (!user.success) return { ok: false };
@@ -212,15 +220,21 @@ function normalizeEnvelopeRecord(
       const subtype = system.data.subtype;
       const name =
         subtype !== null && RECORD_TYPE_NAME_RE.test(subtype) ? `system:${subtype}` : 'system';
-      body = [
-        {
-          ...base,
-          dedupKey: `${key}#unrecognized`,
-          eventType: 'record.unrecognized',
-          payload: { recordType: name },
-        },
-      ];
-      unrecognizedRecord = true;
+      if (IGNORED_RECORD_TYPES.has(name)) {
+        // Known and ignored: no event, but the envelope (cwd, version) below still applies.
+        body = [];
+        ignored = name;
+      } else {
+        body = [
+          {
+            ...base,
+            dedupKey: `${key}#unrecognized`,
+            eventType: 'record.unrecognized',
+            payload: { recordType: name },
+          },
+        ];
+        unrecognizedRecord = true;
+      }
     }
   }
 
@@ -244,7 +258,13 @@ function normalizeEnvelopeRecord(
   if (cwd !== null) state.lastCwd = cwd;
   if (e.version !== null) state.lastVersion = e.version;
   events.push(...body);
-  return { ok: true, events, version, unrecognized: unrecognizedRecord };
+  return {
+    ok: true,
+    events,
+    version,
+    unrecognized: unrecognizedRecord,
+    ...(ignored !== null ? { ignored } : {}),
+  };
 }
 
 type Envelope = z.infer<typeof EnvelopeSchema>;

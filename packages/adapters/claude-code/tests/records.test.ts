@@ -87,6 +87,39 @@ describe('normalizeLine: content minimization (ADR-0009)', () => {
     expect(JSON.stringify(result)).not.toMatch(/ACCOUNT|never-read/);
   });
 
+  it('emits nothing for a known, ignored type and reports its name (ADR-0011)', () => {
+    const state = freshFileState();
+    state.lastVersion = '2.1.263';
+    const { result } = run(
+      { ...env, type: 'attachment', attachment: { content: 'SECRET' }, cwd: '/x/never-read' },
+      state,
+    );
+    expect(result).toEqual({
+      ok: true,
+      events: [],
+      version: '2.1.263',
+      unrecognized: false,
+      ignored: 'attachment',
+    });
+    // Its envelope is not read either: the cwd and version stay as they were.
+    expect(state).toEqual({ lastCwd: null, lastVersion: '2.1.263' });
+  });
+
+  it('ignores a known system subtype but still applies its envelope', () => {
+    const { result } = run({ ...env, type: 'system', subtype: 'stop_hook_summary', hookInfos: [] });
+    expect(result.ok && result.ignored).toBe('system:stop_hook_summary');
+    expect(result.ok && result.unrecognized).toBe(false);
+    expect(result.ok && result.events.map((e) => e.eventType)).toEqual(['session.observed']);
+  });
+
+  it('keeps uncertain types unrecognized', () => {
+    for (const type of ['frame-link', 'atis-latch', 'agent-name', 'mode', 'relocated']) {
+      const { result } = run({ type });
+      expect(result.ok && result.unrecognized).toBe(true);
+      expect(result.ok && result.ignored).toBeUndefined();
+    }
+  });
+
   it('replaces an unsafe record type name with null', () => {
     const { result } = run({ type: 'has space\nand newline' });
     expect(result.ok && result.events[0]?.payload).toEqual({ recordType: null });
