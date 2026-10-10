@@ -3,7 +3,7 @@
 > Status: contracts are **[core v1]**. The selection, attribution, and aggregation logic is
 > **[implemented, P1-A]** as pure functions in `@acp/core` (`selectUsage`, `attributeUsage`,
 > `buildUsageRecord`, `sumTokenCounts`, `aggregateUsage`). It is not yet wired into the pipeline
-> (P1-D). The §5.2 tie rule is being amended (see below). Tables are **[planned, P1-B]**, and dedup-key construction is **[planned, P1-C]**. The
+> (P1-D). The §5.2 tie amendment is implemented (task A9). Tables are **[planned, P1-B]**, and dedup-key construction is **[planned, P1-C]**. The
 > numbers quoted come from a read-only scan of local data on 2026-10-10
 > ([research note](research/claude-code-observations-2026-10-10.md)).
 
@@ -81,7 +81,7 @@ Each `usage.reported` event becomes a **UsageObservation**. Per `(provider, mess
      - the record is still counted exactly once, attributed by the lexical tie-break so the result is
        deterministic;
      - the record is flagged `attributionAmbiguous: true`;
-     - the API reports `ambiguousRecordCount` beside direct usage, and the UI shows the attribution
+     - the API reports `ambiguousAttributionCount` beside direct usage, and the UI shows the attribution
        as ambiguous.
    - A future tie-breaker, such as transcript file creation time reported by the adapter, needs its
      own ADR (open question Q8).

@@ -127,6 +127,8 @@ Implemented rules in `@acp/core` (`deriveSubagentEdge`, `deriveContinuationEdges
 - If a depth above 1 matches calls in more than one session, the match is ambiguous and the parent
   is unknown.
 - Ambiguous parents and cycles produce no edge.
+- A null `occurredAt` is never strictly earlier or later, so undated sightings never create a
+  continuation edge.
 
 ## 6. Hooks (live channel)
 
