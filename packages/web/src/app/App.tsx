@@ -1,4 +1,5 @@
 import { CommandCenter } from '../features/command-center/CommandCenter';
+import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
 import { useRoute, type Route } from '../lib/router';
@@ -9,6 +10,8 @@ function Screen({ route }: { route: Route }) {
   switch (route.name) {
     case 'home':
       return <CommandCenter />;
+    case 'sessions':
+      return <SessionExplorer search={route.params} />;
     default:
       return (
         <p className="text-dim">

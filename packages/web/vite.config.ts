@@ -35,7 +35,8 @@ export default defineConfig({
       },
     },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  // Served from 127.0.0.1 by the local server, so one ~1 MB bundle (React Flow + Recharts) is fine.
+  build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 1500 },
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.{ts,tsx}'],
