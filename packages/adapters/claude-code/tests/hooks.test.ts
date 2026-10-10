@@ -76,7 +76,13 @@ describe('C6 normalizeHook (synthetic fixtures; real capture not approved)', () 
       events.push(...normalizeHook({ ...body, transcript_path: main }, RECEIVED, { claudeDir }));
     }
     for (const e of events) expect(e.source.path).toBe(main);
-    await expectGolden('13-hooks', portable(events, claudeDir), 'events-allowlisted.json');
+    // These bodies embed the absolute fixture path, so their body-hash keys differ per checkout;
+    // key stability is covered by the plain golden above.
+    const masked = portable(events, claudeDir).map((e) => ({
+      ...e,
+      dedupKey: e.dedupKey.replace(/:[0-9a-f]{64}$/, ':<sha256>'),
+    }));
+    await expectGolden('13-hooks', masked, 'events-allowlisted.json');
   });
 
   it('SubagentStop prefers the allowlisted agent transcript of the same agent', async () => {

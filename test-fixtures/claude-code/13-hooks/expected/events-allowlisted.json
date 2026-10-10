@@ -15,7 +15,7 @@
       "byteOffset": null,
       "hookEvent": "CwdChanged"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:CwdChanged:1e0e293585038e7a4519cf889e11132e25888fa094ad06d07588e1a0f6215099",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:CwdChanged:<sha256>",
     "eventType": "session.cwd_changed",
     "payload": {
       "from": "/home/user/project",
@@ -38,7 +38,7 @@
       "byteOffset": null,
       "hookEvent": "Notification"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Notification:0113498ddb9c4946cafff094bc402ec400fe2a681f2ed04816a5e6028c1bb26e",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Notification:<sha256>",
     "eventType": "session.attention",
     "payload": {
       "notificationType": "permission_prompt"
@@ -60,7 +60,7 @@
       "byteOffset": null,
       "hookEvent": "SessionEnd"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionEnd:1ae76668492e8c3f58f75380f68bbc5666c4e864434804ecc3b12a13d8694e61",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionEnd:<sha256>",
     "eventType": "session.ended",
     "payload": {
       "reason": "prompt_input_exit"
@@ -82,7 +82,7 @@
       "byteOffset": null,
       "hookEvent": "SessionStart"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionStart:0ac13fb8d9e4502a37b9ded2df1fda03d42b66517802c0400afa7e25a7666881",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionStart:<sha256>",
     "eventType": "session.started",
     "payload": {
       "startSource": "startup",
@@ -105,7 +105,7 @@
       "byteOffset": null,
       "hookEvent": "Stop"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Stop:0fb6e7636cd6ea019de507cd207edbd2f785ea87aa4588bf689c0e1e11bd0e34",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Stop:<sha256>",
     "eventType": "session.turn_ended",
     "payload": {}
   },
@@ -125,7 +125,7 @@
       "byteOffset": null,
       "hookEvent": "SubagentStart"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStart:89de0cdb9e65c2bf54bba7baa7cc752d5094241ca02a97d1fab09228bf57a9fa",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStart:<sha256>",
     "eventType": "subagent.spawned",
     "payload": {
       "parentProviderSessionId": "c0ffee00-0000-4000-8000-000000000001",
@@ -153,7 +153,7 @@
       "byteOffset": null,
       "hookEvent": "SubagentStop"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStop:478230ba0b9c1f89fcd90f3c110861e34e5253828740c22e0793a14e0fad85eb",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStop:<sha256>",
     "eventType": "subagent.stopped",
     "payload": {
       "agentId": "afake1301",
