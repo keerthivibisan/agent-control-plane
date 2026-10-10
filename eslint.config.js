@@ -35,7 +35,13 @@ const boundaryConfigs = Object.entries(forbiddenImports).map(([files, group]) =>
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/coverage/**', 'test-fixtures/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/coverage/**',
+      'test-fixtures/**',
+      '.claude/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

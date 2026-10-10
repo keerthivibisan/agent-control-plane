@@ -29,3 +29,6 @@ test-results/
 # Claude Code local-only settings
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Agent git worktrees (created by Claude Code inside the repo)
+.claude/worktrees/
