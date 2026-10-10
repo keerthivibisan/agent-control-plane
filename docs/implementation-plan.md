@@ -213,11 +213,13 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
 
 **Session discovery**
 
-- [ ] A real session is discovered. _Pending F2 (user consent)._
+- [x] A real session is discovered. F2 (2026-10-10): one real project, 10 sessions and 33
+      subagents ingested; totals equal the independent reference (`docs/research/p1-f-real-data-2026-10-10.md`).
 - [x] Project association uses verified path containment. F1 generated root: a session whose
       `cwd` is outside `/home/user/project` is not ingested, its subagent with an in-root `cwd` is,
       in both the pipeline and the reference.
-- [ ] Sessions started outside the control plane are observed. _Pending F4 (live session)._
+- [x] Sessions started outside the control plane are observed. F2: all 43 real sessions were
+      started directly in Claude Code. Live appearance while running is F4 (pending).
 - [x] An unknown parent stays unknown. E2E: the demo root shows "parent: unknown" in the graph and
       on its detail page; ACC: scenario 04 (no meta) gives no edge.
 
