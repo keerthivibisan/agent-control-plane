@@ -219,7 +219,8 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
       `cwd` is outside `/home/user/project` is not ingested, its subagent with an in-root `cwd` is,
       in both the pipeline and the reference.
 - [x] Sessions started outside the control plane are observed. F2: all 43 real sessions were
-      started directly in Claude Code. Live appearance while running is F4 (pending).
+      started directly in Claude Code. F4: a new session started in that project appeared while
+      running (`active`, usage counted) with polling only.
 - [x] An unknown parent stays unknown. E2E: the demo root shows "parent: unknown" in the graph and
       on its detail page; ACC: scenario 04 (no meta) gives no edge.
 
@@ -251,13 +252,14 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
       the DB, continue; and one restart per batch; no duplicate dedup keys, same state as one run.
 - [x] Partial lines are safe. F1 scenario 06 and the generated root's unterminated last line;
       F3 restarts with chunks smaller than a line.
-- [ ] Stale is never shown as completed. _Partial:_ E2E asserts no "completed" status in the
-      Command Center (the status enum has none); the live active → stale transition is F4.
+- [x] Stale is never shown as completed. E2E asserts no "completed" status (the enum has none);
+      F4 (2026-10-10): the live session went `active` and, after exit, idle → stale as observed by the
+      user; F2's 43 finished real sessions all show `stale`.
 
 **Frontend**
 
-- [ ] The UI shows real persisted data. _Partial:_ E2E shows the demo server's persisted data
-      matches the API on every screen; real data is F2.
+- [x] The UI shows real persisted data. E2E matches the API on every screen (demo); F4: the user
+      viewed the real project's sessions in the UI, and the API reported 44 sessions, 1 active.
 - [x] The hierarchy is inspectable. E2E: graph nodes and edges equal `/tree`, subagent and
       continuation edges labeled.
 - [x] Timeline and usage views work. E2E: concurrency timeline, both usage charts, chart table,

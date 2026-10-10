@@ -53,3 +53,10 @@ The snapshot is never lower than the transcript aggregate. The excess fits usage
 in transcripts (auxiliary requests); the very large input ratio suggests a different input
 accounting. Scope stays `unknown`, and snapshots are never summed with records. This is a finding,
 not a bug (usage-accounting §8).
+
+## F4: live session (2026-10-10)
+
+`pnpm dev` in live mode with the project registered (polling only, no hooks). The user started a new
+Claude Code session in the project: the API reported 44 sessions, the new one `active` with 5 usage
+records, within the poll interval. After exit the user saw it go idle and then stale; it never showed
+"completed", and never `ended` (no hooks configured, as expected).
