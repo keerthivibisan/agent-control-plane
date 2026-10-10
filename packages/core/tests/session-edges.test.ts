@@ -197,3 +197,80 @@ describe('deriveContinuationEdges (provider-adapters §5, A5)', () => {
     expect(deriveContinuationEdges([...input].reverse())).toEqual(deriveContinuationEdges(input));
   });
 });
+
+describe('continuation direction on timestamp ties (provider-adapters §5 amendment, A9)', () => {
+  /** A fork copy keeps the original line's timestamp, which is the normal case locally. */
+  function copy(from: MessageSighting[], sessionId: string): MessageSighting[] {
+    return from.map((s) => ({ ...s, session: key(sessionId) }));
+  }
+
+  it('a fork copy with identical timestamps gives no edge: the direction is unknown', () => {
+    const original = seen('sess-a', ['m1', 'm2'], 0);
+    const edges = deriveContinuationEdges([
+      ...original,
+      ...copy(original, 'sess-b'),
+      ...seen('sess-b', ['b1'], 30),
+      ...seen('sess-a', ['a9'], 31),
+    ]);
+    expect(edges).toEqual([]);
+  });
+
+  it('a parent that saw the shared messages strictly earlier gives an edge', () => {
+    const edges = deriveContinuationEdges([
+      { messageId: 'm1', session: key('sess-a'), occurredAt: '2026-10-10T08:00:00.000Z' },
+      { messageId: 'm1', session: key('sess-b'), occurredAt: '2026-10-10T08:00:00.001Z' },
+    ]);
+    expect(edges.map(valid).map((e) => [e.parent, e.child])).toEqual([
+      [key('sess-a'), key('sess-b')],
+    ]);
+  });
+
+  it('tied messages are ignored as evidence while strictly earlier ones still count', () => {
+    const tiedPart = seen('sess-a', ['m1'], 0);
+    const edges = deriveContinuationEdges([
+      ...tiedPart,
+      ...copy(tiedPart, 'sess-b'),
+      { messageId: 'm2', session: key('sess-a'), occurredAt: at(5) },
+      { messageId: 'm2', session: key('sess-b'), occurredAt: at(6) },
+    ]);
+    expect(edges.map((e) => [e.parent, e.child])).toEqual([[key('sess-a'), key('sess-b')]]);
+  });
+
+  it('equal instants in different string forms are a tie', () => {
+    const edges = deriveContinuationEdges([
+      { messageId: 'm1', session: key('sess-a'), occurredAt: '2026-10-10T08:00:00Z' },
+      { messageId: 'm1', session: key('sess-b'), occurredAt: '2026-10-10T08:00:00.000Z' },
+    ]);
+    expect(edges).toEqual([]);
+  });
+
+  it('a null timestamp is never strictly earlier or later', () => {
+    expect(
+      deriveContinuationEdges([
+        { messageId: 'm1', session: key('sess-a'), occurredAt: null },
+        { messageId: 'm1', session: key('sess-b'), occurredAt: null },
+      ]),
+    ).toEqual([]);
+    expect(
+      deriveContinuationEdges([
+        { messageId: 'm1', session: key('sess-a'), occurredAt: at(0) },
+        { messageId: 'm1', session: key('sess-b'), occurredAt: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('a strictly earlier origin whose copy in the candidate ties with the child gives no edge', () => {
+    // Z -> A -> B, but A and B hold Z's message with the same (copied) time: A is not provably
+    // earlier than B for everything B inherited, so B's parent stays unknown.
+    const edges = deriveContinuationEdges([
+      { messageId: 'z1', session: key('sess-z'), occurredAt: at(0) },
+      { messageId: 'z1', session: key('sess-a'), occurredAt: at(10) },
+      { messageId: 'z1', session: key('sess-b'), occurredAt: at(10) },
+      { messageId: 'a1', session: key('sess-a'), occurredAt: at(11) },
+      { messageId: 'a1', session: key('sess-b'), occurredAt: at(12) },
+    ]);
+    expect(edges.map((e) => [e.parent.providerSessionId, e.child.providerSessionId])).toEqual([
+      ['sess-z', 'sess-a'],
+    ]);
+  });
+});

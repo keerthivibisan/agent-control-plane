@@ -1,5 +1,5 @@
 import type { ProviderId } from '../domain/provider.js';
-import { compareStrings, compareTimestampsNullLast } from '../usage/ordering.js';
+import { compareStrings, timestampMs } from '../usage/ordering.js';
 import type { SessionEdge, SessionEdgeEvidence, SessionKey } from './session.js';
 import { sessionKeysEqual, sessionKeyToString } from './session-key.js';
 
@@ -91,13 +91,18 @@ export interface MessageSighting {
 
 /**
  * `continuation` edges from shared message history (docs/provider-adapters.md §5): session B's file
- * holds message ids first seen in session A, because a fork copies its parent's history.
+ * holds message ids that session A saw **strictly earlier**, because a fork copies its parent's
+ * history.
  *
- * "First seen" uses the attribution order (earliest `occurredAt`, null last, then lexical session
- * key), so copied messages and their usage point at the same session. For child B, the inherited
- * messages are those first seen in another provider session. The parent is the single candidate
- * whose own file holds *all* of them: in a chain Z → A → B, B inherits from both Z and A, but only A
- * holds both sets. No such candidate, or more than one, gives no edge (parent unknown).
+ * A message's origin is the one session whose earliest sighting is strictly earlier than every
+ * other session's. Fork copies keep the original line's timestamp, so for real forks the earliest
+ * time is usually tied: the direction is then unknown and the message is no evidence at all
+ * (usage-accounting §5.2, tie amendment). A null `occurredAt` never counts as earlier or later.
+ *
+ * For child B, the inherited messages are those whose origin is another provider session. The
+ * parent is the single candidate that holds *all* of them, each sighted strictly earlier than in B:
+ * in a chain Z → A → B, B inherits from both Z and A, but only A holds both sets. No such candidate,
+ * or more than one, gives no edge (parent unknown).
  *
  * Sessions sharing a provider session id (a top-level session and its subagents) never form
  * continuation edges. Edges that would form a cycle are dropped. Output is sorted by child key and
@@ -106,7 +111,8 @@ export interface MessageSighting {
 export function deriveContinuationEdges(sightings: readonly MessageSighting[]): SessionEdge[] {
   const keys = new Map<string, SessionKey>();
   const messagesBySession = new Map<string, Set<string>>();
-  const firstSeen = new Map<string, { sessionKey: string; occurredAt: string | null }>();
+  /** message key -> session key -> earliest sighting (ms), null when no sighting had a time. */
+  const earliest = new Map<string, Map<string, number | null>>();
 
   for (const s of sightings) {
     const sk = sessionKeyToString(s.session);
@@ -116,17 +122,39 @@ export function deriveContinuationEdges(sightings: readonly MessageSighting[]): 
     if (messages === undefined) messagesBySession.set(sk, new Set([mk]));
     else messages.add(mk);
 
-    const current = firstSeen.get(mk);
-    const byTime =
-      current === undefined ? -1 : compareTimestampsNullLast(s.occurredAt, current.occurredAt);
-    if (
-      current === undefined ||
-      byTime < 0 ||
-      (byTime === 0 && compareStrings(sk, current.sessionKey) < 0)
-    ) {
-      firstSeen.set(mk, { sessionKey: sk, occurredAt: s.occurredAt });
+    let bySession = earliest.get(mk);
+    if (bySession === undefined) {
+      bySession = new Map();
+      earliest.set(mk, bySession);
     }
+    const ms = timestampMs(s.occurredAt);
+    const current = bySession.get(sk);
+    if (current === undefined) bySession.set(sk, ms);
+    else if (ms !== null && (current === null || ms < current)) bySession.set(sk, ms);
   }
+
+  const originOf = (mk: string): string | undefined => {
+    let origin: string | undefined;
+    let best = Infinity;
+    let tied = false;
+    for (const [sk, ms] of earliest.get(mk) ?? []) {
+      if (ms === null) continue;
+      if (ms < best) {
+        best = ms;
+        origin = sk;
+        tied = false;
+      } else if (ms === best) {
+        tied = true;
+      }
+    }
+    return tied ? undefined : origin;
+  };
+  const strictlyEarlier = (mk: string, parentKey: string, childKey: string): boolean => {
+    const bySession = earliest.get(mk);
+    const p = bySession?.get(parentKey);
+    const c = bySession?.get(childKey);
+    return p !== undefined && p !== null && c !== undefined && c !== null && p < c;
+  };
 
   const parentOf = new Map<string, string>();
   for (const [childKey, messages] of messagesBySession) {
@@ -135,14 +163,14 @@ export function deriveContinuationEdges(sightings: readonly MessageSighting[]): 
     const inherited: string[] = [];
     const candidates = new Set<string>();
     for (const mk of messages) {
-      const origin = firstSeen.get(mk)?.sessionKey;
+      const origin = originOf(mk);
       if (origin === undefined || origin === childKey) continue;
       if (keys.get(origin)?.providerSessionId === child.providerSessionId) continue;
       inherited.push(mk);
       candidates.add(origin);
     }
     const parents = [...candidates].filter((c) =>
-      inherited.every((mk) => messagesBySession.get(c)?.has(mk) === true),
+      inherited.every((mk) => strictlyEarlier(mk, c, childKey)),
     );
     const [only, ...rest] = parents;
     if (only !== undefined && rest.length === 0) parentOf.set(childKey, only);

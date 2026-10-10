@@ -178,6 +178,18 @@ describe('order independence (usage-accounting §7 scenario 5, A8)', () => {
     }
   });
 
+  it('the generated datasets exercise both ambiguous and clear attribution (A9)', () => {
+    // Fork copies sometimes keep the original timestamp (ambiguous) and sometimes carry a later one.
+    // Records compared above include `attributionAmbiguous`, so the flag is order-independent too.
+    const flags = seeds.flatMap((seed) => {
+      const random = prng(seed);
+      const data = generate(random);
+      return project(data.observations, data, random).records.map((r) => r.attributionAmbiguous);
+    });
+    expect(flags).toContain(true);
+    expect(flags).toContain(false);
+  });
+
   it('never double-counts a message across sessions', () => {
     const random = prng(42);
     const data = generate(random);
