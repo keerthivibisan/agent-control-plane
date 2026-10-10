@@ -33,13 +33,13 @@ Codex's own interfaces. Nothing Claude-specific may leak into `@acp/core` types.
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Transcripts `~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl`                     | documented path; **format documented as internal and changes between versions**; verified-local | full message stream, `message.id`, `requestId`, `model`, per-line usage, `cwd`, `gitBranch`, `version`, `entrypoint`, `cost-state` snapshots                                                                        | **Source of record** for messages, tools, usage                                      |
 | Subagent files `<sessionId>/subagents/agent-<agentId>.jsonl` and `.meta.json`        | directory documented; file names verified-local only                                            | `agentType`, `description`, `toolUseId`, `spawnDepth`, sometimes `model` and worktree info                                                                                                                          | Subagent sessions and edges                                                          |
-| Hooks (`type: "http"` POSTs JSON to a URL)                                           | documented                                                                                      | `session_id`, `transcript_path`, `cwd`, `hook_event_name`; SessionStart `source` and `model`; SessionEnd `reason`; SubagentStart/Stop `agent_id`, `agent_type`, `agent_transcript_path`. **No general token usage** | Live lifecycle, end-of-session evidence, faster tailing                              |
+| Hooks (`type: "http"` POSTs JSON to a URL)                                           | documented; shapes verified-local with 2.1.296 (§10.4)                                          | `session_id`, `transcript_path`, `cwd`, `hook_event_name`; SessionStart `source` and `model`; SessionEnd `reason`; SubagentStart/Stop `agent_id`, `agent_type`, `agent_transcript_path`. **No general token usage** | Live lifecycle, end-of-session evidence, faster tailing                              |
 | OpenTelemetry (`CLAUDE_CODE_ENABLE_TELEMETRY=1`, OTLP)                               | documented                                                                                      | `claude_code.token.usage` / `cost.usage` metrics; `claude_code.api_request` log events with tokens and `request_id`; `query_source` (main, subagent, auxiliary)                                                     | **Deferred** (Phase 2 candidate: second usage source and auxiliary-usage visibility) |
 | Agent SDK `@anthropic-ai/claude-agent-sdk` / `claude -p --output-format stream-json` | documented                                                                                      | launch, `session_id`, abort, and a result with `usage`, `modelUsage`, `total_cost_usd` (client-side estimate)                                                                                                       | **Phase 3** managed execution only                                                   |
 
 Versions:
 
-- The installed CLI is **2.1.263**.
+- The installed CLI was **2.1.263** on 2026-10-10 and **2.1.296** at the hook capture on 2026-10-11.
 - Local transcripts contain **16 different `version` values (2.1.202 to 2.1.293)**. The desktop app runs
   its own runtime, which can be newer than the CLI, so feature availability must be checked per
   record, not from `claude --version`.
@@ -178,12 +178,18 @@ Implemented rules in `@acp/core` (`deriveSubagentEdge`, `deriveContinuationEdges
   - `Stop` → `session.turn_ended`
   - `Notification` → `session.attention` (type only)
   - `CwdChanged` → `session.cwd_changed`
-- **Events to subscribe (Phase 1):** `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`,
-  `Stop`, `Notification` (the "needs attention" signal), `CwdChanged`. Availability per runtime
-  version is unverified; P1-C captures real payloads.
+- **Events to subscribe (Phase 1):** `SessionEnd`, `SubagentStart`, `SubagentStop`, `Stop`,
+  `Notification` (the "needs attention" signal), `CwdChanged` over `type: "http"`. **verified-local
+  (2.1.296, 2026-10-11)** for all but `Notification`
+  ([capture note](research/p1-c6-hook-capture-2026-10-11.md)). `SessionStart` is **not delivered to
+  http hooks** in that version (a `command` hook in the same run fired), so the snippet omits it;
+  `normalizeHook` still maps a `SessionStart` body if one arrives (for example forwarded by a user's
+  own command hook). Session start is otherwise known from the transcript (`session.observed`).
 - **Configuration is opt-in and manual.** The app _prints_ a settings snippet (`"type": "http"`,
   `"timeout": 2`, header via `allowedEnvVars`). The user pastes it into their own settings. The app
-  never writes `~/.claude/settings.json` or a project's `.claude/settings*.json`.
+  never writes `~/.claude/settings.json` or a project's `.claude/settings*.json`. Verified with
+  2.1.296: the POST carries `Content-Type: application/json`, keeps the URL path, and the
+  `$ACP_HOOK_TOKEN` header value is expanded from the environment.
 - **Failure behavior (documented):** a non-2xx response or connection failure is a non-blocking hook
   error. When the server is not running, the user may see hook error notices. This must be documented
   in the UI next to the snippet.
@@ -241,7 +247,8 @@ settings JSON as text. Both come from `src/index.ts`. Goldens for scenarios 1-16
   transcript only when it passes the allowlist **and** names the same session (SubagentStop prefers
   `agent_transcript_path` and requires the same agent id); otherwise null. Only short
   identifier-like values are copied (`source`, `reason`, `notification_type`, `agent_type`, `model`);
-  `message`, `title`, and tool fields are never read.
+  `last_assistant_message`, `message`, `title`, `prompt_id`, `effort`, `background_tasks`,
+  `session_crons`, and tool fields are never read (they still enter the body hash of the key).
 - **Titles and descriptions** use the core `redact()`, whitespace collapse, and a 200 code point cap.
 - **Non-`user`/`assistant`/`system` records** are identified by `type` only. Their other fields,
   including a `cwd`, are never read. A `system` record that is not `api_error` becomes
@@ -257,30 +264,52 @@ settings JSON as text. Both come from `src/index.ts`. Goldens for scenarios 1-16
 
 ### 10.2 Unverified assumptions (all synthetic-fixture based)
 
-| Assumption                                                                                                                                   | Where it matters                           |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `cost-state` per-model keys are `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, plus `totalCostUSD`       | `usage.snapshot` payload                   |
-| Title records use `customTitle` / `aiTitle` (fallback `title`)                                                                               | `session.titled`                           |
-| `system`/`api_error` `error` mirrors the Anthropic SDK error (`status`, nested `error.error.type`)                                           | `provider.error` kind and status           |
-| Hook field names: `notification_type`, `old_cwd` / `new_cwd`, `agent_id`, `agent_type`, `agent_transcript_path`, `source`, `reason`, `model` | all hook events; **real capture not done** |
-| The shape of the settings snippet (`hooks.<Event>[].hooks[]` with `type: "http"`, `url`, `timeout`, `headers`, `allowedEnvVars`)             | `hookSettingsSnippet`                      |
-| Nested (depth above 1) subagent files live flat under the top-level session's `subagents/`                                                   | discovery of nested subagents              |
-| A subagent's `cwd` may be in a worktree, so a subagent file is eligible when its parent transcript is                                        | eligibility                                |
-| A candidate root's `lastSeenAt` is the transcript file mtime (no content read)                                                               | `discoverCandidates`                       |
-| Lines without a `uuid` (and unrecognized lines) are keyed by line hash, so identical duplicate lines collapse                                | dedup keys                                 |
-| Identical hook bodies without `tool_use_id` share a key, so a repeated identical `Stop` or `Notification` is stored once                     | "needs attention" freshness; see below     |
-| Records without a `version` inherit the last `version` seen earlier in the same file                                                         | `providerVersion`, per-version counts      |
-| `cost-state`, title, and unrecognized records carry no usable timestamp, so `occurredAt` is null                                             | ordering                                   |
-| Hooks never carry usage; `PostToolUse` usage is ignored on purpose                                                                           | usage-accounting scenario 2                |
-
-**Proposal (not changed, shared contract):** the hook key in usage-accounting §3 collapses repeated
-identical deliveries. If real payloads show no varying field (for example a Stop hook), a repeated
-`session.turn_ended` or `session.attention` would not refresh the session's attention time. Capturing
-real payloads (C6, needs user approval) decides whether the key needs a delivery discriminator.
+| Assumption                                                                                                                                                                                           | Where it matters                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `cost-state` per-model keys are `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, plus `totalCostUSD`                                                               | `usage.snapshot` payload              |
+| Title records use `customTitle` / `aiTitle` (fallback `title`)                                                                                                                                       | `session.titled`                      |
+| `system`/`api_error` `error` mirrors the Anthropic SDK error (`status`, nested `error.error.type`)                                                                                                   | `provider.error` kind and status      |
+| Hook field names `notification_type` (Notification) and `model` (SessionStart; absent in the captured `startup` payload). All other hook fields the adapter reads were verified with 2.1.296 (§10.4) | Notification, SessionStart            |
+| A hook's `transcript_path` / `agent_transcript_path` names the same session / agent as `session_id` / `agent_id` (the layout was verified, the id equality was not)                                  | `source.path` of hook events          |
+| Nested (depth above 1) subagent files live flat under the top-level session's `subagents/`                                                                                                           | discovery of nested subagents         |
+| A subagent's `cwd` may be in a worktree, so a subagent file is eligible when its parent transcript is                                                                                                | eligibility                           |
+| A candidate root's `lastSeenAt` is the transcript file mtime (no content read)                                                                                                                       | `discoverCandidates`                  |
+| Lines without a `uuid` (and unrecognized lines) are keyed by line hash, so identical duplicate lines collapse                                                                                        | dedup keys                            |
+| Identical hook bodies without `tool_use_id` share a key. With 2.1.296 bodies carry a per-prompt `prompt_id`, so only a repeat within one prompt collapses (§10.4)                                    | "needs attention" freshness           |
+| Records without a `version` inherit the last `version` seen earlier in the same file                                                                                                                 | `providerVersion`, per-version counts |
+| `cost-state`, title, and unrecognized records carry no usable timestamp, so `occurredAt` is null                                                                                                     | ordering                              |
+| Hooks never carry usage; `PostToolUse` usage is ignored on purpose                                                                                                                                   | usage-accounting scenario 2           |
 
 ### 10.3 Known gaps
 
-- Real hook payload capture (C6) has not been done; hook fixtures are synthetic (scenario 13).
+- Hook payloads were captured from one runtime version (2.1.296) in two non-interactive `claude -p`
+  runs. `Notification` (never fires in `-p`), interactive-only values (other `source`/`reason`
+  values, `permission_mode` other than `default`) and SessionStart `model` were not observed.
 - Depth above 1 is covered by a synthetic fixture only (scenario 5).
-- Nothing was verified against a running Claude Code or against the user's real `~/.claude`; that is
-  P1-F.
+- Transcript ingestion was verified against one real project in P1-F
+  ([F2 note](research/p1-f-real-data-2026-10-10.md)); the field-name assumptions in §10.2 that the
+  F2 totals do not exercise (titles, `cost-state` per-model keys, `api_error`) remain unverified.
+
+### 10.4 Hook payloads observed with 2.1.296 **[verified-local, 2026-10-11]**
+
+Shape-only capture (key names, value types, string lengths; no values), approved by the project
+owner, in a throwaway directory with project-level `.claude/settings.local.json` generated by
+`hookSettingsSnippet` ([research note](research/p1-c6-hook-capture-2026-10-11.md)).
+
+| Event           | Keys (in delivery order)                                                                                                                                                                                                                              |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SessionStart`  | `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `source` (`startup`). Only via a `command` hook; never delivered to the `http` hook                                                                                                        |
+| `CwdChanged`    | `session_id`, `transcript_path`, `cwd` (the new directory), `prompt_id`, `hook_event_name`, `old_cwd`, `new_cwd`                                                                                                                                      |
+| `SubagentStart` | `session_id`, `transcript_path`, `cwd`, `prompt_id`, `agent_id`, `agent_type`, `hook_event_name`                                                                                                                                                      |
+| `SubagentStop`  | `session_id`, `transcript_path`, `cwd`, `prompt_id`, `permission_mode`, `agent_id`, `agent_type`, `effort` (`{level}`), `hook_event_name`, `stop_hook_active`, `agent_transcript_path`, `last_assistant_message`, `background_tasks`, `session_crons` |
+| `Stop`          | `session_id`, `transcript_path`, `cwd`, `prompt_id`, `permission_mode`, `effort`, `hook_event_name`, `stop_hook_active`, `last_assistant_message`, `background_tasks`, `session_crons`                                                                |
+| `SessionEnd`    | `session_id`, `transcript_path`, `cwd`, `prompt_id`, `hook_event_name`, `reason` (`other` for a `-p` exit)                                                                                                                                            |
+
+- `session_id` and `prompt_id` are UUIDs; `agent_id` is 17 alphanumeric characters (matches the
+  allowlist's agent id pattern). `transcript_path` has the top-level transcript layout,
+  `agent_transcript_path` the `subagents/agent-<id>.jsonl` layout.
+- **Dedup key finding.** No delivery id or timestamp exists. `prompt_id` is the same for every event
+  of one prompt and changes with the next prompt: one session delivered two `Stop`s with different
+  `prompt_id`s, and their bodies differed, so they got different keys. A `Stop` body also contains
+  `last_assistant_message`. A repeated delivery that is identical in every field (same event, same
+  prompt) still collapses; none was seen. **No discriminator was added**; the §3 key is unchanged.

@@ -15,7 +15,7 @@
       "byteOffset": null,
       "hookEvent": "CwdChanged"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:CwdChanged:2dafdf1a40cc14698486e1e49f367d3dcd6c19b9784a9708c4081ed572595453",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:CwdChanged:967ddbdf1ca14bb471cc788d365d162fc13b0921ef817f8af200304eccbd5800",
     "eventType": "session.cwd_changed",
     "payload": {
       "from": "/home/user/project",
@@ -60,10 +60,10 @@
       "byteOffset": null,
       "hookEvent": "SessionEnd"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionEnd:d1481374880edcde9e9f24cf42b56de1e1d6f8c26394aa9ce7f54cc0129aa4d0",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionEnd:a386d976be30a9ecec9c8da753c5ca28ad624534e221ad01d4601570e391795a",
     "eventType": "session.ended",
     "payload": {
-      "reason": "prompt_input_exit"
+      "reason": "other"
     }
   },
   {
@@ -82,11 +82,11 @@
       "byteOffset": null,
       "hookEvent": "SessionStart"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionStart:6aa5be96443b04a3a01fdac6af3f2da6e61f555bf2db83ea5523191423303a08",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionStart:71beee77d0668db2d5b6ef394f9f05728eb8ab119ea5972aa1ae77b3f49c72a4",
     "eventType": "session.started",
     "payload": {
       "startSource": "startup",
-      "model": "claude-sonnet-4-5"
+      "model": null
     }
   },
   {
@@ -105,7 +105,7 @@
       "byteOffset": null,
       "hookEvent": "Stop"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Stop:e692bc8f8095c2965aa4907b490910f77e74d7566e6f9de709fec7860f88cc1f",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Stop:f25869d2784365c17e590ac646170ad6e38fe38a34b552e8db9f683f7b7d20b3",
     "eventType": "session.turn_ended",
     "payload": {}
   },
@@ -125,7 +125,7 @@
       "byteOffset": null,
       "hookEvent": "SubagentStart"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStart:dc9f8478ae4506e646fce66c6c1bb6e0b99f40f9a212e0e1c69657e1560780bb",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStart:d3fc7f62e4fd89cb89564cdfc1ef56346d04ec740766c5291986e513a2361c5e",
     "eventType": "subagent.spawned",
     "payload": {
       "parentProviderSessionId": "c0ffee00-0000-4000-8000-000000000001",
@@ -153,7 +153,7 @@
       "byteOffset": null,
       "hookEvent": "SubagentStop"
     },
-    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStop:1ff11b4f36d1bdfe87c255289db7eefb544bed93559de29008a12fcd8d14c2ca",
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStop:fe9a316df6c6947d0b16858dbca4b8b75763d6af3b11ec0b768f414883aa01da",
     "eventType": "subagent.stopped",
     "payload": {
       "agentId": "afake1301",

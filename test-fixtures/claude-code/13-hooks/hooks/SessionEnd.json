@@ -2,6 +2,7 @@
   "session_id": "c0ffee00-0000-4000-8000-000000000001",
   "transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
   "cwd": "/home/user/project",
+  "prompt_id": "c0ffee00-0000-4000-8000-00000000f002",
   "hook_event_name": "SessionEnd",
-  "reason": "prompt_input_exit"
+  "reason": "other"
 }

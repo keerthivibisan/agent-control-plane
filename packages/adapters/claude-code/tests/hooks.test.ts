@@ -7,6 +7,7 @@ import {
   HookPayloadError,
   hookSettingsSnippet,
   normalizeHook,
+  SNIPPET_HOOKS,
   SUBSCRIBED_HOOKS,
 } from '../src/hooks.js';
 import {
@@ -35,7 +36,7 @@ async function loadHooks(): Promise<[string, Body][]> {
   );
 }
 
-describe('C6 normalizeHook (synthetic fixtures; real capture not approved)', () => {
+describe('C6 normalizeHook (synthetic values; shapes from the 2.1.296 capture)', () => {
   it('maps every subscribed hook; an unsubscribed one gives []', async () => {
     const claudeDir = await scenarioRoot('13-hooks');
     const events: NormalizedEvent[] = [];
@@ -136,6 +137,39 @@ describe('C6 normalizeHook (synthetic fixtures; real capture not approved)', () 
     expect(c?.sourceEventId).toBe('toolu_x');
   });
 
+  it('keys Stops of different prompts apart; an identical re-delivery collapses', async () => {
+    const claudeDir = await scenarioRoot('13-hooks');
+    const stop = (await loadHooks()).find(([n]) => n === 'Stop')?.[1] ?? {};
+    const key = (body: Body) => normalizeHook(body, RECEIVED, { claudeDir })[0]?.dedupKey;
+    const nextTurn = { ...stop, prompt_id: 'c0ffee00-0000-4000-8000-00000000f003' };
+    expect(key(nextTurn)).not.toBe(key(stop));
+    expect(key({ ...stop })).toBe(key(stop));
+  });
+
+  it('reads the observed fields: no model on SessionStart, reason, agent type', async () => {
+    const claudeDir = await scenarioRoot('13-hooks');
+    const hooks = new Map(await loadHooks());
+    const one = (name: string) =>
+      normalizeHook(hooks.get(name) ?? {}, RECEIVED, { claudeDir })[0]?.payload;
+    expect(one('SessionStart')).toEqual({ startSource: 'startup', model: null });
+    expect(one('SessionEnd')).toEqual({ reason: 'other' });
+    expect(one('SubagentStop')).toEqual({ agentId: 'afake1301', agentType: 'Explore' });
+    expect(one('Stop')).toEqual({});
+  });
+
+  it('never copies last_assistant_message or other Stop fields', async () => {
+    const claudeDir = await scenarioRoot('13-hooks');
+    for (const name of ['Stop', 'SubagentStop']) {
+      const body = (await loadHooks()).find(([n]) => n === name)?.[1] ?? {};
+      const [event] = normalizeHook(
+        { ...body, last_assistant_message: 'ASSISTANT-SECRET', effort: { level: 'EFFORT-X' } },
+        RECEIVED,
+        { claudeDir },
+      );
+      expect(JSON.stringify(event)).not.toMatch(/SECRET|EFFORT-X|prompt_id|f001/);
+    }
+  });
+
   it('never copies message text or other free text from the payload', async () => {
     const claudeDir = await scenarioRoot('13-hooks');
     const note = (await loadHooks()).find(([n]) => n === 'Notification')?.[1] ?? {};
@@ -232,7 +266,9 @@ describe('hookSettingsSnippet', () => {
   };
 
   it('is valid JSON with one http hook per subscribed event', () => {
-    expect(Object.keys(parsed.hooks).sort()).toEqual([...SUBSCRIBED_HOOKS].sort());
+    // SessionStart is not delivered to http hooks (2.1.296 capture), so it is not registered.
+    expect(Object.keys(parsed.hooks).sort()).toEqual([...SNIPPET_HOOKS].sort());
+    expect(Object.keys(parsed.hooks)).not.toContain('SessionStart');
     for (const entries of Object.values(parsed.hooks)) {
       expect(entries[0]?.hooks[0]).toEqual({
         type: 'http',

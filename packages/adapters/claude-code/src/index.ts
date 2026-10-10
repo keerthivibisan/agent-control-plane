@@ -1,6 +1,6 @@
 export { createClaudeCodeAdapter } from './adapter.js';
 export type { ClaudeCodeAdapter, ClaudeCodeAdapterOptions } from './adapter.js';
-export { hookSettingsSnippet, HookPayloadError, SUBSCRIBED_HOOKS } from './hooks.js';
+export { hookSettingsSnippet, HookPayloadError, SNIPPET_HOOKS, SUBSCRIBED_HOOKS } from './hooks.js';
 export type { HookSnippetOptions } from './hooks.js';
 export { CLAUDE_CODE_LIMITATIONS } from './capabilities.js';
 export { DEFAULT_MAX_FILE_BYTES } from './allowlist.js';

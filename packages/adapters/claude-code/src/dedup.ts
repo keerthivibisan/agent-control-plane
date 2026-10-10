@@ -25,7 +25,12 @@ export function metaRecordKey(sessionId: string, agentId: string, fileBytes: Buf
   return `cc:meta:${sessionId}:${agentId}:h:${sha256Hex(fileBytes)}`;
 }
 
-/** `cc:hook:{session_id}:{hook_event_name}:{tool_use_id or sha256(canonical JSON payload)}`. */
+/**
+ * `cc:hook:{session_id}:{hook_event_name}:{tool_use_id or sha256(canonical JSON payload)}`.
+ * Runtime 2.1.296 sends no delivery id or timestamp, but every event except SessionStart carries a
+ * per-prompt `prompt_id`, so e.g. Stops of different turns hash differently. Bodies that are
+ * byte-for-byte equal (same event, same prompt, same fields) still share one key.
+ */
 export function hookRecordKey(
   sessionId: string,
   hookEventName: string,

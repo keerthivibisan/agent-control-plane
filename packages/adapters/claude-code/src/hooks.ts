@@ -30,6 +30,21 @@ export type SubscribedHook = (typeof SUBSCRIBED_HOOKS)[number];
 
 const SUBSCRIBED: ReadonlySet<string> = new Set(SUBSCRIBED_HOOKS);
 
+/**
+ * Hooks the settings snippet registers as `type: "http"`. `SessionStart` is left out: in the
+ * 2026-10-11 capture (runtime 2.1.296) an http `SessionStart` hook was never delivered while a
+ * `command` hook for it in the same run was (docs/research/p1-c6-hook-capture-2026-10-11.md).
+ * `normalizeHook` still accepts a `SessionStart` body, e.g. one a user forwards from a command hook.
+ */
+export const SNIPPET_HOOKS = [
+  'SessionEnd',
+  'SubagentStart',
+  'SubagentStop',
+  'Stop',
+  'Notification',
+  'CwdChanged',
+] as const satisfies readonly SubscribedHook[];
+
 /** Thrown for a body that is not a usable hook payload. The message never quotes the payload. */
 export class HookPayloadError extends Error {
   override readonly name = 'HookPayloadError';
@@ -47,7 +62,11 @@ const identifier = z
   .catch(null);
 const optString = z.string().min(1).nullable().catch(null);
 
-/** Common fields (documented) plus the per-event fields we read. Free-text fields are never read. */
+/**
+ * Common fields plus the per-event fields we read; names verified against runtime 2.1.296 except
+ * `notification_type` and SessionStart `model` (not observed). Free-text fields
+ * (`last_assistant_message`, `message`, `title`, `prompt`, tool input/output) are never read.
+ */
 const HookBodySchema = z.looseObject({
   session_id: z.string().regex(SESSION_ID_RE),
   hook_event_name: z.string().min(1).max(64),
@@ -220,8 +239,8 @@ export const HOOK_TOKEN_HEADER = 'X-ACP-Hook-Token';
  * The settings snippet the user pastes into their own Claude Code settings (provider-adapters §6;
  * ADR-0005: the app prints it and never writes settings). Returns JSON text only. The token value
  * is never included: the header references the environment variable named by `tokenEnvVar`. The
- * `hooks` shape follows the documented `type: "http"` hook form and is not verified against a
- * running Claude Code (docs/provider-adapters.md, unverified assumptions).
+ * shape was verified with runtime 2.1.296 (2026-10-11 capture): Claude Code POSTed JSON to the url
+ * and expanded the `$VAR` header from `allowedEnvVars`. Only {@link SNIPPET_HOOKS} are registered.
  */
 export function hookSettingsSnippet(options: HookSnippetOptions): string {
   const { port, tokenEnvVar } = options;
@@ -244,6 +263,6 @@ export function hookSettingsSnippet(options: HookSnippetOptions): string {
       ],
     },
   ];
-  const hooks = Object.fromEntries(SUBSCRIBED_HOOKS.map((event) => [event, entry]));
+  const hooks = Object.fromEntries(SNIPPET_HOOKS.map((event) => [event, entry]));
   return `${JSON.stringify({ hooks }, null, 2)}\n`;
 }

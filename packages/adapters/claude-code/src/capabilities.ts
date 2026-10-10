@@ -6,8 +6,8 @@ import type { ProviderCapabilities } from '@acp/core';
  */
 export const CLAUDE_CODE_LIMITATIONS: readonly string[] = Object.freeze([
   'The transcript format is internal to Claude Code and not a stable API. Only allowlisted record types are read; known record types that carry nothing the control plane uses are counted as ignored, and unrecognized records are counted per runtime version; neither is interpreted.',
-  'Hooks are opt-in. Without them a session never reaches "ended" and becomes "stale" instead. Hook payload field names (notification_type, old_cwd/new_cwd, agent_id, agent_transcript_path) come from documentation and synthetic fixtures; real payloads have not been captured.',
-  'Hook deliveries with an identical body and no tool_use_id share one key and are stored once, so a repeated identical Stop or Notification does not add a new event.',
+  'Hooks are opt-in. Without them a session never reaches "ended" and becomes "stale" instead. Hook payload field names were checked against one Claude Code version (2.1.296, non-interactive runs); Notification payloads (notification_type) were not observed. SessionStart is not delivered to http hooks in that version, so the settings snippet omits it and session start comes from transcripts.',
+  'Hook deliveries with an identical body and no tool_use_id share one key and are stored once. Bodies carry a per-prompt prompt_id, so Stops of different turns are distinct, but a repeated identical delivery within one prompt (for example the same Notification twice) is stored once.',
   'The scope of cumulative cost-state snapshots (main thread only, or including subagents and auxiliary calls) is unknown, and their per-model field names are unverified. Snapshots are shown, never summed.',
   'Cost is a provider-reported client-side estimate, not billing data.',
   'Auxiliary and background model calls (for example title generation) are not written to transcripts, so their usage is invisible and totals can undercount.',

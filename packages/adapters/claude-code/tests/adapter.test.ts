@@ -139,7 +139,9 @@ describe('capabilities (C7)', () => {
     for (const topic of [
       /internal to Claude Code/,
       /Hooks are opt-in/,
-      /real payloads have not been captured/,
+      /one Claude Code version \(2\.1\.296/,
+      /Notification payloads .* were not observed/,
+      /SessionStart is not delivered to http hooks/,
       /scope of cumulative/,
       /estimate/,
       /Auxiliary/,

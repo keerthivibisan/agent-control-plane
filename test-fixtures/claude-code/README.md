@@ -44,8 +44,9 @@ These cover docs/usage-accounting.md §7 and provider-adapters §5:
 10. A `cwd` change within a session.
 11. An `api_error` system record; an assistant line without `requestId`; a `<synthetic>` model line.
 12. Missing usage categories.
-13. Each subscribed hook event payload. **Synthetic**: real payload capture needs explicit user
-    approval and has not been done. Field names beyond the documented common ones are unverified.
+13. Each subscribed hook event payload. **Synthetic values**; the shapes of six events follow the
+    approved shape-only capture from Claude Code 2.1.296 (2026-10-11). `Notification` is still
+    unverified.
 14. Denied files placed alongside allowed ones (`sessions/x.json`, `foo.key`, `settings.json`,
     `memory/`, `*.orphaned-*`), which must be ignored.
 15. Unparseable complete lines (not JSON, a JSON array, an assistant record without `message.id`):

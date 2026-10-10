@@ -2,6 +2,14 @@
   "session_id": "c0ffee00-0000-4000-8000-000000000001",
   "transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
   "cwd": "/home/user/project",
+  "prompt_id": "c0ffee00-0000-4000-8000-00000000f001",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
   "hook_event_name": "Stop",
-  "stop_hook_active": false
+  "stop_hook_active": false,
+  "last_assistant_message": "<redacted>",
+  "background_tasks": [],
+  "session_crons": []
 }

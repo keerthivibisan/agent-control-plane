@@ -2,9 +2,17 @@
   "session_id": "c0ffee00-0000-4000-8000-000000000001",
   "transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
   "cwd": "/home/user/project",
-  "hook_event_name": "SubagentStop",
-  "stop_hook_active": false,
+  "prompt_id": "c0ffee00-0000-4000-8000-00000000f001",
+  "permission_mode": "default",
   "agent_id": "afake1301",
   "agent_type": "Explore",
-  "agent_transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake1301.jsonl"
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "SubagentStop",
+  "stop_hook_active": false,
+  "agent_transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake1301.jsonl",
+  "last_assistant_message": "<redacted>",
+  "background_tasks": [],
+  "session_crons": []
 }
