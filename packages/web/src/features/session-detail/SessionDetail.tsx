@@ -1,7 +1,7 @@
 import type { Provenance } from '@acp/core';
 import type { SessionDetailDto, UsageSnapshotDto } from '@acp/core/api';
 import type { ReactNode } from 'react';
-import { EstimatedCost } from '../../components/EstimatedCost';
+import { LegacyEstimatedCost as EstimatedCost } from '../../components/LegacyEstimatedCost';
 import { EventList } from '../../components/EventList';
 import { Pager, useCursorStack } from '../../components/Pager';
 import { PageHeader, Panel } from '../../components/Panel';

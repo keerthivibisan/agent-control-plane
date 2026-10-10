@@ -1,5 +1,7 @@
 import { formatCount } from '../lib/format';
 
+/* Superseded by ./TokenValue (unit, "Not reported") and ./TokenBreakdown; kept until phase 2. */
+
 export interface TokenCountProps {
   /** `null` means unavailable: the source did not report it. Never rendered as 0. */
   value: number | null;

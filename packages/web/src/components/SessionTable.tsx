@@ -6,6 +6,8 @@ import { StatusPill } from './StatusPill';
 import { Time } from './Time';
 import { TokenCount } from './TokenCount';
 
+/* Superseded by ./DataTable with copy.ts wording; kept until phase 2 moves the screens over. */
+
 export function SessionName({ session }: { session: SessionSummaryDto }) {
   return (
     <span className="flex min-w-0 flex-col">

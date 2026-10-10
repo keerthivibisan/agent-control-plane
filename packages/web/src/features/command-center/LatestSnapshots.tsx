@@ -1,5 +1,5 @@
 import type { OverviewDto } from '@acp/core/api';
-import { EstimatedCost } from '../../components/EstimatedCost';
+import { LegacyEstimatedCost as EstimatedCost } from '../../components/LegacyEstimatedCost';
 import { Panel } from '../../components/Panel';
 import { Time } from '../../components/Time';
 import { shortId } from '../../lib/format';

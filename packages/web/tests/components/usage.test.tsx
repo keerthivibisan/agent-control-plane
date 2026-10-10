@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { EstimatedCost } from '../../src/components/EstimatedCost';
+import { LegacyEstimatedCost as EstimatedCost } from '../../src/components/LegacyEstimatedCost';
 import { ProvenanceBadge } from '../../src/components/ProvenanceBadge';
 import { TokenCount } from '../../src/components/TokenCount';
 import { UsageComparison, UsageTotals } from '../../src/components/UsageTotals';

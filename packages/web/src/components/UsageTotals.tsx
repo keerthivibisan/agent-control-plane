@@ -5,6 +5,8 @@ import { TOKEN_CATEGORIES } from '../lib/tokens';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { TokenCount } from './TokenCount';
 
+/* Superseded by ./TokenBreakdown inside a ./Card; kept (restyled) until phase 2. */
+
 /** Four token categories of one usage total, each with its own unavailable/partial state. */
 export function UsageTotals({
   usage,
@@ -22,12 +24,12 @@ export function UsageTotals({
 }) {
   return (
     <section
-      className="min-w-0 flex-1 rounded border border-line bg-panel p-3"
+      className="min-w-0 flex-1 rounded-card border border-line bg-panel p-4 shadow-card"
       aria-label={title}
       data-testid={testId}
     >
       <header className="mb-2 flex items-center gap-2">
-        <h3 className="text-xs font-semibold tracking-wide text-dim uppercase">{title}</h3>
+        <h3 className="text-title font-semibold">{title}</h3>
         <ProvenanceBadge provenance={usage.provenance} />
         <span className="ml-auto text-[11px] text-dim">
           {formatCount(usage.recordCount)} usage record{usage.recordCount === 1 ? '' : 's'}

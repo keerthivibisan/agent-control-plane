@@ -2,6 +2,11 @@ import type { SessionStatus } from '@acp/core';
 import type { SessionStatusDto } from '@acp/core/api';
 import { formatTime } from '../lib/format';
 
+/*
+ * Superseded by ./StatusBadge and STATUS_COPY in ../lib/copy (DESIGN.md status words). Kept until
+ * phase 2 moves the remaining screens over.
+ */
+
 /**
  * Display labels. There is no "completed": observation mode only knows a session ended when the
  * provider said so, and silence is "stale", not done (docs/domain-model.md, Session status).

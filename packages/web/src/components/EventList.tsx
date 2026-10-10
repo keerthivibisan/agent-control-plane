@@ -4,6 +4,11 @@ import { href } from '../lib/router';
 import { ProvenanceBadge } from './ProvenanceBadge';
 import { Time } from './Time';
 
+/*
+ * Superseded: new activity feeds use `describeEvent` (../lib/copy) and keep raw fields inside
+ * ./Details. Kept until phase 2 moves the screens over.
+ */
+
 const MAX_VALUE = 80;
 
 /**
