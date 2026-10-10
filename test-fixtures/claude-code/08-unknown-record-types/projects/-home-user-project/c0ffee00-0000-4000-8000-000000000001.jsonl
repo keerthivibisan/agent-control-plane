@@ -1,0 +1,17 @@
+{"type":"file-history-snapshot","messageId":"08000001-0000-4000-8000-000000000001","snapshot":{"messageId":"<redacted>","trackedFileBackups":{},"timestamp":"2026-10-01T10:00:03.000Z"},"isSnapshotUpdate":false}
+{"type":"bridge-session","accountUuid":"acc00000-fake-4000-8000-00000000acc0","organizationUuid":"0rg00000-fake-4000-8000-0000000000rg","cwd":"/home/user/never-read","sessionId":"c0ffee00-0000-4000-8000-000000000001","bridgeToken":"<redacted-SECRET-bridge-token>"}
+{"type":"artifact-autoreact-ledger","accountUuid":"acc00000-fake-4000-8000-00000000acc0","entries":["<redacted>"],"cwd":"/home/user/never-read"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-01T10:00:06.000Z","content":"<redacted>","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/home/user/project","sessionId":"c0ffee00-0000-4000-8000-000000000001","version":"2.1.263","gitBranch":"main","entrypoint":"claude-desktop","type":"user","message":{"role":"user","content":"<redacted>"},"uuid":"08000002-0000-4000-8000-000000000002","timestamp":"2026-10-01T10:00:09.000Z"}
+{"parentUuid":"08000002-0000-4000-8000-000000000002","isSidechain":false,"userType":"external","cwd":"/home/user/project","sessionId":"c0ffee00-0000-4000-8000-000000000001","version":"2.1.263","gitBranch":"main","type":"attachment","attachment":{"type":"file","content":"<redacted>"},"uuid":"08000003-0000-4000-8000-000000000003","timestamp":"2026-10-01T10:00:12.000Z"}
+{"type":"last-prompt","lastPrompt":"<redacted>","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"agent-name","agentName":"<redacted>","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"mode","mode":"default","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"frame-link","sessionId":"c0ffee00-0000-4000-8000-000000000001","frameId":"<redacted>"}
+{"type":"relocated","sessionId":"c0ffee00-0000-4000-8000-000000000001","from":"/home/user/never-read"}
+{"type":"atis-latch","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"artifact-comment-monitor","accountUuid":"acc00000-fake-4000-8000-00000000acc0"}
+{"parentUuid":"08000002-0000-4000-8000-000000000002","isSidechain":false,"userType":"external","cwd":"/home/user/project","sessionId":"c0ffee00-0000-4000-8000-000000000001","version":"2.1.263","gitBranch":"main","type":"system","subtype":"compact_boundary","content":"<redacted>","level":"info","uuid":"08000004-0000-4000-8000-000000000004","timestamp":"2026-10-01T10:00:15.000Z"}
+{"parentUuid":"08000002-0000-4000-8000-000000000002","isSidechain":false,"userType":"external","cwd":"/home/user/project","sessionId":"c0ffee00-0000-4000-8000-000000000001","version":"2.1.263","gitBranch":"main","type":"system","subtype":"stop_hook_summary","hookInfos":[],"level":"suggestion","uuid":"08000005-0000-4000-8000-000000000005","timestamp":"2026-10-01T10:00:18.000Z"}
+{"type":"summary","summary":"<redacted>","leafUuid":"08000002-0000-4000-8000-000000000002"}
+{"type":"brand-new-type-from-the-future","payload":{"secret":"<redacted>"},"version":"9.9.9"}

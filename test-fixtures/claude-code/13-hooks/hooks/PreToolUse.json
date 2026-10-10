@@ -1,0 +1,11 @@
+{
+  "session_id": "c0ffee00-0000-4000-8000-000000000001",
+  "transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "<redacted>"
+  },
+  "tool_use_id": "toolu_fake1301"
+}

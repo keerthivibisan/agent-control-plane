@@ -1,0 +1,8 @@
+{
+  "session_id": "c0ffee00-0000-4000-8000-000000000001",
+  "transcript_path": "/home/user/.claude/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/home/user/project",
+  "hook_event_name": "SubagentStart",
+  "agent_id": "afake1301",
+  "agent_type": "Explore"
+}

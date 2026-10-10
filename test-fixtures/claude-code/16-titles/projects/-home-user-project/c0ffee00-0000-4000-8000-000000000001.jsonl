@@ -1,0 +1,6 @@
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/home/user/project","sessionId":"c0ffee00-0000-4000-8000-000000000001","version":"2.1.263","gitBranch":"main","entrypoint":"claude-desktop","type":"user","message":{"role":"user","content":"<redacted>"},"uuid":"16000001-0000-4000-8000-000000000001","timestamp":"2026-10-01T10:00:03.000Z"}
+{"type":"ai-title","aiTitle":"Synthetic AI title for a fixture","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"custom-title","customTitle":"Synthetic user title with key sk-ant-api03-FAKEFAKEFAKEFAKE0000 inside","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"custom-title","customTitle":"  \t \n ","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"custom-title","customTitle":"Synthetic fixture title padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding end","sessionId":"c0ffee00-0000-4000-8000-000000000001"}
+{"type":"custom-title","sessionId":"c0ffee00-0000-4000-8000-000000000001"}

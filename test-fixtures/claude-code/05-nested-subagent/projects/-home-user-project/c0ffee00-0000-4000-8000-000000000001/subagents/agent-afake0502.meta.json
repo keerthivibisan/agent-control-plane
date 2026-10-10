@@ -1,0 +1,7 @@
+{
+  "agentType": "Explore",
+  "description": "<redacted>",
+  "toolUseId": "toolu_fake0511",
+  "spawnDepth": 2,
+  "model": "claude-haiku-4-5"
+}
