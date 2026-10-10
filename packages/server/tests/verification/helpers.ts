@@ -31,6 +31,27 @@ export const REFERENCE_SCRIPT = join(REPO_ROOT, 'scripts', 'reference-usage.ts')
 export const FIXTURE_ROOT = '/home/user/project';
 export const NOW = new Date('2026-10-10T12:00:00.000Z');
 
+/** Every fixture scenario with transcripts (07 has two versions of one file). */
+export const SCENARIOS = [
+  '01-streaming-duplicates',
+  '02-fork',
+  '03-subagent-with-meta',
+  '04-subagent-without-meta',
+  '05-nested-subagent',
+  '06-partial-last-line',
+  '07-truncated-replaced/v1',
+  '07-truncated-replaced/v2',
+  '08-unknown-record-types',
+  '09-cost-state',
+  '10-cwd-change',
+  '11-api-error-and-edge-lines',
+  '12-missing-usage-categories',
+  '13-hooks',
+  '14-denied-files',
+  '15-unparseable-line',
+  '16-titles',
+];
+
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   for (const fn of cleanups.splice(0).reverse()) fn();
@@ -240,6 +261,19 @@ export function snapshotState(stack: LiveStack) {
          ORDER BY e.kind, child, childAgent`,
       )
       .all(),
+    // Session evidence columns, without internal ids (they differ between databases).
+    sessionRows: c
+      .prepare(
+        `SELECT provider_session_id, provider_agent_id, origin, launch_cwd, git_branch, entrypoint,
+                provider_version, title, agent_type, description, first_seen_at, last_event_at,
+                ended_at, end_reason, last_attention_at, metadata,
+                (SELECT root_path FROM projects WHERE projects.id = sessions.project_id) AS root
+         FROM sessions ORDER BY provider_session_id, provider_agent_id`,
+      )
+      .all(),
+    dedupKeys: (
+      c.prepare('SELECT dedup_key FROM events ORDER BY dedup_key').all() as { dedup_key: string }[]
+    ).map((r) => r.dedup_key),
     duplicateDedupKeys: (
       c
         .prepare(
