@@ -78,6 +78,22 @@ export function createProjectsService(deps: ProjectsServiceDeps): ProjectsServic
               reassigned.push(session.id);
             }
           }
+          // Subagents whose own cwd is outside every root follow their parent session's project.
+          for (const session of repos.sessions.listUnassigned()) {
+            if (session.providerAgentId === null) continue;
+            const parent = repos.sessions.getByKey({
+              provider: session.provider,
+              providerSessionId: session.providerSessionId,
+              providerAgentId: null,
+            });
+            if (
+              parent !== undefined &&
+              parent.projectId !== null &&
+              repos.sessions.setProject(session.id, parent.projectId)
+            ) {
+              reassigned.push(session.id);
+            }
+          }
           return { id: project.id, reassigned };
         });
       } catch (error) {

@@ -180,6 +180,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const upserted = repos.sessions.upsert(input);
         sessionId = upserted.id;
         projectId = input.projectId ?? existing?.projectId ?? null;
+        if (projectId === null && key.providerAgentId !== null) {
+          projectId = inheritFromParent(sessionId, key);
+        } else if (
+          projectId !== null &&
+          key.providerAgentId === null &&
+          (input.projectId ?? null) !== null
+        ) {
+          for (const id of assignOrphanSubagents(key, projectId)) touchedSessions.add(id);
+        }
         if (upserted.created) {
           edgeScopes.set(scopeOf(event), { provider: event.provider, id: event.providerSessionId });
         }
@@ -315,6 +324,30 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       if (owner !== null) input.projectId = owner.id;
     }
     return input;
+  }
+
+  /**
+   * A subagent transcript lives in its parent's session directory, which is also why the adapter
+   * read it. When the subagent's own cwd is outside every root (e.g. it ran in a worktree), it
+   * belongs to the parent's project rather than to none (P1-F F2 finding).
+   */
+  function inheritFromParent(sessionId: string, key: SessionKey): string | null {
+    const parent = repos.sessions.getByKey({ ...key, providerAgentId: null });
+    if (parent === undefined || parent.projectId === null) return null;
+    repos.sessions.setProject(sessionId, parent.projectId);
+    return parent.projectId;
+  }
+
+  /** The parent just got its project: subagents that arrived first without one follow it. */
+  function assignOrphanSubagents(key: SessionKey, projectId: string): string[] {
+    const moved: string[] = [];
+    for (const row of repos.sessions.listByProviderSession(key.provider, key.providerSessionId)) {
+      if (row.providerAgentId !== null && row.projectId === null) {
+        repos.sessions.setProject(row.id, projectId);
+        moved.push(row.id);
+      }
+    }
+    return moved;
   }
 
   function rebuildUsageRecord(provider: NormalizedEvent['provider'], messageId: string): void {

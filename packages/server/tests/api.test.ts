@@ -15,7 +15,7 @@ import {
   EventDtoSchema,
   pageSchema,
 } from '@acp/core/api';
-import { setupApp } from './helpers.js';
+import { envelope, setupApp } from './helpers.js';
 
 const SessionPage = pageSchema(SessionSummaryDtoSchema);
 const EventPage = pageSchema(EventDtoSchema);
@@ -268,6 +268,13 @@ describe('API: project registration', () => {
         payload: { cwd: '/work/app/sub', gitBranch: null, entrypoint: null },
       },
     ]);
+    s.pipeline.ingestEvents([
+      {
+        ...envelope({ dedupKey: 'sub', sessionId: 'early', agentId: 'a1' }),
+        eventType: 'session.observed',
+        payload: { cwd: '/elsewhere/worktree', gitBranch: null, entrypoint: null },
+      },
+    ]);
     s.notices.length = 0;
 
     const res = await request(s.app)
@@ -275,9 +282,12 @@ describe('API: project registration', () => {
       .send({ name: 'app', rootPath: '/work/app' });
     expect(res.status).toBe(201);
     const project = ProjectDtoSchema.parse(res.body);
-    expect(project.sessionCount).toBe(1);
+    expect(project.sessionCount).toBe(2);
     expect(s.notices).toMatchObject([{ kind: 'projects-changed', projectIds: [project.id] }]);
     expect(s.polls.length).toBe(1);
+
+    // The subagent (cwd outside the root) follows its parent on registration.
+    expect(s.notices[0]?.sessionIds.length).toBe(2);
 
     const list = ProjectDtoSchema.array().parse((await request(s.app).get('/api/projects')).body);
     expect(list.map((p) => p.name)).toEqual(['app']);

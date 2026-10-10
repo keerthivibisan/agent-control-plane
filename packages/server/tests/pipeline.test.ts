@@ -260,3 +260,46 @@ describe('pipeline: forks', () => {
     expect(s.repos.usage.getRecord('claude-code', 'msg-1')?.sessionId).toBe(orig!.id);
   });
 });
+
+describe('pipeline: subagent project inheritance (P1-F F2 finding)', () => {
+  const sub = { sessionId: 'sess-1', agentId: 'a1' };
+  const projectOf = (s: ReturnType<typeof setupPipeline>, agentId: string | null) =>
+    s.repos.sessions.getByKey({
+      provider: 'claude-code',
+      providerSessionId: 'sess-1',
+      providerAgentId: agentId,
+    })?.projectId;
+
+  it('gives a subagent whose cwd is outside every root its parent session project', () => {
+    const s = setupPipeline();
+    const p = s.repos.projects.insert({ name: 'p', rootPath: '/work/p' });
+    s.pipeline.ingestEvents([
+      observed({ dedupKey: 'root' }, '/work/p'),
+      observed({ ...sub, dedupKey: 'sub' }, '/elsewhere/worktree'),
+      usage({ ...sub, dedupKey: 'u' }, 'msg-sub', tokens(1, 5)),
+    ]);
+    expect(projectOf(s, 'a1')).toBe(p.id);
+    expect(s.queries.usageSummary('project', { projectId: p.id })[0]?.totals.recordCount).toBe(1);
+  });
+
+  it('assigns subagents that arrived before their parent once the parent is placed', () => {
+    const s = setupPipeline();
+    const p = s.repos.projects.insert({ name: 'p', rootPath: '/work/p' });
+    s.pipeline.ingestEvents([observed({ ...sub, dedupKey: 'sub' }, '/elsewhere/worktree')]);
+    expect(projectOf(s, 'a1')).toBeNull();
+    const result = s.pipeline.ingestEvents([observed({ dedupKey: 'root' }, '/work/p')]);
+    expect(projectOf(s, 'a1')).toBe(p.id);
+    expect(result.sessionIds.length).toBe(2);
+  });
+
+  it('never assigns a project when the parent has none', () => {
+    const s = setupPipeline();
+    s.repos.projects.insert({ name: 'p', rootPath: '/work/p' });
+    s.pipeline.ingestEvents([
+      observed({ dedupKey: 'root' }, '/other'),
+      observed({ ...sub, dedupKey: 'sub' }, '/elsewhere'),
+    ]);
+    expect(projectOf(s, null)).toBeNull();
+    expect(projectOf(s, 'a1')).toBeNull();
+  });
+});
