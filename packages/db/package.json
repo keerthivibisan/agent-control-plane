@@ -1,0 +1,23 @@
+{
+  "name": "@acp/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SQLite persistence: migrations, repositories, transactions. Owned by work package P1-B.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@acp/core": "workspace:*",
+    "better-sqlite3": "13.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "vitest": "5.0.3"
+  }
+}

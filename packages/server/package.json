@@ -1,0 +1,23 @@
+{
+  "name": "@acp/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Express REST API, ingestion pipeline wiring, and SSE stream. Owned by P1-D.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@acp/core": "workspace:*",
+    "@acp/db": "workspace:*",
+    "@acp/adapter-claude-code": "workspace:*",
+    "@acp/adapter-demo": "workspace:*",
+    "express": "5.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/supertest": "7.2.1",
+    "supertest": "7.3.1",
+    "tsx": "4.23.15",
+    "vitest": "5.0.3"
+  }
+}

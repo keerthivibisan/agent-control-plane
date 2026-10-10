@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // core must stay runtime-agnostic: it is imported by both the server and the browser bundle.
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["src", "tests"]
+}

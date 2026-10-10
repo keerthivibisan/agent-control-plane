@@ -1,0 +1,29 @@
+{
+  "name": "@acp/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React dashboard: Command Center, Session Explorer, usage views. Owned by P1-E.",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@acp/core": "workspace:*",
+    "@xyflow/react": "12.12.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-is": "19.3.0",
+    "recharts": "3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "jsdom": "29.1.1",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

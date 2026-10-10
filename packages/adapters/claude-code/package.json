@@ -1,0 +1,22 @@
+{
+  "name": "@acp/adapter-claude-code",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Claude Code observation adapter: transcript, subagent metadata, and hook normalization. Owned by P1-C.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@acp/core": "workspace:*",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "vitest": "5.0.3"
+  }
+}
