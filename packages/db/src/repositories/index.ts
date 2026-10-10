@@ -52,6 +52,7 @@ export type {
   EventInsertResult,
   EventPage,
   EventsRepository,
+  ToolCallRow,
   RecentEventsQuery,
   StoredEvent,
 } from './events.js';

@@ -16,6 +16,7 @@ import {
   nonEmptyOrNull,
   parseInput,
   parseStored,
+  placeholders,
   requireNonEmpty,
   storedTimestamp,
   storedTimestampOrNull,
@@ -101,6 +102,13 @@ export interface UsageRepository {
   /** Removes a record (e.g. when only `<synthetic>` observations remain). */
   deleteRecord(provider: ProviderId, messageId: string): boolean;
   listRecordsForSession(sessionId: string): UsageRecordRow[];
+  /**
+   * Observations of every message that appears in at least two distinct sessions and in which one
+   * of `sessionIds` appears, from all of those sessions. This is the evidence for continuation
+   * (fork) edges: copied history is attributed to the original session, so usage records alone
+   * cannot show which sessions hold the same message. Ordered like `listObservationsByMessage`.
+   */
+  listSharedSightings(sessionIds: readonly string[]): UsageObservationRow[];
 }
 
 const TOKEN_COLUMNS = 'input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens';
@@ -258,6 +266,32 @@ export function createUsageRepository(ctx: RepositoryContext): UsageRepository {
      ORDER BY occurred_at IS NULL, occurred_at, message_id`,
   );
 
+  const sharedCache = new Map<number, ReturnType<typeof c.prepare>>();
+  const sharedStatement = (count: number) => {
+    let statement = sharedCache.get(count);
+    if (statement === undefined) {
+      statement = c.prepare(`
+        WITH mine AS (
+          SELECT DISTINCT provider, message_id FROM usage_observations
+          WHERE session_id IN (${placeholders(count)})
+        ), shared AS (
+          SELECT o.provider, o.message_id FROM usage_observations o
+          JOIN mine m ON m.provider = o.provider AND m.message_id = o.message_id
+          GROUP BY o.provider, o.message_id HAVING COUNT(DISTINCT o.session_id) > 1
+        )
+        SELECT o.event_id, o.provider, o.message_id, o.session_id, o.occurred_at, o.request_id,
+          o.model, o.input_tokens, o.output_tokens, o.cache_creation_tokens, o.cache_read_tokens,
+          s.provider AS s_provider, s.provider_session_id AS s_provider_session_id,
+          s.provider_agent_id AS s_provider_agent_id
+        FROM usage_observations o
+        JOIN shared h ON h.provider = o.provider AND h.message_id = o.message_id
+        JOIN sessions s ON s.id = o.session_id
+        ORDER BY o.provider, o.message_id, o.occurred_at IS NULL, o.occurred_at, o.event_id`);
+      sharedCache.set(count, statement);
+    }
+    return statement;
+  };
+
   return {
     insertObservation(input) {
       const result = insertObservation.run({
@@ -308,6 +342,12 @@ export function createUsageRepository(ctx: RepositoryContext): UsageRepository {
     },
     listRecordsForSession(sessionId) {
       return (forSession.all(sessionId) as RecordDbRow[]).map(toRecord);
+    },
+    listSharedSightings(sessionIds) {
+      if (sessionIds.length === 0) return [];
+      return (sharedStatement(sessionIds.length).all([...sessionIds]) as ObservationDbRow[]).map(
+        toObservation,
+      );
     },
   };
 }

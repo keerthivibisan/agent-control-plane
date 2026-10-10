@@ -107,11 +107,13 @@ conflict`. A different parent is recorded in `edge_conflicts`, and the edge is l
   Also `getByChild`, `listChildren`, `listForSessions`, `listConflicts`.
 - **events**: `insertIfNew` returns `{ inserted, id }` (`ON CONFLICT(dedup_key) DO NOTHING`).
   Also `getById`, `getByDedupKey`, `listRecent` (newest first, `beforeId` cursor), `listAfter`
-  (SSE replay), `maxId`. Events are validated with `NormalizedEventSchema` on write and read.
+  (SSE replay), `maxId`, `listToolCalls(sessionIds, toolUseIds?)` (`tool.called` evidence for
+  subagent edges; added for P1-D). Events are validated with `NormalizedEventSchema` on write and read.
   Unknown payload keys are stripped.
 - **usage**: `insertObservation`, `listObservationsByMessage` (each row carries its session's
   `SessionKey` for attribution), `upsertRecord` (stable id), `getRecord`, `deleteRecord`,
-  `listRecordsForSession`.
+  `listRecordsForSession`, `listSharedSightings(sessionIds)` (observations of messages seen in two or
+  more sessions, for continuation-edge derivation; added for P1-D).
 - **snapshots**: `insert`, `latestForSession`, `listForSession`. The cost is returned as
   `Sourced<number>`: `estimated`, or `unavailable` when not reported.
 - **checkpoints**: implements core's `CheckpointStore` (`get`), plus `set`, `list`, `remove`.

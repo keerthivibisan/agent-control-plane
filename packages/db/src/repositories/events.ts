@@ -2,6 +2,7 @@ import { NormalizedEventSchema, type NormalizedEvent } from '@acp/core';
 import type { RepositoryContext } from '../internal/context.js';
 import {
   nonEmptyOrNull,
+  placeholders,
   pageLimit,
   parseInput,
   parseStored,
@@ -44,6 +45,14 @@ export interface RecentEventsQuery {
   limit?: number;
 }
 
+/** A `tool.called` event, reduced to what subagent-edge derivation needs. */
+export interface ToolCallRow {
+  eventId: number;
+  sessionId: string;
+  toolUseId: string;
+  toolName: string;
+}
+
 export interface EventPage {
   /** Newest first (descending id). */
   items: StoredEvent[];
@@ -65,6 +74,11 @@ export interface EventsRepository {
   listAfter(afterId: number, limit?: number): StoredEvent[];
   /** Highest event id, or null when there are no events. */
   maxId(): number | null;
+  /**
+   * `tool.called` events of the given sessions, optionally only for these tool-use ids. Evidence
+   * for matching a subagent's spawn tool call to the session whose transcript holds it.
+   */
+  listToolCalls(sessionIds: readonly string[], toolUseIds?: readonly string[]): ToolCallRow[];
 }
 
 interface EventDbRow {
@@ -148,6 +162,13 @@ export function createEventsRepository(ctx: RepositoryContext): EventsRepository
     ORDER BY id DESC LIMIT @limit`);
   const after = c.prepare(`SELECT ${COLUMNS} FROM events WHERE id > ? ORDER BY id LIMIT ?`);
   const max = c.prepare('SELECT MAX(id) FROM events').pluck();
+  const toolCallSql = (sessions: number, toolUseIds: number) => `
+    SELECT id, session_id, json_extract(payload, '$.toolUseId') AS tool_use_id,
+      json_extract(payload, '$.toolName') AS tool_name
+    FROM events
+    WHERE event_type = 'tool.called' AND session_id IN (${placeholders(sessions)})
+    ${toolUseIds > 0 ? `AND json_extract(payload, '$.toolUseId') IN (${placeholders(toolUseIds)})` : ''}
+    ORDER BY id`;
 
   return {
     insertIfNew(input) {
@@ -206,6 +227,23 @@ export function createEventsRepository(ctx: RepositoryContext): EventsRepository
     },
     maxId() {
       return (max.get() as number | null) ?? null;
+    },
+    listToolCalls(sessionIds, toolUseIds = []) {
+      if (sessionIds.length === 0) return [];
+      const rows = c
+        .prepare(toolCallSql(sessionIds.length, toolUseIds.length))
+        .all(...sessionIds, ...toolUseIds) as {
+        id: number;
+        session_id: string;
+        tool_use_id: string;
+        tool_name: string;
+      }[];
+      return rows.map((r) => ({
+        eventId: r.id,
+        sessionId: r.session_id,
+        toolUseId: r.tool_use_id,
+        toolName: r.tool_name,
+      }));
     },
   };
 }
