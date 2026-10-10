@@ -12,6 +12,15 @@
       "default": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "sanitize-fixture": "node scripts/sanitize-fixture.ts"
+  },
   "dependencies": {
     "@acp/core": "workspace:*",
     "zod": "4.6.5"
