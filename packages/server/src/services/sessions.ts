@@ -18,7 +18,7 @@ import type {
 import { z } from 'zod';
 import { badRequest, notFound } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../http/cursor.js';
-import { statusOf, toUsageTotalsDto, type Page } from './mappers.js';
+import { statusOf, toReportedCostDto, toUsageTotalsDto, type Page } from './mappers.js';
 
 export const SessionListQuerySchema = z.object({
   projectId: z.string().min(1).optional(),
@@ -163,10 +163,7 @@ export function createSessionsService(deps: SessionsServiceDeps): SessionsServic
       occurredAt: s.occurredAt,
       scope: s.scope,
       byModel: s.byModel,
-      reportedCostUsd:
-        s.reportedCostUsd.provenance === 'estimated'
-          ? { provenance: 'estimated', value: s.reportedCostUsd.value }
-          : { provenance: 'unavailable', value: null },
+      reportedCostUsd: toReportedCostDto(s.reportedCostUsd),
     };
   }
 

@@ -6,16 +6,18 @@ import type {
   HealthDto,
   EventDto,
   OverviewDto,
+  SessionSnapshotSummaryDto,
 } from '@acp/core/api';
+import { OVERVIEW_LATEST_SNAPSHOTS_LIMIT } from '@acp/core/api';
 import { SessionStatusSchema, addUsageTotals, emptyUsageTotals, redact } from '@acp/core';
-import type { Queries, Repositories } from '@acp/db';
+import type { Queries, Repositories, SessionRow } from '@acp/db';
 import { z } from 'zod';
 import { decodeCursor, encodeCursor } from '../http/cursor.js';
 import type { PipelineCounters } from '../pipeline/ingest.js';
 import type { SchedulerStats } from '../scheduler.js';
 import type { Page } from './mappers.js';
 import { toEventDto, type SessionsService } from './sessions.js';
-import { toUsageTotalsDto } from './mappers.js';
+import { toReportedCostDto, toUsageTotalsDto } from './mappers.js';
 import type { SessionStatusDto } from '@acp/core/api';
 
 export interface HookState {
@@ -80,6 +82,33 @@ function ignoredList(counts: Readonly<Record<string, number>>) {
   return Object.entries(counts)
     .map(([recordType, count]) => ({ recordType, count }))
     .sort((a, b) => b.count - a.count || (a.recordType < b.recordType ? -1 : 1));
+}
+
+/**
+ * The latest provider snapshot of the most recently active top-level sessions that have one.
+ * `rows` are newest first. Each entry is reported on its own: snapshots are running totals of
+ * unverified scope and are never summed (usage-accounting §9). Only top-level sessions are listed
+ * (owner decision 2026-10-10); a subagent's snapshot, if any, stays on its detail page.
+ */
+function latestSnapshots(
+  rows: readonly SessionRow[],
+  repos: Repositories,
+): SessionSnapshotSummaryDto[] {
+  const out: SessionSnapshotSummaryDto[] = [];
+  for (const row of rows) {
+    if (out.length === OVERVIEW_LATEST_SNAPSHOTS_LIMIT) break;
+    if (row.providerAgentId !== null) continue;
+    const snapshot = repos.snapshots.latestForSession(row.id);
+    if (snapshot === undefined) continue;
+    out.push({
+      sessionId: row.id,
+      title: row.title,
+      occurredAt: snapshot.occurredAt,
+      scope: snapshot.scope,
+      reportedCostUsd: toReportedCostDto(snapshot.reportedCostUsd),
+    });
+  }
+  return out;
 }
 
 export function createSystemService(deps: SystemServiceDeps): SystemService {
@@ -194,6 +223,7 @@ export function createSystemService(deps: SystemServiceDeps): SystemService {
         activeSessions: summaries.filter(isActive).slice(0, LIST_LIMIT),
         recentEvents: deps.repos.events.listRecent({ limit: LIST_LIMIT }).items.map(toEventDto),
         candidateRootCount: (await candidates()).length,
+        latestSnapshots: latestSnapshots(all, deps.repos),
       };
     },
   };

@@ -145,6 +145,67 @@ describe('API: contracts (every response is parsed by its DTO schema)', () => {
     expect(o.needsAttention.every((s) => s.lastAttentionAt !== null)).toBe(true);
   });
 
+  it('overview lists each recent top-level session latest snapshot, never summed', async () => {
+    const { app, pipeline } = await setupApp();
+    const time = (minute: number) => new Date(Date.UTC(2027, 0, 1, 0, minute)).toISOString();
+    const snapshot = (
+      key: string,
+      session: string,
+      minute: number,
+      cost: number | null,
+      agentId: string | null = null,
+    ): NormalizedEvent => ({
+      ...envelope({ dedupKey: key, sessionId: session, agentId, occurredAt: time(minute) }),
+      eventType: 'usage.snapshot',
+      payload: {
+        kind: 'cumulative-snapshot',
+        scope: 'unknown',
+        byModel: {},
+        reportedCostUsd: cost,
+      },
+    });
+    const events: NormalizedEvent[] = [];
+    for (let i = 0; i < 12; i++) {
+      events.push(snapshot(`snap-${i}`, `cost-${i}`, i, i === 9 ? null : i + 0.25));
+    }
+    // An older and a newer snapshot of one session: only the newer is shown, never their sum.
+    events.push(snapshot('snap-11-old', 'cost-11', 0, 100));
+    // A subagent's snapshot is the newest of all but is not a top-level session.
+    events.push(snapshot('snap-sub', 'cost-11', 30, 7, 'agent-1'));
+    pipeline.ingestEvents(events);
+
+    const res = await request(app).get('/api/overview');
+    const o = OverviewDtoSchema.parse(res.body);
+    expect(o.latestSnapshots.length).toBe(10);
+    const sessions = SessionPage.parse((await request(app).get('/api/sessions?limit=200')).body);
+    const providerId = (id: string) =>
+      sessions.items.find((s) => s.id === id)?.providerSessionId ?? 'missing';
+    expect(o.latestSnapshots.map((s) => providerId(s.sessionId))).toEqual([
+      'cost-11',
+      'cost-10',
+      'cost-9',
+      'cost-8',
+      'cost-7',
+      'cost-6',
+      'cost-5',
+      'cost-4',
+      'cost-3',
+      'cost-2',
+    ]);
+    expect(o.latestSnapshots[0]?.reportedCostUsd).toEqual({
+      provenance: 'estimated',
+      value: 11.25,
+    });
+    expect(o.latestSnapshots[0]?.occurredAt).toBe(time(11));
+    expect(o.latestSnapshots[2]?.reportedCostUsd).toEqual({
+      provenance: 'unavailable',
+      value: null,
+    });
+    // No total cost anywhere in the response.
+    expect(JSON.stringify(res.body)).not.toMatch(/"(total|sum)[A-Za-z]*Cost/i);
+    expect(JSON.stringify(o.latestSnapshots)).not.toContain('111.25');
+  });
+
   it('sessions list, detail and events', async () => {
     const { app } = await setupApp();
     const list = SessionPage.parse((await request(app).get('/api/sessions?limit=200')).body);

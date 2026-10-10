@@ -14,6 +14,7 @@ import { href } from '../../lib/router';
 import { CandidateRoots } from './CandidateRoots';
 import { CapabilitiesPanel, HooksStatus } from './CapabilitiesPanel';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
+import { LatestSnapshots } from './LatestSnapshots';
 import { RegisterProjectForm } from './RegisterProjectForm';
 
 function Stat({ label, value, to }: { label: string; value: number; to?: string }) {
@@ -126,8 +127,9 @@ export function CommandCenter() {
             <UsageTotals
               usage={o.totals}
               title="Total usage"
-              description="Sum of every session's direct usage, per category (subagent usage is counted once, in the subagent's own session). Categories are priced differently and are not added together. Provider-reported cost is per session; see a session's detail page."
+              description="Sum of every session's direct usage, per category (subagent usage is counted once, in the subagent's own session). Categories are priced differently and are not added together. Provider-reported cost is per session and never summed; see the latest provider snapshots below."
             />
+            <LatestSnapshots snapshots={o.latestSnapshots} />
             <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
               <Panel title={`Needs attention (${formatCount(o.needsAttention.length)})`}>
                 <NeedsAttention sessions={o.needsAttention} />

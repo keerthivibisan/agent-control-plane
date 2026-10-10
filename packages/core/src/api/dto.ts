@@ -101,15 +101,22 @@ export const SessionSummaryDtoSchema = z.object({
 });
 export type SessionSummaryDto = z.infer<typeof SessionSummaryDtoSchema>;
 
+/**
+ * Provider-reported cost: always `estimated` (never authoritative), or `unavailable` with a null
+ * value when the provider did not report one (never a false zero).
+ */
+export const ReportedCostUsdDtoSchema = z.discriminatedUnion('provenance', [
+  z.object({ provenance: z.literal('estimated'), value: z.number().nonnegative() }),
+  z.object({ provenance: z.literal('unavailable'), value: z.null() }),
+]);
+export type ReportedCostUsdDto = z.infer<typeof ReportedCostUsdDtoSchema>;
+
 export const UsageSnapshotDtoSchema = z.object({
   occurredAt: IsoTimestampSchema.nullable(),
   scope: SnapshotScopeSchema,
   byModel: z.record(z.string().min(1), TokenCountsSchema),
   /** Provider-reported running total: always estimated, never summed. */
-  reportedCostUsd: z.discriminatedUnion('provenance', [
-    z.object({ provenance: z.literal('estimated'), value: z.number().nonnegative() }),
-    z.object({ provenance: z.literal('unavailable'), value: z.null() }),
-  ]),
+  reportedCostUsd: ReportedCostUsdDtoSchema,
 });
 export type UsageSnapshotDto = z.infer<typeof UsageSnapshotDtoSchema>;
 
@@ -177,6 +184,23 @@ export const UsageSummaryDtoSchema = z.object({
 });
 export type UsageSummaryDto = z.infer<typeof UsageSummaryDtoSchema>;
 
+/** Upper bound on `OverviewDto.latestSnapshots`. */
+export const OVERVIEW_LATEST_SNAPSHOTS_LIMIT = 10;
+
+/**
+ * One top-level session's latest provider snapshot, for the Command Center. Each entry stands
+ * alone: snapshots are running totals of unverified scope, so they are never added together and
+ * there is no total cost anywhere in the API (usage-accounting §9).
+ */
+export const SessionSnapshotSummaryDtoSchema = z.object({
+  sessionId: z.string().min(1),
+  title: nullableString,
+  occurredAt: IsoTimestampSchema.nullable(),
+  scope: SnapshotScopeSchema,
+  reportedCostUsd: ReportedCostUsdDtoSchema,
+});
+export type SessionSnapshotSummaryDto = z.infer<typeof SessionSnapshotSummaryDtoSchema>;
+
 export const OverviewDtoSchema = z.object({
   projectCount: count,
   sessionsByStatus: z.record(SessionStatusSchema, count),
@@ -186,6 +210,11 @@ export const OverviewDtoSchema = z.object({
   recentEvents: z.array(EventDtoSchema),
   /** Unassigned sessions are not ingested; this is how many candidate roots were discovered. */
   candidateRootCount: count,
+  /**
+   * The latest snapshot of each of the most recently active top-level sessions that have one,
+   * newest first. Never summed.
+   */
+  latestSnapshots: z.array(SessionSnapshotSummaryDtoSchema).max(OVERVIEW_LATEST_SNAPSHOTS_LIMIT),
 });
 export type OverviewDto = z.infer<typeof OverviewDtoSchema>;
 

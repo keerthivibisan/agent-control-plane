@@ -47,5 +47,10 @@ Configuration is in [docs/development.md §5](/docs/development.md). Demo mode r
   `lastPollAt`). Adapter and server counters are in memory and reset on restart. Every path is shown
   relative to the provider data root (`displayPath`), never as an absolute home path; the DTO rejects
   absolute file-issue paths.
+- **Cost on the overview** (`OverviewDto.latestSnapshots`): the latest provider snapshot of each of the
+  10 most recently active top-level sessions that have one, newest first. Each entry's
+  `reportedCostUsd` is `estimated` or `unavailable` (null, never 0). Snapshots are never summed, so
+  there is no total cost field anywhere. Built from existing reads (`sessions.scan()` order, then
+  `snapshots.latestForSession` per top-level session until 10 are found).
 - **Not implemented**: `GET /api/sessions/:id/usage` (no DTO; `SessionDetailDto` already carries direct
-  and aggregate usage), and the cost field in `OverviewDto`.
+  and aggregate usage).

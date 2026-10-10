@@ -107,6 +107,25 @@ test('Command Center shows the demo projects and status counts from the API', as
     await expect(counts.locator('[data-status-count="completed"]')).toHaveCount(0);
   }).toPass();
   await expect(page.getByRole('region', { name: 'Total usage' })).toBeVisible();
+
+  // Provider-reported cost: one row per session from the API, labeled estimated, never totaled.
+  await expect(async () => {
+    const overview = await api<{
+      latestSnapshots: { sessionId: string; reportedCostUsd: { provenance: string } }[];
+    }>(request, '/overview');
+    expect(overview.latestSnapshots.length).toBeGreaterThan(0);
+    const rows = page.getByTestId('latest-snapshots').locator('li');
+    await expect(rows).toHaveCount(overview.latestSnapshots.length, { timeout: 1_000 });
+    for (const s of overview.latestSnapshots) {
+      const cost = page.locator(`li[data-session="${s.sessionId}"]`).getByTestId('cost');
+      await expect(cost).toContainText(
+        s.reportedCostUsd.provenance === 'estimated'
+          ? 'estimated (provider-reported)'
+          : 'unavailable',
+        { timeout: 1_000 },
+      );
+    }
+  }).toPass();
 });
 
 test('Session Explorer lists sessions and draws subagent and continuation edges', async ({

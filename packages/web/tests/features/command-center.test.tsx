@@ -170,6 +170,61 @@ describe('Command Center', () => {
     ).toBeTruthy();
   });
 
+  it('lists latest provider snapshots per session as estimated, unavailable never as $0', async () => {
+    const o = overview({
+      latestSnapshots: [
+        {
+          sessionId: 's-titled',
+          title: 'Refactor parser',
+          occurredAt: T1,
+          scope: 'unknown',
+          reportedCostUsd: { provenance: 'estimated', value: 1.5 },
+        },
+        {
+          sessionId: 'abcdef12-0000-4000-8000-000000000000',
+          title: null,
+          occurredAt: null,
+          scope: 'session',
+          reportedCostUsd: { provenance: 'unavailable', value: null },
+        },
+      ],
+    });
+    renderWithApi(<CommandCenter />, fakeServer({ ...base, '/api/overview': o }));
+
+    const list = await screen.findByTestId('latest-snapshots');
+    expect(
+      screen.getByText('Latest provider snapshots: cost estimated (provider-reported)'),
+    ).toBeTruthy();
+    const rows = list.querySelectorAll('li');
+    expect(rows.length).toBe(2);
+
+    const first = rows[0] as HTMLElement;
+    expect(within(first).getByRole('link').getAttribute('href')).toBe('#/sessions/s-titled');
+    const cost = within(first).getByTestId('cost');
+    expect(cost.textContent).toContain('~$1.50');
+    expect(cost.textContent).toContain('estimated (provider-reported)');
+    expect(cost.querySelector('[data-provenance="estimated"]')).toBeTruthy();
+    // Estimated cost is never styled as an authoritative number.
+    expect(cost.querySelector('.text-estimated.italic')).toBeTruthy();
+
+    const second = rows[1] as HTMLElement;
+    expect(within(second).getByTestId('cost').textContent).toContain('unavailable');
+    expect(second.textContent).not.toMatch(/\$0/);
+    expect(second.textContent).toContain('(time unknown)');
+
+    // Per session only: no total cost is rendered anywhere on the page.
+    expect(document.body.textContent).not.toMatch(/total cost/i);
+    expect(screen.getAllByTestId('cost').length).toBe(2);
+  });
+
+  it('says when no provider snapshot was observed', async () => {
+    renderWithApi(<CommandCenter />, fakeServer({ ...base, '/api/overview': overview() }));
+    expect((await screen.findByTestId('latest-snapshots-empty')).textContent).toBe(
+      'No provider snapshot observed yet.',
+    );
+    expect(screen.queryByTestId('cost')).toBeNull();
+  });
+
   it('says no poll ran yet instead of inventing a time', async () => {
     renderWithApi(<CommandCenter />, fakeServer({ ...base, '/api/overview': overview() }));
     const counters = await screen.findByTestId('ingestion-counters');

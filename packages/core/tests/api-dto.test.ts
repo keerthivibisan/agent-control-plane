@@ -3,6 +3,7 @@ import {
   AdapterFileIssueDtoSchema,
   DiagnosticsDtoSchema,
   EventDtoSchema,
+  OVERVIEW_LATEST_SNAPSHOTS_LIMIT,
   OverviewDtoSchema,
   SessionDetailDtoSchema,
   SessionTreeDtoSchema,
@@ -110,12 +111,63 @@ describe('API DTO contracts', () => {
       activeSessions: [summary],
       recentEvents: [],
       candidateRootCount: 0,
+      latestSnapshots: [],
     };
     expect(OverviewDtoSchema.safeParse(overview).success).toBe(true);
     const { unknown: _dropped, ...partial } = overview.sessionsByStatus;
     expect(OverviewDtoSchema.safeParse({ ...overview, sessionsByStatus: partial }).success).toBe(
       false,
     );
+  });
+
+  it('lists latest snapshots per session with estimated or unavailable cost and no total', () => {
+    const entry = (over: Record<string, unknown> = {}) => ({
+      sessionId: 's-1',
+      title: null,
+      occurredAt: T,
+      scope: 'unknown',
+      reportedCostUsd: { provenance: 'estimated', value: 0.42 },
+      ...over,
+    });
+    const overview = {
+      projectCount: 1,
+      sessionsByStatus: { active: 0, idle: 0, stale: 0, ended: 0, unknown: 0 },
+      totals: usage,
+      needsAttention: [],
+      activeSessions: [],
+      recentEvents: [],
+      candidateRootCount: 0,
+      latestSnapshots: [
+        entry(),
+        entry({
+          sessionId: 's-2',
+          occurredAt: null,
+          reportedCostUsd: { provenance: 'unavailable', value: null },
+        }),
+      ],
+    };
+    const parsed = OverviewDtoSchema.parse(overview);
+    expect(parsed.latestSnapshots[1]?.reportedCostUsd.value).toBeNull();
+    expect(Object.keys(parsed).some((k) => /cost/i.test(k))).toBe(false);
+
+    const bad = (cost: unknown) =>
+      OverviewDtoSchema.safeParse({
+        ...overview,
+        latestSnapshots: [entry({ reportedCostUsd: cost })],
+      }).success;
+    expect(bad({ provenance: 'observed', value: 1 })).toBe(false);
+    expect(bad({ provenance: 'derived', value: 1 })).toBe(false);
+    expect(bad({ provenance: 'unavailable', value: 0 })).toBe(false);
+    expect(bad({ provenance: 'estimated', value: null })).toBe(false);
+
+    const tooMany = Array.from({ length: OVERVIEW_LATEST_SNAPSHOTS_LIMIT + 1 }, (_, i) =>
+      entry({ sessionId: `s-${i}` }),
+    );
+    expect(OverviewDtoSchema.safeParse({ ...overview, latestSnapshots: tooMany }).success).toBe(
+      false,
+    );
+    const { latestSnapshots: _l, ...legacy } = overview;
+    expect(OverviewDtoSchema.safeParse(legacy).success).toBe(false);
   });
 
   it('validates tree edges and paginated events', () => {

@@ -139,6 +139,7 @@ export function overview(over: Partial<OverviewDto> = {}): OverviewDto {
     activeSessions: [],
     recentEvents: [],
     candidateRootCount: 0,
+    latestSnapshots: [],
     ...over,
   });
 }
