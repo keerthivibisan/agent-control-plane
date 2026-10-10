@@ -52,7 +52,7 @@ export function createApiRouter(services: Services): Router {
   });
   router.get('/projects/:id/sessions', (req, res) => {
     const q = CursorQuerySchema.parse(req.query);
-    res.json(services.projects.sessions(param(req.params['id']), q.cursor));
+    res.json(services.projects.sessions(param(req.params['id']), q.cursor, q.limit));
   });
 
   router.get('/sessions', (req, res) => {

@@ -41,10 +41,17 @@ export function createStreamRouter(deps: StreamDeps): Router {
       else res.write(frame(notice));
     });
 
-    const lastEventId = Number(req.headers['last-event-id']);
+    const header = req.headers['last-event-id'];
+    const lastEventId = typeof header === 'string' && header !== '' ? Number(header) : NaN;
     let sentUpTo = Number.isInteger(lastEventId) && lastEventId >= 0 ? lastEventId : null;
     if (sentUpTo !== null) {
-      const missed = deps.repos.events.listAfter(sentUpTo, REPLAY_LIMIT);
+      // Page through everything missed so every touched session is named in the catch-up notice.
+      const missed: ReturnType<typeof deps.repos.events.listAfter> = [];
+      for (;;) {
+        const page = deps.repos.events.listAfter(missed.at(-1)?.id ?? sentUpTo, REPLAY_LIMIT);
+        missed.push(...page);
+        if (page.length < REPLAY_LIMIT) break;
+      }
       const last = missed.at(-1);
       if (last !== undefined) {
         sentUpTo = last.id;

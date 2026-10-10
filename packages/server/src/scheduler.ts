@@ -54,17 +54,18 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
     lastPollAt: null,
   };
   let stopped = true;
+  let closed = false;
   let timer: unknown;
   let current: Promise<void> | null = null;
   let rerun: Promise<void> | null = null;
 
   async function pollOnce(): Promise<void> {
     stats.polls++;
-    const roots: RegisteredRoot[] = deps.repos.projects
-      .list()
-      .map((p) => ({ projectId: p.id, rootPath: p.rootPath }));
     for (const adapter of deps.adapters) {
       try {
+        const roots: RegisteredRoot[] = deps.repos.projects
+          .list()
+          .map((p) => ({ projectId: p.id, rootPath: p.rootPath }));
         for await (const batch of adapter.poll(roots, deps.repos.checkpoints)) {
           const result = deps.pipeline.ingestBatch(batch);
           stats.batchesIngested++;
@@ -90,6 +91,8 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
   }
 
   function run(): Promise<void> {
+    // After stop() no new poll may start (a late hook must not touch a closing database).
+    if (closed) return Promise.resolve();
     if (current !== null) {
       // A poll is in flight: queue one follow-up and share it among all callers.
       rerun ??= current.then(() => {
@@ -112,6 +115,7 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
     },
     async stop() {
       stopped = true;
+      closed = true;
       if (timer !== undefined) timers.clear(timer);
       while (current !== null || rerun !== null) await (rerun ?? current);
     },

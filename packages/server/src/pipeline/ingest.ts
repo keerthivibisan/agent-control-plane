@@ -180,7 +180,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const upserted = repos.sessions.upsert(input);
         sessionId = upserted.id;
         projectId = input.projectId ?? existing?.projectId ?? null;
-        if (upserted.created && event.providerSessionId !== null) {
+        if (upserted.created) {
           edgeScopes.set(scopeOf(event), { provider: event.provider, id: event.providerSessionId });
         }
       }

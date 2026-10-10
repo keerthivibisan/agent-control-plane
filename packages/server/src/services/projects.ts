@@ -15,7 +15,7 @@ export interface ProjectsService {
   list(): ProjectDto[];
   get(id: string): ProjectDto;
   register(input: unknown): Promise<ProjectDto>;
-  sessions(id: string, cursor: string | undefined): Page<SessionSummaryDto>;
+  sessions(id: string, cursor: string | undefined, limit?: number): Page<SessionSummaryDto>;
 }
 
 export interface ProjectsServiceDeps {
@@ -96,11 +96,11 @@ export function createProjectsService(deps: ProjectsServiceDeps): ProjectsServic
       return get(result.id);
     },
 
-    sessions(id, cursor) {
+    sessions(id, cursor, limit = 50) {
       if (repos.projects.getById(id) === undefined) throw notFound(`Project ${id} not found`);
       return deps.sessions.list({
         projectId: id,
-        limit: 50,
+        limit,
         ...(cursor !== undefined && { cursor }),
       });
     },

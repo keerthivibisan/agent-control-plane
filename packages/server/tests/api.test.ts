@@ -343,3 +343,15 @@ describe('API: local-only guard', () => {
     expect(ErrorDtoSchema.safeParse(foreignOrigin.body).success).toBe(true);
   });
 });
+
+describe('API: project sessions page size', () => {
+  it('honours ?limit on /projects/:id/sessions', async () => {
+    const { app, repos } = await setupApp();
+    const api = repos.projects.list().find((p) => p.name === 'demo-api')!;
+    const page = SessionPage.parse(
+      (await request(app).get(`/api/projects/${api.id}/sessions?limit=2`)).body,
+    );
+    expect(page.items).toHaveLength(2);
+    expect(page.page.nextCursor).not.toBeNull();
+  });
+});

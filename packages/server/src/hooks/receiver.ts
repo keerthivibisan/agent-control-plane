@@ -48,8 +48,8 @@ export function createHookRouter(deps: HookDeps): Router {
         // The adapter's message may quote the payload, so it is not echoed or logged.
         throw new HttpError(400, 'invalid_hook', 'Hook payload was not recognised');
       }
-      deps.hookState.receivedAny = true;
       if (events.length > 0) deps.pipeline.ingestEvents(events);
+      deps.hookState.receivedAny = true;
       deps.requestPoll();
       deps.logger.log('info', 'hook accepted', { events: events.length });
       res.status(204).end();

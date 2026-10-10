@@ -138,10 +138,16 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
 
-  const server: Server = await new Promise((resolve, reject) => {
-    const s = app.listen(options.port ?? config.port, config.host, () => resolve(s));
-    s.once('error', reject);
-  });
+  let server: Server;
+  try {
+    server = await new Promise<Server>((resolve, reject) => {
+      const s = app.listen(options.port ?? config.port, config.host, () => resolve(s));
+      s.once('error', reject);
+    });
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   scheduler.start();
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : config.port;
@@ -150,9 +156,10 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   return {
     port,
     async close() {
-      await scheduler.stop();
+      // Stop accepting requests first so no hook can request a poll while the scheduler drains.
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      await scheduler.stop();
       db.close();
     },
   };
