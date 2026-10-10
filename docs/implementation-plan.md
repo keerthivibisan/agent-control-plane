@@ -18,7 +18,7 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 | P1-C | Claude Code adapter + demo adapter + fixtures     | adapter agent     | P0                                                              | **done** (C0–C7); real hook payload capture pending approval | `wp/p1-c-adapters-2`                                |
 | P1-D | Server: pipeline, API, SSE, hooks                 | backend agent     | P1-A, P1-B, P1-C (C0 first)                                     | **done** (D0–D7); live mode needs P1-C                       | `wp/p1-d-server`                                    |
 | P1-E | Web UI                                            | frontend agent    | P1-D0 (API contract); P1-D running in demo mode for integration | done: E0–E5 (verified against the demo server)               | `wp/p1-e-web-2` (E3–E5; E0–E2 on main)              |
-| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | todo                                                         |                                                     |
+| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | in-progress: F1, F3, F5 done; F2, F4 pending user consent    | `wp/p1-f-verify`                                    |
 
 ```mermaid
 flowchart TD
@@ -204,53 +204,83 @@ Components are data-driven and small, under `features/<screen>/`. Shared UI live
 
 ### Phase 1 acceptance checklist (all must be checked by P1-F with evidence)
 
+Checked items were verified on 2026-10-10 on `wp/p1-f-verify` against synthetic fixtures, the demo
+server, and tests only. **No real Claude data has been read yet:** items that need it stay unchecked
+until F2 and F4 run with the user's consent. Details: [P1-F verification note](research/p1-f-verification-2026-10-10.md).
+Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.ts`, **F3**
+`…/verification/recovery.test.ts`, **ACC** `…/verification/acceptance.test.ts`, **E2E**
+`packages/web/e2e/demo.spec.ts`.
+
 **Session discovery**
 
-- [ ] A real session is discovered.
-- [ ] Project association uses verified path containment.
-- [ ] Sessions started outside the control plane are observed.
-- [ ] An unknown parent stays unknown.
+- [ ] A real session is discovered. _Pending F2 (user consent)._
+- [x] Project association uses verified path containment. F1 generated root: a session whose
+      `cwd` is outside `/home/user/project` is not ingested, its subagent with an in-root `cwd` is,
+      in both the pipeline and the reference.
+- [ ] Sessions started outside the control plane are observed. _Pending F4 (live session)._
+- [x] An unknown parent stays unknown. E2E: the demo root shows "parent: unknown" in the graph and
+      on its detail page; ACC: scenario 04 (no meta) gives no edge.
 
 **Relationships**
 
-- [ ] Meta creates an edge.
-- [ ] Missing meta creates no guessed edge.
-- [ ] Edges are stable across re-ingestion.
+- [x] Meta creates an edge. ACC: scenario 03 gives one `subagent` edge with `subagent-metadata`
+      evidence.
+- [x] Missing meta creates no guessed edge. ACC: scenario 04 has the subagent session and no edge.
+- [x] Edges are stable across re-ingestion. F3: edges (kind, endpoints, provenance, evidence)
+      are identical after a checkpoint wipe and after restarts, for every scenario.
 
 **Usage**
 
-- [ ] Duplicate message ids don't inflate usage.
-- [ ] Snapshots are never summed.
-- [ ] Missing usage stays unavailable.
-- [ ] Hook and transcript channels don't double-count.
+- [x] Duplicate message ids don't inflate usage. F1: scenarios 01 (streaming growth), 02 (fork)
+      and the generated root equal the independent reference; a first-wins mutation of the
+      reference fails 3 tests.
+- [x] Snapshots are never summed. F1 scenario 09: usage totals equal the reference, which never
+      reads `cost-state`; E2E: the snapshot is shown separately, labeled estimated.
+- [x] Missing usage stays unavailable. F1 scenario 12 and the generated root (missing, negative and
+      non-integer counts stay null with `recordsWithUnavailable`); E2E renders "unavailable".
+- [x] Hook and transcript channels don't double-count. ACC: ingesting every scenario-13 hook
+      payload after the transcript adds events but no usage observation or record.
 
 **Recovery**
 
-- [ ] Re-ingestion leaves totals unchanged.
-- [ ] A restart creates no duplicates.
-- [ ] Partial lines are safe.
-- [ ] Stale is never shown as completed.
+- [x] Re-ingestion leaves totals unchanged. F3: delete all checkpoints and re-run, for every
+      scenario.
+- [x] A restart creates no duplicates. F3: stop after the first batch (200-byte chunks), reopen
+      the DB, continue; and one restart per batch; no duplicate dedup keys, same state as one run.
+- [x] Partial lines are safe. F1 scenario 06 and the generated root's unterminated last line;
+      F3 restarts with chunks smaller than a line.
+- [ ] Stale is never shown as completed. _Partial:_ E2E asserts no "completed" status in the
+      Command Center (the status enum has none); the live active → stale transition is F4.
 
 **Frontend**
 
-- [ ] The UI shows real persisted data.
-- [ ] The hierarchy is inspectable.
-- [ ] Timeline and usage views work.
-- [ ] Direct and aggregate usage are distinguishable.
-- [ ] Provenance and unavailable values are visible.
-- [ ] Demo data is separated.
+- [ ] The UI shows real persisted data. _Partial:_ E2E shows the demo server's persisted data
+      matches the API on every screen; real data is F2.
+- [x] The hierarchy is inspectable. E2E: graph nodes and edges equal `/tree`, subagent and
+      continuation edges labeled.
+- [x] Timeline and usage views work. E2E: concurrency timeline, both usage charts, chart table,
+      group table.
+- [x] Direct and aggregate usage are distinguishable. E2E: separate "Direct usage" and
+      "Aggregate usage" regions equal to the API, aggregate > direct for the root.
+- [x] Provenance and unavailable values are visible. E2E: "estimated (provider-reported)" cost,
+      "unavailable" categories, "no snapshot" note.
+- [x] Demo data is separated. E2E: DEMO banner and "demo mode" on every screen; the demo server
+      runs on its own `demo.sqlite` in a temp data dir.
 
 **Security**
 
-- [ ] Credential files are excluded (a test proves it).
-- [ ] Access is limited to registered roots.
-- [ ] Logs are redacted.
-- [ ] User config is never modified.
+- [x] Credential files are excluded (a test proves it). ACC: with scenario 14 (sessions/,
+      `.key`, settings, history, memory, set-aside files) only the one allowlisted transcript is
+      read (event source paths and checkpoints).
+- [x] Access is limited to registered roots. F1 generated root (out-of-root session excluded).
+- [ ] Logs are redacted. _Not verified by P1-F yet._
+- [x] User config is never modified. ACC: sha256 and mtime of every file in the data root,
+      `settings.json` included, are unchanged after two full ingests.
 
 **Quality**
 
-- [ ] `pnpm check` passes.
-- [ ] CI is green.
+- [x] `pnpm check` passes (on `wp/p1-f-verify`).
+- [ ] CI is green. _Not verifiable here: the branch is not pushed._
 
 ## Risks
 
