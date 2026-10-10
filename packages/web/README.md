@@ -2,7 +2,7 @@
 
 **Owner:** work package P1-E (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
 
-**Status:** **Not implemented.** Dependencies are pinned.
+**Status:** E0–E5 implemented: Command Center, Session Explorer, session detail (`#/sessions/:id`), usage analytics (`#/usage`), project page (`#/projects/:id`). Checked against the demo server only; no real-data run yet (P1-F).
 
 ## Responsibility
 

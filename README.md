@@ -7,13 +7,13 @@ provider is Claude Code. Codex support will follow through a separate adapter.
 > **Status: Phase 1 in progress. The server runs in demo mode only (`ACP_MODE=demo pnpm dev`); live mode
 > waits for the Claude Code adapter.**
 >
-> **Implemented and tested** (456 tests):
+> **Implemented and tested** (475 tests):
 >
 > - core contracts and the usage-accounting logic;
 > - SQLite persistence;
 > - the demo adapter;
 > - Claude Code file discovery and the incremental reader;
-> - the web UI shell, Command Center, and Session Explorer, built against the API contract;
+> - the web UI: Command Center, Session Explorer, session detail, usage analytics, and project page;
 > - the server: ingestion pipeline, scheduler, REST API, SSE stream, hook receiver, and static UI
 >   serving. Verified in demo mode (`/api` on 127.0.0.1:7420, UI on 127.0.0.1:5173).
 >

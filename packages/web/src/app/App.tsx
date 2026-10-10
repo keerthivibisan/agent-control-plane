@@ -1,4 +1,5 @@
 import { CommandCenter } from '../features/command-center/CommandCenter';
+import { ProjectPage } from '../features/project/ProjectPage';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { ApiProvider, useQueryStore } from '../lib/query';
@@ -16,6 +17,8 @@ function Screen({ route }: { route: Route }) {
       return <SessionExplorer search={route.params} />;
     case 'session':
       return <SessionDetail key={route.id} id={route.id} />;
+    case 'project':
+      return <ProjectPage key={route.id} id={route.id} />;
     case 'usage':
       return <UsageAnalytics search={route.params} />;
     default:

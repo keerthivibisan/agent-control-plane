@@ -10,15 +10,15 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 
 <!-- Agents: update your row when you start (in-progress + branch) and when you finish (done + PR/commit). -->
 
-| WP   | Title                                             | Owner role        | Depends on                                                      | Status                                     | Branch                                              |
-| ---- | ------------------------------------------------- | ----------------- | --------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------- |
-| P0   | Bootstrap: repo, tooling, core contracts v1, docs | coordinator       | —                                                               | **done**                                   | `main`                                              |
-| P1-A | Core domain logic                                 | core agent        | P0                                                              | **done**                                   | `wp/p1-a-core-logic`, `wp/p1-a9-fork-ties` (merged) |
-| P1-B | Persistence (SQLite)                              | persistence agent | P0                                                              | **done**                                   | `wp/p1-b-persistence` (merged)                      |
-| P1-C | Claude Code adapter + demo adapter + fixtures     | adapter agent     | P0                                                              | in-progress: C0–C3 merged; C4–C7 remaining | WIP `wp/p1-c4-wip`                                  |
-| P1-D | Server: pipeline, API, SSE, hooks                 | backend agent     | P1-A, P1-B, P1-C (C0 first)                                     | **done** (D0–D7); live mode needs P1-C     | `wp/p1-d-server`                                    |
-| P1-E | Web UI                                            | frontend agent    | P1-D0 (API contract); P1-D running in demo mode for integration | in-progress: E0–E2 merged; E3–E5 remaining | `wp/p1-e-web` (merged so far)                       |
-| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | todo                                       |                                                     |
+| WP   | Title                                             | Owner role        | Depends on                                                      | Status                                         | Branch                                              |
+| ---- | ------------------------------------------------- | ----------------- | --------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------- |
+| P0   | Bootstrap: repo, tooling, core contracts v1, docs | coordinator       | —                                                               | **done**                                       | `main`                                              |
+| P1-A | Core domain logic                                 | core agent        | P0                                                              | **done**                                       | `wp/p1-a-core-logic`, `wp/p1-a9-fork-ties` (merged) |
+| P1-B | Persistence (SQLite)                              | persistence agent | P0                                                              | **done**                                       | `wp/p1-b-persistence` (merged)                      |
+| P1-C | Claude Code adapter + demo adapter + fixtures     | adapter agent     | P0                                                              | in-progress: C0–C3 merged; C4–C7 remaining     | WIP `wp/p1-c4-wip`                                  |
+| P1-D | Server: pipeline, API, SSE, hooks                 | backend agent     | P1-A, P1-B, P1-C (C0 first)                                     | **done** (D0–D7); live mode needs P1-C         | `wp/p1-d-server`                                    |
+| P1-E | Web UI                                            | frontend agent    | P1-D0 (API contract); P1-D running in demo mode for integration | done: E0–E5 (verified against the demo server) | `wp/p1-e-web-2` (E3–E5; E0–E2 on main)              |
+| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | todo                                           |                                                     |
 
 ```mermaid
 flowchart TD
