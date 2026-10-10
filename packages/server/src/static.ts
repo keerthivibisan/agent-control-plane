@@ -11,7 +11,9 @@ export function mountStatic(app: Express, dir: string): boolean {
   if (!existsSync(index)) return false;
   app.use(express.static(dir, { index: false, fallthrough: true }));
   app.get(/^\/(?!api(\/|$)).*/, (_req, res) => {
-    res.sendFile(index);
+    // Relative to `root`: send's dotfile check then covers only 'index.html', not the parent
+    // directories, so a checkout under a dot-directory (e.g. .claude/worktrees) still works.
+    res.sendFile('index.html', { root: dir });
   });
   return true;
 }
