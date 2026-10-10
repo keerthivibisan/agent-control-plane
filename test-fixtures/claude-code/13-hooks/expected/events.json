@@ -1,0 +1,163 @@
+[
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "CwdChanged"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:CwdChanged:2dafdf1a40cc14698486e1e49f367d3dcd6c19b9784a9708c4081ed572595453",
+    "eventType": "session.cwd_changed",
+    "payload": {
+      "from": "/home/user/project",
+      "to": "/home/user/project/packages/a"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "Notification"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Notification:f9d14ae8fd5592609a0dfb97cd9ed5a693d02aae4b9068670da5e34bde9b20fc",
+    "eventType": "session.attention",
+    "payload": {
+      "notificationType": "permission_prompt"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "SessionEnd"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionEnd:d1481374880edcde9e9f24cf42b56de1e1d6f8c26394aa9ce7f54cc0129aa4d0",
+    "eventType": "session.ended",
+    "payload": {
+      "reason": "prompt_input_exit"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "SessionStart"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SessionStart:6aa5be96443b04a3a01fdac6af3f2da6e61f555bf2db83ea5523191423303a08",
+    "eventType": "session.started",
+    "payload": {
+      "startSource": "startup",
+      "model": "claude-sonnet-4-5"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "Stop"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:Stop:e692bc8f8095c2965aa4907b490910f77e74d7566e6f9de709fec7860f88cc1f",
+    "eventType": "session.turn_ended",
+    "payload": {}
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake1301",
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "SubagentStart"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStart:dc9f8478ae4506e646fce66c6c1bb6e0b99f40f9a212e0e1c69657e1560780bb",
+    "eventType": "subagent.spawned",
+    "payload": {
+      "parentProviderSessionId": "c0ffee00-0000-4000-8000-000000000001",
+      "agentId": "afake1301",
+      "agentType": "Explore",
+      "description": null,
+      "spawnToolUseId": null,
+      "spawnDepth": null,
+      "model": null
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake1301",
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "hook",
+      "providerVersion": null,
+      "path": null,
+      "byteOffset": null,
+      "hookEvent": "SubagentStop"
+    },
+    "dedupKey": "cc:hook:c0ffee00-0000-4000-8000-000000000001:SubagentStop:1ff11b4f36d1bdfe87c255289db7eefb544bed93559de29008a12fcd8d14c2ca",
+    "eventType": "subagent.stopped",
+    "payload": {
+      "agentId": "afake1301",
+      "agentType": "Explore"
+    }
+  }
+]

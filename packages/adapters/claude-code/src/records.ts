@@ -248,7 +248,7 @@ function normalizeEnvelopeRecord(
 }
 
 type Envelope = z.infer<typeof EnvelopeSchema>;
-type EventBase = Pick<
+export type EventBase = Pick<
   NormalizedEvent,
   | 'schemaVersion'
   | 'provider'
