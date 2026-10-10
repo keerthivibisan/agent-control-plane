@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { startServer } from './bootstrap.js';
 import { ConfigError, loadConfig } from './config.js';
-import { createLogger } from './logger.js';
+import { createLogger, errorFields } from './logger.js';
 
 const logger = createLogger();
 
@@ -20,8 +20,12 @@ try {
   process.once('SIGINT', () => shutdown('SIGINT'));
   process.once('SIGTERM', () => shutdown('SIGTERM'));
 } catch (error) {
-  const message =
-    error instanceof ConfigError || error instanceof Error ? error.message : 'unknown error';
-  logger.log('error', 'failed to start', { message });
+  // A ConfigError names variables and rules, never their values. Any other message can quote an
+  // absolute path (data dir, database file), so only its class and code are logged.
+  logger.log(
+    'error',
+    'failed to start',
+    error instanceof ConfigError ? { message: error.message } : errorFields(error),
+  );
   process.exit(1);
 }

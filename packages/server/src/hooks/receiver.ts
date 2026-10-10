@@ -1,7 +1,8 @@
-import express, { Router } from 'express';
+import express, { Router, type ErrorRequestHandler } from 'express';
 import type { ObservationAdapter } from '@acp/core';
 import { HttpError } from '../errors.js';
-import type { Logger } from '../logger.js';
+import { requestIdOf } from '../http/middleware.js';
+import { errorFields, type Logger } from '../logger.js';
 import type { Pipeline } from '../pipeline/ingest.js';
 import type { HookState } from '../services/system.js';
 import { tokenMatches } from './token.js';
@@ -51,9 +52,30 @@ export function createHookRouter(deps: HookDeps): Router {
       if (events.length > 0) deps.pipeline.ingestEvents(events);
       deps.hookState.receivedAny = true;
       deps.requestPoll();
-      deps.logger.log('info', 'hook accepted', { events: events.length });
+      deps.logger.log('info', 'hook accepted', {
+        requestId: requestIdOf(res),
+        events: events.length,
+      });
       res.status(204).end();
     },
   );
+  // Every rejection is logged with the request id and a fixed reason code, never the body, headers
+  // or token; the shared error handler then sends the ErrorDto.
+  const logRejection: ErrorRequestHandler = (err: unknown, _req, res, next) => {
+    deps.logger.log('warn', 'hook rejected', {
+      requestId: requestIdOf(res),
+      reason: rejectionReason(err),
+    });
+    next(err);
+  };
+  router.use('/hooks/claude-code', logRejection);
   return router;
+}
+
+function rejectionReason(err: unknown): string {
+  if (err instanceof HttpError) return err.code;
+  const type = (err as { type?: unknown } | null)?.type;
+  if (type === 'entity.too.large') return 'payload_too_large';
+  if (type === 'entity.parse.failed') return 'invalid_json';
+  return errorFields(err).errorName;
 }

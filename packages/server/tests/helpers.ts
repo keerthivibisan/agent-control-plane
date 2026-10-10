@@ -12,7 +12,7 @@ import type {
 } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import { createQueries, createRepositories, openDatabase, type AcpDatabase } from '@acp/db';
-import { silentLogger } from '../src/logger.js';
+import { createLogger, silentLogger, type Logger } from '../src/logger.js';
 import { createNotifier } from '../src/notifier.js';
 import { createPipeline } from '../src/pipeline/ingest.js';
 
@@ -32,7 +32,10 @@ export const at = (seconds: number): string =>
   new Date(Date.parse(T0) + seconds * 1000).toISOString();
 
 /** A temp-file database with repositories and a pipeline whose notices are collected. */
-export function setupPipeline(dbPath = join(tempDir(), 'acp.sqlite')) {
+export function setupPipeline(
+  dbPath = join(tempDir(), 'acp.sqlite'),
+  logger: Logger = silentLogger,
+) {
   const db: AcpDatabase = openDatabase(dbPath);
   cleanups.push(() => db.close());
   const repos = createRepositories(db);
@@ -46,7 +49,7 @@ export function setupPipeline(dbPath = join(tempDir(), 'acp.sqlite')) {
   const pipeline = createPipeline({
     db,
     repos,
-    logger: silentLogger,
+    logger,
     now: () => new Date(at(3600)),
     publish,
   });
@@ -170,6 +173,17 @@ export async function collect(
 
 export const API_NOW = new Date('2026-10-10T08:05:00.000Z');
 
+/** A real `createLogger` whose JSON lines are kept in memory, so tests can assert what was logged. */
+export function captureLogger() {
+  const lines: string[] = [];
+  const logger = createLogger(
+    (line) => lines.push(line),
+    () => API_NOW,
+  );
+  const records = () => lines.map((l) => JSON.parse(l) as Record<string, unknown>);
+  return { logger, lines, records };
+}
+
 /** The full app over a temp database, with the demo adapter available but nothing ingested yet. */
 export async function setupApp(
   options: {
@@ -178,15 +192,18 @@ export async function setupApp(
     hookAdapter?: ObservationAdapter;
     /** Extra adapters reported by the services (diagnostics, capabilities) and polled. */
     extraAdapters?: ObservationAdapter[];
+    /** Used by the pipeline, scheduler, error handler and hook receiver. */
+    logger?: Logger;
   } = {},
 ) {
+  const logger = options.logger ?? silentLogger;
   const { createApp } = await import('../src/app.js');
   const { loadConfig } = await import('../src/config.js');
   const { createServices } = await import('../src/services/index.js');
   const { createScheduler } = await import('../src/scheduler.js');
   const { createDemoAdapter } = await import('@acp/adapter-demo');
 
-  const base = setupPipeline();
+  const base = setupPipeline(undefined, logger);
   const config = loadConfig(
     { ACP_MODE: 'demo', ACP_DATA_DIR: tempDir() },
     { homeDir: '/home/tester' },
@@ -200,7 +217,7 @@ export async function setupApp(
     adapters,
     repos: base.repos,
     pipeline: base.pipeline,
-    logger: silentLogger,
+    logger,
     now: () => API_NOW,
     intervalMs: 60_000,
   });
@@ -226,7 +243,7 @@ export async function setupApp(
   const hookAdapter = options.hookAdapter;
   const app = createApp({
     config,
-    logger: silentLogger,
+    logger,
     services,
     stream: { repos: base.repos, notifier, heartbeatMs: 20 },
     hooks: {
@@ -235,7 +252,7 @@ export async function setupApp(
       pipeline: base.pipeline,
       hookState,
       requestPoll: () => void polls.push(1),
-      logger: silentLogger,
+      logger,
       now: () => API_NOW,
     },
   });

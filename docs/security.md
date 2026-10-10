@@ -37,10 +37,17 @@
      `-----BEGIN … PRIVATE KEY-----`, `Bearer <token>`, `Authorization:` headers, and `password=`/`token=`
      query values.
    - Redaction must be tested with positive and negative cases.
-5. **Logging.**
-   - Logs are structured JSON lines with a request id.
+5. **Logging [implemented, P1-D; audited 2026-10-10].**
+   - Logs are structured JSON lines; request-scoped lines (hook accepted/rejected, unhandled request
+     errors) carry the request id.
    - Logs never include payload bodies, hook bodies, or file contents. They include only ids, counts,
      and paths relative to the Claude data root.
+   - Caught errors are logged as `errorName` plus a machine `errorCode` (`EACCES`, `SQLITE_BUSY`) via
+     the server's `errorFields()`, never the message, which can quote paths or values. The one
+     exception is a startup `ConfigError`, whose message names variables and rules but not values.
+   - Hook rejections log `requestId` and a fixed `reason` (`unauthorized`, `invalid_hook`,
+     `invalid_json`, `payload_too_large`, `hooks_unavailable`) only.
+   - Tested in `packages/server/tests/logging.test.ts`, which captures real logger output.
 6. **HTTP.**
    - Every input is validated with Zod.
    - Errors use the format `{ error: { code, message, requestId } }`, with no stack traces in responses.

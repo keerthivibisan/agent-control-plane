@@ -21,7 +21,7 @@ import {
   type SessionUpsertInput,
 } from '@acp/db';
 import { z } from 'zod';
-import type { Logger } from '../logger.js';
+import { errorFields, type Logger } from '../logger.js';
 
 /**
  * The ingestion pipeline (docs/architecture.md): validate → dedupe → persist → project → checkpoint,
@@ -115,8 +115,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       });
     } catch (error) {
       counters.batchesFailed++;
+      // Counts and the error class only: never event payloads, paths or the driver's message.
       logger.log('error', 'ingest batch rolled back', {
-        errorName: error instanceof Error ? error.name : 'unknown',
+        ...errorFields(error),
         events: candidates.length,
       });
       throw error;

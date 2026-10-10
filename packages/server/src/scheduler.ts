@@ -1,6 +1,6 @@
 import type { ObservationAdapter, RegisteredRoot } from '@acp/core';
 import type { Repositories } from '@acp/db';
-import type { Logger } from './logger.js';
+import { errorFields, type Logger } from './logger.js';
 import type { Pipeline } from './pipeline/ingest.js';
 
 /**
@@ -74,9 +74,10 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       } catch (error) {
         // One failing adapter or batch must not stop the others; it is counted and logged.
         stats.pollErrors++;
+        // Name and code only: an adapter error message may quote a path under the data root.
         deps.logger.log('error', 'poll failed', {
           provider: adapter.provider,
-          errorName: error instanceof Error ? error.name : 'unknown',
+          ...errorFields(error),
         });
       }
     }

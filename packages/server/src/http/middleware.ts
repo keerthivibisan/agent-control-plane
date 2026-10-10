@@ -3,7 +3,7 @@ import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import type { ErrorDto } from '@acp/core/api';
 import { HttpError } from '../errors.js';
-import type { Logger } from '../logger.js';
+import { errorFields, type Logger } from '../logger.js';
 
 export const REQUEST_ID_HEADER = 'X-Request-Id';
 
@@ -67,7 +67,7 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
     logger.log('error', 'unhandled request error', {
       requestId: requestIdOf(res),
       method: req.method,
-      errorName: err instanceof Error ? err.name : 'unknown',
+      ...errorFields(err),
     });
     res.status(500).json(errorBody(res, 'internal_error', 'Internal server error'));
   };

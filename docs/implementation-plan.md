@@ -278,7 +278,12 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
       `.key`, settings, history, memory, set-aside files) only the one allowlisted transcript is
       read (event source paths and checkpoints).
 - [x] Access is limited to registered roots. F1 generated root (out-of-root session excluded).
-- [ ] Logs are redacted. _Not verified by P1-F yet._
+- [x] Logs are redacted. Audit of every server logger call (2026-10-10, `wp/p1-followups-api`):
+      lines are `redact()`ed JSON; errors log only class name and machine code (`errorFields`), and
+      `failed to start` no longer logs arbitrary error messages; hook rejections now log request id
+      and reason code. `packages/server/tests/logging.test.ts` captures real logger output for hook
+      rejections and acceptance, rolled-back batches, invalid events, failed polls and unhandled
+      request errors, and asserts that no body, path or secret appears.
 - [x] User config is never modified. ACC: sha256 and mtime of every file in the data root,
       `settings.json` included, are unchanged after two full ingests.
 
