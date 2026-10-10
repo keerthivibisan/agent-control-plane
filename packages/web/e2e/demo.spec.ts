@@ -185,6 +185,31 @@ test('session detail separates direct and aggregate usage and labels cost as est
   await expect(page.getByRole('heading', { name: 'Event timeline (newest first)' })).toBeVisible();
 });
 
+test('a category no record reported renders as "unavailable", never 0', async ({
+  page,
+  request,
+}) => {
+  // The demo set has a session with missing usage categories (fixtures README).
+  let target: Session | undefined;
+  await expect(async () => {
+    const list = await api<{ items: Session[] }>(request, '/sessions?limit=200');
+    target = list.items.find((s) => CATEGORIES.some((c) => s.directUsage.tokens[c] === null));
+    expect(target).toBeDefined();
+  }).toPass();
+  if (target === undefined) throw new Error('no session with an unavailable category');
+  const id = target.id;
+  await open(page, `/sessions/${id}`);
+  await expect(async () => {
+    const d = await api<Detail>(request, `/sessions/${id}`);
+    await expectTotals(page.getByTestId('usage-direct'), d.directUsage);
+    const nullCategory = CATEGORIES.find((c) => d.directUsage.tokens[c] === null);
+    expect(nullCategory).toBeDefined();
+    await expect(
+      page.getByTestId('usage-direct').locator(`dd[data-category="${nullCategory}"]`),
+    ).toHaveText('unavailable', { timeout: 1_000 });
+  }).toPass();
+});
+
 test('usage page renders both charts, the chart table, and direct totals from the API', async ({
   page,
   request,
