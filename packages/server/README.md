@@ -2,8 +2,8 @@
 
 **Owner:** work package P1-D (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
 
-**Status:** **Implemented (P1-D), demo mode verified.** Live mode refuses to start until the Claude
-Code adapter (P1-C) is integrated.
+**Status:** **Implemented (P1-D).** Demo mode verified end to end; live mode wired to the Claude Code
+adapter and tested against sanitized fixtures (not yet against real data, P1-F).
 
 ## Responsibility
 
@@ -20,7 +20,13 @@ repositories`.
 
 ```bash
 ACP_MODE=demo pnpm dev   # server on 127.0.0.1:7420, UI on http://127.0.0.1:5173
+pnpm dev                 # live mode: reads <ACP_CLAUDE_DIR>/projects for registered projects only
+pnpm --filter @acp/server hooks:snippet   # prints Claude Code hook settings to paste yourself
 ```
+
+Hooks are optional. The snippet references `$ACP_HOOK_TOKEN`; set it to the contents of
+`<ACP_DATA_DIR>/hook-token`. The app never writes Claude settings. The snippet shape is unverified
+until real hook payloads are captured (P1-C6).
 
 Configuration is in [docs/development.md §5](/docs/development.md). Demo mode rebuilds
 `<ACP_DATA_DIR>/demo.sqlite` on every start and replays fixtures starting 20 minutes in the past.
@@ -35,4 +41,4 @@ Configuration is in [docs/development.md §5](/docs/development.md). Demo mode r
 - **Scheduler**: polls are single-flight (not per file); requests during a poll coalesce into one rerun.
 - **Guard**: non-loopback `Host`, foreign `Origin`, and CORS preflights get 403 on all `/api` routes.
 - **Not implemented**: `GET /api/sessions/:id/usage` (no DTO; `SessionDetailDto` already carries direct
-  and aggregate usage), the Claude settings snippet (P1-C6), and the cost field in `OverviewDto`.
+  and aggregate usage), the adapter's `diagnostics()` in the diagnostics endpoint (no DTO field yet), and the cost field in `OverviewDto`.

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import type { Server } from 'node:http';
+import { createClaudeCodeAdapter } from '@acp/adapter-claude-code';
 import { createDemoAdapter } from '@acp/adapter-demo';
 import type { ObservationAdapter } from '@acp/core';
 import { createQueries, createRepositories, openDatabase } from '@acp/db';
@@ -32,6 +33,8 @@ export interface StartOptions {
   now?: () => Date;
   /** Demo fixtures start `DEMO_HEAD_START_MS` before this instant. */
   demoBaseTime?: Date;
+  /** Tests only: fixture roots like `/home/user/project` do not exist on the test machine. */
+  normalizeRoot?: (rootPath: string) => Promise<string>;
 }
 
 export interface RunningServer {
@@ -73,10 +76,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     const base = (options.demoBaseTime ?? now()).getTime() - DEMO_HEAD_START_MS;
     adapters.push(createDemoAdapter({ baseTime: new Date(base), now }));
   } else {
-    throw new Error(
-      'Live mode needs the Claude Code adapter (work package P1-C), which is not integrated yet. ' +
-        'Run with ACP_MODE=demo.',
-    );
+    // Read-only: only allowlisted files under <claudeDir>/projects inside registered roots.
+    adapters.push(createClaudeCodeAdapter({ claudeDir: config.claudeDir, now }));
   }
 
   mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
@@ -117,7 +118,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     hookReceiverUrl: `http://${config.host}:${options.port ?? config.port}/api/hooks/claude-code`,
     hookState,
     claudeDir: config.claudeDir,
-    normalizeRoot: config.mode === 'demo' ? (p) => Promise.resolve(p) : normalizeLiveRoot,
+    normalizeRoot:
+      options.normalizeRoot ??
+      (config.mode === 'demo' ? (p) => Promise.resolve(p) : normalizeLiveRoot),
     publish: (n) => notifier.publish(n),
     requestPoll,
   });

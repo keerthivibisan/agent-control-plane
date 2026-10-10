@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { z } from 'zod';
 
 /** Runtime configuration (docs/development.md §5). Parsed once at startup; invalid values fail fast. */
@@ -60,12 +60,12 @@ export function loadConfig(
     );
   }
   const home = options.homeDir ?? homedir();
-  const dataDir = e.ACP_DATA_DIR ?? join(home, '.agent-control-plane');
+  const dataDir = resolve(e.ACP_DATA_DIR ?? join(home, '.agent-control-plane'));
   return {
     host: '127.0.0.1',
     port: e.ACP_PORT,
     dataDir,
-    claudeDir: e.ACP_CLAUDE_DIR ?? e.CLAUDE_CONFIG_DIR ?? join(home, '.claude'),
+    claudeDir: resolve(e.ACP_CLAUDE_DIR ?? e.CLAUDE_CONFIG_DIR ?? join(home, '.claude')),
     mode: e.ACP_MODE,
     databasePath: join(dataDir, e.ACP_MODE === 'demo' ? 'demo.sqlite' : 'acp.sqlite'),
     hookTokenPath: join(dataDir, 'hook-token'),

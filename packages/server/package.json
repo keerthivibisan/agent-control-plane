@@ -20,7 +20,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev": "node --conditions=development --import tsx src/main.ts",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "hooks:snippet": "node --conditions=development --import tsx src/hook-snippet.ts"
   },
   "dependencies": {
     "@acp/core": "workspace:*",
