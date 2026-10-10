@@ -2,9 +2,11 @@
 
 > Status: the adapter contract is **[core v1 types]** in
 > [`packages/core/src/adapters/contract.ts`](../packages/core/src/adapters/contract.ts). The Claude Code
-> observation design below is **[planned, P1-C]**. Interface facts are labeled **verified-local** (seen
-> in local data on 2026-10-10), **documented** (Claude Code docs), or **unverified**. Verify unverified
-> items with sanitized fixtures before relying on them.
+> observation adapter is **[implemented, P1-C]** in `@acp/adapter-claude-code` and verified against
+> synthetic fixtures only; §10 lists everything that is still unverified against a real runtime.
+> Interface facts are labeled **verified-local** (seen in local data on 2026-10-10), **documented**
+> (Claude Code docs), or **unverified**. Verify unverified items with sanitized fixtures before
+> relying on them.
 
 ## 1. Contract
 
@@ -163,8 +165,9 @@ truthful answer. Stale never means completed.
 
 ## 8. Errors and version drift
 
-- Any per-file error (permission, decode, size cap) is recorded on the checkpoint and in diagnostics.
-  Other files continue.
+- Any per-file error (permission, size cap, symlink escape, invalid meta) is surfaced in diagnostics
+  (`adapter.diagnostics()`, §10), because the core `Checkpoint` has no error field. Schema-invalid
+  lines are counted in the checkpoint's `parseErrors`. Other files continue.
 - `capabilities().limitations` lists known gaps, for example:
   - "hooks not configured: end-of-session not observable";
   - "transcript format is internal to Claude Code";
@@ -178,3 +181,71 @@ truthful answer. Stale never means completed.
 - It emits `provider: "demo"` and `source.channel: "demo"`, and runs only in `ACP_MODE=demo` (separate
   `demo.sqlite`) or in tests.
 - The UI shows a persistent **DEMO DATA** banner (ADR-0007).
+
+## 10. Claude Code adapter: implementation notes and unverified assumptions **[implemented, P1-C]**
+
+`createClaudeCodeAdapter({ claudeDir, now?, maxFileBytes?, chunkBytes? })` returns an
+`ObservationAdapter` plus `diagnostics()`. `hookSettingsSnippet({ port, tokenEnvVar })` returns the
+settings JSON as text. Both come from `src/index.ts`. Goldens for scenarios 1-16 are in
+`test-fixtures/claude-code/*/expected/`.
+
+### 10.1 Implemented behavior worth knowing
+
+- **Identity comes from the path, not the line.** `providerSessionId` and `providerAgentId` are
+  taken from the allowlisted file name. A forked file therefore yields events under its own session
+  even though its copied lines carry the old `sessionId`.
+- **Record keys.** `cc:tx:{sid}:{agentId|main}:{uuid}` or `…:h:{sha256(line bytes)}` when a line has
+  no uuid (every unrecognized record, `cost-state`, and title records without a uuid). Event suffixes:
+  `#session #cwd #user #assistant #tool:{id} #result:{id} #usage #snapshot #title #error
+#unrecognized`. Meta: `cc:meta:{sid}:{aid}:h:{sha256(file bytes)}#spawned`. Hook:
+  `cc:hook:{sid}:{event}:{tool_use_id|sha256(canonical body)}`. Two identical lines in one file
+  share a hash key and are stored once.
+- **Subagent meta** (`subagent.spawned`, channel `subagent-meta`, `occurredAt` null) is read whole
+  (at most 1 MiB), only for `agentType`, `description` (redacted, 200 chars), `toolUseId`,
+  `spawnDepth`, and `model`. The parent field is the session directory; the adapter never guesses a
+  deeper parent (core matches `spawnToolUseId`). Invalid JSON gives an `invalid-meta` diagnostic and
+  no event, and is retried on the next poll.
+- **Hooks** (`normalizeHook`): `session_id` must be a UUID. Unknown `hook_event_name` gives `[]`.
+  `SubagentStart/Stop` need a valid `agent_id`. `source.path` is the real path of the hook's
+  transcript only when it passes the allowlist **and** names the same session (SubagentStop prefers
+  `agent_transcript_path` and requires the same agent id); otherwise null. Only short
+  identifier-like values are copied (`source`, `reason`, `notification_type`, `agent_type`, `model`);
+  `message`, `title`, and tool fields are never read.
+- **Titles and descriptions** use the core `redact()`, whitespace collapse, and a 200 code point cap.
+- **Non-`user`/`assistant`/`system` records** are identified by `type` only. Their other fields,
+  including a `cwd`, are never read. A `system` record that is not `api_error` becomes
+  `record.unrecognized` with `recordType: system:<subtype>`.
+- **Diagnostics.** The core `Checkpoint` has no error field, so per-file issues (size cap, symlink
+  escape, I/O error, `invalid-meta`) are exposed through `adapter.diagnostics()`, with paths relative
+  to the Claude data root. Schema-invalid complete lines are added to the checkpoint's `parseErrors`.
+- **Meta and unchanged files** are skipped by checkpoint (identity, size, mtime).
+
+### 10.2 Unverified assumptions (all synthetic-fixture based)
+
+| Assumption                                                                                                                                   | Where it matters                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `cost-state` per-model keys are `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, plus `totalCostUSD`       | `usage.snapshot` payload                   |
+| Title records use `customTitle` / `aiTitle` (fallback `title`)                                                                               | `session.titled`                           |
+| `system`/`api_error` `error` mirrors the Anthropic SDK error (`status`, nested `error.error.type`)                                           | `provider.error` kind and status           |
+| Hook field names: `notification_type`, `old_cwd` / `new_cwd`, `agent_id`, `agent_type`, `agent_transcript_path`, `source`, `reason`, `model` | all hook events; **real capture not done** |
+| The shape of the settings snippet (`hooks.<Event>[].hooks[]` with `type: "http"`, `url`, `timeout`, `headers`, `allowedEnvVars`)             | `hookSettingsSnippet`                      |
+| Nested (depth above 1) subagent files live flat under the top-level session's `subagents/`                                                   | discovery of nested subagents              |
+| A subagent's `cwd` may be in a worktree, so a subagent file is eligible when its parent transcript is                                        | eligibility                                |
+| A candidate root's `lastSeenAt` is the transcript file mtime (no content read)                                                               | `discoverCandidates`                       |
+| Lines without a `uuid` (and unrecognized lines) are keyed by line hash, so identical duplicate lines collapse                                | dedup keys                                 |
+| Identical hook bodies without `tool_use_id` share a key, so a repeated identical `Stop` or `Notification` is stored once                     | "needs attention" freshness; see below     |
+| Records without a `version` inherit the last `version` seen earlier in the same file                                                         | `providerVersion`, per-version counts      |
+| `cost-state`, title, and unrecognized records carry no usable timestamp, so `occurredAt` is null                                             | ordering                                   |
+| Hooks never carry usage; `PostToolUse` usage is ignored on purpose                                                                           | usage-accounting scenario 2                |
+
+**Proposal (not changed, shared contract):** the hook key in usage-accounting §3 collapses repeated
+identical deliveries. If real payloads show no varying field (for example a Stop hook), a repeated
+`session.turn_ended` or `session.attention` would not refresh the session's attention time. Capturing
+real payloads (C6, needs user approval) decides whether the key needs a delivery discriminator.
+
+### 10.3 Known gaps
+
+- Real hook payload capture (C6) has not been done; hook fixtures are synthetic (scenario 13).
+- Depth above 1 is covered by a synthetic fixture only (scenario 5).
+- Nothing was verified against a running Claude Code or against the user's real `~/.claude`; that is
+  P1-F.
