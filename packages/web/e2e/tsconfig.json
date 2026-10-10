@@ -1,0 +1,11 @@
+{
+  // Playwright e2e specs and config (P1-F task F5). They run in Node under Playwright's own
+  // TypeScript loader, separate from the Vite/DOM app config in ../tsconfig.json.
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"],
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"]
+}

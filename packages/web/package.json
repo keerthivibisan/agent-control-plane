@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p e2e/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "vite build && playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@acp/core": "workspace:*",
