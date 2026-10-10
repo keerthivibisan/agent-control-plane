@@ -5,23 +5,26 @@
 
 ## 1. Where things stand (updated 2026-10-10, second session)
 
-| WP   | What                                                     | State                                                                         | Branch                           |
-| ---- | -------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------- |
-| P0   | Bootstrap, CI, docs, ADRs, core contracts v1             | **done, on `main`**                                                           | merged                           |
-| P1-A | Core logic (usage, aggregation, status, edges, paths)    | **done, on `main`**                                                           | merged                           |
-| P1-B | SQLite persistence                                       | **done, on `main`** (+ `listSharedSightings`, `listToolCalls` added for P1-D) | merged                           |
-| P1-C | Demo adapter + Claude Code adapter (C0–C7) + fixtures    | **done, on `main`**; real hook payload capture needs user approval            | `wp/p1-c-adapters-2` (merged)    |
-| P1-D | Server: pipeline, scheduler, REST, SSE, hooks, dev, live | **done, on `main`**; live mode wired, tested on fixtures only                 | `wp/p1-d-server`, `wp/p1-d-live` |
-| P1-E | Web UI (E0–E5)                                           | **done, on `main`**                                                           | `wp/p1-e-web-2` (merged)         |
-| P1-F | Integration and verification                             | **in progress**: F1/F3/F5/F6 (no real data) on `wp/p1-f-verify`               | `wp/p1-f-verify`                 |
+| WP   | What                                                     | State                                                                         | Branch                                             |
+| ---- | -------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
+| P0   | Bootstrap, CI, docs, ADRs, core contracts v1             | **done, on `main`**                                                           | merged                                             |
+| P1-A | Core logic (usage, aggregation, status, edges, paths)    | **done, on `main`**                                                           | merged                                             |
+| P1-B | SQLite persistence                                       | **done, on `main`** (+ `listSharedSightings`, `listToolCalls` added for P1-D) | merged                                             |
+| P1-C | Demo adapter + Claude Code adapter (C0–C7) + fixtures    | **done, on `main`**; hooks verified on 2.1.296; ADR-0011 ignored records      | `wp/p1-c-adapters-2`, `wp/p1-c-followups` (merged) |
+| P1-D | Server: pipeline, scheduler, REST, SSE, hooks, dev, live | **done, on `main`**; live mode wired, tested on fixtures only                 | `wp/p1-d-server`, `wp/p1-d-live`                   |
+| P1-E | Web UI (E0–E5)                                           | **done, on `main`**                                                           | `wp/p1-e-web-2` (merged)                           |
+| P1-F | Integration and verification                             | **done** except CI (not pushed)                                               | `wp/p1-f-verify` (merged)                          |
 
-`pnpm check` passes on `main` (617 tests). `ACP_MODE=demo pnpm dev` works end to end; plain `pnpm dev`
+`pnpm check` passes on `main` (711 tests). `ACP_MODE=demo pnpm dev` works end to end; plain `pnpm dev`
 is live mode over `<ACP_CLAUDE_DIR>/projects` for registered projects.
 
-**Open decisions for the user:** real-data run (F2/F4, needs consent and a chosen project); real hook
-payload capture (C6) — it also decides whether hook dedup keys need a delivery discriminator, since
-identical `Stop` bodies currently collapse; adapter `diagnostics()` vs `Checkpoint.lastError` contract;
-`OverviewDto` cost field; license; Phase 3 budget metric.
+**Decided on 2026-10-10/11 by the project owner:** real-data run done for one consented project
+(F2 exact match after one fix; F4 live check passed); hook payload capture done (2.1.296;
+SessionStart is not delivered over http, so the snippet omits it); `diagnostics()` on the adapter
+(ADR-0011); `OverviewDto.latestSnapshots` cost list (estimated, never summed); MIT accepted (ADR-0010).
+
+**Still open:** CI (push to GitHub, owner's call); Notification hook shape (needs an interactive
+capture); Phase 3 budget metric (Q1) and roadmap questions Q2–Q8.
 
 > Sections 4–6 below describe the state at the first handoff and are kept for history. Their
 > "remaining work" items for P1-C, P1-D and P1-E are done.

@@ -47,6 +47,11 @@ produces several events appends a suffix for each event.
 | Subagent meta file                                       | `cc:meta:{sessionId}:{agentId}:h:{sha256(file bytes)}`. A new key appears when the file content changes (e.g. `stoppedByUser` added) |
 | Hook delivery                                            | `cc:hook:{session_id}:{hook_event_name}:{tool_use_id or sha256(canonical JSON payload)}`                                             |
 
+Hook bodies (Claude Code 2.1.296, captured 2026-10-11) carry no delivery id, but every event except
+`SessionStart` has a per-prompt `prompt_id`, so deliveries from different turns hash differently. A
+delivery identical in every field within one prompt collapses to one event
+(`docs/research/p1-c6-hook-capture-2026-10-11.md`).
+
 The suffixes are `#session`, `#assistant`, `#usage`, `#tool:{toolUseId}`, `#result:{toolUseId}`, and so
 on. The key never contains a byte offset or the ingestion time, so re-reading a moved, rewritten, or
 re-delivered record yields the same key.
