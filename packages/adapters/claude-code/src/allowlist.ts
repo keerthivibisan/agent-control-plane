@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
-import { isPathInside } from './paths.js';
+import { isPathInside } from '@acp/core';
 
 /**
  * File access allowlist (docs/provider-adapters.md §3, security-critical). Only these shapes,
@@ -81,14 +81,14 @@ export function resolveAllowedTranscriptSync(claudeDir: string, candidate: strin
   try {
     const projects = realpathSync(path.join(claudeDir, 'projects'));
     const real = realpathSync(candidate);
-    if (!isPathInside(real, projects)) return null;
+    if (!isPathInside(projects, real)) return null;
     const realClass = classifyRelative(path.relative(projects, real));
     if (realClass === null || realClass.kind === 'subagent-meta') return null;
     // The logical path must be allowlisted too, relative to either spelling of the projects dir.
-    const logicalBase = isPathInside(candidate, projects)
+    const logicalBase = isPathInside(projects, candidate)
       ? projects
       : path.resolve(claudeDir, 'projects');
-    if (!isPathInside(candidate, logicalBase)) return null;
+    if (!isPathInside(logicalBase, candidate)) return null;
     const logicalClass = classifyRelative(path.relative(logicalBase, path.resolve(candidate)));
     if (logicalClass === null || !sameSource(logicalClass, realClass)) return null;
     return real;

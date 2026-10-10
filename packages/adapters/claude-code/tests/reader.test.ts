@@ -81,6 +81,29 @@ describe('incremental reader (C3)', () => {
     expect(second.last?.sizeBytes).toBe(line(1).length + 5);
   });
 
+  it('resumes from a checkpoint committed mid-file even though size and mtime match', async () => {
+    const dir = await makeTempDir();
+    const file = await put(dir, 'a.jsonl', line(1, 40) + line(2, 40) + line(3, 40));
+    const gen = readIncrement(file, undefined, { ...OPTIONS, chunkBytes: 16 });
+    const head = await gen.next();
+    await gen.return(undefined);
+    if (head.done === true) throw new Error('expected a first batch');
+    const first: ReadBatch = head.value;
+    expect(first.nextCheckpoint.byteOffset).toBeLessThan(first.nextCheckpoint.sizeBytes);
+
+    const rest = await readAll(file, first.nextCheckpoint);
+    expect(values([...first.lines, ...rest.lines])).toEqual([1, 2, 3]);
+    expect(rest.last?.byteOffset).toBe(rest.last?.sizeBytes);
+  });
+
+  it('yields nothing for an untouched file whose last line is still partial', async () => {
+    const dir = await makeTempDir();
+    const file = await put(dir, 'a.jsonl', `${line(1)}{"n":`);
+    const first = await readAll(file, undefined);
+    expect(values(first.lines)).toEqual([1]);
+    expect((await readAll(file, first.last)).batches).toEqual([]);
+  });
+
   it('reads in bounded chunks; lines longer than a chunk stay intact', async () => {
     const dir = await makeTempDir();
     const content = line(1, 40) + line(2) + line(3, 100) + line(4);

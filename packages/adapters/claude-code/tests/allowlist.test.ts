@@ -2,26 +2,7 @@ import { mkdir, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { classifyRelative, resolveAllowedTranscriptSync } from '../src/allowlist.js';
-import { isPathInside } from '../src/paths.js';
 import { makeTempDir, put, PROJECT_DIR, SID_1, SID_2 } from './helpers/temp-claude-dir.js';
-
-describe('path containment (segment-wise)', () => {
-  it('accepts the root itself and descendants', () => {
-    expect(isPathInside('/repo', '/repo')).toBe(true);
-    expect(isPathInside('/repo/', '/repo')).toBe(true);
-    expect(isPathInside('/repo/packages/a', '/repo')).toBe(true);
-    expect(isPathInside('/repo/a', '/repo/')).toBe(true);
-  });
-
-  it('rejects siblings with a shared prefix, parents, traversal, and relative paths', () => {
-    expect(isPathInside('/repo-evil', '/repo')).toBe(false);
-    expect(isPathInside('/repoX/a', '/repo')).toBe(false);
-    expect(isPathInside('/', '/repo')).toBe(false);
-    expect(isPathInside('/repo/../etc', '/repo')).toBe(false);
-    expect(isPathInside('repo/a', '/repo')).toBe(false);
-    expect(isPathInside('/repo/a', 'repo')).toBe(false);
-  });
-});
 
 describe('allowlist classification (provider-adapters §3)', () => {
   it('accepts exactly the three allowlisted shapes', () => {

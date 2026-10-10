@@ -2,13 +2,14 @@ import { constants } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { open, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { isPathInside } from '@acp/core';
 import type { CandidateRoot, RegisteredRoot } from '@acp/core';
 import { z } from 'zod';
 import { classifyRelative, MAX_META_BYTES, SESSION_ID_RE, sameSource } from './allowlist.js';
 import type { ClassifiedPath } from './allowlist.js';
 import { errorCode } from './diagnostics.js';
 import type { DiagnosticsCollector } from './diagnostics.js';
-import { isAbsolutePathString, isPathInside } from './paths.js';
+import { isAbsolutePathString } from './paths.js';
 import { ENVELOPE_RECORD_TYPES } from './record-types.js';
 
 /** The first-`cwd` peek reads at most this much of a transcript (§4.1). */
@@ -71,7 +72,7 @@ export async function listSources(
     const shown = display(path.join(logicalProjects, path.relative(projects, logical)));
     try {
       const real = await realpath(logical);
-      if (!isPathInside(real, projects)) {
+      if (!isPathInside(projects, real)) {
         diagnostics.fileIssue(shown, 'outside-projects');
         continue;
       }
@@ -174,7 +175,7 @@ function cwdOf(line: string): string | null {
 
 /** True when `cwd` is inside any registered root (segment-wise). */
 export function insideAnyRoot(cwd: string, roots: readonly RegisteredRoot[]): boolean {
-  return roots.some((r) => isPathInside(cwd, r.rootPath));
+  return roots.some((r) => isPathInside(r.rootPath, cwd));
 }
 
 /** Groups first `cwd`s that are outside every registered root into candidate roots. */

@@ -70,14 +70,14 @@ export async function* readIncrement(
     const st = await fh.stat();
     if (st.size > options.maxFileBytes) throw new FileTooLargeError(st.size, options.maxFileBytes);
     const fileIdentity = `${st.dev}:${st.ino}`;
-    if (
+    const unchanged =
       checkpoint !== undefined &&
       checkpoint.fileIdentity === fileIdentity &&
       checkpoint.sizeBytes === st.size &&
-      checkpoint.mtimeMs === st.mtimeMs
-    ) {
-      return;
-    }
+      checkpoint.mtimeMs === st.mtimeMs;
+    // Fully consumed and untouched. A checkpoint short of the end (a partial last line, or a
+    // batch committed mid-file before a restart) still needs the scan below.
+    if (unchanged && checkpoint.byteOffset === st.size) return;
 
     let start = 0;
     let parseErrors = 0;
@@ -134,7 +134,8 @@ export async function* readIncrement(
       };
       yielded = true;
     }
-    if (!yielded) {
+    // An unchanged file with only a partial line left has nothing to commit.
+    if (!yielded && !(unchanged && !reset)) {
       yield {
         lines: [],
         reset,
