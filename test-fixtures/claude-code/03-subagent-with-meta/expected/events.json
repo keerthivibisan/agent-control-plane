@@ -1,0 +1,371 @@
+[
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000001-0000-4000-8000-000000000001",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:03.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 0,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000001-0000-4000-8000-000000000001#session",
+    "eventType": "session.observed",
+    "payload": {
+      "cwd": "/home/user/project",
+      "gitBranch": "main",
+      "entrypoint": "claude-desktop"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000001-0000-4000-8000-000000000001",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:03.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 0,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000001-0000-4000-8000-000000000001#user",
+    "eventType": "message.user",
+    "payload": {
+      "uuid": "03000001-0000-4000-8000-000000000001",
+      "parentUuid": null,
+      "isMeta": false
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000002-0000-4000-8000-000000000002",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:06.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 357,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000002-0000-4000-8000-000000000002#assistant",
+    "eventType": "message.assistant",
+    "payload": {
+      "uuid": "03000002-0000-4000-8000-000000000002",
+      "parentUuid": "03000001-0000-4000-8000-000000000001",
+      "messageId": "msg_fake0301",
+      "requestId": "req_fake0301",
+      "model": "claude-sonnet-4-5",
+      "stopReason": "tool_use"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000002-0000-4000-8000-000000000002",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:06.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 357,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000002-0000-4000-8000-000000000002#tool:toolu_fake0301",
+    "eventType": "tool.called",
+    "payload": {
+      "toolUseId": "toolu_fake0301",
+      "toolName": "Agent",
+      "messageId": "msg_fake0301"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000002-0000-4000-8000-000000000002",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:06.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 357,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000002-0000-4000-8000-000000000002#usage",
+    "eventType": "usage.reported",
+    "payload": {
+      "kind": "per-turn",
+      "messageId": "msg_fake0301",
+      "requestId": "req_fake0301",
+      "model": "claude-sonnet-4-5",
+      "tokens": {
+        "input": 3,
+        "output": 90,
+        "cacheCreation": 500,
+        "cacheRead": 20000
+      }
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000005-0000-4000-8000-000000000005",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:15.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 1275,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000005-0000-4000-8000-000000000005#user",
+    "eventType": "message.user",
+    "payload": {
+      "uuid": "03000005-0000-4000-8000-000000000005",
+      "parentUuid": "03000002-0000-4000-8000-000000000002",
+      "isMeta": false
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000005-0000-4000-8000-000000000005",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:15.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 1275,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000005-0000-4000-8000-000000000005#result:toolu_fake0301",
+    "eventType": "tool.result",
+    "payload": {
+      "toolUseId": "toolu_fake0301",
+      "isError": null
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000006-0000-4000-8000-000000000006",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:18.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 1804,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000006-0000-4000-8000-000000000006#assistant",
+    "eventType": "message.assistant",
+    "payload": {
+      "uuid": "03000006-0000-4000-8000-000000000006",
+      "parentUuid": "03000005-0000-4000-8000-000000000005",
+      "messageId": "msg_fake0302",
+      "requestId": "req_fake0302",
+      "model": "claude-sonnet-4-5",
+      "stopReason": "end_turn"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000006-0000-4000-8000-000000000006",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": null,
+    "occurredAt": "2026-10-01T10:00:18.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001.jsonl",
+      "byteOffset": 1804,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:main:03000006-0000-4000-8000-000000000006#usage",
+    "eventType": "usage.reported",
+    "payload": {
+      "kind": "per-turn",
+      "messageId": "msg_fake0302",
+      "requestId": "req_fake0302",
+      "model": "claude-sonnet-4-5",
+      "tokens": {
+        "input": 3,
+        "output": 40,
+        "cacheCreation": 500,
+        "cacheRead": 20000
+      }
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000003-0000-4000-8000-000000000003",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake0301",
+    "occurredAt": "2026-10-01T10:00:09.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake0301.jsonl",
+      "byteOffset": 0,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:afake0301:03000003-0000-4000-8000-000000000003#session",
+    "eventType": "session.observed",
+    "payload": {
+      "cwd": "/home/user/project",
+      "gitBranch": "main",
+      "entrypoint": "claude-desktop"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000003-0000-4000-8000-000000000003",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake0301",
+    "occurredAt": "2026-10-01T10:00:09.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake0301.jsonl",
+      "byteOffset": 0,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:afake0301:03000003-0000-4000-8000-000000000003#user",
+    "eventType": "message.user",
+    "payload": {
+      "uuid": "03000003-0000-4000-8000-000000000003",
+      "parentUuid": null,
+      "isMeta": false
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000004-0000-4000-8000-000000000004",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake0301",
+    "occurredAt": "2026-10-01T10:00:12.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake0301.jsonl",
+      "byteOffset": 378,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:afake0301:03000004-0000-4000-8000-000000000004#assistant",
+    "eventType": "message.assistant",
+    "payload": {
+      "uuid": "03000004-0000-4000-8000-000000000004",
+      "parentUuid": "03000003-0000-4000-8000-000000000003",
+      "messageId": "msg_fake0311",
+      "requestId": "req_fake0311",
+      "model": "claude-haiku-4-5",
+      "stopReason": "end_turn"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "sourceEventId": "03000004-0000-4000-8000-000000000004",
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake0301",
+    "occurredAt": "2026-10-01T10:00:12.000Z",
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "transcript",
+      "providerVersion": "2.1.263",
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake0301.jsonl",
+      "byteOffset": 378,
+      "hookEvent": null
+    },
+    "dedupKey": "cc:tx:c0ffee00-0000-4000-8000-000000000001:afake0301:03000004-0000-4000-8000-000000000004#usage",
+    "eventType": "usage.reported",
+    "payload": {
+      "kind": "per-turn",
+      "messageId": "msg_fake0311",
+      "requestId": "req_fake0311",
+      "model": "claude-haiku-4-5",
+      "tokens": {
+        "input": 5,
+        "output": 210,
+        "cacheCreation": 900,
+        "cacheRead": 0
+      }
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "provider": "claude-code",
+    "dedupKey": "cc:meta:c0ffee00-0000-4000-8000-000000000001:afake0301:h:d1429ade5c6bc2c100e5f6dcbbfc2eff01182572e8a6420eab522b257e7fc8ff#spawned",
+    "sourceEventId": null,
+    "providerSessionId": "c0ffee00-0000-4000-8000-000000000001",
+    "providerAgentId": "afake0301",
+    "occurredAt": null,
+    "observedAt": "2026-10-10T12:00:00.000Z",
+    "provenance": "observed",
+    "source": {
+      "channel": "subagent-meta",
+      "providerVersion": null,
+      "path": "<root>/projects/-home-user-project/c0ffee00-0000-4000-8000-000000000001/subagents/agent-afake0301.meta.json",
+      "byteOffset": 0,
+      "hookEvent": null
+    },
+    "eventType": "subagent.spawned",
+    "payload": {
+      "parentProviderSessionId": "c0ffee00-0000-4000-8000-000000000001",
+      "agentId": "afake0301",
+      "agentType": "Explore",
+      "description": "<redacted>",
+      "spawnToolUseId": "toolu_fake0301",
+      "spawnDepth": 1,
+      "model": "claude-haiku-4-5"
+    }
+  }
+]

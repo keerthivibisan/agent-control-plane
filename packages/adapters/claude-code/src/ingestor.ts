@@ -9,6 +9,7 @@ import { errorCode } from './diagnostics.js';
 import type { DiagnosticsCollector } from './diagnostics.js';
 import { insideAnyRoot, listSources, peekFirstCwd, toCandidates } from './discovery.js';
 import type { PeekResult, SourceFile } from './discovery.js';
+import { readMeta } from './meta.js';
 import { FileTooLargeError, readIncrement } from './reader.js';
 import { freshFileState, normalizeLine, replayLine } from './records.js';
 import type { FileState } from './records.js';
@@ -60,8 +61,8 @@ export class TranscriptIngestor {
     const sources = await listSources(this.options.claudeDir, this.options.maxFileBytes, d);
     for (const src of await this.eligible(sources, roots)) {
       try {
-        if (src.kind === 'subagent-meta') continue; // subagent metadata: added with task C5
-        yield* this.readTranscript(src, checkpoints);
+        if (src.kind === 'subagent-meta') yield* this.readMetaFile(src, checkpoints);
+        else yield* this.readTranscript(src, checkpoints);
       } catch (err) {
         if (err instanceof FileTooLargeError) {
           d.fileIssue(src.displayPath, 'size-cap', `${err.sizeBytes} > ${err.capBytes} bytes`);
@@ -121,6 +122,16 @@ export class TranscriptIngestor {
       this.options.diagnostics.fileIssue(src.displayPath, 'io-error', errorCode(err));
       return null;
     }
+  }
+
+  private async *readMetaFile(
+    src: SourceFile,
+    checkpoints: CheckpointStore,
+  ): AsyncGenerator<IngestionBatch> {
+    const outcome = await readMeta(src, checkpoints, this.options.now().toISOString());
+    if (outcome.kind === 'batch') yield outcome.batch;
+    else if (outcome.kind === 'invalid')
+      this.options.diagnostics.fileIssue(src.displayPath, 'invalid-meta', outcome.reason);
   }
 
   private async *readTranscript(
