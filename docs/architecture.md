@@ -60,7 +60,7 @@ Inside `@acp/server`, the layering is `routes → services → repositories (fro
 validate input with Zod, call one service method, and map the result to a DTO. Route handlers contain
 no business logic.
 
-## 3. Event flow [planned, P1-C/P1-D]
+## 3. Event flow [server side implemented, P1-D; Claude Code adapter planned, P1-C]
 
 1. **Discover.** The adapter lists allowlisted transcript files under the Claude data directory
    ([provider-adapters.md](provider-adapters.md)). It peeks only at the first `cwd` of each file to decide
@@ -111,7 +111,7 @@ The database is SQLite through `better-sqlite3` (synchronous, in-process; ADR-00
 - Default location is `~/.agent-control-plane/acp.sqlite` (`ACP_DATA_DIR`). Demo mode uses a separate
   `demo.sqlite` file (ADR-0007).
 
-## 6. Live updates [planned, P1-D]
+## 6. Live updates [implemented, P1-D]
 
 `GET /api/events/stream` is Server-Sent Events:
 

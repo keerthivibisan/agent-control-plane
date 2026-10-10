@@ -4,20 +4,23 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: Phase 1 in progress. There is no server yet, so the app cannot be run end to end.**
+> **Status: Phase 1 in progress. The server runs in demo mode only (`ACP_MODE=demo pnpm dev`); live mode
+> waits for the Claude Code adapter.**
 >
-> **Implemented and tested** (411 tests):
+> **Implemented and tested** (456 tests):
 >
 > - core contracts and the usage-accounting logic;
 > - SQLite persistence;
 > - the demo adapter;
 > - Claude Code file discovery and the incremental reader;
-> - the web UI shell, Command Center, and Session Explorer, built against the API contract.
+> - the web UI shell, Command Center, and Session Explorer, built against the API contract;
+> - the server: ingestion pipeline, scheduler, REST API, SSE stream, hook receiver, and static UI
+>   serving. Verified in demo mode (`/api` on 127.0.0.1:7420, UI on 127.0.0.1:5173).
 >
 > **Remaining:**
 >
 > - the Claude Code record normalizers and hooks;
-> - the server (pipeline, API, SSE, `pnpm dev`);
+> - wiring the Claude Code adapter into the server for live mode;
 > - the session detail, usage, and project pages;
 > - verification.
 >
@@ -66,15 +69,15 @@ See [docs/security.md](docs/security.md).
 
 ## Planned features
 
-| Feature                                                                                                                              | Phase | Status                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----- | ------------------------------------------------------ |
-| Core contracts (events, usage, sessions, provenance, adapter interface)                                                              | 0     | **implemented**                                        |
-| Project registration, Claude Code session discovery, subagent tree, usage accounting, Command Center, Session Explorer, live updates | 1     | **in progress** (building blocks done; server pending) |
-| Usage reliability, cost estimation with provenance, restart recovery                                                                 | 2     | planned                                                |
-| Managed orchestration (planning, at most 3 children, budgets, worktrees, validation)                                                 | 3     | planned                                                |
-| Harness Lab                                                                                                                          | 4     | planned                                                |
-| Codex adapter                                                                                                                        | 5     | planned                                                |
-| Evidence-driven recommendations                                                                                                      | 6     | research                                               |
+| Feature                                                                                                                              | Phase | Status                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------- |
+| Core contracts (events, usage, sessions, provenance, adapter interface)                                                              | 0     | **implemented**                                                   |
+| Project registration, Claude Code session discovery, subagent tree, usage accounting, Command Center, Session Explorer, live updates | 1     | **in progress** (server and demo mode done; live adapter pending) |
+| Usage reliability, cost estimation with provenance, restart recovery                                                                 | 2     | planned                                                           |
+| Managed orchestration (planning, at most 3 children, budgets, worktrees, validation)                                                 | 3     | planned                                                           |
+| Harness Lab                                                                                                                          | 4     | planned                                                           |
+| Codex adapter                                                                                                                        | 5     | planned                                                           |
+| Evidence-driven recommendations                                                                                                      | 6     | research                                                          |
 
 See [docs/roadmap.md](docs/roadmap.md).
 
