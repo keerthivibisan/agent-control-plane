@@ -5,6 +5,7 @@ import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
 import { useRoute, type Route } from '../lib/router';
 import { browserEventSource, useEventStream, type EventSourceFactory } from '../lib/useEventStream';
+import { UsageAnalytics } from '../features/usage/UsageAnalytics';
 import { Shell } from './Shell';
 
 function Screen({ route }: { route: Route }) {
@@ -15,6 +16,8 @@ function Screen({ route }: { route: Route }) {
       return <SessionExplorer search={route.params} />;
     case 'session':
       return <SessionDetail key={route.id} id={route.id} />;
+    case 'usage':
+      return <UsageAnalytics search={route.params} />;
     default:
       return (
         <p className="text-dim">
