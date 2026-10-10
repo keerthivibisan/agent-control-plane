@@ -14,3 +14,4 @@ export * from './usage/aggregation.js';
 export * from './sessions/status.js';
 export * from './sessions/edges.js';
 export * from './paths/containment.js';
+export * from './redaction/redact.js';
