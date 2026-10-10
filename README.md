@@ -4,25 +4,24 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: Phase 1 in progress. The server runs in demo mode only (`ACP_MODE=demo pnpm dev`); live mode
-> waits for the Claude Code adapter.**
+> **Status: Phase 1 in progress: all components are implemented; verification (P1-F) is under way.**
+> `ACP_MODE=demo pnpm dev` runs on demo data. Live mode (the default) reads Claude Code transcripts for
+> registered projects; it is tested against sanitized fixtures only and has not yet been checked
+> against real data.
 >
-> **Implemented and tested** (475 tests):
+> **Implemented and tested** (617 tests):
 >
 > - core contracts and the usage-accounting logic;
 > - SQLite persistence;
-> - the demo adapter;
-> - Claude Code file discovery and the incremental reader;
-> - the web UI: Command Center, Session Explorer, session detail, usage analytics, and project page;
+> - the demo adapter and the Claude Code adapter (discovery, incremental reader, record
+>   normalizers, subagent metadata, hook normalization);
 > - the server: ingestion pipeline, scheduler, REST API, SSE stream, hook receiver, and static UI
->   serving. Verified in demo mode (`/api` on 127.0.0.1:7420, UI on 127.0.0.1:5173).
+>   serving, in demo and live mode;
+> - the web UI: Command Center, Session Explorer, session detail, usage analytics, and project page.
 >
-> **Remaining:**
->
-> - the Claude Code record normalizers and hooks;
-> - wiring the Claude Code adapter into the server for live mode;
-> - the session detail, usage, and project pages;
-> - verification.
+> **Remaining:** P1-F verification (reference recomputation, restart checks, browser e2e, and a
+> real-data run with the user's consent). Real hook payloads have not been captured, so the hook field
+> names are unverified (`pnpm --filter @acp/server hooks:snippet` prints the settings to paste).
 >
 > See [HANDOFF.md](HANDOFF.md) and [docs/implementation-plan.md](docs/implementation-plan.md).
 

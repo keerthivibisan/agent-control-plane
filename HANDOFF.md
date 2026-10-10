@@ -3,21 +3,28 @@
 > Written by the coordinator agent on 2026-10-10 when the original session ended. **Start here.**
 > Then read `CLAUDE.md` and `AGENTS.md`, which are binding, and `docs/implementation-plan.md`.
 
-## 1. Where things stand
+## 1. Where things stand (updated 2026-10-10, second session)
 
-| WP         | What                                                                                                        | State                                                                                                   | Branch                           |
-| ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| P0         | Bootstrap: tooling, CI, docs, ADRs, core contracts v1                                                       | **done, on `main`**                                                                                     | `main`                           |
-| P1-D0      | API DTO contract (`@acp/core/api`)                                                                          | **done, on `main`**                                                                                     | `main`                           |
-| P1-A (+A9) | Core logic: usage selection/attribution, aggregation, status, edges, paths, redaction. A9 handles fork ties | **done, on `main`** (212 tests)                                                                         | merged                           |
-| P1-B       | SQLite persistence (B1–B6)                                                                                  | **done, on `main`** (81 db tests)                                                                       | merged                           |
-| P1-C       | Demo adapter + Claude Code adapter + fixtures                                                               | **partial.** C0–C3 are on `main`; the demo adapter is complete. C4 WIP is on an unmerged branch. See §4 | WIP `wp/p1-c4-wip`               |
-| P1-E       | Web UI                                                                                                      | **partial.** E0–E2 (shell, Command Center, Session Explorer) are on `main`. See §4                      | merged; continue on a new branch |
-| P1-D       | Server: pipeline, REST, SSE, hooks, `pnpm dev`                                                              | **not started. Unblocked:** B and C0 are on `main`. **Do this next**                                    | —                                |
-| P1-F       | Integration and verification                                                                                | not started                                                                                             | —                                |
+| WP   | What                                                     | State                                                                         | Branch                           |
+| ---- | -------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------- |
+| P0   | Bootstrap, CI, docs, ADRs, core contracts v1             | **done, on `main`**                                                           | merged                           |
+| P1-A | Core logic (usage, aggregation, status, edges, paths)    | **done, on `main`**                                                           | merged                           |
+| P1-B | SQLite persistence                                       | **done, on `main`** (+ `listSharedSightings`, `listToolCalls` added for P1-D) | merged                           |
+| P1-C | Demo adapter + Claude Code adapter (C0–C7) + fixtures    | **done, on `main`**; real hook payload capture needs user approval            | `wp/p1-c-adapters-2` (merged)    |
+| P1-D | Server: pipeline, scheduler, REST, SSE, hooks, dev, live | **done, on `main`**; live mode wired, tested on fixtures only                 | `wp/p1-d-server`, `wp/p1-d-live` |
+| P1-E | Web UI (E0–E5)                                           | **done, on `main`**                                                           | `wp/p1-e-web-2` (merged)         |
+| P1-F | Integration and verification                             | **in progress**: F1/F3/F5/F6 (no real data) on `wp/p1-f-verify`               | `wp/p1-f-verify`                 |
 
-`pnpm check` passes on `main`: core 212, db 81, adapter-claude-code 51, adapter-demo 12, web 55, for **411 tests** in total. Each unmerged branch was committed only at passing checkpoints. Unfinished work was converted from stashes into clearly labeled `wip` branches, so it travels with
-the repo.
+`pnpm check` passes on `main` (617 tests). `ACP_MODE=demo pnpm dev` works end to end; plain `pnpm dev`
+is live mode over `<ACP_CLAUDE_DIR>/projects` for registered projects.
+
+**Open decisions for the user:** real-data run (F2/F4, needs consent and a chosen project); real hook
+payload capture (C6) — it also decides whether hook dedup keys need a delivery discriminator, since
+identical `Stop` bodies currently collapse; adapter `diagnostics()` vs `Checkpoint.lastError` contract;
+`OverviewDto` cost field; license; Phase 3 budget metric.
+
+> Sections 4–6 below describe the state at the first handoff and are kept for history. Their
+> "remaining work" items for P1-C, P1-D and P1-E are done.
 
 ## 2. Restore on a new machine
 
