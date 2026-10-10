@@ -13,7 +13,7 @@ The goal: **no usage number is ever inflated, invented, or silently zero.**
 | --------------------------------------- | ---------------------------------------------------------------------- |
 | `schemaVersion`                         | `1`. Bump only by ADR. Old rows keep their version                     |
 | `provider`                              | `claude-code` \| `codex` \| `demo`                                     |
-| `eventType`                             | one of 14 types (`EVENT_TYPES`); each has a typed `payload` schema     |
+| `eventType`                             | one of 17 types (`EVENT_TYPES`); each has a typed `payload` schema     |
 | `dedupKey`                              | stable identity of the _source record_ (§3)                            |
 | `sourceEventId`                         | provider id of the record, e.g. the transcript `uuid`                  |
 | `providerSessionId` / `providerAgentId` | provider identity. Internal ids are assigned by the pipeline           |

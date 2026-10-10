@@ -92,7 +92,7 @@ The adapter never writes to the Claude data directory and never edits Claude Cod
    | `system` with `subtype: api_error` | `provider.error`                                                                                                           |
    | `cost-state`                       | `usage.snapshot` (`scope: unknown`)                                                                                        |
    | first record with `cwd`            | `session.observed`; a later different `cwd` gives `session.cwd_changed`                                                    |
-   | `custom-title` / `ai-title`        | session title (redacted, at most 200 chars) via `session.observed` metadata                                                |
+   | `custom-title` / `ai-title`        | `session.titled` (redacted, at most 200 chars; `titleSource` user or ai)                                                   |
    | **anything else**                  | `record.unrecognized` with `recordType` only                                                                               |
 
    Records such as `bridge-session` and `artifact-autoreact-ledger` contain account and organization
@@ -127,6 +127,14 @@ Depth above 1 is **unverified**. P1-C must cover it with a synthetic fixture mar
     `<ACP_DATA_DIR>/hook-token` with mode 0600.
   - Requires `Content-Type: application/json` and a body of at most 256 KiB.
   - Responds `204` quickly with no body, so it never returns a decision that could block the user.
+- **Hook to event mapping:**
+  - `SessionStart` → `session.started`
+  - `SessionEnd` → `session.ended`
+  - `SubagentStart` → `subagent.spawned` (hook evidence)
+  - `SubagentStop` → `subagent.stopped`
+  - `Stop` → `session.turn_ended`
+  - `Notification` → `session.attention` (type only)
+  - `CwdChanged` → `session.cwd_changed`
 - **Events to subscribe (Phase 1):** `SessionStart`, `SessionEnd`, `SubagentStart`, `SubagentStop`,
   `Stop`, `Notification` (the "needs attention" signal), `CwdChanged`. Availability per runtime
   version is unverified; P1-C captures real payloads.

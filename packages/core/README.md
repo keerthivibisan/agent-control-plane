@@ -2,7 +2,7 @@
 
 **Owner:** work package P0 (contracts v1), P1-A (logic), P1-D0 (`src/api/**`) (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
 
-**Status:** **Partially implemented.** v1 contracts: provenance, provider ids, project, normalized events (14 types), usage (per-turn, cumulative snapshot), session key/status/edges, and the adapter contract. Pure logic (dedup selection, attribution, aggregation, status, edges, paths, redaction) is P1-A.
+**Status:** **Partially implemented.** v1 contracts: provenance, provider ids, project, normalized events (17 types), usage (per-turn, cumulative snapshot), session key/status/edges, and the adapter contract. Pure logic (dedup selection, attribution, aggregation, status, edges, paths, redaction) is P1-A.
 
 ## Responsibility
 

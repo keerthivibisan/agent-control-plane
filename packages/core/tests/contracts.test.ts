@@ -108,6 +108,9 @@ describe('normalized events', () => {
     'session.started': { startSource: 'startup', model: null },
     'session.ended': { reason: 'prompt_input_exit' },
     'session.cwd_changed': { from: '/repo', to: '/repo/packages/a' },
+    'session.titled': { title: 'Fix login bug', titleSource: 'user' },
+    'session.attention': { notificationType: 'permission_prompt' },
+    'session.turn_ended': {},
     'subagent.spawned': {
       parentProviderSessionId: 'sess-1',
       agentId: 'a1',

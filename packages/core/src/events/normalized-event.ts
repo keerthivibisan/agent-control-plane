@@ -59,6 +59,27 @@ export const SessionStartedEvent = event(
 
 export const SessionEndedEvent = event('session.ended', z.object({ reason: nullableString }));
 
+/** Session title from `custom-title` / `ai-title` records. Redacted and capped at 200 chars by the adapter. */
+export const SessionTitledEvent = event(
+  'session.titled',
+  z.object({
+    title: z.string().min(1).max(200),
+    titleSource: z.enum(['user', 'ai']),
+  }),
+);
+
+/**
+ * The provider is waiting on the user (Notification hook). Only the notification type is kept;
+ * the message text is not stored (ADR-0009).
+ */
+export const SessionAttentionEvent = event(
+  'session.attention',
+  z.object({ notificationType: nullableString }),
+);
+
+/** The agent finished responding and is waiting for input (Stop hook). Not a session end. */
+export const SessionTurnEndedEvent = event('session.turn_ended', z.object({}));
+
 export const SessionCwdChangedEvent = event(
   'session.cwd_changed',
   z.object({ from: nullableString, to: z.string().min(1) }),
@@ -139,6 +160,9 @@ export const NormalizedEventSchema = z.discriminatedUnion('eventType', [
   SessionStartedEvent,
   SessionEndedEvent,
   SessionCwdChangedEvent,
+  SessionTitledEvent,
+  SessionAttentionEvent,
+  SessionTurnEndedEvent,
   SubagentSpawnedEvent,
   SubagentStoppedEvent,
   UserMessageEvent,
