@@ -10,15 +10,15 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 
 <!-- Agents: update your row when you start (in-progress + branch) and when you finish (done + PR/commit). -->
 
-| WP   | Title                                             | Owner role        | Depends on                                                      | Status         | Branch                |
-| ---- | ------------------------------------------------- | ----------------- | --------------------------------------------------------------- | -------------- | --------------------- |
-| P0   | Bootstrap: repo, tooling, core contracts v1, docs | coordinator       | —                                                               | **done**       | `main`                |
-| P1-A | Core domain logic                                 | core agent        | P0                                                              | in-progress    | `wp/p1-a-core-logic`  |
-| P1-B | Persistence (SQLite)                              | persistence agent | P0                                                              | in-progress    | `wp/p1-b-persistence` |
-| P1-C | Claude Code adapter + demo adapter + fixtures     | adapter agent     | P0                                                              | in-progress    | `wp/p1-c-adapters`    |
-| P1-D | Server: pipeline, API, SSE, hooks                 | backend agent     | P1-A, P1-B, P1-C (C0 first)                                     | todo (D0 done) |                       |
-| P1-E | Web UI                                            | frontend agent    | P1-D0 (API contract); P1-D running in demo mode for integration | todo           |                       |
-| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | todo           |                       |
+| WP   | Title                                             | Owner role        | Depends on                                                      | Status                      | Branch                |
+| ---- | ------------------------------------------------- | ----------------- | --------------------------------------------------------------- | --------------------------- | --------------------- |
+| P0   | Bootstrap: repo, tooling, core contracts v1, docs | coordinator       | —                                                               | **done**                    | `main`                |
+| P1-A | Core domain logic                                 | core agent        | P0                                                              | done (A9 amendment pending) | `wp/p1-a-core-logic`  |
+| P1-B | Persistence (SQLite)                              | persistence agent | P0                                                              | in-progress                 | `wp/p1-b-persistence` |
+| P1-C | Claude Code adapter + demo adapter + fixtures     | adapter agent     | P0                                                              | in-progress                 | `wp/p1-c-adapters`    |
+| P1-D | Server: pipeline, API, SSE, hooks                 | backend agent     | P1-A, P1-B, P1-C (C0 first)                                     | todo (D0 done)              |                       |
+| P1-E | Web UI                                            | frontend agent    | P1-D0 (API contract); P1-D running in demo mode for integration | todo                        |                       |
+| P1-F | Integration and verification                      | coordinator       | P1-D, P1-E                                                      | todo                        |                       |
 
 ```mermaid
 flowchart TD

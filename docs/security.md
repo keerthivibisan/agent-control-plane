@@ -31,7 +31,7 @@
    - Phase 1 persists no prompt or response text, no thinking, and no tool inputs or outputs.
    - The free-text fields allowed are session titles, subagent `description`, and error kinds. They are
      redacted (rule 4) and capped in length.
-4. **Redaction (P1-A `redact()` in core).**
+4. **Redaction (`redact()` in core) [implemented, P1-A].** The replacement marker is `[REDACTED]`. Beyond the list below, it also covers `ghu_`/`ghs_`/`ghr_`, `xoxs-`, `ASIA…`, `Proxy-Authorization`, and `secret=`/`api_key=` values.
    - It is applied to every persisted free-text field and every log line.
    - Patterns cover at least: `sk-ant-…`, `sk-…`, `ghp_`/`gho_`/`github_pat_`, `xox[abpr]-`, `AKIA…`,
      `-----BEGIN … PRIVATE KEY-----`, `Bearer <token>`, `Authorization:` headers, and `password=`/`token=`

@@ -53,6 +53,7 @@ describe('API DTO contracts', () => {
       aggregateUsage: usage,
       latestSnapshot: null,
       continuationIds: [],
+      ambiguousAttributionCount: 0,
     });
     expect(parsed.parent.state).toBe('unknown');
     expect(parsed.directUsage.tokens.cacheCreation).toBeNull();
@@ -71,6 +72,7 @@ describe('API DTO contracts', () => {
       aggregateUsage: usage,
       latestSnapshot: null,
       continuationIds: [],
+      ambiguousAttributionCount: 0,
     });
     expect(result.success).toBe(false);
   });

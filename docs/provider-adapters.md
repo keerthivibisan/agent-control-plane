@@ -103,14 +103,14 @@ The adapter never writes to the Claude data directory and never edits Claude Cod
 
 ## 5. Parent-child relationships
 
-| Evidence                                                                               | Edge                                                                                                                                                                                 | Provenance |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| Meta file `<S>/subagents/agent-<A>.meta.json` exists                                   | `subagent`: parent `(S, null)` to child `(S, A)`, evidence `subagent-metadata`                                                                                                       | observed   |
-| …and `meta.toolUseId` equals a `tool.called` (`Agent`/`Task`) in the parent transcript | adds `spawn-tool-use`                                                                                                                                                                | observed   |
-| `spawnDepth > 1`                                                                       | Parent is the session (top-level or subagent) whose transcript contains `tool.called` with id `meta.toolUseId`. **No match means parent unknown**. Never default to the root session | observed   |
-| SubagentStart/SubagentStop hook with `agent_id` in session S                           | adds `subagent-hook` to the `(S, A)` edge                                                                                                                                            | observed   |
-| Session B's file contains message ids first seen in session A                          | `continuation` A to B, evidence `shared-message-history`                                                                                                                             | derived    |
-| Subagent transcript **without** a meta file                                            | **no edge**. The child is shown with parent _unknown_                                                                                                                                | —          |
+| Evidence                                                                                | Edge                                                                                                                                                                                                                            | Provenance |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| Meta file `<S>/subagents/agent-<A>.meta.json` exists                                    | `subagent`: parent `(S, null)` to child `(S, A)`, evidence `subagent-metadata`                                                                                                                                                  | observed   |
+| …and `meta.toolUseId` equals a `tool.called` (`Agent`/`Task`) in the parent transcript  | adds `spawn-tool-use`                                                                                                                                                                                                           | observed   |
+| `spawnDepth > 1`                                                                        | Parent is the session (top-level or subagent) whose transcript contains `tool.called` with id `meta.toolUseId`. **No match means parent unknown**. Never default to the root session                                            | observed   |
+| SubagentStart/SubagentStop hook with `agent_id` in session S                            | adds `subagent-hook` to the `(S, A)` edge                                                                                                                                                                                       | observed   |
+| Session B's file contains message ids first seen in session A **strictly earlier** in A | `continuation` A to B, evidence `shared-message-history`. The parent is the single session holding all of B's inherited ids. **On a timestamp tie, which is normal for forks, the direction is unknown and no edge is created** | derived    |
+| Subagent transcript **without** a meta file                                             | **no edge**. The child is shown with parent _unknown_                                                                                                                                                                           | —          |
 
 Verified locally:
 
@@ -119,6 +119,14 @@ Verified locally:
 - every `spawnDepth` was 1.
 
 Depth above 1 is **unverified**. P1-C must cover it with a synthetic fixture marked as such.
+
+Implemented rules in `@acp/core` (`deriveSubagentEdge`, `deriveContinuationEdges`):
+
+- Spawn tool calls are matched only within the same provider session, so fork copies of `Agent`
+  calls are ignored.
+- If a depth above 1 matches calls in more than one session, the match is ambiguous and the parent
+  is unknown.
+- Ambiguous parents and cycles produce no edge.
 
 ## 6. Hooks (live channel)
 
@@ -148,7 +156,7 @@ Depth above 1 is **unverified**. P1-C must cover it with a synthetic fixture mar
 ## 7. Status and staleness
 
 The pipeline records evidence: `lastEventAt`, plus `endedAt` and `endReason` from `SessionEnd`. Status is
-derived on read (P1-A). Without hooks, sessions never reach `ended`; they become `stale`, which is the
+derived on read by `deriveSessionStatus` in `@acp/core` **[implemented]**. Without hooks, sessions never reach `ended`; they become `stale`, which is the
 truthful answer. Stale never means completed.
 
 ## 8. Errors and version drift

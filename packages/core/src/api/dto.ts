@@ -120,6 +120,11 @@ export const SessionDetailDtoSchema = SessionSummaryDtoSchema.extend({
   latestSnapshot: UsageSnapshotDtoSchema.nullable(),
   /** Sessions forked from this one (continuation edges). */
   continuationIds: z.array(z.string().min(1)),
+  /**
+   * Usage records attributed to this session whose origin is ambiguous: fork copies share
+   * timestamps, so they are counted once but may belong to a sibling (usage-accounting §5.2).
+   */
+  ambiguousAttributionCount: z.number().int().nonnegative(),
 });
 export type SessionDetailDto = z.infer<typeof SessionDetailDtoSchema>;
 

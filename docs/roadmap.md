@@ -25,12 +25,13 @@ current phase is in [implementation-plan.md](implementation-plan.md).
 
 ## Open questions
 
-| ID  | Question                                                                | Needed by                       | Notes                                                               |
-| --- | ----------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------- |
-| Q1  | Budget metric for orchestration runs                                    | Phase 3                         | see orchestration-lifecycle §4                                      |
-| Q2  | Managed-execution interface: Agent SDK vs `claude -p` stream-json       | Phase 3                         | the SDK gives an abort controller and typed results                 |
-| Q3  | Does a `cost-state` snapshot include subagent and auxiliary usage?      | P1-F                            | determines the snapshot `scope`; cross-check in usage-accounting §8 |
-| Q4  | Hook availability on each runtime version in use (2.1.202–2.1.293 seen) | P1-C                            | capture real payloads                                               |
-| Q5  | Nested subagents (`spawnDepth > 1`): how parent identity appears        | P1-C                            | not seen locally                                                    |
-| Q6  | Final license                                                           | before the first public release | MIT is provisional (ADR-0010)                                       |
-| Q7  | Should OTel become the primary usage source?                            | Phase 2                         | documented and stable, but needs user env configuration             |
+| ID  | Question                                                                | Needed by                       | Notes                                                                |
+| --- | ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------- |
+| Q1  | Budget metric for orchestration runs                                    | Phase 3                         | see orchestration-lifecycle §4                                       |
+| Q2  | Managed-execution interface: Agent SDK vs `claude -p` stream-json       | Phase 3                         | the SDK gives an abort controller and typed results                  |
+| Q3  | Does a `cost-state` snapshot include subagent and auxiliary usage?      | P1-F                            | determines the snapshot `scope`; cross-check in usage-accounting §8  |
+| Q4  | Hook availability on each runtime version in use (2.1.202–2.1.293 seen) | P1-C                            | capture real payloads                                                |
+| Q5  | Nested subagents (`spawnDepth > 1`): how parent identity appears        | P1-C                            | not seen locally                                                     |
+| Q6  | Final license                                                           | before the first public release | MIT is provisional (ADR-0010)                                        |
+| Q7  | Should OTel become the primary usage source?                            | Phase 2                         | documented and stable, but needs user env configuration              |
+| Q8  | Which session is the origin when fork copies share timestamps?          | Phase 2                         | the adapter could report transcript file creation time; needs an ADR |

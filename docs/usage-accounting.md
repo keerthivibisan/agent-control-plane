@@ -1,7 +1,9 @@
 # Event and usage accounting
 
-> Status: contracts are **[core v1]**. The selection, attribution, and aggregation logic is **[planned,
-> P1-A]**, tables are **[planned, P1-B]**, and dedup-key construction is **[planned, P1-C]**. The
+> Status: contracts are **[core v1]**. The selection, attribution, and aggregation logic is
+> **[implemented, P1-A]** as pure functions in `@acp/core` (`selectUsage`, `attributeUsage`,
+> `buildUsageRecord`, `sumTokenCounts`, `aggregateUsage`). It is not yet wired into the pipeline
+> (P1-D). The §5.2 tie rule is being amended (see below). Tables are **[planned, P1-B]**, and dedup-key construction is **[planned, P1-C]**. The
 > numbers quoted come from a read-only scan of local data on 2026-10-10
 > ([research note](research/claude-code-observations-2026-10-10.md)).
 
@@ -67,10 +69,22 @@ Each `usage.reported` event becomes a **UsageObservation**. Per `(provider, mess
    tie, choose the earliest `occurredAt`, then the lowest event row id. The record takes all four
    categories **from that one observation**. If any non-output category differs among observations
    that report it, set `conflict = true` and keep the selected observation's values. Conflicts are
-   counted in diagnostics.
+   counted in diagnostics. A null `occurredAt` sorts last in this tie-break. `conflict` compares
+   reported (non-null) values only.
 2. **Attribution.** The record belongs to the session of the observation with the earliest
    `occurredAt` (null sorts last), with ties broken by lexical `SessionKey`. Attribution is recomputed
    when observations arrive, so the result does not depend on ingestion order.
+   - **Tie amendment (2026-10-10).** Fork copies keep the original line's timestamp. In local data,
+     1,715 of 1,715 cross-file message ids had an identical first timestamp in every file. So a tie
+     on the earliest `occurredAt` across _different_ sessions means the origin is **unknown**. In
+     that case:
+     - the record is still counted exactly once, attributed by the lexical tie-break so the result is
+       deterministic;
+     - the record is flagged `attributionAmbiguous: true`;
+     - the API reports `ambiguousRecordCount` beside direct usage, and the UI shows the attribution
+       as ambiguous.
+   - A future tie-breaker, such as transcript file creation time reported by the adapter, needs its
+     own ADR (open question Q8).
 3. **Exclusions.** Observations whose `model` is `<synthetic>` (Claude Code placeholder messages; 28
    lines locally) are stored but excluded from usage records.
 
