@@ -6,6 +6,7 @@
 import {
   CandidateRootDtoSchema,
   CapabilitiesDtoSchema,
+  DiagnosticsDtoSchema,
   EventDtoSchema,
   HealthDtoSchema,
   OverviewDtoSchema,
@@ -17,6 +18,7 @@ import {
   UsageTotalsDtoSchema,
   type CandidateRootDto,
   type CapabilitiesDto,
+  type DiagnosticsDto,
   type EventDto,
   type HealthDto,
   type OverviewDto,
@@ -160,6 +162,21 @@ export function capabilities(over: Partial<CapabilitiesDto> = {}): CapabilitiesD
       },
     ],
     hooks: { receiverUrl: 'http://127.0.0.1:7420/api/hooks/claude-code', receivedAny: false },
+    ...over,
+  });
+}
+
+export function diagnostics(over: Partial<DiagnosticsDto> = {}): DiagnosticsDto {
+  return DiagnosticsDtoSchema.parse({
+    sources: [],
+    unrecognized: [],
+    edgeConflictCount: 0,
+    usageConflictCount: 0,
+    adapters: [],
+    ingestion: {
+      pipeline: { eventsInvalid: 0, batchesFailed: 0 },
+      scheduler: { polls: 0, pollErrors: 0, lastPollAt: null },
+    },
     ...over,
   });
 }

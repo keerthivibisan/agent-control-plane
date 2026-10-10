@@ -118,6 +118,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     hookReceiverUrl: `http://${config.host}:${options.port ?? config.port}/api/hooks/claude-code`,
     hookState,
     claudeDir: config.claudeDir,
+    ingestionStats: () => ({ pipeline: pipeline.counters(), scheduler: scheduler.stats() }),
     normalizeRoot:
       options.normalizeRoot ??
       (config.mode === 'demo' ? (p) => Promise.resolve(p) : normalizeLiveRoot),

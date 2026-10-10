@@ -15,7 +15,38 @@ import {
   EventDtoSchema,
   pageSchema,
 } from '@acp/core/api';
-import { envelope, setupApp } from './helpers.js';
+import type { AdapterDiagnostics, NormalizedEvent, ObservationAdapter } from '@acp/core';
+import { API_NOW, envelope, setupApp } from './helpers.js';
+
+/** An adapter whose poll always fails and whose diagnostics are fixed. */
+function fakeAdapter(diagnostics: AdapterDiagnostics): ObservationAdapter {
+  return {
+    provider: 'claude-code',
+    capabilities: () =>
+      Promise.resolve({
+        provider: 'claude-code',
+        observation: {
+          transcripts: true,
+          lifecycleHooks: false,
+          subagentRelationships: false,
+          perTurnUsage: false,
+          cumulativeSnapshots: false,
+        },
+        managedExecution: false,
+        providerVersionsSeen: [],
+        limitations: [],
+      }),
+    discoverCandidates: () => Promise.resolve([]),
+    // A poll that fails before yielding anything; the message quotes a path on purpose.
+    poll: () => ({
+      [Symbol.asyncIterator]: () => ({
+        next: () => Promise.reject(new TypeError('/home/tester/.claude/projects/-r/a.jsonl: boom')),
+      }),
+    }),
+    normalizeHook: () => [],
+    diagnostics: () => diagnostics,
+  };
+}
 
 const SessionPage = pageSchema(SessionSummaryDtoSchema);
 const EventPage = pageSchema(EventDtoSchema);
@@ -38,6 +69,49 @@ describe('API: contracts (every response is parsed by its DTO schema)', () => {
 
     const res = await request(app).get('/api/discovery/candidates');
     expect(CandidateRootDtoSchema.array().parse(res.body)).toEqual([]);
+  });
+
+  it('reports adapter diagnostics with relative paths and the ingestion counters', async () => {
+    const failing = fakeAdapter({
+      fileIssues: [
+        { path: '/home/tester/.claude/projects/-repo/big.jsonl', reason: 'size-cap', detail: null },
+        { path: '/elsewhere/secret/dir/x.jsonl', reason: 'io-error', detail: 'EACCES' },
+        { path: 'projects/-repo/agent-1.meta.json', reason: 'invalid-meta', detail: '' },
+      ],
+      ignoredRecords: { 'queue-operation': 3, 'file-history-snapshot': 40, 'last-prompt': 3 },
+      parseErrors: 2,
+    });
+    const { app, scheduler, pipeline } = await setupApp({ extraAdapters: [failing] });
+    pipeline.ingestEvents([{ not: 'an event' } as unknown as NormalizedEvent]);
+    await scheduler.pollNow();
+
+    const res = await request(app).get('/api/diagnostics/ingestion');
+    const diag = DiagnosticsDtoSchema.parse(res.body);
+    expect(diag.adapters.map((a) => a.provider)).toEqual(['demo', 'claude-code']);
+    expect(diag.adapters[0]).toEqual({
+      provider: 'demo',
+      fileIssues: [],
+      ignoredRecords: [],
+      parseErrors: 0,
+    });
+    const cc = diag.adapters[1];
+    expect(cc?.fileIssues).toEqual([
+      { path: 'projects/-repo/big.jsonl', reason: 'size-cap', detail: null },
+      { path: 'dir/x.jsonl', reason: 'io-error', detail: 'EACCES' },
+      { path: 'projects/-repo/agent-1.meta.json', reason: 'invalid-meta', detail: null },
+    ]);
+    expect(cc?.ignoredRecords).toEqual([
+      { recordType: 'file-history-snapshot', count: 40 },
+      { recordType: 'last-prompt', count: 3 },
+      { recordType: 'queue-operation', count: 3 },
+    ]);
+    expect(cc?.parseErrors).toBe(2);
+    expect(diag.ingestion).toEqual({
+      pipeline: { eventsInvalid: 1, batchesFailed: 0 },
+      scheduler: { polls: 1, pollErrors: 1, lastPollAt: API_NOW.toISOString() },
+    });
+    // No absolute or home path anywhere in the response.
+    expect(JSON.stringify(res.body)).not.toMatch(/\/home\/|\/elsewhere|"\/|~\//);
   });
 
   it('lists candidates outside registered roots', async () => {

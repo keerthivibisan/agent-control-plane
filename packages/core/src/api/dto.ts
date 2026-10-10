@@ -222,6 +222,38 @@ export const CandidateRootDtoSchema = z.object({
 });
 export type CandidateRootDto = z.infer<typeof CandidateRootDtoSchema>;
 
+/** `/x`, `~/x`, `C:\x`, `\\host\x`: a path that could reveal the user's home directory. */
+function isAbsoluteLike(path: string): boolean {
+  return /^(?:[/\\~]|[A-Za-z]:[/\\])/.test(path);
+}
+
+export const AdapterFileIssueDtoSchema = z.object({
+  /** Relative to the provider data root; never an absolute or home-relative path. */
+  path: z
+    .string()
+    .min(1)
+    .refine((p) => !isAbsoluteLike(p), 'path must be relative to the provider data root'),
+  /** Short machine reason, e.g. `size-cap`, `invalid-meta`, `outside-projects`. */
+  reason: z.string().min(1),
+  /** Error code or a short fixed explanation. Never file content. */
+  detail: nullableString,
+});
+export type AdapterFileIssueDto = z.infer<typeof AdapterFileIssueDtoSchema>;
+
+export const AdapterDiagnosticsDtoSchema = z.object({
+  provider: ProviderIdSchema,
+  /** Problems from the adapter's most recent scan. */
+  fileIssues: z.array(AdapterFileIssueDtoSchema),
+  /**
+   * Known record types the adapter skips on purpose because they carry nothing the control plane
+   * uses, largest count first. Not the same as `unrecognized`, which are types nobody knows.
+   */
+  ignoredRecords: z.array(z.object({ recordType: z.string().min(1), count })),
+  /** Unparseable or schema-invalid complete lines skipped since the adapter was created. */
+  parseErrors: count,
+});
+export type AdapterDiagnosticsDto = z.infer<typeof AdapterDiagnosticsDtoSchema>;
+
 export const DiagnosticsDtoSchema = z.object({
   sources: z.array(
     z.object({
@@ -238,6 +270,23 @@ export const DiagnosticsDtoSchema = z.object({
   ),
   edgeConflictCount: count,
   usageConflictCount: count,
+  /** What each adapter reports about its own reading (ADR-0011). In memory; resets on restart. */
+  adapters: z.array(AdapterDiagnosticsDtoSchema),
+  /** The server's own ingestion counters since it started. */
+  ingestion: z.object({
+    pipeline: z.object({
+      /** Events that failed `NormalizedEventSchema`; skipped, never stored. */
+      eventsInvalid: count,
+      /** Batches whose transaction rolled back; their checkpoint did not move. */
+      batchesFailed: count,
+    }),
+    scheduler: z.object({
+      polls: count,
+      /** Adapter polls that threw; the other adapters still ran. */
+      pollErrors: count,
+      lastPollAt: IsoTimestampSchema.nullable(),
+    }),
+  }),
 });
 export type DiagnosticsDto = z.infer<typeof DiagnosticsDtoSchema>;
 

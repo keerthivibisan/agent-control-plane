@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AdapterFileIssueDtoSchema,
+  DiagnosticsDtoSchema,
   EventDtoSchema,
   OverviewDtoSchema,
   SessionDetailDtoSchema,
@@ -150,6 +152,61 @@ describe('API DTO contracts', () => {
     expect(EventDtoSchema.safeParse({ ...event, eventType: 'session.completed' }).success).toBe(
       false,
     );
+  });
+
+  it('carries per-adapter diagnostics and server ingestion counters', () => {
+    const diagnostics = {
+      sources: [],
+      unrecognized: [{ providerVersion: '2.1.263', recordType: 'mystery', count: 2 }],
+      edgeConflictCount: 0,
+      usageConflictCount: 0,
+      adapters: [
+        {
+          provider: 'claude-code',
+          fileIssues: [{ path: 'projects/-repo/big.jsonl', reason: 'size-cap', detail: null }],
+          ignoredRecords: [
+            { recordType: 'file-history-snapshot', count: 40 },
+            { recordType: 'queue-operation', count: 3 },
+          ],
+          parseErrors: 1,
+        },
+      ],
+      ingestion: {
+        pipeline: { eventsInvalid: 0, batchesFailed: 1 },
+        scheduler: { polls: 4, pollErrors: 0, lastPollAt: T },
+      },
+    };
+    const parsed = DiagnosticsDtoSchema.parse(diagnostics);
+    expect(parsed.adapters[0]?.ignoredRecords[0]?.recordType).toBe('file-history-snapshot');
+    expect(parsed.ingestion.scheduler.lastPollAt).toBe(T);
+    expect(
+      DiagnosticsDtoSchema.safeParse({
+        ...diagnostics,
+        ingestion: {
+          ...diagnostics.ingestion,
+          scheduler: { polls: 0, pollErrors: 0, lastPollAt: null },
+        },
+      }).success,
+    ).toBe(true);
+
+    // The counters are required: an old server response must not parse as "zero problems".
+    const { adapters: _a, ingestion: _i, ...legacy } = diagnostics;
+    expect(DiagnosticsDtoSchema.safeParse(legacy).success).toBe(false);
+  });
+
+  it('rejects absolute and home-relative file issue paths', () => {
+    for (const path of ['/Users/me/.claude/projects/x.jsonl', '~/.claude/x', 'C:\\Users\\me\\x']) {
+      expect(
+        AdapterFileIssueDtoSchema.safeParse({ path, reason: 'io-error', detail: null }).success,
+      ).toBe(false);
+    }
+    expect(
+      AdapterFileIssueDtoSchema.safeParse({
+        path: 'projects/a.jsonl',
+        reason: 'r',
+        detail: 'EACCES',
+      }).success,
+    ).toBe(true);
   });
 
   it('keeps SSE notices to invalidation data', () => {

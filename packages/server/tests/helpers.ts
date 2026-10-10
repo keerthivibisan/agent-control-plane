@@ -176,11 +176,14 @@ export async function setupApp(
     ingestDemo?: boolean;
     normalizeRoot?: (p: string) => Promise<string>;
     hookAdapter?: ObservationAdapter;
+    /** Extra adapters reported by the services (diagnostics, capabilities) and polled. */
+    extraAdapters?: ObservationAdapter[];
   } = {},
 ) {
   const { createApp } = await import('../src/app.js');
   const { loadConfig } = await import('../src/config.js');
   const { createServices } = await import('../src/services/index.js');
+  const { createScheduler } = await import('../src/scheduler.js');
   const { createDemoAdapter } = await import('@acp/adapter-demo');
 
   const base = setupPipeline();
@@ -189,13 +192,24 @@ export async function setupApp(
     { homeDir: '/home/tester' },
   );
   const adapter = createDemoAdapter();
+  const adapters = [adapter, ...(options.extraAdapters ?? [])];
   const polls: number[] = [];
   const hookState = { receivedAny: false };
+  // Never started: tests drive it with pollNow() when they need its counters.
+  const scheduler = createScheduler({
+    adapters,
+    repos: base.repos,
+    pipeline: base.pipeline,
+    logger: silentLogger,
+    now: () => API_NOW,
+    intervalMs: 60_000,
+  });
   const services = createServices({
     db: base.db,
     repos: base.repos,
     queries: base.queries,
-    adapters: [adapter],
+    adapters,
+    ingestionStats: () => ({ pipeline: base.pipeline.counters(), scheduler: scheduler.stats() }),
     now: () => API_NOW,
     thresholds: config.statusThresholds,
     mode: 'demo',
@@ -236,5 +250,5 @@ export async function setupApp(
       base.pipeline.ingestBatch(b);
     base.notices.length = 0;
   }
-  return { ...base, app, config, adapter, polls, hookState, services, hookToken };
+  return { ...base, app, config, adapter, polls, hookState, services, hookToken, scheduler };
 }

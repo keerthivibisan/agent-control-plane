@@ -2,17 +2,21 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { CommandCenter } from '../../src/features/command-center/CommandCenter';
 import { containingProject } from '../../src/features/command-center/CandidateRoots';
-import { candidate, event, overview, partialUsage, project, session, T1 } from '../fixtures/dto';
+import {
+  candidate,
+  diagnostics,
+  event,
+  overview,
+  partialUsage,
+  project,
+  session,
+  T1,
+} from '../fixtures/dto';
 import { fakeServer, jsonResponse, renderWithApi } from '../helpers';
 
 const base = {
   '/api/discovery/candidates': [],
-  '/api/diagnostics/ingestion': {
-    sources: [],
-    unrecognized: [],
-    edgeConflictCount: 0,
-    usageConflictCount: 0,
-  },
+  '/api/diagnostics/ingestion': diagnostics(),
 };
 
 describe('Command Center', () => {
@@ -114,6 +118,63 @@ describe('Command Center', () => {
     renderWithApi(<CommandCenter />, fakeServer({ ...base, '/api/overview': overview() }));
     expect(await screen.findByText('No session is waiting for input.')).toBeTruthy();
     expect((await screen.findAllByTestId('hooks-status'))[0]?.textContent).toContain('opt-in');
+  });
+
+  it('shows adapter diagnostics: known skipped records apart from unrecognized ones', async () => {
+    const d = diagnostics({
+      unrecognized: [{ providerVersion: '2.1.0', recordType: 'mystery-type', count: 2 }],
+      adapters: [
+        {
+          provider: 'claude-code',
+          fileIssues: [{ path: 'projects/-repo/big.jsonl', reason: 'size-cap', detail: 'EFBIG' }],
+          ignoredRecords: [
+            { recordType: 'file-history-snapshot', count: 12601 },
+            { recordType: 'queue-operation', count: 3 },
+          ],
+          parseErrors: 1,
+        },
+      ],
+      ingestion: {
+        pipeline: { eventsInvalid: 4, batchesFailed: 2 },
+        scheduler: { polls: 17, pollErrors: 1, lastPollAt: T1 },
+      },
+    });
+    renderWithApi(
+      <CommandCenter />,
+      fakeServer({ ...base, '/api/overview': overview(), '/api/diagnostics/ingestion': d }),
+    );
+
+    const ignored = await screen.findByTestId('ignored-records');
+    expect(ignored.textContent).toContain('file-history-snapshot: 12,601');
+    expect(ignored.textContent).toContain('queue-operation: 3');
+    expect(screen.getByText('Known record types, skipped (counted, not stored)')).toBeTruthy();
+    const unrecognized = screen.getByTestId('unrecognized-records');
+    expect(unrecognized.textContent).toContain('mystery-type');
+    expect(unrecognized.textContent).not.toContain('file-history-snapshot');
+    expect(ignored.textContent).not.toContain('mystery-type');
+
+    expect(screen.getByTestId('file-issues').textContent).toBe(
+      'projects/-repo/big.jsonl: size-cap (EFBIG)',
+    );
+    const adapter = screen.getByTestId('adapter-diagnostics-claude-code');
+    expect(adapter.textContent).toContain('1 line skipped as unparseable');
+
+    const counters = screen.getByTestId('ingestion-counters');
+    const value = (label: string) =>
+      within(counters).getByText(label).nextElementSibling?.textContent;
+    expect(value('Polls (since start)')).toBe('17');
+    expect(value('Poll errors')).toBe('1');
+    expect(value('Failed batches / invalid events')).toBe('2 / 4');
+    expect(
+      within(counters).getByText('Last poll').nextElementSibling?.querySelector('time'),
+    ).toBeTruthy();
+  });
+
+  it('says no poll ran yet instead of inventing a time', async () => {
+    renderWithApi(<CommandCenter />, fakeServer({ ...base, '/api/overview': overview() }));
+    const counters = await screen.findByTestId('ingestion-counters');
+    expect(within(counters).getByText('Last poll').nextElementSibling?.textContent).toBe('not yet');
+    expect(screen.queryByTestId('ignored-records')).toBeNull();
   });
 
   it('matches candidate roots to registered projects by path segment', () => {

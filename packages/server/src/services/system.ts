@@ -7,10 +7,12 @@ import type {
   EventDto,
   OverviewDto,
 } from '@acp/core/api';
-import { SessionStatusSchema, addUsageTotals, emptyUsageTotals } from '@acp/core';
+import { SessionStatusSchema, addUsageTotals, emptyUsageTotals, redact } from '@acp/core';
 import type { Queries, Repositories } from '@acp/db';
 import { z } from 'zod';
 import { decodeCursor, encodeCursor } from '../http/cursor.js';
+import type { PipelineCounters } from '../pipeline/ingest.js';
+import type { SchedulerStats } from '../scheduler.js';
 import type { Page } from './mappers.js';
 import { toEventDto, type SessionsService } from './sessions.js';
 import { toUsageTotalsDto } from './mappers.js';
@@ -43,16 +45,41 @@ export interface SystemServiceDeps {
   hookState: HookState;
   /** Provider data root; used only to show checkpoint paths relative to it. */
   claudeDir: string;
+  /** The server's own ingestion counters (pipeline and scheduler), read on every request. */
+  ingestionStats: () => IngestionStats;
+}
+
+export interface IngestionStats {
+  pipeline: Pick<PipelineCounters, 'eventsInvalid' | 'batchesFailed'>;
+  scheduler: Pick<SchedulerStats, 'polls' | 'pollErrors' | 'lastPollAt'>;
 }
 
 const LIST_LIMIT = 20;
 
-/** Never expose an absolute home path (DiagnosticsDto): relative to the data root, else the tail. */
-function displayPath(sourcePath: string, dataRoot: string): string {
+/**
+ * Never expose an absolute home path (DiagnosticsDto): relative to the data root, else the tail.
+ * A path that is already relative and stays below its base (adapter file issues) is kept as is.
+ */
+export function displayPath(sourcePath: string, dataRoot: string): string {
   if (sourcePath.includes('://')) return sourcePath;
   const prefix = dataRoot.endsWith('/') ? dataRoot : `${dataRoot}/`;
   if (sourcePath.startsWith(prefix)) return sourcePath.slice(prefix.length);
-  return sourcePath.split('/').slice(-2).join('/') || sourcePath;
+  const segments = sourcePath.split(/[/\\]/);
+  const relative = !/^(?:[/\\~]|[A-Za-z]:)/.test(sourcePath) && !segments.includes('..');
+  if (relative) return sourcePath;
+  return (
+    segments
+      .filter((s) => s !== '' && s !== '..')
+      .slice(-2)
+      .join('/') || 'unknown'
+  );
+}
+
+/** Ignored record counts as a list, largest first (ties by type, so the order is stable). */
+function ignoredList(counts: Readonly<Record<string, number>>) {
+  return Object.entries(counts)
+    .map(([recordType, count]) => ({ recordType, count }))
+    .sort((a, b) => b.count - a.count || (a.recordType < b.recordType ? -1 : 1));
 }
 
 export function createSystemService(deps: SystemServiceDeps): SystemService {
@@ -100,6 +127,7 @@ export function createSystemService(deps: SystemServiceDeps): SystemService {
 
     diagnostics() {
       const counts = deps.queries.diagnosticsCounts();
+      const stats = deps.ingestionStats();
       return {
         sources: deps.repos.checkpoints.list().map((c) => ({
           sourcePath: displayPath(c.sourcePath, deps.claudeDir),
@@ -111,6 +139,31 @@ export function createSystemService(deps: SystemServiceDeps): SystemService {
         unrecognized: counts.unrecognized,
         edgeConflictCount: counts.edgeConflictCount,
         usageConflictCount: counts.usageConflictCount,
+        adapters: deps.adapters.map((adapter) => {
+          const d = adapter.diagnostics();
+          return {
+            provider: adapter.provider,
+            // Adapters already report relative paths; this guards the contract regardless.
+            fileIssues: d.fileIssues.map((issue) => ({
+              path: displayPath(issue.path, deps.claudeDir),
+              reason: issue.reason,
+              detail: issue.detail === null || issue.detail === '' ? null : redact(issue.detail),
+            })),
+            ignoredRecords: ignoredList(d.ignoredRecords),
+            parseErrors: d.parseErrors,
+          };
+        }),
+        ingestion: {
+          pipeline: {
+            eventsInvalid: stats.pipeline.eventsInvalid,
+            batchesFailed: stats.pipeline.batchesFailed,
+          },
+          scheduler: {
+            polls: stats.scheduler.polls,
+            pollErrors: stats.scheduler.pollErrors,
+            lastPollAt: stats.scheduler.lastPollAt,
+          },
+        },
       };
     },
 

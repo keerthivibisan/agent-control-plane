@@ -3,7 +3,12 @@ import type { StreamNoticeDto } from '@acp/core/api';
 import type { AcpDatabase, Queries, Repositories } from '@acp/db';
 import { createProjectsService, type ProjectsService } from './projects.js';
 import { createSessionsService, type SessionsService } from './sessions.js';
-import { createSystemService, type HookState, type SystemService } from './system.js';
+import {
+  createSystemService,
+  type HookState,
+  type IngestionStats,
+  type SystemService,
+} from './system.js';
 import { createUsageService, type UsageService } from './usage.js';
 
 export interface Services {
@@ -25,6 +30,7 @@ export interface ServicesDeps {
   hookReceiverUrl: string;
   hookState: HookState;
   claudeDir: string;
+  ingestionStats: () => IngestionStats;
   normalizeRoot: (rootPath: string) => Promise<string>;
   publish: (notice: StreamNoticeDto) => void;
   requestPoll: () => void;
@@ -60,8 +66,9 @@ export function createServices(deps: ServicesDeps): Services {
       hookReceiverUrl: deps.hookReceiverUrl,
       hookState: deps.hookState,
       claudeDir: deps.claudeDir,
+      ingestionStats: deps.ingestionStats,
     }),
   };
 }
 
-export type { HookState };
+export type { HookState, IngestionStats };

@@ -40,5 +40,12 @@ Configuration is in [docs/development.md §5](/docs/development.md). Demo mode r
 - **Hooks** carry no provider time, so the delivery time is the activity evidence for status.
 - **Scheduler**: polls are single-flight (not per file); requests during a poll coalesce into one rerun.
 - **Guard**: non-loopback `Host`, foreign `Origin`, and CORS preflights get 403 on all `/api` routes.
+- **Diagnostics** (`GET /api/diagnostics/ingestion`): checkpoints per source, unrecognized record types
+  and conflict counts from the database; each adapter's `diagnostics()` (ADR-0011: file issues from its
+  latest scan, known record types it skipped on purpose sorted by count, parse errors); and the
+  server's own counters (pipeline `eventsInvalid`/`batchesFailed`, scheduler `polls`/`pollErrors`/
+  `lastPollAt`). Adapter and server counters are in memory and reset on restart. Every path is shown
+  relative to the provider data root (`displayPath`), never as an absolute home path; the DTO rejects
+  absolute file-issue paths.
 - **Not implemented**: `GET /api/sessions/:id/usage` (no DTO; `SessionDetailDto` already carries direct
-  and aggregate usage), the adapter's `diagnostics()` in the diagnostics endpoint (no DTO field yet), and the cost field in `OverviewDto`.
+  and aggregate usage), and the cost field in `OverviewDto`.
