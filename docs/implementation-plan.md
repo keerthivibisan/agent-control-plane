@@ -253,8 +253,9 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
 - [x] Partial lines are safe. F1 scenario 06 and the generated root's unterminated last line;
       F3 restarts with chunks smaller than a line.
 - [x] Stale is never shown as completed. E2E asserts no "completed" status (the enum has none);
-      F4 (2026-10-10): the live session went `active` and, after exit, idle → stale as observed by the
-      user; F2's 43 finished real sessions all show `stale`.
+      F4 (2026-10-10): the live session showed `active` and the user confirmed the behavior; idle and
+      stale are derived at read time from the last event (core status tests), and F2's 43 finished
+      real sessions all show `stale`.
 
 **Frontend**
 

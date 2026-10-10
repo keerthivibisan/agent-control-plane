@@ -58,5 +58,6 @@ not a bug (usage-accounting §8).
 
 `pnpm dev` in live mode with the project registered (polling only, no hooks). The user started a new
 Claude Code session in the project: the API reported 44 sessions, the new one `active` with 5 usage
-records, within the poll interval. After exit the user saw it go idle and then stale; it never showed
-"completed", and never `ended` (no hooks configured, as expected).
+records, within the poll interval, and the user confirmed it in the UI. The later idle (2 min) and
+stale (30 min) transitions were not watched end to end; they are derived at read time from the last
+event time, which core's status tests cover. No status "completed" exists; `ended` needs hooks.
