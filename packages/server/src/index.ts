@@ -1,4 +1,10 @@
 export { createApp } from './app.js';
 export type { AppDeps } from './app.js';
+export { createServices } from './services/index.js';
+export type { Services, ServicesDeps } from './services/index.js';
+export { createPipeline } from './pipeline/ingest.js';
+export type { Pipeline, IngestResult } from './pipeline/ingest.js';
+export { createScheduler } from './scheduler.js';
+export type { Scheduler } from './scheduler.js';
 export { ConfigError, loadConfig } from './config.js';
 export type { ServerConfig } from './config.js';

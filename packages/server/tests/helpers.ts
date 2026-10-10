@@ -161,3 +161,53 @@ export async function collect(
   for await (const b of adapter.poll(roots, store)) out.push(b);
   return out;
 }
+
+export const API_NOW = new Date('2026-10-10T08:05:00.000Z');
+
+/** The full app over a temp database, with the demo adapter available but nothing ingested yet. */
+export async function setupApp(
+  options: { ingestDemo?: boolean; normalizeRoot?: (p: string) => Promise<string> } = {},
+) {
+  const { createApp } = await import('../src/app.js');
+  const { loadConfig } = await import('../src/config.js');
+  const { createServices } = await import('../src/services/index.js');
+  const { createDemoAdapter } = await import('@acp/adapter-demo');
+
+  const base = setupPipeline();
+  const config = loadConfig(
+    { ACP_MODE: 'demo', ACP_DATA_DIR: tempDir() },
+    { homeDir: '/home/tester' },
+  );
+  const adapter = createDemoAdapter();
+  const polls: number[] = [];
+  const hookState = { receivedAny: false };
+  const services = createServices({
+    db: base.db,
+    repos: base.repos,
+    queries: base.queries,
+    adapters: [adapter],
+    now: () => API_NOW,
+    thresholds: config.statusThresholds,
+    mode: 'demo',
+    version: '0.0.0',
+    hookReceiverUrl: `http://127.0.0.1:${config.port}/api/hooks/claude-code`,
+    hookState,
+    claudeDir: config.claudeDir,
+    normalizeRoot: options.normalizeRoot ?? ((p) => Promise.resolve(p)),
+    publish: (n) => base.notices.push(n),
+    requestPoll: () => void polls.push(1),
+  });
+  const app = createApp({ config, logger: silentLogger, services });
+
+  if (options.ingestDemo !== false) {
+    base.repos.projects.insert({ name: 'demo-api', rootPath: '/home/user/demo-api' });
+    base.repos.projects.insert({ name: 'demo-web', rootPath: '/home/user/demo-web' });
+    const roots = base.repos.projects
+      .list()
+      .map((p) => ({ projectId: p.id, rootPath: p.rootPath }));
+    for (const b of await collect(adapter, roots, base.repos.checkpoints))
+      base.pipeline.ingestBatch(b);
+    base.notices.length = 0;
+  }
+  return { ...base, app, config, adapter, polls, hookState, services };
+}
