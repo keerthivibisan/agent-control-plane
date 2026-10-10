@@ -1,6 +1,6 @@
-# ADR-0010: MIT license (provisional)
+# ADR-0010: MIT license
 
-- **Status:** provisional — must be confirmed by the project owners before the first public release
+- **Status:** accepted — confirmed by the project owner on 2026-10-10 (was provisional)
 - **Date:** 2026-10-10
 
 ## Context
