@@ -1,4 +1,4 @@
-import { CapabilitiesPanel } from '../features/command-center/CapabilitiesPanel';
+import { CommandCenter } from '../features/command-center/CommandCenter';
 import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
 import { useRoute, type Route } from '../lib/router';
@@ -8,7 +8,7 @@ import { Shell } from './Shell';
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
     case 'home':
-      return <CapabilitiesPanel />;
+      return <CommandCenter />;
     default:
       return (
         <p className="text-dim">

@@ -82,13 +82,21 @@ export function session(over: Partial<SessionSummaryDto> & { id: string }): Sess
 }
 
 export function detail(over: Partial<SessionDetailDto> & { id: string }): SessionDetailDto {
-  const { parent, aggregateUsage, latestSnapshot, continuationIds, ...summary } = over;
+  const {
+    parent,
+    aggregateUsage,
+    latestSnapshot,
+    continuationIds,
+    ambiguousAttributionCount,
+    ...summary
+  } = over;
   return SessionDetailDtoSchema.parse({
     ...session(summary),
     parent: parent ?? { state: 'unknown' },
     aggregateUsage: aggregateUsage ?? usage({ recordCount: 9 }),
     latestSnapshot: latestSnapshot ?? null,
     continuationIds: continuationIds ?? [],
+    ambiguousAttributionCount: ambiguousAttributionCount ?? 0,
   });
 }
 

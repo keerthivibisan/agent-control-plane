@@ -1,4 +1,5 @@
 import type { UsageTotalsDto } from '@acp/core/api';
+import type { ReactNode } from 'react';
 import { formatCount } from '../lib/format';
 import { TOKEN_CATEGORIES } from '../lib/tokens';
 import { ProvenanceBadge } from './ProvenanceBadge';
@@ -9,11 +10,14 @@ export function UsageTotals({
   usage,
   title,
   description,
+  note,
   testId,
 }: {
   usage: UsageTotalsDto;
   title: string;
   description?: string;
+  /** Extra caveat shown under the totals (e.g. ambiguous attribution). */
+  note?: ReactNode;
   testId?: string;
 }) {
   return (
@@ -44,7 +48,27 @@ export function UsageTotals({
         ))}
       </dl>
       {description ? <p className="mt-2 text-[11px] text-dim">{description}</p> : null}
+      {note}
     </section>
+  );
+}
+
+/**
+ * Fork copies share timestamps, so for some records the originating session can't be told apart
+ * from a sibling fork. They are counted exactly once, here, but the attribution is a deterministic
+ * tie-break, not evidence (usage-accounting §5.2, tie amendment).
+ */
+export function AmbiguousAttributionNote({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <p
+      className="mt-1 text-[11px] text-estimated italic"
+      data-testid="ambiguous-attribution"
+      title="The earliest timestamp ties across sessions (fork copies), so the origin is unknown. Each record is still counted once."
+    >
+      {formatCount(count)} record{count === 1 ? '' : 's'} shared with a fork — attribution ambiguous
+      (counted once)
+    </p>
   );
 }
 
@@ -55,9 +79,12 @@ export function UsageTotals({
 export function UsageComparison({
   direct,
   aggregate,
+  ambiguousAttributionCount = 0,
 }: {
   direct: UsageTotalsDto;
   aggregate: UsageTotalsDto;
+  /** `SessionDetailDto.ambiguousAttributionCount`: shown next to direct usage when above 0. */
+  ambiguousAttributionCount?: number;
 }) {
   return (
     <div>
@@ -66,6 +93,7 @@ export function UsageComparison({
           usage={direct}
           title="Direct usage"
           description="Usage records attributed to this session only."
+          note={<AmbiguousAttributionNote count={ambiguousAttributionCount} />}
           testId="usage-direct"
         />
         <UsageTotals

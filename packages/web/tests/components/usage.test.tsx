@@ -96,3 +96,18 @@ describe('estimated values', () => {
     expect(container.textContent).not.toContain('$0');
   });
 });
+
+describe('ambiguous attribution', () => {
+  it('notes records shared with a fork next to direct usage only', () => {
+    render(<UsageComparison direct={usage()} aggregate={usage()} ambiguousAttributionCount={3} />);
+    const note = screen.getByTestId('ambiguous-attribution');
+    expect(note.textContent).toContain('3 records shared with a fork');
+    expect(note.textContent).toContain('counted once');
+    expect(screen.getByTestId('usage-direct').contains(note)).toBe(true);
+  });
+
+  it('shows no note when the count is 0', () => {
+    render(<UsageComparison direct={usage()} aggregate={usage()} ambiguousAttributionCount={0} />);
+    expect(screen.queryByTestId('ambiguous-attribution')).toBeNull();
+  });
+});

@@ -40,10 +40,10 @@ describe('app shell', () => {
   it('shows a contract violation instead of rendering a malformed response', async () => {
     const server = fakeServer({ '/api/capabilities': { mode: 'demo', providers: 'nope' } });
     renderApp(server.fetch);
-    const alert = await screen.findByRole('alert');
-    expect(alert.getAttribute('data-error-kind')).toBe('parse');
-    expect(alert.textContent).toContain('/api/capabilities');
-    expect(alert.textContent).toContain('providers');
+    const alerts = await screen.findAllByRole('alert');
+    const alert = alerts.find((a) => a.textContent.includes('/api/capabilities'));
+    expect(alert?.getAttribute('data-error-kind')).toBe('parse');
+    expect(alert?.textContent).toContain('providers');
     expect(screen.queryByTestId('demo-banner')).toBeNull();
   });
 });
