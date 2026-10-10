@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+/* The theme toggle sets `.dark` on <html> (src/lib/theme.ts); `system` follows prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --color-canvas: #f5f6f8;
+  --color-panel: #ffffff;
+  --color-sunken: #eceff3;
+  --color-ink: #1a1e24;
+  --color-dim: #5a6370;
+  --color-line: #d6dbe1;
+  --color-accent: #1d4ed8;
+  --color-estimated: #92400e;
+  --color-estimated-bg: #fef3c7;
+  --color-unavailable: #6b7280;
+}
+
+.dark {
+  --color-canvas: #0e1115;
+  --color-panel: #151a20;
+  --color-sunken: #1c222a;
+  --color-ink: #e4e8ee;
+  --color-dim: #9aa4b2;
+  --color-line: #2b323c;
+  --color-accent: #7aa7ff;
+  --color-estimated: #fcd34d;
+  --color-estimated-bg: #3b2a0a;
+  --color-unavailable: #9ca3af;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+/* React Flow follows the app theme. */
+.react-flow {
+  --xy-background-color: var(--color-canvas);
+  --xy-node-background-color: var(--color-panel);
+  --xy-node-border-radius: 6px;
+  --xy-edge-label-background-color: var(--color-panel);
+  --xy-edge-label-color: var(--color-ink);
+  --xy-controls-button-background-color: var(--color-panel);
+  --xy-controls-button-color: var(--color-ink);
+  --xy-controls-button-border-color: var(--color-line);
+  --xy-minimap-background-color: var(--color-panel);
+}

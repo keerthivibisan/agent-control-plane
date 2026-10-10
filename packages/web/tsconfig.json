@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "noEmit": true,
+    // vite.config.ts imports src/lib/constants.ts with its extension (Vite's native config loader).
+    "allowImportingTsExtensions": true,
+    // An app, not a library: Vite bundles it, nothing consumes its declarations.
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}

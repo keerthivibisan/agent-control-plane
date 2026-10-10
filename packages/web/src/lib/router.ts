@@ -1,0 +1,74 @@
+import { useMemo, useSyncExternalStore } from 'react';
+
+/** Hash routes (no router dependency): `#/`, `#/sessions`, `#/sessions/:id`, `#/projects/:id`, `#/usage`. */
+export type Route =
+  | { name: 'home' }
+  | { name: 'sessions'; params: URLSearchParams }
+  | { name: 'session'; id: string }
+  | { name: 'project'; id: string }
+  | { name: 'usage'; params: URLSearchParams }
+  | { name: 'not-found'; hash: string };
+
+function decode(segment: string): string | null {
+  try {
+    const v = decodeURIComponent(segment);
+    return v.length > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function parseRoute(hash: string): Route {
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash;
+  const [pathPart = '', query = ''] = raw.split('?', 2);
+  const path = pathPart === '' ? '/' : pathPart;
+  const params = new URLSearchParams(query);
+  const segments = path.split('/').filter((s) => s.length > 0);
+
+  if (segments.length === 0) return { name: 'home' };
+  const [head, id, ...rest] = segments;
+  if (rest.length > 0) return { name: 'not-found', hash };
+  if (head === 'sessions' && id === undefined) return { name: 'sessions', params };
+  if (head === 'usage' && id === undefined) return { name: 'usage', params };
+  if (head === 'sessions' && id !== undefined) {
+    const decoded = decode(id);
+    if (decoded) return { name: 'session', id: decoded };
+  }
+  if (head === 'projects' && id !== undefined) {
+    const decoded = decode(id);
+    if (decoded) return { name: 'project', id: decoded };
+  }
+  return { name: 'not-found', hash };
+}
+
+function withParams(path: string, params: Record<string, string | null | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) search.set(k, v);
+  const qs = search.toString();
+  return qs ? `#${path}?${qs}` : `#${path}`;
+}
+
+export const href = {
+  home: () => '#/',
+  sessions: (params: Record<string, string | null | undefined> = {}) =>
+    withParams('/sessions', params),
+  session: (id: string) => `#/sessions/${encodeURIComponent(id)}`,
+  project: (id: string) => `#/projects/${encodeURIComponent(id)}`,
+  usage: (params: Record<string, string | null | undefined> = {}) => withParams('/usage', params),
+};
+
+export function navigate(hash: string): void {
+  window.location.hash = hash.startsWith('#') ? hash.slice(1) : hash;
+}
+
+function subscribe(onChange: () => void): () => void {
+  window.addEventListener('hashchange', onChange);
+  return () => window.removeEventListener('hashchange', onChange);
+}
+
+const getHash = () => window.location.hash;
+
+export function useRoute(): Route {
+  const hash = useSyncExternalStore(subscribe, getHash, () => '');
+  return useMemo(() => parseRoute(hash), [hash]);
+}

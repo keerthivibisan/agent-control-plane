@@ -5,6 +5,12 @@
   "description": "React dashboard: Command Center, Session Explorer, usage views. Owned by P1-E.",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@acp/core": "workspace:*",
     "@xyflow/react": "12.12.0",
