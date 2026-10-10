@@ -7,8 +7,8 @@ import {
   type IsoTimestamp,
   type Provenance,
   type ProviderId,
-  type SessionKey,
   type TokenCounts,
+  type UsageObservation,
 } from '@acp/core';
 import { DbError } from '../errors.js';
 import type { RepositoryContext } from '../internal/context.js';
@@ -35,17 +35,15 @@ export interface UsageObservationInput {
   tokens: TokenCounts;
 }
 
-export interface UsageObservationRow {
-  eventId: number;
+/**
+ * A stored observation. It is a core `UsageObservation` (`session` is the observation's SessionKey),
+ * so a message's rows can be passed straight to `buildUsageRecord` / `selectUsage` /
+ * `attributeUsage`. `sessionId` is the internal id of that session.
+ */
+export interface UsageObservationRow extends UsageObservation {
   provider: ProviderId;
-  messageId: string;
   sessionId: string;
-  /** Key of the observation's session, for attribution tie-breaks (usage-accounting §5). */
-  sessionKey: SessionKey;
   occurredAt: IsoTimestamp | null;
-  requestId: string | null;
-  model: string | null;
-  tokens: TokenCounts;
 }
 
 export interface UsageRecordInput {
@@ -63,6 +61,8 @@ export interface UsageRecordInput {
   tokens: TokenCounts;
   observationCount: number;
   conflict: boolean;
+  /** Core `UsageRecordDraft.attributionAmbiguous`: the origin session is unknown (fork tie). */
+  attributionAmbiguous: boolean;
   /** Default `transcript`. */
   source?: IngestionChannel;
   /** Default `observed`. */
@@ -81,6 +81,7 @@ export interface UsageRecordRow {
   tokens: TokenCounts;
   observationCount: number;
   conflict: boolean;
+  attributionAmbiguous: boolean;
   source: IngestionChannel;
   provenance: Provenance;
   updatedAt: IsoTimestamp;
@@ -135,13 +136,15 @@ interface RecordDbRow extends TokenDbColumns {
   model: string | null;
   observation_count: number;
   conflict: number;
+  attribution_ambiguous: number;
   source: string;
   provenance: string;
   updated_at: string;
 }
 
 const RECORD_COLUMNS = `id, provider, message_id, session_id, selected_event_id, occurred_at,
-  request_id, model, ${TOKEN_COLUMNS}, observation_count, conflict, source, provenance, updated_at`;
+  request_id, model, ${TOKEN_COLUMNS}, observation_count, conflict, attribution_ambiguous, source,
+  provenance, updated_at`;
 
 export function storedTokens(row: TokenDbColumns, table: string): TokenCounts {
   return parseStored(
@@ -174,7 +177,7 @@ function toObservation(row: ObservationDbRow): UsageObservationRow {
     provider: parseStored(ProviderIdSchema, row.provider, t, 'provider'),
     messageId: row.message_id,
     sessionId: row.session_id,
-    sessionKey: {
+    session: {
       provider: parseStored(ProviderIdSchema, row.s_provider, 'sessions', 'provider'),
       providerSessionId: row.s_provider_session_id,
       providerAgentId: row.s_provider_agent_id === '' ? null : row.s_provider_agent_id,
@@ -200,6 +203,7 @@ function toRecord(row: RecordDbRow): UsageRecordRow {
     tokens: storedTokens(row, t),
     observationCount: row.observation_count,
     conflict: row.conflict === 1,
+    attributionAmbiguous: row.attribution_ambiguous === 1,
     source: parseStored(IngestionChannelSchema, row.source, t, 'source'),
     provenance: parseStored(ProvenanceSchema, row.provenance, t, 'provenance'),
     updatedAt: storedTimestamp(row.updated_at, t, 'updated_at'),
@@ -226,7 +230,8 @@ export function createUsageRepository(ctx: RepositoryContext): UsageRepository {
     INSERT INTO usage_records (${RECORD_COLUMNS})
     VALUES (@id, @provider, @message_id, @session_id, @selected_event_id, @occurred_at,
       @request_id, @model, @input_tokens, @output_tokens, @cache_creation_tokens,
-      @cache_read_tokens, @observation_count, @conflict, @source, @provenance, @updated_at)
+      @cache_read_tokens, @observation_count, @conflict, @attribution_ambiguous, @source, @provenance,
+      @updated_at)
     ON CONFLICT (provider, message_id) DO UPDATE SET
       session_id = excluded.session_id,
       selected_event_id = excluded.selected_event_id,
@@ -239,6 +244,7 @@ export function createUsageRepository(ctx: RepositoryContext): UsageRepository {
       cache_read_tokens = excluded.cache_read_tokens,
       observation_count = excluded.observation_count,
       conflict = excluded.conflict,
+      attribution_ambiguous = excluded.attribution_ambiguous,
       source = excluded.source,
       provenance = excluded.provenance,
       updated_at = excluded.updated_at
@@ -286,6 +292,7 @@ export function createUsageRepository(ctx: RepositoryContext): UsageRepository {
         ...tokenParams(input.tokens),
         observation_count: input.observationCount,
         conflict: input.conflict ? 1 : 0,
+        attribution_ambiguous: input.attributionAmbiguous ? 1 : 0,
         source: parseInput(IngestionChannelSchema, input.source ?? 'transcript', 'source'),
         provenance: parseInput(ProvenanceSchema, input.provenance ?? 'observed', 'provenance'),
         updated_at: ctx.now().toISOString(),

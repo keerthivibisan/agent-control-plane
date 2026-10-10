@@ -67,6 +67,7 @@ function build(): Fixture {
     t: TokenCounts,
     model: string | null,
     occurredAt: string | null = T0,
+    { conflict = false, attributionAmbiguous = false } = {},
   ) =>
     repos.usage.upsertRecord({
       provider: 'claude-code',
@@ -78,14 +79,16 @@ function build(): Fixture {
       model,
       tokens: t,
       observationCount: 1,
-      conflict: false,
+      conflict,
+      attributionAmbiguous,
     });
   rec('m1', ids.A, tokens(10, 100, null, 1000), 'opus');
   rec('m2', ids.A, tokens(5, 50, 20, null), 'sonnet', '2026-10-11T01:00:00.000Z');
   rec('m3', ids.A1, tokens(1, 10, null, null), 'opus');
   rec('m4', ids.A1a, tokens(null, null, null, null), null);
-  rec('m5', ids.F, tokens(2, 20, 2, 200), 'opus');
-  rec('m6', ids.B, tokens(7, 70, 7, 700), 'sonnet', null);
+  // The fork's copy tied with the original on time: counted once, flagged ambiguous.
+  rec('m5', ids.F, tokens(2, 20, 2, 200), 'opus', T0, { attributionAmbiguous: true });
+  rec('m6', ids.B, tokens(7, 70, 7, 700), 'sonnet', null, { conflict: true });
   rec('m7', ids.U, tokens(1, 1, 1, 1), 'opus');
   return { repos, q: createQueries(db), ids };
 }

@@ -91,7 +91,7 @@ describe('usage repository (B4)', () => {
       provider: 'claude-code',
       messageId: 'msg-1',
       sessionId: main,
-      sessionKey: key('sess-1'),
+      session: key('sess-1'),
       occurredAt: at(1),
       requestId: 'req-1',
       model: 'claude-opus-4-1',
@@ -99,7 +99,7 @@ describe('usage repository (B4)', () => {
     });
     // Null categories stay null (unavailable), never 0.
     expect(observations[2]?.tokens).toEqual(tokens(null, null, null, null));
-    expect(observations[2]?.sessionKey).toEqual(key('sess-fork'));
+    expect(observations[2]?.session).toEqual(key('sess-fork'));
     expect(repos.usage.listObservationsByMessage('claude-code', 'other')).toEqual([]);
   });
 
@@ -122,6 +122,7 @@ describe('usage repository (B4)', () => {
       tokens: tokens(3, 10, null, 5),
       observationCount: 1,
       conflict: false,
+      attributionAmbiguous: true,
     });
     expect(created.created).toBe(true);
     // Recomputed after more observations: re-attributed to the original session.
@@ -132,6 +133,7 @@ describe('usage repository (B4)', () => {
       tokens: tokens(3, 120, null, 5),
       observationCount: 3,
       conflict: true,
+      attributionAmbiguous: false,
     });
     expect(updated).toEqual({ id: created.id, created: false });
     expect(repos.usage.getRecord('claude-code', 'msg-1')).toEqual({
@@ -142,6 +144,7 @@ describe('usage repository (B4)', () => {
       tokens: tokens(3, 120, null, 5),
       observationCount: 3,
       conflict: true,
+      attributionAmbiguous: false,
       source: 'transcript',
       provenance: 'observed',
       updatedAt: '2026-10-10T12:00:01.000Z',
@@ -181,6 +184,7 @@ describe('usage repository (B4)', () => {
         tokens: tokens(1, 1),
         observationCount: 0,
         conflict: false,
+        attributionAmbiguous: false,
       }),
     ).toThrow(DbError);
   });
@@ -226,7 +230,6 @@ describe('snapshots repository (B4)', () => {
     expect(all[0]?.reportedCostUsd).toEqual({
       provenance: 'unavailable',
       value: null,
-      reason: 'not reported by provider',
     });
   });
 

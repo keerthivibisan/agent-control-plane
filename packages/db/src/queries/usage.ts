@@ -1,29 +1,21 @@
-import { TokenCountsSchema, type IsoTimestamp, type ProviderId, type TokenCounts } from '@acp/core';
+import {
+  emptyUsageTotals,
+  TokenCountsSchema,
+  type IsoTimestamp,
+  type ProviderId,
+  type UsageTotals,
+} from '@acp/core';
+import type { UsageGroupBy } from '@acp/core/api';
 import { DbError } from '../errors.js';
 import type { SqliteConnection } from '../database.js';
 import { parseStored, placeholders, toStoredTimestamp } from '../internal/validate.js';
 import { subagentSubtreeCte } from './tree.js';
 
-/** Count of records that did not report a category (so the UI can say "partial"). */
-export interface UnavailableCounts {
-  input: number;
-  output: number;
-  cacheCreation: number;
-  cacheRead: number;
-}
-
-/**
- * Null-preserving per-category sums over usage records (usage-accounting §6).
- * A category is `null` (unavailable) when every contributing record is null for it — including
- * when there are no records at all — and is never coerced to 0.
+/*
+ * Totals use core's `UsageTotals` (the same shape `sumTokenCounts` returns), computed in SQL:
+ * a category is `null` (unavailable) when every contributing record is null for it, including when
+ * there are no records at all, and is never coerced to 0 (usage-accounting §6).
  */
-export interface UsageTotals {
-  recordCount: number;
-  tokens: TokenCounts;
-  recordsWithUnavailable: UnavailableCounts;
-}
-
-export type UsageGroupBy = 'project' | 'session' | 'model' | 'day';
 
 export interface UsageSummaryFilter {
   projectId?: string;
@@ -90,18 +82,6 @@ export function toTotals(row: TotalsDbRow): UsageTotals {
   };
 }
 
-const EMPTY_ROW: TotalsDbRow = {
-  record_count: 0,
-  input: null,
-  output: null,
-  cache_creation: null,
-  cache_read: null,
-  input_unavailable: 0,
-  output_unavailable: 0,
-  cache_creation_unavailable: 0,
-  cache_read_unavailable: 0,
-};
-
 const GROUP_KEYS: Record<UsageGroupBy, string> = {
   project: 's.project_id',
   session: 'r.session_id',
@@ -114,6 +94,12 @@ export interface UsageQueries {
   directUsage(sessionId: string): UsageTotals;
   /** Direct usage for many sessions at once (list views). Every requested id gets an entry. */
   directUsageBySession(sessionIds: readonly string[]): Map<string, UsageTotals>;
+  /**
+   * Records attributed to this session whose origin is ambiguous (fork copies with tied
+   * timestamps; usage-accounting §5.2). Reported beside direct usage as
+   * `ambiguousAttributionCount`.
+   */
+  ambiguousAttributionCount(sessionId: string): number;
   /**
    * Aggregate usage: direct usage of the session plus every descendant over `subagent` edges.
    * Continuation (fork) children are excluded; their copied messages are already attributed to
@@ -130,6 +116,11 @@ export interface UsageQueries {
 
 export function createUsageQueries(c: SqliteConnection): UsageQueries {
   const direct = c.prepare(`SELECT ${TOTALS_SELECT} FROM usage_records r WHERE r.session_id = ?`);
+  const ambiguous = c
+    .prepare(
+      'SELECT COUNT(*) FROM usage_records WHERE session_id = ? AND attribution_ambiguous = 1',
+    )
+    .pluck();
   const aggregate = c.prepare(`
     WITH RECURSIVE ${subagentSubtreeCte('@root')}
     SELECT ${TOTALS_SELECT} FROM usage_records r
@@ -141,7 +132,7 @@ export function createUsageQueries(c: SqliteConnection): UsageQueries {
     },
     directUsageBySession(sessionIds) {
       const out = new Map<string, UsageTotals>();
-      for (const id of sessionIds) out.set(id, toTotals(EMPTY_ROW));
+      for (const id of sessionIds) out.set(id, emptyUsageTotals());
       for (let i = 0; i < sessionIds.length; i += 500) {
         const chunk = sessionIds.slice(i, i + 500);
         const rows = c
@@ -154,12 +145,18 @@ export function createUsageQueries(c: SqliteConnection): UsageQueries {
       }
       return out;
     },
+    ambiguousAttributionCount(sessionId) {
+      return ambiguous.get(sessionId) as number;
+    },
     aggregateUsage(rootSessionId) {
       return toTotals(aggregate.get({ root: rootSessionId }) as TotalsDbRow);
     },
     usageSummary(groupBy, filter = {}) {
+      // Callers may pass unchecked input; only the fixed expressions may reach the SQL text.
+      if (!Object.hasOwn(GROUP_KEYS, groupBy)) {
+        throw new DbError('invalid_input', 'invalid usage groupBy');
+      }
       const keyExpr = GROUP_KEYS[groupBy];
-      if (keyExpr === undefined) throw new DbError('invalid_input', 'invalid usage groupBy');
       const where: string[] = [];
       const params: Record<string, string> = {};
       if (filter.projectId !== undefined) {

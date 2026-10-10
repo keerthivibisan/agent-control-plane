@@ -90,7 +90,7 @@ function toSnapshot(row: SnapshotDbRow): UsageSnapshotRow {
     byModel: snapshot.byModel,
     reportedCostUsd:
       snapshot.reportedCostUsd === null
-        ? unavailable('not reported by provider')
+        ? unavailable()
         : { provenance: 'estimated', value: snapshot.reportedCostUsd },
   };
 }

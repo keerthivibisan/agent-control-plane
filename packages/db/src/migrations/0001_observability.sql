@@ -152,6 +152,9 @@ CREATE TABLE usage_records (
   cache_read_tokens INTEGER CHECK (cache_read_tokens >= 0),
   observation_count INTEGER NOT NULL CHECK (observation_count >= 1),
   conflict INTEGER NOT NULL CHECK (conflict IN (0, 1)),
+  -- The earliest occurredAt was tied across different sessions (fork copies), so the session was
+  -- chosen by the lexical tie-break and the true origin is unknown (usage-accounting §5.2).
+  attribution_ambiguous INTEGER NOT NULL DEFAULT 0 CHECK (attribution_ambiguous IN (0, 1)),
   source TEXT NOT NULL,
   provenance TEXT NOT NULL,
   updated_at TEXT NOT NULL,
