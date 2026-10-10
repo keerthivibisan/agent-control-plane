@@ -8,3 +8,5 @@ export { createScheduler } from './scheduler.js';
 export type { Scheduler } from './scheduler.js';
 export { ConfigError, loadConfig } from './config.js';
 export type { ServerConfig } from './config.js';
+export { startServer } from './bootstrap.js';
+export type { RunningServer, StartOptions } from './bootstrap.js';

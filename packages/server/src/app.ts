@@ -7,6 +7,7 @@ import { createHookRouter, type HookDeps } from './hooks/receiver.js';
 import { createApiRouter } from './routes/api.js';
 import { createStreamRouter, type StreamDeps } from './routes/stream.js';
 import type { Services } from './services/index.js';
+import { mountStatic } from './static.js';
 
 /** The Vite dev server proxies to this server, so its origin is also a legitimate caller. */
 export const WEB_DEV_PORT = 5173;
@@ -17,6 +18,8 @@ export interface AppDeps {
   services: Services;
   stream: StreamDeps;
   hooks: HookDeps;
+  /** Built web UI directory; omitted in tests and when the web package has not been built. */
+  staticDir?: string;
 }
 
 /** Builds the Express app without listening, so tests can drive it with supertest. */
@@ -29,6 +32,7 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', createHookRouter(deps.hooks));
   app.use('/api', createApiRouter(deps.services));
   app.use('/api', notFoundHandler);
+  if (deps.staticDir !== undefined) mountStatic(app, deps.staticDir);
   app.use(errorHandler(deps.logger));
   return app;
 }
