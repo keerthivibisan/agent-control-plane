@@ -4,11 +4,24 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: Phase 0 (bootstrap) complete. The application is not runnable yet.**
-> What exists today: the repository tooling, CI, specifications, the implementation plan, and the
-> `@acp/core` v1 contracts (event, usage, session, provenance, and adapter schemas) with tests.
-> Session observability (Phase 1) is being built next; see
-> [docs/implementation-plan.md](docs/implementation-plan.md).
+> **Status: Phase 1 in progress. There is no server yet, so the app cannot be run end to end.**
+>
+> **Implemented and tested** (411 tests):
+>
+> - core contracts and the usage-accounting logic;
+> - SQLite persistence;
+> - the demo adapter;
+> - Claude Code file discovery and the incremental reader;
+> - the web UI shell, Command Center, and Session Explorer, built against the API contract.
+>
+> **Remaining:**
+>
+> - the Claude Code record normalizers and hooks;
+> - the server (pipeline, API, SSE, `pnpm dev`);
+> - the session detail, usage, and project pages;
+> - verification.
+>
+> See [HANDOFF.md](HANDOFF.md) and [docs/implementation-plan.md](docs/implementation-plan.md).
 
 ## The problem
 
@@ -53,15 +66,15 @@ See [docs/security.md](docs/security.md).
 
 ## Planned features
 
-| Feature                                                                                                                              | Phase | Status          |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----- | --------------- |
-| Core contracts (events, usage, sessions, provenance, adapter interface)                                                              | 0     | **implemented** |
-| Project registration, Claude Code session discovery, subagent tree, usage accounting, Command Center, Session Explorer, live updates | 1     | planned (next)  |
-| Usage reliability, cost estimation with provenance, restart recovery                                                                 | 2     | planned         |
-| Managed orchestration (planning, at most 3 children, budgets, worktrees, validation)                                                 | 3     | planned         |
-| Harness Lab                                                                                                                          | 4     | planned         |
-| Codex adapter                                                                                                                        | 5     | planned         |
-| Evidence-driven recommendations                                                                                                      | 6     | research        |
+| Feature                                                                                                                              | Phase | Status                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----- | ------------------------------------------------------ |
+| Core contracts (events, usage, sessions, provenance, adapter interface)                                                              | 0     | **implemented**                                        |
+| Project registration, Claude Code session discovery, subagent tree, usage accounting, Command Center, Session Explorer, live updates | 1     | **in progress** (building blocks done; server pending) |
+| Usage reliability, cost estimation with provenance, restart recovery                                                                 | 2     | planned                                                |
+| Managed orchestration (planning, at most 3 children, budgets, worktrees, validation)                                                 | 3     | planned                                                |
+| Harness Lab                                                                                                                          | 4     | planned                                                |
+| Codex adapter                                                                                                                        | 5     | planned                                                |
+| Evidence-driven recommendations                                                                                                      | 6     | research                                               |
 
 See [docs/roadmap.md](docs/roadmap.md).
 

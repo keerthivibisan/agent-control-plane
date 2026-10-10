@@ -8,6 +8,8 @@ This file adds Claude Code-specific working notes.
 
 ## Start of every session
 
+0. If `HANDOFF.md` exists, read it first. It records the latest state, the unmerged branches, and
+   ready-to-paste prompts for the remaining work.
 1. Run `git status` and `git log --oneline -5`. Know your branch and what changed.
 2. Open `docs/implementation-plan.md` and read the **Status** table.
    - If the user named a work package (WP), work only on that WP.

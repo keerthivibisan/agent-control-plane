@@ -100,7 +100,7 @@ depends on hooks being configured.
 
 Details are in [usage-accounting.md](usage-accounting.md).
 
-## 5. Persistence [planned, P1-B]
+## 5. Persistence [implemented, P1-B]
 
 The database is SQLite through `better-sqlite3` (synchronous, in-process; ADR-0003):
 

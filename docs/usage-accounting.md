@@ -3,7 +3,7 @@
 > Status: contracts are **[core v1]**. The selection, attribution, and aggregation logic is
 > **[implemented, P1-A]** as pure functions in `@acp/core` (`selectUsage`, `attributeUsage`,
 > `buildUsageRecord`, `sumTokenCounts`, `aggregateUsage`). It is not yet wired into the pipeline
-> (P1-D). The §5.2 tie amendment is implemented (task A9). Tables are **[planned, P1-B]**, and dedup-key construction is **[planned, P1-C]**. The
+> (P1-D). The §5.2 tie amendment is implemented (task A9). Tables are **[implemented, P1-B]** (`@acp/db` migration 0001). Dedup-key construction is **[in progress, P1-C]**. The
 > numbers quoted come from a read-only scan of local data on 2026-10-10
 > ([research note](research/claude-code-observations-2026-10-10.md)).
 
