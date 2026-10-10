@@ -191,6 +191,9 @@ export function createDemoAdapter(options: DemoAdapterOptions = {}): Observation
       }
       return [];
     },
+
+    // Fixtures are validated on load, so the demo adapter never skips a file or a record.
+    diagnostics: () => ({ fileIssues: [], ignoredRecords: {}, parseErrors: 0 }),
   };
 }
 

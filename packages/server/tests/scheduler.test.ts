@@ -18,6 +18,7 @@ function blockingAdapter(batches: IngestionBatch[] = []) {
     capabilities: () => Promise.reject(new Error('unused')),
     discoverCandidates: () => Promise.resolve([]),
     normalizeHook: () => [],
+    diagnostics: () => ({ fileIssues: [], ignoredRecords: {}, parseErrors: 0 }),
     async *poll() {
       state.started++;
       state.active++;

@@ -63,6 +63,31 @@ export interface IngestionBatch {
   nextCheckpoint: Checkpoint;
 }
 
+/** A source file the adapter could not (fully) read. Paths are relative to the provider data root. */
+export interface AdapterFileIssue {
+  path: string;
+  /** Short machine reason, e.g. `size-cap`, `invalid-meta`, `outside-projects`. */
+  reason: string;
+  /** Error code or a short fixed explanation. Never file content. */
+  detail: string | null;
+}
+
+/**
+ * What the adapter knows about its own reading that `Checkpoint` cannot hold (coordinator decision
+ * 2026-10-10: `diagnostics()` on the adapter rather than an error field on checkpoints).
+ * Counts are since the adapter was created; file issues are from the most recent scan.
+ */
+export interface AdapterDiagnostics {
+  fileIssues: AdapterFileIssue[];
+  /**
+   * Records of types the adapter knows and deliberately skips because they carry nothing the
+   * control plane uses, by record type. Unknown types are `record.unrecognized` events instead.
+   */
+  ignoredRecords: Record<string, number>;
+  /** Unparseable or schema-invalid complete lines skipped. */
+  parseErrors: number;
+}
+
 export interface ObservationAdapter {
   readonly provider: ProviderId;
   capabilities(): Promise<ProviderCapabilities>;
@@ -75,4 +100,5 @@ export interface ObservationAdapter {
   ): AsyncIterable<IngestionBatch>;
   /** Normalizes one hook delivery; throws on invalid input. Returns [] for ignored hook events. */
   normalizeHook(body: unknown, receivedAt: IsoTimestamp): NormalizedEvent[];
+  diagnostics(): AdapterDiagnostics;
 }

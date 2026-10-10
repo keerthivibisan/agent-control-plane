@@ -28,6 +28,8 @@ export interface VersionRecordCounts {
 }
 
 export interface ClaudeCodeDiagnostics {
+  /** Known record types skipped on purpose (core `AdapterDiagnostics.ignoredRecords`). */
+  ignoredRecords: Record<string, number>;
   /** Problems found by the most recent poll or discovery scan. */
   fileIssues: FileIssue[];
   /** Records read since the adapter was created, by provider runtime version (`unknown` if none). */
@@ -75,6 +77,7 @@ export class DiagnosticsCollector {
           .map(([k, v]) => [k, { ...v }]),
       ),
       parseErrors: this.parseErrorCount,
+      ignoredRecords: {},
     };
   }
 }

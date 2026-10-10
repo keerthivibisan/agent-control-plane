@@ -25,6 +25,7 @@ function fakeAdapter(impl: (body: unknown) => NormalizedEvent[]): ObservationAda
       }),
     }),
     normalizeHook: impl,
+    diagnostics: () => ({ fileIssues: [], ignoredRecords: {}, parseErrors: 0 }),
   };
 }
 
