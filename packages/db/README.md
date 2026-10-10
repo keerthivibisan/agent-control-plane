@@ -2,9 +2,9 @@
 
 **Owner:** work package P1-B (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
 
-**Status:** **Partially implemented.** Connection setup (`openDatabase`), the migration runner, and the
-Phase 1 schema (`0001_observability.sql`) exist and are tested. Repositories, the transaction
-helper, and queries are still in progress in P1-B.
+**Status:** **Partially implemented.** Connection setup (`openDatabase`), the migration runner, the
+Phase 1 schema (`0001_observability.sql`), and the repositories (`createRepositories`) exist and are
+tested. The transaction helper and queries are still in progress in P1-B.
 
 ## Responsibility
 
