@@ -30,6 +30,48 @@ export function formatTime(iso: string): string {
   );
 }
 
+const exact = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/** Exact local time for tooltips: "Oct 10, 2026, 8:05:00 AM". */
+export function formatExactTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : exact.format(d);
+}
+
+const dateOnly = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const dateWithYear = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
+/**
+ * Relative time in words: "just now", "3 min ago", "5 h ago", "yesterday", "4 days ago", then a
+ * date. Future times (clock skew) read "just now" rather than a negative age. `now` is injected so
+ * callers and tests control the clock.
+ */
+export function formatRelative(iso: string, now: Date): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const s = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const days = Math.floor(h / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return d.getFullYear() === now.getFullYear() ? dateOnly.format(d) : dateWithYear.format(d);
+}
+
 export function formatDuration(ms: number): string {
   if (ms < 0) return '—';
   const s = Math.round(ms / 1000);
@@ -43,6 +85,11 @@ export function formatDuration(ms: number): string {
 
 export function shortId(id: string): string {
   return id.length > 10 ? id.slice(0, 8) : id;
+}
+
+/** Display form of an id for the ShortId component: always at most 8 characters. */
+export function idPrefix(id: string): string {
+  return id.slice(0, 8);
 }
 
 /** What to call a session: its title, else its subagent type, else an explicit "untitled". */
