@@ -1,0 +1,12 @@
+{
+  // Root verification scripts (P1-F). They run directly with Node 22 type stripping, so only
+  // erasable syntax and Node built-ins are allowed. Typechecked by the server verification tests'
+  // `tsc` run (they import the script) and linted with this project.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["*.ts"]
+}
