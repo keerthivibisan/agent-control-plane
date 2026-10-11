@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    // Resolve @acp/core to its built dist, not its TypeScript source (docs/development.md §3).
+    "customConditions": []
+  },
+  "include": ["src"]
+}

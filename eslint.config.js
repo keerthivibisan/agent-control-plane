@@ -9,11 +9,12 @@ import tseslint from 'typescript-eslint';
  * Each entry lists the workspace packages a package must NOT import.
  */
 const forbiddenImports = {
-  'packages/core/**': ['@acp/db', '@acp/server', '@acp/web', '@acp/adapter-*'],
-  'packages/db/**': ['@acp/server', '@acp/web', '@acp/adapter-*'],
-  'packages/adapters/**': ['@acp/db', '@acp/server', '@acp/web'],
+  'packages/core/**': ['@acp/db', '@acp/server', '@acp/web', '@acp/adapter-*', '@acp/orchestrator'],
+  'packages/db/**': ['@acp/server', '@acp/web', '@acp/adapter-*', '@acp/orchestrator'],
+  'packages/orchestrator/**': ['@acp/db', '@acp/server', '@acp/web', '@acp/adapter-*'],
+  'packages/adapters/**': ['@acp/db', '@acp/server', '@acp/web', '@acp/orchestrator'],
   'packages/server/**': ['@acp/web', '@acp/adapter-demo/fixtures/*'],
-  'packages/web/**': ['@acp/db', '@acp/server', '@acp/adapter-*'],
+  'packages/web/**': ['@acp/db', '@acp/server', '@acp/adapter-*', '@acp/orchestrator'],
 };
 
 const boundaryConfigs = Object.entries(forbiddenImports).map(([files, group]) => ({

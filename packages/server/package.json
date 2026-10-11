@@ -24,10 +24,11 @@
     "hooks:snippet": "node --conditions=development --import tsx src/hook-snippet.ts"
   },
   "dependencies": {
-    "@acp/core": "workspace:*",
-    "@acp/db": "workspace:*",
     "@acp/adapter-claude-code": "workspace:*",
     "@acp/adapter-demo": "workspace:*",
+    "@acp/core": "workspace:*",
+    "@acp/db": "workspace:*",
+    "@acp/orchestrator": "workspace:*",
     "express": "5.3.0",
     "zod": "4.6.5"
   },
