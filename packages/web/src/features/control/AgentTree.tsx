@@ -118,8 +118,8 @@ function AgentCard({
       className="relative flex max-w-2xl flex-col gap-2.5 rounded-card border border-line bg-panel px-4 py-3 shadow-card"
     >
       <header className="flex flex-wrap items-start gap-x-3 gap-y-1">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium">{agent.role}</h3>
+        <div className="min-w-40 flex-1">
+          <h3 className="font-medium break-words">{agent.role}</h3>
           <span className="inline-flex items-center gap-0.5 text-caption text-dim">
             {term.term}
             <InfoTip tip={term.tip} label={term.term} />
