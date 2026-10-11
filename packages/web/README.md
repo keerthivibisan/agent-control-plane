@@ -39,7 +39,8 @@ Phase 2, on `wp/ui-overview`, rewrites three screens (checked against the demo s
   skipped on purpose apart from unknown records, reading counters and capabilities in plain words;
   raw counters under Technical details.
 
-The Sessions, session, Tokens and project screens still use the old wording and components.
+The Tokens, Projects and project pages were redone on `wp/ui-tokens`; the Sessions and session
+screens still use the old wording and components.
 
 ## Allowed dependencies
 
