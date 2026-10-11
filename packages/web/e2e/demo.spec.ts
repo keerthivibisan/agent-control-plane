@@ -81,34 +81,54 @@ test('sample-data banner and demo mode are always visible', async ({ page }) => 
   }
 });
 
-test('Command Center shows the demo projects and status counts from the API', async ({
+test('Overview shows the demo projects, status counts, tokens and estimated costs from the API', async ({
   page,
   request,
 }) => {
   await open(page, '/');
-  await expect(page.getByRole('heading', { name: 'Command Center' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByText('demo-api')).toBeVisible();
   await expect(nav.getByText('demo-web')).toBeVisible();
 
   await expect(async () => {
-    const overview = await api<{ projectCount: number; sessionsByStatus: Record<string, number> }>(
-      request,
-      '/overview',
-    );
+    const overview = await api<{
+      projectCount: number;
+      sessionsByStatus: Record<string, number>;
+      totals: Usage;
+    }>(request, '/overview');
     expect(overview.projectCount).toBe(2);
+    await expect(page.getByTestId('stat-projects')).toContainText(
+      `${overview.projectCount} folders`,
+      {
+        timeout: 1_000,
+      },
+    );
     const counts = page.getByTestId('sessions-by-status');
     for (const [status, n] of Object.entries(overview.sessionsByStatus)) {
+      // "Unknown" is only shown when some session has it.
+      if (status === 'unknown' && n === 0) continue;
       await expect(counts.locator(`[data-status-count="${status}"]`)).toContainText(fmt(n), {
         timeout: 1_000,
       });
     }
     // "completed" is not a status the product can show (only active/idle/stale/ended/unknown).
     await expect(counts.locator('[data-status-count="completed"]')).toHaveCount(0);
+
+    // Token types side by side, straight from the API; a missing type reads "Not reported".
+    const tokens = page.getByRole('region', { name: 'Tokens used' });
+    for (const c of CATEGORIES) {
+      const cell = tokens.locator(`dd[data-category="${c}"]`);
+      const v = overview.totals.tokens[c];
+      if (v === null) await expect(cell).toHaveText('Not reported', { timeout: 1_000 });
+      else await expect(cell).toContainText(fmt(v), { timeout: 1_000 });
+    }
   }).toPass();
-  await expect(page.getByRole('region', { name: 'Total usage' })).toBeVisible();
 
   // Provider-reported cost: one row per session from the API, labeled estimated, never totaled.
+  await expect(page.getByRole('region', { name: 'Estimated cost by session' })).toContainText(
+    'never added together',
+  );
   await expect(async () => {
     const overview = await api<{
       latestSnapshots: { sessionId: string; reportedCostUsd: { provenance: string } }[];
@@ -118,14 +138,14 @@ test('Command Center shows the demo projects and status counts from the API', as
     await expect(rows).toHaveCount(overview.latestSnapshots.length, { timeout: 1_000 });
     for (const s of overview.latestSnapshots) {
       const cost = page.locator(`li[data-session="${s.sessionId}"]`).getByTestId('cost');
-      await expect(cost).toContainText(
-        s.reportedCostUsd.provenance === 'estimated'
-          ? 'estimated (provider-reported)'
-          : 'unavailable',
-        { timeout: 1_000 },
-      );
+      await expect(cost).toHaveAttribute('data-provenance', s.reportedCostUsd.provenance, {
+        timeout: 1_000,
+      });
+      if (s.reportedCostUsd.provenance === 'estimated') await expect(cost).toContainText('~$');
+      else await expect(cost).toContainText('Not reported');
     }
   }).toPass();
+  await expect(page.getByText(/total cost/i)).toHaveCount(0);
 });
 
 test('Session Explorer lists sessions and draws subagent and continuation edges', async ({
