@@ -233,16 +233,31 @@ test('usage page renders both charts, the chart table, and direct totals from th
   page,
   request,
 }) => {
-  await open(page, '/usage?groupBy=model');
-  await expect(page.getByRole('heading', { name: 'Usage', exact: true })).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Input and output tokens' })).toBeVisible();
-  await expect(
-    page.getByRole('img', { name: 'Cache creation and cache read tokens' }),
-  ).toBeVisible();
-  await expect(page.locator('.recharts-surface').first()).toBeVisible();
-  await expect(page.getByTestId('direct-note')).toContainText('DIRECT usage');
+  /** Each token type's stat card shows the API value (exact, with separators) or "Not reported". */
+  async function expectStats(section: Locator, usage: Usage) {
+    for (const c of CATEGORIES) {
+      const v = usage.tokens[c];
+      const card = section.getByTestId(`stat-${c}`);
+      if (v === null) {
+        await expect(card.locator(`[data-category="${c}"]`)).toHaveText('Not reported', {
+          timeout: 1_000,
+        });
+      } else await expect(card).toContainText(fmt(v), { timeout: 1_000 });
+    }
+  }
 
-  await page.getByText('Chart data as a table').click();
+  await open(page, '/usage?groupBy=model');
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByTestId('token-explainer')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Input and output tokens per day' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Prompt cache tokens per day' })).toBeVisible();
+  await expect(page.locator('.recharts-surface').first()).toBeVisible();
+  // Groups and stats sum each session's own (direct) usage: helpers count under themselves.
+  await expect(page.getByTestId('direct-note')).toContainText(
+    "Each session's own tokens are counted once; helper agents count under themselves.",
+  );
+
+  await page.getByRole('button', { name: 'Show as table' }).click();
   await expect(async () => {
     const byDay = await api<{ groups: { key: string }[] }>(request, '/usage/summary?groupBy=day');
     const days = byDay.groups.filter((g) => g.key !== 'unknown').length;
@@ -257,7 +272,7 @@ test('usage page renders both charts, the chart table, and direct totals from th
     await expect(page.locator('tr[data-group]')).toHaveCount(byModel.groups.length, {
       timeout: 1_000,
     });
-    await expectTotals(page.getByTestId('usage-totals'), byModel.totals);
+    await expectStats(page.getByTestId('usage-totals'), byModel.totals);
   }).toPass();
 });
 
@@ -265,9 +280,22 @@ test('project page shows the project, its direct usage totals and its sessions',
   page,
   request,
 }) => {
+  /** Each token type's stat card shows the API value (exact, with separators) or "Not reported". */
+  async function expectStats(section: Locator, usage: Usage) {
+    for (const c of CATEGORIES) {
+      const v = usage.tokens[c];
+      const card = section.getByTestId(`stat-${c}`);
+      if (v === null) {
+        await expect(card.locator(`[data-category="${c}"]`)).toHaveText('Not reported', {
+          timeout: 1_000,
+        });
+      } else await expect(card).toContainText(fmt(v), { timeout: 1_000 });
+    }
+  }
+
   await open(page, '/');
   await page.getByRole('navigation', { name: 'Main' }).getByText('demo-api').click();
-  await expect(page.getByRole('heading', { name: 'demo-api' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'demo-api', level: 1 })).toBeVisible();
 
   const projects = await api<{ id: string; name: string; rootPath: string }[]>(
     request,
@@ -282,7 +310,7 @@ test('project page shows the project, its direct usage totals and its sessions',
       request,
       `/usage/summary?groupBy=session&projectId=${project.id}`,
     );
-    await expectTotals(page.getByTestId('project-usage'), usage.totals);
+    await expectStats(page.getByTestId('project-usage'), usage.totals);
     const sessions = await api<{ items: Session[] }>(request, `/projects/${project.id}/sessions`);
     await expect(page.locator('tr[data-session-id]')).toHaveCount(sessions.items.length, {
       timeout: 1_000,
