@@ -2,7 +2,8 @@ import { useMemo, useSyncExternalStore } from 'react';
 
 /**
  * Hash routes (no router dependency): `#/`, `#/sessions`, `#/sessions/:id`, `#/projects`,
- * `#/projects/:id`, `#/usage` (the "Tokens" page), `#/setup`, `#/health` (the "Data health" page).
+ * `#/projects/:id`, `#/usage` (the "Tokens" page), `#/setup`, `#/health` (the "Data health" page),
+ * `#/control` and `#/control/:runId` (the control panel).
  */
 export type Route =
   | { name: 'home' }
@@ -13,6 +14,7 @@ export type Route =
   | { name: 'session'; id: string }
   | { name: 'project'; id: string }
   | { name: 'usage'; params: URLSearchParams }
+  | { name: 'control'; runId: string | null }
   | { name: 'not-found'; hash: string };
 
 function decode(segment: string): string | null {
@@ -39,6 +41,11 @@ export function parseRoute(hash: string): Route {
   if (head === 'projects' && id === undefined) return { name: 'projects' };
   if (head === 'setup' && id === undefined) return { name: 'setup' };
   if (head === 'health' && id === undefined) return { name: 'health' };
+  if (head === 'control' && id === undefined) return { name: 'control', runId: null };
+  if (head === 'control' && id !== undefined) {
+    const decoded = decode(id);
+    if (decoded) return { name: 'control', runId: decoded };
+  }
   if (head === 'sessions' && id !== undefined) {
     const decoded = decode(id);
     if (decoded) return { name: 'session', id: decoded };
@@ -67,6 +74,8 @@ export const href = {
   setup: () => '#/setup',
   health: () => '#/health',
   usage: (params: Record<string, string | null | undefined> = {}) => withParams('/usage', params),
+  control: (runId?: string) =>
+    runId === undefined ? '#/control' : `#/control/${encodeURIComponent(runId)}`,
 };
 
 export function navigate(hash: string): void {

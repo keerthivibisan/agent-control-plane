@@ -1,6 +1,7 @@
 import { ButtonLink } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { CommandCenter } from '../features/command-center/CommandCenter';
+import { ControlPanel } from '../features/control/ControlPanel';
 import { DataHealthPage } from '../features/health/DataHealthPage';
 import { ProjectPage } from '../features/project/ProjectPage';
 import { ProjectsList } from '../features/projects/ProjectsList';
@@ -33,6 +34,8 @@ function Screen({ route }: { route: Route }) {
       return <DataHealthPage />;
     case 'usage':
       return <UsageAnalytics search={route.params} />;
+    case 'control':
+      return <ControlPanel key={route.runId ?? ''} runId={route.runId} />;
     case 'not-found':
       return (
         <EmptyState

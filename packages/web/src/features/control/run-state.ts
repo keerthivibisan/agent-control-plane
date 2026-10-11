@@ -1,0 +1,153 @@
+import type { AgentRunStatus, RunStatus } from '@acp/core';
+import type { AgentRunDto, ApprovalDto, RunDetailDto } from '@acp/core/api';
+
+/**
+ * Pure rules the control panel reads from a run (orchestration-lifecycle §0). The server decides
+ * what is allowed; these only decide which buttons to offer, so a refused action still shows the
+ * server's reason.
+ */
+
+const LIVE_AGENT: ReadonlySet<AgentRunStatus> = new Set([
+  'QUEUED',
+  'STARTING',
+  'RUNNING',
+  'WAITING_APPROVAL',
+  'BLOCKED',
+]);
+
+/** Runs that can still do work, so Stop all is offered. */
+const LIVE_RUN: ReadonlySet<RunStatus> = new Set(['QUEUED', 'RUNNING', 'BLOCKED']);
+
+/** Runs that have ended for good: no chat, no stopping. */
+const ENDED_RUN: ReadonlySet<RunStatus> = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
+
+export function isAgentLive(status: AgentRunStatus): boolean {
+  return LIVE_AGENT.has(status);
+}
+
+export function isRunLive(status: RunStatus): boolean {
+  return LIVE_RUN.has(status);
+}
+
+/** The lead keeps listening while the owner reviews; a stopping or ended run doesn't. */
+export function canChat(status: RunStatus): boolean {
+  return !ENDED_RUN.has(status) && status !== 'CANCELLING';
+}
+
+export interface AgentNode {
+  agent: AgentRunDto;
+  children: AgentNode[];
+}
+
+const byCreated = (a: AgentRunDto, b: AgentRunDto) =>
+  a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1;
+
+/**
+ * The run's agents as a tree, from `parentAgentRunId` only (recorded by the engine when the lead
+ * started the agent). Agents without a parent, or whose parent is missing from the run, start
+ * their own branch, leads first; every agent appears exactly once, none is hidden.
+ */
+export function buildAgentTree(agents: readonly AgentRunDto[]): AgentNode[] {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  const placed = new Set<string>();
+  const node = (a: AgentRunDto): AgentNode | null => {
+    if (placed.has(a.id)) return null;
+    placed.add(a.id);
+    const children = agents
+      .filter((c) => c.parentAgentRunId === a.id && c.id !== a.id)
+      .sort(byCreated)
+      .map(node)
+      .filter((n): n is AgentNode => n !== null);
+    return { agent: a, children };
+  };
+  const roots = agents
+    .filter((a) => a.parentAgentRunId === null || !byId.has(a.parentAgentRunId))
+    .sort((a, b) => (a.kind === b.kind ? byCreated(a, b) : a.kind === 'lead' ? -1 : 1));
+  const out: AgentNode[] = [];
+  for (const a of [...roots, ...[...agents].sort(byCreated)]) {
+    const n = node(a);
+    if (n) out.push(n);
+  }
+  return out;
+}
+
+/** Waiting approvals first-come first-served; the rest newest first. */
+export function splitApprovals(approvals: readonly ApprovalDto[]): {
+  pending: ApprovalDto[];
+  decided: ApprovalDto[];
+} {
+  const pending = approvals
+    .filter((a) => a.status === 'pending')
+    .sort((a, b) => (a.requestedAt < b.requestedAt ? -1 : 1));
+  const decided = approvals
+    .filter((a) => a.status !== 'pending')
+    .sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1));
+  return { pending, decided };
+}
+
+/** Whether any helper agent has changes to look at (so the review is worth fetching). */
+export function hasReview(run: Pick<RunDetailDto, 'agents'>): boolean {
+  return run.agents.some((a) => a.review !== null);
+}
+
+export interface BudgetView {
+  /** 0–100, for the bar's width. */
+  percent: number;
+  /** Budget tokens past the limit (soft cap, ADR-0014), or 0 when within it. */
+  over: number;
+  level: 'ok' | 'near' | 'over';
+}
+
+/** Budget bar state. A zero limit with any use counts as full. */
+export function budgetView(budget: AgentRunDto['budget']): BudgetView {
+  const { used, limit } = budget;
+  const ratio = limit > 0 ? used / limit : used > 0 ? Infinity : 0;
+  const over = Math.max(0, used - limit);
+  return {
+    percent: Math.min(100, Math.round(ratio * 1000) / 10),
+    over,
+    level: ratio >= 1 ? 'over' : ratio >= 0.8 ? 'near' : 'ok',
+  };
+}
+
+export type DiffLineKind = 'file' | 'hunk' | 'add' | 'del' | 'context' | 'meta';
+
+export interface DiffLine {
+  kind: DiffLineKind;
+  text: string;
+}
+
+/**
+ * Classifies a unified diff's lines for display. `diff --git a/x b/x` becomes a file heading with
+ * the path; the `index`/`---`/`+++` header lines are dropped because the heading already names the
+ * file; other header lines (new file, rename) are kept as quiet notes.
+ */
+export function diffLines(diff: string): DiffLine[] {
+  if (diff.length === 0) return [];
+  const out: DiffLine[] = [];
+  let inHeader = false;
+  for (const line of diff.replace(/\n$/, '').split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      const m = / b\/(.+)$/.exec(line);
+      out.push({ kind: 'file', text: m?.[1] ?? line.slice('diff --git '.length) });
+      inHeader = true;
+      continue;
+    }
+    if (inHeader) {
+      if (line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
+        continue;
+      }
+      if (!line.startsWith('@@')) {
+        out.push({ kind: 'meta', text: line });
+        continue;
+      }
+    }
+    inHeader = false;
+    if (line.startsWith('@@')) out.push({ kind: 'hunk', text: line });
+    else if (line.startsWith('+')) out.push({ kind: 'add', text: line });
+    else if (line.startsWith('-')) out.push({ kind: 'del', text: line });
+    else if (line.startsWith('\\')) out.push({ kind: 'meta', text: line });
+    else out.push({ kind: 'context', text: line });
+  }
+  return out;
+}

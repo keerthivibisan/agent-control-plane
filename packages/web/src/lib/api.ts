@@ -1,5 +1,17 @@
 import {
+  AgentRunDtoSchema,
+  ApprovalDecisionRequestSchema,
+  ApprovalDtoSchema,
+  CSRF_HEADER,
   CandidateRootDtoSchema,
+  ChatMessageDtoSchema,
+  ChatRequestSchema,
+  CsrfTokenDtoSchema,
+  ReviewActionRequestSchema,
+  ReviewDtoSchema,
+  RunDetailDtoSchema,
+  RunSummaryDtoSchema,
+  StartRunRequestSchema,
   CapabilitiesDtoSchema,
   DiagnosticsDtoSchema,
   ErrorDtoSchema,
@@ -87,7 +99,14 @@ async function readJson(res: Response): Promise<{ ok: true; value: unknown } | {
 
 export interface ApiClient {
   get<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T>;
-  post<T>(path: string, body: unknown, schema: Schema<T>, signal?: AbortSignal): Promise<T>;
+  /** `headers` adds request headers, e.g. the control panel's CSRF token (ADR-0013). */
+  post<T>(
+    path: string,
+    body: unknown,
+    schema: Schema<T>,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<T>;
 }
 
 /** Typed fetch client: every response body is parsed with its DTO schema before the UI sees it. */
@@ -98,6 +117,7 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
     schema: Schema<T>,
     body: unknown,
     signal: AbortSignal | undefined,
+    extraHeaders: Record<string, string> = {},
   ): Promise<T> {
     let res: Response;
     try {
@@ -105,8 +125,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
         method,
         headers:
           body === undefined
-            ? { accept: 'application/json' }
-            : { accept: 'application/json', 'content-type': 'application/json' },
+            ? { accept: 'application/json', ...extraHeaders }
+            : { accept: 'application/json', 'content-type': 'application/json', ...extraHeaders },
       };
       if (body !== undefined) init.body = JSON.stringify(body);
       if (signal) init.signal = signal;
@@ -171,7 +191,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
 
   return {
     get: (path, schema, signal) => request('GET', path, schema, undefined, signal),
-    post: (path, body, schema, signal) => request('POST', path, schema, body, signal),
+    post: (path, body, schema, signal, headers) =>
+      request('POST', path, schema, body, signal, headers),
   };
 }
 
@@ -252,4 +273,135 @@ export const schemas = {
 
 export function registerProject(client: ApiClient, input: RegisterProjectInput) {
   return client.post(paths.projects(), input, ProjectDtoSchema);
+}
+
+// --- Control panel (Phase 3 M1, P3-E) ------------------------------------------------------------
+//
+// The routes are served by P3-D. Assumed response bodies (proposed to P3-D): GET /runs →
+// RunSummaryDto[]; POST /runs → RunDetailDto; POST /runs/:id/chat → ChatMessageDto;
+// POST /approvals/:id → ApprovalDto; POST /runs/:id/agents/:agentId/stop → AgentRunDto;
+// POST /runs/:id/stop → RunSummaryDto (a RunDetailDto also parses); GET and POST
+// /runs/:id/review → ReviewDto.
+
+export type StartRunRequest = ReturnType<typeof StartRunRequestSchema.parse>;
+export type ChatRequest = ReturnType<typeof ChatRequestSchema.parse>;
+export type ApprovalDecisionRequest = ReturnType<typeof ApprovalDecisionRequestSchema.parse>;
+export type ReviewActionRequest = ReturnType<typeof ReviewActionRequestSchema.parse>;
+
+export const controlPaths = {
+  token: () => `${API_BASE}/control/token`,
+  runs: () => `${API_BASE}/runs`,
+  run: (id: string) => `${API_BASE}/runs/${enc(id)}`,
+  chat: (runId: string) => `${API_BASE}/runs/${enc(runId)}/chat`,
+  approval: (id: string) => `${API_BASE}/approvals/${enc(id)}`,
+  stopAgent: (runId: string, agentId: string) =>
+    `${API_BASE}/runs/${enc(runId)}/agents/${enc(agentId)}/stop`,
+  stopRun: (runId: string) => `${API_BASE}/runs/${enc(runId)}/stop`,
+  review: (runId: string) => `${API_BASE}/runs/${enc(runId)}/review`,
+} as const;
+
+export const controlSchemas = {
+  token: CsrfTokenDtoSchema,
+  runs: RunSummaryDtoSchema.array(),
+  run: RunDetailDtoSchema,
+  review: ReviewDtoSchema,
+} as const;
+
+/** True for every cached control-panel path, so a mutation refetches just those. */
+export function isControlPath(key: string): boolean {
+  return key.startsWith(`${API_BASE}/runs`) || key.startsWith(`${API_BASE}/approvals`);
+}
+
+// The CSRF token (ADR-0013), fetched on first use and kept per client.
+const csrfTokens = new WeakMap<ApiClient, Promise<string>>();
+
+function csrfToken(client: ApiClient, fresh: boolean): Promise<string> {
+  const cached = fresh ? undefined : csrfTokens.get(client);
+  if (cached) return cached;
+  const token = client.get(controlPaths.token(), CsrfTokenDtoSchema).then((t) => t.token);
+  // A failed fetch is not kept: the next mutation asks again.
+  token.catch(() => csrfTokens.delete(client));
+  csrfTokens.set(client, token);
+  return token;
+}
+
+/**
+ * A control-panel mutation with the `X-ACP-CSRF` header. A 403 fetches a fresh token and retries
+ * once, because the server may have restarted and issued a new one.
+ */
+async function controlPost<T>(
+  client: ApiClient,
+  path: string,
+  body: unknown,
+  schema: Schema<T>,
+): Promise<T> {
+  const send = async (fresh: boolean) =>
+    client.post(path, body, schema, undefined, {
+      [CSRF_HEADER]: await csrfToken(client, fresh),
+    });
+  try {
+    return await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** Validates a request body with its core schema before it leaves the browser. */
+function checked<T>(schema: Schema<T>, input: unknown, path: string): T {
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    throw new ApiError({
+      kind: 'parse',
+      path,
+      message: 'request did not match the API contract',
+      issues: parsed.error.issues.map((i) => ({
+        path: formatIssuePath(i.path),
+        message: i.message,
+      })),
+    });
+  }
+  return parsed.data;
+}
+
+export async function startRun(client: ApiClient, input: StartRunRequest) {
+  const path = controlPaths.runs();
+  return controlPost(client, path, checked(StartRunRequestSchema, input, path), RunDetailDtoSchema);
+}
+
+export async function sendChat(client: ApiClient, runId: string, input: ChatRequest) {
+  const path = controlPaths.chat(runId);
+  return controlPost(client, path, checked(ChatRequestSchema, input, path), ChatMessageDtoSchema);
+}
+
+export async function decideApproval(
+  client: ApiClient,
+  approvalId: string,
+  input: ApprovalDecisionRequest,
+) {
+  const path = controlPaths.approval(approvalId);
+  return controlPost(
+    client,
+    path,
+    checked(ApprovalDecisionRequestSchema, input, path),
+    ApprovalDtoSchema,
+  );
+}
+
+export function stopAgent(client: ApiClient, runId: string, agentId: string) {
+  return controlPost(client, controlPaths.stopAgent(runId, agentId), {}, AgentRunDtoSchema);
+}
+
+export function stopRun(client: ApiClient, runId: string) {
+  return controlPost(client, controlPaths.stopRun(runId), {}, RunSummaryDtoSchema);
+}
+
+export async function reviewAction(client: ApiClient, runId: string, input: ReviewActionRequest) {
+  const path = controlPaths.review(runId);
+  return controlPost(
+    client,
+    path,
+    checked(ReviewActionRequestSchema, input, path),
+    ReviewDtoSchema,
+  );
 }

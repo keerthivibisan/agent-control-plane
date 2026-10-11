@@ -1,4 +1,4 @@
-import type { SessionStatus } from '@acp/core';
+import type { AgentRunStatus, RunStatus, SessionStatus } from '@acp/core';
 import type { EventDto } from '@acp/core/api';
 import { formatCount } from './format';
 import type { TokenCategory } from './tokens';
@@ -980,5 +980,274 @@ export const SESSION_DETAIL_COPY = {
     sources: 'Where these values come from',
     sourcesText:
       'Observed values were read from Claude Code files or hooks. Status and token totals are derived from them. Cost is estimated: reported by Claude Code, not calculated here.',
+  },
+} as const;
+
+// --- Control panel (Phase 3 M1, wp/p3-e-control-ui) ---------------------------------------------
+
+/** A run or agent status as a word, a one-line tip, and how it looks (`tone`). */
+export interface ControlStatusCopy {
+  word: string;
+  tip: string;
+  tone: 'working' | 'waiting' | 'done' | 'stopped' | 'problem';
+}
+
+/**
+ * Run states (orchestration-lifecycle §0) in words. Only a run whose changes were all merged or
+ * discarded reads "Finished"; there is still no "completed" for sessions.
+ */
+export const RUN_STATUS_COPY: Readonly<Record<RunStatus, ControlStatusCopy>> = {
+  QUEUED: { word: 'Starting', tip: 'The run is getting ready.', tone: 'working' },
+  RUNNING: { word: 'Running', tip: 'Agents are working.', tone: 'working' },
+  BLOCKED: {
+    word: 'Waiting for you',
+    tip: 'An agent is paused until you answer a request.',
+    tone: 'waiting',
+  },
+  REVIEW: {
+    word: 'Ready for your review',
+    tip: 'Every agent has stopped. Merge or discard their changes below.',
+    tone: 'waiting',
+  },
+  COMPLETED: {
+    word: 'Finished — all changes reviewed',
+    tip: "You merged or discarded every helper agent's changes.",
+    tone: 'done',
+  },
+  FAILED: { word: 'Failed', tip: 'The run stopped because of an error.', tone: 'problem' },
+  CANCELLING: { word: 'Stopping', tip: 'The agents are being stopped.', tone: 'stopped' },
+  CANCELLED: { word: 'Stopped', tip: 'This run was stopped.', tone: 'stopped' },
+  NEEDS_REVIEW: {
+    word: 'Interrupted — check its work',
+    tip: 'The app restarted while agents were working. Their work was not restarted; review what they left.',
+    tone: 'problem',
+  },
+};
+
+export const AGENT_STATUS_COPY: Readonly<Record<AgentRunStatus, ControlStatusCopy>> = {
+  QUEUED: { word: 'Waiting to start', tip: 'It starts shortly.', tone: 'working' },
+  STARTING: { word: 'Starting', tip: 'Claude is starting up.', tone: 'working' },
+  RUNNING: { word: 'Working', tip: 'It is working on its task.', tone: 'working' },
+  WAITING_APPROVAL: {
+    word: 'Waiting for your approval',
+    tip: 'It asked to change something and waits for your answer.',
+    tone: 'waiting',
+  },
+  BLOCKED: {
+    word: 'Paused at its budget',
+    tip: 'It used up its budget and waits for you to let it continue or stop it.',
+    tone: 'waiting',
+  },
+  SUCCEEDED: { word: 'Finished its task', tip: 'It reported that it is done.', tone: 'done' },
+  FAILED: { word: 'Failed', tip: 'It stopped because of an error.', tone: 'problem' },
+  CANCELLED: { word: 'Stopped', tip: 'It was stopped.', tone: 'stopped' },
+  TIMED_OUT: { word: 'Timed out', tip: 'It ran out of time and was stopped.', tone: 'problem' },
+  NEEDS_REVIEW: {
+    word: 'Interrupted — check its work',
+    tip: 'The app restarted while it was working. It was not restarted.',
+    tone: 'problem',
+  },
+};
+
+export const CONTROL_COPY = {
+  nav: 'Control panel',
+  page: {
+    title: 'Control panel',
+    description:
+      'Chat with a lead agent that starts helper agents for you. Nothing in your project changes without your approval.',
+  },
+  allRuns: 'All runs',
+  newRun: 'New run',
+  loading: 'Loading the run…',
+  terms: {
+    lead: {
+      term: 'Lead agent',
+      tip: 'The agent you chat with. It reads your project, plans the work and starts helper agents. It never edits files itself.',
+    },
+    worker: {
+      term: 'Helper agent',
+      tip: 'An agent the lead agent started for one task. It works in its own copy of your project, so your files stay untouched until you merge its changes.',
+    },
+    budget: {
+      term: 'Budget tokens',
+      tip: 'Budget tokens count what an agent adds: output tokens, input tokens and cache write tokens. Cache read tokens are not counted, because every turn re-reads the whole conversation and they would use up any budget at once. The limit is soft: work already under way can go a little over, then the agent pauses and asks you whether to continue.',
+    },
+  },
+  start: {
+    title: 'Start a run',
+    description: 'Pick a project and tell the lead agent what you want done.',
+    project: 'Project',
+    projectHint: 'Agents only work inside a project you added.',
+    chooseProject: 'Choose a project',
+    noProjects: {
+      title: 'Add a project first',
+      text: 'Agents can only work in a folder you added as a project.',
+      action: 'Go to Setup',
+    },
+    task: 'What should the agents do?',
+    taskHint: 'Optional. You can keep chatting with the lead agent after the run starts.',
+    taskPlaceholder:
+      'For example: spin up two agents. One adds a settings page, the other writes tests for it.',
+    budget: 'Budget per agent',
+    budgetHint: 'In budget tokens. An agent that reaches it pauses and asks you.',
+    budgetInvalid: 'Enter a whole number of budget tokens above 0.',
+    submit: 'Start run',
+    starting: 'Starting…',
+    projectMissing: 'Choose a project.',
+    failed: "The run didn't start.",
+    sentFailed: "The run started, but your first message wasn't sent. Send it again below.",
+  },
+  runs: {
+    title: 'Your runs',
+    description: 'Earlier and ongoing runs, newest first.',
+    empty: {
+      title: 'No runs yet',
+      text: 'Start a run and it will be listed here.',
+    },
+    loading: 'Loading runs…',
+  },
+  chat: {
+    title: 'Chat with the lead agent',
+    you: 'You',
+    lead: 'Lead agent',
+    empty: {
+      title: 'Nothing said yet',
+      text: 'Tell the lead agent what you want done. It plans the work and starts helper agents.',
+    },
+    label: 'Message to the lead agent',
+    placeholder: 'Message the lead agent…',
+    hint: 'Enter sends, Shift+Enter adds a line.',
+    send: 'Send',
+    sending: 'Sending…',
+    closed: 'This run has ended, so the chat is closed.',
+    failed: "Your message wasn't sent.",
+    tooLong: (max: number) => `Keep it under ${formatCount(max)} characters.`,
+    /** Prefilled when the owner clicks Message on a helper agent's card. */
+    messageFor: (role: string) => `Please tell the ${role}: `,
+    relayNote: 'The lead agent passes your message on to its helper agents.',
+  },
+  agents: {
+    title: 'Agents',
+    description: 'The lead agent at the top, the helper agents it started beneath it.',
+    none: 'No helper agents yet. The lead agent starts them when it needs them.',
+    noAgents: 'No agents yet. The lead agent appears here once the run starts.',
+    showAll: 'Show all',
+    showLess: 'Show less',
+    startedBy: (role: string) => `Started by ${role}`,
+    latest: 'Latest',
+    noActivity: 'Nothing yet',
+    task: 'Task',
+    budgetText: (used: string, limit: string) => `${used} of ${limit} budget tokens`,
+    overBy: (n: string) => `${n} budget tokens over its budget`,
+    costNoSession: 'Claude Code has not reported a cost for this agent yet.',
+    message: 'Message',
+    stop: 'Stop',
+    openSession: 'Open its session',
+    helpers: 'Helper agents it started inside Claude Code',
+    confirmStop: (role: string) =>
+      `Stop the ${role}? It stops right away. Changes it already made stay for you to review.`,
+    confirmStopLead: 'Stop the lead agent? It stops right away and starts no more helper agents.',
+    stopConfirm: 'Stop agent',
+    keep: 'Keep running',
+    stopping: 'Stopping…',
+    stopFailed: "The agent didn't stop.",
+  },
+  approvals: {
+    title: 'Waiting for your approval',
+    description:
+      'Agents ask before they change files or run commands. Nothing happens until you answer.',
+    timeout: (minutes: number) =>
+      `A request nobody answers is denied automatically after ${minutes} minutes.`,
+    toolUse: (role: string) => `The ${role} wants to:`,
+    budgetRaise: (role: string) =>
+      `The ${role} used up its budget. Approve to let it continue, or deny to stop it.`,
+    budgetRaiseShort: 'Asked to continue past its budget',
+    approve: 'Approve',
+    deny: 'Deny',
+    failed: "Your answer wasn't saved.",
+    history: (n: number) => `Earlier requests (${formatCount(n)})`,
+    status: {
+      pending: 'Waiting',
+      approved: 'Approved',
+      denied: 'Denied',
+      expired: 'Denied automatically (no answer in time)',
+    },
+  },
+  review: {
+    title: 'Review changes',
+    description:
+      'Each helper agent worked in its own copy of your project. Merge its changes into your project, or discard them.',
+    loading: 'Loading changes…',
+    into: (base: string) => `To merge into ${base}`,
+    files: (n: number) => `${formatCount(n)} changed ${n === 1 ? 'file' : 'files'}`,
+    noFiles: 'No files changed.',
+    added: (n: number) => `${formatCount(n)} ${n === 1 ? 'line' : 'lines'} added`,
+    removed: (n: number) => `${formatCount(n)} ${n === 1 ? 'line' : 'lines'} removed`,
+    linesNotReported: 'Line counts not reported',
+    fileStatus: {
+      added: 'New',
+      modified: 'Changed',
+      deleted: 'Deleted',
+      renamed: 'Renamed',
+    },
+    diff: 'The changes, line by line',
+    diffEmpty: 'No line-by-line changes to show.',
+    truncated:
+      'Only the start of the changes is shown: they are too large to show in full. Every changed file is listed above.',
+    merge: 'Merge',
+    discard: 'Discard',
+    confirmMerge: (role: string, base: string) =>
+      `Merge the ${role}'s changes into ${base}? This changes the files in your project.`,
+    confirmDiscard: (role: string) =>
+      `Discard the ${role}'s changes? Its copy of the project is deleted. This can't be undone.`,
+    confirmMergeButton: 'Merge changes',
+    confirmDiscardButton: 'Discard changes',
+    cancel: 'Cancel',
+    working: 'Working…',
+    failed: "That didn't work.",
+    waitForStop: 'You can merge or discard once this agent has stopped.',
+    state: {
+      pending: 'Waiting for your review',
+      merged: 'Merged into your project',
+      discarded: 'Discarded',
+      'no-changes': 'No changes to review',
+    },
+    branch: 'Branch',
+    baseBranch: 'Merges into',
+  },
+  stopAll: {
+    button: 'Stop all',
+    confirm:
+      'Stop the lead agent and every helper agent? They stop right away. Changes already made stay for you to review.',
+    confirmButton: 'Stop everything',
+    keep: 'Keep running',
+    stopping: 'Stopping…',
+    failed: "The run didn't stop.",
+  },
+  facts: {
+    status: 'Status',
+    project: 'Project',
+    projectMissing: 'No longer in your projects',
+    started: 'Started',
+    updated: 'Last change',
+    budget: 'Budget per agent',
+    agents: (n: number) => `${formatCount(n)} ${n === 1 ? 'agent' : 'agents'}`,
+    approvals: (n: number) =>
+      `${formatCount(n)} ${n === 1 ? 'request waits' : 'requests wait'} for your approval`,
+  },
+  technical: {
+    summary: 'Technical details',
+    runId: 'Run id',
+    agentId: 'Agent id',
+    sessionId: 'Session id',
+    noSession: 'Not linked to a session yet',
+    costWarning: 'Cost warning at (estimated)',
+    noCostWarning: 'None',
+    ended: 'Ended',
+    notEnded: 'Not ended',
+  },
+  notFound: {
+    title: 'Run not found',
+    text: 'There is no run at this address. It may have been deleted.',
   },
 } as const;
