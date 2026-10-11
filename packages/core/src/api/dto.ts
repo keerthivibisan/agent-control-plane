@@ -337,10 +337,21 @@ export type ErrorDto = z.infer<typeof ErrorDtoSchema>;
 
 /** SSE `data:` payload. An invalidation notice only: clients refetch over REST. */
 export const StreamNoticeDtoSchema = z.object({
-  kind: z.enum(['events-ingested', 'projects-changed']),
+  /**
+   * `runs-changed`, `approval-requested` and `chat-message` belong to the control panel (Phase 3):
+   * refetch the runs named in `runIds`.
+   */
+  kind: z.enum([
+    'events-ingested',
+    'projects-changed',
+    'runs-changed',
+    'approval-requested',
+    'chat-message',
+  ]),
   /** Highest event row id included; also sent as the SSE `id:` field. */
   lastEventId: z.number().int().nonnegative(),
   sessionIds: z.array(z.string().min(1)),
   projectIds: z.array(z.string().min(1)),
+  runIds: z.array(z.string().min(1)).optional(),
 });
 export type StreamNoticeDto = z.infer<typeof StreamNoticeDtoSchema>;
