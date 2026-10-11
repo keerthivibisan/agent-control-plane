@@ -40,7 +40,7 @@ const CASES: readonly [EventType, Record<string, unknown>, string][] = [
       model: 'model-a',
       tokens: { input: 1200, output: 340, cacheCreation: 5, cacheRead: 9000 },
     },
-    'Used 1,200 input · 340 output tokens',
+    'Used 1,200 input tokens · 340 output tokens',
   ],
   [
     'usage.reported',
@@ -51,7 +51,7 @@ const CASES: readonly [EventType, Record<string, unknown>, string][] = [
       model: null,
       tokens: { input: null, output: 0, cacheCreation: null, cacheRead: null },
     },
-    'Used input not reported · 0 output tokens',
+    'Used input tokens not reported · 0 output tokens',
   ],
   ['tool.called', { toolUseId: 't', toolName: 'Bash', messageId: null }, 'Used tool: Bash'],
   ['tool.result', { toolUseId: 't', isError: false }, 'Tool finished'],

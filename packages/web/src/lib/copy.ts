@@ -301,7 +301,8 @@ function usageSentence(payload: Record<string, unknown>): string {
   const output = tokenCount(payload, 'output');
   const part = (n: number | null, unit: string) =>
     n === null ? `${unit} not reported` : `${formatCount(n)} ${unit}`;
-  return `Used ${part(input, 'input')} · ${part(output, 'output')} tokens`;
+  // Every count names its own unit (owner: no abbreviations such as "30 input").
+  return `Used ${part(input, 'input tokens')} · ${part(output, 'output tokens')}`;
 }
 
 /**
