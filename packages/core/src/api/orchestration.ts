@@ -91,6 +91,8 @@ export const ChangedFileDtoSchema = z.object({
   deletions: count.nullable(),
 });
 
+export type ChangedFileDto = z.infer<typeof ChangedFileDtoSchema>;
+
 export const AgentReviewDtoSchema = z.object({
   agentRunId: z.string().min(1),
   role: z.string().min(1),

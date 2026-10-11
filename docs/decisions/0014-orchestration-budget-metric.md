@@ -18,8 +18,12 @@ context. A budget that counts cache reads is used up almost at once (orchestrati
 - Usage is deduplicated by `(provider, messageId)` as in usage-accounting §4.
 - The cap is **soft**: calls already in flight may overshoot, and the overshoot is reported. Reaching
   it moves the agent to `BLOCKED` and asks the owner (raise the cap, or stop).
-- Optional run-level soft warning on provider-reported estimated cost (`softCostUsdPerRun`). It never
-  stops anything and is always labeled "estimated".
+- Optional soft warning on provider-reported estimated cost (`softCostUsdPerRun`): it fires when **any
+  single agent's** latest reported cost passes the value. Costs of different agents are never added
+  up (the Phase 1 rule "cost is never summed" still holds). It never stops anything and is always
+  labeled "estimated".
+- Duplicate message ids across agents (no timestamp in the managed event) are charged to one agent
+  deterministically (the smallest agent run id), so replay order never changes a budget.
 
 ## Alternatives considered
 

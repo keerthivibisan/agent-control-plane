@@ -24,8 +24,14 @@ Agent SDK.
   never get these tools (depth 1).
 - `permissionMode: 'default'` with a `canUseTool` callback (ADR-0013). `bypassPermissions` is never
   used.
-- `settingSources: ['project']`: the project's own Claude settings and CLAUDE.md apply; the owner's
-  user-level settings and hooks are not loaded into managed runs.
+- `settingSources: []` (the SDK's isolation mode; **amended 2026-10-11** after P3-B review, was
+  `['project']`): no user, project or local settings file is loaded. A repository's
+  `.claude/settings.json` could otherwise pre-approve tools (skipping the owner's approval) or run
+  hooks as shell commands, both contrary to ADR-0013. Trade-off: the project's CLAUDE.md is not loaded
+  into managed runs; adding it explicitly to the system prompt is a possible later change.
+- `strictMcpConfig: true`: only the MCP servers passed in the options load (project `.mcp.json` and
+  plugins are ignored).
+- The `claude` process receives a filtered environment (no `ACP_*` variables, e.g. the hook token).
 - Tests never call the real SDK: the adapter takes an injectable `query` function.
 
 ## Alternatives considered

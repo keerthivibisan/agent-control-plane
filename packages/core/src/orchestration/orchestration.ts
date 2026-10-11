@@ -46,13 +46,17 @@ export const ReviewStateSchema = z.enum(['pending', 'merged', 'discarded', 'no-c
 export type ReviewState = z.infer<typeof ReviewStateSchema>;
 
 export const ApprovalKindSchema = z.enum(['tool-use', 'budget-raise']);
+export type ApprovalKind = z.infer<typeof ApprovalKindSchema>;
 export const ApprovalStatusSchema = z.enum(['pending', 'approved', 'denied', 'expired']);
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>;
 
 export const RunBudgetSchema = z.object({
   /** Per-agent cap in budget tokens (output + uncached input + cache write; ADR-0014). Soft. */
   maxTokensPerAgent: z.number().int().positive(),
-  /** Warn (never stop) when the provider-reported estimated cost passes this. Null: no warning. */
+  /**
+   * Warn (never stop) when any single agent's provider-reported estimated cost passes this. Costs
+   * of different agents are never added up (ADR-0014). Null: no warning.
+   */
   softCostUsdPerRun: z.number().positive().nullable(),
 });
 export type RunBudget = z.infer<typeof RunBudgetSchema>;
