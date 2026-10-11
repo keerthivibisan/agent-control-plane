@@ -64,7 +64,57 @@ Enum-like columns are validated with Zod in TypeScript, not with `CHECK`, becaus
 | `usage_snapshots`       | `event_id`                                                             | one per `usage.snapshot`; never summed                                                    |
 | `ingestion_checkpoints` | `source_path`                                                          | written in the same transaction as its events                                             |
 
-There are no Phase 3 tables (domain-model §3).
+`0001` creates no Phase 3 tables (domain-model §3); they arrive in `0002`.
+
+## Orchestration schema (`0002_orchestration.sql`, Phase 3 M1, P3-C)
+
+**Status: implemented (P3-C).** Tables, repositories and temp-file DB tests exist. Nothing calls them
+yet: the run service is P3-D.
+
+Same conventions as `0001` (STRICT, UUID text ids, UTC `...Z` timestamps, enum columns validated in
+TypeScript). Same-run references use composite foreign keys `(run_id, agent_run_id) →
+agent_runs (run_id, id)`, so an approval, artifact or workspace can never point at another run's agent.
+
+| Table                   | Key / uniques                                                  | Notes                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `orchestration_runs`    | `id`                                                           | `project_id` → projects **ON DELETE RESTRICT** (a project with runs cannot be unregistered); budget columns (ADR-0014)        |
+| `agent_runs`            | `id`; `(run_id, id)`; one lead per run (partial unique index)  | parent in the same run; `task` ≤ 4000 (ADR-0015); `budget_tokens_used`, `budget_tokens_limit`                                 |
+| `agent_run_sessions`    | `(agent_run_id, provider, provider_session_id)`; one `primary` | stores the provider session id; the observed `sessions` row is joined at read time, so linking never waits for ingestion      |
+| `approvals`             | `id`                                                           | `summary` 1..200 characters, `redact()`ed again on write; decisions are immutable; the owner's decision message is not stored |
+| `artifacts`             | `id`; `storage_path` unique                                    | `patch` / `manifest`; path relative to the data dir (no `..`, not absolute); `sha256` lowercase hex; immutable                |
+| `managed_workspaces`    | `id`; `agent_run_id`, `worktree_path`, `branch` unique         | workers only; `state` `active`/`removed`; `review_state` (core `ReviewState`) and `changed_files`                             |
+| `orchestrator_messages` | `id`; `(run_id, seq)`                                          | owner ↔ lead chat only (ADR-0015); `seq` assigned on insert                                                                   |
+
+Every table cascades from `orchestration_runs`: deleting a run deletes its agents, session links,
+approvals, artifact rows, workspace rows and chat (ADR-0015). Files on disk are the caller's job:
+`runs.remove(id)` returns the artifact paths and the still-active worktree paths to delete.
+
+**Never stored:** worker conversation content, thinking, tool inputs or outputs, activity sentences,
+and owner decision messages. A test asserts the free-text columns are exactly `orchestration_runs.title`,
+`agent_runs.role`, `agent_runs.task`, `approvals.summary` and `orchestrator_messages.text` (+ `role`).
+
+`createOrchestrationRepositories(db, options?)` returns:
+
+- **runs**: `insert` (default `QUEUED`), `getById`, `list({ projectId?, limit?, before? })` (newest
+  first, with `agentCount` and `pendingApprovals`), `listByStatus`, `setStatus(id, status, { from?,
+endedAt? })` (`from` guard → `conflict`), `setBudget`, `remove` → `{ artifactPaths,
+activeWorktreePaths }`.
+- **agentRuns**: `insert` (lead: no parent/task; worker: the run's lead as parent and a task; limit
+  defaults to the run cap), `getById`, `listForRun`, `listByStatus`, `setStatus` (with `from`),
+  `setBudgetTokensUsed`, `setBudgetTokensLimit`. Rows carry `sessionId` (joined) and
+  `budgetTokensLimit`.
+- **agentRunSessions**: `link` (idempotent), `listForAgentRun`, `findByProviderSession`.
+- **approvals**: `insert` (pending), `getById`, `listForRun`, `listPending({ runId? })`,
+  `decide(id, 'approved' | 'denied' | 'expired', at?)`, `expirePending(cutoff, at?)`.
+- **artifacts**: `insert`, `getById`, `listForRun`, `listForAgentRun` (no update).
+- **workspaces**: `insert`, `getById`, `getByAgentRun`, `listForRun`, `listActive`, `setReview`,
+  `markRemoved`.
+- **messages**: `insert` (appends with the next `seq`), `list(runId, { limit?, beforeSeq? })`
+  (latest page, oldest first), `count`.
+
+Errors: unknown referenced rows → `DbError('not_found')`; duplicates and failed `from` guards →
+`conflict`; invalid input → `invalid_input`. The engine decides state transitions; the repositories
+only persist them.
 
 ## Usage
 

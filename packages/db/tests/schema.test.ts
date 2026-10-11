@@ -1,3 +1,4 @@
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -26,6 +27,16 @@ const PHASE1_TABLES = [
   'usage_observations',
   'usage_records',
   'usage_snapshots',
+];
+
+const PHASE3_TABLES = [
+  'agent_run_sessions',
+  'agent_runs',
+  'approvals',
+  'artifacts',
+  'managed_workspaces',
+  'orchestration_runs',
+  'orchestrator_messages',
 ];
 
 function describeSchema(database: AcpDatabase) {
@@ -86,18 +97,27 @@ describe('0001_observability schema (B3)', () => {
     expect(migrations[0]).toMatchObject({ version: 1, name: 'observability' });
   });
 
-  it('creates exactly the Phase 1 tables (no Phase 3 tables)', () => {
-    const tables = describeSchema(db).map((t) => t.table);
-    expect(tables).toEqual(PHASE1_TABLES);
-    for (const forbidden of [
-      'tasks',
-      'orchestration_runs',
-      'agent_runs',
-      'approvals',
-      'artifacts',
-    ]) {
-      expect(tables).not.toContain(forbidden);
+  it('creates exactly the Phase 1 tables (no Phase 3 tables) when applied alone', () => {
+    // Migration 0002 adds the Phase 3 tables; 0001 on its own must still create only Phase 1.
+    const dir = join(tempDir(), 'only-0001');
+    mkdirSync(dir);
+    copyFileSync(
+      join(DEFAULT_MIGRATIONS_DIR, '0001_observability.sql'),
+      join(dir, '0001_observability.sql'),
+    );
+    const phase1 = openDatabase(join(tempDir(), 'phase1.sqlite'), { migrationsDir: dir });
+    try {
+      const tables = describeSchema(phase1).map((t) => t.table);
+      expect(tables).toEqual(PHASE1_TABLES);
+      for (const forbidden of PHASE3_TABLES) expect(tables).not.toContain(forbidden);
+    } finally {
+      phase1.close();
     }
+  });
+
+  it('with 0002 applied, adds exactly the Phase 3 tables', () => {
+    const tables = describeSchema(db).map((t) => t.table);
+    expect(tables).toEqual([...PHASE1_TABLES, ...PHASE3_TABLES].sort());
   });
 
   it('matches the schema snapshot (columns, foreign keys, indexes)', () => {
