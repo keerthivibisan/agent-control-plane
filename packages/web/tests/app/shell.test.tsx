@@ -113,7 +113,7 @@ describe('app shell', () => {
     const server = fakeServer({ '/api/diagnostics/ingestion': diagnostics() });
     renderApp(server.fetch);
     expect(await screen.findByRole('heading', { level: 1, name: 'Data health' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'Observation capabilities' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'What this app can see' })).toBeTruthy();
     expect(await screen.findByTestId('ingestion-counters')).toBeTruthy();
   });
 

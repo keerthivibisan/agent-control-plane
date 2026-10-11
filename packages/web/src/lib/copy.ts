@@ -495,3 +495,295 @@ export const PROJECT_PAGE = {
     updating: 'Updating…',
   },
 } as const;
+
+/* -------------------------------------------------------------------------------------------- */
+/* Overview, Setup and Data health screens (phase 2, wp/ui-overview). Add-only section.          */
+/* -------------------------------------------------------------------------------------------- */
+
+/** "1 helper agent" / "3 helper agents"; null when there are none (rows then say nothing). */
+export function helperAgentsText(n: number): string | null {
+  return n === 0 ? null : countOf(n, 'helper agent', 'helper agents');
+}
+
+export const OVERVIEW_COPY = {
+  stats: {
+    running: { label: 'Running now', tip: STATUS_COPY.active.tip },
+    needYou: {
+      label: 'Need you',
+      tip: 'Sessions where Claude Code said it is waiting for your input. This needs live updates (see Setup).',
+    },
+    projects: { label: 'Projects', tip: GLOSSARY.project.tip },
+    seeAll: 'See all',
+  },
+  statusCard: {
+    title: 'Sessions by status',
+    description: 'Every session in your projects, grouped by what it is doing now.',
+  },
+  tokens: {
+    title: 'Tokens used',
+    description:
+      'All sessions in your projects, each counted once. Token types are priced differently, so they are shown side by side and never added up.',
+    link: 'Tokens over time',
+  },
+  running: {
+    title: 'Running now',
+    description: 'Sessions with activity in the last 2 minutes.',
+    link: 'All running sessions',
+  },
+  waiting: {
+    title: 'Waiting for you',
+    description: 'Sessions where Claude Code asked for your input.',
+    asked: 'Asked',
+    noHooksTitle: 'Live updates are off',
+    noHooksText:
+      'Claude Code can only tell this app that a session is waiting for you through hooks. Until they are set up, this list stays empty.',
+    noHooksAction: 'Set up live updates',
+  },
+  costs: {
+    title: 'Estimated cost by session',
+    description:
+      'The latest cost Claude Code reported for each recent session. Claude Code makes this estimate, not this app, and the costs are never added together.',
+    asOf: 'as of',
+    scope: 'What the total covers',
+  },
+  activity: {
+    title: 'Recent activity',
+    description: 'The latest things your sessions did, newest first.',
+    raw: 'Technical details: raw events',
+    unknownSession: 'Not linked to a session',
+  },
+  getStarted: {
+    title: 'Add your first project',
+    text: 'This app only reads Claude Code sessions that ran inside folders you add. Add a folder to get started.',
+    action: 'Add a project folder',
+    found: (n: number) =>
+      `${countOf(n, 'folder', 'folders')} with Claude Code activity ${n === 1 ? 'was' : 'were'} found and can be added in one click.`,
+  },
+  sessions: (n: number) => countOf(n, 'session', 'sessions'),
+  folders: (n: number) => countOf(n, 'folder', 'folders'),
+  untitled: 'Untitled session',
+  noProject: 'No project',
+  lastActivity: 'Last activity',
+  noActivity: 'No activity yet',
+  /** Link text for a session known only by its id. */
+  sessionById: (shortId: string) => `Session ${shortId}`,
+} as const;
+
+/** Column labels inside "Technical details" on the Overview, Setup and Data health pages. */
+export const TECH_LABELS = {
+  sessionId: 'Session id',
+  eventId: 'Event id',
+  eventType: 'Event type',
+  scope: 'Scope',
+  reportedAt: 'Reported at',
+  occurredAt: 'Occurred at',
+  provenance: 'Provenance',
+  channel: 'Channel',
+  provider: 'Provider',
+  costReports: 'Cost reports',
+  rawEvents: 'Raw events',
+  file: 'File',
+  reason: 'Reason',
+  detail: 'Detail',
+  recordType: 'Record type',
+  version: 'Version',
+  count: 'Count',
+  parseErrors: 'Parse errors',
+  bytesRead: 'Bytes read',
+  size: 'Size (bytes)',
+  updatedAt: 'Updated at',
+  counter: 'Counter',
+  value: 'Value',
+  receiverUrl: 'Receiver URL',
+} as const;
+
+export const SETUP_COPY = {
+  heading: 'Connect this app to your work',
+  description:
+    'Add the folders where you use Claude Code. Optionally, turn on live updates so the app knows the moment a session needs you.',
+  step: (n: number) => `Step ${n}`,
+  optional: 'Optional',
+  addProject: {
+    title: 'Add a project folder',
+    description:
+      'Only sessions that ran inside a folder you add are read. Nothing outside it is opened.',
+    nameLabel: 'Name',
+    nameHint: 'Any name you like, for example the repository name.',
+    namePlaceholder: 'my-app',
+    pathLabel: 'Folder path',
+    pathHint: 'The full path, starting with / (or a drive letter on Windows).',
+    pathPlaceholder: '/Users/me/code/my-app',
+    submit: 'Add project',
+    submitting: 'Adding…',
+    /** Accessible name of the form. */
+    formLabel: 'Register a project',
+    added: (name: string) => `Added ${name}.`,
+    addedText: 'Its sessions will show up in a few seconds.',
+    open: 'Open project',
+  },
+  unadded: {
+    title: 'Folders with Claude Code activity, not added yet',
+    description:
+      "Claude Code ran in these folders, but they aren't projects yet, so their sessions aren't read. Add one with a click.",
+    add: 'Add',
+    adding: 'Adding…',
+    addAs: (name: string) => `Add as project "${name}"`,
+    insideProject: 'Inside project',
+    noActivity: 'No activity seen',
+    sessions: (n: number) => countOf(n, 'session', 'sessions'),
+  },
+  hooks: {
+    title: 'Live updates through hooks',
+    description:
+      'Hooks are a Claude Code feature that sends this app a short note when something happens. Everything else works without them.',
+    whatTheyAdd: 'What hooks add',
+    benefits: [
+      '"Waiting for you" appears the moment a session asks for your input.',
+      'Sessions show "Ended" when they really end, instead of turning "Inactive" after 30 minutes.',
+      'Helper agents and finished turns show up right away.',
+    ],
+    neverEdits:
+      'This app never edits your Claude Code settings. You add the hooks yourself and can remove them at any time.',
+    receiverLabel: 'This app listens for hooks at',
+    stepsTitle: 'How to turn them on',
+    steps: {
+      print: 'In this repository, print the hook settings:',
+      paste:
+        'Paste the printed "hooks" block into your own Claude Code settings file (for example ~/.claude/settings.json).',
+      token:
+        'Set the ACP_HOOK_TOKEN environment variable, where Claude Code runs, to the contents of the hook-token file in this app’s data folder. The command above prints where that file is.',
+      restart: 'Start a new Claude Code session. The first hook arrives after its first reply.',
+    },
+    command: 'pnpm --filter @acp/server hooks:snippet',
+    serverDown:
+      'If this app is not running, Claude Code may show a small hook error. It never blocks your work.',
+    received: 'Connected: this app has received hooks from Claude Code.',
+    notReceived: 'Not connected yet: no hook has been received.',
+    demo: 'Sample data does not accept hooks. Start the app normally to connect them.',
+    commandName: 'command',
+    receiverName: 'hook address',
+  },
+  copy: {
+    action: (what: string) => `Copy ${what}`,
+    copied: 'Copied',
+    failed: "Couldn't copy",
+  },
+  errors: {
+    nameMissing: 'Give the project a name.',
+    nameTooLong: 'Use a shorter name (at most 200 characters).',
+    pathMissing: 'Enter the folder path.',
+    pathNotAbsolute:
+      'Use the full folder path, starting with / (for example /Users/me/code/my-app).',
+    notFound:
+      "That folder wasn't found on this computer, or it isn't a folder. Check the path and try again.",
+    duplicate: 'This folder is already a project.',
+    generic: "The folder couldn't be added.",
+  },
+} as const;
+
+/** Plain words for an adapter file-issue reason (docs/provider-adapters.md §8). */
+export const FILE_ISSUE_REASONS: Readonly<Record<string, string>> = {
+  'size-cap': 'Too large to read, so it was skipped.',
+  'io-error': "Couldn't be opened or read.",
+  'invalid-meta': "A helper agent's description file is damaged, so its parent is unknown.",
+  'outside-projects': 'Points outside the Claude Code data folder, so it was not read.',
+  'symlink-mismatch': 'A link that points somewhere unexpected, so it was not read.',
+  'not-regular-file': 'Not a regular file, so it was not read.',
+};
+
+export function fileIssueText(reason: string): string {
+  return FILE_ISSUE_REASONS[reason] ?? `Skipped (${reason}).`;
+}
+
+export const HEALTH_COPY = {
+  heading: 'Is the data trustworthy?',
+  allGood: (files: number) => `All good: ${countOf(files, 'file', 'files')} read, no problems.`,
+  allGoodText:
+    'Everything this app tracks was read without errors. Anything it skips on purpose is listed below.',
+  attention: (n: number) => `${countOf(n, 'thing needs', 'things need')} a look`,
+  attentionText:
+    'The app kept working, but some data could not be read, so some numbers elsewhere may be low.',
+  firstRead: 'Getting ready',
+  firstReadText: 'This app has not finished its first check for Claude Code activity yet.',
+  summaryLabel: 'Summary',
+  problems: {
+    fileIssues: (n: number) => countOf(n, 'file could not be read', 'files could not be read'),
+    parseErrors: (n: number) => countOf(n, 'line could not be read', 'lines could not be read'),
+    unknownRecords: (n: number) =>
+      countOf(n, 'record of an unknown kind', 'records of an unknown kind'),
+    pollErrors: (n: number) =>
+      countOf(n, 'check for new activity failed', 'checks for new activity failed'),
+    failedBatches: (n: number) =>
+      countOf(n, 'batch of updates was not saved', 'batches of updates were not saved'),
+    invalidEvents: (n: number) =>
+      countOf(n, 'update was rejected as invalid', 'updates were rejected as invalid'),
+  },
+  files: {
+    title: 'Files that could not be read',
+    description: 'From the latest scan. Sessions in these files may be missing or incomplete.',
+    none: 'Every file was readable.',
+  },
+  skipped: {
+    title: 'Known, skipped on purpose',
+    tip: 'Claude Code writes some records that carry nothing this app uses (for example file snapshots). They are recognized, counted and skipped, never stored.',
+    description: 'Records this app recognizes and skips because they carry nothing it uses.',
+    none: 'Nothing was skipped.',
+    count: (n: number) => countOf(n, 'record', 'records'),
+  },
+  unknown: {
+    title: 'Unknown records',
+    tip: 'Records of a kind this app does not recognize, perhaps from a newer Claude Code version. They are counted, not interpreted.',
+    description: 'Records of a kind this app does not recognize. Counted, not interpreted.',
+    none: 'Every record was of a known kind.',
+    noType: 'Record without a type',
+    version: (v: string | null) =>
+      v === null ? 'Claude Code version not reported' : `Claude Code ${v}`,
+  },
+  parse: {
+    title: 'Lines that could not be read',
+    description: 'Damaged or incomplete lines in session files. They were skipped.',
+    none: 'No damaged lines.',
+    bySource: (provider: string, n: number) =>
+      `${provider}: ${countOf(n, 'line', 'lines')} skipped since the app started`,
+    fileChanged: 'file last changed',
+  },
+  reading: {
+    title: 'Reading activity',
+    description: 'How this app checks for new activity, since it was last started.',
+    polls: 'Checks for new activity',
+    lastPoll: 'Last check',
+    notYet: 'Not yet',
+    pollErrors: 'Failed checks',
+    failedBatches: 'Updates not saved',
+    failedBatchesTip:
+      'Batches of updates that were rolled back. Their files are read again on the next check.',
+    invalidEvents: 'Updates rejected as invalid',
+    filesTracked: 'Files tracked',
+    edgeConflicts: 'Conflicting parent information',
+    edgeConflictsTip: 'Two files named different parents for one session. The first one was kept.',
+    usageConflicts: 'Conflicting token reports',
+    usageConflictsTip:
+      'Copies of one reply reported different token counts. The one with the most output was kept.',
+  },
+  capabilities: {
+    title: 'What this app can see',
+    description: 'What each source of sessions provides, and what it cannot tell this app.',
+    providerName: (p: string) =>
+      p === 'claude-code' ? 'Claude Code' : p === 'demo' ? 'Sample data' : p,
+    observation: {
+      transcripts: 'Session files (messages, tools, tokens)',
+      lifecycleHooks: 'Live updates through hooks',
+      subagentRelationships: 'Which session started which helper agent',
+      perTurnUsage: 'Tokens for each reply',
+      cumulativeSnapshots: 'Running totals and estimated cost from Claude Code',
+    },
+    yes: 'Yes',
+    no: 'No',
+    versions: 'Claude Code versions seen',
+    noVersions: 'None yet',
+    limitations: 'Good to know',
+    limitationsCount: (n: number) => `Good to know: ${countOf(n, 'known limit', 'known limits')}`,
+    hooksReceived: 'Hooks received',
+  },
+  raw: 'Technical details: raw counters',
+} as const;
