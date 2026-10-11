@@ -5,7 +5,9 @@ import { errorHandler, notFoundHandler, requestId } from './http/middleware.js';
 import type { Logger } from './logger.js';
 import { createHookRouter, type HookDeps } from './hooks/receiver.js';
 import { createApiRouter } from './routes/api.js';
+import { createControlRouter } from './routes/control.js';
 import { createStreamRouter, type StreamDeps } from './routes/stream.js';
+import type { ControlService } from './control/service.js';
 import type { Services } from './services/index.js';
 import { mountStatic } from './static.js';
 
@@ -18,6 +20,8 @@ export interface AppDeps {
   services: Services;
   stream: StreamDeps;
   hooks: HookDeps;
+  /** The control panel's run service (Phase 3). Omitted: the control routes are not mounted. */
+  control?: ControlService;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -31,6 +35,7 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', createStreamRouter(deps.stream));
   app.use('/api', createHookRouter(deps.hooks));
   app.use('/api', createApiRouter(deps.services));
+  if (deps.control !== undefined) app.use('/api', createControlRouter(deps.control));
   app.use('/api', notFoundHandler);
   if (deps.staticDir !== undefined) mountStatic(app, deps.staticDir);
   app.use(errorHandler(deps.logger));

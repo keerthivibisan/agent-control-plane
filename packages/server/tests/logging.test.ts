@@ -223,6 +223,51 @@ describe('hook receiver logging', () => {
   });
 });
 
+describe('control panel logging (ADR-0015: logs never contain chat or task text)', () => {
+  it('a whole run logs ids, codes and counts only', async () => {
+    const { setupControl } = await import('./control/helpers.js');
+    const cap = captureLogger();
+    const s = await setupControl({ logger: cap.logger });
+    const runId = (await s.startRun(`owner ${MARKER} ${SECRET}`)).id;
+    const lead = s.fake.lead();
+    lead.started();
+    lead.emit({ type: 'lead-text', text: `lead ${MARKER}` });
+    const worker = await s.startWorker('Builder', `task ${MARKER} ${HOME_PATH}`);
+    worker.started();
+    worker.emit({ type: 'activity', summary: `activity ${MARKER}` });
+    await lead.callLead('message_agent', { agentId: worker.id, text: `to worker ${MARKER}` });
+    await expect(lead.callLead('start_agent', { role: MARKER })).rejects.toThrow();
+    await s.post(`/api/runs/${runId}/agents/${worker.id}/message`, { text: `owner ${MARKER}` });
+    const pending = worker.ask('Edit', `Edit ${HOME_PATH}`);
+    const approval = (await s.detail(runId)).approvals[0];
+    await s.post(`/api/approvals/${approval?.id ?? ''}`, {
+      decision: 'deny',
+      message: `no ${MARKER}`,
+    });
+    await pending;
+    await lead.ask('Bash', `rm ${MARKER}`);
+    await s.post(`/api/runs/${runId}/chat`, { text: `again ${MARKER}` });
+    await s.post(`/api/runs/${runId}/stop`);
+    await s.control.idle();
+
+    const messages = new Set(cap.records().map((r) => r['message']));
+    for (const m of [
+      'run created',
+      'agent started',
+      'lead tool called',
+      'lead tool refused',
+      'approval requested',
+      'approval decided',
+      'lead tool use denied',
+      'run stopped by owner',
+    ]) {
+      expect(messages).toContain(m);
+    }
+    expectClean(cap.lines);
+    for (const line of cap.lines) expect(line).not.toContain('acp-ws-repo-');
+  });
+});
+
 describe('ingestion logging', () => {
   it('a rolled-back batch logs the error class, code and event count only', () => {
     const cap = captureLogger();

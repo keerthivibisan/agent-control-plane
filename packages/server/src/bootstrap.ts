@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import type { Server } from 'node:http';
-import { createClaudeCodeAdapter } from '@acp/adapter-claude-code';
+import { createClaudeCodeAdapter, createManagedClaudeCode } from '@acp/adapter-claude-code';
 import { createDemoAdapter } from '@acp/adapter-demo';
-import type { ObservationAdapter } from '@acp/core';
+import type { ManagedExecutionAdapter, ObservationAdapter } from '@acp/core';
 import { createQueries, createRepositories, openDatabase } from '@acp/db';
 import { createApp } from './app.js';
 import type { ServerConfig } from './config.js';
@@ -14,6 +14,9 @@ import { createNotifier } from './notifier.js';
 import { createPipeline } from './pipeline/ingest.js';
 import { createScheduler } from './scheduler.js';
 import { createServices } from './services/index.js';
+import { managedAgentEnv } from './control/env.js';
+import { createControlService, type ControlService } from './control/service.js';
+import { createGitRunner, createWorkspaceManager, type GitRunner } from './workspace/index.js';
 
 /** The demo projects live only in the separate demo database (AGENTS.md §3.9). */
 const DEMO_PROJECTS = [
@@ -35,10 +38,21 @@ export interface StartOptions {
   demoBaseTime?: Date;
   /** Tests only: fixture roots like `/home/user/project` do not exist on the test machine. */
   normalizeRoot?: (rootPath: string) => Promise<string>;
+  /**
+   * A managed adapter to use instead of the Agent SDK (tests and the P3-F e2e inject a scripted
+   * fake). With one injected, managed execution defaults to on in demo mode too.
+   */
+  managedAdapter?: ManagedExecutionAdapter;
+  /** Tests: git for the workspace manager (isolated from the user's git config). */
+  git?: GitRunner;
+  /** Tests: control-service timing overrides. */
+  control?: { approvalTimeoutMs?: number; sweepIntervalMs?: number | null; cancelGraceMs?: number };
 }
 
 export interface RunningServer {
   port: number;
+  /** Whether the control-panel routes are on. */
+  managed: boolean;
   close(): Promise<void>;
 }
 
@@ -61,6 +75,21 @@ async function normalizeLiveRoot(rootPath: string): Promise<string> {
     if (error instanceof HttpError) throw error;
     throw new HttpError(400, 'invalid_root', 'Root path does not exist or is not readable');
   }
+}
+
+/**
+ * Managed execution (Phase 3): an injected adapter (tests, e2e) is used whenever managed is not
+ * `off`. Otherwise the Agent SDK adapter runs only in live mode, never in demo mode, with the
+ * filtered environment (no ACP_* or GIT_* variables; ADR-0012).
+ */
+function resolveManagedAdapter(
+  config: ServerConfig,
+  injected: ManagedExecutionAdapter | undefined,
+): ManagedExecutionAdapter | undefined {
+  if (config.managed === 'off') return undefined;
+  if (injected !== undefined) return injected;
+  if (config.mode === 'demo') return undefined;
+  return createManagedClaudeCode({ env: managedAgentEnv(process.env) });
 }
 
 export async function startServer(options: StartOptions): Promise<RunningServer> {
@@ -91,7 +120,17 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   }
 
   const notifier = createNotifier();
-  const pipeline = createPipeline({ db, repos, logger, now, publish: (n) => notifier.publish(n) });
+  // Set below; the pipeline and scheduler only call it once polling starts.
+  const controlRef: { current?: ControlService } = {};
+  const extraRoots = () => controlRef.current?.extraRoots() ?? [];
+  const pipeline = createPipeline({
+    db,
+    repos,
+    logger,
+    now,
+    publish: (n) => notifier.publish(n),
+    extraRoots,
+  });
   const scheduler = createScheduler({
     adapters,
     repos,
@@ -99,7 +138,28 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     logger,
     now,
     intervalMs: config.pollIntervalMs,
+    extraRoots,
   });
+
+  const managedAdapter = resolveManagedAdapter(config, options.managedAdapter);
+  const git = options.git ?? createGitRunner();
+  const controlService = createControlService({
+    db,
+    repos,
+    adapter: managedAdapter,
+    workspaces: createWorkspaceManager({ dataDir: config.dataDir, git, logger }),
+    git,
+    dataDir: config.dataDir,
+    enabled: managedAdapter !== undefined,
+    logger,
+    now,
+    publish: (n) => notifier.publish(n),
+    runTimeoutMs: config.runTimeoutMs,
+    flushIngestion: () => scheduler.pollNow(),
+    ...options.control,
+  });
+  controlRef.current = controlService;
+  logger.log('info', 'managed agents', { enabled: controlService.enabled });
   const requestPoll = () => {
     void scheduler.pollNow();
   };
@@ -124,6 +184,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       (config.mode === 'demo' ? (p) => Promise.resolve(p) : normalizeLiveRoot),
     publish: (n) => notifier.publish(n),
     requestPoll,
+    isManagedPath: (cwd) => controlService.isManagedPath(cwd),
   });
   const app = createApp({
     config,
@@ -139,8 +200,10 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       logger,
       now,
     },
+    control: controlService,
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
+  await controlService.start();
 
   let server: Server;
   try {
@@ -149,6 +212,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       s.once('error', reject);
     });
   } catch (error) {
+    await controlService.close();
     db.close();
     throw error;
   }
@@ -159,11 +223,14 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   return {
     port,
+    managed: controlService.enabled,
     async close() {
       // Stop accepting requests first so no hook can request a poll while the scheduler drains.
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await scheduler.stop();
+      // Agents are aborted without recording anything: the next start marks them NEEDS_REVIEW.
+      await controlService.close();
       db.close();
     },
   };

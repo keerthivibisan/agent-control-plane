@@ -9,6 +9,7 @@ import {
   type IngestionBatch,
   type IsoTimestamp,
   type NormalizedEvent,
+  type RegisteredRoot,
   type SessionKey,
   type ToolCallSighting,
 } from '@acp/core';
@@ -62,6 +63,8 @@ export interface PipelineDeps {
   now: () => Date;
   /** Called after the transaction commits, never before (SSE must not announce rolled-back data). */
   publish: (notice: StreamNoticeDto) => void;
+  /** Managed worktrees, each mapped to its run's project (Phase 3), for project assignment. */
+  extraRoots?: () => readonly RegisteredRoot[];
 }
 
 /** Spawn evidence kept on a subagent session so its edge can be (re)derived in any event order. */
@@ -144,7 +147,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     checkpoint: IngestionBatch['nextCheckpoint'] | null,
     result: IngestResult,
   ): void {
-    const roots = repos.projects.list();
+    // A managed worker's worktree counts as its run's project (deepest root wins).
+    const roots = [
+      ...repos.projects.list(),
+      ...(deps.extraRoots?.() ?? []).map((r) => ({ id: r.projectId, rootPath: r.rootPath })),
+    ];
     const touchedSessions = new Set<string>();
     const touchedProjects = new Set<string>();
     const observedSessions = new Set<string>();

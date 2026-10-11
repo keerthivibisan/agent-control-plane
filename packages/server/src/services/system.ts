@@ -49,6 +49,8 @@ export interface SystemServiceDeps {
   claudeDir: string;
   /** The server's own ingestion counters (pipeline and scheduler), read on every request. */
   ingestionStats: () => IngestionStats;
+  /** True for managed worktree paths (Phase 3), which discovery must not offer as projects. */
+  isManagedPath?: (cwd: string) => boolean;
 }
 
 export interface IngestionStats {
@@ -117,12 +119,17 @@ export function createSystemService(deps: SystemServiceDeps): SystemService {
 
   async function candidates(): Promise<CandidateRootDto[]> {
     const lists = await Promise.all(deps.adapters.map((a) => a.discoverCandidates(roots())));
-    return lists.flat().map((c) => ({
-      provider: c.provider,
-      cwd: c.cwd,
-      sessionCount: c.sessionCount,
-      lastSeenAt: c.lastSeenAt,
-    }));
+    // Managed worktrees belong to a run's project; they are never offered as a new project.
+    const hidden = deps.isManagedPath ?? (() => false);
+    return lists
+      .flat()
+      .filter((c) => !hidden(c.cwd))
+      .map((c) => ({
+        provider: c.provider,
+        cwd: c.cwd,
+        sessionCount: c.sessionCount,
+        lastSeenAt: c.lastSeenAt,
+      }));
   }
 
   return {

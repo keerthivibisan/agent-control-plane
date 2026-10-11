@@ -19,6 +19,8 @@ const EnvSchema = z.object({
   ACP_POLL_INTERVAL_MS: positiveInt('ACP_POLL_INTERVAL_MS').default(5_000),
   ACP_ACTIVE_WINDOW_MS: positiveInt('ACP_ACTIVE_WINDOW_MS').default(120_000),
   ACP_STALE_AFTER_MS: positiveInt('ACP_STALE_AFTER_MS').default(1_800_000),
+  ACP_MANAGED: z.enum(['on', 'off']).optional(),
+  ACP_RUN_TIMEOUT_MS: positiveInt('ACP_RUN_TIMEOUT_MS').default(7_200_000),
 });
 
 export interface ServerConfig {
@@ -33,6 +35,13 @@ export interface ServerConfig {
   readonly hookTokenPath: string;
   readonly pollIntervalMs: number;
   readonly statusThresholds: { readonly activeWindowMs: number; readonly staleAfterMs: number };
+  /**
+   * Managed agents (Phase 3): `on`, `off`, or `auto` (unset): on in live mode, off in demo unless a
+   * managed adapter is injected (tests and e2e). The real Agent SDK never runs in demo mode.
+   */
+  readonly managed: 'on' | 'off' | 'auto';
+  /** A working run is stopped (agents TIMED_OUT) after this long (ADR-0013 §3). */
+  readonly runTimeoutMs: number;
 }
 
 export class ConfigError extends Error {
@@ -74,5 +83,7 @@ export function loadConfig(
       activeWindowMs: e.ACP_ACTIVE_WINDOW_MS,
       staleAfterMs: e.ACP_STALE_AFTER_MS,
     },
+    managed: e.ACP_MANAGED ?? 'auto',
+    runTimeoutMs: e.ACP_RUN_TIMEOUT_MS,
   };
 }

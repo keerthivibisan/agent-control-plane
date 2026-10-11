@@ -34,6 +34,8 @@ export interface ServicesDeps {
   normalizeRoot: (rootPath: string) => Promise<string>;
   publish: (notice: StreamNoticeDto) => void;
   requestPoll: () => void;
+  /** Managed worktree paths (Phase 3); hidden from project discovery. */
+  isManagedPath?: (cwd: string) => boolean;
 }
 
 export function createServices(deps: ServicesDeps): Services {
@@ -67,6 +69,7 @@ export function createServices(deps: ServicesDeps): Services {
       hookState: deps.hookState,
       claudeDir: deps.claudeDir,
       ingestionStats: deps.ingestionStats,
+      ...(deps.isManagedPath !== undefined && { isManagedPath: deps.isManagedPath }),
     }),
   };
 }

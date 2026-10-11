@@ -34,6 +34,8 @@ export interface SchedulerDeps {
   logger: Logger;
   now: () => Date;
   intervalMs: number;
+  /** Roots that are not projects but belong to one: managed worktrees (Phase 3). */
+  extraRoots?: () => readonly RegisteredRoot[];
   /** Injected for tests. */
   timers?: {
     set(fn: () => void, ms: number): unknown;
@@ -65,7 +67,8 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       try {
         const roots: RegisteredRoot[] = deps.repos.projects
           .list()
-          .map((p) => ({ projectId: p.id, rootPath: p.rootPath }));
+          .map((p) => ({ projectId: p.id, rootPath: p.rootPath }))
+          .concat(deps.extraRoots?.() ?? []);
         for await (const batch of adapter.poll(roots, deps.repos.checkpoints)) {
           const result = deps.pipeline.ingestBatch(batch);
           stats.batchesIngested++;
