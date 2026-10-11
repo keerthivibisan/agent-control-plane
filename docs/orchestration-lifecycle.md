@@ -1,8 +1,26 @@
-# Orchestration lifecycle (Phase 3 design — NOT IMPLEMENTED)
+# Orchestration lifecycle (Phase 3 — in progress, milestone M1)
 
-> Nothing in this document exists in code. It records the intended design so that Phase 1 avoids
-> decisions that block it. Phase 3 starts with an ADR that confirms or revises it. **Do not implement
-> any of this during Phase 1.**
+> Phase 3 started on 2026-10-11 (owner decision). ADR-0012 (Agent SDK), ADR-0013 (guardrails),
+> ADR-0014 (budget) and ADR-0015 (chat storage) confirm and narrow this design. **§0 is what M1
+> builds**; §2–§5 remain the target for later milestones. Mark sections [implemented] only when they
+> work.
+
+## 0. Milestone M1 (what is being built)
+
+- **Shape.** One run per conversation in the control panel: a **lead** agent (chats with the owner,
+  read-only in the project root, has the lead tools) and up to 3 **worker** agents (one task each, own
+  worktree, no lead tools). There is no separate PLANNING/POLICY_CHECK step: every `start_agent`
+  call is a plan step that the engine checks against policy before anything starts.
+- **Run states (M1):** `QUEUED → RUNNING ⇄ BLOCKED → REVIEW → COMPLETED`, plus `FAILED`,
+  `CANCELLING → CANCELLED` and `NEEDS_REVIEW` (after a restart). `REVIEW` = every worker stopped and
+  the owner is reviewing; `COMPLETED` = the owner merged or discarded every worker's changes.
+- **Agent states:** `QUEUED → STARTING → RUNNING ⇄ WAITING_APPROVAL`, `RUNNING → BLOCKED` (budget),
+  and terminal `SUCCEEDED | FAILED | CANCELLED | TIMED_OUT | NEEDS_REVIEW`.
+- **Integration (M1):** per-worker review in the panel (diff + changed files); Merge into a clean base
+  branch or Discard, always by the owner (ADR-0013). No automatic merging, no validation runner yet
+  (P3-G).
+- **Budget:** ADR-0014 budget tokens per agent; reaching the soft cap → `BLOCKED` + an approval of
+  kind `budget-raise`.
 
 ## 1. Principles
 

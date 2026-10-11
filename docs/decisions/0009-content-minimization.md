@@ -28,3 +28,6 @@ need content.
 - Debugging parser issues relies on `source.path` and `byteOffset` pointing back to the original line.
 - Result summaries in the Session Explorer are limited to tool names and counts until on-demand
   reading exists.
+
+**Amended by ADR-0015 (2026-10-11):** the control-panel chat between the owner and the lead agent
+(and worker task texts) is stored locally. Nothing else changes.

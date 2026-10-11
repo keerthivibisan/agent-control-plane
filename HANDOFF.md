@@ -13,30 +13,30 @@
 - **Where it stands.**
   - Phase 1 (observability) is functionally complete and verified, including on real data.
   - A UI redesign for non-technical users is in progress (§5).
-  - Phase 3 (the "master control panel" that starts and manages Claude agents from the UI) is planned
-    in §7. It is not started.
+  - Phase 3 (the "master control panel" that starts and manages Claude agents from the UI) is in
+    progress (§7): decisions made, ADRs written, contracts on `main`.
 - **Repo.** `/Users/grootan/Desktop/agent-control-plane` (pnpm monorepo). Branch `main` is always green.
   Nothing has been pushed to any remote yet.
 
 ## 1. State of work
 
-| Work package                                                | State                                                                | Where                                         |
-| ----------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------- |
-| P0 bootstrap (tooling, CI config, specs, ADRs, contracts)   | done                                                                 | `main`                                        |
-| P1-A core logic (usage dedup/selection/attribution, status) | done                                                                 | `main`                                        |
-| P1-B SQLite persistence                                     | done                                                                 | `main`                                        |
-| P1-C demo adapter + Claude Code adapter + fixtures          | done; hooks verified on Claude Code 2.1.296; Notification unobserved | `main`                                        |
-| P1-D server (pipeline, scheduler, REST, SSE, hooks, live)   | done                                                                 | `main`                                        |
-| P1-E web UI (original screens)                              | done; being replaced by the redesign (§5)                            | `main`                                        |
-| P1-F verification                                           | done except CI (nothing pushed)                                      | `main`; evidence in `docs/research/p1-f-*.md` |
-| Follow-ups (ADR-0011 diagnostics, cost list, log redaction) | done                                                                 | `main`                                        |
-| UI redesign phase 1: foundation                             | done                                                                 | `main` (`6ce2de0`)                            |
-| UI redesign phase 2: Tokens / Projects / Project            | done                                                                 | `main` (`02d7e20`)                            |
-| UI redesign phase 2: Overview / Setup / Data health         | done                                                                 | `main` (`015b181`)                            |
-| UI redesign phase 2: Sessions / Session detail / tree view  | done                                                                 | `main` (`8d785dd`)                            |
-| UI redesign phase 3: cleanup                                | todo (§5.4)                                                          | prompt §8.4                                   |
-| Phase 2 (usage reliability, pricing) — roadmap              | not started                                                          | `docs/roadmap.md`                             |
-| Phase 3 (master control panel / orchestration)              | planned (§7); needs owner decisions and ADRs first                   | prompt §8.5                                   |
+| Work package                                                | State                                                                    | Where                                                 |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------- |
+| P0 bootstrap (tooling, CI config, specs, ADRs, contracts)   | done                                                                     | `main`                                                |
+| P1-A core logic (usage dedup/selection/attribution, status) | done                                                                     | `main`                                                |
+| P1-B SQLite persistence                                     | done                                                                     | `main`                                                |
+| P1-C demo adapter + Claude Code adapter + fixtures          | done; hooks verified on Claude Code 2.1.296; Notification unobserved     | `main`                                                |
+| P1-D server (pipeline, scheduler, REST, SSE, hooks, live)   | done                                                                     | `main`                                                |
+| P1-E web UI (original screens)                              | done; being replaced by the redesign (§5)                                | `main`                                                |
+| P1-F verification                                           | done except CI (nothing pushed)                                          | `main`; evidence in `docs/research/p1-f-*.md`         |
+| Follow-ups (ADR-0011 diagnostics, cost list, log redaction) | done                                                                     | `main`                                                |
+| UI redesign phase 1: foundation                             | done                                                                     | `main` (`6ce2de0`)                                    |
+| UI redesign phase 2: Tokens / Projects / Project            | done                                                                     | `main` (`02d7e20`)                                    |
+| UI redesign phase 2: Overview / Setup / Data health         | done                                                                     | `main` (`015b181`)                                    |
+| UI redesign phase 2: Sessions / Session detail / tree view  | done                                                                     | `main` (`8d785dd`)                                    |
+| UI redesign phase 3: cleanup                                | todo (§5.4)                                                              | prompt §8.4                                           |
+| Phase 2 (usage reliability, pricing) — roadmap              | not started                                                              | `docs/roadmap.md`                                     |
+| Phase 3 (master control panel / orchestration)              | **in progress**: P3-0 done; next P3-A, B, C, W, E in parallel (§7, §8.5) | `main`; plan section in `docs/implementation-plan.md` |
 
 The last full `pnpm check` on `main` passed with 826 tests (core 215, adapter-demo 12,
 adapter-claude-code 199, db 83, web 189, server 128). The Playwright e2e passes 7/7.
@@ -270,77 +270,40 @@ events are append-only. To see corrected diagnostics, re-ingest into a fresh dat
 5. **Docs:** update the Status table in `docs/implementation-plan.md`, this file, and the README
    status in the same change as the behavior they describe.
 
-## 7. Phase 3 plan: the master control panel (DRAFT — needs owner decisions and ADRs)
+## 7. Phase 3: the master control panel (in progress, milestone M1)
 
-### 7.1 Goal (owner's words, summarized)
+**Goal (owner).** Manage several Claude agents from one UI: chat with a lead agent ("spin up two
+agents: one builds X, one tests it") while the family tree beside it grows live with each agent's
+status, activity, tokens and estimated cost; approve, message, stop and review agents there.
 
-A UI from which you manage multiple Claude sessions. A main orchestrator chat window lets you say
-"spin up two agents: one builds X, one tests it". The family-tree graph sits beside it and grows
-live, showing what each agent is working on, its status, tokens and estimated cost. You can open,
-message, pause or stop any agent from the panel.
+**Owner decisions (2026-10-11), recorded as ADRs:**
 
-### 7.2 Design (builds on `docs/orchestration-lifecycle.md`, which must be revised by ADR)
+| Decision                                                                                                                                   | ADR      |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| Claude Agent SDK as the engine (pinned 0.3.296, only in `@acp/adapter-claude-code`)                                                        | ADR-0012 |
+| Agents ask in the panel before edits/commands; only `git` + SDK `claude` run; worktrees; max 3 workers, depth 1; review before merge; CSRF | ADR-0013 |
+| Budget = output + uncached input + cache write per agent (cache reads tracked, not counted); soft cap                                      | ADR-0014 |
+| The owner↔lead chat and worker task texts are stored locally (amends ADR-0009)                                                             | ADR-0015 |
+| Agent changes always reviewed by the owner before merging                                                                                  | ADR-0013 |
 
-- **Orchestrator.**
-  - The server runs a lead Claude session headless.
-  - The app exposes a small, fixed tool set to it, for example as a local MCP server:
-    `start_agent(task, project, role)`, `list_agents()`, `message_agent(id, text)`,
-    `stop_agent(id)`, `get_agent_status(id)`.
-  - The model plans; **the engine enforces** everything, per orchestration-lifecycle §1.
-- **Managed agents.**
-  - Each agent is a headless Claude Code run, using either the Claude Agent SDK or `claude -p` with
-    `--input-format stream-json --output-format stream-json` (decision Q2).
-  - Each runs in its own `git worktree` of a registered project.
-  - The engine collects a patch and changed-file manifest per agent and integrates deliberately
-    (orchestration-lifecycle §5).
-- **Live view.**
-  - The existing observation pipeline already shows these sessions, the family tree and activity.
-  - Managed runs add stronger, "managed"-origin evidence: the engine knows each child's parent
-    because it launched it.
-  - Streaming output from the headless processes is shown as activity, still without storing
-    conversation content beyond what the owner approves (ADR-0009 must be revisited for the chat
-    window itself).
-- **Run model.**
-  - Tasks, runs and the state machine in orchestration-lifecycle §2 (QUEUED → PLANNING →
-    POLICY_CHECK → RUNNING… → VALIDATING → COMPLETED/FAILED).
-  - New DB migrations (P1-B-style ownership): `tasks`, `runs`, `run_agents`, `approvals`,
-    `budgets`.
-- **Guardrails** (an ADR that replaces today's "no shell execution from any input" rule for Phase 3
-  only):
-  - Only the fixed `claude` binary is ever launched, with argument arrays; text is never built into
-    a shell command.
-  - Agents run only inside registered projects, each in its own worktree.
-  - At most 3 concurrent children, depth 1 (roadmap).
-  - Per-run budget (Q1), a kill switch (stop all), timeouts, and cancellation via AbortController
-    or process kill.
-  - Approval prompts are surfaced in the panel.
-  - Never `--dangerously-skip-permissions` by default.
-  - Local only (127.0.0.1); the chat and approvals UI is protected by the existing local-only guard
-    plus a per-session CSRF token.
+**Where the detail lives.**
 
-### 7.3 Decisions needed from the owner before building
+- The plan: `docs/implementation-plan.md`, "Phase 3" section (WPs, owned paths, tasks, acceptance)
+  and Status rows P3-0 … P3-F.
+- The design: `docs/orchestration-lifecycle.md` §0 (M1 states and integration).
+- Contracts on `main`: `packages/core/src/orchestration/**` (domain, `budgetTokens`, limits,
+  `LeadToolInputs`), `packages/core/src/adapters/managed.ts` (`ManagedExecutionAdapter`),
+  `packages/core/src/api/orchestration.ts` (DTOs, requests, `CSRF_HEADER`), new stream notice kinds.
+- Scaffold: `packages/orchestrator` (empty engine package, boundaries in `eslint.config.js`).
 
-1. **Q2, engine:** Claude Agent SDK (cleaner: typed messages, AbortController; a new pinned
-   dependency) or `claude -p` stream-json (no new dependency).
-2. **Agent permissions:** ask before edits and commands, with prompts shown in the panel (safer), or
-   pre-approved tool lists per task.
-3. **Q1, budget metric:** recommended is a per-agent cap on output plus uncached input tokens, with
-   cache reads tracked separately, plus a soft estimated-cost cap when a cost is reported.
-4. **Chat content:** may the orchestrator chat transcript be stored locally? ADR-0009 currently
-   forbids conversation content.
-5. **Integration:** auto-merge child worktrees when validation passes, or always require review.
+**State.**
 
-### 7.4 Proposed work packages (after the decisions; run in parallel where marked)
-
-| WP   | Scope                                                                                                     | Parallel with          |
-| ---- | --------------------------------------------------------------------------------------------------------- | ---------------------- |
-| P3-0 | ADRs (engine, guardrails/exec policy, budget, chat content), revise orchestration-lifecycle.md; contracts | first, alone           |
-| P3-A | `packages/orchestrator` engine: run state machine, policy checks, budgets, persistence (pure + tests)     | P3-B, P3-C             |
-| P3-B | `packages/adapters/claude-code` managed mode: launch/stream/abort a headless run in a worktree            | P3-A, P3-C             |
-| P3-C | db migrations + repositories for tasks/runs/agents/approvals                                              | P3-A, P3-B             |
-| P3-D | server: run routes, orchestrator tool endpoint (MCP), SSE run events, worktree manager                    | after A–C              |
-| P3-E | web: Orchestrator chat + live family tree side by side, agent drawer (status, activity, stop/message)     | after D's API contract |
-| P3-F | verification: fake-claude test double, e2e of "spin up two agents", cancellation, restart (NEEDS_REVIEW)  | last                   |
+- P3-0 is done.
+- Next, in parallel: P3-A (engine), P3-B (managed adapter), P3-C (persistence), P3-W (worktrees),
+  P3-E (UI).
+- Then P3-D (server).
+- Then P3-F (verification and a real smoke run with owner consent).
+- Prompts are in §8.5.
 
 ## 8. Ready-to-paste prompts
 
@@ -450,18 +413,39 @@ Prepend §8.0 to each prompt.
 > - Update `packages/web/README.md` and the root README.
 > - Verify: `pnpm check`, the e2e, and a screenshot pass of every route (light, dark, 1440, 1024).
 
-### 8.5 Phase 3 planning (coordinator; needs the owner)
+### 8.5 Phase 3 work packages (one agent each; prepend §8.0)
 
-> Act as coordinator. Enter plan mode. Read HANDOFF §7, `docs/orchestration-lifecycle.md`,
-> `docs/roadmap.md` (Q1, Q2), ADR-0004, ADR-0005, ADR-0009 and `docs/security.md`.
+All Phase 3 prompts share this text. Replace `<WP>`, `<branch>` and `<extra>`:
+
+> Implement **<WP>** from the "Phase 3" section of `docs/implementation-plan.md` on branch
+> `<branch>`, created from `main`.
 >
-> - Ask the owner the §7.3 decisions, one question each with a recommendation.
-> - Then write: the ADRs for the engine, the execution and guardrail policy, the budget metric and
->   chat content (P3-0); revised `docs/orchestration-lifecycle.md`; a Phase 3 section in
->   `docs/implementation-plan.md` with the WPs from §7.4, owned paths and acceptance criteria; and
->   ready-to-paste prompts for P3-A to P3-F.
-> - Present the plan for approval before any code.
-> - Do not start Phase 3 code until the owner approves.
+> - **Read first:** that section's row for <WP> (owned paths, tasks, acceptance),
+>   `docs/orchestration-lifecycle.md` §0, ADR-0012..0015, and the contracts in
+>   `packages/core/src/orchestration/**`, `packages/core/src/adapters/managed.ts` and
+>   `packages/core/src/api/orchestration.ts`.
+> - **Don't change contracts or shared files.** If you need a change, propose the diff in your
+>   report and stop that part.
+> - **Guardrails (ADR-0013) are tested, not assumed:**
+>   - never use a shell;
+>   - never call the real Claude Agent SDK in tests (inject a fake `query`);
+>   - never store worker conversation content.
+> - **Mark the Status row:** set your row to in-progress with your branch, and to done when finished.
+>
+> <extra>
+
+| WP   | Branch                | `<extra>`                                                                                                                                                                                                 |
+| ---- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3-A | `wp/p3-a-engine`      | Pure code only; no I/O. Remove `--passWithNoTests` from `packages/orchestrator/package.json` once tests exist (scripts field only).                                                                       |
+| P3-B | `wp/p3-b-managed`     | The SDK API is verified in `packages/adapters/claude-code/node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts` (`query`, `canUseTool`, `createSdkMcpServer`, `tool`, `interrupt`). Read it; don't guess. |
+| P3-C | `wp/p3-c-persistence` | New migration file only; never edit `0001`. Export the new repositories from `packages/db/src/index.ts`.                                                                                                  |
+| P3-W | `wp/p3-w-workspaces`  | Test against temp git repos created in the test (`git init`); never touch this repository's own git state.                                                                                                |
+| P3-E | `wp/p3-e-control-ui`  | Follow `packages/web/DESIGN.md`; build against the DTOs with fixture data (the server routes come in P3-D); screenshots from a demo server on port 7495.                                                  |
+| P3-D | `wp/p3-d-server`      | Start only after A, B, C and W are merged. Use a fake managed adapter in tests. Keep `ACP_MODE=demo` working.                                                                                             |
+| P3-F | `wp/p3-f-verify`      | After D and E. The real smoke run needs the owner's consent in chat, in a throwaway git repo; print aggregates only.                                                                                      |
+
+**Coordinator after each WP:** review (scope, rebase, your own `pnpm check` + e2e, guardrail code,
+screenshots for UI), merge `--ff-only`, update this file and the Status table.
 
 ## 9. Backlog (smaller items, any time)
 

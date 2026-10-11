@@ -129,7 +129,14 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
   just after the last fully consumed newline), `headHash` (sha256 of the first ≤ 4 KiB), `updatedAt`.
 - **Rule:** updated in the same transaction as the events read from that chunk.
 
-### Task, OrchestrationRun, AgentRun, AgentRunSession, Artifact, ValidationRun, Approval [Phase 3 — spec only]
+### Task, OrchestrationRun, AgentRun, AgentRunSession, Artifact, ValidationRun, Approval [Phase 3 — M1 in progress]
+
+> M1 (orchestration-lifecycle §0) implements OrchestrationRun, AgentRun (with `kind` lead/worker,
+> `role`, `task`, budget tokens used), AgentRunSession, Approval, Artifact (patch and manifest), plus
+> two entities not in the original table: **ManagedWorkspace** (`agentRunId`, `projectId`,
+> `worktreePath`, `branch`, `baseBranch`, `state`) and **OrchestratorMessage** (`runId`, `role`
+> owner|lead, `text`, `createdAt`; ADR-0015). Task and ValidationRun wait for P3-G. Zod shapes:
+> `packages/core/src/orchestration/orchestration.ts`.
 
 | Entity           | Purpose                                         | Key fields                                                                                                                                               | Lifecycle                                                                               |
 | ---------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |

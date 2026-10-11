@@ -81,12 +81,21 @@
   sessions, events, and usage for that project.
 - The database never stores credentials.
 
-## 4. Phase 3 additions (not implemented)
+## 4. Phase 3 additions (in progress, ADR-0013)
 
-- Approval gates for destructive actions and external side effects.
-- Workspace isolation through git worktrees.
-- Command policy with timeouts.
-- Bounded retries.
-- Child cancellation.
+- **Processes:** only `git` (execFile, argument arrays) and the SDK-spawned `claude` run; no text
+  reaches a shell.
+- **Isolation:** one git worktree per worker under `<ACP_DATA_DIR>/worktrees/`; the lead is
+  read-only in the project root; the owner's working tree is never written by an agent.
+- **Approval gates:** every non-read-only tool use (edits, writes, commands, web) needs the owner's
+  approval in the panel; unanswered approvals are denied after 15 minutes.
+- **Limits:** at most 3 workers, depth 1, per-agent soft budget (ADR-0014), run timeout, Stop and
+  Stop all.
+- **Review before merge:** nothing reaches the project without the owner's Merge click, and only
+  into a clean base branch.
+- **Requests:** local-only guard plus a CSRF token (`X-ACP-CSRF`) on mutating control-panel routes.
+- **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
+  (ADR-0015); never worker conversation content. Logs never include chat text.
+- Later (P3-G): validation command allowlist with timeouts; bounded retries.
 
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).

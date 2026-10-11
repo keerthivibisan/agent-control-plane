@@ -132,9 +132,11 @@ See [security.md](security.md).
 
 ## 8. Future modules (not built in Phase 1)
 
-- **Orchestration engine (Phase 3):** a new package `@acp/orchestrator` and a managed-execution adapter
-  mode ([orchestration-lifecycle.md](orchestration-lifecycle.md)).
-- **Workspace manager and validation runner (Phase 3):** git worktree isolation, command policy.
+- **Orchestration engine (Phase 3, in progress):** `@acp/orchestrator` (pure engine; scaffolded) and
+  the managed-execution mode of `@acp/adapter-claude-code` over the Claude Agent SDK (ADR-0012), per
+  [orchestration-lifecycle.md](orchestration-lifecycle.md) §0.
+- **Workspace manager (Phase 3, in progress):** `packages/server/src/workspace/` (git worktrees,
+  diff, merge on owner approval; ADR-0013). Validation runner: later (P3-G).
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by
