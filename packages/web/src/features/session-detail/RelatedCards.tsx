@@ -1,22 +1,14 @@
-import type { SessionDetailDto, SessionSummaryDto, SessionTreeDto } from '@acp/core/api';
+import type { SessionDetailDto, SessionTreeDto } from '@acp/core/api';
 import type { ReactNode } from 'react';
 import { Card } from '../../components/Card';
-import { EmptyState } from '../../components/EmptyState';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { InfoTip } from '../../components/InfoTip';
-import { RelativeTime } from '../../components/RelativeTime';
 import { ShortId } from '../../components/ShortId';
-import { StatusBadge } from '../../components/StatusBadge';
 import type { QueryState } from '../../lib/query-store';
-import {
-  EMPTY,
-  GLOSSARY,
-  helperAgentsText,
-  SESSION_DETAIL_COPY,
-  SESSIONS_COPY,
-} from '../../lib/copy';
+import { EMPTY, GLOSSARY, SESSION_DETAIL_COPY, SESSIONS_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
-import { sessionName, TokenSummary } from '../sessions/session-bits';
+import { FamilyTree } from '../sessions/FamilyTree';
+import { sessionName } from '../sessions/session-bits';
 
 const COPY = SESSION_DETAIL_COPY.related;
 
@@ -102,68 +94,31 @@ export function RelatedSessionsCard({
   );
 }
 
-/** The helper agents this session started, from the tree's verified `subagent` edges. */
-export function HelperAgentsCard({
-  s,
-  tree,
-}: {
-  s: SessionDetailDto;
-  tree: QueryState<SessionTreeDto>;
-}) {
-  const copy = SESSION_DETAIL_COPY.helpers;
-  const t = tree.data;
-  const children: SessionSummaryDto[] = [];
-  if (t) {
-    const byId = new Map(t.nodes.map((n) => [n.session.id, n.session]));
-    const seen = new Set<string>();
-    for (const e of t.edges) {
-      if (e.kind !== 'subagent' || e.parentId !== s.id || seen.has(e.childId)) continue;
-      seen.add(e.childId);
-      const child = byId.get(e.childId);
-      if (child) children.push(child);
-    }
-    children.sort((a, b) => (a.firstSeenAt < b.firstSeenAt ? -1 : 1));
-  }
+/**
+ * "Session family": this session's whole family as a tree (top-level session first, helper agents
+ * nested, continuations dashed), with this session outlined. Built from the tree's evidence edges.
+ */
+export function FamilyCard({ s, tree }: { s: SessionDetailDto; tree: QueryState<SessionTreeDto> }) {
+  const copy = SESSIONS_COPY.family;
   return (
     <Card
       title={copy.title}
       tip={GLOSSARY.helperAgent.tip}
-      description={
-        s.childCount > 0
-          ? (helperAgentsText(s.childCount) ?? SESSIONS_COPY.table.noHelpers)
-          : copy.description
-      }
+      description={copy.description}
       testId="helper-agents"
     >
+      {/* With helpers, the tree card says how many; without, one sentence says so. */}
       {s.childCount === 0 ? (
-        <EmptyState compact title={EMPTY.helpers.title} text={EMPTY.helpers.text} />
-      ) : t === undefined ? (
-        tree.error ? (
-          <ErrorNotice error={tree.error} />
-        ) : (
-          <p className="text-dim">{SESSION_DETAIL_COPY.activity.loading}</p>
-        )
+        <p className="mb-3 text-dim" data-testid="helper-count">
+          {EMPTY.helpers.text}
+        </p>
+      ) : null}
+      {tree.data !== undefined ? (
+        <FamilyTree tree={tree.data} currentId={s.id} />
+      ) : tree.error ? (
+        <ErrorNotice error={tree.error} />
       ) : (
-        <ul className="flex flex-col divide-y divide-line">
-          {children.map((c) => (
-            <li
-              key={c.id}
-              data-session-id={c.id}
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0"
-            >
-              <a href={href.session(c.id)} className="min-w-0 flex-1 truncate font-medium">
-                {sessionName(c)}
-              </a>
-              <StatusBadge status={c.status} withTip={false} />
-              <span className="text-caption">
-                <TokenSummary usage={c.directUsage} withCache={false} />
-              </span>
-              <span className="text-caption text-dim">
-                <RelativeTime iso={c.lastEventAt} fallback={SESSIONS_COPY.table.noActivity} />
-              </span>
-            </li>
-          ))}
-        </ul>
+        <p className="text-dim">{SESSION_DETAIL_COPY.activity.loading}</p>
       )}
     </Card>
   );

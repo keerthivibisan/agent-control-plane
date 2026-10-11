@@ -8,18 +8,20 @@ import { ConcurrencyTimeline } from './ConcurrencyTimeline';
 import { explorerHref, type ExplorerParams, type RelateView } from './explorer-params';
 import { fieldClass } from './Filters';
 import { isHelperAgent, sessionName } from './session-bits';
-import { SessionGraph } from './SessionGraph';
+import { SessionFamily } from './FamilyTree';
+import { FamilyLegend, SessionGraph } from './SessionGraph';
 
 const COPY = SESSIONS_COPY.relate;
 
 function Tabs({ params, view }: { params: ExplorerParams; view: RelateView }) {
-  const tab = (v: RelateView, label: string) => (
+  const relationships = view !== 'timeline';
+  const tab = (v: RelateView, selected: boolean, label: string) => (
     <a
       href={explorerHref({ ...params, view: v })}
       role="tab"
-      aria-selected={view === v}
+      aria-selected={selected}
       className={`rounded-control px-3 py-1.5 font-medium no-underline transition-colors ${
-        view === v ? 'bg-panel text-ink shadow-card' : 'text-dim hover:text-ink'
+        selected ? 'bg-panel text-ink shadow-card' : 'text-dim hover:text-ink'
       }`}
     >
       {label}
@@ -31,8 +33,30 @@ function Tabs({ params, view }: { params: ExplorerParams; view: RelateView }) {
       aria-label={COPY.title}
       className="flex gap-1 rounded-control bg-sunken p-1"
     >
-      {tab('relationships', COPY.tabs.relationships)}
-      {tab('timeline', COPY.tabs.timeline)}
+      {tab('relationships', relationships, COPY.tabs.relationships)}
+      {tab('timeline', !relationships, COPY.tabs.timeline)}
+    </div>
+  );
+}
+
+/** Tree (default, easiest to read) or the same family as a zoomable diagram. */
+function ShowAs({ params, view }: { params: ExplorerParams; view: RelateView }) {
+  const option = (v: RelateView, label: string) => (
+    <a
+      href={explorerHref({ ...params, view: v })}
+      aria-current={view === v ? 'true' : undefined}
+      className={`rounded-control px-2.5 py-1 no-underline ${
+        view === v ? 'bg-accent-soft font-medium text-accent' : 'text-dim hover:text-ink'
+      }`}
+    >
+      {label}
+    </a>
+  );
+  return (
+    <div className="flex items-center gap-1" role="group" aria-label={SESSIONS_COPY.family.showAs}>
+      <span className="mr-1 text-dim">{SESSIONS_COPY.family.showAs}</span>
+      {option('relationships', SESSIONS_COPY.family.tree)}
+      {option('graph', SESSIONS_COPY.family.diagram)}
     </div>
   );
 }
@@ -106,10 +130,25 @@ export function HowSessionsRelate({
         ) : root === null ? (
           <EmptyState compact title={COPY.tabs.relationships} text={COPY.pickHint} />
         ) : (
-          <div className="flex flex-col gap-4">
-            <RootPicker params={params} sessions={sessions} root={root} />
-            {/* Remount per root so collapsed nodes never carry over to another family. */}
-            <SessionGraph key={root} sessionId={root} />
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <RootPicker params={params} sessions={sessions} root={root} />
+              <ShowAs params={params} view={view} />
+            </div>
+            {view === 'graph' ? (
+              // Remount per root so collapsed nodes never carry over to another family.
+              <SessionGraph key={root} sessionId={root} />
+            ) : (
+              <>
+                <FamilyLegend />
+                <SessionFamily
+                  sessionId={root}
+                  currentLabel={SESSIONS_COPY.family.selected}
+                  outlineRoot={false}
+                />
+                <p className="text-caption text-dim">{COPY.evidenceNote}</p>
+              </>
+            )}
           </div>
         )}
       </div>

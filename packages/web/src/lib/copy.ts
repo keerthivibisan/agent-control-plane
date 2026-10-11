@@ -862,6 +862,17 @@ export const SESSIONS_COPY = {
     legendLabel: 'Legend',
     loading: 'Loading relationships…',
   },
+  family: {
+    label: 'Session family',
+    title: 'Session family',
+    description:
+      'Which session started which. Helper agents sit under the session that started them; a dashed line shows where a session was continued.',
+    thisSession: 'This session',
+    selected: 'Selected',
+    showAs: 'Show as',
+    tree: 'Tree',
+    diagram: 'Diagram',
+  },
   timeline: {
     description:
       'Each bar runs from when a session was first seen to its last activity. Bars that overlap ran at the same time.',
@@ -917,10 +928,6 @@ export const SESSION_DETAIL_COPY = {
     continuedFrom: 'Continued from',
     continuedAs: 'Continued as',
     notContinued: "Not continued in another session that we've seen.",
-  },
-  helpers: {
-    title: 'Helper agents',
-    description: 'Sub-agents this session started to work on parts of the task.',
   },
   activity: {
     title: 'Activity',

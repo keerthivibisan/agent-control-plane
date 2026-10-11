@@ -21,7 +21,8 @@ function LineSample({ kind }: { kind: keyof typeof EDGE_STYLE }) {
   );
 }
 
-function Legend() {
+/** The legend shared by the tree and the diagram: same words, same line styles. */
+export function FamilyLegend() {
   return (
     <ul
       className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-dim"
@@ -70,7 +71,7 @@ export function SessionGraph({ sessionId }: { sessionId: string }) {
       {(t) => (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-            <Legend />
+            <FamilyLegend />
             <p className="text-caption text-dim">
               {COPY.size(t.nodes.length)}
               {t.rootId !== sessionId ? ` · ${COPY.fromRoot}` : ''}

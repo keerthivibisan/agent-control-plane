@@ -129,6 +129,14 @@ describe('Sessions page', () => {
     expect((picker as HTMLSelectElement).value).toBe('s-1');
     expect(await within(card).findByText('Started a helper agent')).toBeTruthy();
     expect(within(card).getByText('Continued as')).toBeTruthy();
+    // The default is the family tree, from the tree's edges: the helper sits under its parent.
+    const top = await within(card).findByTestId('family-member-s-1');
+    expect(within(top).getByTestId('family-no-known-parent')).toBeTruthy();
+    const nested = within(card).getByRole('list', { name: 'Helper agents: Fix login' });
+    expect(within(nested).getByTestId('family-member-s-2')).toBeTruthy();
+    expect(within(card).getByRole('link', { name: 'Diagram' }).getAttribute('href')).toBe(
+      '#/sessions?view=graph',
+    );
     fireEvent.change(picker, { target: { value: 's-9' } });
     await waitFor(() =>
       expect(window.location.hash).toBe('#/sessions?root=s-9&view=relationships'),

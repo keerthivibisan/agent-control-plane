@@ -2,7 +2,8 @@ import { ProviderIdSchema, SessionStatusSchema } from '@acp/core';
 import type { SessionFilters } from '../../lib/api';
 import { href } from '../../lib/router';
 
-export type RelateView = 'relationships' | 'timeline';
+/** `relationships` is the family tree; `graph` the same family as a diagram. */
+export type RelateView = 'relationships' | 'graph' | 'timeline';
 
 /** Sessions-page state lives in the hash (`#/sessions?status=stale&root=…`) so views can be linked. */
 export interface ExplorerParams {
@@ -19,10 +20,7 @@ export interface ExplorerParams {
 const nonEmpty = (v: string | null) => (v && v.trim().length > 0 ? v.trim() : undefined);
 
 function readView(v: string | null): RelateView | undefined {
-  if (v === 'timeline') return 'timeline';
-  // `graph` is the old name of the relationships view; old links keep working.
-  if (v === 'relationships' || v === 'graph') return 'relationships';
-  return undefined;
+  return v === 'timeline' || v === 'graph' || v === 'relationships' ? v : undefined;
 }
 
 export function readExplorerParams(params: URLSearchParams): ExplorerParams {

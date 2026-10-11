@@ -24,23 +24,26 @@ export function sessionName(
 export function TokenSummary({
   usage,
   withCache = true,
+  compact = true,
 }: {
   usage: UsageTotalsDto;
   withCache?: boolean;
+  /** False for exact numbers ("1,240 input tokens"), where there is room for them. */
+  compact?: boolean;
 }) {
   const t = usage.tokens;
   return (
     <span className="inline-flex flex-col gap-0.5 text-left">
-      <span className="whitespace-nowrap">
-        <Part value={t.input} type="input" />
+      <span>
+        <Part value={t.input} type="input" compact={compact} />
         <span className="text-dim"> · </span>
-        <Part value={t.output} type="output" />
+        <Part value={t.output} type="output" compact={compact} />
       </span>
       {withCache ? (
-        <span className="text-caption whitespace-nowrap text-dim">
-          <Part value={t.cacheCreation} type="cacheCreation" />
+        <span className="text-caption text-dim">
+          <Part value={t.cacheCreation} type="cacheCreation" compact={compact} />
           {' · '}
-          <Part value={t.cacheRead} type="cacheRead" />
+          <Part value={t.cacheRead} type="cacheRead" compact={compact} />
         </span>
       ) : null}
     </span>
@@ -48,13 +51,25 @@ export function TokenSummary({
 }
 
 /** One token type with its unit; a missing one names its type: "Cache write tokens: Not reported". */
-function Part({ value, type }: { value: number | null; type: TokenCategory }) {
+function Part({
+  value,
+  type,
+  compact,
+}: {
+  value: number | null;
+  type: TokenCategory;
+  compact: boolean;
+}) {
   if (value === null) {
     return (
-      <span className="text-unavailable" data-state="unavailable">
+      <span className="whitespace-nowrap text-unavailable" data-state="unavailable">
         {tokenType(type).label}: {NOT_REPORTED}
       </span>
     );
   }
-  return <TokenValue value={value} type={type} compact />;
+  return (
+    <span className="whitespace-nowrap">
+      <TokenValue value={value} type={type} compact={compact} />
+    </span>
+  );
 }

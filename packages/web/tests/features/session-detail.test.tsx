@@ -61,7 +61,9 @@ describe('Session detail', () => {
     );
     expect(await screen.findByText(/didn't start any helper agents/)).toBeTruthy();
     expect(screen.queryByTestId('usage-aggregate')).toBeNull();
-    expect(screen.getByText('No helper agents')).toBeTruthy();
+    expect(screen.getByTestId('helper-count').textContent).toBe(
+      'This session did not start any helper agents.',
+    );
     expect(screen.getByText('No activity yet')).toBeTruthy();
   });
 
@@ -123,7 +125,7 @@ describe('Session detail', () => {
         '/api/sessions/s-1/events': page([]),
         '/api/sessions/s-1/tree': tree(
           's-1',
-          [session({ id: 's-1', title: 'Fix login' }), helper, fork],
+          [session({ id: 's-1', title: 'Fix login', childCount: 1 }), helper, fork],
           [edge('s-1', 'h-1'), edge('s-1', 's-fork-1', 'continuation')],
         ),
       }),
@@ -133,11 +135,19 @@ describe('Session detail', () => {
     expect(
       await within(continuations).findByRole('link', { name: 'Fix login, part 2' }),
     ).toBeTruthy();
-    const helpers = screen.getByTestId('helper-agents');
-    const link = await within(helpers).findByRole('link', { name: 'Helper agent: Explore' });
+    // The family tree: this session outlined, its helper nested, the fork as "Continued as".
+    const family = screen.getByTestId('helper-agents');
+    expect(within(family).getByText('1 helper agent')).toBeTruthy();
+    const link = await within(family).findByRole('link', { name: 'Helper agent: Explore' });
     expect(link.getAttribute('href')).toBe('#/sessions/h-1');
-    // The fork is a continuation, not a helper agent.
+    expect(within(family).getByTestId('family-member-s-1').getAttribute('data-current')).toBe(
+      'true',
+    );
+    const helpers = within(family).getByRole('list', { name: 'Helper agents: Fix login' });
     expect(within(helpers).queryByText('Fix login, part 2')).toBeNull();
+    expect(within(family).getByTestId('family-continued-as').textContent).toContain(
+      'Fix login, part 2',
+    );
     expect(screen.getByRole('link', { name: 'See how it relates' }).getAttribute('href')).toBe(
       '#/sessions?root=s-1&view=relationships',
     );

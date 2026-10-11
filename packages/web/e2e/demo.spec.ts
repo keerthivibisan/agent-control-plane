@@ -42,12 +42,12 @@ async function api<T>(request: APIRequestContext, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The text a full (non-compact) TokenCount renders for a category value. */
+/** A TokenBreakdown shows the API's value per token type, and "Not reported" (never 0) for null. */
 async function expectTotals(section: Locator, usage: Usage, timeout = 1_000) {
   for (const c of CATEGORIES) {
     const cell = section.locator(`dd[data-category="${c}"]`);
     const v = usage.tokens[c];
-    if (v === null) await expect(cell).toHaveText('unavailable', { timeout });
+    if (v === null) await expect(cell).toHaveText('Not reported', { timeout });
     else await expect(cell).toContainText(fmt(v), { timeout });
   }
 }
@@ -148,13 +148,13 @@ test('Overview shows the demo projects, status counts, tokens and estimated cost
   await expect(page.getByText(/total cost/i)).toHaveCount(0);
 });
 
-test('Session Explorer lists sessions and draws subagent and continuation edges', async ({
+test('Sessions page lists sessions, nests helpers and draws only the /tree edges', async ({
   page,
   request,
 }) => {
   const root = await findRoot(request);
   await open(page, '/sessions');
-  await expect(page.getByRole('heading', { name: 'Session Explorer' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sessions', level: 1 })).toBeVisible();
 
   await expect(async () => {
     const list = await api<{ items: Session[] }>(request, '/sessions?limit=50');
@@ -163,71 +163,93 @@ test('Session Explorer lists sessions and draws subagent and continuation edges'
     });
   }).toPass();
 
-  await page
-    .locator(`tr[data-session-id="${root.id}"]`)
-    .getByRole('button', { name: 'graph' })
-    .click();
   const tree = await api<{ nodes: unknown[]; edges: Edge[] }>(request, `/sessions/${root.id}/tree`);
-  const subagentEdges = tree.edges.filter((e) => e.kind === 'subagent').length;
-  const continuationEdges = tree.edges.filter((e) => e.kind === 'continuation').length;
-  expect(subagentEdges).toBeGreaterThan(0);
-  expect(continuationEdges).toBeGreaterThan(0);
+  const subagentEdges = tree.edges.filter((e) => e.kind === 'subagent');
+  const continuationEdges = tree.edges.filter((e) => e.kind === 'continuation');
+  expect(subagentEdges.length).toBeGreaterThan(0);
+  expect(continuationEdges.length).toBeGreaterThan(0);
 
+  const relate = page.getByRole('region', { name: 'How sessions relate' });
+  await relate.getByRole('combobox', { name: 'Show relationships for' }).selectOption(root.id);
+
+  // Default view: the family tree. Every session in /tree appears once; each subagent edge's child
+  // sits in its parent's "Helper agents" list; each continuation child is under "Continued as".
+  const family = relate.getByTestId('family-tree');
+  await expect(family.locator('[data-testid^="family-member-"]')).toHaveCount(tree.nodes.length);
+  for (const e of subagentEdges) {
+    const parentCard = family.getByTestId(`family-member-${e.parentId}`);
+    const parentName = (await parentCard.getByRole('link').first().textContent()) ?? '';
+    await expect(
+      family
+        .getByRole('list', { name: `Helper agents: ${parentName}` })
+        .getByTestId(`family-member-${e.childId}`),
+    ).toHaveCount(1);
+  }
+  await expect(family.getByTestId('family-continued-as')).toHaveCount(continuationEdges.length);
+  // The root has no verified parent: it says so explicitly instead of hiding the fact.
+  await expect(
+    family.getByTestId(`family-member-${root.id}`).getByTestId('family-no-known-parent'),
+  ).toHaveText('No known parent');
+
+  // The diagram shows the same edges, no more.
+  await relate.getByRole('link', { name: 'Diagram' }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(tree.nodes.length);
   await expect(page.locator('.react-flow__edge')).toHaveCount(tree.edges.length);
-  const labels = page.locator('.react-flow__edge-text');
-  await expect(labels.filter({ hasText: /^subagent$/ })).toHaveCount(subagentEdges);
-  await expect(labels.filter({ hasText: /^continuation \(fork\)$/ })).toHaveCount(
-    continuationEdges,
+  await expect(page.locator('.react-flow__edge.edge-subagent')).toHaveCount(subagentEdges.length);
+  await expect(page.locator('.react-flow__edge.edge-continuation')).toHaveCount(
+    continuationEdges.length,
   );
-  // The root has no verified parent: it says so explicitly instead of hiding the fact.
   await expect(page.getByTestId(`node-${root.id}`).getByTestId('node-parent-unknown')).toHaveText(
-    'parent: unknown',
+    'No known parent',
   );
 
-  await page.getByRole('link', { name: 'concurrency timeline' }).click();
+  await relate.getByRole('tab', { name: 'Timeline' }).click();
   await expect(page.getByTestId('gantt')).toBeVisible();
 });
 
-test('session detail separates direct and aggregate usage and labels cost as estimated', async ({
+test('session detail shows both token views apart and labels cost as estimated', async ({
   page,
   request,
 }) => {
   const root = await findRoot(request);
   await open(page, `/sessions/${root.id}`);
-  const metadata = page.getByTestId('session-metadata');
-  await expect(metadata.getByTestId('parent-unknown')).toHaveText('parent: unknown');
+  await expect(page.getByTestId('parent-unknown')).toHaveText('No known parent');
 
   await expect(async () => {
     const d = await api<Detail>(request, `/sessions/${root.id}`);
     await expectTotals(page.getByTestId('usage-direct'), d.directUsage);
     await expectTotals(page.getByTestId('usage-aggregate'), d.aggregateUsage);
-    // With subagents, aggregate is strictly more than direct: the two views are distinguishable.
+    // With helper agents, "with helpers" is strictly more than "this session": distinguishable.
     expect(d.aggregateUsage.recordCount).toBeGreaterThan(d.directUsage.recordCount);
   }).toPass();
-  await expect(page.getByRole('region', { name: 'Direct usage' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Aggregate usage' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Tokens (this session)' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Tokens (with helpers)' })).toBeVisible();
 
   const detail = await api<Detail>(request, `/sessions/${root.id}`);
   expect(detail.latestSnapshot?.reportedCostUsd.provenance).toBe('estimated');
-  const cost = page.getByTestId('snapshot').getByTestId('cost');
-  await expect(cost).toContainText('estimated (provider-reported)');
+  const snapshot = page.getByTestId('snapshot');
+  await expect(snapshot.getByRole('heading', { name: 'Estimated cost' })).toBeVisible();
+  const cost = snapshot.getByTestId('cost');
+  await expect(cost).toHaveAttribute('data-provenance', 'estimated');
   await expect(cost).toContainText('~$');
 
-  // The fork: a continuation child with a known parent and no snapshot (cost unavailable, not 0).
+  // The session's own family tree, with this session outlined.
+  await expect(page.getByTestId(`family-member-${root.id}`)).toHaveAttribute(
+    'data-current',
+    'true',
+  );
+
+  // The fork: a continuation child with a known parent and no report (cost not reported, not 0).
   const forkId = root.continuationIds[0];
   if (forkId === undefined) throw new Error('demo root has no fork');
   await open(page, `/sessions/${forkId}`);
-  await expect(page.getByTestId('parent-known')).toContainText('continuation');
+  await expect(page.getByTestId('parent-known')).toContainText('Continued from');
   const fork = await api<Detail>(request, `/sessions/${forkId}`);
   if (fork.latestSnapshot === null) await expect(page.getByTestId('no-snapshot')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Event timeline (newest first)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible();
 });
 
-test('a category no record reported renders as "unavailable", never 0', async ({
-  page,
-  request,
-}) => {
+test('a token type no record reported reads "Not reported", never 0', async ({ page, request }) => {
   // The demo set has a session with missing usage categories (fixtures README).
   let target: Session | undefined;
   await expect(async () => {
@@ -245,7 +267,7 @@ test('a category no record reported renders as "unavailable", never 0', async ({
     expect(nullCategory).toBeDefined();
     await expect(
       page.getByTestId('usage-direct').locator(`dd[data-category="${nullCategory}"]`),
-    ).toHaveText('unavailable', { timeout: 1_000 });
+    ).toHaveText('Not reported', { timeout: 1_000 });
   }).toPass();
 });
 

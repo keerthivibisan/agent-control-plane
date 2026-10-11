@@ -26,7 +26,11 @@ function usePageEdges(sessions: readonly SessionSummaryDto[]): SessionEdgeDto[] 
   return trees.flatMap((t) => t.data?.edges ?? []);
 }
 
-function SessionCell({ row }: { row: GroupedRow }) {
+/**
+ * Name on top; underneath, in a quieter line: short id, project and how many helper agents it
+ * started (a helper agent shows its task instead). Keeps the table narrow enough for 1024px.
+ */
+function SessionCell({ row, projectName }: { row: GroupedRow; projectName: string | null }) {
   const s = row.session;
   const helper = isHelperAgent(s);
   return (
@@ -47,14 +51,30 @@ function SessionCell({ row }: { row: GroupedRow }) {
         >
           {sessionName(s)}
         </a>
-        <div className="flex flex-wrap items-center gap-x-2 text-caption text-dim">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-dim">
           <ShortId id={s.id} label="session id" />
-          {helper && s.description ? (
-            <span className="max-w-72 truncate" title={s.description}>
-              {s.description}
+          {s.projectId ? (
+            <a
+              href={href.project(s.projectId)}
+              className="text-dim hover:text-ink"
+              data-testid="session-project"
+            >
+              {projectName ?? s.projectId}
+            </a>
+          ) : (
+            <span>{COPY.noProject}</span>
+          )}
+          {s.childCount > 0 ? (
+            <span className="inline-flex items-center gap-0.5" data-testid="helper-count">
+              {helperAgentsText(s.childCount)}
             </span>
           ) : null}
         </div>
+        {helper && s.description ? (
+          <div className="mt-0.5 max-w-80 truncate text-caption text-dim" title={s.description}>
+            {s.description}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -79,40 +99,24 @@ export function SessionList({
     {
       key: 'session',
       label: COPY.session,
-      className: 'lg:max-w-[22rem]',
-      cell: (r) => <SessionCell row={r} />,
-    },
-    {
-      key: 'project',
-      label: COPY.project,
-      cell: ({ session: s }) =>
-        s.projectId ? (
-          <a href={href.project(s.projectId)} className="text-ink">
-            {projectNames.get(s.projectId) ?? s.projectId}
-          </a>
-        ) : (
-          <span className="text-dim">{COPY.noProject}</span>
-        ),
+      header: (
+        <span className="inline-flex items-center gap-1">
+          {COPY.session}
+          <InfoTip tip={GLOSSARY.helperAgent.tip} label={GLOSSARY.helperAgent.term} />
+        </span>
+      ),
+      className: 'lg:max-w-[24rem]',
+      cell: (r) => (
+        <SessionCell
+          row={r}
+          projectName={r.session.projectId ? (projectNames.get(r.session.projectId) ?? null) : null}
+        />
+      ),
     },
     {
       key: 'status',
       label: COPY.status,
       cell: ({ session: s }) => <StatusBadge status={s.status} withTip={false} />,
-    },
-    {
-      key: 'helpers',
-      label: COPY.helpers,
-      header: (
-        <span className="inline-flex items-center gap-1">
-          {COPY.helpers}
-          <InfoTip tip={GLOSSARY.helperAgent.tip} label={COPY.helpers} />
-        </span>
-      ),
-      cell: ({ session: s }) => (
-        <span className={s.childCount === 0 ? 'text-dim' : ''}>
-          {helperAgentsText(s.childCount) ?? SESSIONS_COPY.table.noHelpers}
-        </span>
-      ),
     },
     {
       key: 'tokens',
@@ -133,16 +137,19 @@ export function SessionList({
   ];
 
   return (
-    <DataTable
-      label={COPY.label}
-      columns={columns}
-      rows={rows}
-      rowKey={(r) => r.session.id}
-      rowAttributes={(r) => ({
-        'data-session-id': r.session.id,
-        'data-depth': String(r.depth),
-      })}
-      empty={empty}
-    />
+    // Safety net only: at 1024px and up the columns fit; below that the rows become cards.
+    <div className="overflow-x-auto">
+      <DataTable
+        label={COPY.label}
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.session.id}
+        rowAttributes={(r) => ({
+          'data-session-id': r.session.id,
+          'data-depth': String(r.depth),
+        })}
+        empty={empty}
+      />
+    </div>
   );
 }

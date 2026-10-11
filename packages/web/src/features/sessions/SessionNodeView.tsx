@@ -45,7 +45,7 @@ export function SessionNodeView({ data }: NodeProps<SessionNode>) {
         <TokenSummary usage={s.directUsage} withCache={false} />
       </div>
       {s.childCount > 0 ? (
-        <div className="mt-1 flex items-center gap-1 text-caption text-dim">
+        <div className="mt-1 flex flex-col text-caption text-dim">
           <span>{COPY.withHelpers}:</span>
           <TokenSummary usage={data.aggregateUsage} withCache={false} />
         </div>

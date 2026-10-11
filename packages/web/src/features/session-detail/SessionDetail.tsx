@@ -14,7 +14,7 @@ import { relationshipsHref } from '../sessions/explorer-params';
 import { sessionName } from '../sessions/session-bits';
 import { ActivityFeed } from './ActivityFeed';
 import { CostCard } from './CostCard';
-import { HelperAgentsCard, RelatedSessionsCard } from './RelatedCards';
+import { FamilyCard, RelatedSessionsCard } from './RelatedCards';
 import { TechnicalDetails } from './TechnicalDetails';
 import { TokensCard } from './TokensCard';
 
@@ -83,8 +83,10 @@ function Loaded({ s }: { s: SessionDetailDto }) {
       <div className="flex flex-col gap-6">
         <TokensCard s={s} />
         <CostCard snapshot={s.latestSnapshot} />
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-          <HelperAgentsCard s={s} tree={tree} />
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+          <div className="xl:col-span-2">
+            <FamilyCard s={s} tree={tree} />
+          </div>
           <RelatedSessionsCard s={s} tree={tree.data} />
         </div>
         <ActivityFeed sessionId={s.id} />
