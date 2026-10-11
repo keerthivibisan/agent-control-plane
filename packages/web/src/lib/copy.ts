@@ -359,3 +359,139 @@ export function describeEvent(event: Pick<EventDto, 'eventType' | 'payload'>): s
       return 'Unknown record (skipped)';
   }
 }
+
+// --- Tokens, Projects and Project pages (phase 2, wp/ui-tokens) ---------------------------------
+
+/** "1 session" / "12 sessions": a count with its noun, so a number never stands alone. */
+export function countOf(n: number, singular: string, plural = `${singular}s`): string {
+  return `${formatCount(n)} ${n === 1 ? singular : plural}`;
+}
+
+export type UsageGroupWord = 'project' | 'session' | 'model' | 'day';
+export type DatePreset = '7d' | '30d' | 'all' | 'custom';
+
+const GROUP_WORDS: Readonly<Record<UsageGroupWord, string>> = {
+  project: 'Project',
+  session: 'Session',
+  model: 'Model',
+  day: 'Day',
+};
+
+/** Wording for the Tokens page (`#/usage`). */
+export const TOKENS_PAGE = {
+  explainer: {
+    title: 'What the four token types mean',
+    intro:
+      'A token is a small piece of text, roughly part of a word. Claude Code reports how many tokens each reply used, in four types:',
+    why: 'They are priced differently (cache read is much cheaper than normal input), so this app always shows them side by side and never adds them into one total.',
+    hide: 'Hide',
+    show: 'What do these mean?',
+  },
+  filters: {
+    label: 'Token filters',
+    dates: 'Dates',
+    presets: {
+      '7d': 'Last 7 days',
+      '30d': 'Last 30 days',
+      all: 'All time',
+      custom: 'Custom',
+    } satisfies Record<DatePreset, string>,
+    from: 'From',
+    to: 'To',
+    utcNote: 'Days are counted in UTC.',
+    project: 'Project',
+    allProjects: 'All projects',
+    groupBy: 'Group by',
+    clear: 'Clear filters',
+  },
+  groupWords: GROUP_WORDS,
+  stats: {
+    label: 'Tokens in the selected range',
+    notReportedNote: 'No usage record in this range reported this type.',
+  },
+  charts: {
+    title: 'Tokens per day',
+    inputOutput: 'Input and output tokens per day',
+    cache: 'Prompt cache tokens per day',
+    note: 'Lines are not stacked. A gap means that day did not report this type; it is not zero. Days with no usage are left out.',
+    showTable: 'Show as table',
+    showChart: 'Show as chart',
+    dayAxis: 'Day (UTC)',
+    tokensAxis: 'Tokens',
+    tableLabel: 'Tokens per day',
+  },
+  undated: (n: number) =>
+    n === 1
+      ? '1 usage record has no date, so it is not on the charts. It is included in the numbers above and the table below.'
+      : `${formatCount(n)} usage records have no date, so they are not on the charts. They are included in the numbers above and the table below.`,
+  breakdown: {
+    title: (group: UsageGroupWord) => `Tokens by ${GROUP_WORDS[group].toLowerCase()}`,
+    countedOnce:
+      "Each session's own tokens are counted once; helper agents count under themselves.",
+    sortedByDay: 'Newest day first.',
+    sortedByOutput: 'Most output tokens first.',
+    partial: 'Partial',
+  },
+  cost: {
+    text: "Looking for cost? Each session's page shows the estimated cost Claude Code reported.",
+    link: 'Go to sessions',
+  },
+  emptyRange: {
+    title: 'No token usage in this range',
+    text: 'Try a longer date range or another project.',
+  },
+} as const;
+
+/** Wording for the Projects list (`#/projects`). */
+export const PROJECTS_PAGE = {
+  add: 'Add a project',
+  tableLabel: 'Projects',
+  columns: {
+    project: 'Project',
+    folder: 'Folder',
+    sessions: 'Sessions',
+    running: 'Running now',
+    lastActivity: 'Last activity',
+  },
+  sessions: (n: number) => countOf(n, 'session'),
+  running: (n: number) => (n === 0 ? 'None' : `${formatCount(n)} running`),
+  noActivity: 'No activity yet',
+} as const;
+
+/** Wording for one project's page (`#/projects/:id`). */
+export const PROJECT_PAGE = {
+  back: 'All projects',
+  folder: 'Folder',
+  lastActivity: 'Last activity',
+  tokens: {
+    title: 'Tokens used in this project',
+    description:
+      "All time. Each session's own tokens, counted once; helper agents count under themselves.",
+  },
+  seeTokens: 'See tokens by day',
+  openInTokens: 'Open in Tokens',
+  sessions: {
+    title: 'Sessions in this project',
+    columns: {
+      session: 'Session',
+      status: 'Status',
+      helpers: 'Helper agents',
+      tokens: 'Tokens (this session)',
+      lastActivity: 'Last activity',
+    },
+    isHelper: 'Helper agent',
+    helpers: (n: number) => (n === 0 ? 'None' : countOf(n, 'helper agent')),
+    empty: {
+      title: 'No sessions yet',
+      text: 'Sessions appear here once Claude Code runs inside this folder.',
+    },
+  },
+  pager: {
+    label: 'Pages',
+    first: 'First page',
+    previous: 'Previous',
+    next: 'Next',
+    page: (n: number) => `Page ${formatCount(n)}`,
+    updating: 'Updating…',
+  },
+} as const;
