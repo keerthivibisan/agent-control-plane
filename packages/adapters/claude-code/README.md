@@ -32,6 +32,42 @@ hookSettingsSnippet({ port, tokenEnvVar }); // JSON text for the user to paste; 
 `createClaudeCodeAdapter` returns the core `ObservationAdapter` plus `diagnostics()`. Defaults:
 512 MiB size cap, 1 MiB read chunks, system clock.
 
+## Managed mode (`src/managed/**`, P3-B)
+
+`createManagedClaudeCode({ query? })` implements core's `ManagedExecutionAdapter` over the Claude
+Agent SDK (ADR-0012, ADR-0013). It is the only code in the repo that imports
+`@anthropic-ai/claude-agent-sdk`.
+
+```ts
+import { createManagedClaudeCode } from '@acp/adapter-claude-code';
+
+const adapter = createManagedClaudeCode(); // tests: createManagedClaudeCode({ query: fake })
+const handle = adapter.start(spec, { requestPermission });
+for await (const event of handle.events) {
+  /* started | activity | usage | lead-text | finished */
+}
+await handle.send(text); // throws ManagedAgentEndedError once finished
+await handle.interrupt();
+handle.abort(); // ends the iterator now, with finished: cancelled
+```
+
+- **Permissions.**
+  - The SDK options use `permissionMode: 'default'`, `settingSources: ['project']` and
+    `strictMcpConfig: true`.
+  - Read-only tools (Read, Glob, Grep, LS) inside the agent's directory, and the lead's own
+    `mcp__acp__*` tools, run without asking. Everything else asks the owner with a redacted,
+    content-free summary of at most 200 characters.
+  - Workers never get the lead tools.
+- **Events.**
+  - Activity is the tool name plus its target path or command name.
+  - Usage is reported per assistant message id.
+  - Lead text is the lead's main-thread text only; worker text is never emitted.
+  - A worker ends after a turn with nothing queued; the lead runs until `abort()`.
+
+Details and SDK facts: [docs/provider-adapters.md](/docs/provider-adapters.md) §11. Tests use a
+scripted fake `query` (`tests/managed/fake-query.ts`). The real SDK `query` is mocked to fail, so
+no test can start Claude.
+
 ## Tests and goldens
 
 Golden events live in `test-fixtures/claude-code/<scenario>/expected/`. After an intentional change,
@@ -40,4 +76,5 @@ by hand** before committing. Tests never read the real `~/.claude`.
 
 ## Allowed dependencies
 
-`@acp/core`, `zod`, Node built-ins. **Never** `@acp/db` or `@acp/server`; adapters do not persist. These rules are enforced by `eslint.config.js`.
+`@acp/core`, `zod`, Node built-ins, and `@anthropic-ai/claude-agent-sdk` (managed mode only).
+**Never** `@acp/db` or `@acp/server`; adapters do not persist. These rules are enforced by `eslint.config.js`.

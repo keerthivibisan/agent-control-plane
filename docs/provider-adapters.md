@@ -313,3 +313,67 @@ owner, in a throwaway directory with project-level `.claude/settings.local.json`
   `prompt_id`s, and their bodies differed, so they got different keys. A `Stop` body also contains
   `last_assistant_message`. A repeated delivery that is identical in every field (same event, same
   prompt) still collapses; none was seen. **No discriminator was added**; the §3 key is unchanged.
+
+## 11. Managed mode: Claude Agent SDK **[implemented, P3-B; fake-query tests only]**
+
+`createManagedClaudeCode({ query? })` in `@acp/adapter-claude-code` (`src/managed/**`) implements
+core's `ManagedExecutionAdapter` (ADR-0012, ADR-0013). Everything below was read from the pinned
+SDK's type declarations (`@anthropic-ai/claude-agent-sdk` 0.3.296, `sdk.d.ts`) and is exercised
+only against a scripted fake `query`. **No real run has happened yet** (that is P3-F).
+
+### 11.1 How the adapter uses the SDK
+
+- One `query({ prompt, options })` per agent. `prompt` is an async iterable of `SDKUserMessage`
+  (streaming input); the first message is `spec.prompt`, and `send()` pushes more.
+- Options: `cwd`, `abortController`, `permissionMode: 'default'`, `settingSources: ['project']`,
+  `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`
+  that holds `{ acp: createSdkMcpServer(...) }` for the lead and nothing for workers. It never sets
+  `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
+- `canUseTool`:
+  - Allows `Read`, `Glob`, `Grep` and `LS` when their target path is inside the agent's `cwd`
+    (lexically) and Claude Code did not flag a `blockedPath`.
+  - Allows the lead's own `mcp__acp__<tool>` when `mcpServer.source === 'sdk'`, or when the field is
+    absent (older CLIs). The SDK says trust is keyed on `source`, not on the name.
+  - Denies any `mcp__acp__*` to a worker without asking.
+  - Everything else goes to `requestPermission`, with a summary of the tool name plus its target path
+    (or, for `Bash`, only the command name), redacted and at most 200 characters.
+  - A rejected request, or an aborted signal, gives a deny.
+- Message mapping:
+  - `system/init` → `started` (once; the CLI re-sends `init` on each turn of a headless run).
+  - Assistant `tool_use` blocks → `activity` with the same summary.
+  - Assistant `message.usage` → `usage` for each frame, keyed by `message.id`.
+  - The lead's main-thread `text` blocks → `lead-text`.
+  - `result` marks the end of a turn.
+  - Worker text, thinking, tool input and output, and the result text are never emitted.
+- `finished`:
+  - **Lead:** the input stays open for chat; `finished` comes only on abort or an SDK failure.
+  - **Worker:** the input is closed after a `result` whose `queued_turn_count` is 0 or absent, so
+    the query ends and `finished` follows. After that, `send()` throws `ManagedAgentEndedError`.
+  - `abort()` aborts the controller, calls `Query.close()`, and ends the event stream at once with
+    `finished: cancelled`. Messages that are still in flight are dropped; the transcript still has
+    them for observation.
+  - `reportedCostUsd` is the latest result's `total_cost_usd`.
+
+### 11.2 SDK facts from the 0.3.296 declarations (unverified at runtime)
+
+- **Streamed assistant frames share `message.id`.** The CLI emits one assistant message per finished
+  content block, and they share `message.id`. Their `usage` is not final, so the engine has to keep
+  one observation per id (usage-accounting §4).
+- **`total_cost_usd` is a running total.** In streaming-input sessions it is cumulative across turns.
+  Read the latest result; never sum results. Crash and startup-error results "may carry zeroed
+  values", so the adapter reports a 0 cost on an error result as unavailable (`null`).
+- **`modelUsage` covers more than `usage`.** It includes subagents and internal calls, while
+  `result.usage` covers the main loop only. The adapter uses neither: budget usage comes from
+  per-message `usage`.
+- **What subagent frames carry.** They have `parent_tool_use_id` set. By default only their
+  `tool_use`/`tool_result` blocks are forwarded (`forwardSubagentText` is off).
+- **Permission rules can skip `canUseTool`.** The callback runs only when the permission system would
+  prompt. With `settingSources: ['project']`, a project's `.claude/settings.json` `permissions.allow`
+  rules (and its hooks) apply, and an allow rule approves a tool without asking the owner. See the
+  P3-B report for the proposal.
+- **`strictMcpConfig` ignores other MCP configuration.** It ignores project `.mcp.json`, user
+  settings, plugins and agent frontmatter MCP servers, so only `mcpServers` from the options load.
+- **`env` is inherited.** When `env` is omitted, the CLI subprocess inherits `process.env`.
+- **The binary comes from an optional dependency, not a script.** The SDK ships its platform binary
+  as an optional dependency (`@anthropic-ai/claude-agent-sdk-darwin-arm64` here). It has no install
+  script, so pnpm 10's build-script block does not affect it.
