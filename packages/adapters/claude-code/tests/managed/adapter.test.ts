@@ -101,6 +101,27 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     }
   });
 
+  it('passes the given environment as the SDK env option, as a copy (ADR-0012)', async () => {
+    const { query, calls } = fakeQuery(async function* (ctx) {
+      await ctx.nextInput();
+      yield result();
+    });
+    const env: Record<string, string> = { PATH: '/usr/bin', HOME: '/home/tester' };
+    const handle = createManagedClaudeCode({ query, env }).start(spec('worker'), callbacks());
+    env['ACP_HOOK_TOKEN'] = 'added-after-start';
+    await collect(handle.events);
+    expect(calls[0]?.options.env).toEqual({ PATH: '/usr/bin', HOME: '/home/tester' });
+  });
+
+  it('leaves the SDK env option unset when no environment is given', async () => {
+    const { query, calls } = fakeQuery(async function* (ctx) {
+      await ctx.nextInput();
+      yield result();
+    });
+    await collect(createManagedClaudeCode({ query }).start(spec('worker'), callbacks()).events);
+    expect(calls[0]?.options).not.toHaveProperty('env');
+  });
+
   it('passes the resolved model when one is given', async () => {
     const { query, calls } = fakeQuery(async function* (ctx) {
       await ctx.nextInput();

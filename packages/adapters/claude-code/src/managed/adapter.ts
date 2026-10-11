@@ -30,6 +30,13 @@ export type ManagedQueryFn = (params: {
 export interface ManagedClaudeCodeOptions {
   /** Defaults to the Agent SDK's `query`. Tests always inject a fake (ADR-0012). */
   query?: ManagedQueryFn;
+  /**
+   * The complete environment for the `claude` process (the SDK `env` option, which replaces the
+   * inherited environment rather than merging). The server passes `process.env` without `ACP_*`
+   * and `GIT_*` variables (ADR-0012), so the hook token never reaches an agent. Omitted: the SDK
+   * default (the process inherits `process.env`).
+   */
+  env?: Readonly<Record<string, string>>;
 }
 
 /** Thrown by `send` once the agent has finished or been aborted. */
@@ -54,6 +61,7 @@ export function buildOptions(
   spec: ManagedAgentSpec,
   callbacks: ManagedCallbacks,
   abortController: AbortController,
+  env?: Readonly<Record<string, string>>,
 ): Options {
   const options: Options = {
     cwd: spec.cwd,
@@ -71,6 +79,8 @@ export function buildOptions(
         : {},
   };
   if (spec.model !== null) options.model = spec.model;
+  // A copy, so a later change to the caller's object never reaches a running agent.
+  if (env !== undefined) options.env = { ...env };
   return options;
 }
 
@@ -87,10 +97,11 @@ export function createManagedClaudeCode(
   options: ManagedClaudeCodeOptions = {},
 ): ManagedExecutionAdapter {
   const run: ManagedQueryFn = options.query ?? sdkQuery;
+  const env = options.env;
   return {
     provider: 'claude-code',
     start(spec, callbacks) {
-      return startAgent(run, spec, callbacks);
+      return startAgent(run, spec, callbacks, env);
     },
   };
 }
@@ -99,6 +110,7 @@ function startAgent(
   run: ManagedQueryFn,
   spec: ManagedAgentSpec,
   callbacks: ManagedCallbacks,
+  env: Readonly<Record<string, string>> | undefined,
 ): ManagedAgentHandle {
   const abortController = new AbortController();
   const input = new AsyncQueue<SDKUserMessage>();
@@ -107,7 +119,7 @@ function startAgent(
   let lastResult: TurnResult | null = null;
 
   input.push(userMessage(spec.prompt));
-  const q = run({ prompt: input, options: buildOptions(spec, callbacks, abortController) });
+  const q = run({ prompt: input, options: buildOptions(spec, callbacks, abortController, env) });
 
   const finish = (outcome: 'success' | 'error' | 'cancelled'): void => {
     if (events.isClosed) return;
