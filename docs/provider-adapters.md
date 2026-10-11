@@ -325,7 +325,7 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
 
 - One `query({ prompt, options })` per agent. `prompt` is an async iterable of `SDKUserMessage`
   (streaming input); the first message is `spec.prompt`, and `send()` pushes more.
-- Options: `cwd`, `abortController`, `permissionMode: 'default'`, `settingSources: ['project']`,
+- Options: `cwd`, `abortController`, `permissionMode: 'default'`, `settingSources: []` (isolation),
   `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`
   that holds `{ acp: createSdkMcpServer(...) }` for the lead and nothing for workers. It never sets
   `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
@@ -369,8 +369,9 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
   `tool_use`/`tool_result` blocks are forwarded (`forwardSubagentText` is off).
 - **Permission rules can skip `canUseTool`.** The callback runs only when the permission system would
   prompt. With `settingSources: ['project']`, a project's `.claude/settings.json` `permissions.allow`
-  rules (and its hooks) apply, and an allow rule approves a tool without asking the owner. See the
-  P3-B report for the proposal.
+  rules (and its hooks) would apply, so an allow rule would approve a tool without asking the owner.
+  **Resolved (coordinator, ADR-0012 amendment):** managed runs use `settingSources: []`, the SDK's
+  isolation mode, so no settings file is loaded. Cost: the project's CLAUDE.md is not loaded.
 - **`strictMcpConfig` ignores other MCP configuration.** It ignores project `.mcp.json`, user
   settings, plugins and agent frontmatter MCP servers, so only `mcpServers` from the options load.
 - **`env` is inherited.** When `env` is omitted, the CLI subprocess inherits `process.env`.

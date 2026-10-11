@@ -52,7 +52,8 @@ handle.abort(); // ends the iterator now, with finished: cancelled
 ```
 
 - **Permissions.**
-  - The SDK options use `permissionMode: 'default'`, `settingSources: ['project']` and
+  - The SDK options use `permissionMode: 'default'`, `settingSources: []` (SDK isolation mode: no settings files, so no
+    repository permission rules or hooks; CLAUDE.md is not loaded) and
     `strictMcpConfig: true`.
   - Read-only tools (Read, Glob, Grep, LS) inside the agent's directory, and the lead's own
     `mcp__acp__*` tools, run without asking. Everything else asks the owner with a redacted,

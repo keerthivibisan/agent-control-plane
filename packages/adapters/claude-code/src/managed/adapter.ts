@@ -59,7 +59,10 @@ export function buildOptions(
     cwd: spec.cwd,
     abortController,
     permissionMode: 'default',
-    settingSources: ['project'],
+    // SDK isolation mode (ADR-0012 amendment, 2026-10-11): no user/project/local settings, so a
+    // repository's permission rules or hooks can neither skip the owner's approval nor run shell
+    // commands (ADR-0013). The project's CLAUDE.md is therefore not loaded either.
+    settingSources: [],
     canUseTool: createCanUseTool(spec, callbacks),
     strictMcpConfig: true,
     mcpServers:

@@ -79,7 +79,7 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     const options = calls[0]?.options;
     expect(options?.cwd).toBe(CWD);
     expect(options?.permissionMode).toBe('default');
-    expect(options?.settingSources).toEqual(['project']);
+    expect(options?.settingSources).toEqual([]);
     expect(options?.strictMcpConfig).toBe(true);
     expect(options?.abortController).toBeInstanceOf(AbortController);
     expect(typeof options?.canUseTool).toBe('function');
