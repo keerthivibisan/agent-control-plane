@@ -33,13 +33,13 @@
 | UI redesign phase 1: foundation                             | done                                                                 | `main` (`6ce2de0`)                            |
 | UI redesign phase 2: Tokens / Projects / Project            | done                                                                 | `main` (`02d7e20`)                            |
 | UI redesign phase 2: Overview / Setup / Data health         | done                                                                 | `main` (`015b181`)                            |
-| UI redesign phase 2: Sessions / Session detail / tree view  | **in progress** in an agent worktree; prompt §8.3 to redo or finish  | branch `wp/ui-sessions` (may exist locally)   |
+| UI redesign phase 2: Sessions / Session detail / tree view  | done                                                                 | `main` (`8d785dd`)                            |
 | UI redesign phase 3: cleanup                                | todo (§5.4)                                                          | prompt §8.4                                   |
 | Phase 2 (usage reliability, pricing) — roadmap              | not started                                                          | `docs/roadmap.md`                             |
 | Phase 3 (master control panel / orchestration)              | planned (§7); needs owner decisions and ADRs first                   | prompt §8.5                                   |
 
-The last full `pnpm check` on `main` passed with 812 tests (core 215, adapter-demo 12,
-adapter-claude-code 199, db 83, web 175, server 128). The Playwright e2e passes 7/7.
+The last full `pnpm check` on `main` passed with 826 tests (core 215, adapter-demo 12,
+adapter-claude-code 199, db 83, web 189, server 128). The Playwright e2e passes 7/7.
 
 **Check the in-progress branches first:**
 
@@ -199,9 +199,10 @@ sentences and formatting rules. All wording lives in `packages/web/src/lib/copy.
   - Breakdown table with units.
   - Projects list, and a project page with its sessions.
 
-### 5.2 In progress (finish or redo with §8.3)
+### 5.2 Done since the first draft of this file (kept for reference)
 
-- **Sessions / Session detail** (`wp/ui-sessions`).
+- **Sessions / Session detail** (`2b5e3cb`, `8d785dd`, merged). Search finds ids only (server `q`
+  searches ids); search by name needs a server change.
   - Friendly list with helper agents grouped under their parent.
   - The default relationships view is a family tree: top-level session at the top, helper agents
     nested below, "Continued as" as a dashed link. It is built only from `/tree` edges and shows
@@ -226,6 +227,9 @@ sentences and formatting rules. All wording lives in `packages/web/src/lib/copy.
 - **Icons:** add an `AlertIcon` (warning triangle); a local copy is in `health/HealthCards.tsx`.
 - **CopyableCode:** a shared command/URL box with a copy button; a local copy is in
   `setup/HooksSetup.tsx`.
+- **Sessions agent:** move `features/sessions/use-api-queries.ts` into `lib/query.tsx`; add a
+  `className` to `TokenBreakdown`'s grid; restyle `ErrorNotice` and `QueryView`'s loading text;
+  delete `components/{EventList,ParentInfo,Pager,SessionTable,LegacyEstimatedCost}` when unused.
 - **`sessionLabel()` in `lib/format.ts`:** returns lowercase "untitled session"; align it with the
   Overview's local `sessionName()` ("Untitled session").
 
