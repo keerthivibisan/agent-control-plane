@@ -1,66 +1,57 @@
-import type { SessionSummaryDto } from '@acp/core/api';
-import { PageHeader, Panel } from '../../components/Panel';
-import { Pager, useCursorStack } from '../../components/Pager';
+import { ButtonLink } from '../../components/Button';
+import { Card } from '../../components/Card';
+import { EmptyState } from '../../components/EmptyState';
+import { SessionsIcon } from '../../components/icons';
+import { PageHeader } from '../../components/PageHeader';
+import { useCursorStack } from '../../components/Pager';
 import { QueryView } from '../../components/QueryView';
-import { SessionTable } from '../../components/SessionTable';
 import { paths, schemas } from '../../lib/api';
-import { shortId } from '../../lib/format';
+import { EMPTY, PAGES, SESSIONS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
-import { navigate } from '../../lib/router';
+import { href } from '../../lib/router';
 import {
   explorerHref,
+  hasFilters,
   readExplorerParams,
   toSessionFilters,
   type ExplorerParams,
 } from './explorer-params';
-import { ConcurrencyTimeline } from './ConcurrencyTimeline';
 import { Filters } from './Filters';
-import { SessionGraph } from './SessionGraph';
+import { HowSessionsRelate } from './HowSessionsRelate';
+import { PageButtons } from './PageButtons';
+import { SessionList } from './SessionList';
 
 const PAGE_SIZE = 50;
 
-function ViewTabs({ params }: { params: ExplorerParams }) {
-  const view = params.view ?? 'graph';
-  const tab = (v: 'graph' | 'timeline', label: string) => (
-    <a
-      href={explorerHref({ ...params, view: v })}
-      aria-current={view === v ? 'page' : undefined}
-      className={`rounded px-1.5 text-[11px] no-underline ${view === v ? 'bg-sunken font-semibold text-ink' : 'text-dim'}`}
-    >
-      {label}
-    </a>
-  );
-  return (
-    <>
-      {tab('graph', 'tree graph')}
-      {tab('timeline', 'concurrency timeline')}
-    </>
-  );
-}
-
-function SelectedView({
-  params,
-  sessions,
-}: {
-  params: ExplorerParams;
-  sessions: readonly SessionSummaryDto[];
-}) {
-  if (params.view === 'timeline') {
-    return <ConcurrencyTimeline sessions={sessions} />;
-  }
-  if (!params.root) {
+function NoSessions({ params }: { params: ExplorerParams }) {
+  if (hasFilters(params)) {
     return (
-      <p className="text-dim italic">
-        Pick a session&apos;s <strong>graph</strong> button to see its subagent and continuation
-        tree.
-      </p>
+      <EmptyState
+        title={EMPTY.sessionsFiltered.title}
+        text={EMPTY.sessionsFiltered.text}
+        action={
+          <ButtonLink href={explorerHref({})} variant="secondary">
+            {SESSIONS_COPY.filters.clear}
+          </ButtonLink>
+        }
+      />
     );
   }
-  // Remount per root so collapse state never leaks between trees.
-  return <SessionGraph key={params.root} sessionId={params.root} />;
+  return (
+    <EmptyState
+      icon={<SessionsIcon size={22} />}
+      title={EMPTY.sessions.title}
+      text={EMPTY.sessions.text}
+      action={
+        <ButtonLink href={href.setup()} variant="primary">
+          {SESSIONS_COPY.table.addProject}
+        </ButtonLink>
+      }
+    />
+  );
 }
 
-function SessionList({ params }: { params: ExplorerParams }) {
+function SessionsBody({ params }: { params: ExplorerParams }) {
   const pager = useCursorStack();
   const projects = useApiQuery(paths.projects(), schemas.projects);
   const projectNames = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
@@ -69,59 +60,46 @@ function SessionList({ params }: { params: ExplorerParams }) {
     schemas.sessionPage,
   );
   return (
-    <QueryView query={page} loading="Loading sessions…">
+    <QueryView query={page} loading={SESSIONS_COPY.table.loading}>
       {(p) => (
-        <div className="flex flex-col gap-3">
-          <Panel
-            title="Sessions"
-            actions={
-              <Pager
-                pageNumber={pager.pageNumber}
-                nextCursor={p.page.nextCursor}
-                onNext={pager.next}
-                onPrev={pager.prev}
-                onFirst={pager.first}
-                fetching={page.fetching}
-              />
-            }
-          >
-            <SessionTable
+        <div className="flex flex-col gap-6">
+          <Card padded={p.items.length === 0}>
+            <SessionList
               sessions={p.items}
               projectNames={projectNames}
-              selectedId={params.root ?? null}
-              onSelect={(id) => navigate(explorerHref({ ...params, root: id, view: 'graph' }))}
+              empty={<NoSessions params={params} />}
             />
-          </Panel>
-          <Panel
-            title={
-              params.view !== 'timeline' && params.root
-                ? `Tree of ${shortId(params.root)}`
-                : 'Relationships and concurrency'
-            }
-            actions={<ViewTabs params={params} />}
-          >
-            <SelectedView params={params} sessions={p.items} />
-          </Panel>
+            {pager.pageNumber > 1 || p.page.nextCursor !== null ? (
+              <div className="flex justify-end border-t border-line px-4 py-3">
+                <PageButtons
+                  pageNumber={pager.pageNumber}
+                  nextCursor={p.page.nextCursor}
+                  onNext={pager.next}
+                  onPrev={pager.prev}
+                  fetching={page.fetching}
+                />
+              </div>
+            ) : null}
+          </Card>
+          {p.items.length > 0 ? <HowSessionsRelate params={params} sessions={p.items} /> : null}
         </div>
       )}
     </QueryView>
   );
 }
 
-/** `#/sessions`: filterable session list, tree graph for a selected root, concurrency timeline. */
+/** `#/sessions`: every session in your projects, filters, and how they relate. */
 export function SessionExplorer({ search }: { search: URLSearchParams }) {
   const params = readExplorerParams(search);
+  // Remount the list (and its page stack) whenever the filters change.
   const filterKey = JSON.stringify(toSessionFilters(params));
   return (
-    <div className="flex flex-col gap-3">
-      <PageHeader title="Session Explorer">
-        <span className="text-[11px] text-dim">
-          Usage columns are direct usage; a session&apos;s aggregate (with subagents) is in the
-          graph and on its detail page.
-        </span>
-      </PageHeader>
-      <Filters key={`${params.model ?? ''}|${params.q ?? ''}`} params={params} />
-      <SessionList key={filterKey} params={params} />
+    <div>
+      <PageHeader title={PAGES.sessions.title} description={PAGES.sessions.description} />
+      <div className="flex flex-col gap-6">
+        <Filters key={params.q ?? ''} params={params} />
+        <SessionsBody key={filterKey} params={params} />
+      </div>
     </div>
   );
 }

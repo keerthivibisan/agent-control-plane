@@ -1,42 +1,53 @@
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import { useCallback, useMemo, useState } from 'react';
+import { InfoTip } from '../../components/InfoTip';
 import { QueryView } from '../../components/QueryView';
 import { paths, schemas } from '../../lib/api';
+import { GLOSSARY, SESSIONS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
-import { buildGraph } from './graph';
+import { buildGraph, EDGE_STYLE } from './graph';
 import { GraphActions, SessionNodeView } from './SessionNodeView';
 
+const COPY = SESSIONS_COPY.relate;
 const nodeTypes = { session: SessionNodeView };
 
-function Legend() {
+function LineSample({ kind }: { kind: keyof typeof EDGE_STYLE }) {
+  const { stroke, dash } = EDGE_STYLE[kind];
   return (
-    <div className="flex flex-wrap items-center gap-4 text-[11px] text-dim">
-      <span className="flex items-center gap-1">
-        <svg width="28" height="6" aria-hidden="true">
-          <line x1="0" y1="3" x2="28" y2="3" stroke="var(--color-accent)" strokeWidth="2" />
-        </svg>
-        subagent edge
-      </span>
-      <span className="flex items-center gap-1">
-        <svg width="28" height="6" aria-hidden="true">
-          <line
-            x1="0"
-            y1="3"
-            x2="28"
-            y2="3"
-            stroke="#a855f7"
-            strokeWidth="2"
-            strokeDasharray="6 4"
-          />
-        </svg>
-        continuation (fork) edge
-      </span>
-      <span>Edges are verified relationships only; aggregate usage follows subagent edges.</span>
-    </div>
+    <svg width="32" height="8" aria-hidden="true" className="shrink-0">
+      <line x1="0" y1="4" x2="26" y2="4" stroke={stroke} strokeWidth="2" strokeDasharray={dash} />
+      <path d="M25 1 L31 4 L25 7 Z" fill={stroke} />
+    </svg>
   );
 }
 
-/** React Flow graph of the session tree containing `sessionId` (GET /api/sessions/:id/tree). */
+function Legend() {
+  return (
+    <ul
+      className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-dim"
+      aria-label={SESSIONS_COPY.relate.legendLabel}
+    >
+      <li className="flex items-center gap-1.5">
+        <LineSample kind="subagent" />
+        {COPY.legend.subagent}
+      </li>
+      <li className="flex items-center gap-1.5">
+        <LineSample kind="continuation" />
+        {COPY.legend.continuation}
+        <InfoTip tip={GLOSSARY.continued.tip} label={COPY.legend.continuation} />
+      </li>
+      <li className="flex items-center gap-1">
+        {COPY.legend.noParent}
+        <InfoTip tip={GLOSSARY.noKnownParent.tip} label={COPY.legend.noParent} />
+      </li>
+    </ul>
+  );
+}
+
+/**
+ * The family of sessions containing `sessionId` (GET /api/sessions/:id/tree), as a graph. Lines
+ * come only from the tree's edges, which carry evidence; nothing is drawn from timing or folders.
+ */
 export function SessionGraph({ sessionId }: { sessionId: string }) {
   const tree = useApiQuery(paths.sessionTree(sessionId), schemas.sessionTree);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
@@ -55,24 +66,22 @@ export function SessionGraph({ sessionId }: { sessionId: string }) {
   );
 
   return (
-    <QueryView query={tree} loading="Loading session tree…">
+    <QueryView query={tree} loading={COPY.loading}>
       {(t) => (
-        <div className="flex flex-col gap-2">
-          <Legend />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <Legend />
+            <p className="text-caption text-dim">
+              {COPY.size(t.nodes.length)}
+              {t.rootId !== sessionId ? ` · ${COPY.fromRoot}` : ''}
+            </p>
+          </div>
           {model && model.danglingEdges > 0 ? (
-            <p role="alert" className="text-[11px] text-red-700 dark:text-red-300">
-              {model.danglingEdges} edge{model.danglingEdges === 1 ? '' : 's'} referenced sessions
-              missing from the tree response and were not drawn.
+            <p role="alert" className="text-caption text-danger">
+              {COPY.dangling(model.danglingEdges)}
             </p>
           ) : null}
-          <p className="text-[11px] text-dim">
-            {t.nodes.length} session{t.nodes.length === 1 ? '' : 's'}, {t.edges.length} edge
-            {t.edges.length === 1 ? '' : 's'}
-            {t.rootId !== sessionId
-              ? ' · the tree is shown from its root; the selected session is outlined'
-              : ''}
-          </p>
-          <div className="h-[560px] rounded border border-line">
+          <div className="h-[520px] overflow-hidden rounded-control border border-line">
             <GraphActions.Provider value={actions}>
               <ReactFlow
                 nodes={model?.nodes ?? []}
@@ -81,14 +90,16 @@ export function SessionGraph({ sessionId }: { sessionId: string }) {
                 nodesDraggable={false}
                 nodesConnectable={false}
                 fitView
+                fitViewOptions={{ maxZoom: 1, padding: 0.15 }}
                 minZoom={0.2}
                 proOptions={{ hideAttribution: true }}
               >
-                <Background />
+                <Background color="var(--color-line-strong)" gap={20} />
                 <Controls showInteractive={false} />
               </ReactFlow>
             </GraphActions.Provider>
           </div>
+          <p className="text-caption text-dim">{COPY.evidenceNote}</p>
         </div>
       )}
     </QueryView>

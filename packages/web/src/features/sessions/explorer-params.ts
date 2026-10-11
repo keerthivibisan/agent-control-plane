@@ -2,24 +2,32 @@ import { ProviderIdSchema, SessionStatusSchema } from '@acp/core';
 import type { SessionFilters } from '../../lib/api';
 import { href } from '../../lib/router';
 
-/** Explorer state lives in the hash (`#/sessions?status=stale&root=…`) so views can be linked. */
+export type RelateView = 'relationships' | 'timeline';
+
+/** Sessions-page state lives in the hash (`#/sessions?status=stale&root=…`) so views can be linked. */
 export interface ExplorerParams {
   projectId?: string | undefined;
   provider?: string | undefined;
   status?: string | undefined;
   model?: string | undefined;
   q?: string | undefined;
-  /** Session whose tree is shown in the graph. */
+  /** Session whose relationships are drawn. */
   root?: string | undefined;
-  view?: 'graph' | 'timeline' | undefined;
+  view?: RelateView | undefined;
 }
 
 const nonEmpty = (v: string | null) => (v && v.trim().length > 0 ? v.trim() : undefined);
 
+function readView(v: string | null): RelateView | undefined {
+  if (v === 'timeline') return 'timeline';
+  // `graph` is the old name of the relationships view; old links keep working.
+  if (v === 'relationships' || v === 'graph') return 'relationships';
+  return undefined;
+}
+
 export function readExplorerParams(params: URLSearchParams): ExplorerParams {
   const provider = ProviderIdSchema.safeParse(params.get('provider'));
   const status = SessionStatusSchema.safeParse(params.get('status'));
-  const view = params.get('view');
   return {
     projectId: nonEmpty(params.get('projectId')),
     provider: provider.success ? provider.data : undefined,
@@ -27,12 +35,17 @@ export function readExplorerParams(params: URLSearchParams): ExplorerParams {
     model: nonEmpty(params.get('model')),
     q: nonEmpty(params.get('q')),
     root: nonEmpty(params.get('root')),
-    view: view === 'timeline' ? 'timeline' : view === 'graph' ? 'graph' : undefined,
+    view: readView(params.get('view')),
   };
 }
 
 export function explorerHref(p: ExplorerParams): string {
   return href.sessions({ ...p });
+}
+
+/** Link to a session's relationships on the Sessions page. */
+export function relationshipsHref(sessionId: string): string {
+  return explorerHref({ root: sessionId, view: 'relationships' });
 }
 
 export function toSessionFilters(p: ExplorerParams): SessionFilters {
@@ -43,4 +56,8 @@ export function toSessionFilters(p: ExplorerParams): SessionFilters {
     model: p.model,
     q: p.q,
   };
+}
+
+export function hasFilters(p: ExplorerParams): boolean {
+  return Object.values(toSessionFilters(p)).some((v) => v !== undefined);
 }

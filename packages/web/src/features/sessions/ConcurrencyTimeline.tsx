@@ -1,72 +1,118 @@
 import type { SessionStatus } from '@acp/core';
 import type { SessionSummaryDto } from '@acp/core/api';
 import { useMemo } from 'react';
-import { StatusPill } from '../../components/StatusPill';
-import { formatDuration, formatTime, sessionLabel, shortId } from '../../lib/format';
+import { Tooltip } from '../../components/Tooltip';
+import { SESSIONS_COPY, STATUS_COPY } from '../../lib/copy';
+import { formatDuration, formatExactTime } from '../../lib/format';
 import { href } from '../../lib/router';
 import { buildGantt } from './gantt';
+import { sessionName } from './session-bits';
 
+const COPY = SESSIONS_COPY.timeline;
+
+/** Status colors from the theme (index.css); the legend names each status in words too. */
 const BAR: Record<SessionStatus, string> = {
-  active: 'bg-emerald-500/70',
-  idle: 'bg-sky-500/60',
-  stale: 'bg-amber-500/60',
-  ended: 'bg-slate-400/70',
-  unknown: 'bg-slate-300/60 dark:bg-slate-600/60',
+  active: 'bg-status-active',
+  idle: 'bg-status-idle',
+  stale: 'bg-status-stale/70',
+  ended: 'bg-status-ended/70',
+  unknown: 'bg-status-unknown/60',
 };
 
-/** Gantt bars of the sessions on the current explorer page, to show which ran at the same time. */
+const tickFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/** One bar per session on this page, to show which ones ran at the same time. */
 export function ConcurrencyTimeline({ sessions }: { sessions: readonly SessionSummaryDto[] }) {
   const model = useMemo(() => buildGantt(sessions), [sessions]);
-  if (!model) return <p className="text-dim italic">No sessions on this page.</p>;
+  if (!model) return <p className="text-dim">{COPY.empty}</p>;
+  const statuses = [...new Set(model.rows.map((r) => r.session.status.value))];
   return (
-    <div className="flex flex-col gap-1 text-[11px]" data-testid="gantt">
+    <div className="flex flex-col gap-3" data-testid="gantt">
       <p className="text-dim">
-        Bars span first seen → last event (observed activity, not a runtime claim). Peak overlap on
-        this page: <span className="font-mono text-ink">{model.peakConcurrency}</span> session
-        {model.peakConcurrency === 1 ? '' : 's'}.
+        {COPY.description} {COPY.peak(model.peakConcurrency)}
       </p>
-      <div className="grid grid-cols-[14rem_1fr] gap-x-2">
-        <div />
-        <div className="relative h-4 border-b border-line text-dim">
-          {model.ticks.map((t) => (
+      <div
+        role="list"
+        aria-label={COPY.label}
+        className="grid grid-cols-[minmax(8rem,16rem)_1fr] gap-x-4"
+      >
+        <div aria-hidden="true" />
+        <div
+          aria-hidden="true"
+          className="relative mb-1 h-5 border-b border-line text-caption text-dim"
+        >
+          {model.ticks.map((t, i) => (
             <span
               key={t.pct}
-              className="absolute -translate-x-1/2 font-mono whitespace-nowrap first:translate-x-0 last:-translate-x-full"
+              className={`absolute top-0 whitespace-nowrap ${
+                i === 0
+                  ? ''
+                  : i === model.ticks.length - 1
+                    ? '-translate-x-full'
+                    : '-translate-x-1/2'
+              }`}
               style={{ left: `${t.pct}%` }}
             >
-              {formatTime(new Date(t.ms).toISOString()).slice(5, 16)}
+              {tickFormat.format(new Date(t.ms))}
             </span>
           ))}
         </div>
-        {model.rows.map((r) => (
-          <div key={r.session.id} className="contents">
-            <div className="flex min-w-0 items-center gap-1 py-0.5">
-              <a href={href.session(r.session.id)} className="truncate" title={r.session.id}>
-                {sessionLabel(r.session)}
+        {model.rows.map((r) => {
+          const s = r.session;
+          const span = r.noEvents
+            ? `${formatExactTime(s.firstSeenAt)} · ${COPY.noActivity}`
+            : `${formatExactTime(s.firstSeenAt)} → ${formatExactTime(
+                new Date(r.endMs).toISOString(),
+              )} (${formatDuration(r.endMs - r.startMs)})`;
+          return (
+            <div key={s.id} role="listitem" className="contents">
+              <a
+                href={href.session(s.id)}
+                className="truncate py-1.5 text-ink"
+                title={sessionName(s)}
+              >
+                {sessionName(s)}
               </a>
-              <span className="shrink-0 font-mono text-dim">{shortId(r.session.id)}</span>
+              <div className="relative h-8 border-b border-line/60">
+                <div
+                  className="absolute top-2.5 h-3"
+                  style={{
+                    left: `${r.leftPct}%`,
+                    width: r.noEvents ? '0.75rem' : `max(${r.widthPct}%, 6px)`,
+                  }}
+                >
+                  <Tooltip
+                    content={`${sessionName(s)} · ${STATUS_COPY[s.status.value].word} · ${span}`}
+                    className={`block h-full w-full rounded-full ${
+                      r.noEvents ? 'border-2 border-status-unknown bg-panel' : BAR[s.status.value]
+                    }`}
+                  >
+                    <span className="sr-only" data-testid={`bar-${s.id}`}>
+                      {span}
+                    </span>
+                  </Tooltip>
+                </div>
+              </div>
             </div>
-            <div className="relative h-5 border-b border-line/40">
-              <div
-                className={`absolute top-1 h-3 rounded-sm ${BAR[r.session.status.value]} ${r.noEvents ? 'border border-dashed border-dim bg-transparent' : ''}`}
-                style={{ left: `${r.leftPct}%`, width: `max(${r.widthPct}%, 3px)` }}
-                title={`${sessionLabel(r.session)} · ${formatTime(r.session.firstSeenAt)} → ${
-                  r.noEvents ? 'no events' : formatTime(new Date(r.endMs).toISOString())
-                } (${formatDuration(r.endMs - r.startMs)})`}
-                data-testid={`bar-${r.session.id}`}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <div className="mt-1 flex flex-wrap gap-2">
-        {(['active', 'idle', 'stale', 'ended', 'unknown'] as const).map((s) => (
-          <span key={s} className="flex items-center gap-1">
-            <span className={`inline-block h-2 w-4 rounded-sm ${BAR[s]}`} />
-            <StatusPill status={s} />
-          </span>
+      <ul
+        className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-dim"
+        aria-label={SESSIONS_COPY.relate.legendLabel}
+      >
+        {statuses.map((st) => (
+          <li key={st} className="flex items-center gap-1.5">
+            <span aria-hidden="true" className={`inline-block h-2 w-5 rounded-full ${BAR[st]}`} />
+            {STATUS_COPY[st].word}
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }

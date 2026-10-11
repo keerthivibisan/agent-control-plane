@@ -787,3 +787,190 @@ export const HEALTH_COPY = {
   },
   raw: 'Technical details: raw counters',
 } as const;
+// --- Sessions list and session detail (phase 2, wp/ui-sessions) ---------------------------------
+// Wording for `#/sessions` and `#/sessions/:id`. Add-only: other screens add their own sections.
+
+/** What an untitled session is called. Never left blank. */
+export const UNTITLED_SESSION = 'Untitled session';
+
+/** "Helper agent: Explore", or "Helper agent" when Claude Code did not report a type. */
+export function helperAgentLabel(agentType: string | null): string {
+  return agentType ? `${GLOSSARY.helperAgent.term}: ${agentType}` : GLOSSARY.helperAgent.term;
+}
+
+export const SESSIONS_COPY = {
+  filters: {
+    label: 'Session filters',
+    project: 'Project',
+    allProjects: 'All projects',
+    status: 'Status',
+    anyStatus: 'Any status',
+    model: 'Model',
+    anyModel: 'Any model',
+    provider: 'Provider',
+    anyProvider: 'Any provider',
+    search: 'Find a session',
+    searchPlaceholder: 'Find a session by id',
+    searchTip:
+      "Matches session ids (the short code under each name), or part of one. Searching by name isn't available yet.",
+    clear: 'Clear filters',
+    find: 'Find',
+  },
+  table: {
+    label: 'Sessions',
+    session: 'Session',
+    project: 'Project',
+    status: 'Status',
+    helpers: 'Helper agents',
+    /** helperAgentsText (Overview section) returns null for 0; the list says it in words. */
+    noHelpers: 'No helper agents',
+    tokens: GLOSSARY.tokensThisSession.term,
+    lastActivity: 'Last activity',
+    noProject: 'Not in a project',
+    noActivity: 'No activity yet',
+    loading: 'Loading sessions…',
+    addProject: 'Add a project',
+  },
+  pager: {
+    label: 'Pages',
+    previous: 'Previous page',
+    next: 'Next page',
+    page: (n: number) => `Page ${formatCount(n)}`,
+    updating: 'Updating…',
+  },
+  relate: {
+    title: 'How sessions relate',
+    description:
+      'Which sessions started helper agents or were continued in another session, and which ran at the same time.',
+    tabs: { relationships: 'Relationships', timeline: 'Timeline' },
+    pick: 'Show relationships for',
+    pickHint: 'Pick a session to see the helper agents it started and where it was continued.',
+    legend: {
+      subagent: 'Started a helper agent',
+      continuation: 'Continued as',
+      noParent: GLOSSARY.noKnownParent.term,
+    },
+    evidenceNote: "Lines are drawn only where Claude Code's own records show the link.",
+    fromRoot: 'Shown from the first session in this family. The one you picked is outlined.',
+    size: (n: number) => countOf(n, 'session', 'sessions'),
+    dangling: (n: number) =>
+      `${countOf(n, 'link points', 'links point')} at a session that wasn't sent, so ${n === 1 ? 'it is' : 'they are'} not drawn.`,
+    hideLinked: (n: number) => `Hide ${countOf(n, 'linked session', 'linked sessions')}`,
+    showHidden: (n: number) => `Show ${countOf(n, 'hidden session', 'hidden sessions')}`,
+    withHelpers: 'With helpers',
+    lastActivity: 'Last activity',
+    legendLabel: 'Legend',
+    loading: 'Loading relationships…',
+  },
+  timeline: {
+    description:
+      'Each bar runs from when a session was first seen to its last activity. Bars that overlap ran at the same time.',
+    peak: (n: number) =>
+      n <= 1
+        ? 'No two sessions on this page ran at the same time.'
+        : `At most ${formatCount(n)} sessions on this page ran at the same time.`,
+    noActivity: 'No activity yet (shown as a dot)',
+    empty: 'No sessions on this page.',
+    label: 'Session timeline',
+  },
+} as const;
+
+export const SESSION_DETAIL_COPY = {
+  back: 'All sessions',
+  loading: 'Loading session…',
+  status: 'Status',
+  project: 'Project',
+  id: 'Id',
+  started: 'Started',
+  lastActivity: 'Last activity',
+  models: 'Model',
+  noModel: 'No model reported yet',
+  noProject: 'Not in a project',
+  seeRelations: 'See how it relates',
+  tokens: {
+    title: 'Tokens',
+    description:
+      '"With helpers" already includes "this session", so the two are never added together. Token types are shown side by side, never as one total.',
+    noHelpers:
+      "This session didn't start any helper agents, so this is also its total with helpers.",
+  },
+  cost: {
+    none: {
+      title: "Claude Code didn't report a cost for this session",
+      text: 'A cost appears here only when Claude Code reports one. This app never calculates prices.',
+    },
+    reported: 'Reported',
+    scope: {
+      session: 'Covers this session only.',
+      'session-including-subagents': 'Includes the helper agents this session started.',
+      unknown: "Claude Code didn't say whether this includes helper agents.",
+    },
+    runningTotal:
+      "Claude Code's latest running total for this session, shown as reported and never added to other costs.",
+    byModel: 'Tokens by model (from the same report)',
+    model: 'Model',
+    noModels: 'The report lists no tokens by model.',
+  },
+  related: {
+    title: 'Related sessions',
+    startedBy: 'Started by',
+    continuedFrom: 'Continued from',
+    continuedAs: 'Continued as',
+    notContinued: "Not continued in another session that we've seen.",
+  },
+  helpers: {
+    title: 'Helper agents',
+    description: 'Sub-agents this session started to work on parts of the task.',
+  },
+  activity: {
+    title: 'Activity',
+    description: 'What happened in this session, newest first.',
+    loadOlder: 'Load older',
+    loading: 'Loading…',
+    start: 'That is everything recorded for this session.',
+    readAt: 'time not recorded, read',
+    rawTable: 'Raw events',
+    rawSummary: 'Technical details: raw events',
+    raw: {
+      occurred: 'Occurred',
+      event: 'Event',
+      eventId: 'Event id',
+      channel: 'Channel',
+      provenance: 'Provenance',
+      version: 'Claude Code version',
+      fields: 'Fields',
+    },
+  },
+  technical: {
+    launchFolder: 'Launch folder',
+    gitBranch: 'Git branch',
+    entryPoint: 'Entry point',
+    version: 'Claude Code version',
+    provider: 'Provider',
+    sessionId: 'Session id',
+    providerSessionId: 'Claude Code session id',
+    agentId: 'Helper agent id',
+    notHelper: 'Not a helper agent',
+    origin: 'Origin',
+    projectId: 'Project id',
+    task: 'Helper agent task',
+    firstSeen: 'First seen',
+    ended: 'Ended',
+    notEnded: 'No end reported',
+    attention: 'Last waited for you',
+    never: 'Never',
+    status: 'Status',
+    statusBasis: (evaluatedAt: string) => `derived, evaluated ${evaluatedAt}`,
+    parent: 'Parent link',
+    parentEvidence: (kind: string, provenance: string, evidence: string) =>
+      `${kind} link, ${provenance}, evidence: ${evidence}`,
+    noParent: 'none known (no evidence)',
+    snapshot: 'Cost report',
+    noSnapshot: 'none',
+    snapshotSummary: (provenance: string, scope: string) => `${provenance} · scope: ${scope}`,
+    sharedRecords: 'Shared usage records',
+    sources: 'Where these values come from',
+    sourcesText:
+      'Observed values were read from Claude Code files or hooks. Status and token totals are derived from them. Cost is estimated: reported by Claude Code, not calculated here.',
+  },
+} as const;

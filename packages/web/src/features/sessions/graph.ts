@@ -5,6 +5,9 @@ import type {
   UsageTotalsDto,
 } from '@acp/core/api';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
+import { SESSIONS_COPY } from '../../lib/copy';
+
+const EDGE_LABEL: Record<SessionEdgeDto['kind'], string> = SESSIONS_COPY.relate.legend;
 
 export type SessionNodeData = {
   session: SessionSummaryDto;
@@ -27,19 +30,14 @@ export type SessionGraphEdge = Edge<{
   evidence: SessionEdgeDto['evidence'];
 }>;
 
-export const NODE_WIDTH = 300;
-export const X_GAP = 380;
-export const Y_GAP = 190;
+export const NODE_WIDTH = 280;
+export const X_GAP = 350;
+export const Y_GAP = 170;
 
-const EDGE_STYLE: Record<SessionEdgeDto['kind'], Pick<SessionGraphEdge, 'style' | 'label'>> = {
-  subagent: {
-    label: 'subagent',
-    style: { stroke: 'var(--color-accent)', strokeWidth: 1.5 },
-  },
-  continuation: {
-    label: 'continuation (fork)',
-    style: { stroke: '#a855f7', strokeWidth: 1.5, strokeDasharray: '6 4' },
-  },
+/** Theme colors only (index.css), so both themes work. Dashes tell the kinds apart without color. */
+export const EDGE_STYLE: Record<SessionEdgeDto['kind'], { stroke: string; dash?: string }> = {
+  subagent: { stroke: 'var(--color-accent)' },
+  continuation: { stroke: 'var(--color-dim)', dash: '6 4' },
 };
 
 export interface GraphModel {
@@ -173,8 +171,13 @@ export function buildGraph(
       target: e.childId,
       type: 'smoothstep',
       className: `edge-${e.kind}`,
-      markerEnd: { type: MarkerType.ArrowClosed },
-      ...EDGE_STYLE[e.kind],
+      markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_STYLE[e.kind].stroke },
+      style: {
+        stroke: EDGE_STYLE[e.kind].stroke,
+        strokeWidth: 1.5,
+        ...(EDGE_STYLE[e.kind].dash ? { strokeDasharray: EDGE_STYLE[e.kind].dash } : {}),
+      },
+      ariaLabel: EDGE_LABEL[e.kind],
       data: { kind: e.kind, provenance: e.provenance, evidence: e.evidence },
     }));
 

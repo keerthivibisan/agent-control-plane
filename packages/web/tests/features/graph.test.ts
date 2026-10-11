@@ -53,7 +53,10 @@ describe('buildGraph', () => {
     expect(cont?.className).toBe('edge-continuation');
     expect(cont?.style?.strokeDasharray).toBeDefined();
     expect(sub?.style?.strokeDasharray).toBeUndefined();
-    expect(cont?.label).toBe('continuation (fork)');
+    // Plain-words names for screen readers (the legend uses the same words), theme colors only.
+    expect(sub?.ariaLabel).toBe('Started a helper agent');
+    expect(cont?.ariaLabel).toBe('Continued as');
+    for (const e of g.edges) expect(String(e.style?.stroke)).toMatch(/^var\(--color-/);
   });
 
   it('collapse hides descendants and reports how many', () => {
