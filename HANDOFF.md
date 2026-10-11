@@ -1,428 +1,480 @@
-# HANDOFF — continue Agent Control Plane on another machine / account
+# HANDOFF — Agent Control Plane: state, decisions, and how to continue
 
-> Written by the coordinator agent on 2026-10-10 when the original session ended. **Start here.**
-> Then read `CLAUDE.md` and `AGENTS.md`, which are binding, and `docs/implementation-plan.md`.
+> **Start here.** Updated 2026-10-11 by the coordinator. This file is self-contained: an agent (or a
+> person) outside the original session can continue from it. Read it fully, then `CLAUDE.md` and
+> `AGENTS.md` (binding), then the specs a task cites. Older handoff text lives in git history
+> (`git log -- HANDOFF.md`).
 
-## 1. Where things stand (updated 2026-10-10, second session)
+## 0. Quick orientation
 
-| WP   | What                                                     | State                                                                         | Branch                                             |
-| ---- | -------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
-| P0   | Bootstrap, CI, docs, ADRs, core contracts v1             | **done, on `main`**                                                           | merged                                             |
-| P1-A | Core logic (usage, aggregation, status, edges, paths)    | **done, on `main`**                                                           | merged                                             |
-| P1-B | SQLite persistence                                       | **done, on `main`** (+ `listSharedSightings`, `listToolCalls` added for P1-D) | merged                                             |
-| P1-C | Demo adapter + Claude Code adapter (C0–C7) + fixtures    | **done, on `main`**; hooks verified on 2.1.296; ADR-0011 ignored records      | `wp/p1-c-adapters-2`, `wp/p1-c-followups` (merged) |
-| P1-D | Server: pipeline, scheduler, REST, SSE, hooks, dev, live | **done, on `main`**; live mode wired, tested on fixtures only                 | `wp/p1-d-server`, `wp/p1-d-live`                   |
-| P1-E | Web UI (E0–E5)                                           | **done, on `main`**                                                           | `wp/p1-e-web-2` (merged)                           |
-| P1-F | Integration and verification                             | **done** except CI (not pushed)                                               | `wp/p1-f-verify` (merged)                          |
+- **What it is.** A local-first control plane that observes Claude Code sessions (and later Codex),
+  shows what agents are doing, which session spawned which helper agent, and how many tokens each
+  used, all from local transcript files. Later phases add managed orchestration from the UI.
+- **Where it stands.**
+  - Phase 1 (observability) is functionally complete and verified, including on real data.
+  - A UI redesign for non-technical users is in progress (§5).
+  - Phase 3 (the "master control panel" that starts and manages Claude agents from the UI) is planned
+    in §7. It is not started.
+- **Repo.** `/Users/grootan/Desktop/agent-control-plane` (pnpm monorepo). Branch `main` is always green.
+  Nothing has been pushed to any remote yet.
 
-`pnpm check` passes on `main` (711 tests). `ACP_MODE=demo pnpm dev` works end to end; plain `pnpm dev`
-is live mode over `<ACP_CLAUDE_DIR>/projects` for registered projects.
+## 1. State of work
 
-**Decided on 2026-10-10/11 by the project owner:** real-data run done for one consented project
-(F2 exact match after one fix; F4 live check passed); hook payload capture done (2.1.296;
-SessionStart is not delivered over http, so the snippet omits it); `diagnostics()` on the adapter
-(ADR-0011); `OverviewDto.latestSnapshots` cost list (estimated, never summed); MIT accepted (ADR-0010).
+| Work package                                                | State                                                                | Where                                         |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------- |
+| P0 bootstrap (tooling, CI config, specs, ADRs, contracts)   | done                                                                 | `main`                                        |
+| P1-A core logic (usage dedup/selection/attribution, status) | done                                                                 | `main`                                        |
+| P1-B SQLite persistence                                     | done                                                                 | `main`                                        |
+| P1-C demo adapter + Claude Code adapter + fixtures          | done; hooks verified on Claude Code 2.1.296; Notification unobserved | `main`                                        |
+| P1-D server (pipeline, scheduler, REST, SSE, hooks, live)   | done                                                                 | `main`                                        |
+| P1-E web UI (original screens)                              | done; being replaced by the redesign (§5)                            | `main`                                        |
+| P1-F verification                                           | done except CI (nothing pushed)                                      | `main`; evidence in `docs/research/p1-f-*.md` |
+| Follow-ups (ADR-0011 diagnostics, cost list, log redaction) | done                                                                 | `main`                                        |
+| UI redesign phase 1: foundation                             | done                                                                 | `main` (`6ce2de0`)                            |
+| UI redesign phase 2: Tokens / Projects / Project            | done                                                                 | `main` (`02d7e20`)                            |
+| UI redesign phase 2: Overview / Setup / Data health         | done                                                                 | `main` (`015b181`)                            |
+| UI redesign phase 2: Sessions / Session detail / tree view  | **in progress** in an agent worktree; prompt §8.3 to redo or finish  | branch `wp/ui-sessions` (may exist locally)   |
+| UI redesign phase 3: cleanup                                | todo (§5.4)                                                          | prompt §8.4                                   |
+| Phase 2 (usage reliability, pricing) — roadmap              | not started                                                          | `docs/roadmap.md`                             |
+| Phase 3 (master control panel / orchestration)              | planned (§7); needs owner decisions and ADRs first                   | prompt §8.5                                   |
 
-**Still open:** CI (push to GitHub, owner's call); Notification hook shape (needs an interactive
-capture); Phase 3 budget metric (Q1) and roadmap questions Q2–Q8.
+The last full `pnpm check` on `main` passed with 812 tests (core 215, adapter-demo 12,
+adapter-claude-code 199, db 83, web 175, server 128). The Playwright e2e passes 7/7.
 
-> Sections 4–6 below describe the state at the first handoff and are kept for history. Their
-> "remaining work" items for P1-C, P1-D and P1-E are done.
-
-## 2. Restore on a new machine
-
-You received the repo either as a GitHub remote or as a bundle file
-(`agent-control-plane.bundle`, which contains every branch):
-
-```bash
-git clone agent-control-plane.bundle agent-control-plane
-```
-
-```bash
-cd agent-control-plane && git branch -a
-```
-
-Only one branch matters besides `main`: the WIP branch for P1-C. Create it locally:
-
-```bash
-git branch wp/p1-c4-wip origin/wp/p1-c4-wip
-```
-
-The bundle contains only `main` and `wp/p1-c4-wip`. Every other work branch was merged into `main`.
-
-## 3. Toolchain (read this, it bit us)
-
-- **Node 22.x, at least 22.12 and below 23.** `.nvmrc` pins 22.21.1, and `engine-strict` rejects other
-  versions. Node 18 and 20 fail.
-- **pnpm 10.26.x.** Run `corepack enable` under Node 22. **Gotcha:** some nvm Node installs ship pnpm 8.
-  Root scripts call `pnpm -r …`, which picks up whatever `pnpm` is first on `PATH`. Check
-  `pnpm --version` _inside_ a script run as well (`pnpm exec pnpm --version`). If you see 8.x, put
-  pnpm 10 first on `PATH`.
-- **C/C++ toolchain** (Xcode CLT or build-essential). `better-sqlite3@13.0.3` may compile from source;
-  on the original Mac it did.
-- **jsdom is pinned to 29.1.1** because 30 needs Node 22.22 or later. **TypeScript is pinned to 6.0.3**
-  because typescript-eslint does not support TS 7 yet (ADR-0001).
+**Check the in-progress branches first:**
 
 ```bash
-pnpm install --frozen-lockfile
+git branch --list 'wp/ui-*'
+git log --oneline main..wp/ui-overview
+git log --oneline main..wp/ui-sessions
 ```
 
-```bash
-pnpm check
+If a branch has commits and a clean `pnpm check`, review it and merge it (§6). If it is missing or
+broken, rerun its prompt from §8 on a fresh branch from `main`.
+
+## 2. Setup and toolchain (things that bit us)
+
+- **Node 22.x (≥22.12, <23).** `.nvmrc` pins 22.21.1 and `engine-strict` rejects others:
+  `source ~/.nvm/nvm.sh && nvm use`.
+- **pnpm 10.26.x.** On this Mac, nvm's Node 22 resolves **pnpm 8.15.9**, while `/usr/local/bin/pnpm`
+  is 10.26.1. Root scripts run `pnpm -r`, so put pnpm 10 first: create a directory that holds only a
+  `pnpm` symlink to `/usr/local/bin/pnpm` and prepend it to `PATH`. Check both `pnpm --version` and
+  `pnpm exec pnpm --version`.
+- **Install and check:** `pnpm install --frozen-lockfile`, then `pnpm check` (format, lint,
+  typecheck, test, build).
+- **E2E:** `pnpm --filter @acp/web test:e2e`. It builds the web UI and runs Playwright against a demo
+  server on port 7431 with a temp data dir. It is not part of `pnpm check`. Chromium was installed
+  with `pnpm --filter @acp/web exec playwright install chromium`.
+- **vitest conditions.** In packages that load Express, list only the `development` condition in
+  `vitest.config.ts`. Adding `import` makes Node load `is-promise`'s ESM entry, and Express then fails
+  with "isPromise is not a function".
+- **Dot-directories.** Paths containing `.claude/` (agent worktrees live in `.claude/worktrees/`) once
+  broke the SPA fallback. Fixed in `430223d`; keep `sendFile(..., { root })`.
+- **Golden fixtures must not depend on the checkout path.** One hook golden hashed an absolute path,
+  and only `70b4cc0` fixed that.
+- **Ports.** The owner's live app uses **7420** (API) and **5173** (Vite). Agents doing manual
+  checks or screenshots must use other ports (we used 7451, 7461, 7471, 7481, 7491) with
+  `ACP_MODE=demo` and a temp `ACP_DATA_DIR`.
+- **Run the app.**
+
+  ```bash
+  pnpm dev                          # live mode: reads <ACP_CLAUDE_DIR>/projects for registered projects only
+  ACP_MODE=demo pnpm dev            # sample data in a separate demo.sqlite, rebuilt on every start
+  pnpm --filter @acp/server hooks:snippet   # prints Claude Code hook settings for the user to paste
+  ```
+
+  Data lives in `~/.agent-control-plane` (`acp.sqlite`, `hook-token`). UI at
+  http://127.0.0.1:5173, API at http://127.0.0.1:7420.
+
+- **Hard rules (AGENTS.md):**
+  - Never read the real `~/.claude` while developing; use `test-fixtures/` and temp dirs. The
+    exceptions are explicit owner consent for one project, and aggregate output only.
+  - Never read `~/.claude/sessions/`.
+  - Never edit Claude Code settings.
+  - Store no conversation content.
+  - Missing usage is `null`, never 0.
+  - Cost is always "estimated" and never summed.
+  - There is no "completed" status.
+
+## 3. Architecture recap (what exists)
+
+```
+packages/core            contracts (zod), pure logic; @acp/core/api = HTTP DTOs (web parses every response)
+packages/db              SQLite (better-sqlite3), migrations, repositories, queries
+packages/adapters/demo   deterministic fixtures (demo mode, tests)
+packages/adapters/claude-code  allowlisted transcript/meta/hook reading → NormalizedEvent
+packages/server          composition root: pipeline, scheduler, REST, SSE, hook receiver, static UI
+packages/web             React 19 + Vite + Tailwind 4 + Recharts + React Flow; hash router
+scripts/reference-usage.ts   independent usage recomputation (P1-F F1), aggregates only
 ```
 
-Claude Code creates agent worktrees under `.claude/worktrees/`. Git, ESLint, and Prettier ignore
-them. Never commit them.
+Key behaviors, all tested:
 
-## 4. Unmerged branches — status at handoff
+- **Pipeline** (`packages/server/src/pipeline/ingest.ts`):
+  - One transaction per batch: validate, skip duplicates (before touching the session row), upsert
+    the session, store usage observations, rebuild usage records, store snapshots, derive edges, then
+    the checkpoint. Notices are published only after commit.
+  - Invalid events are counted and skipped.
+- **Usage** (usage-accounting.md):
+  - Dedup is global by `(provider, messageId)`; the observation with max output wins.
+  - Usage is attributed to the earliest occurrence. Fork copies with tied timestamps are counted
+    once and flagged `attributionAmbiguous`.
+- **Edges:**
+  - Subagent edges come from meta-file evidence (plus the spawn tool call). The evidence is stored in
+    the child session's metadata, so edges derive in any event order.
+  - Continuation edges come from strictly-earlier shared messages; ties give no edge.
+  - There are no edges from timing or folder names.
+- **Projects:**
+  - A session belongs to the deepest registered root containing its first `cwd`.
+  - **A subagent outside every root inherits its parent session's project** (fix `ae27c9e`, found by
+    the real-data run).
+- **Status** is derived at read time: Running (<2 min) / Paused (2–30 min) / Inactive (>30 min) /
+  Ended (only with hooks) / Unknown.
+- **Hooks** (`POST /api/hooks/claude-code`):
+  - Token header, constant-time compare, 256 KiB limit, 204 response.
+  - A local-only guard rejects foreign Host/Origin and CORS preflights.
+  - Verified against Claude Code 2.1.296: an http `SessionStart` hook is **not** delivered, so the
+    snippet omits it. Bodies carry a per-turn `prompt_id`.
+- **Diagnostics (ADR-0011):**
+  - Every adapter has `diagnostics()`: file issues, known-ignored record types, parse errors.
+  - `GET /api/diagnostics/ingestion` adds poll and pipeline counters.
+  - Eight known no-use record types are counted as ignored instead of "unrecognized".
+- **Overview** includes `latestSnapshots`: per-session estimated cost, never summed.
+- **Logs** are structured JSON, `redact()`ed, and errors log only class name and machine code.
 
-The coordinator fills this in from the agents' final reports. If a section is missing, run
-`git log --oneline main..<branch>` and read the commit bodies. Every commit says which task it
-implements and what was tested.
+## 4. Decisions log (project owner, 2026-10-10/11)
 
-### `wp/p1-b-persistence` (P1-B)
+| Decision                                                                                             | Record                                           |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| MIT license accepted                                                                                 | ADR-0010                                         |
+| `diagnostics()` on the adapter interface (not a `Checkpoint` error field)                            | ADR-0011                                         |
+| Command Center shows per-session latest estimated cost (`OverviewDto.latestSnapshots`), never summed | dto.ts, server README                            |
+| Real-data run approved for `/Users/grootan/Desktop/ftl-rendering-harness` only                       | `docs/research/p1-f-real-data-2026-10-10.md`     |
+| Real hook payload capture approved (throwaway dir, shape-only)                                       | `docs/research/p1-c6-hook-capture-2026-10-11.md` |
+| UI redesign: "clean & calm" style; technical detail behind collapsed Details and a Data health page  | `packages/web/DESIGN.md`                         |
+| No abbreviations ("direct in/out"); always "Input tokens", "Output tokens", etc.                     | DESIGN.md glossary                               |
+| Easy "which session is under which" family-tree view as the default relationships view               | §5.2 (sessions screen)                           |
+| Next big goal: a master control panel to start and manage Claude agents from the UI (Phase 3)        | §7                                               |
 
-**Done and merged** (B1–B6, last commit `ddf30aa`). The full public API is in
-`packages/db/README.md`. Points the server agent needs:
+Verification highlights:
 
-- **Connection:** `openDatabase(path, { migrate })` opens the database, and `withTransaction(db, fn)`
-  wraps work in a transaction. It is synchronous, uses BEGIN IMMEDIATE, and turns nested calls into
-  savepoints.
-- **Repositories:** `createRepositories(db)` returns `projects`, `sessions`, `edges`, `events`,
-  `usage`, `snapshots`, and `checkpoints`. `checkpoints` implements core's `CheckpointStore`.
-  `createQueries(db)` returns `listSessions` (keyset), `sessionTree`, `directUsage`/`aggregateUsage`
-  (null-preserving), `ambiguousAttributionCount`, `usageSummary`, `projectStats`,
-  `childCountBySession`, and `diagnosticsCounts`.
-- **Pipeline recipe for D2**, run inside `withTransaction`:
-  1. `events.insertIfNew`; continue only if the event was inserted;
-  2. `sessions.upsert`;
-  3. `edges.upsert`;
-  4. `usage.insertObservation`;
-  5. `buildUsageRecord(usage.listObservationsByMessage(…))`, then `upsertRecord`, or `deleteRecord`
-     if it returns null;
-  6. `snapshots.insert`;
-  7. `checkpoints.set`.
-- **Null keys:** `usageSummary` returns null keys, and the server must label them, because
-  `UsageSummaryDto` requires a non-empty key.
-- **Contract proposals:** add `SessionMetadataSchema` and `SessionOriginSchema` to core.
+- **F2:** on real data, the app and the independent reference matched exactly: 39/39 sessions with
+  usage, 3/3 models, 5,595 records.
+- **F4:** a new live session appeared as Running via polling.
+- **Q3 finding:** Claude Code's `cost-state` snapshots are ≥ the transcript totals (output and cache
+  up to 1.3×, input up to 458×). They stay "estimated" and are never added to records.
 
-### `wp/p1-c-adapters` (P1-C)
+## 5. UI redesign (current focus)
 
-**Committed (checks passed):**
+**Problem (owner).** The original UI read like a debug console: jargon ("derived", "provenance",
+"aggregate", "direct in", "cache w"), raw ids and event payloads everywhere, and numbers without
+units. Someone who doesn't know Claude Code must be able to understand and use it.
 
-| Commit    | Task    | Contents                                                                                                                                                                                                                                                                                                                          |
-| --------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `6a1ee12` | C0      | **Demo adapter is complete.** `createDemoAdapter({ baseTime?, now?, fixturesDir? }): ObservationAdapter`. Fixtures: 2 projects, a session with 2 subagents, a fork, missing usage, a snapshot, titles, an end. Checkpoints count records; `sourcePath` is `demo://…`                                                              |
-| `7b416f4` | C1 + C2 | `scripts/sanitize-fixture.ts`; file allowlist (`classifyRelative`, `listSources`: realpath containment, symlink-escape rejection, size caps); `peekFirstCwd` (64 KiB); `toCandidates`; `resolveAllowedTranscriptSync` (for hook paths); a local `isPathInside` (duplicates core; swap it for `@acp/core`); `DiagnosticsCollector` |
-| `4ff7f61` | C3      | `readIncrement`: `dev:ino`, size, and `headHash` change → reset; 1 MiB chunks up to the last `\n`; parse errors counted and skipped; `FileTooLargeError`. Tests for scenarios 6, 7, and 10. 95/95 tests at this point                                                                                                             |
+**Brief.** `packages/web/DESIGN.md` is binding. It holds the glossary, status words, activity-feed
+sentences and formatting rules. All wording lives in `packages/web/src/lib/copy.ts`.
 
-**WIP branch `wp/p1-c4-wip`** (`cfbbec8`, on top of `4ff7f61`) is **untested; checks were not run.**
-It holds the stashed C4 work:
+### 5.1 Done
 
-- `src/redact.ts` (duplicates core; switch to the core `redact`);
-- `src/dedup.ts`, `src/records.ts`, `src/ingestor.ts`;
-- `tests/helpers/scenarios.ts`;
-- synthetic fixtures `test-fixtures/claude-code/01…16` (no `expected/` goldens yet).
+- **Phase 1 foundation** (`3718a23`, `c1c5cd9`, `6ce2de0`):
+  - Theme tokens, light and dark.
+  - Icon sidebar: Overview, Sessions, Tokens, Projects (with the registered projects listed), then
+    Setup and Data health at the bottom. Footer with a Live dot and the theme toggle.
+  - Slim demo banner.
+  - Shared components in `src/components/`: Card, StatCard, PageHeader, InfoTip, Tooltip,
+    StatusBadge, TokenValue, TokenBreakdown, EstimatedCost, ShortId, RelativeTime, EmptyState,
+    Details, DataTable, Button, icons.
+  - `copy.ts` with a tested `describeEvent`.
+  - New routes `#/projects`, `#/setup`, `#/health`.
+- **Phase 2 Overview / Setup / Data health** (`80e0553`, `2304cc6`, `015b181`):
+  - Overview: Running now, Need you, sessions by status in words, token stats per type, estimated
+    cost by session, and recent activity as sentences.
+  - Setup: step cards to add a project, add discovered folders with one click, and set up hooks
+    optionally.
+  - Data health: a friendly summary first, the detail behind it.
+- **Phase 2 Tokens / Projects / Project** (`7100d90`, `02d7e20`):
+  - Token-type explainer.
+  - Date presets, project filter and group-by.
+  - Four stat cards that are never summed.
+  - Themed charts with gaps for missing data, plus a "Show as table" view.
+  - Breakdown table with units.
+  - Projects list, and a project page with its sessions.
 
-Start from this branch, not from scratch.
+### 5.2 In progress (finish or redo with §8.3)
 
-**Remaining work, in order:**
+- **Sessions / Session detail** (`wp/ui-sessions`).
+  - Friendly list with helper agents grouped under their parent.
+  - The default relationships view is a family tree: top-level session at the top, helper agents
+    nested below, "Continued as" as a dashed link. It is built only from `/tree` edges and shows
+    "No known parent" explicitly. React Flow is an optional tab.
+  - Timeline tab.
+  - Detail page: tokens for this session and with helpers, side by side (never added together);
+    estimated cost; helper agents; the family tree with the current session highlighted; an activity
+    feed in sentences; technical details collapsed.
 
-1. **C4 golden and unit tests.** Run the ingestor per scenario with roots `/home/user/project` and a
-   fixed `now`, generate `expected/events.json` with `UPDATE_GOLDEN=1`, and **review each golden by
-   hand**. Assert:
-   - every event passes `NormalizedEventSchema`;
-   - no event JSON contains `<redacted>`, and scenario 08 does not contain `acc00000`, `0rg00000`,
-     `never-read`, or `SECRET`;
-   - scenario 15 gives `parseErrors: 3`;
-   - in scenario 06 the checkpoint excludes the partial line;
-   - scenario 14 never shows session `…0002`;
-   - scenario 07 copies v1, polls, overwrites with v2, polls again, and resets;
-   - a second poll emits nothing new;
-   - a restart with small `chunkBytes` produces the same keys.
+### 5.3 Proposed shared-component changes (from phase 2 agents; decide during cleanup)
 
-   Also unit-test `redact`, `dedup`, and `records`.
+- **Pager:** restyle `components/Pager` like `features/project/SessionsPager.tsx`, then delete the
+  local copy.
+- **DataTable:** optional horizontal-scroll wrapper for narrow widths.
+- **StatCard:** optional token-type color swatch.
+- **Dark-theme token colors:** they fail the lightness band (all too light, L 0.71–0.84). Darken
+  them slightly.
+- **Focus ring:** nav focus outline rendered gray instead of the accent color.
+- **Hardcoded colors:** `UsageChart.tsx` and `graph.ts` still hardcode hex in places; use
+  `TOKEN_TYPE_COLOR`.
+- **TokenBreakdown:** labels truncate at 1024px ("Cache write to…"); let `dt` labels wrap.
+- **Icons:** add an `AlertIcon` (warning triangle); a local copy is in `health/HealthCards.tsx`.
+- **CopyableCode:** a shared command/URL box with a copy button; a local copy is in
+  `setup/HooksSetup.tsx`.
+- **`sessionLabel()` in `lib/format.ts`:** returns lowercase "untitled session"; align it with the
+  Overview's local `sessionName()` ("Untitled session").
 
-2. **C5 meta.** Read the whole file (at most 1 MiB) and emit `subagent.spawned`:
-   - key `cc:meta:{sid}:{aid}:h:{sha256}#spawned`, envelope on the child key `(sid, agentId)`;
-   - channel `subagent-meta`, `occurredAt` null, description redacted and capped at 200;
-   - invalid JSON raises an `invalid-meta` diagnostic.
+### 5.4 Cleanup (UI phase 3, after 5.2 merges)
 
-   Remove the temporary `continue` in `ingestor.ts`. Write goldens for 03, 04, and 05.
+- Delete the superseded components once unused: `StatusPill` (`STATUS_LABELS`), `TokenCount`,
+  `Time`, `EventList`, `SessionTable`, `UsageTotals`, Panel's `PageHeader`, `LegacyEstimatedCost`,
+  and `TOKEN_CATEGORIES` in `lib/tokens.ts`.
+- Apply §5.3.
+- Update `packages/web/README.md` and the root README status.
+- Screenshot every route in light, dark, 1440 and 1024, and check that no screen shows an
+  abbreviation, a raw id outside Details, or a number without a unit.
+- Keep e2e green.
 
-3. **C6 `normalizeHook`.**
-   - Requires `session_id` and `hook_event_name`; unknown events return `[]`.
-   - Key: `cc:hook:{sid}:{event}:{tool_use_id|sha256(canonical body)}`.
-   - `occurredAt` is null; `observedAt` is `receivedAt`.
-   - `source.path` is the allowlisted transcript only; SubagentStop uses `agent_transcript_path`.
+### 5.5 Data note for the owner's live DB
 
-   Also `hookSettingsSnippet({ port, tokenEnvVar })`, which returns a JSON string only. Test with
-   scenario 13.
+Records ingested before the ignored-types change remain stored as "unrecognized" events, because
+events are append-only. To see corrected diagnostics, re-ingest into a fresh data dir
+(`ACP_DATA_DIR=<new dir> pnpm dev`, then register the project again). The old DB stays as a backup.
 
-4. **C7 `capabilities()`.** Set `providerVersionsSeen` and honest `limitations`: internal format;
-   hooks are opt-in and real payloads are not captured; snapshot scope unknown; cost is an estimate;
-   auxiliary usage invisible; depth above 1 unverified; retention; size cap.
-5. **Assemble.**
-   - Write `src/adapter.ts` and `src/index.ts`: `createClaudeCodeAdapter({ claudeDir, now?,
-maxFileBytes?, chunkBytes? })` returns an `ObservationAdapter` plus `diagnostics()`.
-   - Update the package README and `test-fixtures/claude-code/README.md` (scenarios 15 and 16 were
-     added).
+## 6. How to coordinate (the workflow that worked)
 
-**Unverified assumptions to record in `docs/provider-adapters.md`:**
+1. **One work package per agent.** Each agent works in its own git worktree on `wp/<id>-<slug>` from
+   `main`, with explicit owned paths. Shared files (contracts, `copy.ts`, `e2e/demo.spec.ts`) are
+   add-only or limited to the agent's own blocks.
+2. **A shared contract change goes first.** It lands on `main` in its own commit, made by the
+   coordinator, before parallel agents start (the ADR-0011 pattern).
+3. **Review every branch before merging:**
+   - Scope: `git diff --name-only main...<branch>` must stay inside the owned paths.
+   - Rebase on `main` and run `pnpm check` and the e2e yourself; never trust a reported result.
+   - Read the risky code: anything touching privacy, file access, the cost and null rules, or
+     security.
+   - For UI, look at the screenshots.
+   - Then `git merge --ff-only`.
+4. **Commit messages:** Conventional Commits with the package scope; a body giving what, why and
+   tests; a `Checks:` line with the real results. Never commit failing checks, and never push
+   without the owner's OK.
+5. **Docs:** update the Status table in `docs/implementation-plan.md`, this file, and the README
+   status in the same change as the behavior they describe.
 
-- `providerSessionId` comes from the file path, not the line.
-- Lines without a uuid and unrecognized lines use a line-hash key.
-- Key suffixes: `#session #cwd #user #assistant #tool: #result: #usage #snapshot #title #error
-#unrecognized #spawned`.
-- These field names are guesses: `cost-state` models (`inputTokens`, `outputTokens`,
-  `cacheReadInputTokens`, `cacheCreationInputTokens`), titles (`customTitle`/`aiTitle`), the
-  api_error shape, and the hook fields `notification_type`, `old_cwd`/`new_cwd`, `agent_id`.
-- Other system subtypes become `system:<subtype>`.
-- Nested subagent files are stored flat under the top-level session's `subagents/`.
-- A candidate's `lastSeenAt` is the file mtime.
+## 7. Phase 3 plan: the master control panel (DRAFT — needs owner decisions and ADRs)
 
-**Contract proposals (need a coordinator decision):**
+### 7.1 Goal (owner's words, summarized)
 
-1. Add either an optional `lastError` to `Checkpoint`, or `diagnostics()` to `ObservationAdapter`.
-   This affects P1-B and P1-D.
-2. Widen the `SourceRef.path` doc comment to cover hook events, which carry the allowlisted
-   transcript path.
+A UI from which you manage multiple Claude sessions. A main orchestrator chat window lets you say
+"spin up two agents: one builds X, one tests it". The family-tree graph sits beside it and grows
+live, showing what each agent is working on, its status, tokens and estimated cost. You can open,
+message, pause or stop any agent from the panel.
 
-### `wp/p1-e-web` (P1-E)
+### 7.2 Design (builds on `docs/orchestration-lifecycle.md`, which must be revised by ADR)
 
-**Committed (checks passed; 254/254 tests at `267228f`). There is no stash.**
+- **Orchestrator.**
+  - The server runs a lead Claude session headless.
+  - The app exposes a small, fixed tool set to it, for example as a local MCP server:
+    `start_agent(task, project, role)`, `list_agents()`, `message_agent(id, text)`,
+    `stop_agent(id)`, `get_agent_status(id)`.
+  - The model plans; **the engine enforces** everything, per orchestration-lifecycle §1.
+- **Managed agents.**
+  - Each agent is a headless Claude Code run, using either the Claude Agent SDK or `claude -p` with
+    `--input-format stream-json --output-format stream-json` (decision Q2).
+  - Each runs in its own `git worktree` of a registered project.
+  - The engine collects a patch and changed-file manifest per agent and integrates deliberately
+    (orchestration-lifecycle §5).
+- **Live view.**
+  - The existing observation pipeline already shows these sessions, the family tree and activity.
+  - Managed runs add stronger, "managed"-origin evidence: the engine knows each child's parent
+    because it launched it.
+  - Streaming output from the headless processes is shown as activity, still without storing
+    conversation content beyond what the owner approves (ADR-0009 must be revisited for the chat
+    window itself).
+- **Run model.**
+  - Tasks, runs and the state machine in orchestration-lifecycle §2 (QUEUED → PLANNING →
+    POLICY_CHECK → RUNNING… → VALIDATING → COMPLETED/FAILED).
+  - New DB migrations (P1-B-style ownership): `tasks`, `runs`, `run_agents`, `approvals`,
+    `budgets`.
+- **Guardrails** (an ADR that replaces today's "no shell execution from any input" rule for Phase 3
+  only):
+  - Only the fixed `claude` binary is ever launched, with argument arrays; text is never built into
+    a shell command.
+  - Agents run only inside registered projects, each in its own worktree.
+  - At most 3 concurrent children, depth 1 (roadmap).
+  - Per-run budget (Q1), a kill switch (stop all), timeouts, and cancellation via AbortController
+    or process kill.
+  - Approval prompts are surfaced in the panel.
+  - Never `--dangerously-skip-permissions` by default.
+  - Local only (127.0.0.1); the chat and approvals UI is protected by the existing local-only guard
+    plus a per-session CSRF token.
 
-| Commit    | Task          | Contents                                                                                                                                                                                                                                      |
-| --------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `15f2736` | E0            | Vite/React/Tailwind scaffold; typed API client that parses every response with the DTOs; query store; `useEventStream` (SSE invalidation); hash router; theme; app shell with the DEMO banner; a clear "server not reachable" state           |
-| `62f7203` | E1            | Command Center: status counts, active and needs-attention lists, recent events, totals, register-project form, candidate roots, capabilities and diagnostics panels                                                                           |
-| `267228f` | E2 + E3 Gantt | Session Explorer: filters, session-id search, list, a React Flow graph built only from `SessionTreeDto.edges` (subagent vs continuation edges styled differently, expand/collapse, explicit parent unknown), and a concurrency Gantt timeline |
+### 7.3 Decisions needed from the owner before building
 
-**Remaining work.** The agent's detailed design is in that branch's last commit body. In short:
+1. **Q2, engine:** Claude Agent SDK (cleaner: typed messages, AbortController; a new pinned
+   dependency) or `claude -p` stream-json (no new dependency).
+2. **Agent permissions:** ask before edits and commands, with prompts shown in the panel (safer), or
+   pre-approved tool lists per task.
+3. **Q1, budget metric:** recommended is a per-agent cap on output plus uncached input tokens, with
+   cache reads tracked separately, plus a soft estimated-cost cap when a cost is reported.
+4. **Chat content:** may the orchestrator chat transcript be stored locally? ADR-0009 currently
+   forbids conversation content.
+5. **Integration:** auto-merge child worktrees when validation passes, or always require review.
 
-1. **E3 session detail, `#/sessions/:id`.** Create `features/session-detail/SessionDetail.tsx` using
-   the existing components: `StatusPill`, `ParentInfo`, `UsageComparison` (already shows the
-   ambiguity note), `EstimatedCost`, `EventList`, `Pager` with `useCursorStack`. It covers metadata
-   with provenance, the snapshot by-model table, "no provider snapshot observed", and a "show in
-   graph" link. Add `case 'session'` to `App.tsx`.
-2. **E4 usage, `#/usage`.**
-   - Build two Recharts charts from `groupBy=day`, one for input and output and one for cache
-     creation and cache read. `null` must show as a gap, never 0, and the charts are not stacked.
-   - Add a group table and totals labeled "Groups and totals sum DIRECT usage".
-   - Test the pure `toChartRows`, and stub `ResizeObserver` if anything renders Recharts.
-3. **E5 project page, `#/projects/:id`.** Show metadata, usage totals from
-   `usageSummary({groupBy:'session', projectId})`, and a paginated `SessionTable`.
+### 7.4 Proposed work packages (after the decisions; run in parallel where marked)
 
-**Endpoints the UI calls (P1-D must match them exactly):**
+| WP   | Scope                                                                                                     | Parallel with          |
+| ---- | --------------------------------------------------------------------------------------------------------- | ---------------------- |
+| P3-0 | ADRs (engine, guardrails/exec policy, budget, chat content), revise orchestration-lifecycle.md; contracts | first, alone           |
+| P3-A | `packages/orchestrator` engine: run state machine, policy checks, budgets, persistence (pure + tests)     | P3-B, P3-C             |
+| P3-B | `packages/adapters/claude-code` managed mode: launch/stream/abort a headless run in a worktree            | P3-A, P3-C             |
+| P3-C | db migrations + repositories for tasks/runs/agents/approvals                                              | P3-A, P3-B             |
+| P3-D | server: run routes, orchestrator tool endpoint (MCP), SSE run events, worktree manager                    | after A–C              |
+| P3-E | web: Orchestrator chat + live family tree side by side, agent drawer (status, activity, stop/message)     | after D's API contract |
+| P3-F | verification: fake-claude test double, e2e of "spin up two agents", cancellation, restart (NEEDS_REVIEW)  | last                   |
 
-- `GET /api/health`, `/api/capabilities`, `/api/projects`, `/api/overview`,
-  `/api/discovery/candidates`, `/api/diagnostics/ingestion`
-- `POST /api/projects {name, rootPath}`. A 400 must return an `ErrorDto`.
-- `GET /api/sessions?model&projectId&provider&q&status&cursor&limit=50` (empty parameters are
-  omitted)
-- `GET /api/sessions/:id/tree`
-- `GET /api/usage/summary?groupBy=model`
-- `GET /api/events/stream`
-- For E3–E5: `/api/sessions/:id`, `/api/sessions/:id/events?cursor`,
-  `/api/usage/summary?groupBy&from&to&projectId`, `/api/projects/:id`,
-  `/api/projects/:id/sessions?cursor`
+## 8. Ready-to-paste prompts
 
-The Vite dev server runs on `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:7420`.
-`pnpm --filter @acp/web dev` works without a server and shows the unreachable state.
+Prepend §8.0 to each prompt.
 
-**Assumptions the server must honor:**
+### 8.0 Common preamble
 
-- `/tree` is rooted at the topmost ancestor.
-- "Unreachable" means a fetch failure, or a 502, 503, or 504 response whose body is not an
-  `ErrorDto`.
-- The DEMO banner keys off `capabilities.mode`.
+> You are working on the Agent Control Plane repo at `/Users/grootan/Desktop/agent-control-plane`.
+> Read `HANDOFF.md` fully, then `CLAUDE.md` and `AGENTS.md`; they are binding. Work in a new git
+> worktree on the branch named below, created from `main`. Follow the toolchain notes in HANDOFF §2,
+> including the pnpm 10 PATH shim, and run `pnpm install --frozen-lockfile` first. Edit only the
+> paths listed as yours; propose any other change in your report. Never read the real `~/.claude`.
+> Never edit Claude settings. Don't change dependencies. For manual checks use `ACP_MODE=demo`, a
+> temp `ACP_DATA_DIR`, and a port other than 7420/5173. Commit at each checkpoint with Conventional
+> Commits (body: what, why, tests; a `Checks:` line with real results), only when `pnpm check` passes
+> from the repo root. Do not push or merge. Finish with the AGENTS.md §9 completion report, including
+> the e2e result and screenshot paths for UI work.
 
-**Contract proposal (needs a coordinator decision).** `OverviewDto` has no cost field, but task E1
-asks for the latest cost, labeled estimated. Either:
+### 8.1 Coordinator: merge what is in flight
 
-- add `latestSnapshots: {sessionId, occurredAt, reportedCostUsd}[]` (the most recent N, never
-  summed), or
-- drop that item from E1.
+> Act as coordinator. Run `git branch --list 'wp/ui-*'`. If `wp/ui-sessions` has commits: check scope (packages/web only, and inside its feature
+> folders apart from add-only `copy.ts` sections and its own e2e blocks); rebase on `main`; run
+> `pnpm check` and `pnpm --filter @acp/web test:e2e`; screenshot its routes in demo mode on port 7451
+> and review them against `packages/web/DESIGN.md`; then `git merge --ff-only`. If the branch is
+> missing or unfinished, run prompt 8.3 instead. Afterwards run prompt 8.4.
 
-## 5. What to do next, in order
+### 8.2 UI phase 2: Overview, Setup, Data health (branch `wp/ui-overview`)
 
-These three can run **in parallel**, one agent each:
-
-1. **P1-D (server):** prompt §6.3. It is unblocked now and on the critical path. Wire the demo adapter
-   first; the Claude adapter's `createClaudeCodeAdapter` arrives when P1-C is finished.
-2. **Finish P1-C:** prompt §6.2, starting from `wp/p1-c4-wip`.
-3. **Finish P1-E:** prompt §6.4, on a new branch from `main`.
-
-**Coordinator role.** One person or agent acts as coordinator. For each branch they:
-
-- rebase it on `main`;
-- run `pnpm check`;
-- merge it with `git merge --ff-only`;
-- update the Status table in `docs/implementation-plan.md`.
-
-The coordinator also owns the shared files (AGENTS.md §5) and decides on contract proposals. 4. **Integrate.**
-
-- Run `ACP_MODE=demo pnpm dev`, open http://localhost:5173, and check the Command Center, Session
-  Explorer, and usage views against the demo data.
-- Then do the P1-F real-data run, with the user's consent: register a project that has Claude Code
-  sessions.
-
-5. **Run P1-F**, the verification checklist in `docs/implementation-plan.md`.
-
-Branches can run in parallel. Use one agent per WP, each in its own worktree or clone, on branch
-`wp/<id>-<slug>`.
-
-## 6. Ready-to-paste prompts
-
-Paste one prompt into a fresh Claude Code (or other agent) session at the repo root. Each one
-assumes the agent can read the repo.
-
-### 6.0 Common preamble (prepend to each prompt below)
-
-> You are working on the Agent Control Plane repo. Read `HANDOFF.md`, `CLAUDE.md`, and `AGENTS.md`
-> first; they are binding. Then read your work package (WP) in `docs/implementation-plan.md` and the
-> specs it cites. Follow the toolchain notes in HANDOFF.md §3, and verify Node 22 and pnpm 10 before
-> anything else. Edit only the paths your WP owns (AGENTS.md §5). Never read the real `~/.claude`
-> directory. Use `test-fixtures/` and temp directories instead. Never modify Claude Code settings.
-> Don't change dependencies or shared contracts. If you need a change, propose the diff in your
-> report. Commit at every checkpoint with the detailed message format in CLAUDE.md, and only when
-> `pnpm check` passes. End with the AGENTS.md §9 completion report. Do not push or merge unless I ask.
-
-### 6.1 P1-B — done
-
-No prompt is needed. P1-B is merged; its API is in §4 and `packages/db/README.md`.
-
-### 6.2 Finish P1-C (adapters)
-
-> Continue **P1-C** from branch `wp/p1-c4-wip`. It is `wp/p1-c-adapters` plus one untested WIP commit
-> holding the C4 code and fixtures.
+> Follow `packages/web/DESIGN.md` exactly and use `src/lib/copy.ts` and the shared components in
+> `src/components/`.
 >
-> 1. Check out `wp/p1-c4-wip`. It is already rebased onto `main` as of the handoff; rebase again if
->    `main` has moved.
-> 2. Read HANDOFF.md §4 (P1-C) and `git log main..HEAD`. C0 (demo adapter), C1, C2, and C3 were
->    committed with passing checks. The WIP commit has not been checked; make it pass and fold it into
->    proper C4 commits, or rewrite it.
-> 3. Finish the remaining tasks:
->    - **C4** record normalizers: follow the provider-adapters.md §4.4 allowlist and the
->      usage-accounting.md §3 dedup keys. Store **no** content fields. Write golden contract tests
->      over synthetic fixtures for the 14 scenarios in `test-fixtures/claude-code/README.md`.
->    - **C5** subagent meta → `subagent.spawned`.
->    - **C6** `normalizeHook` and `hookSettingsSnippet`. Use synthetic hook fixtures only. Real
->      payload capture needs my explicit approval in chat, so skip it and list it as a gap.
->    - **C7** `capabilities()` with honest limitations.
-> 4. If a fixture has duplicate message ids across sessions with identical timestamps (forks), note
->    that core flags these as ambiguous (usage-accounting.md §5.2).
-> 5. `createClaudeCodeAdapter({ claudeDir, now?, maxFileBytes?, chunkBytes? })` returns an
->    `ObservationAdapter` (`packages/core/src/adapters/contract.ts`). Every emitted event must pass
->    `NormalizedEventSchema`.
-
-### 6.3 P1-D (server) — start once P1-B and P1-C0 are on `main`
-
-> Implement **P1-D** on a new branch, `wp/p1-d-server`.
+> **Owned paths:** `packages/web/src/features/{command-center,setup,health}/**`, a new section in
+> `copy.ts` (add-only), add-only fixtures in `tests/fixtures`, and only the overview test blocks in
+> `e2e/demo.spec.ts`. Don't edit `src/components/**`, `src/lib/{tokens,format,router}.ts` or
+> `src/app/**`.
 >
-> **Read first:** `docs/architecture.md`, `docs/usage-accounting.md`, `docs/provider-adapters.md` §6
-> (hooks), `docs/security.md`, `docs/development.md` §5 (env config), the P1-D section of the plan,
-> `packages/core/src/api/dto.ts` (the response contract; the web UI parses every response with it),
-> and the public APIs of `@acp/core`, `@acp/db`, `@acp/adapter-demo`, and
-> `@acp/adapter-claude-code`.
->
-> **Owned paths:** `packages/server/**` and the root `package.json` `dev` script (task D7). Dependencies
-> are already pinned: express 5.3, zod, tsx, supertest, vitest.
->
-> **Tasks:**
->
-> - **D1:** `loadConfig()` with `ACP_PORT`=7420, `ACP_DATA_DIR`=~/.agent-control-plane,
->   `ACP_CLAUDE_DIR`, `ACP_MODE`=live|demo (demo uses `demo.sqlite` and the demo adapter only),
->   `ACP_POLL_INTERVAL_MS`, `ACP_ACTIVE_WINDOW_MS`, `ACP_STALE_AFTER_MS`. Also `createApp(deps)`, which
->   tests can use without listening.
-> - **D2:** pipeline `ingestBatch(batch)`. In one transaction:
->   1. validate each event with `NormalizedEventSchema`;
->   2. `insertIfNew`;
->   3. for inserted events only, update projections:
->      - upsert sessions by `SessionKey`, mapping project with `findOwningRoot`;
->      - store usage observations, then recompute affected records with
->        `groupObservationsByMessage` + `buildUsageRecord`, persisting `attributionAmbiguous`;
->      - recompute edges with `deriveSubagentEdge` / `deriveContinuationEdges`;
->      - store snapshots;
->      - set `last_attention_at` from `session.attention`, and `ended_at` from `session.ended`;
->   4. advance the checkpoint;
->   5. after commit, publish a `StreamNoticeDto`.
->      Tests: re-ingesting twice gives identical totals; a crash mid-batch leaves no partial state; demo
->      adapter end-to-end.
-> - **D3:** scheduler. A poll loop that is single-flight per file, plus hook-triggered immediate
->   reads.
-> - **D4:** every REST route in the plan (including `GET /api/overview`), each response parsed by its
->   DTO schema in tests. Session status is derived at read time with `deriveSessionStatus`.
->   `X-Request-Id`, error middleware returning `ErrorDto`, keyset pagination.
-> - **D5:** SSE `/api/events/stream`: `Last-Event-ID`, a 15 s heartbeat, publish only after commit.
-> - **D6:** `POST /api/hooks/claude-code`:
->   - token file `<ACP_DATA_DIR>/hook-token` with mode 0600;
->   - header `X-ACP-Hook-Token`, compared in constant time;
->   - 256 KiB limit; reply 204 with no body;
->   - reject CORS from foreign origins.
->     Never write Claude settings. Expose the snippet only.
-> - **D7:** serve `packages/web/dist` statically. Add a root `pnpm dev` that runs the server (with
->   `node --conditions=development --import tsx`) and the Vite dev server in parallel. Bind
->   **127.0.0.1** only.
->
-> **Logging:** structured, redacted with `redact()`, never payloads.
->
-> **Done:** `ACP_MODE=demo pnpm dev` serves the demo data, and the web UI at http://localhost:5173
-> shows it.
+> - **Overview** answers "what are my Claude Code agents doing?":
+>   - Stat cards: Running now, Need you, sessions by status in words, the four token types as
+>     separate stats with units (never one total), and Projects.
+>   - "Running now" and "Waiting for you" lists.
+>   - "Estimated cost by session" from `OverviewDto.latestSnapshots`, with the note that cost is
+>     reported by Claude Code and not added up.
+>   - Recent activity as sentences (`describeEvent`), with the raw table under Details.
+>   - Empty states that point to Setup.
+>   - Move the register form, candidate roots, capabilities and diagnostics off the Overview.
+> - **Setup** is "Connect this app to your work", as step cards:
+>   1. Add a project folder, with friendly validation.
+>   2. Folders with Claude activity not added yet, with a one-click add.
+>   3. Optional hooks: explain in plain words what they add, show the receiver URL and the steps
+>      (`pnpm --filter @acp/server hooks:snippet`, set `ACP_HOOK_TOKEN`), and whether a hook was ever
+>      received. The app never edits Claude settings.
+> - **Data health:**
+>   - A friendly summary first.
+>   - Cards: file problems, known-skipped vs unknown records, parse errors, poll and ingest counters
+>     with relative times, and capabilities and limitations in plain words.
+>   - Raw detail under Details.
+> - **Rules:** null shows "Not reported", never 0; cost is estimated and never summed; token types
+>   are never summed; no "completed"; no abbreviations.
+> - **Verify:** `pnpm check`; the e2e; screenshots of `#/`, `#/setup` and `#/health` in light and
+>   dark at 1440 and 1024px, from a demo server on port 7471. Look at them and polish.
 
-### 6.4 Finish P1-E (web)
+### 8.3 UI phase 2: Sessions and Session detail (branch `wp/ui-sessions`)
 
-> Continue **P1-E** on a new branch, `wp/p1-e-web-2`, created from `main`. E0–E2 are already merged.
+> Follow `packages/web/DESIGN.md` exactly and use `src/lib/copy.ts` and the shared components.
 >
-> 1. Run `pnpm check` (it should pass).
-> 2. Read HANDOFF.md §4 (P1-E) and `git log --oneline -- packages/web`. E0 (scaffold, typed client, SSE) and E1
->    (Command Center) were committed.
-> 3. Finish the remaining tasks:
->    - **E2** Session Explorer: filters, list, a React Flow graph built only from
->      `SessionTreeDto.edges`, an explicit "parent: unknown", and a concurrency timeline;
->    - **E3** session detail: provenance badges, direct vs aggregate usage side by side, the
->      `ambiguousAttributionCount` note, snapshot cost labeled "estimated (provider-reported)", and a
->      paginated event timeline;
->    - **E4** usage analytics in Recharts, with cache categories separate;
->    - **E5** project page.
-> 4. Rules: `null` renders as "unavailable", never 0. Status never shows "completed". Fixture DTOs go
->    in `tests/` only. Use the hash router; there is no router dependency. When the API is
->    unreachable, show a clear message.
-
-### 6.5 P1-F (verification) — last
-
-> Run **P1-F** from the plan:
+> **Owned paths:** `packages/web/src/features/{sessions,session-detail}/**`, a new `copy.ts` section
+> (add-only), add-only fixtures, and only the Session Explorer, session detail and "unavailable"
+> e2e blocks.
 >
-> - **F1:** a reference recomputation script, aggregate-only, that never prints content;
-> - **F2:** a real-data run on a project I choose;
-> - **F3:** re-ingest and restart checks;
-> - **F4:** live new-session check;
-> - **F5:** a Playwright e2e test in demo mode;
-> - **F6:** the docs and acceptance checklist.
+> - **Sessions list:**
+>   - Friendly filters: project, status in words, model, and search ("Find a session by name or
+>     id").
+>   - Rows: title or "Untitled session" with a ShortId, project, StatusBadge, helper-agent count,
+>     input and output tokens with units (cache in a secondary line or tooltip), and last activity.
+>   - Helper agents grouped under their parent.
+> - **"How sessions relate" card:**
+>   - The default tab is a **family tree** a non-technical person reads instantly: the top-level
+>     session at the top, helper agents nested beneath with connecting lines. Each node shows its
+>     title (or "Helper agent: {type}"), StatusBadge, and "N input · N output tokens".
+>   - "Continued as" appears as a dashed labeled link. Nodes are clickable.
+>   - Built only from `/tree` edges, with "No known parent" explicit.
+>   - Tabs: "Relationships" (the tree; React Flow as an optional alternative, restyled with theme
+>     colors) and "Timeline" (concurrency).
+> - **Session detail:**
+>   - Header: title, status, project, started and last activity, models, ShortId.
+>   - "Tokens (this session)" and "Tokens (with helpers)" side by side, explaining that the second
+>     includes the first (never add them), plus the shared-messages note.
+>   - Estimated cost card with a per-model table in tokens, or "Claude Code didn't report a cost for
+>     this session".
+>   - Helper agents, and Continued from / as.
+>   - The session's family tree with the current session highlighted.
+>   - Activity feed in sentences with "Load older"; raw events, full ids and metadata under
+>     Technical details.
+> - **Rules:** as in 8.2, plus graph edges only from evidence.
+> - **Verify:** `pnpm check`; the e2e; screenshots of `#/sessions` (both tabs) and a session with
+>   helpers, light and dark, at 1440 and 1024px, from a demo server on port 7481.
+
+### 8.4 UI phase 3: cleanup and polish (branch `wp/ui-cleanup`, after 8.2 and 8.3 merge)
+
+> **Owned:** `packages/web/**` and the root README status.
 >
-> Ask me before reading any real Claude data, and only ever print aggregates.
+> - Apply the HANDOFF §5.3 proposals and §5.4 cleanup: delete superseded components, unify Pager,
+>   add the DataTable scroll, darken the dark-theme token colors into the lightness band, fix the
+>   accent focus ring, remove hardcoded hex colors.
+> - Audit every route for abbreviations, raw ids outside Details, numbers without units, and "0"
+>   where data is missing.
+> - Update `packages/web/README.md` and the root README.
+> - Verify: `pnpm check`, the e2e, and a screenshot pass of every route (light, dark, 1440, 1024).
 
-## 7. Key findings and decisions (details in docs/)
+### 8.5 Phase 3 planning (coordinator; needs the owner)
 
-- **Usage dedup is global by `(provider, messageId)`.** About 52% of transcript lines repeat a message
-  with a growing `output_tokens`, so the rule is "max output wins". Forks copy history into new
-  session files (ADR-0006, usage-accounting §5).
-- **Fork copies keep their original timestamps.** Verified locally: 1,715 of 1,715. Attribution of
-  copied messages is therefore _ambiguous_: still counted once, but flagged. No continuation edge is
-  created on a tie. Open question Q8 (roadmap) tracks a better tie-breaker.
-- **Subagent edges come only from evidence.** Locally, 197 of 197 meta files linked to their spawning
-  `Agent` tool call.
-- **Transcripts are the usage source of record.** Hooks are optional, live, and carry no usage
-  (ADR-0005). OTel is deferred.
-- **No conversation content is stored** (ADR-0009). The app never modifies Claude settings. It binds
-  to localhost only.
+> Act as coordinator. Enter plan mode. Read HANDOFF §7, `docs/orchestration-lifecycle.md`,
+> `docs/roadmap.md` (Q1, Q2), ADR-0004, ADR-0005, ADR-0009 and `docs/security.md`.
+>
+> - Ask the owner the §7.3 decisions, one question each with a recommendation.
+> - Then write: the ADRs for the engine, the execution and guardrail policy, the budget metric and
+>   chat content (P3-0); revised `docs/orchestration-lifecycle.md`; a Phase 3 section in
+>   `docs/implementation-plan.md` with the WPs from §7.4, owned paths and acceptance criteria; and
+>   ready-to-paste prompts for P3-A to P3-F.
+> - Present the plan for approval before any code.
+> - Do not start Phase 3 code until the owner approves.
 
-## 8. Needs a human decision
+## 9. Backlog (smaller items, any time)
 
-1. **Git author identity.** Commits so far were authored as "Keerthi Vibisan
-   <keerthivibisan2211@gmail.com>", taken from the original machine's git config. Rewrite the history
-   before publishing if that is wrong.
-2. **License.** MIT is provisional (ADR-0010).
-3. **Real hook payload capture (P1-C6).** It needs approval and a throwaway directory.
-4. **Budget metric for Phase 3 (Q1).** Raw token budgets break on cache reads.
-5. **Open questions Q2–Q8** in `docs/roadmap.md`.
+- **CI:** push to a GitHub remote, with owner approval, to run `.github/workflows/ci.yml`. This is
+  the last Phase 1 checklist item.
+- **Notification hook shape:** still unverified. It needs a short interactive capture under the same
+  approved conditions as `docs/research/p1-c6-hook-capture-2026-10-11.md`.
+- **Overview query:** `snapshots.latestForTopLevelSessions(limit)` in `@acp/db`, to replace one query
+  per session. The overview still scans every session; fine locally, but move status counts to SQL
+  if this grows.
+- **Invalid events:** they are counted but their checkpoint advances, so they are lost. Consider
+  persisting per-file errors (ADR-0011 consequence).
+- **Demo database:** it is rebuilt before `listen` succeeds, so a second instance destroys the first
+  instance's demo DB. Check the port first.
+- **Still-unrecognized record types** (`frame-link`, `system:compact_boundary`, `relocated`,
+  `agent-name`, `mode`, `atis-latch`): research what they mean. `relocated` and `frame-link` may
+  carry relationships.
+- **Q8 fork-origin tie-breaker** and **Q7 OTel** belong to Phase 2.
+- **Git authorship:** commits are authored as "Keerthi Vibisan", from this machine's git config.
+  Rewrite before publishing if that is wrong.
