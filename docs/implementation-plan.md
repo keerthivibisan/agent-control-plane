@@ -26,7 +26,7 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 | P3-W | Workspace manager (git worktrees)                 | workspace agent   | P3-0                                                            | **done** (awaiting coordinator review)                                                         | `wp/p3-w-workspaces`                                |
 | P3-D | Server composition for the control panel          | backend agent     | P3-A, B, C, W                                                   | **done** (fake managed adapter + temp git repos; real SDK run is P3-F)                         | `wp/p3-d-server`                                    |
 | P3-E | Control panel UI                                  | frontend agent    | P3-0 (DTOs); D for integration                                  | **done** against fixture DTOs; live data needs P3-D (routes and response shapes as proposed)   | `wp/p3-e-control-ui`                                |
-| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | in-progress (part 1: fake-adapter e2e + server verification)                                   | `wp/p3-f-verify`                                    |
+| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | part 1 done; real smoke run pending owner consent (SSE bug found, see M1 checklist)            | `wp/p3-f-verify`                                    |
 
 ```mermaid
 flowchart TD
@@ -325,6 +325,61 @@ Discard); Stop all.
 | **P3-E** UI              | `packages/web/src/features/control/**`, add-only `copy.ts` section, nav entry in `src/app/Shell.tsx` (coordinator-approved for this WP) | `#/control` page per the M1 experience, DESIGN.md wording (plain words, units, "estimated", no "completed"); reuse `FamilyTree` from `features/sessions`; budget bar in budget tokens with the ADR-0014 explanation; approvals tray; review panel with a readable diff; Stop / Stop all with confirmation; empty state "Start a run". Builds against the DTOs with fixture data until P3-D lands.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Component tests with fixture DTOs; screenshots light/dark 1440/1024; no raw ids outside Details.                                                                                                                                              |
 | **P3-F** verification    | `packages/server/tests/verification/control/**`, `packages/web/e2e/control.spec.ts`                                                     | Deterministic e2e with a fake managed adapter: chat "spin up two agents" → two workers appear in the tree → approve one edit, deny one → stop one → review diff → merge one, discard one → run COMPLETED; budget soft cap → BLOCKED; restart → NEEDS_REVIEW; Stop all. Then, with owner consent, one real smoke run in a throwaway git repo (aggregates only).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | All pass; the DB holds no worker conversation content (asserted); every ADR-0013 guardrail has a passing refusal test.                                                                                                                        |
 | P3-G (after M1)          | —                                                                                                                                       | Validation runner (per-project command allowlist, timeouts) shown in the review panel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | —                                                                                                                                                                                                                                             |
+
+### Phase 3 M1 acceptance (P3-F)
+
+Verified on `wp/p3-f-verify` (2026-10-12) with a scripted fake managed adapter or a scripted
+stand-in for the SDK's `query()`: neither the Agent SDK nor the `claude` binary ran. Server tests live
+in `packages/server/tests/verification/control/`; the browser flows in `packages/web/e2e/control.spec.ts`
+(`pnpm --filter @acp/web test:e2e`, project `control`, server
+`tests/verification/control/e2e-server.ts` on port 7441 with a test-only driver on 7442).
+
+- [x] **Main flow in the browser:** "spin up two agents" → the lead starts two helpers → both appear
+      in the tree with statuses → approve one edit in the tray, deny one command → stop one helper →
+      the other writes a real file in its worktree and finishes → the review panel shows the changed
+      files and the diff → merge one, discard the other → the run reads "Finished — all changes
+      reviewed" and the throwaway repo's `main` holds the merged file, not the discarded one
+      (e2e "two helper agents …").
+- [x] **Budget soft cap → BLOCKED** with "over its budget" and a budget-raise approval; approving
+      resumes with a raised limit (e2e "budget soft cap …"; server `tests/control/guardrails.test.ts`).
+- [x] **Stop all → CANCELLED**, every agent aborted (e2e "budget soft cap …", "a 4th helper …";
+      `tests/control/routes.test.ts` "Stop all").
+- [x] **A refused 4th helper** returns "At most 3 agents can work at once; wait for one to finish." to
+      the lead, which relays it to the chat; the tree keeps 3 (e2e "a 4th helper …").
+- [x] **Restart → NEEDS_REVIEW** through the whole server (`startServer`, clean shutdown): nothing
+      relaunched, approvals expired, worktrees kept, chat refused, review/merge/discard still work, run
+      COMPLETED (`verification/control/restart.test.ts`; after a crash: `tests/control/restart.test.ts`).
+- [x] **No worker conversation content in the DB:** every table dumped after a full run through the
+      real managed adapter; no worker text, thinking, tool input/output, result text or owner→worker
+      message; owner chat, lead replies and tasks are stored as ADR-0015 allows
+      (`verification/control/content.test.ts`).
+- [x] **Logs hold no chat or task text** (`verification/control/content.test.ts`, the e2e server log,
+      `tests/logging.test.ts` "a whole run logs ids, codes and counts only").
+- [x] **Every ADR-0013 guardrail has a passing refusal test:**
+  - missing/invalid CSRF on every mutating route → 403 (`tests/control/guardrails.test.ts` "CSRF");
+  - a run for an unregistered project → 409 (`tests/control/guardrails.test.ts`); `start_agent` for a
+    project no longer registered → `project-not-registered` (`verification/control/guardrails.test.ts`);
+  - a 4th worker → refused (`tests/control/guardrails.test.ts`, e2e);
+  - depth 2: workers get no lead tools, a worker's `mcp__acp__*` call is denied by the real adapter,
+    and `start_agent` from a worker is `depth-exceeded` (`verification/control/guardrails.test.ts`);
+  - over budget: a blocked worker's tools are denied and its messages refused; an over-budget lead
+    cannot start agents (`tests/control/guardrails.test.ts`, `verification/control/guardrails.test.ts`);
+  - a run being stopped cannot start agents (`verification/control/guardrails.test.ts`);
+  - a non-read-only tool without approval: Write, Bash and a read outside the worktree park as
+    approvals, nothing is allowed by default, shutdown answers deny; reads inside run
+    (`verification/control/guardrails.test.ts`; `tests/control/guardrails.test.ts`); unanswered →
+    expired (`tests/control/routes.test.ts`); the lead's tool uses are denied without asking;
+  - a merge into a dirty base → `base_dirty` (`tests/control/guardrails.test.ts`,
+    `tests/workspace/manager.test.ts`);
+  - only `git` via `execFile` with argument arrays, no shell, no hooks
+    (`tests/workspace/manager.test.ts`); run timeout (`tests/control/routes.test.ts`).
+- [ ] **Live updates in the browser.** _Bug found by P3-F, not fixed (outside its paths):_ the server
+      frames SSE notices as `event: notice` (`packages/server/src/routes/stream.ts`) but the web app
+      listens with `EventSource.onmessage` (`packages/web/src/lib/useEventStream.ts`), which fires only
+      for unnamed `message` events. The open page therefore never refreshes on its own; only the
+      owner's own actions refetch. The e2e reloads to observe agent-driven changes and pins the bug
+      with a `test.fail` test that will flag once it is fixed.
+- [ ] **One real smoke run** in a throwaway git repo with the owner's consent (aggregates only).
 
 ## Risks
 
