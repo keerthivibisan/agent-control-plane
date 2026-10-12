@@ -67,7 +67,7 @@ describe('SSE /api/events/stream', () => {
     let maxIdAtNotice: number | null = null;
     s.notifier.subscribe(() => (maxIdAtNotice = s.repos.events.maxId()));
     s.pipeline.ingestBatch(batch('/a.jsonl', [usage({ dedupKey: 'u1' }, 'm1', tokens(1, 1))]));
-    await stream.waitFor('event: notice');
+    await stream.waitFor('data: {');
 
     const received = notices(stream.text());
     expect(received).toHaveLength(1);
@@ -85,7 +85,7 @@ describe('SSE /api/events/stream', () => {
       usage({ dedupKey: 'c', occurredAt: at(3) }, 'm3', tokens(1, 1)),
     ]);
     const stream = await openStream(s.app, { 'Last-Event-ID': '1' });
-    await stream.waitFor('event: notice');
+    await stream.waitFor('data: {');
     const received = notices(stream.text());
     expect(received).toHaveLength(1);
     expect(received[0]?.lastEventId).toBe(3);

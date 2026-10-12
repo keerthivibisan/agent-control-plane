@@ -7,12 +7,10 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
  * owner through the UI only. Neither the Agent SDK nor `claude` runs. The project "e2e-app" is a
  * throwaway git repo; its `main` branch is checked through the driver after merging.
  *
- * Known product bug (found here, reported, not fixed in this WP): the server frames every SSE
- * notice as `event: notice`, but the web app listens with `EventSource.onmessage`, which only fires
- * for unnamed `message` events, so the open page never refreshes on its own. The owner's own
- * actions refetch, but changes made by agents (a new helper, a status, an approval) appear only
- * after a reload. The flows below therefore reload to observe agent-driven changes (`seen`), and
- * the last test pins the bug with `test.fail` so it flags once the bug is fixed.
+ * The flows reload to observe agent-driven changes (`seen`) so they don't depend on timing. Live
+ * updates without a reload are covered by the last test (the SSE bug P3-F found: the server used
+ * to send named `event: notice` frames, which `EventSource.onmessage` never receives; fixed by
+ * sending unnamed events).
  */
 
 const DRIVER = process.env.ACP_E2E_DRIVER_URL ?? 'http://127.0.0.1:7442';
@@ -379,18 +377,17 @@ test('a 4th helper agent is refused with a clear reason the lead passes on', asy
   );
 });
 
-// Pins the SSE bug described at the top: an agent-driven change must appear without a reload.
-// Expected to fail until the web app listens for the server's `notice` events (or the server
-// sends unnamed events); Playwright reports it once it starts passing.
-test.fail(
-  'the open run page updates live when an agent changes something (no reload)',
-  async ({ page, request }) => {
-    const runId = await startRun(page, 'Live update check');
-    const leadDto = (await run(request, runId)).agents.find((a) => a.kind === 'lead');
-    if (leadDto === undefined) throw new Error('no lead');
-    await fakeAgent(request, leadDto.id);
-    await expect(runStatus(page)).toHaveAttribute('data-status', 'QUEUED');
-    await act(request, leadDto.id, 'started');
-    await expect(runStatus(page)).toHaveAttribute('data-status', 'RUNNING', { timeout: 5_000 });
-  },
-);
+// Regression test for the SSE bug P3-F found (fixed: the server sends unnamed events): an
+// agent-driven change must appear without a reload.
+test('the open run page updates live when an agent changes something (no reload)', async ({
+  page,
+  request,
+}) => {
+  const runId = await startRun(page, 'Live update check');
+  const leadDto = (await run(request, runId)).agents.find((a) => a.kind === 'lead');
+  if (leadDto === undefined) throw new Error('no lead');
+  await fakeAgent(request, leadDto.id);
+  await expect(runStatus(page)).toHaveAttribute('data-status', 'QUEUED');
+  await act(request, leadDto.id, 'started');
+  await expect(runStatus(page)).toHaveAttribute('data-status', 'RUNNING', { timeout: 5_000 });
+});

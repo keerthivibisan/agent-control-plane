@@ -13,7 +13,9 @@ export interface StreamDeps {
 }
 
 function frame(notice: StreamNoticeDto): string {
-  return `id: ${notice.lastEventId}\nevent: notice\ndata: ${JSON.stringify(notice)}\n\n`;
+  // Unnamed event: `EventSource.onmessage` only fires for events without an `event:` field
+  // (the web client listens there; P3-F found named events never reached the page).
+  return `id: ${notice.lastEventId}\ndata: ${JSON.stringify(notice)}\n\n`;
 }
 
 /**

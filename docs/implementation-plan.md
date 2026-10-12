@@ -373,12 +373,10 @@ in `packages/server/tests/verification/control/`; the browser flows in `packages
     `tests/workspace/manager.test.ts`);
   - only `git` via `execFile` with argument arrays, no shell, no hooks
     (`tests/workspace/manager.test.ts`); run timeout (`tests/control/routes.test.ts`).
-- [ ] **Live updates in the browser.** _Bug found by P3-F, not fixed (outside its paths):_ the server
-      frames SSE notices as `event: notice` (`packages/server/src/routes/stream.ts`) but the web app
-      listens with `EventSource.onmessage` (`packages/web/src/lib/useEventStream.ts`), which fires only
-      for unnamed `message` events. The open page therefore never refreshes on its own; only the
-      owner's own actions refetch. The e2e reloads to observe agent-driven changes and pins the bug
-      with a `test.fail` test that will flag once it is fixed.
+- [x] **Live updates in the browser.** Bug found by P3-F (the server sent named `event: notice` SSE
+      frames, which `EventSource.onmessage` never receives); fixed by the coordinator by sending
+      unnamed events (`packages/server/src/routes/stream.ts`). Evidence: the e2e test "the open run
+      page updates live when an agent changes something (no reload)" passes.
 - [ ] **One real smoke run** in a throwaway git repo with the owner's consent (aggregates only).
 
 ## Risks
