@@ -26,7 +26,7 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 | P3-W | Workspace manager (git worktrees)                 | workspace agent   | P3-0                                                            | **done** (awaiting coordinator review)                                                         | `wp/p3-w-workspaces`                                |
 | P3-D | Server composition for the control panel          | backend agent     | P3-A, B, C, W                                                   | **done** (fake managed adapter + temp git repos; real SDK run is P3-F)                         | `wp/p3-d-server`                                    |
 | P3-E | Control panel UI                                  | frontend agent    | P3-0 (DTOs); D for integration                                  | **done** against fixture DTOs; live data needs P3-D (routes and response shapes as proposed)   | `wp/p3-e-control-ui`                                |
-| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | todo                                                                                           |                                                     |
+| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | in-progress (part 1: fake-adapter e2e + server verification)                                   | `wp/p3-f-verify`                                    |
 
 ```mermaid
 flowchart TD
