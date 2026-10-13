@@ -48,7 +48,8 @@ describe('migration 0002_orchestration (P3-C)', () => {
       const recorded = v2.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2]);
+      // Later migrations (0003, P4-B) apply on the same open; 0001 and 0002 come first.
+      expect(recorded.map((r) => r.version).slice(0, 2)).toEqual([1, 2]);
       expect(recorded[1]?.checksum).toBe(loadMigrations()[1]?.checksum);
       expect(
         createRepositories(v2)

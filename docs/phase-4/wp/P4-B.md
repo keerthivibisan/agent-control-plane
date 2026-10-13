@@ -3,13 +3,13 @@
 > Progress file for P4-B. Only the agent working on P4-B edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                               |
-| ------- | --------------------------------------------------- |
-| Status  | in-progress                                         |
-| Owner   | persistence agent                                   |
-| Branch  | `wp/p4-b-db`                                        |
-| Started | 2026-10-13                                          |
-| Updated | 2026-10-13                                          |
+| Field   | Value             |
+| ------- | ----------------- |
+| Status  | in-progress       |
+| Owner   | persistence agent |
+| Branch  | `wp/p4-b-db`      |
+| Started | 2026-10-13        |
+| Updated | 2026-10-13        |
 
 ## Tasks
 
@@ -21,9 +21,10 @@
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
-| 2026-10-13 | Claimed; branch `wp/p4-b-db` created from `main` | (this commit) | — |
+| Date       | What was done                                    | Commit        | Checks |
+| ---------- | ------------------------------------------------ | ------------- | ------ |
+| 2026-10-13 | Claimed; branch `wp/p4-b-db` created from `main` | (this commit) | —      |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: migration 0003, workspace repositories, runs `ticketId`, depth-2 agent runs; workspace tests not written yet | (this commit) | db tests 117/117 ✓; server tests have timeouts under load (being checked) |
 
 ## Handoff notes
 

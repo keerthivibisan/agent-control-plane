@@ -39,6 +39,8 @@ const PHASE3_TABLES = [
   'orchestrator_messages',
 ];
 
+const PHASE4_TABLES = ['check_runs', 'project_setup', 'ticket_comments', 'ticket_plans', 'tickets'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -115,9 +117,9 @@ describe('0001_observability schema (B3)', () => {
     }
   });
 
-  it('with 0002 applied, adds exactly the Phase 3 tables', () => {
+  it('with 0002 and 0003 applied, adds exactly the Phase 3 and Phase 4 tables', () => {
     const tables = describeSchema(db).map((t) => t.table);
-    expect(tables).toEqual([...PHASE1_TABLES, ...PHASE3_TABLES].sort());
+    expect(tables).toEqual([...PHASE1_TABLES, ...PHASE3_TABLES, ...PHASE4_TABLES].sort());
   });
 
   it('matches the schema snapshot (columns, foreign keys, indexes)', () => {

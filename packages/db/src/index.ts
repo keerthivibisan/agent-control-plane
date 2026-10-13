@@ -4,5 +4,6 @@ export * from './migrations.js';
 export * from './transaction.js';
 export * from './repositories/index.js';
 export * from './repositories/orchestration/index.js';
+export * from './repositories/workspace/index.js';
 export * from './queries/index.js';
 export { MAX_PAGE_SIZE } from './internal/validate.js';

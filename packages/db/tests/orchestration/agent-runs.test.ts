@@ -33,7 +33,7 @@ describe('agent runs repository (P3-C)', () => {
     expect(store.orch.agentRuns.getById('missing')).toBeUndefined();
   });
 
-  it('enforces the lead/worker shape, depth 1, one lead, and same-run parents', () => {
+  it('enforces the lead/worker shape, depth <= 2, one lead, and same-run parents', () => {
     const store = setupOrchestration();
     const { run, lead, workers } = runWithAgents(store, 1);
     const worker = workers[0]!; // one worker was created above
@@ -50,13 +50,20 @@ describe('agent runs repository (P3-C)', () => {
         store.orch.agentRuns.insert({ ...base, kind: 'worker', parentAgentRunId: null, task: 't' }),
       ),
     ).toMatchObject({ code: 'invalid_input' });
-    // Depth 2: a worker's worker.
+    // Depth 2 (P4-B, ADR-0013 amendment): a helper's helper is allowed; depth 3 is refused.
+    const child = store.orch.agentRuns.insert({
+      ...base,
+      kind: 'worker',
+      parentAgentRunId: worker.id,
+      task: 't',
+    });
+    expect(child.parentAgentRunId).toBe(worker.id);
     expect(
       thrown(() =>
         store.orch.agentRuns.insert({
           ...base,
           kind: 'worker',
-          parentAgentRunId: worker.id,
+          parentAgentRunId: child.id,
           task: 't',
         }),
       ),

@@ -22,6 +22,11 @@ import { guardWrite, statusGuard } from './shared.js';
 export interface RunInsertInput {
   /** A registered project (`not_found` otherwise). */
   projectId: string;
+  /**
+   * The ticket this run works on (Phase 4), a ticket of the same project (`invalid_input`
+   * otherwise; unknown → `not_found`). Defaults to null (a Phase 3 control-panel run).
+   */
+  ticketId?: string | null;
   title: string;
   budget: RunBudget;
   /** Defaults to `QUEUED`. */
@@ -42,6 +47,8 @@ export interface RunCursor {
 
 export interface RunListOptions {
   projectId?: string;
+  /** Only the runs of this ticket (its run history). */
+  ticketId?: string;
   /** 1..MAX_PAGE_SIZE; default 50. */
   limit?: number;
   before?: RunCursor;
@@ -85,6 +92,7 @@ export interface OrchestrationRunsRepository {
 interface RunDbRow {
   id: string;
   project_id: string;
+  ticket_id: string | null;
   title: string;
   status: string;
   max_tokens_per_agent: number;
@@ -94,7 +102,7 @@ interface RunDbRow {
   ended_at: string | null;
 }
 
-const COLUMNS = `id, project_id, title, status, max_tokens_per_agent, soft_cost_usd_per_run,
+const COLUMNS = `id, project_id, ticket_id, title, status, max_tokens_per_agent, soft_cost_usd_per_run,
   created_at, updated_at, ended_at`;
 const T = 'orchestration_runs';
 const PREFIXED = COLUMNS.split(',')
@@ -107,6 +115,7 @@ function toRun(row: RunDbRow): OrchestrationRun {
     {
       id: row.id,
       projectId: row.project_id,
+      ticketId: row.ticket_id,
       title: row.title,
       status: row.status,
       budget: {
@@ -127,7 +136,7 @@ export function createOrchestrationRunsRepository(
 ): OrchestrationRunsRepository {
   const c = ctx.connection;
   const insert = c.prepare(
-    `INSERT INTO ${T} (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL) RETURNING ${COLUMNS}`,
+    `INSERT INTO ${T} (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) RETURNING ${COLUMNS}`,
   );
   const byId = c.prepare(`SELECT ${COLUMNS} FROM ${T} WHERE id = ?`);
   const exists = c.prepare(`SELECT status FROM ${T} WHERE id = ?`).pluck();
@@ -154,6 +163,11 @@ export function createOrchestrationRunsRepository(
         input.projectId,
         'run projectId',
       );
+      const ticketId = parseInput(
+        OrchestrationRunSchema.shape.ticketId,
+        input.ticketId ?? null,
+        'run ticketId',
+      );
       const budget = parseInput(RunBudgetSchema, input.budget, 'run budget');
       const status = parseInput(RunStatusSchema, input.status ?? 'QUEUED', 'run status');
       const at = ctx.now().toISOString();
@@ -162,6 +176,7 @@ export function createOrchestrationRunsRepository(
           insert.get(
             ctx.newId(),
             projectId,
+            ticketId,
             title,
             status,
             budget.maxTokensPerAgent,
@@ -183,6 +198,10 @@ export function createOrchestrationRunsRepository(
       if (options.projectId !== undefined) {
         where.push('r.project_id = ?');
         params.push(options.projectId);
+      }
+      if (options.ticketId !== undefined) {
+        where.push('r.ticket_id = ?');
+        params.push(options.ticketId);
       }
       if (options.before) {
         const cursorAt = toStoredTimestamp(options.before.createdAt, 'cursor createdAt');

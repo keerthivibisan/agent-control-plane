@@ -2,6 +2,7 @@ import {
   AgentRoleKindSchema,
   AgentRunSchema,
   AgentRunStatusSchema,
+  HARD_MAX_DEPTH,
   type AgentRoleKind,
   type AgentRun,
   type AgentRunStatus,
@@ -19,7 +20,10 @@ import { guardWrite, nonNegativeInt, positiveInt, statusGuard } from './shared.j
 
 export interface AgentRunInsertInput {
   runId: string;
-  /** `lead`: no parent, no task. `worker`: the run's lead as parent (depth 1), and a task. */
+  /**
+   * `lead`: no parent, no task. `worker`: a parent in the same run (the lead, or a helper of the
+   * lead: at most HARD_MAX_DEPTH levels), and a task.
+   */
   kind: AgentRoleKind;
   parentAgentRunId: string | null;
   role: string;
@@ -127,6 +131,18 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
     .prepare('SELECT max_tokens_per_agent FROM orchestration_runs WHERE id = ?')
     .pluck();
   const parentOf = c.prepare(`SELECT run_id, kind FROM ${T} WHERE id = ?`);
+  const parentIdOf = c.prepare(`SELECT parent_agent_run_id FROM ${T} WHERE id = ?`).pluck();
+
+  /** Levels below the lead (the lead is 0). Bounded: parents are inserted before children. */
+  function depthOf(id: string): number {
+    let depth = 0;
+    let current = parentIdOf.get(id) as string | null | undefined;
+    while (current !== null && current !== undefined && depth <= HARD_MAX_DEPTH) {
+      depth += 1;
+      current = parentIdOf.get(current) as string | null | undefined;
+    }
+    return depth;
+  }
   const currentStatus = c.prepare(`SELECT status FROM ${T} WHERE id = ?`).pluck();
   const setUsed = c.prepare(`UPDATE ${T} SET budget_tokens_used = ? WHERE id = ?`);
   const setLimit = c.prepare(`UPDATE ${T} SET budget_tokens_limit = ? WHERE id = ?`);
@@ -176,9 +192,13 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
           if (!parent || parent.run_id !== valid.runId) {
             throw new DbError('not_found', 'parent agent run not found in this run');
           }
-          // Delegation depth 1 (ADR-0013): only the lead may be a parent.
-          if (parent.kind !== 'lead') {
-            throw new DbError('invalid_input', 'a worker can only be started by the lead');
+          // Delegation depth (ADR-0013 amendment): helpers sit at most HARD_MAX_DEPTH levels
+          // below the lead. The engine applies the project's own (lower) limit.
+          if (depthOf(valid.parentAgentRunId) + 1 > HARD_MAX_DEPTH) {
+            throw new DbError(
+              'invalid_input',
+              `helpers can be at most ${HARD_MAX_DEPTH} levels below the lead`,
+            );
           }
         }
         const id = ctx.newId();
