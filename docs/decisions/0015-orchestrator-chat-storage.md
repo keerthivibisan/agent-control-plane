@@ -23,3 +23,7 @@ lead agent is the owner's own working record: they need to scroll back and resum
 
 ADR-0009 gains a pointer to this exception. Logs never contain chat text (redaction tests extend to
 the control-panel routes).
+
+**Amended by ADR-0016 (2026-10-13):** ticket titles and descriptions, owner comments, and the
+lead's plans and comments to the owner are stored for the board. Worker content is still never
+stored.

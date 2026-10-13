@@ -31,3 +31,7 @@ need content.
 
 **Amended by ADR-0015 (2026-10-11):** the control-panel chat between the owner and the lead agent
 (and worker task texts) is stored locally. Nothing else changes.
+
+**Amended by ADR-0016 (2026-10-13):** ticket titles and descriptions, owner comments, and the
+lead's plans and comments to the owner are stored for the board. Worker content is still never
+stored.

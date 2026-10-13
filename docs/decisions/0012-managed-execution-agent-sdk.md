@@ -44,3 +44,10 @@ Agent SDK.
 A new pinned dependency and its peers (`@anthropic-ai/sdk`, `@modelcontextprotocol/sdk`). SDK
 upgrades are deliberate coordinator changes. Managed sessions still write normal transcripts, so the
 Phase 1 observation pipeline sees them.
+
+## Amendment (project owner, 2026-10-13, Phase 4)
+
+Because settings isolation no longer loads `CLAUDE.md`, the server passes chosen **context files**
+explicitly: the project setup's `contextFiles` plus the harness manifest's `context`, read from the
+repository (realpath inside the repo root; at most 10 files and 32 KiB in total), appended to the
+system prompt via `ManagedAgentSpec.context`. Nothing is read from `~/.claude`.

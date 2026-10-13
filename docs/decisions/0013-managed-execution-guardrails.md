@@ -38,3 +38,17 @@ The engine (`@acp/orchestrator`) and server enforce, and tests prove:
 AGENTS.md §3.8 now reads "no shell execution from any input; Phase 3 managed runs follow ADR-0013".
 Every guardrail has a refusal test (a 4th worker, a project outside the registered roots, an
 over-budget agent, a non-read-only tool without approval, a merge into a dirty base).
+
+## Amendment (project owner, 2026-10-13, Phase 4)
+
+- **Configurable limits.** Each project's agent setup chooses `maxConcurrentHelpers` (1–6) and
+  `maxDepth` (1–2); hard ceilings `HARD_MAX_HELPERS = 6`, `HARD_MAX_DEPTH = 2` in `@acp/core`. Defaults
+  stay 3 helpers, depth 1. At depth 2 a helper can start, message and stop its own children only;
+  Stop all stops descendants first; budgets roll up for display but stay per agent.
+- **Per-project allowlist** (pre-approved safe actions; everything else still asks):
+  - `editInOwnWorktree`: Edit/Write/MultiEdit/NotebookEdit auto-approved when the target resolves
+    (realpath, no symlink escape) inside the agent's own worktree;
+  - `runHarnessChecks`: a Bash call auto-approved only when its command string exactly equals one of
+    the harness checks' argv joined by single spaces, with no shell metacharacters.
+    Auto-approvals are recorded as approvals with `decidedBy: allowlist`.
+- **Checks** are a third allowed process kind, under ADR-0017's execution policy.
