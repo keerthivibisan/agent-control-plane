@@ -15,7 +15,7 @@
 
 - [ ] ManagedAgentSpec.context appended to the system prompt (SDK preset append)
 - [ ] canStartHelpers: depth-2 parents get child-management tools only
-- [ ] submit_plan exposed via the lead tool server
+- [x] submit_plan exposed via the lead tool server (done by the coordinator in P4-0 to keep `main` green)
 - [ ] Fake-query tests; pnpm check green
 
 ## Work log (append-only; newest last)

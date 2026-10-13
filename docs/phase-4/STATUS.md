@@ -16,4 +16,6 @@
 | P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | todo   | `wp/p4-g-ticket`        | —      |
 | P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | todo   | `wp/p4-h-verify`        | —      |
 
+**Current wave (2026-10-13):** wave 1 — P4-A, P4-B, P4-C, P4-I, P4-E, P4-F.
+
 **Waves:** P4-0 → (P4-A, P4-B, P4-C, P4-I, P4-E, P4-F in parallel) → P4-D (+ P4-G from P4-0) → P4-H.
