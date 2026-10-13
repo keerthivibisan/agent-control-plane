@@ -434,6 +434,9 @@ blocked`), the branch, a task checklist, an append-only **work log**, handoff no
    The coordinator merges and sets `done` in STATUS.md.
 6. **Blocked** (you need a contract change or a decision): set `blocked`, write what you need, why,
    and the proposed diff, and stop that part.
+7. **Interrupted sessions** (usage limits, closed chats): follow "If a session was interrupted" in
+   [`STATUS.md`](STATUS.md). In short: find the branch and worktree, rescue uncommitted changes by
+   continuing in the same worktree, read the work log, and never restart a WP that has commits.
 
 ## 10. Prompts
 
