@@ -46,7 +46,7 @@ const PROJECTS: NavItem = {
   label: NAV_LABELS.projects,
   to: href.projects(),
   icon: ProjectsIcon,
-  match: ['projects'],
+  match: ['projects', 'project-new'],
 };
 const SECONDARY: readonly NavItem[] = [
   { label: NAV_LABELS.setup, to: href.setup(), icon: SetupIcon, match: ['setup'] },
@@ -104,7 +104,8 @@ function ProjectLinks({ route }: { route: Route }) {
   return (
     <ul className="flex flex-col gap-0.5 max-lg:hidden" aria-label="Your projects">
       {projects.data.map((p) => {
-        const active = route.name === 'project' && route.id === p.id;
+        const active =
+          (route.name === 'project' || route.name === 'project-settings') && route.id === p.id;
         return (
           <li key={p.id}>
             <a

@@ -15,6 +15,8 @@ import type { QueryStore } from '../lib/query-store';
 import { href, useRoute, type Route } from '../lib/router';
 import { browserEventSource, useEventStream, type EventSourceFactory } from '../lib/useEventStream';
 import { UsageAnalytics } from '../features/usage/UsageAnalytics';
+import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
+import { ProjectSettings } from '../features/project-setup/ProjectSettings';
 import { Shell } from './Shell';
 
 function Screen({ route }: { route: Route }) {
@@ -39,6 +41,10 @@ function Screen({ route }: { route: Route }) {
       return <ControlPanel key={route.runId ?? ''} runId={route.runId} />;
     case 'board':
       return <BoardPage key={route.projectId ?? ''} projectId={route.projectId} />;
+    case 'project-new':
+      return <NewProjectWizard />;
+    case 'project-settings':
+      return <ProjectSettings key={route.id} id={route.id} />;
     case 'not-found':
       return (
         <EmptyState

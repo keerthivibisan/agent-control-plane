@@ -33,6 +33,16 @@ import {
 } from '@acp/core/api';
 import type { RegisterProjectInput } from '@acp/core';
 import { API_BASE, PROXY_ERROR_HEADER } from './constants';
+// Project setup (Phase 4, P4-F).
+import {
+  CheckRunDtoSchema,
+  ContextCandidateDtoSchema,
+  CreateRepoProjectRequestSchema,
+  HarnessStatusDtoSchema,
+  ProjectAgentSetupDtoSchema,
+  TicketDtoSchema,
+  UpdateProjectSetupRequestSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -113,12 +123,20 @@ export interface ApiClient {
     signal?: AbortSignal,
     headers?: Record<string, string>,
   ): Promise<T>;
+  /** Like `post`, with PUT (Phase 4: `PUT /api/projects/:id/setup`). */
+  put<T>(
+    path: string,
+    body: unknown,
+    schema: Schema<T>,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<T>;
 }
 
 /** Typed fetch client: every response body is parsed with its DTO schema before the UI sees it. */
 export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, init)): ApiClient {
   async function request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     path: string,
     schema: Schema<T>,
     body: unknown,
@@ -199,6 +217,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
     get: (path, schema, signal) => request('GET', path, schema, undefined, signal),
     post: (path, body, schema, signal, headers) =>
       request('POST', path, schema, body, signal, headers),
+    put: (path, body, schema, signal, headers) =>
+      request('PUT', path, schema, body, signal, headers),
   };
 }
 
@@ -467,4 +487,116 @@ export async function moveTicket(client: ApiClient, ticketId: string, input: Mov
 /** POST /api/tickets/:id/start: creates a run for the ticket, which starts in Planning. */
 export function startTicket(client: ApiClient, ticketId: string) {
   return controlPost(client, boardPaths.start(ticketId), {}, TicketDetailDtoSchema);
+// --- Project setup: wizard and settings (Phase 4, wp/p4-f-project-setup) ------------------------
+//
+// Served by P4-D (docs/phase-4/README.md §6.3). Every mutation sends the CSRF header like the
+// control panel; the harness POSTs send an empty JSON body.
+
+export type CreateRepoProjectRequest = ReturnType<typeof CreateRepoProjectRequestSchema.parse>;
+export type UpdateProjectSetupRequest = ReturnType<typeof UpdateProjectSetupRequestSchema.parse>;
+
+export const projectSetupPaths = {
+  createRepo: () => `${API_BASE}/projects/new`,
+  setup: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/setup`,
+  harness: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/harness`,
+  harnessChecks: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/harness/checks`,
+  harnessTicket: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/harness/ticket`,
+  contextCandidates: (projectId: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/context-candidates`,
+} as const;
+
+export const projectSetupSchemas = {
+  setup: ProjectAgentSetupDtoSchema,
+  harness: HarnessStatusDtoSchema,
+  checkRuns: CheckRunDtoSchema.array(),
+  contextCandidates: ContextCandidateDtoSchema.array(),
+  ticket: TicketDtoSchema,
+} as const;
+
+/** True for the cached setup, harness and context-file paths of one project. */
+export function isProjectSetupPath(projectId: string): (key: string) => boolean {
+  const base = `${API_BASE}/projects/${enc(projectId)}`;
+  return (key) =>
+    key === base ||
+    key.startsWith(`${base}/setup`) ||
+    key.startsWith(`${base}/harness`) ||
+    key.startsWith(`${base}/context-candidates`);
+}
+
+/** A PUT with the `X-ACP-CSRF` header; a 403 fetches a fresh token and retries once. */
+async function controlPut<T>(
+  client: ApiClient,
+  path: string,
+  body: unknown,
+  schema: Schema<T>,
+): Promise<T> {
+  const send = async (fresh: boolean) =>
+    client.put(path, body, schema, undefined, { [CSRF_HEADER]: await csrfToken(client, fresh) });
+  try {
+    return await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** POST /api/projects/new: the server runs `git init -b main` in a new folder (ADR-0017). */
+export async function createRepoProject(client: ApiClient, input: CreateRepoProjectRequest) {
+  const path = projectSetupPaths.createRepo();
+  return controlPost(
+    client,
+    path,
+    checked(CreateRepoProjectRequestSchema, input, path),
+    ProjectDtoSchema,
+  );
+}
+
+export function getProjectSetup(client: ApiClient, projectId: string, signal?: AbortSignal) {
+  return client.get(projectSetupPaths.setup(projectId), projectSetupSchemas.setup, signal);
+}
+
+export async function updateProjectSetup(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateProjectSetupRequest,
+) {
+  const path = projectSetupPaths.setup(projectId);
+  return controlPut(
+    client,
+    path,
+    checked(UpdateProjectSetupRequestSchema, input, path),
+    projectSetupSchemas.setup,
+  );
+}
+
+export function getHarnessStatus(client: ApiClient, projectId: string, signal?: AbortSignal) {
+  return client.get(projectSetupPaths.harness(projectId), projectSetupSchemas.harness, signal);
+}
+
+/** "Run checks now": every harness check on the project's main branch, read-only. */
+export function runHarnessChecks(client: ApiClient, projectId: string) {
+  return controlPost(
+    client,
+    projectSetupPaths.harnessChecks(projectId),
+    {},
+    projectSetupSchemas.checkRuns,
+  );
+}
+
+/** Adds the ready-written "Build the harness" ticket (HARNESS_TICKET_TEMPLATE) to the board. */
+export function createHarnessTicket(client: ApiClient, projectId: string) {
+  return controlPost(
+    client,
+    projectSetupPaths.harnessTicket(projectId),
+    {},
+    projectSetupSchemas.ticket,
+  );
+}
+
+export function getContextCandidates(client: ApiClient, projectId: string, signal?: AbortSignal) {
+  return client.get(
+    projectSetupPaths.contextCandidates(projectId),
+    projectSetupSchemas.contextCandidates,
+    signal,
+  );
 }

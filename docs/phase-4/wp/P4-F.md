@@ -23,6 +23,7 @@
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
 | 2026-10-13 | Claimed; branch `wp/p4-f-project-setup` created from `main` | (this commit) | — |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: api client functions, copy, routes, form logic and setup sections; wizard and settings pages not written yet | (this commit) | not run (WIP; App.tsx imports pages that don't exist yet) |
 
 ## Handoff notes
 

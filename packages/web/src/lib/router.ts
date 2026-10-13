@@ -17,6 +17,9 @@ export type Route =
   | { name: 'usage'; params: URLSearchParams }
   | { name: 'control'; runId: string | null }
   | { name: 'board'; projectId: string | null }
+  // Phase 4 (P4-F): the new project wizard and a project's settings.
+  | { name: 'project-new' }
+  | { name: 'project-settings'; id: string }
   | { name: 'not-found'; hash: string };
 
 function decode(segment: string): string | null {
@@ -37,6 +40,12 @@ export function parseRoute(hash: string): Route {
 
   if (segments.length === 0) return { name: 'home' };
   const [head, id, ...rest] = segments;
+  // Phase 4 (P4-F): `#/projects/new` and `#/projects/:id/settings`.
+  if (head === 'projects' && id === 'new' && rest.length === 0) return { name: 'project-new' };
+  if (head === 'projects' && id !== undefined && rest.length === 1 && rest[0] === 'settings') {
+    const decoded = decode(id);
+    if (decoded) return { name: 'project-settings', id: decoded };
+  }
   if (rest.length > 0) return { name: 'not-found', hash };
   if (head === 'sessions' && id === undefined) return { name: 'sessions', params };
   if (head === 'usage' && id === undefined) return { name: 'usage', params };
@@ -86,6 +95,9 @@ export const href = {
   board: (projectId?: string) =>
     projectId === undefined ? '#/board' : `#/board/${encodeURIComponent(projectId)}`,
   ticket: (id: string) => `#/tickets/${encodeURIComponent(id)}`,
+  // Phase 4 (P4-F).
+  newProject: () => '#/projects/new',
+  projectSettings: (id: string) => `#/projects/${encodeURIComponent(id)}/settings`,
 };
 
 export function navigate(hash: string): void {

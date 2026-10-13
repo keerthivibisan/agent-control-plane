@@ -2,6 +2,8 @@ import type { AgentRunStatus, RunStatus, SessionStatus } from '@acp/core';
 import type { EventDto } from '@acp/core/api';
 import { formatCount } from './format';
 import type { TokenCategory } from './tokens';
+// Project setup (Phase 4, P4-F).
+import type { CheckRunStatus, HarnessState } from '@acp/core';
 
 /**
  * Every word the UI shows to explain itself, in one place (packages/web/DESIGN.md). Screens import
@@ -1360,6 +1362,23 @@ export const HARNESS_STATE_COPY: Readonly<Record<HarnessState, HarnessStateCopy>
   invalid: {
     word: 'Invalid',
     tip: "The checks file (.acp/harness.json) can't be read. Open the project setup to see why.",
+// --- New project wizard and project settings (Phase 4, wp/p4-f-project-setup) ------------------
+
+/** Harness states (docs/phase-4/README.md §3) as a word, a one-line explanation and a tone. */
+export const HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStatusCopy>> = {
+  ready: {
+    word: 'Ready',
+    tip: 'The project has a harness with at least one required check. Agents can verify their own changes, and a failed required check stops a plain merge.',
+    tone: 'done',
+  },
+  partial: {
+    word: 'Partial',
+    tip: 'The project has a harness, but none of its checks is required, so nothing has to pass before a merge. Mark at least one check as required.',
+    tone: 'waiting',
+  },
+  invalid: {
+    word: 'Invalid',
+    tip: "The project has a harness file (.acp/harness.json), but it can't be read. Fix the problems below; until then no checks run.",
     tone: 'problem',
   },
   none: {
@@ -1462,5 +1481,221 @@ export const BOARD_COPY = {
       title: 'Project not found',
       text: 'There is no project at this address. It may have been removed.',
     },
+  },
+    tip: "The project has no harness yet, so agents can't check their own work and nothing is checked before a merge. Let an agent build one with the ticket below.",
+    tone: 'stopped',
+  },
+};
+
+/** Check run results (ADR-0017) in words. */
+export const CHECK_STATUS_COPY: Readonly<Record<CheckRunStatus, ControlStatusCopy>> = {
+  passed: { word: 'Passed', tip: 'The command finished without an error.', tone: 'done' },
+  failed: { word: 'Failed', tip: 'The command finished with an error.', tone: 'problem' },
+  'timed-out': {
+    word: 'Took too long',
+    tip: 'The command ran past its time limit and was stopped.',
+    tone: 'problem',
+  },
+  error: {
+    word: "Couldn't run",
+    tip: "The command couldn't be started, for example because it isn't installed.",
+    tone: 'problem',
+  },
+  skipped: { word: 'Skipped', tip: 'This check was not run.', tone: 'stopped' },
+};
+
+/** "12.4 KB": file sizes in the context picker (1 KB = 1,024 bytes, like the 32 KB limit). */
+export function formatKiB(bytes: number): string {
+  if (bytes < 1024) return `${formatCount(bytes)} ${bytes === 1 ? 'byte' : 'bytes'}`;
+  const kib = bytes / 1024;
+  return `${kib < 10 ? kib.toFixed(1) : formatCount(Math.round(kib))} KB`;
+}
+
+export const PROJECT_SETUP_COPY = {
+  wizard: {
+    title: 'New project',
+    description:
+      'Add a project and decide how AI agents work on it. You can change all of this later in its settings.',
+    back: 'Back',
+    next: 'Next',
+    finish: 'Finish and open the board',
+    saving: 'Saving…',
+    progressLabel: 'Setup steps',
+    stepOf: (n: number, total: number) => `Step ${n} of ${total}`,
+    steps: {
+      source: 'Project',
+      agents: 'How agents work',
+      allowlist: 'Pre-approved actions',
+      context: 'Context files',
+      harness: 'Harness',
+    },
+    toProjects: 'Projects',
+    saveFailed: "Your choices couldn't be saved.",
+  },
+  source: {
+    title: 'Where is the project?',
+    description:
+      'Use a git repository you already have, or let this app create a new, empty one for you.',
+    choiceLabel: 'Project source',
+    existing: 'Add an existing folder',
+    existingHint: 'A git repository that is already on this computer.',
+    newRepo: 'Create a new repository',
+    newRepoHint: 'A new folder with git set up and a first commit on the main branch.',
+    parentLabel: 'Create it inside',
+    parentHint: 'A folder that already exists. Use the full path, starting with /.',
+    parentPlaceholder: '/Users/me/code',
+    nameLabel: 'Repository name',
+    nameHint: 'Becomes the new folder’s name. Letters, digits, dots, dashes and underscores.',
+    namePlaceholder: 'my-new-app',
+    willCreate: 'New folder',
+    readmeLabel: 'First README (optional)',
+    readmeHint: 'Saved as README.md in the first commit. You can leave it empty.',
+    readmePlaceholder: '# My new app\n\nWhat this project is for.',
+    create: 'Create repository',
+    creating: 'Creating…',
+    added: (name: string) => `${name} is added.`,
+    addedText: 'Next, choose how agents work on it.',
+    createdText: 'A new git repository with a first commit on main. Next, choose how agents work on it.',
+    alreadyAdded:
+      'This project is already added. Settings you choose next apply to it; to add a different one, start the wizard again.',
+    errors: {
+      parentMissing: 'Enter the folder to create the repository in.',
+      parentNotAbsolute:
+        'Use the full folder path, starting with / (for example /Users/me/code).',
+      nameMissing: 'Give the repository a name.',
+      nameInvalid:
+        'Use only letters, digits, dots, dashes and underscores, starting with a letter or digit (at most 100 characters).',
+      readmeTooLong: 'Keep the README under 20,000 characters.',
+      exists: 'A folder with that name already exists there. Pick another name.',
+      parentNotFound:
+        "That folder wasn't found on this computer, or it isn't a folder. Check the path and try again.",
+      generic: "The repository couldn't be created.",
+    },
+  },
+  agents: {
+    title: 'How agents work',
+    description:
+      'A lead agent plans each ticket and hands parts of it to helper agents. These are the limits it works within.',
+    planFirst: 'Plan first',
+    planFirstValue: 'On',
+    planFirstHint:
+      'The lead agent always proposes a plan, and no helper starts until you approve it. This is always on for now.',
+    projectKey: 'Ticket prefix',
+    projectKeyHint: 'Starts every ticket number on this project’s board, for example WEB-12.',
+    helpers: 'Helpers at once',
+    helpersHint: (max: number) =>
+      `How many helper agents may work at the same time (1 to ${max}). More helpers finish sooner but use more tokens.`,
+    helpersValue: (n: number) => countOf(n, 'helper'),
+    depth: 'Helper depth',
+    depthOptions: {
+      1: {
+        label: 'Only the lead starts helpers',
+        hint: 'Simplest to follow. Recommended.',
+      },
+      2: {
+        label: 'Helpers may start their own helpers',
+        hint: 'One more level, for large tickets. Still within the helpers-at-once limit.',
+      },
+    },
+    budget: 'Budget per agent',
+    budgetHint:
+      'Each agent stops when it has used this many budget tokens (output plus new input; cache reads are not counted).',
+    budgetValue: (n: number) => `${formatCount(n)} budget tokens`,
+    model: 'Model',
+    modelHint: 'Leave empty to use Claude Code’s default model, or enter a model name.',
+    modelPlaceholder: 'Claude Code’s default',
+    errors: {
+      projectKey: 'Use 2 to 6 capital letters for the ticket prefix, for example WEB.',
+      budget: 'Enter the budget as a whole number above zero, for example 500,000.',
+      modelTooLong: 'Use a shorter model name (at most 100 characters).',
+    },
+  },
+  allowlist: {
+    title: 'Pre-approved actions',
+    description:
+      'Agents ask you before they change files or run commands. You can let them do these two safe things without asking. Everything else still asks.',
+    edit: 'Let helpers edit files in their own copy without asking',
+    editHint:
+      'Each helper works in its own copy of the project (a git worktree). Edits there never touch your files until you merge them.',
+    checks: 'Let helpers run this project’s checks without asking',
+    checksHint:
+      'Only the exact check commands listed in the harness. Other commands still ask.',
+    checksNoHarness: 'This takes effect once the project has a harness.',
+    recorded: 'Every pre-approved action is still recorded with the run, so you can see it later.',
+  },
+  context: {
+    title: 'Context for agents',
+    description:
+      'Files every agent reads before it starts, such as CLAUDE.md with your project’s rules.',
+    limits: (max: number, maxKiB: number) => `At most ${max} files and ${maxKiB} KB in total.`,
+    selected: (n: number, max: number) => `${formatCount(n)} of ${max} files chosen`,
+    size: (used: string, maxKiB: number) => `${used} of ${maxKiB} KB`,
+    suggested: 'Suggested',
+    loading: 'Looking for files…',
+    none: 'No suitable files were found in this project.',
+    notListed: 'Not found in the project any more',
+    sizeUnknown: 'Size not reported',
+    listLabel: 'Context files',
+    errors: {
+      tooMany: (max: number) => `Choose at most ${max} files.`,
+      tooLarge: (maxKiB: number) =>
+        `The chosen files are larger than ${maxKiB} KB together. Leave some out.`,
+    },
+  },
+  harness: {
+    title: 'Harness',
+    description:
+      'The project’s own checks (tests, lint, build) that let agents verify their work. They are listed in .acp/harness.json in the repository.',
+    status: 'Status',
+    problems: 'What needs fixing',
+    checks: 'Checks',
+    noChecks: 'No checks listed.',
+    required: 'Required',
+    optional: 'Optional',
+    requiredTip: 'Must pass before a plain merge.',
+    checkedAt: 'Read from the repository',
+    createTicket: 'Create a ‘Build the harness’ ticket',
+    creatingTicket: 'Creating…',
+    ticketCreated: (key: string) => `Added ${key} “Build the harness” to the board.`,
+    ticketCreatedText: 'Start it from the board. You approve its plan and review its changes.',
+    openTicket: 'Open ticket',
+    ticketFailed: "The ticket couldn't be created.",
+    ticketExplain:
+      'A ready-written ticket asks an agent to add fast checks and write .acp/harness.json. You approve its plan and review its changes like any other ticket.',
+    runChecks: 'Run checks now',
+    runningChecks: 'Running checks…',
+    runChecksHint:
+      'Runs every check on a read-only copy of the main branch. Your files are not changed.',
+    runChecksUnavailable: 'Checks can run once the project has a valid harness.',
+    runFailed: "The checks couldn't be run.",
+    results: 'Latest results',
+    noResults: 'The checks ran, but none reported a result.',
+    duration: (text: string) => `took ${text}`,
+    exitCode: (code: number | null) =>
+      code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
+    output: 'Output (last part)',
+    noOutput: 'No output.',
+    contextFiles: 'Context files',
+    noContextFiles: 'None chosen.',
+    commandNote:
+      'The exact commands, time limits and working folders are in .acp/harness.json in the repository.',
+  },
+  settings: {
+    title: (name: string) => `${name} settings`,
+    description:
+      'The AI work environment for this project: how agents work, what they may do without asking, what they read first, and its harness.',
+    back: (name: string) => name,
+    environment: 'AI work environment',
+    environmentDescription: 'Applies to runs started from now on. Running agents keep their settings.',
+    save: 'Save changes',
+    saving: 'Saving…',
+    saved: 'Saved.',
+    unsaved: 'You have unsaved changes.',
+    reset: 'Undo changes',
+    saveFailed: "Your changes couldn't be saved.",
+    danger: 'Danger zone',
+    dangerText:
+      'Removing a project from this app never deletes its folder or its git history. It is refused while the project has tickets or runs. Removing projects isn’t available in the app yet.',
+    settingsLink: 'Settings',
   },
 } as const;

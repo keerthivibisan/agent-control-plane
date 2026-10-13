@@ -11,7 +11,7 @@ import { RelativeTime } from '../../components/RelativeTime';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TokenValue } from '../../components/TokenValue';
 import { paths, schemas } from '../../lib/api';
-import { PAGES, PROJECT_PAGE, PROJECTS_PAGE } from '../../lib/copy';
+import { PAGES, PROJECT_PAGE, PROJECT_SETUP_COPY, PROJECTS_PAGE } from '../../lib/copy';
 import { sessionLabel } from '../../lib/format';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
@@ -178,9 +178,14 @@ function Header({ project }: { project: ProjectDto }) {
         </span>
       }
       actions={
-        <ButtonLink href={usageHref({ groupBy: 'session', projectId: project.id })}>
-          {PROJECT_PAGE.openInTokens}
-        </ButtonLink>
+        <>
+          <ButtonLink href={usageHref({ groupBy: 'session', projectId: project.id })}>
+            {PROJECT_PAGE.openInTokens}
+          </ButtonLink>
+          <ButtonLink href={href.projectSettings(project.id)}>
+            {PROJECT_SETUP_COPY.settings.settingsLink}
+          </ButtonLink>
+        </>
       }
     />
   );
