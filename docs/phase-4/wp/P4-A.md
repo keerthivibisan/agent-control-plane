@@ -25,7 +25,8 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
-| 2026-10-13 | Claimed P4-A; branch `wp/p4-a-engine` created from `main` (8c05f68) | (this commit) | — |
+| 2026-10-13 | Claimed P4-A; branch `wp/p4-a-engine` created from `main` (8c05f68) | edba6fe | — |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: refusal codes, PLAN_REVIEW→FAILED edge, RunLimits/plans/decidedBy state, limits.ts, tree.ts, start_agent policy, Draft plan/limit/tree support. Not green yet (index exports pending) | (this commit) | typecheck ✗ (WIP) |
 
 ## Handoff notes
 

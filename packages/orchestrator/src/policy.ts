@@ -1,8 +1,9 @@
-import { MAX_CONCURRENT_CHILD_AGENTS, MAX_DELEGATION_DEPTH } from '@acp/core';
 import type { RunStatus } from '@acp/core';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
+import { runLimits } from './limits.js';
+import { agentDepth } from './tree.js';
 import { isLiveAgentStatus } from './transitions.js';
 import type { EngineAgent, RunState } from './state.js';
 
@@ -35,33 +36,43 @@ export function checkProjectRegistered(
   return refusal('project-not-registered', 'Agents run only for registered projects.');
 }
 
-/** Depth of an agent in the run's tree: the lead is 0, its workers 1. */
-export function agentDepth(state: RunState, agent: EngineAgent): number {
-  let depth = 0;
-  let parentId = agent.parentAgentRunId;
-  // Bounded by the agent count, so a corrupt cycle cannot loop forever.
-  for (let i = 0; parentId !== null && i <= state.agents.length; i++) {
-    depth++;
-    const parent = state.agents.find((a) => a.id === parentId);
-    parentId = parent === undefined ? null : parent.parentAgentRunId;
-  }
-  return depth;
-}
-
 export function isAgentOverBudget(agent: EngineAgent): boolean {
   return agent.status === 'BLOCKED' || isOverBudget(agent.budgetTokensUsed, agent.budgetLimit);
 }
 
+/** Plan-first runs (ADR-0016): while planning, helpers, edits and commands wait for approval. */
+export function checkPlanApproved(status: RunStatus): Refusal | null {
+  if (status === 'PLANNING' || status === 'PLAN_REVIEW') {
+    return refusal(
+      'plan-not-approved',
+      status === 'PLANNING'
+        ? 'Plan first: read what you need, then call submit_plan. Helpers, edits and commands wait until the owner approves the plan.'
+        : 'Your plan is waiting for the owner. Helpers, edits and commands wait until the owner approves it.',
+    );
+  }
+  return null;
+}
+
+/** Whether an agent may start helpers of its own: the new helper must fit `RunLimits.maxDepth`. */
+export function mayStartHelpers(state: RunState, agent: EngineAgent): boolean {
+  return agentDepth(state, agent) + 1 <= runLimits(state).maxDepth;
+}
+
 /**
- * `start_agent` policy (ADR-0013 §2–§3): the run accepts work, the project is registered, the
- * caller is the lead (the child stays within `MAX_DELEGATION_DEPTH`), the caller is within budget,
- * and fewer than `MAX_CONCURRENT_CHILD_AGENTS` workers are live.
+ * `start_agent` policy (ADR-0013 §2–§3 and its amendment): the run accepts work and its plan is
+ * approved, the project is registered, the new helper stays within the run's `maxDepth`, the caller
+ * is live and within budget, and fewer than the run's `maxConcurrentHelpers` helpers are live
+ * (counted over the whole tree).
  */
 export function checkStartAgent(
   state: RunState,
   callerAgentRunId: string,
   registeredProjectIds: Iterable<string>,
 ): Refusal | null {
+  if (state.run.status !== 'CANCELLING' && state.run.status !== 'CANCELLED') {
+    const planRefusal = checkPlanApproved(state.run.status);
+    if (planRefusal !== null) return planRefusal;
+  }
   const runRefusal = checkRunActive(state.run.status);
   if (runRefusal !== null) return runRefusal;
 
@@ -70,23 +81,29 @@ export function checkStartAgent(
 
   const caller = state.agents.find((a) => a.id === callerAgentRunId);
   if (caller === undefined) return refusal('unknown-agent', 'Unknown calling agent.');
-  if (agentDepth(state, caller) + 1 > MAX_DELEGATION_DEPTH) {
-    return refusal('depth-exceeded', 'Only the lead agent can start agents.');
+  if (!mayStartHelpers(state, caller)) {
+    return refusal(
+      'depth-exceeded',
+      runLimits(state).maxDepth === 1
+        ? 'Only the lead agent can start agents.'
+        : 'Helpers of helpers cannot start more agents.',
+    );
   }
   if (!isLiveAgentStatus(caller.status)) {
     return refusal('agent-not-live', 'The calling agent has ended.');
   }
   if (isAgentOverBudget(caller)) {
-    return refusal('over-budget', 'The lead agent reached its budget; the owner must raise it.');
+    return refusal('over-budget', 'The calling agent reached its budget; the owner must raise it.');
   }
 
+  const { maxConcurrentHelpers } = runLimits(state);
   const liveWorkers = state.agents.filter(
     (a) => a.kind === 'worker' && isLiveAgentStatus(a.status),
   ).length;
-  if (liveWorkers >= MAX_CONCURRENT_CHILD_AGENTS) {
+  if (liveWorkers >= maxConcurrentHelpers) {
     return refusal(
       'too-many-agents',
-      `At most ${MAX_CONCURRENT_CHILD_AGENTS} agents can work at once; wait for one to finish.`,
+      `At most ${maxConcurrentHelpers} agents can work at once; wait for one to finish.`,
     );
   }
   return null;

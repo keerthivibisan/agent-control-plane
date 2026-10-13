@@ -6,6 +6,7 @@ import type {
   OrchestrationRun,
   PermissionDecision,
   ReviewState,
+  TicketPlan,
 } from '@acp/core';
 import type { z } from 'zod';
 import type { Refusal } from './errors.js';
@@ -42,6 +43,25 @@ export interface EngineApproval {
   status: ApprovalStatus;
   requestedAt: string;
   decidedAt: string | null;
+  /**
+   * Who decided (ApprovalDto.decidedBy, ADR-0013 amendment): the owner, the project allowlist, or
+   * the timeout. Null while pending and when the engine closed it because the agent or run stopped.
+   * Optional so Phase 3 rows loaded without it stay valid.
+   */
+  decidedBy?: ApprovalDecider | null;
+}
+
+export type ApprovalDecider = 'owner' | 'allowlist' | 'timeout';
+
+/**
+ * Per-run agent-tree limits (ADR-0013 amendment), taken from the project's agent setup when the
+ * run is created and validated against `HARD_MAX_HELPERS` / `HARD_MAX_DEPTH`.
+ */
+export interface RunLimits {
+  /** Live helpers (workers at any depth) allowed at once in the run. */
+  maxConcurrentHelpers: number;
+  /** Deepest helper allowed: 1 = only the lead starts helpers; 2 = helpers may start helpers. */
+  maxDepth: number;
 }
 
 /**
@@ -56,6 +76,16 @@ export interface RunState {
   agents: readonly EngineAgent[];
   approvals: readonly EngineApproval[];
   ledger: UsageLedger;
+  /**
+   * Limits for this run. Absent means the Phase 3 defaults (`MAX_CONCURRENT_CHILD_AGENTS` helpers,
+   * depth `MAX_DELEGATION_DEPTH`), so runs loaded without them keep the M1 behaviour.
+   */
+  limits?: RunLimits;
+  /**
+   * Plan versions of a ticket run (ADR-0016), oldest first. Owner-facing text, stored per
+   * ADR-0016. Absent or empty for Phase 3 runs.
+   */
+  plans?: readonly TicketPlan[];
 }
 
 /** Injected so the engine stays pure and testable (AGENTS.md §6). */
@@ -76,8 +106,13 @@ export type EngineEffect =
       agentRunId: string;
       kind: AgentRoleKind;
       role: string;
-      /** First user message: the owner's first chat message (lead) or the task (worker). */
+      /** First user message: the owner's first chat message or the ticket brief (lead), or the task (worker). */
       prompt: string;
+      /**
+       * Set (true) only for a worker that may start helpers of its own (depth 2, ADR-0013
+       * amendment); the server then gives it the child-management tools (`ManagedAgentSpec`).
+       */
+      canStartHelpers?: boolean;
     }
   | { type: 'send-to-agent'; agentRunId: string; text: string }
   /** Stop the current turn but keep the session (budget cap reached). */
@@ -90,6 +125,10 @@ export type EngineEffect =
   /** Store and publish a chat line (ADR-0015). Only owner text and the lead's replies. */
   | { type: 'chat-message'; role: 'owner' | 'lead'; text: string }
   | { type: 'link-session'; agentRunId: string; providerSessionId: string }
+  /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
+  | { type: 'plan-submitted'; planId: string }
+  /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */
+  | { type: 'plan-decided'; planId: string; status: 'approved' | 'changes-requested' }
   /** Usage passed the soft cap; report how far (ADR-0014). */
   | { type: 'budget-overshoot'; agentRunId: string; used: number; limit: number; overshoot: number }
   /** Content-free diagnostics: count them, never log the payload. */

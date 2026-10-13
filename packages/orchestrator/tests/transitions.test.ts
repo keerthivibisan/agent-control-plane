@@ -19,7 +19,7 @@ import {
 const EXPECTED_RUN: Record<RunStatus, RunStatus[]> = {
   QUEUED: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   PLANNING: ['PLAN_REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
-  PLAN_REVIEW: ['PLANNING', 'RUNNING', 'CANCELLING', 'NEEDS_REVIEW'],
+  PLAN_REVIEW: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   RUNNING: ['BLOCKED', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   REVIEW: ['COMPLETED', 'CANCELLING'],
@@ -81,7 +81,7 @@ describe('run transition table', () => {
   });
 
   it('lets every live run state be cancelled or marked NEEDS_REVIEW after a restart', () => {
-    for (const s of ['QUEUED', 'RUNNING', 'BLOCKED'] as const) {
+    for (const s of ['QUEUED', 'PLANNING', 'PLAN_REVIEW', 'RUNNING', 'BLOCKED'] as const) {
       expect(canTransitionRun(s, 'CANCELLING')).toBe(true);
       expect(canTransitionRun(s, 'NEEDS_REVIEW')).toBe(true);
     }

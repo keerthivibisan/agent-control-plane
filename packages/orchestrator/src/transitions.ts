@@ -8,10 +8,11 @@ import { IllegalTransitionError } from './errors.js';
  */
 export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> = Object.freeze({
   QUEUED: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
-  // Phase 4 plan-first (ADR-0016; added in P4-0, behaviour built by P4-A): the lead submits a plan,
-  // the owner approves (→ RUNNING) or requests changes (→ PLANNING).
+  // Phase 4 plan-first (ADR-0016): the lead submits a plan, the owner approves (→ RUNNING) or
+  // requests changes (→ PLANNING). A lead that ends before an approved plan fails the run (no
+  // helper can exist yet, so there is nothing to review).
   PLANNING: ['PLAN_REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
-  PLAN_REVIEW: ['PLANNING', 'RUNNING', 'CANCELLING', 'NEEDS_REVIEW'],
+  PLAN_REVIEW: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   RUNNING: ['BLOCKED', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   // BLOCKED = every live agent waits for the owner (an approval or a budget decision).
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],

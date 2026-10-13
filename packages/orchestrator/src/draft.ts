@@ -1,5 +1,11 @@
 import { redact } from '@acp/core';
-import type { AgentRunStatus, OrchestrationRun, PermissionDecision, RunStatus } from '@acp/core';
+import type {
+  AgentRunStatus,
+  OrchestrationRun,
+  PermissionDecision,
+  RunStatus,
+  TicketPlan,
+} from '@acp/core';
 import { agentBudgetUsage, budgetOvershoot, isOverBudget } from './budget.js';
 import type { UsageLedger } from './budget.js';
 import {
@@ -8,11 +14,14 @@ import {
   isLiveAgentStatus,
   isTerminalRunStatus,
 } from './transitions.js';
+import { agentDepth, childrenOf } from './tree.js';
 import type {
+  ApprovalDecider,
   EngineAgent,
   EngineApproval,
   EngineContext,
   EngineEffect,
+  RunLimits,
   RunState,
 } from './state.js';
 
@@ -41,8 +50,11 @@ export class Draft {
   readonly agents: EngineAgent[];
   readonly approvals: EngineApproval[];
   ledger: UsageLedger;
+  readonly plans: TicketPlan[];
+  readonly limits: RunLimits | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
+  private readonly hadPlans: boolean;
 
   constructor(
     state: RunState,
@@ -52,6 +64,9 @@ export class Draft {
     this.agents = state.agents.map((a) => ({ ...a }));
     this.approvals = state.approvals.map((a) => ({ ...a }));
     this.ledger = state.ledger;
+    this.plans = (state.plans ?? []).map((p) => ({ ...p }));
+    this.hadPlans = state.plans !== undefined;
+    this.limits = state.limits === undefined ? undefined : { ...state.limits };
     this.nowIso = ctx.now.toISOString();
   }
 
@@ -79,7 +94,8 @@ export class Draft {
     return (
       id === this.run.id ||
       this.agents.some((a) => a.id === id) ||
-      this.approvals.some((a) => a.id === id)
+      this.approvals.some((a) => a.id === id) ||
+      this.plans.some((p) => p.id === id)
     );
   }
 
@@ -115,6 +131,25 @@ export class Draft {
     if (abort) this.effects.push({ type: 'abort-agent', agentRunId: agent.id });
   }
 
+  /**
+   * Ends an agent and everything below it, descendants first (ADR-0013 amendment: "Stop all stops
+   * descendants first"), so a parent helper cannot start replacements while its children stop.
+   */
+  endAgentTree(agent: EngineAgent, to: AgentRunStatus, abort: boolean, seen = new Set<string>()): void {
+    if (seen.has(agent.id)) return;
+    seen.add(agent.id);
+    for (const child of childrenOf(this, agent.id)) this.endAgentTree(child, to, abort, seen);
+    this.endAgent(agent, to, abort);
+  }
+
+  /** Live workers, deepest first; the order in which Stop all ends them. */
+  liveWorkersDeepestFirst(): EngineAgent[] {
+    return this.liveWorkers()
+      .map((a, i) => ({ a, i, depth: agentDepth(this, a) }))
+      .sort((x, y) => y.depth - x.depth || x.i - y.i)
+      .map((x) => x.a);
+  }
+
   /** Closes every pending approval of one agent (or all agents when `agentRunId` is null). */
   settlePendingApprovals(
     agentRunId: string | null,
@@ -124,7 +159,7 @@ export class Draft {
     for (const approval of this.approvals) {
       if (approval.status !== 'pending') continue;
       if (agentRunId !== null && approval.agentRunId !== agentRunId) continue;
-      this.closeApproval(approval, status, { allow: false, message });
+      this.closeApproval(approval, status, { allow: false, message }, null);
     }
   }
 
@@ -132,9 +167,11 @@ export class Draft {
     approval: EngineApproval,
     status: 'approved' | 'denied' | 'expired',
     decision: PermissionDecision,
+    decidedBy: ApprovalDecider | null = null,
   ): void {
     approval.status = status;
     approval.decidedAt = this.now;
+    approval.decidedBy = decidedBy;
     // Budget approvals have no SDK callback waiting; only tool-use approvals resolve a promise.
     if (approval.kind === 'tool-use') {
       this.effects.push({ type: 'resolve-permission', approvalId: approval.id, decision });
@@ -218,6 +255,12 @@ export class Draft {
     const lead = this.lead();
     const status = this.run.status;
 
+    // Plan-first (ADR-0016): no helper exists before approval, so a lead that ends here fails the run.
+    if (status === 'PLANNING' || status === 'PLAN_REVIEW') {
+      if (lead === undefined || !isLiveAgentStatus(lead.status)) this.setRunStatus('FAILED');
+      return;
+    }
+
     if (status === 'QUEUED' && lead !== undefined) {
       if (lead.status === 'RUNNING' || lead.status === 'WAITING_APPROVAL') {
         this.setRunStatus('RUNNING');
@@ -255,12 +298,15 @@ export class Draft {
 
   finish(): RunState {
     this.run.updatedAt = this.now;
-    return {
+    const state: RunState = {
       run: this.run,
       agents: this.agents,
       approvals: this.approvals,
       ledger: this.ledger,
     };
+    if (this.limits !== undefined) state.limits = this.limits;
+    if (this.hadPlans || this.plans.length > 0) state.plans = this.plans;
+    return state;
   }
 
   static readonly messages = {

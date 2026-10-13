@@ -6,9 +6,9 @@
 export const REFUSAL_CODES = [
   /** The run's project is not (or no longer) a registered project. */
   'project-not-registered',
-  /** `MAX_CONCURRENT_CHILD_AGENTS` workers are already live. */
+  /** The run's helper limit (`RunLimits.maxConcurrentHelpers`) is reached. */
   'too-many-agents',
-  /** The caller is a worker; workers may not start agents (`MAX_DELEGATION_DEPTH`). */
+  /** The new agent would be deeper than the run allows (`RunLimits.maxDepth`). */
   'depth-exceeded',
   /** The run is cancelling or cancelled; nothing new is scheduled. */
   'run-cancelling',
@@ -36,6 +36,11 @@ export const REFUSAL_CODES = [
   'illegal-transition',
   /** An id supplied by the caller is already used in this run. */
   'duplicate-id',
+  /** Plan-first (ADR-0016): helpers, edits and commands wait until the owner approves a plan. */
+  'plan-not-approved',
+  'plan-not-found',
+  /** The plan is not the one waiting for the owner's decision (already decided or superseded). */
+  'plan-not-pending',
 ] as const;
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 
