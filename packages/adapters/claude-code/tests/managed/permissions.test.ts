@@ -5,15 +5,25 @@ import { describe, expect, it } from 'vitest';
 import {
   createCanUseTool,
   DENY_ABORTED,
+  DENY_HELPER_LEAD_TOOL,
   DENY_NO_DECISION,
   DENY_WORKER_LEAD_TOOL,
+  HELPER_PARENT_TOOL_NAMES,
   leadToolName,
+  managedToolNames,
 } from '../../src/managed/permissions.js';
 
 const CWD = '/work/project';
 
-function spec(kind: 'lead' | 'worker'): ManagedAgentSpec {
-  return { agentRunId: `agent-${kind}`, kind, cwd: CWD, prompt: 'p', model: null };
+function spec(kind: 'lead' | 'worker', canStartHelpers?: boolean): ManagedAgentSpec {
+  return {
+    agentRunId: `agent-${kind}`,
+    kind,
+    cwd: CWD,
+    prompt: 'p',
+    model: null,
+    ...(canStartHelpers === undefined ? {} : { canStartHelpers }),
+  };
 }
 
 type Options = Parameters<CanUseTool>[2];
@@ -31,9 +41,10 @@ function setup(
   kind: 'lead' | 'worker',
   decide: (r: PermissionRequest) => Promise<PermissionDecision> = () =>
     Promise.resolve({ allow: true }),
+  canStartHelpers?: boolean,
 ) {
   const requests: PermissionRequest[] = [];
-  const canUseTool = createCanUseTool(spec(kind), {
+  const canUseTool = createCanUseTool(spec(kind, canStartHelpers), {
     requestPermission(r) {
       requests.push(r);
       return decide(r);
@@ -192,5 +203,76 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     expect(leadToolName('mcp__acp__start_agent')).toBe('start_agent');
     expect(leadToolName('mcp__acp__nope')).toBeNull();
     expect(leadToolName('start_agent')).toBeNull();
+  });
+});
+
+describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 amendment)', () => {
+  const ours = opts({ mcpServer: { name: 'acp', source: 'sdk' } });
+
+  it('managedToolNames: every tool for the lead, the subset for a parent helper, none otherwise', () => {
+    expect(managedToolNames(spec('lead'))).toEqual(LEAD_TOOL_NAMES);
+    expect(managedToolNames(spec('lead', false))).toEqual(LEAD_TOOL_NAMES);
+    expect(managedToolNames(spec('worker', true))).toEqual(HELPER_PARENT_TOOL_NAMES);
+    expect(managedToolNames(spec('worker', false))).toEqual([]);
+    expect(managedToolNames(spec('worker'))).toEqual([]);
+    expect(HELPER_PARENT_TOOL_NAMES).toEqual([
+      'start_agent',
+      'list_agents',
+      'message_agent',
+      'stop_agent',
+      'agent_status',
+    ]);
+  });
+
+  it('allows the child-management tools from our server without asking', async () => {
+    const { canUseTool, requests } = setup('worker', undefined, true);
+    for (const name of HELPER_PARENT_TOOL_NAMES) {
+      await expect(canUseTool(`mcp__acp__${name}`, {}, ours)).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+      await expect(canUseTool(`mcp__acp__${name}`, {}, opts())).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+    }
+    expect(requests).toEqual([]);
+  });
+
+  it('denies submit_plan, request_review and unknown acp tools without asking', async () => {
+    const { canUseTool, requests } = setup('worker', undefined, true);
+    for (const name of ['submit_plan', 'request_review', 'unknown']) {
+      await expect(canUseTool(`mcp__acp__${name}`, {}, ours)).resolves.toEqual({
+        behavior: 'deny',
+        message: DENY_HELPER_LEAD_TOOL,
+        toolUseID: 'toolu_1',
+      });
+    }
+    expect(requests).toEqual([]);
+  });
+
+  it('denies a child-management tool that comes from another server', async () => {
+    const { canUseTool, requests } = setup('worker', undefined, true);
+    await expect(
+      canUseTool(
+        'mcp__acp__start_agent',
+        {},
+        opts({ mcpServer: { name: 'acp', source: 'project' } }),
+      ),
+    ).resolves.toMatchObject({ behavior: 'deny', message: DENY_HELPER_LEAD_TOOL });
+    expect(requests).toEqual([]);
+  });
+
+  it('still asks the owner for edits and shell commands', async () => {
+    const { canUseTool, requests } = setup('worker', undefined, true);
+    await canUseTool('Edit', { file_path: 'src/a.ts' }, opts());
+    await canUseTool('Bash', { command: 'pnpm test' }, opts());
+    expect(requests.map((r) => r.toolName)).toEqual(['Edit', 'Bash']);
+  });
+
+  it('a worker with canStartHelpers false keeps no lead tools', async () => {
+    const { canUseTool } = setup('worker', undefined, false);
+    await expect(canUseTool('mcp__acp__start_agent', {}, ours)).resolves.toMatchObject({
+      behavior: 'deny',
+      message: DENY_WORKER_LEAD_TOOL,
+    });
   });
 });

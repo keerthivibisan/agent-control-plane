@@ -48,3 +48,40 @@ describe('P3-B lead tools (ADR-0012)', () => {
     expect(server.instance).toBeDefined();
   });
 });
+
+describe('P4-I tool sets', () => {
+  it('builds only the named tools, in contract order', () => {
+    const names = leadToolDefinitions(
+      () => Promise.resolve(''),
+      ['agent_status', 'start_agent', 'list_agents', 'stop_agent', 'message_agent'],
+    ).map((t) => t.name);
+    expect(names).toEqual([
+      'start_agent',
+      'list_agents',
+      'message_agent',
+      'stop_agent',
+      'agent_status',
+    ]);
+  });
+
+  it('exposes submit_plan to the lead with the contract input schema', async () => {
+    const calls: [LeadToolName, unknown][] = [];
+    const tools = leadToolDefinitions((name, input) => {
+      calls.push([name, input]);
+      return Promise.resolve('plan v1 submitted');
+    });
+    const submitPlan = tools.find((t) => t.name === 'submit_plan');
+    expect(Object.keys((submitPlan?.inputSchema ?? {}) as Record<string, unknown>)).toEqual([
+      'summary',
+      'steps',
+    ]);
+    const input = {
+      summary: 'Add a toggle',
+      steps: [{ title: 'UI', role: 'ui', detail: 'Do it' }],
+    };
+    await expect(submitPlan?.handler(input, {})).resolves.toEqual({
+      content: [{ type: 'text', text: 'plan v1 submitted' }],
+    });
+    expect(calls).toEqual([['submit_plan', input]]);
+  });
+});

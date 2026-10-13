@@ -13,16 +13,17 @@
 
 ## Tasks
 
-- [ ] ManagedAgentSpec.context appended to the system prompt (SDK preset append)
-- [ ] canStartHelpers: depth-2 parents get child-management tools only
+- [x] ManagedAgentSpec.context appended to the system prompt (SDK preset append)
+- [x] canStartHelpers: depth-2 parents get child-management tools only
 - [x] submit_plan exposed via the lead tool server (done by the coordinator in P4-0 to keep `main` green)
-- [ ] Fake-query tests; pnpm check green
+- [x] Fake-query tests; pnpm check green
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                | Commit       | Checks          |
-| ---------- | ------------------------------------------------------------ | ------------ | --------------- |
-| 2026-10-13 | Claimed P4-I; branch `wp/p4-i-adapter` from `main` (8c05f68) | claim commit | n/a (docs only) |
+| Date       | What was done                                                                                                                                                                                                                               | Commit      | Checks                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| 2026-10-13 | Claimed P4-I; branch `wp/p4-i-adapter` from `main` (8c05f68)                                                                                                                                                                                | 80e33f3     | n/a (docs only)                                                                                            |
+| 2026-10-13 | Context as preset `append` (capped at MAX_CONTEXT_BYTES); `canStartHelpers` gets the child-management tools only; `managedToolNames` drives both the MCP server and `canUseTool`; 15 new fake-query tests; README and provider-adapters §11 | feat commit | format ✓ lint ✓ typecheck ✓ test 1382/1382 ✓ build ✓ (server suite with `--testTimeout=60000`; see report) |
 
 ## Handoff notes
 

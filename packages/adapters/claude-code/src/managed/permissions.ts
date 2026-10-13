@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { LEAD_TOOL_NAMES } from '@acp/core';
-import type { ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
+import type { LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { isInside, summarizeToolUse, targetPath } from './summary.js';
 
@@ -17,7 +17,32 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set(['Read', 'Glob', 'Gr
 
 const LEAD_TOOL_SET: ReadonlySet<string> = new Set(LEAD_TOOL_NAMES);
 
+/**
+ * The tools a depth-2 parent helper gets (ADR-0013 amendment): managing its own children only.
+ * Never `submit_plan` or `request_review`: planning and review stay with the lead. The engine
+ * scopes each call to the caller's own children; this list only decides what the model sees.
+ */
+export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
+  'start_agent',
+  'list_agents',
+  'message_agent',
+  'stop_agent',
+  'agent_status',
+];
+
+/**
+ * The control-plane tools one agent may use: every lead tool for the lead, the child-management
+ * subset for a worker with `canStartHelpers`, none for any other worker (depth 1). The adapter
+ * builds the MCP server and `canUseTool` from this one list, so the two cannot disagree.
+ */
+export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[] {
+  if (spec.kind === 'lead') return LEAD_TOOL_NAMES;
+  return spec.canStartHelpers === true ? HELPER_PARENT_TOOL_NAMES : [];
+}
+
 export const DENY_WORKER_LEAD_TOOL = 'Worker agents cannot use the control-plane tools.';
+export const DENY_HELPER_LEAD_TOOL =
+  'Helper agents can only start, list, message, stop and check their own helpers.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
 
@@ -52,20 +77,28 @@ function readsOnlyInside(
 }
 
 /**
- * The `canUseTool` callback for one managed agent (ADR-0013 §4):
- * - the lead's own tools (lead only) and in-directory read-only tools are allowed;
- * - a worker calling a lead tool is denied outright (depth 1, ADR-0012);
+ * The `canUseTool` callback for one managed agent (ADR-0013 §4 and its 2026-10-13 amendment):
+ * - the agent's own control-plane tools (`managedToolNames`) from our in-process server, and
+ *   in-directory read-only tools, are allowed;
+ * - a worker calling any other `mcp__acp__*` tool is denied outright (depth 1, ADR-0012; a depth-2
+ *   parent helper never gets `submit_plan` or `request_review`);
  * - everything else asks the owner through `callbacks.requestPermission`, with a redacted summary.
  * A rejected or failed request, or an aborted agent, is a deny: the callback never throws.
  */
 export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallbacks): CanUseTool {
+  const ownTools: ReadonlySet<string> = new Set(managedToolNames(spec));
   return async (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
     if (toolName.startsWith(LEAD_TOOL_PREFIX)) {
+      const name = leadToolName(toolName);
       if (spec.kind === 'worker') {
-        return { behavior: 'deny', message: DENY_WORKER_LEAD_TOOL, toolUseID };
+        if (name !== null && ownTools.has(name) && fromLeadServer(options)) {
+          return { behavior: 'allow', toolUseID };
+        }
+        const message = ownTools.size > 0 ? DENY_HELPER_LEAD_TOOL : DENY_WORKER_LEAD_TOOL;
+        return { behavior: 'deny', message, toolUseID };
       }
-      if (leadToolName(toolName) !== null && fromLeadServer(options)) {
+      if (name !== null && ownTools.has(name) && fromLeadServer(options)) {
         return { behavior: 'allow', toolUseID };
       }
       // An unknown `mcp__acp__*` name, or one from another server, is not ours: ask like any tool.

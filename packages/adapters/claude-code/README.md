@@ -32,7 +32,7 @@ hookSettingsSnippet({ port, tokenEnvVar }); // JSON text for the user to paste; 
 `createClaudeCodeAdapter` returns the core `ObservationAdapter` plus `diagnostics()`. Defaults:
 512 MiB size cap, 1 MiB read chunks, system clock.
 
-## Managed mode (`src/managed/**`, P3-B)
+## Managed mode (`src/managed/**`, P3-B; P4-I)
 
 `createManagedClaudeCode({ query? })` implements core's `ManagedExecutionAdapter` over the Claude
 Agent SDK (ADR-0012, ADR-0013). It is the only code in the repo that imports
@@ -55,10 +55,19 @@ handle.abort(); // ends the iterator now, with finished: cancelled
   - The SDK options use `permissionMode: 'default'`, `settingSources: []` (SDK isolation mode: no settings files, so no
     repository permission rules or hooks; CLAUDE.md is not loaded) and
     `strictMcpConfig: true`.
-  - Read-only tools (Read, Glob, Grep, LS) inside the agent's directory, and the lead's own
+  - Read-only tools (Read, Glob, Grep, LS) inside the agent's directory, and the agent's own
     `mcp__acp__*` tools, run without asking. Everything else asks the owner with a redacted,
     content-free summary of at most 200 characters.
-  - Workers never get the lead tools.
+- **Control-plane tools** (`mcp__acp__*`, one in-process MCP server):
+  - The lead gets every tool in `LeadToolInputs`, including `submit_plan`.
+  - A worker with `canStartHelpers` (a depth-2 parent helper) gets only `start_agent`,
+    `list_agents`, `message_agent`, `stop_agent` and `agent_status` (`HELPER_PARENT_TOOL_NAMES`).
+    It never gets `submit_plan` or `request_review`; a call to them is denied without asking.
+  - Every other worker gets no server, and any `mcp__acp__*` call is denied.
+- **Project context** (`spec.context`, ADR-0012 amendment): when present and not blank, it is
+  appended to Claude Code's own system prompt (`systemPrompt: { type: 'preset', preset:
+'claude_code', append }`), cut to at most `MAX_CONTEXT_BYTES` (32 KiB) on a character boundary.
+  Without context the system prompt stays unset, as in Phase 3.
 - **Events.**
   - Activity is the tool name plus its target path or command name.
   - Usage is reported per assistant message id.

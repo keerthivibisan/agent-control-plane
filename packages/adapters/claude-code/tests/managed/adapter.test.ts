@@ -1,3 +1,4 @@
+import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES } from '@acp/core';
 import type {
   ManagedAgentEvent,
   ManagedAgentSpec,
@@ -21,10 +22,20 @@ const realQuery = vi.hoisted(() => {
   };
   return spy;
 });
-vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => ({
-  ...(await importOriginal<typeof Sdk>()),
-  query: realQuery.fn,
-}));
+// Records the tool names of every in-process MCP server the adapter builds (the real builder runs;
+// it only creates an in-process server object).
+const servers = vi.hoisted(() => ({ toolNames: [] as string[][] }));
+vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => {
+  const original = await importOriginal<typeof Sdk>();
+  return {
+    ...original,
+    query: realQuery.fn,
+    createSdkMcpServer: (options: Parameters<typeof Sdk.createSdkMcpServer>[0]) => {
+      servers.toolNames.push((options.tools ?? []).map((t) => t.name));
+      return original.createSdkMcpServer(options);
+    },
+  };
+});
 
 const CWD = '/work/acp/worktrees/run-1/agent-1';
 const SECRET = 'TOP-SECRET-WORKER-TEXT';
@@ -164,6 +175,87 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     const adapter = createManagedClaudeCode();
     expect(adapter.provider).toBe('claude-code');
     expect(() => adapter.start(spec('worker'), callbacks())).toThrow('real Agent SDK');
+  });
+});
+
+describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () => {
+  function optionsFor(s: ManagedAgentSpec): Sdk.Options {
+    const { query, calls } = fakeQuery(async function* (ctx) {
+      await idle(ctx);
+      yield* [];
+    });
+    createManagedClaudeCode({ query }).start(s, callbacks()).abort();
+    const options = calls[0]?.options;
+    if (options === undefined) throw new Error('query was not called');
+    return options;
+  }
+
+  it("appends the project context to Claude Code's preset system prompt", () => {
+    for (const kind of ['lead', 'worker'] as const) {
+      const options = optionsFor(spec(kind, { context: '# CLAUDE.md\nUse pnpm.' }));
+      expect(options.systemPrompt).toEqual({
+        type: 'preset',
+        preset: 'claude_code',
+        append: '# CLAUDE.md\nUse pnpm.',
+      });
+    }
+  });
+
+  it('leaves the system prompt unset without context, or with blank context', () => {
+    expect(optionsFor(spec('worker'))).not.toHaveProperty('systemPrompt');
+    expect(optionsFor(spec('lead', { context: ' \n\t ' }))).not.toHaveProperty('systemPrompt');
+  });
+
+  it('caps the appended context at MAX_CONTEXT_BYTES without splitting a character', () => {
+    // 'é' is 2 bytes in UTF-8: an odd cap would fall inside one.
+    const context = `a${'é'.repeat(MAX_CONTEXT_BYTES)}`;
+    const options = optionsFor(spec('worker', { context }));
+    const prompt = options.systemPrompt;
+    if (typeof prompt !== 'object' || Array.isArray(prompt) || prompt.type !== 'preset') {
+      throw new Error('expected a preset system prompt');
+    }
+    const append = prompt.append ?? '';
+    expect(Buffer.byteLength(append, 'utf8')).toBe(MAX_CONTEXT_BYTES - 1);
+    expect(append).toBe(context.slice(0, MAX_CONTEXT_BYTES / 2));
+    expect(append).not.toContain('\uFFFD');
+  });
+
+  it('keeps context under the cap unchanged', () => {
+    const context = 'x'.repeat(MAX_CONTEXT_BYTES);
+    const prompt = optionsFor(spec('worker', { context })).systemPrompt;
+    expect(prompt).toMatchObject({ append: context });
+  });
+
+  it('gives a worker with canStartHelpers only the child-management tools', () => {
+    servers.toolNames.length = 0;
+    const options = optionsFor(
+      spec('worker', { canStartHelpers: true, leadTools: () => Promise.resolve('ok') }),
+    );
+    expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
+    expect(options.mcpServers?.['acp']).toMatchObject({ type: 'sdk', name: 'acp' });
+    expect(servers.toolNames).toEqual([
+      ['start_agent', 'list_agents', 'message_agent', 'stop_agent', 'agent_status'],
+    ]);
+    expect(servers.toolNames[0]).not.toContain('submit_plan');
+    expect(servers.toolNames[0]).not.toContain('request_review');
+  });
+
+  it('gives the lead every lead tool, including submit_plan', () => {
+    servers.toolNames.length = 0;
+    optionsFor(spec('lead'));
+    expect(servers.toolNames).toEqual([LEAD_TOOL_NAMES]);
+    expect(servers.toolNames[0]).toContain('submit_plan');
+  });
+
+  it('gives no tools to a worker without canStartHelpers, or one with it but no handler', () => {
+    servers.toolNames.length = 0;
+    const handler = () => Promise.resolve('nope');
+    expect(optionsFor(spec('worker', { leadTools: handler })).mcpServers).toEqual({});
+    expect(
+      optionsFor(spec('worker', { canStartHelpers: false, leadTools: handler })).mcpServers,
+    ).toEqual({});
+    expect(optionsFor(spec('worker', { canStartHelpers: true })).mcpServers).toEqual({});
+    expect(servers.toolNames).toEqual([]);
   });
 });
 

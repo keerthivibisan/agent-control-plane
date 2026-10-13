@@ -314,7 +314,7 @@ owner, in a throwaway directory with project-level `.claude/settings.local.json`
   `last_assistant_message`. A repeated delivery that is identical in every field (same event, same
   prompt) still collapses; none was seen. **No discriminator was added**; the §3 key is unchanged.
 
-## 11. Managed mode: Claude Agent SDK **[implemented, P3-B; fake-query tests only]**
+## 11. Managed mode: Claude Agent SDK **[implemented, P3-B and P4-I; fake-query tests only]**
 
 `createManagedClaudeCode({ query? })` in `@acp/adapter-claude-code` (`src/managed/**`) implements
 core's `ManagedExecutionAdapter` (ADR-0012, ADR-0013). Everything below was read from the pinned
@@ -326,15 +326,24 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
 - One `query({ prompt, options })` per agent. `prompt` is an async iterable of `SDKUserMessage`
   (streaming input); the first message is `spec.prompt`, and `send()` pushes more.
 - Options: `cwd`, `abortController`, `permissionMode: 'default'`, `settingSources: []` (isolation),
-  `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`
-  that holds `{ acp: createSdkMcpServer(...) }` for the lead and nothing for workers. It never sets
-  `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
+  `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`.
+  It never sets `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
+- `mcpServers` (P4-I, ADR-0013 amendment): `{ acp: createSdkMcpServer(...) }` with every
+  `LeadToolInputs` tool (including `submit_plan`) for the lead; with only `start_agent`,
+  `list_agents`, `message_agent`, `stop_agent` and `agent_status` for a worker with
+  `canStartHelpers` (a depth-2 parent helper; the engine scopes each call to its own children);
+  nothing for other workers. One list (`managedToolNames`) drives both the server and `canUseTool`.
+- `systemPrompt` (P4-I, ADR-0012 amendment): when `spec.context` is present and not blank,
+  `{ type: 'preset', preset: 'claude_code', append: context }`, with the context cut to at most
+  `MAX_CONTEXT_BYTES` (32 KiB) of UTF-8 on a character boundary. Otherwise it is not set.
 - `canUseTool`:
   - Allows `Read`, `Glob`, `Grep` and `LS` when their target path is inside the agent's `cwd`
     (lexically) and Claude Code did not flag a `blockedPath`.
-  - Allows the lead's own `mcp__acp__<tool>` when `mcpServer.source === 'sdk'`, or when the field is
-    absent (older CLIs). The SDK says trust is keyed on `source`, not on the name.
-  - Denies any `mcp__acp__*` to a worker without asking.
+  - Allows the agent's own `mcp__acp__<tool>` (from `managedToolNames`) when
+    `mcpServer.source === 'sdk'`, or when the field is absent (older CLIs). The SDK says trust is
+    keyed on `source`, not on the name.
+  - Denies a worker any other `mcp__acp__*` without asking: every one for a plain worker, and
+    `submit_plan`, `request_review`, unknown names or another server's tools for a parent helper.
   - Everything else goes to `requestPermission`, with a summary of the tool name plus its target path
     (or, for `Bash`, only the command name), redacted and at most 200 characters.
   - A rejected request, or an aborted signal, gives a deny.
@@ -375,6 +384,13 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
 - **`strictMcpConfig` ignores other MCP configuration.** It ignores project `.mcp.json`, user
   settings, plugins and agent frontmatter MCP servers, so only `mcpServers` from the options load.
 - **`env` is inherited.** When `env` is omitted, the CLI subprocess inherits `process.env`.
+- **Omitting `systemPrompt` means an empty system prompt.** In `sdk.mjs` (0.3.296) an undefined
+  `systemPrompt` becomes the custom prompt `""`; only `{ type: 'preset', preset: 'claude_code' }`
+  selects Claude Code's own prompt. So managed agents without context run with no system prompt
+  (as in the P3-F smoke), and agents with context get Claude Code's full prompt plus the context.
+  Whether to always use the preset is an open coordinator decision (P4-I handoff).
+- **`snapshot` defaults to on.** The rendered preset plus `append` is recorded on the first request
+  and reused for the session, so a context change only reaches new agents.
 - **The binary comes from an optional dependency, not a script.** The SDK ships its platform binary
   as an optional dependency (`@anthropic-ai/claude-agent-sdk-darwin-arm64` here). It has no install
   script, so pnpm 10's build-script block does not affect it.

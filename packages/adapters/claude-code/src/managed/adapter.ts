@@ -5,12 +5,13 @@ import type {
   ManagedCallbacks,
   ManagedExecutionAdapter,
 } from '@acp/core';
+import { MAX_CONTEXT_BYTES } from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
-import { createCanUseTool, LEAD_MCP_SERVER_NAME } from './permissions.js';
+import { createCanUseTool, LEAD_MCP_SERVER_NAME, managedToolNames } from './permissions.js';
 import { AsyncQueue } from './queue.js';
 
 /**
@@ -53,9 +54,34 @@ function userMessage(text: string): SDKUserMessage {
 }
 
 /**
- * SDK options for one agent (ADR-0012, ADR-0013). Never `bypassPermissions`; only project-level
- * settings load; `strictMcpConfig` keeps every MCP server except ours out, and only the lead gets
- * that one. Exported for tests.
+ * `text` cut to at most `maxBytes` UTF-8 bytes, never inside a character. The server already caps
+ * context (ADR-0012 amendment); this keeps the adapter's own promise if a caller does not.
+ */
+export function capUtf8(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= maxBytes) return text;
+  let end = maxBytes;
+  // Back up over continuation bytes (10xxxxxx) to the start of the character that does not fit.
+  while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end -= 1;
+  return bytes.subarray(0, end).toString('utf8');
+}
+
+/**
+ * The SDK system prompt for one agent. With project context (ADR-0012 amendment): Claude Code's own
+ * prompt with the context appended, capped at `MAX_CONTEXT_BYTES`. Without it: unset, as in Phase 3
+ * (the SDK then sends an empty system prompt).
+ */
+export function systemPromptFor(spec: ManagedAgentSpec): Options['systemPrompt'] {
+  const context = spec.context ?? '';
+  if (context.trim() === '') return undefined;
+  return { type: 'preset', preset: 'claude_code', append: capUtf8(context, MAX_CONTEXT_BYTES) };
+}
+
+/**
+ * SDK options for one agent (ADR-0012, ADR-0013). Never `bypassPermissions`; no settings files
+ * load; `strictMcpConfig` keeps every MCP server except ours out. Ours goes to the lead (every
+ * tool) and to a worker with `canStartHelpers` (child management only); other workers get none.
+ * Exported for tests.
  */
 export function buildOptions(
   spec: ManagedAgentSpec,
@@ -73,11 +99,16 @@ export function buildOptions(
     settingSources: [],
     canUseTool: createCanUseTool(spec, callbacks),
     strictMcpConfig: true,
-    mcpServers:
-      spec.kind === 'lead' && spec.leadTools !== undefined
-        ? { [LEAD_MCP_SERVER_NAME]: createLeadToolServer(spec.leadTools) }
-        : {},
+    mcpServers: {},
   };
+  const toolNames = managedToolNames(spec);
+  if (spec.leadTools !== undefined && toolNames.length > 0) {
+    options.mcpServers = {
+      [LEAD_MCP_SERVER_NAME]: createLeadToolServer(spec.leadTools, toolNames),
+    };
+  }
+  const systemPrompt = systemPromptFor(spec);
+  if (systemPrompt !== undefined) options.systemPrompt = systemPrompt;
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };
