@@ -5,11 +5,11 @@
 
 | Field   | Value                                                    |
 | ------- | -------------------------------------------------------- |
-| Status  | todo                                                     |
+| Status  | in-progress                                              |
 | Owner   | harness agent                                            |
-| Branch  | `wp/p4-c-harness` (create from `main` when you claim it) |
-| Started | —                                                        |
-| Updated | —                                                        |
+| Branch  | `wp/p4-c-harness`                                        |
+| Started | 2026-10-13                                               |
+| Updated | 2026-10-13                                               |
 
 ## Tasks
 
@@ -23,6 +23,7 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-13 | Claimed P4-C; branch `wp/p4-c-harness` created from `main` | (this commit) | — |
 
 ## Handoff notes
 
