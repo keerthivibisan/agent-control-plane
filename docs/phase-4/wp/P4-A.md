@@ -5,11 +5,11 @@
 
 | Field   | Value                                                   |
 | ------- | ------------------------------------------------------- |
-| Status  | todo                                                    |
+| Status  | in-progress                                             |
 | Owner   | engine agent                                            |
-| Branch  | `wp/p4-a-engine` (create from `main` when you claim it) |
-| Started | —                                                       |
-| Updated | —                                                       |
+| Branch  | `wp/p4-a-engine`                                        |
+| Started | 2026-10-13                                              |
+| Updated | 2026-10-13                                              |
 
 ## Tasks
 
@@ -25,6 +25,7 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-13 | Claimed P4-A; branch `wp/p4-a-engine` created from `main` (8c05f68) | (this commit) | — |
 
 ## Handoff notes
 
