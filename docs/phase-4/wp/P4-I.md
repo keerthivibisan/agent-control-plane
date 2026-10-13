@@ -3,13 +3,13 @@
 > Progress file for P4-I. Only the agent working on P4-I edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                                    |
-| ------- | -------------------------------------------------------- |
-| Status  | todo                                                     |
-| Owner   | adapter agent                                            |
-| Branch  | `wp/p4-i-adapter` (create from `main` when you claim it) |
-| Started | —                                                        |
-| Updated | —                                                        |
+| Field   | Value             |
+| ------- | ----------------- |
+| Status  | in-progress       |
+| Owner   | adapter agent     |
+| Branch  | `wp/p4-i-adapter` |
+| Started | 2026-10-13        |
+| Updated | 2026-10-13        |
 
 ## Tasks
 
@@ -20,8 +20,9 @@
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
+| Date       | What was done                                                | Commit       | Checks          |
+| ---------- | ------------------------------------------------------------ | ------------ | --------------- |
+| 2026-10-13 | Claimed P4-I; branch `wp/p4-i-adapter` from `main` (8c05f68) | claim commit | n/a (docs only) |
 
 ## Handoff notes
 
