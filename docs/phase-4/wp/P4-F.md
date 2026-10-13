@@ -5,11 +5,11 @@
 
 | Field   | Value                                                          |
 | ------- | -------------------------------------------------------------- |
-| Status  | todo                                                           |
+| Status  | in-progress                                                    |
 | Owner   | frontend agent                                                 |
 | Branch  | `wp/p4-f-project-setup` (create from `main` when you claim it) |
-| Started | —                                                              |
-| Updated | —                                                              |
+| Started | 2026-10-13                                                     |
+| Updated | 2026-10-13                                                     |
 
 ## Tasks
 
@@ -22,6 +22,7 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-13 | Claimed; branch `wp/p4-f-project-setup` created from `main` | (this commit) | — |
 
 ## Handoff notes
 
