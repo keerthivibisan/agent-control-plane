@@ -1,4 +1,10 @@
 import {
+  BoardDtoSchema,
+  CreateTicketRequestSchema,
+  MoveTicketRequestSchema,
+  TicketCardDtoSchema,
+  TicketDetailDtoSchema,
+  TicketDtoSchema,
   AgentRunDtoSchema,
   ApprovalDecisionRequestSchema,
   ApprovalDtoSchema,
@@ -404,4 +410,61 @@ export async function reviewAction(client: ApiClient, runId: string, input: Revi
     checked(ReviewActionRequestSchema, input, path),
     ReviewDtoSchema,
   );
+}
+
+// --- Board (Phase 4, wp/p4-e-board) -------------------------------------------------------------
+//
+// Routes from docs/phase-4/README.md §6.3, served by P4-D. Every response is parsed with its
+// @acp/core/api DTO; every mutation sends the CSRF header (ADR-0013) through `controlPost`.
+
+export type CreateTicketRequest = ReturnType<typeof CreateTicketRequestSchema.parse>;
+export type MoveTicketRequest = ReturnType<typeof MoveTicketRequestSchema.parse>;
+
+export const boardPaths = {
+  board: (projectId: string) => withQuery(`${API_BASE}/board`, { projectId }),
+  tickets: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/tickets`,
+  move: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/move`,
+  start: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/start`,
+} as const;
+
+export const boardSchemas = {
+  board: BoardDtoSchema,
+  tickets: TicketCardDtoSchema.array(),
+} as const;
+
+const projectTicketsPattern = new RegExp(`^${API_BASE}/projects/[^/?]+/tickets(\\?|$)`);
+
+/** True for every cached board or ticket path, so a board mutation refetches just those. */
+export function isBoardPath(key: string): boolean {
+  return (
+    key.startsWith(`${API_BASE}/board`) ||
+    key.startsWith(`${API_BASE}/tickets`) ||
+    projectTicketsPattern.test(key)
+  );
+}
+
+/** POST /api/projects/:id/tickets: the new ticket lands in Backlog. */
+export async function createTicket(
+  client: ApiClient,
+  projectId: string,
+  input: CreateTicketRequest,
+) {
+  const path = boardPaths.tickets(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(CreateTicketRequestSchema, input, path),
+    TicketDtoSchema,
+  );
+}
+
+/** POST /api/tickets/:id/move: the owner-set statuses only (Backlog, Ready, Cancelled). */
+export async function moveTicket(client: ApiClient, ticketId: string, input: MoveTicketRequest) {
+  const path = boardPaths.move(ticketId);
+  return controlPost(client, path, checked(MoveTicketRequestSchema, input, path), TicketDtoSchema);
+}
+
+/** POST /api/tickets/:id/start: creates a run for the ticket, which starts in Planning. */
+export function startTicket(client: ApiClient, ticketId: string) {
+  return controlPost(client, boardPaths.start(ticketId), {}, TicketDetailDtoSchema);
 }

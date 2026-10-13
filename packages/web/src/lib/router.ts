@@ -3,7 +3,8 @@ import { useMemo, useSyncExternalStore } from 'react';
 /**
  * Hash routes (no router dependency): `#/`, `#/sessions`, `#/sessions/:id`, `#/projects`,
  * `#/projects/:id`, `#/usage` (the "Tokens" page), `#/setup`, `#/health` (the "Data health" page),
- * `#/control` and `#/control/:runId` (the control panel).
+ * `#/control` and `#/control/:runId` (the control panel), `#/board` and `#/board/:projectId` (the
+ * Phase 4 board; without an id it opens the last used project).
  */
 export type Route =
   | { name: 'home' }
@@ -15,6 +16,7 @@ export type Route =
   | { name: 'project'; id: string }
   | { name: 'usage'; params: URLSearchParams }
   | { name: 'control'; runId: string | null }
+  | { name: 'board'; projectId: string | null }
   | { name: 'not-found'; hash: string };
 
 function decode(segment: string): string | null {
@@ -46,6 +48,11 @@ export function parseRoute(hash: string): Route {
     const decoded = decode(id);
     if (decoded) return { name: 'control', runId: decoded };
   }
+  if (head === 'board' && id === undefined) return { name: 'board', projectId: null };
+  if (head === 'board' && id !== undefined) {
+    const decoded = decode(id);
+    if (decoded) return { name: 'board', projectId: decoded };
+  }
   if (head === 'sessions' && id !== undefined) {
     const decoded = decode(id);
     if (decoded) return { name: 'session', id: decoded };
@@ -76,6 +83,9 @@ export const href = {
   usage: (params: Record<string, string | null | undefined> = {}) => withParams('/usage', params),
   control: (runId?: string) =>
     runId === undefined ? '#/control' : `#/control/${encodeURIComponent(runId)}`,
+  board: (projectId?: string) =>
+    projectId === undefined ? '#/board' : `#/board/${encodeURIComponent(projectId)}`,
+  ticket: (id: string) => `#/tickets/${encodeURIComponent(id)}`,
 };
 
 export function navigate(hash: string): void {

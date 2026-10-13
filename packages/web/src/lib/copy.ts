@@ -1261,3 +1261,206 @@ export const CONTROL_COPY = {
     text: 'There is no run at this address. It may have been deleted.',
   },
 } as const;
+
+// --- Board (Phase 4, wp/p4-e-board) -------------------------------------------------------------
+
+// Kept inside this section (imports are hoisted) so parallel WPs only ever append to copy.ts.
+import type { HarnessState, TicketPriority, TicketStage, TicketType } from '@acp/core';
+
+/** A board column: its name, a one-line tip, and what an empty column says. */
+export interface StageCopy {
+  word: string;
+  tip: string;
+  empty: string;
+}
+
+/** Board columns (docs/phase-4/README.md §5.2), in board order. */
+export const STAGE_COPY: Readonly<Record<TicketStage, StageCopy>> = {
+  BACKLOG: {
+    word: 'Backlog',
+    tip: "Tickets you wrote but haven't marked ready yet. New tickets land here.",
+    empty: 'New tickets land here.',
+  },
+  READY: {
+    word: 'Ready',
+    tip: 'Ready for the agents. Start a ticket and the lead agent plans it first.',
+    empty: 'Move a ticket here when it is ready to work on.',
+  },
+  PLANNING: {
+    word: 'Planning',
+    tip: 'The lead agent is reading the code and writing a plan. Nothing changes yet.',
+    empty: 'Drop a ready ticket here to start it.',
+  },
+  PLAN_REVIEW: {
+    word: 'Plan review',
+    tip: 'A plan waits for you. Approve it or say what should change; no helper starts before that.',
+    empty: 'No plan is waiting for you.',
+  },
+  WORKING: {
+    word: 'Agents working',
+    tip: 'Helper agents are making the changes, each in its own copy of the project.',
+    empty: 'No agents are working.',
+  },
+  NEEDS_YOU: {
+    word: 'Needs you',
+    tip: 'An agent waits for your answer: an action that is not pre-approved, or more budget.',
+    empty: 'Nothing waits for you.',
+  },
+  IN_REVIEW: {
+    word: 'In review',
+    tip: 'The agents stopped. Review their changes and checks, then merge or discard each one.',
+    empty: 'Nothing to review.',
+  },
+  DONE: {
+    word: 'Done',
+    tip: 'Every change was merged or discarded. The ticket keeps its history.',
+    empty: 'Finished tickets appear here.',
+  },
+  CANCELLED: {
+    word: 'Cancelled',
+    tip: 'Tickets you cancelled. They are kept with their history, never deleted.',
+    empty: 'No cancelled tickets.',
+  },
+};
+
+export const TICKET_TYPE_COPY: Readonly<Record<TicketType, { word: string; tip: string }>> = {
+  feature: { word: 'Feature', tip: 'Something new for the project.' },
+  bug: { word: 'Bug', tip: 'Something that is broken.' },
+  chore: { word: 'Chore', tip: 'Upkeep: clean-up, upgrades, small tasks.' },
+  harness: {
+    word: 'Harness',
+    tip: 'Work on the checks that let agents verify their own changes.',
+  },
+};
+
+export const TICKET_PRIORITY_COPY: Readonly<Record<TicketPriority, string>> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  urgent: 'Urgent',
+};
+
+export interface HarnessStateCopy {
+  word: string;
+  tip: string;
+  tone: 'ok' | 'partial' | 'problem' | 'none';
+}
+
+export const HARNESS_STATE_COPY: Readonly<Record<HarnessState, HarnessStateCopy>> = {
+  ready: {
+    word: 'Ready',
+    tip: "The project's checks are set up, with at least one that must pass before merge.",
+    tone: 'ok',
+  },
+  partial: {
+    word: 'Partial',
+    tip: 'Checks are set up, but none is required, so nothing has to pass before merge.',
+    tone: 'partial',
+  },
+  invalid: {
+    word: 'Invalid',
+    tip: "The checks file (.acp/harness.json) can't be read. Open the project setup to see why.",
+    tone: 'problem',
+  },
+  none: {
+    word: 'None',
+    tip: 'This project has no checks for agents yet. A "Build the harness" ticket can add them.',
+    tone: 'none',
+  },
+};
+
+export const BOARD_COPY = {
+  nav: 'Board',
+  page: {
+    title: 'Board',
+    description:
+      'Your tickets, from idea to merged change. The lead agent plans each one; you approve the plan and review the changes.',
+  },
+  loading: 'Loading the board…',
+  switcher: { label: 'Project' },
+  newTicket: 'New ticket',
+  newProject: 'New project',
+  setup: 'Setup',
+  harness: {
+    term: 'Harness',
+    tip: 'The checks in your project (tests, lint, build) that let agents verify their own work, listed in .acp/harness.json.',
+  },
+  stats: {
+    running: (n: number) => `${formatCount(n)} running`,
+    needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'needs' : 'need'} you`,
+    tokens: 'Tokens, last 7 days',
+    tokensTip:
+      "Tokens used by this project's agent runs in the last 7 days, by type. Token types are priced differently, so they are never added up.",
+    cost: 'Estimated cost',
+    costNote: 'shown on each ticket for its latest run; never added up',
+  },
+  card: {
+    helpers: (n: number) => `${formatCount(n)} ${n === 1 ? 'helper' : 'helpers'}`,
+    needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'needs' : 'need'} you`,
+    lastRun: { failed: 'Last run failed', stopped: 'Last run stopped' },
+    priority: (word: string) => `${word} priority`,
+  },
+  column: {
+    count: (n: number) => `${formatCount(n)} ${n === 1 ? 'ticket' : 'tickets'}`,
+    showCancelled: (n: number) => `Show cancelled (${formatCount(n)})`,
+    hideCancelled: 'Hide cancelled',
+  },
+  move: {
+    button: 'Move',
+    menuLabel: (key: string) => `Move ${key}`,
+    toBacklog: 'Move to Backlog',
+    toReady: 'Move to Ready',
+    start: 'Start (the lead agent plans it)',
+    cancel: 'Cancel ticket…',
+    none: 'The agents move this ticket now. Open it to act on it.',
+    moved: (key: string, to: string) => `Moved ${key} to ${to}.`,
+    started: (key: string) => `Started ${key}. The lead agent is planning it.`,
+    cancelled: (key: string) => `Cancelled ${key}.`,
+    failed: (key: string) => `${key} didn't move.`,
+    startFailed: (key: string) => `${key} didn't start.`,
+  },
+  cancel: {
+    title: (key: string) => `Cancel ${key}?`,
+    text: 'The ticket moves to Cancelled. If agents are working on it, they are stopped. It keeps its history and can be re-run later.',
+    confirm: 'Cancel ticket',
+    keep: 'Keep it',
+    working: 'Cancelling…',
+  },
+  dialog: {
+    title: 'New ticket',
+    description:
+      'Describe the work. The ticket lands in Backlog; move it to Ready when it is ready.',
+    titleField: 'Title',
+    titlePlaceholder: 'For example: Add a dark mode toggle',
+    titleMissing: 'Give the ticket a title.',
+    titleTooLong: 'Keep the title to 200 characters or fewer.',
+    type: 'Type',
+    priority: 'Priority',
+    labels: 'Labels',
+    labelsHint: 'Optional. Separate labels with commas: up to 10, each up to 30 characters.',
+    labelsTooMany: 'Use at most 10 labels.',
+    labelTooLong: 'Each label can be at most 30 characters.',
+    descriptionField: 'Description',
+    descriptionHint:
+      'Optional. What should change and why. The lead agent reads this when it plans the ticket.',
+    create: 'Create ticket',
+    creating: 'Creating…',
+    cancel: 'Cancel',
+    failed: "The ticket wasn't created.",
+    created: (key: string) => `Created ${key} in Backlog.`,
+  },
+  empty: {
+    noProjects: {
+      title: 'Add a project first',
+      text: 'The board holds tickets for a project. Add an existing git folder or create a new repository.',
+    },
+    noTickets: {
+      title: 'No tickets yet',
+      text: 'Write a first ticket. The lead agent plans it with you before anything changes.',
+    },
+    notFound: {
+      title: 'Project not found',
+      text: 'There is no project at this address. It may have been removed.',
+    },
+  },
+} as const;

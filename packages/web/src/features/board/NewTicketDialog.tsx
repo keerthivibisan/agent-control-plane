@@ -1,0 +1,199 @@
+import {
+  TicketPrioritySchema,
+  TicketTypeSchema,
+  type TicketPriority,
+  type TicketType,
+} from '@acp/core';
+import type { TicketDto } from '@acp/core/api';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { Button } from '../../components/Button';
+import { createTicket } from '../../lib/api';
+import { BOARD_COPY, TICKET_PRIORITY_COPY, TICKET_TYPE_COPY } from '../../lib/copy';
+import { ActionError } from '../control/bits';
+import { useBoardAction } from './actions';
+import { Dialog } from './Dialog';
+import { parseLabels } from './moves';
+
+const C = BOARD_COPY.dialog;
+const MAX_TITLE = 200;
+const MAX_LABELS = 10;
+const MAX_LABEL = 30;
+const MAX_DESCRIPTION = 20_000;
+
+const fieldClass =
+  'w-full rounded-control border border-line-strong bg-panel px-3 py-2 text-ink placeholder:text-dim/70';
+
+interface Errors {
+  title?: string;
+  labels?: string;
+}
+
+/** Plain-sentence validation, mirroring CreateTicketRequestSchema so the server rarely refuses. */
+function validate(title: string, labels: string[]): Errors {
+  const errors: Errors = {};
+  const t = title.trim();
+  if (t.length === 0) errors.title = C.titleMissing;
+  else if (t.length > MAX_TITLE) errors.title = C.titleTooLong;
+  if (labels.length > MAX_LABELS) errors.labels = C.labelsTooMany;
+  else if (labels.some((l) => l.length > MAX_LABEL)) errors.labels = C.labelTooLong;
+  return errors;
+}
+
+function Field({
+  id,
+  label,
+  hint,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  error?: string | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="font-medium">
+        {label}
+      </label>
+      {children}
+      {hint ? (
+        <span id={`${id}-hint`} className="text-caption text-dim">
+          {hint}
+        </span>
+      ) : null}
+      {error ? (
+        <span id={`${id}-error`} role="alert" className="text-caption text-danger">
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** "New ticket": title, type, priority, labels, description. The ticket lands in Backlog. */
+export function NewTicketDialog({
+  projectId,
+  onClose,
+  onCreated,
+}: {
+  projectId: string;
+  onClose: () => void;
+  onCreated: (ticket: TicketDto) => void;
+}) {
+  const create = useBoardAction(createTicket);
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState<TicketType>('feature');
+  const [priority, setPriority] = useState<TicketPriority>('medium');
+  const [labels, setLabels] = useState('');
+  const [description, setDescription] = useState('');
+  const [errors, setErrors] = useState<Errors>({});
+  const ids = {
+    title: useId(),
+    type: useId(),
+    priority: useId(),
+    labels: useId(),
+    description: useId(),
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const parsedLabels = parseLabels(labels);
+    const next = validate(title, parsedLabels);
+    setErrors(next);
+    if (next.title || next.labels) return;
+    const ticket = await create.run(projectId, {
+      title: title.trim(),
+      description,
+      type,
+      priority,
+      labels: parsedLabels,
+    });
+    if (ticket !== null) onCreated(ticket);
+  };
+
+  const close = () => {
+    if (!create.pending) onClose();
+  };
+
+  return (
+    <Dialog title={C.title} description={C.description} onClose={close} testId="new-ticket" wide>
+      <form className="flex flex-col gap-4" onSubmit={(e) => void submit(e)} noValidate>
+        <Field id={ids.title} label={C.titleField} error={errors.title}>
+          <input
+            id={ids.title}
+            data-autofocus
+            value={title}
+            maxLength={MAX_TITLE + 50}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={C.titlePlaceholder}
+            aria-invalid={errors.title ? true : undefined}
+            aria-describedby={errors.title ? `${ids.title}-error` : undefined}
+            className={`${fieldClass} ${errors.title ? 'border-danger' : ''}`}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field id={ids.type} label={C.type}>
+            <select
+              id={ids.type}
+              value={type}
+              onChange={(e) => setType(TicketTypeSchema.parse(e.target.value))}
+              className={fieldClass}
+            >
+              {TicketTypeSchema.options.map((t) => (
+                <option key={t} value={t}>
+                  {TICKET_TYPE_COPY[t].word}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field id={ids.priority} label={C.priority}>
+            <select
+              id={ids.priority}
+              value={priority}
+              onChange={(e) => setPriority(TicketPrioritySchema.parse(e.target.value))}
+              className={fieldClass}
+            >
+              {TicketPrioritySchema.options.map((p) => (
+                <option key={p} value={p}>
+                  {TICKET_PRIORITY_COPY[p]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <Field id={ids.labels} label={C.labels} hint={C.labelsHint} error={errors.labels}>
+          <input
+            id={ids.labels}
+            value={labels}
+            onChange={(e) => setLabels(e.target.value)}
+            aria-invalid={errors.labels ? true : undefined}
+            aria-describedby={`${ids.labels}-hint${errors.labels ? ` ${ids.labels}-error` : ''}`}
+            className={`${fieldClass} ${errors.labels ? 'border-danger' : ''}`}
+          />
+        </Field>
+        <Field id={ids.description} label={C.descriptionField} hint={C.descriptionHint}>
+          <textarea
+            id={ids.description}
+            rows={5}
+            value={description}
+            maxLength={MAX_DESCRIPTION}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-describedby={`${ids.description}-hint`}
+            className={`${fieldClass} resize-y`}
+          />
+        </Field>
+        <ActionError error={create.error} message={C.failed} />
+        <div className="flex justify-end gap-2">
+          <Button onClick={close} disabled={create.pending}>
+            {C.cancel}
+          </Button>
+          <Button type="submit" variant="primary" disabled={create.pending}>
+            {create.pending ? C.creating : C.create}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}

@@ -22,9 +22,10 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                       | Commit        | Checks |
-| ---------- | --------------------------------------------------- | ------------- | ------ |
-| 2026-10-13 | Claimed; branch `wp/p4-e-board` created from `main` | (this commit) | —      |
+| Date       | What was done                                                                                                                                                                           | Commit        | Checks                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------- |
+| 2026-10-13 | Claimed; branch `wp/p4-e-board` created from `main`                                                                                                                                     | (this commit) | —                           |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: board routes, client functions (api.ts), board copy, move rules, dialog, new-ticket dialog, move menu, icons. Board page not wired yet | (this commit) | WIP: pnpm check not run yet |
 
 ## Handoff notes
 
