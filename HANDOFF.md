@@ -20,23 +20,23 @@
 
 ## 1. State of work
 
-| Work package                                                | State                                                                    | Where                                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------- |
-| P0 bootstrap (tooling, CI config, specs, ADRs, contracts)   | done                                                                     | `main`                                                |
-| P1-A core logic (usage dedup/selection/attribution, status) | done                                                                     | `main`                                                |
-| P1-B SQLite persistence                                     | done                                                                     | `main`                                                |
-| P1-C demo adapter + Claude Code adapter + fixtures          | done; hooks verified on Claude Code 2.1.296; Notification unobserved     | `main`                                                |
-| P1-D server (pipeline, scheduler, REST, SSE, hooks, live)   | done                                                                     | `main`                                                |
-| P1-E web UI (original screens)                              | done; being replaced by the redesign (§5)                                | `main`                                                |
-| P1-F verification                                           | done except CI (nothing pushed)                                          | `main`; evidence in `docs/research/p1-f-*.md`         |
-| Follow-ups (ADR-0011 diagnostics, cost list, log redaction) | done                                                                     | `main`                                                |
-| UI redesign phase 1: foundation                             | done                                                                     | `main` (`6ce2de0`)                                    |
-| UI redesign phase 2: Tokens / Projects / Project            | done                                                                     | `main` (`02d7e20`)                                    |
-| UI redesign phase 2: Overview / Setup / Data health         | done                                                                     | `main` (`015b181`)                                    |
-| UI redesign phase 2: Sessions / Session detail / tree view  | done                                                                     | `main` (`8d785dd`)                                    |
-| UI redesign phase 3: cleanup                                | todo (§5.4)                                                              | prompt §8.4                                           |
-| Phase 2 (usage reliability, pricing) — roadmap              | not started                                                              | `docs/roadmap.md`                                     |
-| Phase 3 (master control panel / orchestration)              | **in progress**: P3-0 done; next P3-A, B, C, W, E in parallel (§7, §8.5) | `main`; plan section in `docs/implementation-plan.md` |
+| Work package                                                | State                                                                                   | Where                                                 |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| P0 bootstrap (tooling, CI config, specs, ADRs, contracts)   | done                                                                                    | `main`                                                |
+| P1-A core logic (usage dedup/selection/attribution, status) | done                                                                                    | `main`                                                |
+| P1-B SQLite persistence                                     | done                                                                                    | `main`                                                |
+| P1-C demo adapter + Claude Code adapter + fixtures          | done; hooks verified on Claude Code 2.1.296; Notification unobserved                    | `main`                                                |
+| P1-D server (pipeline, scheduler, REST, SSE, hooks, live)   | done                                                                                    | `main`                                                |
+| P1-E web UI (original screens)                              | done; being replaced by the redesign (§5)                                               | `main`                                                |
+| P1-F verification                                           | done except CI (nothing pushed)                                                         | `main`; evidence in `docs/research/p1-f-*.md`         |
+| Follow-ups (ADR-0011 diagnostics, cost list, log redaction) | done                                                                                    | `main`                                                |
+| UI redesign phase 1: foundation                             | done                                                                                    | `main` (`6ce2de0`)                                    |
+| UI redesign phase 2: Tokens / Projects / Project            | done                                                                                    | `main` (`02d7e20`)                                    |
+| UI redesign phase 2: Overview / Setup / Data health         | done                                                                                    | `main` (`015b181`)                                    |
+| UI redesign phase 2: Sessions / Session detail / tree view  | done                                                                                    | `main` (`8d785dd`)                                    |
+| UI redesign phase 3: cleanup                                | todo (§5.4)                                                                             | prompt §8.4                                           |
+| Phase 2 (usage reliability, pricing) — roadmap              | not started                                                                             | `docs/roadmap.md`                                     |
+| Phase 3 (master control panel / orchestration)              | **M1 done** (P3-0…F merged; real smoke run passed 2026-10-13); P3-G and follow-ups next | `main`; plan section in `docs/implementation-plan.md` |
 
 The last full `pnpm check` on `main` passed with 826 tests (core 215, adapter-demo 12,
 adapter-claude-code 199, db 83, web 189, server 128). The Playwright e2e passes 7/7.
@@ -298,12 +298,19 @@ status, activity, tokens and estimated cost; approve, message, stop and review a
 
 **State.**
 
-- P3-0 is done.
-- Next, in parallel: P3-A (engine), P3-B (managed adapter), P3-C (persistence), P3-W (worktrees),
-  P3-E (UI).
-- Then P3-D (server).
-- Then P3-F (verification and a real smoke run with owner consent).
-- Prompts are in §8.5.
+- **M1 is done** (2026-10-13): P3-0, A, B, C, W, D, E and F are merged. The control panel is at
+  `#/control`; managed agents are on by default in live mode (`ACP_MANAGED=off` turns them off).
+- Verified with a fake-Claude browser e2e and a real smoke run in a throwaway repo
+  (`docs/research/p3-f-smoke-2026-10-13.md`).
+- **Follow-ups:**
+  - an owner "Request review" action (in the smoke run the lead needed a nudge);
+  - optionally load the project's CLAUDE.md into managed runs explicitly (lost with settings
+    isolation);
+  - the DTO proposals in the P3 reports (cost warning field, review errors, advertising managed
+    mode);
+  - P3-G validation runner;
+  - CI.
+- Prompts for the original WPs are in §8.5.
 
 ## 8. Ready-to-paste prompts
 

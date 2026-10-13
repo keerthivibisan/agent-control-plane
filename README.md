@@ -4,24 +4,20 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: Phase 1 in progress: all components are implemented; verification (P1-F) is under way.**
-> `ACP_MODE=demo pnpm dev` runs on demo data. Live mode (the default) reads Claude Code transcripts for
-> registered projects; it is tested against sanitized fixtures only and has not yet been checked
-> against real data.
+> **Status: Phase 1 (session observability) is done and verified on real data. Phase 3 milestone M1
+> (the control panel for managed Claude agents) is done and passed a real smoke run.** CI has not run
+> yet (nothing is pushed).
 >
-> **Implemented and tested** (617 tests):
+> **Implemented and tested** (1,315 unit and integration tests, plus 11 browser end-to-end tests):
 >
-> - core contracts and the usage-accounting logic;
-> - SQLite persistence;
-> - the demo adapter and the Claude Code adapter (discovery, incremental reader, record
->   normalizers, subagent metadata, hook normalization);
-> - the server: ingestion pipeline, scheduler, REST API, SSE stream, hook receiver, and static UI
->   serving, in demo and live mode;
-> - the web UI: Command Center, Session Explorer, session detail, usage analytics, and project page.
->
-> **Remaining:** P1-F verification (reference recomputation, restart checks, browser e2e, and a
-> real-data run with the user's consent). Real hook payloads have not been captured, so the hook field
-> names are unverified (`pnpm --filter @acp/server hooks:snippet` prints the settings to paste).
+> - observing Claude Code sessions: discovery, incremental reading, usage accounting with dedup,
+>   subagent and fork relationships, hooks (optional);
+> - the server: ingestion pipeline, REST API, live updates, hook receiver, in demo and live mode;
+> - the web UI in plain language: Overview, Sessions with a family tree, session detail, Tokens,
+>   Projects, Setup and Data health;
+> - **Control panel** (`#/control`): chat with a lead Claude agent that starts up to 3 helper agents,
+>   each in its own git worktree; you approve every edit or command, review each diff and merge or
+>   discard. Budgets, Stop and Stop all, safe restarts.
 >
 > See [HANDOFF.md](HANDOFF.md) and [docs/implementation-plan.md](docs/implementation-plan.md).
 

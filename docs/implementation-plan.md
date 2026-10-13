@@ -23,10 +23,10 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 | P3-A | Orchestration engine (`@acp/orchestrator`)        | engine agent      | P3-0                                                            | **done** (engine pure and tested; wired in P3-D)                                               | `wp/p3-a-engine`                                    |
 | P3-B | Managed adapter over the Agent SDK                | adapter agent     | P3-0                                                            | **done** (fake-query tests; no real SDK run yet, see P3-F)                                     | `wp/p3-b-managed`                                   |
 | P3-C | Orchestration persistence (migration 0002)        | persistence agent | P3-0                                                            | **done** (migration 0002, 7 repositories, tests)                                               | `wp/p3-c-persistence`                               |
-| P3-W | Workspace manager (git worktrees)                 | workspace agent   | P3-0                                                            | **done** (awaiting coordinator review)                                                         | `wp/p3-w-workspaces`                                |
+| P3-W | Workspace manager (git worktrees)                 | workspace agent   | P3-0                                                            | **done**                                                                                       | `wp/p3-w-workspaces` (merged)                       |
 | P3-D | Server composition for the control panel          | backend agent     | P3-A, B, C, W                                                   | **done** (fake managed adapter + temp git repos; real SDK run is P3-F)                         | `wp/p3-d-server`                                    |
-| P3-E | Control panel UI                                  | frontend agent    | P3-0 (DTOs); D for integration                                  | **done** against fixture DTOs; live data needs P3-D (routes and response shapes as proposed)   | `wp/p3-e-control-ui`                                |
-| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | part 1 done; real smoke run pending owner consent (SSE bug found, see M1 checklist)            | `wp/p3-f-verify`                                    |
+| P3-E | Control panel UI                                  | frontend agent    | P3-0 (DTOs); D for integration                                  | **done** (integrated with P3-D, verified by P3-F)                                              | `wp/p3-e-control-ui` (merged)                       |
+| P3-F | Phase 3 M1 verification                           | coordinator       | P3-D, P3-E                                                      | **done** (fake-Claude e2e, SSE fix, real smoke run passed 2026-10-13)                          | `wp/p3-f-verify` + coordinator commits              |
 
 ```mermaid
 flowchart TD
@@ -377,7 +377,8 @@ in `packages/server/tests/verification/control/`; the browser flows in `packages
       frames, which `EventSource.onmessage` never receives); fixed by the coordinator by sending
       unnamed events (`packages/server/src/routes/stream.ts`). Evidence: the e2e test "the open run
       page updates live when an agent changes something (no reload)" passes.
-- [ ] **One real smoke run** in a throwaway git repo with the owner's consent (aggregates only).
+- [x] **One real smoke run** in a throwaway git repo with the owner's consent (aggregates only):
+      passed on 2026-10-13 (`docs/research/p3-f-smoke-2026-10-13.md`).
 
 ## Risks
 
