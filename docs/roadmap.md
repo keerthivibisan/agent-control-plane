@@ -3,15 +3,16 @@
 Each phase starts only after the previous phase's acceptance criteria pass. Task-level detail for the
 current phase is in [implementation-plan.md](implementation-plan.md).
 
-| Phase                               | Scope                                                                                                                                                                                                              | Status                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| **0 — Bootstrap**                   | repo, toolchain, CI, core contracts v1, specs, ADRs, agent rules                                                                                                                                                   | **done**                             |
-| **1 — Session observability**       | project registration, Claude Code observation adapter, pipeline, SQLite, sessions/edges/usage, Command Center, Session Explorer, usage summaries, SSE                                                              | **done** (CI pending)                |
-| 2 — Usage reliability & recovery    | source-missing detection, stale reconciliation, capability reporting in the UI, versioned pricing table and cost estimation with provenance, optional OTel ingestion as a second usage source, purge and retention | planned                              |
-| 3 — Managed orchestration           | tasks, runs, planning, adaptive delegation (at most 3 children, depth 1), budget manager, worktree isolation, cancellation, result aggregation, validation runner, Orchestration Studio                            | **in progress** (M1; ADR-0012..0015) |
-| 4 — Harness Lab                     | harness configs and versions, baseline vs harness-assisted runs, repeated trials, comparisons with variance                                                                                                        | planned                              |
-| 5 — Codex adapter                   | `packages/adapters/codex` against Codex's supported app-server interface; contract tests                                                                                                                           | planned                              |
-| 6 — Evidence-driven recommendations | recommendations with evidence and measurable acceptance criteria; approval before applying                                                                                                                         | research                             |
+| Phase                               | Scope                                                                                                                                                                                                                                                                      | Status                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **0 — Bootstrap**                   | repo, toolchain, CI, core contracts v1, specs, ADRs, agent rules                                                                                                                                                                                                           | **done**                     |
+| **1 — Session observability**       | project registration, Claude Code observation adapter, pipeline, SQLite, sessions/edges/usage, Command Center, Session Explorer, usage summaries, SSE                                                                                                                      | **done** (CI pending)        |
+| 2 — Usage reliability & recovery    | source-missing detection, stale reconciliation, capability reporting in the UI, versioned pricing table and cost estimation with provenance, optional OTel ingestion as a second usage source, purge and retention                                                         | planned                      |
+| 3 — Managed orchestration           | tasks, runs, planning, adaptive delegation (at most 3 children, depth 1), budget manager, worktree isolation, cancellation, result aggregation, validation runner, Orchestration Studio                                                                                    | **M1 done** (2026-10-13)     |
+| **4 — Agent workspace**             | Jira-like board per project, tickets with plan-first runs, project creation and AI work environment setup, harness manifest and checks before merge, configurable agent tree (≤ 6 helpers, depth ≤ 2), per-project allowlist ([docs/phase-4/README.md](phase-4/README.md)) | **in progress** (2026-10-13) |
+| 5 — Harness Lab                     | harness experiments: baseline vs harness-assisted runs, repeated trials, comparisons with variance                                                                                                                                                                         | planned                      |
+| 6 — Codex adapter                   | `packages/adapters/codex` against Codex's supported app-server interface; contract tests                                                                                                                                                                                   | planned                      |
+| 7 — Evidence-driven recommendations | recommendations with evidence and measurable acceptance criteria; approval before applying                                                                                                                                                                                 | research                     |
 
 ## Feasibility notes (preliminary estimates, 2026-10-10 — not guarantees)
 
@@ -20,8 +21,8 @@ current phase is in [implementation-plan.md](implementation-plan.md).
   versions.
 - **Phase 3:** feasible but much harder. The hard parts are plan quality, merge conflicts, and
   budget semantics.
-- **Phase 4:** needs many repeated runs per variant to produce statistically meaningful results.
-- **Phase 6:** a research problem.
+- **Phase 5 (Harness Lab):** needs many repeated runs per variant to produce statistically meaningful results.
+- **Phase 7 (recommendations):** a research problem.
 
 ## Open questions
 

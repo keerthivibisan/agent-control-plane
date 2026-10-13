@@ -11,15 +11,17 @@ agent sessions. The first provider is Claude Code.
 
 - **Phase 0 (bootstrap): done.** Tooling, CI, docs, and `@acp/core` v1 contracts.
 - **Phase 1 (session observability): done** (CI pending a push). The UI redesign is merged.
-- **Phase 3 (managed orchestration, the "control panel"): in progress since 2026-10-11** by owner
-  decision, milestone M1 only (ADR-0012..0015; Phase 3 section of
-  [docs/implementation-plan.md](docs/implementation-plan.md)). Check its **Status** table first.
+- **Phase 3 (managed orchestration, the "control panel"): M1 done** (2026-10-13; ADR-0012..0015).
+- **Phase 4 (Agent Workspace: board, projects, tickets, harness): in progress since 2026-10-13** by
+  owner decision. **Start at [docs/phase-4/README.md](docs/phase-4/README.md)**; status in
+  `docs/phase-4/STATUS.md`; follow its progress protocol (§9) so no work is repeated.
 - **Out of scope until their phase starts:**
   - Phase 2 items (pricing table, OTel, purge) unless a WP explicitly includes them;
-  - Phase 3 beyond M1 (e.g. the validation runner, P3-G) until M1 is accepted;
-  - Harness Lab (Phase 4);
-  - Codex adapter (Phase 5);
-  - recommendations (Phase 6).
+  - Phase 3 items not taken into Phase 4 (P3-G's validation runner is superseded by the Phase 4
+    harness checks);
+  - Harness Lab experiments (Phase 5);
+  - Codex adapter (Phase 6);
+  - recommendations (Phase 7).
 
   Do not build these, even partially.
 
@@ -126,6 +128,12 @@ explicitly asks, and in a separate commit:
 
 Do not work around a contract by duplicating types or casting. Architectural decisions need an ADR
 proposal (`docs/decisions/0000-template.md`, status `proposed`).
+
+**Progress protocol (Phase 4 onward, `docs/phase-4/README.md` §9):** each WP has one progress file
+(`docs/phase-4/wp/<WP>.md`) that only its agent edits; check `git branch --list 'wp/p4-*'` and
+**continue an existing branch** instead of restarting; claim with a first commit; commit at every
+checkpoint with a log line; finish by setting `review` with the §9 report. Only the coordinator edits
+`docs/phase-4/STATUS.md`.
 
 **Multiple agents at once:**
 

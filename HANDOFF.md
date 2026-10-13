@@ -7,6 +7,10 @@
 
 ## 0. Quick orientation
 
+> **Phase 4 (2026-10-13 onward): start at [`docs/phase-4/README.md`](docs/phase-4/README.md)** — the
+> Agent Workspace plan (board, projects, tickets, harness), its work packages, prompts and the
+> progress protocol. `docs/phase-4/STATUS.md` shows what is done. This HANDOFF covers Phases 1–3.
+
 - **What it is.** A local-first control plane that observes Claude Code sessions (and later Codex),
   shows what agents are doing, which session spawned which helper agent, and how many tokens each
   used, all from local transcript files. Later phases add managed orchestration from the UI.

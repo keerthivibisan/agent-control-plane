@@ -8,6 +8,9 @@ Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
 
 ## Status
 
+> **Phase 4 is planned and tracked in [docs/phase-4/README.md](phase-4/README.md) and
+> [docs/phase-4/STATUS.md](phase-4/STATUS.md)**, not in this file.
+
 <!-- Agents: update your row when you start (in-progress + branch) and when you finish (done + PR/commit). -->
 
 | WP   | Title                                             | Owner role        | Depends on                                                      | Status                                                                                         | Branch                                              |
