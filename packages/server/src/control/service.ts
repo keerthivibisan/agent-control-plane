@@ -968,6 +968,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     async reviewAction(runId, body) {
       const input = ReviewActionRequestSchema.parse(body);
+      if (input.action === 'merge-anyway') {
+        // Contract added in P4-0; harness checks (and so "merge anyway") arrive with P4-C/P4-D.
+        throw new HttpError(
+          409,
+          'merge_anyway_unavailable',
+          'There are no failed checks to override; use merge instead',
+        );
+      }
       await applyReview(runId, input.agentRunId, input.action);
       return review(runId);
     },

@@ -49,6 +49,7 @@ describe('lead tools', () => {
         'request_review',
         'start_agent',
         'stop_agent',
+        'submit_plan',
       ].sort(),
     );
     expect(

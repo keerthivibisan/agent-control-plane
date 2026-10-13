@@ -18,6 +18,17 @@ export interface ManagedAgentSpec {
   model: string | null;
   /** Lead only: the fixed tool set (ADR-0012). Workers never get these tools (depth 1). */
   leadTools?: LeadToolHandler;
+  /**
+   * Project context (ADR-0012 amendment): the chosen context files' text, read by the server from
+   * the repository, appended to the system prompt. At most `MAX_CONTEXT_BYTES`.
+   */
+  context?: string;
+  /**
+   * A worker allowed to start its own helpers (depth 2, ADR-0013 amendment) gets `leadTools`
+   * restricted to child management (`start_agent`, `list_agents`, `message_agent`, `stop_agent`,
+   * `agent_status`); never `submit_plan` or `request_review`.
+   */
+  canStartHelpers?: boolean;
 }
 
 /** Executes a lead tool call after the engine has validated it; returns text for the model. */

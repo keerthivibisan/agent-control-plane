@@ -22,6 +22,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   stop_agent: 'Stop one worker agent.',
   agent_status: "Get one worker agent's status, latest activity and budget use.",
   request_review: 'Tell the owner the workers are done and their changes are ready for review.',
+  submit_plan:
+    'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
 };
 
 const REFUSED = 'The control plane could not run this tool';
@@ -64,6 +66,7 @@ export function leadToolDefinitions(handler: LeadToolHandler): LeadToolDefinitio
       i.request_review.shape,
       run(handler, 'request_review'),
     ),
+    tool('submit_plan', d.submit_plan, i.submit_plan.shape, run(handler, 'submit_plan')),
   ];
 }
 

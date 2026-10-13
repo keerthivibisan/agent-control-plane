@@ -17,7 +17,9 @@ import {
 
 /** The M1 tables as specified (orchestration-lifecycle §0), written out independently of src. */
 const EXPECTED_RUN: Record<RunStatus, RunStatus[]> = {
-  QUEUED: ['RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
+  QUEUED: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
+  PLANNING: ['PLAN_REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
+  PLAN_REVIEW: ['PLANNING', 'RUNNING', 'CANCELLING', 'NEEDS_REVIEW'],
   RUNNING: ['BLOCKED', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   REVIEW: ['COMPLETED', 'CANCELLING'],

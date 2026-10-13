@@ -998,6 +998,16 @@ export interface ControlStatusCopy {
  */
 export const RUN_STATUS_COPY: Readonly<Record<RunStatus, ControlStatusCopy>> = {
   QUEUED: { word: 'Starting', tip: 'The run is getting ready.', tone: 'working' },
+  PLANNING: {
+    word: 'Planning',
+    tip: 'The lead agent is reading the code and writing a plan for you to approve.',
+    tone: 'working',
+  },
+  PLAN_REVIEW: {
+    word: 'Plan ready for you',
+    tip: 'Read the plan, then approve it or say what should change. No helper starts before that.',
+    tone: 'waiting',
+  },
   RUNNING: { word: 'Running', tip: 'Agents are working.', tone: 'working' },
   BLOCKED: {
     word: 'Waiting for you',

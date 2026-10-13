@@ -13,6 +13,10 @@ import { IsoTimestampSchema } from '../domain/time.js';
  */
 export const RunStatusSchema = z.enum([
   'QUEUED',
+  /** Phase 4, plan-first (ADR-0016): the lead is reading the code and preparing `submit_plan`. */
+  'PLANNING',
+  /** Phase 4: a plan is waiting for the owner's approval or comments. */
+  'PLAN_REVIEW',
   'RUNNING',
   'BLOCKED',
   'REVIEW',
@@ -64,6 +68,8 @@ export type RunBudget = z.infer<typeof RunBudgetSchema>;
 export const OrchestrationRunSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
+  /** The board ticket this run works on (Phase 4, ADR-0016); null for Phase 3 control-panel runs. */
+  ticketId: z.string().min(1).nullable().default(null),
   title: z.string().min(1).max(200),
   status: RunStatusSchema,
   budget: RunBudgetSchema,
@@ -103,6 +109,20 @@ export const LeadToolInputs = {
   stop_agent: z.object({ agentId: z.string().min(1) }),
   agent_status: z.object({ agentId: z.string().min(1) }),
   request_review: z.object({}),
+  /** Plan-first (ADR-0016): the lead's proposed plan; helpers can't start until it is approved. */
+  submit_plan: z.object({
+    summary: z.string().trim().min(1).max(2000),
+    steps: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).max(120),
+          role: z.string().trim().min(1).max(60),
+          detail: z.string().max(2000),
+        }),
+      )
+      .min(1)
+      .max(12),
+  }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];

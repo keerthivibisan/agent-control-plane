@@ -347,11 +347,14 @@ export const StreamNoticeDtoSchema = z.object({
     'runs-changed',
     'approval-requested',
     'chat-message',
+    'tickets-changed',
   ]),
   /** Highest event row id included; also sent as the SSE `id:` field. */
   lastEventId: z.number().int().nonnegative(),
   sessionIds: z.array(z.string().min(1)),
   projectIds: z.array(z.string().min(1)),
   runIds: z.array(z.string().min(1)).optional(),
+  /** Phase 4: tickets whose card or page should be refetched. */
+  ticketIds: z.array(z.string().min(1)).optional(),
 });
 export type StreamNoticeDto = z.infer<typeof StreamNoticeDtoSchema>;

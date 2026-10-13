@@ -151,6 +151,13 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       return withReply(requestReview(state, ctx), 'The owner can now review the changes.');
     }
+
+    case 'submit_plan':
+      // Contract added in P4-0; the plan phase itself is P4-A. Until then a plan cannot be filed.
+      return {
+        ok: false,
+        refusal: refusal('invalid-input', 'Plans are not supported by this engine version yet.'),
+      };
   }
 }
 

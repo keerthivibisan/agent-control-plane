@@ -93,6 +93,8 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     run: {
       id: input.runId,
       projectId: input.projectId,
+      // Phase 3 runs have no ticket; P4-A makes createRun ticket-aware.
+      ticketId: null,
       title: input.title,
       status: 'QUEUED',
       budget: { ...budget },

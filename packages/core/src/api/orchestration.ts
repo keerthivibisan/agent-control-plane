@@ -49,6 +49,8 @@ export const ApprovalDtoSchema = z.object({
   /** Short, redacted description for the owner, e.g. "Edit src/app.ts". */
   summary: z.string().min(1).max(200),
   status: ApprovalStatusSchema,
+  /** Who decided (Phase 4): the owner, the project allowlist (ADR-0013 amendment) or the timeout. */
+  decidedBy: z.enum(['owner', 'allowlist', 'timeout']).nullable().optional(),
   requestedAt: IsoTimestampSchema,
   decidedAt: IsoTimestampSchema.nullable(),
 });
@@ -121,7 +123,14 @@ export const ApprovalDecisionRequestSchema = z.object({
   decision: z.enum(['approve', 'deny']),
   message: z.string().max(500).optional(),
 });
-export const ReviewActionRequestSchema = z.object({
-  agentRunId: z.string().min(1),
-  action: z.enum(['merge', 'discard']),
-});
+export const ReviewActionRequestSchema = z
+  .object({
+    agentRunId: z.string().min(1),
+    /** `merge-anyway` (Phase 4): merge although a required harness check failed; needs a reason. */
+    action: z.enum(['merge', 'discard', 'merge-anyway']),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .refine((r) => r.action !== 'merge-anyway' || r.reason !== undefined, {
+    message: 'merge-anyway needs a reason',
+    path: ['reason'],
+  });

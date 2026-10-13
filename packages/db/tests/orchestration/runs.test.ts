@@ -14,6 +14,8 @@ describe('orchestration runs repository (P3-C)', () => {
     expect(run).toEqual({
       id: 'id-0002',
       projectId: store.projectId,
+      // Phase 4 contract (P4-0): runs carry a ticket id; P3 runs have none until P4-B stores it.
+      ticketId: null,
       title: 'Build X',
       status: 'QUEUED',
       budget: BUDGET,
