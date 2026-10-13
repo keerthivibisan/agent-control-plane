@@ -5,11 +5,11 @@
 
 | Field   | Value                                               |
 | ------- | --------------------------------------------------- |
-| Status  | todo                                                |
+| Status  | in-progress                                         |
 | Owner   | persistence agent                                   |
-| Branch  | `wp/p4-b-db` (create from `main` when you claim it) |
-| Started | —                                                   |
-| Updated | —                                                   |
+| Branch  | `wp/p4-b-db`                                        |
+| Started | 2026-10-13                                          |
+| Updated | 2026-10-13                                          |
 
 ## Tasks
 
@@ -23,6 +23,7 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-13 | Claimed; branch `wp/p4-b-db` created from `main` | (this commit) | — |
 
 ## Handoff notes
 
