@@ -3,13 +3,13 @@
 > Progress file for P4-C. Only the agent working on P4-C edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                                    |
-| ------- | -------------------------------------------------------- |
-| Status  | in-progress                                              |
-| Owner   | harness agent                                            |
-| Branch  | `wp/p4-c-harness`                                        |
-| Started | 2026-10-13                                               |
-| Updated | 2026-10-13                                               |
+| Field   | Value             |
+| ------- | ----------------- |
+| Status  | in-progress       |
+| Owner   | harness agent     |
+| Branch  | `wp/p4-c-harness` |
+| Started | 2026-10-13        |
+| Updated | 2026-10-13        |
 
 ## Tasks
 
@@ -21,9 +21,10 @@
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
-| 2026-10-13 | Claimed P4-C; branch `wp/p4-c-harness` created from `main` | (this commit) | — |
+| Date       | What was done                                                                                                                                       | Commit        | Checks                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------ |
+| 2026-10-13 | Claimed P4-C; branch `wp/p4-c-harness` created from `main`                                                                                          | (this commit) | —                                          |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: harness module source (manifest, context, output tail, runner, main checks); tests not written yet | (this commit) | lint ✓ typecheck ✓ (server); tests pending |
 
 ## Handoff notes
 
