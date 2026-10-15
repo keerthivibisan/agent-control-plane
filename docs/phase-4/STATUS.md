@@ -9,7 +9,7 @@
 | P4-A | [Engine: plan phase, limits, depth 2, allowlist](wp/P4-A.md) | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-a-engine`        | —                      |
 | P4-B | [Database: migration 0003 and repositories](wp/P4-B.md)      | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-b-db`            | —                      |
 | P4-C | [Harness: manifest, context files, check runner](wp/P4-C.md) | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-c-harness`       | —                      |
-| P4-I | [Adapter: context, nested helpers, submit_plan](wp/P4-I.md)  | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-i-adapter`       | —                      |
+| P4-I | [Adapter: context, nested helpers, submit_plan](wp/P4-I.md)  | P4-0              | **done**                             | `wp/p4-i-adapter`       | 2026-10-15             |
 | P4-E | [Board UI](wp/P4-E.md)                                       | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-e-board`         | —                      |
 | P4-F | [Project wizard and settings UI](wp/P4-F.md)                 | P4-0              | **in-progress** (claimed 2026-10-13) | `wp/p4-f-project-setup` | —                      |
 | P4-D | [Server wiring](wp/P4-D.md)                                  | P4-A, B, C, I     | todo                                 | `wp/p4-d-server`        | —                      |
@@ -23,7 +23,7 @@ worktrees as `wip(...)` commits, so nothing lives only in a worktree. No wave-1 
 
 | WP   | Branch                  | Head      | State                                                                                                                                      | What is left                                                                                                                             |
 | ---- | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| P4-I | `wp/p4-i-adapter`       | `e8d13dc` | **review**; coordinator fix added (always use Claude Code's system prompt)                                                                 | Coordinator: full `pnpm check` on a quiet machine, then merge                                                                            |
+| P4-I | `wp/p4-i-adapter`       | `e8d13dc` | **merged** 2026-10-15 (Claude Code system prompt always on)                                                                                | —                                                                                                                                        |
 | P4-B | `wp/p4-b-db`            | `584682d` | migration 0003, repositories, runs `ticketId`, depth-2 agent runs written; workspace tests drafted (WIP)                                   | Finish the workspace tests and the 0002 → 0003 upgrade test, README section, `pnpm check`, progress file → review                        |
 | P4-C | `wp/p4-c-harness`       | `df11548` | harness source written (manifest, context, output tail, runner, main checks); tests drafted (WIP)                                          | Finish the tests (temp git repos, no-shell assertion, timeouts, caps), `pnpm check`, progress file → review                              |
 | P4-A | `wp/p4-a-engine`        | `130bab8` | plan phase, limits, tree, allowlist and tests drafted (WIP, not green); also edits `packages/server/src/control/errors.ts` (outside scope) | Make it green; justify or move the server edit (refusal codes mapping); finish every transition and refusal test; progress file → review |
@@ -45,6 +45,11 @@ its branch.
 - **Open for P4-A/P4-D:** a parent helper that ends its turn finishes, and a later message to it
   fails. Either the engine keeps parents busy while they have children, or the adapter keeps their
   input open like the lead's.
+
+**Known flaky test (pre-existing, not Phase 4):** `packages/server/tests/smoke.test.ts` "ingests a
+registered project…" sometimes sees a subagent's parent as unknown under heavy load. It reads the
+detail before the subagent's meta file batch is ingested; it failed 1 of 3 runs on `main`. Fix
+(backlog): make the test wait for the edge, not just the session count.
 
 **Environment note:** heavy machine load (Microsoft Defender, other projects' test runs) makes vitest
 workers time out and the server suite flaky on timing. Rerun before treating a failure as real.
