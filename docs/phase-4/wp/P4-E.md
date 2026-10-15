@@ -9,23 +9,24 @@
 | Owner   | frontend agent                                         |
 | Branch  | `wp/p4-e-board` (create from `main` when you claim it) |
 | Started | 2026-10-13                                             |
-| Updated | 2026-10-13                                             |
+| Updated | 2026-10-15                                             |
 
 ## Tasks
 
-- [ ] Route #/board and #/board/:projectId; nav entry 'Board' first
-- [ ] Project switcher and header stats (token types never summed; estimated cost never summed)
-- [ ] Columns by stage(); cards (key, title, type, priority, labels, helpers, budget tokens, needs-you badge)
-- [ ] Native HTML5 drag and drop + keyboard Move menu; only owner-settable moves
-- [ ] New ticket dialog; empty states
+- [x] Route #/board and #/board/:projectId; nav entry 'Board' first
+- [x] Project switcher and header stats (token types never summed; estimated cost never summed)
+- [x] Columns by stage(); cards (key, title, type, priority, labels, helpers, budget tokens, needs-you badge)
+- [x] Native HTML5 drag and drop + keyboard Move menu; only owner-settable moves
+- [x] New ticket dialog; empty states
 - [ ] Fixture-DTO tests; screenshots light/dark at 1440 and 1024; pnpm check + e2e green
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                                                                                           | Commit        | Checks                      |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------- |
-| 2026-10-13 | Claimed; branch `wp/p4-e-board` created from `main`                                                                                                                                     | (this commit) | —                           |
-| 2026-10-13 | WIP checkpoint after a usage-limit interruption: board routes, client functions (api.ts), board copy, move rules, dialog, new-ticket dialog, move menu, icons. Board page not wired yet | (this commit) | WIP: pnpm check not run yet |
+| Date       | What was done                                                                                                                                                                           | Commit        | Checks                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| 2026-10-13 | Claimed; branch `wp/p4-e-board` created from `main`                                                                                                                                     | (this commit) | —                                                              |
+| 2026-10-13 | WIP checkpoint after a usage-limit interruption: board routes, client functions (api.ts), board copy, move rules, dialog, new-ticket dialog, move menu, icons. Board page not wired yet | (this commit) | WIP: pnpm check not run yet                                    |
+| 2026-10-15 | Board wired (App/Shell, Board first in nav); board page, columns, stats, cards, Move menu, DnD, dialogs; fixture-DTO tests (board.test.tsx, board-logic.test.ts)                        | (this commit) | format ✓ lint ✓ typecheck ✓ test 1396/1396 (web 255) ✓ build ✓ |
 
 ## Handoff notes
 
