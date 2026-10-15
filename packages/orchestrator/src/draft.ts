@@ -14,7 +14,7 @@ import {
   isLiveAgentStatus,
   isTerminalRunStatus,
 } from './transitions.js';
-import { agentDepth, childrenOf } from './tree.js';
+import { agentDepth, childrenOf, descendantsOf } from './tree.js';
 import type {
   ApprovalDecider,
   EngineAgent,
@@ -257,6 +257,15 @@ export class Draft {
    *   still live, is then aborted.
    */
   reconcile(): void {
+    // Depth 2: a parent helper held open for its helpers ends once none of them is live.
+    for (const agent of this.agents) {
+      if (agent.awaitingHelpers !== true || !isLiveAgentStatus(agent.status)) continue;
+      const below = descendantsOf(this, agent.id);
+      if (below.some((a) => isLiveAgentStatus(a.status))) continue;
+      agent.awaitingHelpers = false;
+      this.setAgentStatus(agent, 'SUCCEEDED');
+    }
+
     const lead = this.lead();
     const status = this.run.status;
 

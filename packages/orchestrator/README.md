@@ -108,7 +108,12 @@ ticket run; `runSettingsFromSetup(setup)` gives `{ limits, budget }` for `create
   `canStartHelpers: true`; it may call `start_agent`, `list_agents`, `message_agent`, `stop_agent`
   and `agent_status` for its own children only (`CHILD_MANAGEMENT_TOOLS`), never `submit_plan` or
   `request_review`. The lead manages the whole tree. Stopping an agent stops its descendants first;
-  Stop all aborts deepest first and the lead last. Budgets stay per agent; `agentRollUp` sums them
+  Stop all aborts deepest first and the lead last. The adapter ends a helper's query when its
+  turn ends. So a parent helper that reports `finished: success` while it still has live helpers
+  stays RUNNING with `awaitingHelpers: true`, because its subtree is still working and the run
+  must not reach review. It becomes SUCCEEDED once its last helper ends. Messages to it are
+  refused because its process has ended. An error or cancel ends it at once; the lead keeps
+  managing its helpers. Budgets stay per agent; `agentRollUp` sums them
   for display only.
 - **Allowlist (ADR-0013 amendment).** Helpers only; the lead always asks. `editInOwnWorktree`
   allows Edit/Write/MultiEdit/NotebookEdit when the server-resolved real path is strictly inside

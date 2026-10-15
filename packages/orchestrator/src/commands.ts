@@ -21,6 +21,7 @@ import type {
   RunState,
 } from './state.js';
 import { isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
+import { descendantsOf } from './tree.js';
 
 /** Return value of a command body: a refusal (state unchanged), or a value. */
 type Body<T> = Refusal | { value: T };
@@ -264,6 +265,18 @@ export function agentEvent(
             : event.outcome === 'cancelled'
               ? 'CANCELLED'
               : 'FAILED';
+        // Depth 2: a parent helper that finished its own work while its helpers still run keeps
+        // the subtree open (RUNNING) until they end; `Draft.reconcile` then marks it SUCCEEDED.
+        if (
+          to === 'SUCCEEDED' &&
+          agent.kind === 'worker' &&
+          (agent.status === 'RUNNING' || agent.status === 'STARTING') &&
+          descendantsOf(d, agent.id).some((a) => isLiveAgentStatus(a.status))
+        ) {
+          d.setAgentStatus(agent, 'RUNNING');
+          agent.awaitingHelpers = true;
+          return done;
+        }
         // A blocked or waiting agent cannot succeed mid-turn; treat a success report there as an end.
         if (to === 'SUCCEEDED' && agent.status === 'WAITING_APPROVAL') {
           d.endAgent(agent, 'FAILED', false);

@@ -166,6 +166,15 @@ export function leadToolCall(
       if (!isLiveAgentStatus(target.status)) {
         return { ok: false, refusal: refusal('agent-not-live', 'That agent has stopped.') };
       }
+      if (target.awaitingHelpers === true) {
+        return {
+          ok: false,
+          refusal: refusal(
+            'agent-not-live',
+            'That agent finished its own work and is waiting for its helpers.',
+          ),
+        };
+      }
       if (isAgentOverBudget(target)) {
         return {
           ok: false,

@@ -343,3 +343,41 @@ describe('ticketLeadPrompt', () => {
     expect(noDesc).toContain('Helpers cannot start helpers of their own.');
   });
 });
+
+describe('more planning refusals', () => {
+  it('request_review is refused while planning', () => {
+    const review = leadToolCall(
+      planningRun(),
+      {
+        callerAgentRunId: LEAD,
+        name: 'request_review',
+        input: {},
+        registeredProjectIds: REGISTERED,
+      },
+      makeCtx(1000),
+    );
+    expect(refused(review)).toBe('run-not-active');
+  });
+
+  it('owner chat is refused while the planning lead is over budget', () => {
+    const s = ok(
+      event(planningRun(undefined, 100), LEAD, {
+        type: 'usage',
+        messageId: 'm',
+        tokens: tokens(500),
+      }),
+    ).state;
+    expect(statusOf(s, LEAD)).toBe('BLOCKED');
+    expect(s.run.status).toBe('PLANNING');
+    expect(refused(ownerChat(s, 'hello', makeCtx(2000)))).toBe('over-budget');
+  });
+
+  it('supersedes a leftover proposal so two plans never wait at once', () => {
+    const { state } = submitPlanFor(planningRun());
+    // A stored state where the run is back in planning with a proposal left over.
+    const odd: RunState = { ...state, run: { ...state.run, status: 'PLANNING' } };
+    const r = submitPlanFor(odd, 'q');
+    expect(r.state.plans?.map((p) => p.status)).toEqual(['superseded', 'proposed']);
+    expect(pendingPlan(r.state)?.version).toBe(2);
+  });
+});

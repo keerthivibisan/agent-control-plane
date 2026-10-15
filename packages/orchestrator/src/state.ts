@@ -28,6 +28,12 @@ export interface EngineAgent extends AgentRun {
   review: ReviewState | null;
   /** Provider-reported cost of this agent's query; always an estimate, never summed. */
   reportedCostUsd: number | null;
+  /**
+   * Depth 2: a parent helper whose own query ended successfully while its helpers still work. It
+   * stays RUNNING (its subtree is still working) until the last descendant ends, then SUCCEEDED.
+   * Its process has ended, so nothing can be sent to it. Absent/false for everyone else.
+   */
+  awaitingHelpers?: boolean;
 }
 
 /** An owner decision request (ADR-0013 §4, ADR-0014). The summary is redacted, ≤ 200 characters. */

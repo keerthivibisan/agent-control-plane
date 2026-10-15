@@ -249,3 +249,100 @@ describe('depth 2', () => {
     expect(statusOf(s, p.id)).toBe('RUNNING');
   });
 });
+
+describe('depth 2: a parent helper that finishes while its helpers work', () => {
+  function tree() {
+    const s = workingRun({ maxConcurrentHelpers: 5, maxDepth: 2 });
+    const p = start(s, LEAD, 'P');
+    const c = start(p.state, p.id, 'C');
+    return { state: c.state, p: p.id, c: c.id };
+  }
+  const finish = (state: RunState, id: string, outcome: 'success' | 'error' | 'cancelled') =>
+    ok(event(state, id, { type: 'finished', outcome, reportedCostUsd: 0.05 }, 6000)).state;
+
+  it('stays RUNNING until its last helper ends, then SUCCEEDED', () => {
+    const { state, p, c } = tree();
+    const held = finish(state, p, 'success');
+    expect(statusOf(held, p)).toBe('RUNNING');
+    expect(agentOf(held, p).awaitingHelpers).toBe(true);
+    expect(agentOf(held, p).reportedCostUsd).toBe(0.05);
+    expect(held.run.status).toBe('RUNNING');
+    // Nothing can be sent to its ended process.
+    expect(refused(tool(held, LEAD, 'message_agent', { agentId: p, text: 'hi' }))).toBe(
+      'agent-not-live',
+    );
+    const after = finish(held, c, 'success');
+    expect(statusOf(after, c)).toBe('SUCCEEDED');
+    expect(statusOf(after, p)).toBe('SUCCEEDED');
+    expect(agentOf(after, p).awaitingHelpers).toBe(false);
+    expect(agentOf(after, p).review).toBe('pending');
+  });
+
+  it('also ends once its helper is stopped', () => {
+    const { state, p, c } = tree();
+    const held = finish(state, p, 'success');
+    const r = ok(stopAgent(held, c, makeCtx(7000)));
+    expect(statusOf(r.state, p)).toBe('SUCCEEDED');
+  });
+
+  it('ends at once on an error, leaving its helpers to the lead', () => {
+    const { state, p, c } = tree();
+    const failed = finish(state, p, 'error');
+    expect(statusOf(failed, p)).toBe('FAILED');
+    expect(statusOf(failed, c)).toBe('RUNNING');
+    expect(ok(tool(failed, LEAD, 'stop_agent', { agentId: c })).value).toBe('Stopped C.');
+  });
+
+  it('a helper without live helpers finishes normally', () => {
+    const { state, p, c } = tree();
+    const s = finish(finish(state, c, 'success'), p, 'success');
+    expect(statusOf(s, p)).toBe('SUCCEEDED');
+    expect(agentOf(s, p).awaitingHelpers).toBeUndefined();
+  });
+
+  it('Stop all still ends a held parent after its helpers', () => {
+    const { state, p, c } = tree();
+    const r = ok(cancelRun(finish(state, p, 'success'), makeCtx(8000)));
+    expect(r.effects.filter((e) => e.type === 'abort-agent').map((e) => e.agentRunId)).toEqual([
+      c,
+      p,
+      LEAD,
+    ]);
+    expect(statusOf(r.state, p)).toBe('CANCELLED');
+  });
+});
+
+describe('typed refusals around limits and depth', () => {
+  it('start_agent: project-not-registered, run-cancelling, agent-not-live, over-budget', () => {
+    const s = workingRun({ maxConcurrentHelpers: 3, maxDepth: 2 });
+    const notRegistered = leadToolCall(
+      s,
+      {
+        callerAgentRunId: LEAD,
+        name: 'start_agent',
+        input: { role: 'X', task: 'y' },
+        registeredProjectIds: [],
+      },
+      makeCtx(3000, 'z'),
+    );
+    expect(refused(notRegistered)).toBe('project-not-registered');
+    expect(refused(start(ok(cancelRun(s, makeCtx(3000))).state, LEAD).result)).toBe(
+      'run-cancelling',
+    );
+    const p = start(s, LEAD, 'P');
+    const ended = ok(
+      event(p.state, p.id, { type: 'finished', outcome: 'error', reportedCostUsd: null }),
+    ).state;
+    expect(refused(start(ended, p.id).result)).toBe('agent-not-live');
+    const over = ok(
+      event(p.state, p.id, { type: 'usage', messageId: 'big', tokens: tokens(5000) }),
+    ).state;
+    expect(refused(start(over, p.id).result)).toBe('over-budget');
+  });
+
+  it('a depth-1 helper cannot submit a plan or request review', () => {
+    const { state, id } = start(workingRun({ maxConcurrentHelpers: 3, maxDepth: 1 }), LEAD);
+    expect(refused(tool(state, id, 'submit_plan', { summary: 's', steps: [] }))).toBe('not-lead');
+    expect(refused(tool(state, id, 'request_review', {}))).toBe('not-lead');
+  });
+});
