@@ -127,7 +127,7 @@ export function TicketCard({
       draggable={draggable}
       onDragStart={draggable ? start : undefined}
       onDragEnd={onDragEnd}
-      className={`group flex flex-col gap-2 rounded-control border bg-panel px-3 py-2.5 shadow-card transition-[border-color,opacity] ${
+      className={`group relative flex flex-col gap-2 rounded-control border bg-panel px-3 py-2.5 shadow-card transition-[border-color,opacity] ${
         draggable ? 'cursor-grab active:cursor-grabbing' : ''
       } ${dragging ? 'border-accent opacity-50' : 'border-line hover:border-line-strong'} ${
         busy ? 'opacity-60' : ''
@@ -190,11 +190,19 @@ export function TicketCard({
         </p>
       ) : null}
 
-      {ticket.lastRunOutcome !== null && !running ? (
-        <p
-          className={`text-caption ${ticket.lastRunOutcome === 'failed' ? 'text-danger' : 'text-dim'}`}
-        >
-          {C.lastRun[ticket.lastRunOutcome]}
+      {(ticket.lastRunOutcome !== null && !running) || ticket.latestEstimatedCost !== null ? (
+        <p className="flex flex-wrap items-center gap-x-2 text-caption text-dim">
+          {ticket.lastRunOutcome !== null && !running ? (
+            <span className={ticket.lastRunOutcome === 'failed' ? 'text-danger' : ''}>
+              {C.lastRun[ticket.lastRunOutcome]}
+            </span>
+          ) : null}
+          {ticket.lastRunOutcome !== null && !running && ticket.latestEstimatedCost !== null ? (
+            <span aria-hidden="true">·</span>
+          ) : null}
+          {ticket.latestEstimatedCost !== null ? (
+            <LatestCost cost={ticket.latestEstimatedCost} />
+          ) : null}
         </p>
       ) : null}
 
@@ -203,12 +211,6 @@ export function TicketCard({
           {ticket.lastActivityAt !== null ? 'Active ' : 'Updated '}
           <RelativeTime iso={ticket.lastActivityAt ?? ticket.updatedAt} />
         </span>
-        {ticket.latestEstimatedCost !== null ? (
-          <>
-            <span aria-hidden="true">·</span>
-            <LatestCost cost={ticket.latestEstimatedCost} />
-          </>
-        ) : null}
         <span className="flex-1" />
         <MoveMenu
           ticketKey={ticket.key}

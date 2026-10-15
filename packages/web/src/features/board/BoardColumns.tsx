@@ -90,7 +90,7 @@ function Column({
       aria-label={s.word}
       data-testid={`column-${column.stage}`}
       {...handlers}
-      className={`flex w-68 shrink-0 flex-col rounded-card bg-sunken transition-[opacity,background-color] ${tone}`}
+      className={`flex w-64 shrink-0 flex-col rounded-card bg-sunken transition-[opacity,background-color] ${tone}`}
     >
       <header className="flex items-center gap-2 px-3 pt-3 pb-2">
         <h2 className="min-w-0 flex-1 text-body">
@@ -195,7 +195,7 @@ export function BoardColumns({
   };
 
   return (
-    <div className="-mx-1 overflow-x-auto px-1 pt-1 pb-4" data-testid="board-columns">
+    <div className="relative -mx-1 overflow-x-auto px-1 pt-1 pb-4" data-testid="board-columns">
       <div className="flex min-h-[28rem] items-stretch gap-3">
         {columns.map((column) =>
           column.stage === 'CANCELLED' && !showCancelled ? (

@@ -66,7 +66,6 @@ export function BoardStats({ board }: { board: BoardDto }) {
           {C.stats.needsYou(stats.needsYou)}
         </span>
       </span>
-      <span className="hidden h-5 w-px bg-line xl:inline-block" aria-hidden="true" />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1" data-testid="board-tokens">
         <span className="inline-flex items-center gap-0.5 text-dim">
           {C.stats.tokens}
