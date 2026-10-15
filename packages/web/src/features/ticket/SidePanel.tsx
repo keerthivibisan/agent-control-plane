@@ -251,7 +251,7 @@ export function SidePanel({
         role="tablist"
         aria-label={agent.role}
         onKeyDown={onKeyDown}
-        className="mt-3 flex flex-wrap gap-x-1 border-b border-line px-3"
+        className="mt-3 flex gap-x-1 overflow-x-auto border-b border-line px-3.5"
       >
         {tabs.map((t) => (
           <button
@@ -267,7 +267,7 @@ export function SidePanel({
             aria-controls={`${baseId}-panel`}
             tabIndex={t === active ? 0 : -1}
             onClick={() => onTab(t)}
-            className={`-mb-px inline-flex items-center gap-1 border-b-2 px-2.5 py-2 text-body font-medium transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1 border-b-2 px-1.5 py-2 text-[0.8125rem] font-medium transition-colors ${
               t === active ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'
             }`}
           >

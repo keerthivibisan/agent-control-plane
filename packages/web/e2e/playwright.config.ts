@@ -14,6 +14,9 @@ import { defineConfig, devices } from '@playwright/test';
  *   registered as "e2e-app", on ACP_E2E_CONTROL_PORT (7441) plus a test-only driver for the fake
  *   agents on the next port. Neither the Agent SDK nor `claude` ever runs.
  *
+ * - `ticket` (P4-G, ticket.spec.ts): the ticket page on the demo server's built UI, with the ticket
+ *   and run routes answered from synthetic fixtures (page.route) until P4-D serves them.
+ *
  * Not part of `pnpm check`: it needs a downloaded Chromium
  * (`pnpm --filter @acp/web exec playwright install chromium`). The config lives in e2e/ so the e2e
  * tsconfig (Node types) covers it for ESLint; the app tsconfig is Vite/DOM only.
@@ -44,6 +47,11 @@ export default defineConfig({
     {
       name: 'demo',
       testMatch: 'demo.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      name: 'ticket',
+      testMatch: 'ticket.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {

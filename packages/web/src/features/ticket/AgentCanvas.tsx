@@ -135,7 +135,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       data-selected={selected ? 'true' : undefined}
       // A click anywhere on the card selects it; the header button is the keyboard way.
       onClick={() => ctx.onSelect(agent.id)}
-      className={`relative flex w-60 flex-col gap-2 rounded-card border bg-panel px-3.5 py-3 text-left shadow-card transition-shadow ${
+      className={`relative flex w-52 flex-col gap-2 rounded-card border bg-panel px-3 py-3 text-left shadow-card transition-shadow ${
         selected ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong'
       } ${waiting > 0 ? 'border-t-4 border-t-warning' : ''}`}
     >
@@ -169,7 +169,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
         </p>
       )}
       <BudgetBar budget={agent.budget} />
-      {helpersBudget > 0 ? (
+      {!lead && helpersBudget > 0 ? (
         <p className="text-caption text-dim tabular-nums">
           {C.withHelpers(formatCount(agent.budget.used + helpersBudget))}
         </p>
@@ -202,7 +202,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
 const CHILD_ROW =
   'relative flex justify-center pt-6 before:absolute before:top-0 before:left-1/2 before:h-6 before:border-l-2 before:border-accent/40';
 const CHILD =
-  'relative flex flex-col items-center px-2 pt-6 ' +
+  'relative flex flex-col items-center px-1.5 pt-6 ' +
   'before:absolute before:top-0 before:right-1/2 before:w-1/2 before:border-t-2 before:border-accent/40 ' +
   'after:absolute after:top-0 after:left-1/2 after:h-6 after:w-1/2 after:border-t-2 after:border-l-2 after:border-accent/40 ' +
   'first:before:border-t-0 last:after:border-t-0';

@@ -26,7 +26,6 @@ import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { canChat, hasReview } from '../control/run-state';
 import { useTicketAction } from './actions';
 import { AgentCanvas } from './AgentCanvas';
-import { CheckStatus } from './ChecksTab';
 import { PlanCard } from './PlanReview';
 import { SidePanel, type PanelTab } from './SidePanel';
 import { TicketInfo } from './TicketInfo';
@@ -163,6 +162,8 @@ function ReviewList({
   checks: readonly CheckRunDto[];
   onOpen: (agentId: string) => void;
 }) {
+  // Only once every agent has stopped; a helper that stopped early is reviewed from its card.
+  if (run.status !== 'REVIEW' && run.status !== 'NEEDS_REVIEW') return null;
   const waiting = run.agents.filter((a) => a.review?.state === 'pending');
   if (waiting.length === 0) return null;
   return (
@@ -188,10 +189,14 @@ function ReviewList({
               </span>
               <span className="text-caption">
                 {gate.kind === 'blocked' ? (
-                  <CheckStatus check={{ status: 'failed' }} />
+                  <span aria-hidden="true" className="mr-1 font-bold text-danger">
+                    ✗
+                  </span>
                 ) : gate.kind === 'passed' ? (
-                  <CheckStatus check={{ status: 'passed' }} />
-                ) : null}{' '}
+                  <span aria-hidden="true" className="mr-1 font-bold text-success">
+                    ✓
+                  </span>
+                ) : null}
                 <span className={gate.kind === 'blocked' ? 'text-danger' : 'text-dim'}>
                   {gate.kind === 'blocked'
                     ? C.review.checksFailed
@@ -264,7 +269,7 @@ function RunView({
         checks={checks}
         onOpen={(id) => onSelect(id, 'changes')}
       />
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="flex min-w-0 flex-col gap-6">
           {plan ? (
             <PlanCard

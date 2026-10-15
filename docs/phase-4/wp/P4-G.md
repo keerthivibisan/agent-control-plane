@@ -22,14 +22,30 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                                                                           | Commit        | Checks                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
-| 2026-10-15 | Claimed P4-G; branch `wp/p4-g-ticket` from `main`                                                                                                                       | `58ad08a`     | docs only                                            |
-| 2026-10-16 | Ticket page: route, `#/control` → board (start page kept at `#/control/new`), canvas, side panel, plan card, checks, merge-anyway, history; typed client; fixture tests | (this commit) | format ✓ lint ✓ typecheck ✓ test 1407/1407 ✓ build ✓ |
+| Date       | What was done                                                                                                                                                                                                | Commit        | Checks                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------- |
+| 2026-10-15 | Claimed P4-G; branch `wp/p4-g-ticket` from `main`                                                                                                                                                            | `58ad08a`     | docs only                                                                          |
+| 2026-10-16 | Ticket page: route, `#/control` → board (start page kept at `#/control/new`), canvas, side panel, plan card, checks, merge-anyway, history; typed client; fixture tests                                      | `b2f1108`     | format ✓ lint ✓ typecheck ✓ test 1407/1407 ✓ build ✓                               |
+| 2026-10-16 | Fixture-backed Playwright spec `e2e/ticket.spec.ts` (project `ticket` on the demo server, page.route) + screenshots; layout polish (narrower cards, 25rem panel, scrolling tabs, review list only in REVIEW) | (this commit) | format ✓ lint ✓ typecheck ✓ test 1407/1407 ✓ build ✓; e2e `--project ticket` 3/3 ✓ |
 
 ## Handoff notes
 
-_None yet._
+Stopped on the owner's request (2026-10-16). Status stays `in-progress`.
+
+- **Done:** route `#/tickets/:id`; `#/control` → `#/board` (start page kept at `#/control/new`;
+  `control.spec.ts` and one control unit test updated); canvas, side panel tabs, plan card,
+  checks, merge / merge-anyway / discard, run picker, history, comments, PATCH edit; client
+  functions in `lib/api.ts` (`updateTicket`, `addTicketComment`, `decidePlan`, `rerunTicket`,
+  `runAgentChecks`, `messageAgent`, `ticketPaths`, `ticketSchemas`; `ApiClient.patch`); tests.
+- **Screenshots** (light/dark, 1440/1024): `ACP_SCREENSHOT_DIR=<dir> ACP_E2E_PORT=7521
+ACP_E2E_CONTROL_PORT=7531 pnpm --filter @acp/web test:e2e --project ticket`.
+- **Left:** run the full web e2e (all projects) with `ACP_E2E_PORT=7521`; look at the last
+  screenshots once more; §9 completion report; status `review`.
+- **For the coordinator / P4-D:** `AgentRunDto` has no worktree branch, so a card shows it only
+  once `GET /runs/:id/review` reports it (proposal: add `branch: string | null` to
+  `AgentRunDto`). Assumed responses: PATCH ticket, plan decision and start → `TicketDetailDto`.
+  Merge conflicts expected with P4-E (`href.board`/`href.ticket`, same text) and P4-F (`ApiClient.put`
+  next to `patch`). The "Control panel" sidebar entry still exists (Shell is not P4-G's).
 
 ## Blockers / proposed contract changes
 

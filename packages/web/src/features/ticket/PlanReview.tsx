@@ -147,14 +147,9 @@ export function PlanCard({
   };
 
   return (
-    <Card
-      title={C.title}
-      description={C.intro}
-      testId="plan-card"
-      actions={<PlanMeta plan={plan} />}
-      className="border-accent/40"
-    >
+    <Card title={C.title} description={C.intro} testId="plan-card" className="border-accent/40">
       <div className="flex flex-col gap-5">
+        <PlanMeta plan={plan} />
         <PlanBody plan={plan} />
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <label htmlFor={inputId} className="font-medium">
