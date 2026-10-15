@@ -134,7 +134,7 @@ describe('tickets repository (P4-B)', () => {
       type: 'feature',
       key: 'WEB-1',
     });
-    expect(u?.updatedAt > t.updatedAt).toBe(true);
+    expect((u?.updatedAt ?? '') > t.updatedAt).toBe(true);
     expect(store.ws.tickets.update('missing', { title: 'x' })).toBeUndefined();
     expect(thrown(() => store.ws.tickets.update(t.id, { type: 'epic' as 'bug' }))).toMatchObject({
       code: 'invalid_input',
@@ -155,7 +155,9 @@ describe('tickets repository (P4-B)', () => {
     expect(store.ws.tickets.setStatus('missing', 'READY')).toBeUndefined();
     store.ws.tickets.setStatus(b.id, 'CANCELLED');
     const list = (statuses?: ('READY' | 'CANCELLED' | 'BACKLOG')[]) =>
-      store.ws.tickets.listForProject(store.projectId, { statuses }).map((t) => t.key);
+      store.ws.tickets
+        .listForProject(store.projectId, statuses === undefined ? {} : { statuses })
+        .map((t) => t.key);
     expect(list()).toEqual(['WEB-1', 'WEB-2']);
     expect(list(['CANCELLED'])).toEqual(['WEB-2']);
     expect(list([])).toEqual([]);

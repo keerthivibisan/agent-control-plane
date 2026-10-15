@@ -95,11 +95,13 @@ and owner decision messages. A test asserts the free-text columns are exactly `o
 
 `createOrchestrationRepositories(db, options?)` returns:
 
-- **runs**: `insert` (default `QUEUED`), `getById`, `list({ projectId?, limit?, before? })` (newest
+- **runs**: `insert` (default `QUEUED`; optional `ticketId`, P4-B), `getById`,
+  `list({ projectId?, ticketId?, limit?, before? })` (newest
   first, with `agentCount` and `pendingApprovals`), `listByStatus`, `setStatus(id, status, { from?,
 endedAt? })` (`from` guard → `conflict`), `setBudget`, `remove` → `{ artifactPaths,
 activeWorktreePaths }`.
-- **agentRuns**: `insert` (lead: no parent/task; worker: the run's lead as parent and a task; limit
+- **agentRuns**: `insert` (lead: no parent/task; worker: a parent in the same run at most
+  `HARD_MAX_DEPTH` = 2 levels below the lead (P4-B; was depth 1), and a task; limit
   defaults to the run cap), `getById`, `listForRun`, `listByStatus`, `setStatus` (with `from`),
   `setBudgetTokensUsed`, `setBudgetTokensLimit`. Rows carry `sessionId` (joined) and
   `budgetTokensLimit`.
@@ -115,6 +117,47 @@ activeWorktreePaths }`.
 Errors: unknown referenced rows → `DbError('not_found')`; duplicates and failed `from` guards →
 `conflict`; invalid input → `invalid_input`. The engine decides state transitions; the repositories
 only persist them.
+
+## Workspace schema (`0003_workspace.sql`, Phase 4, P4-B)
+
+**Status: implemented (P4-B).** Tables, repositories and temp-file DB tests exist, including an
+upgrade test from a 0002 database. The server wiring is P4-D. `0001` and `0002` are unchanged.
+
+| Table                | Key / uniques                                             | Notes                                                                                                                                    |
+| -------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_setup`      | `project_id` (1:1, cascades); `project_key` unique        | `setup` JSON validated with core's `ProjectAgentSetupSchema`; `next_ticket_seq` is the ticket counter (only incremented)                 |
+| `tickets`            | `id`; `(project_id, seq)`                                 | `key` fixed at creation; `labels` JSON array; `project_id` **RESTRICT** (tickets are never deleted, ADR-0016); `current_run_id` SET NULL |
+| `ticket_plans`       | `id`; `(run_id, version)`; one `proposed`, one `approved` | `steps` JSON (core `PlanStepSchema`); `(ticket_id, run_id)` → a run of the same ticket, cascades with the run                            |
+| `ticket_comments`    | `id`                                                      | `author` `owner`/`lead`; optional run or plan of the same ticket (composite FKs), cascades with them                                     |
+| `check_runs`         | `id`                                                      | `run_id` NULL = main branch; `(run_id, agent_run_id)` → agent of that run; `output_tail` ≤ 16384 characters                              |
+| `orchestration_runs` | + `ticket_id` (nullable, → tickets RESTRICT)              | added with `ALTER TABLE`; unique index `(ticket_id, id)` is the parent key for the same-ticket FKs                                       |
+
+Rules SQLite cannot express as foreign keys are triggers: a run's ticket belongs to the run's
+project, and a ticket's current run is a run of that ticket. They fire only when the referenced row
+exists, so a missing row still reports `not_found`. Harness status is not stored (read from the repo).
+
+**Stored text (ADR-0016/0017):** ticket titles and descriptions, owner and lead comments, plan
+summaries and steps, and the redacted output tail of a check. A test pins this list.
+
+`createWorkspaceRepositories(db, options?)` returns:
+
+- **projectSetup**: `get(projectId)`, `getByProjectKey(key)`, `upsert(setup)` (keeps the ticket
+  counter; a key used by another project → `conflict`).
+- **tickets**: `insert` (atomic per-project number from `project_setup.next_ticket_seq` in one
+  `BEGIN IMMEDIATE`; `not_found` without a setup), `getById`, `listForProject(projectId,
+{ statuses? })` (by number), `update` (owner fields), `setStatus(id, status, { from?,
+currentRunId? })`, `countForProject`.
+- **plans**: `insert` (next version per run; a still-proposed plan becomes `superseded`;
+  `plannedHelpers` = distinct non-"Lead" step roles), `getById`, `listForTicket`, `listForRun`,
+  `latestForRun`, `approvedForRun`, `decide(id, 'approved' | 'changes-requested', at?)` (only from
+  `proposed`, else `conflict`), `supersedeProposed(runId, at?)`.
+- **comments**: `insert` (the plan's run is filled in), `getById`, `listForTicket`, `listForPlan`.
+- **checkRuns**: `insert` (output `redact()`ed again and cut to its tail; run project must match),
+  `getById`, `listForRun`, `listForAgentRun`, `latestForAgentRun` (latest per check id),
+  `listForProjectMain(projectId, { limit? })`.
+
+`projects.remove` throws a foreign-key error for a project with tickets or runs; the server checks
+`tickets.countForProject` / runs first and answers 409.
 
 ## Usage
 

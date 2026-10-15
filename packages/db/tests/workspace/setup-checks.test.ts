@@ -46,13 +46,13 @@ describe('project setup repository (P4-B)', () => {
         JSON.stringify(bad).slice(0, 80),
       ).toMatchObject({ code: 'invalid_input' });
     }
-    expect(
-      thrown(() => store.ws.projectSetup.upsert(setupInput('nope', 'NOPE'))),
-    ).toMatchObject({ code: 'not_found' });
+    expect(thrown(() => store.ws.projectSetup.upsert(setupInput('nope', 'NOPE')))).toMatchObject({
+      code: 'not_found',
+    });
     const other = store.repos.projects.insert({ name: 'api', rootPath: '/home/user/api' });
-    expect(thrown(() => store.ws.projectSetup.upsert(setupInput(other.id, 'WEB')))).toMatchObject(
-      { code: 'conflict' },
-    );
+    expect(thrown(() => store.ws.projectSetup.upsert(setupInput(other.id, 'WEB')))).toMatchObject({
+      code: 'conflict',
+    });
   });
 
   it('a stored setup that no longer validates fails loudly on read', () => {
@@ -159,7 +159,11 @@ describe('check runs repository (P4-B)', () => {
         store.ws.checkRuns.insert(result({ projectId: store.projectId, agentRunId: helper.id })),
       ),
     ).toMatchObject({ code: 'invalid_input' });
-    const plain = store.orch.runs.insert({ projectId: store.projectId, title: 'P', budget: BUDGET });
+    const plain = store.orch.runs.insert({
+      projectId: store.projectId,
+      title: 'P',
+      budget: BUDGET,
+    });
     expect(
       thrown(() =>
         store.ws.checkRuns.insert(
@@ -178,12 +182,12 @@ describe('check runs repository (P4-B)', () => {
         ),
       ),
     ).toMatchObject({ code: 'invalid_input' });
-    expect(
-      thrown(() => store.ws.checkRuns.insert(result({ projectId: 'nope' }))),
-    ).toMatchObject({ code: 'not_found' });
+    expect(thrown(() => store.ws.checkRuns.insert(result({ projectId: 'nope' })))).toMatchObject({
+      code: 'not_found',
+    });
   });
 
-  it("deleting a run removes its checks; main-branch checks stay", () => {
+  it('deleting a run removes its checks; main-branch checks stay', () => {
     const store = setupWorkspace();
     const { run, helper } = ticketWithRun(store);
     store.ws.checkRuns.insert(

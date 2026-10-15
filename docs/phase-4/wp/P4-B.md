@@ -21,10 +21,11 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                    | Commit        | Checks |
-| ---------- | ------------------------------------------------ | ------------- | ------ |
-| 2026-10-13 | Claimed; branch `wp/p4-b-db` created from `main` | (this commit) | —      |
+| Date       | What was done                                                                                                                                                 | Commit        | Checks                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------- |
+| 2026-10-13 | Claimed; branch `wp/p4-b-db` created from `main`                                                                                                              | (this commit) | —                                                                         |
 | 2026-10-13 | WIP checkpoint after a usage-limit interruption: migration 0003, workspace repositories, runs `ticketId`, depth-2 agent runs; workspace tests not written yet | (this commit) | db tests 117/117 ✓; server tests have timeouts under load (being checked) |
+| 2026-10-15 | Workspace tests (tickets, plans, comments, setup, check runs), 0002 → 0003 upgrade test, README section; resumed from 584682d                                 | (this commit) | format ✓ lint ✓ typecheck ✓ test 1392/1392 ✓ build ✓                      |
 
 ## Handoff notes
 

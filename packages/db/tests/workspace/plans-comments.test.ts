@@ -174,9 +174,9 @@ describe('ticket comments repository (P4-B)', () => {
     expect(thrown(() => store.ws.comments.insert({ ...base, ticketId: 'nope' }))).toMatchObject({
       code: 'not_found',
     });
-    expect(
-      thrown(() => store.ws.comments.insert({ ...base, runId: other.run.id })),
-    ).toMatchObject({ code: 'not_found' });
+    expect(thrown(() => store.ws.comments.insert({ ...base, runId: other.run.id }))).toMatchObject({
+      code: 'not_found',
+    });
     expect(thrown(() => store.ws.comments.insert({ ...base, planId: otherPlan.id }))).toMatchObject(
       { code: 'not_found' },
     );
