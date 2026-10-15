@@ -111,15 +111,17 @@ export function validateContext(
 }
 
 export type DraftResult =
-  | { ok: true; request: UpdateProjectSetupRequest }
-  | { ok: false; errors: SetupErrors };
+  { ok: true; request: UpdateProjectSetupRequest } | { ok: false; errors: SetupErrors };
 
 /** The whole draft → the PUT body, or the sentences that say what to fix. */
 export function draftToRequest(
   draft: SetupDraft,
   candidates: readonly ContextCandidateDto[] | undefined,
 ): DraftResult {
-  const errors = { ...validateAgentFields(draft), ...validateContext(draft.contextFiles, candidates) };
+  const errors = {
+    ...validateAgentFields(draft),
+    ...validateContext(draft.contextFiles, candidates),
+  };
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   const model = draft.model.trim();
   const parsed = UpdateProjectSetupRequestSchema.safeParse({

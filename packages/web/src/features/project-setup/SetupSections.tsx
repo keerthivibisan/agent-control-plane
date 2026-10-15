@@ -4,13 +4,7 @@ import { useId } from 'react';
 import { CONTROL_COPY, PROJECT_SETUP_COPY, formatKiB } from '../../lib/copy';
 import type { QueryState } from '../../lib/query-store';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import {
-  CheckboxField,
-  ChoiceCards,
-  FixedSetting,
-  NumberChoice,
-  TextField,
-} from './fields';
+import { CheckboxField, ChoiceCards, FixedSetting, NumberChoice, TextField } from './fields';
 import {
   DEPTH_CHOICES,
   HELPER_CHOICES,
@@ -103,7 +97,8 @@ export function AllowlistFields({
   onChange,
   harness,
 }: Omit<SectionProps, 'errors'> & { harness: HarnessStatusDto | undefined }) {
-  const noHarness = harness !== undefined && (harness.state === 'none' || harness.state === 'invalid');
+  const noHarness =
+    harness !== undefined && (harness.state === 'none' || harness.state === 'invalid');
   return (
     <div className="flex flex-col gap-3">
       <CheckboxField
@@ -205,6 +200,7 @@ export function ContextPicker({
                   type="checkbox"
                   checked={chosen.has(r.path)}
                   onChange={(e) => toggle(r.path, e.target.checked)}
+                  aria-label={r.path}
                   className="size-4 shrink-0 accent-accent"
                 />
                 <span className="min-w-0 flex-1 truncate font-mono text-caption" title={r.path}>

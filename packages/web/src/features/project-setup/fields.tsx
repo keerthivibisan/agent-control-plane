@@ -286,7 +286,15 @@ export function CheckboxField({
 }
 
 /** A fixed setting shown read-only: "Plan first: On ✓". */
-export function FixedSetting({ label, value, hint }: { label: string; value: string; hint: string }) {
+export function FixedSetting({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="font-medium">{label}</span>

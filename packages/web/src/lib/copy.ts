@@ -1552,16 +1552,17 @@ export const PROJECT_SETUP_COPY = {
     readmeHint: 'Saved as README.md in the first commit. You can leave it empty.',
     readmePlaceholder: '# My new app\n\nWhat this project is for.',
     create: 'Create repository',
+    adding: 'Adding…',
     creating: 'Creating…',
     added: (name: string) => `${name} is added.`,
     addedText: 'Next, choose how agents work on it.',
-    createdText: 'A new git repository with a first commit on main. Next, choose how agents work on it.',
+    createdText:
+      'A new git repository with a first commit on main. Next, choose how agents work on it.',
     alreadyAdded:
       'This project is already added. Settings you choose next apply to it; to add a different one, start the wizard again.',
     errors: {
       parentMissing: 'Enter the folder to create the repository in.',
-      parentNotAbsolute:
-        'Use the full folder path, starting with / (for example /Users/me/code).',
+      parentNotAbsolute: 'Use the full folder path, starting with / (for example /Users/me/code).',
       nameMissing: 'Give the repository a name.',
       nameInvalid:
         'Use only letters, digits, dots, dashes and underscores, starting with a letter or digit (at most 100 characters).',
@@ -1618,8 +1619,7 @@ export const PROJECT_SETUP_COPY = {
     editHint:
       'Each helper works in its own copy of the project (a git worktree). Edits there never touch your files until you merge them.',
     checks: 'Let helpers run this project’s checks without asking',
-    checksHint:
-      'Only the exact check commands listed in the harness. Other commands still ask.',
+    checksHint: 'Only the exact check commands listed in the harness. Other commands still ask.',
     checksNoHarness: 'This takes effect once the project has a harness.',
     recorded: 'Every pre-approved action is still recorded with the run, so you can see it later.',
   },
@@ -1686,7 +1686,8 @@ export const PROJECT_SETUP_COPY = {
       'The AI work environment for this project: how agents work, what they may do without asking, what they read first, and its harness.',
     back: (name: string) => name,
     environment: 'AI work environment',
-    environmentDescription: 'Applies to runs started from now on. Running agents keep their settings.',
+    environmentDescription:
+      'Applies to runs started from now on. Running agents keep their settings.',
     save: 'Save changes',
     saving: 'Saving…',
     saved: 'Saved.',
@@ -1695,7 +1696,7 @@ export const PROJECT_SETUP_COPY = {
     saveFailed: "Your changes couldn't be saved.",
     danger: 'Danger zone',
     dangerText:
-      'Removing a project from this app never deletes its folder or its git history. It is refused while the project has tickets or runs. Removing projects isn’t available in the app yet.',
+      'Removing a project from this app isn’t available yet. When it is, it will never delete the folder or its git history, and it won’t be possible while the project has tickets or runs.',
     settingsLink: 'Settings',
   },
 } as const;
