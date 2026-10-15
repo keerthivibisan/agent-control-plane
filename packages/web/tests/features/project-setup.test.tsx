@@ -129,7 +129,8 @@ describe('New project wizard (#/projects/new)', () => {
     expect(within(notice).getByRole('link', { name: 'Open ticket' }).getAttribute('href')).toBe(
       '#/tickets/t-harness',
     );
-    expect(s.csrf).toEqual([CSRF, CSRF]);
+    // POST /api/projects (existing, Phase 1) takes no CSRF header; the setup PUT and ticket do.
+    expect(s.csrf).toEqual([null, CSRF, CSRF]);
 
     // Back keeps the project (no second POST); Finish opens the board.
     fireEvent.click(screen.getByRole('button', { name: 'Finish and open the board' }));

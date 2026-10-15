@@ -45,7 +45,7 @@ const STEP_TEXT: Record<StepKey, { title: string; description: string }> = {
 function Progress({ current }: { current: number }) {
   return (
     <nav aria-label={W.progressLabel} className="mb-6">
-      <ol className="flex flex-wrap items-center gap-x-2 gap-y-3">
+      <ol className="flex flex-wrap items-center gap-x-4 gap-y-3 xl:gap-x-2">
         {STEPS.map((key, i) => {
           const done = i < current;
           const active = i === current;
@@ -70,7 +70,7 @@ function Progress({ current }: { current: number }) {
               </span>
               <span className={active ? 'font-medium text-ink' : 'text-dim'}>{W.steps[key]}</span>
               {i < STEPS.length - 1 ? (
-                <span aria-hidden="true" className="mx-1 hidden h-px w-8 bg-line-strong sm:block" />
+                <span aria-hidden="true" className="mx-1 hidden h-px w-8 bg-line-strong xl:block" />
               ) : null}
             </li>
           );

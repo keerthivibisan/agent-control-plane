@@ -86,7 +86,7 @@ function EnvironmentForm({
       noValidate
       aria-label={C.settings.environment}
       onSubmit={(e) => void submit(e)}
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-8 [&>section+section]:border-t [&>section+section]:border-line [&>section+section]:pt-8"
     >
       <FormSection
         title={C.agents.title}
