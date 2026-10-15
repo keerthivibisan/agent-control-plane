@@ -67,13 +67,14 @@ export function capUtf8(text: string, maxBytes: number): string {
 }
 
 /**
- * The SDK system prompt for one agent. With project context (ADR-0012 amendment): Claude Code's own
- * prompt with the context appended, capped at `MAX_CONTEXT_BYTES`. Without it: unset, as in Phase 3
- * (the SDK then sends an empty system prompt).
+ * The SDK system prompt for one agent: always Claude Code's own prompt (coordinator decision
+ * 2026-10-13 — leaving it unset makes SDK 0.3.296 send an empty prompt, so agents would lack
+ * Claude Code's tool and safety guidance), with project context appended when there is any
+ * (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`.
  */
-export function systemPromptFor(spec: ManagedAgentSpec): Options['systemPrompt'] {
+export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['systemPrompt']> {
   const context = spec.context ?? '';
-  if (context.trim() === '') return undefined;
+  if (context.trim() === '') return { type: 'preset', preset: 'claude_code' };
   return { type: 'preset', preset: 'claude_code', append: capUtf8(context, MAX_CONTEXT_BYTES) };
 }
 
@@ -107,8 +108,7 @@ export function buildOptions(
       [LEAD_MCP_SERVER_NAME]: createLeadToolServer(spec.leadTools, toolNames),
     };
   }
-  const systemPrompt = systemPromptFor(spec);
-  if (systemPrompt !== undefined) options.systemPrompt = systemPrompt;
+  options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };

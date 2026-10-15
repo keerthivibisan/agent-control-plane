@@ -201,9 +201,10 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     }
   });
 
-  it('leaves the system prompt unset without context, or with blank context', () => {
-    expect(optionsFor(spec('worker'))).not.toHaveProperty('systemPrompt');
-    expect(optionsFor(spec('lead', { context: ' \n\t ' }))).not.toHaveProperty('systemPrompt');
+  it('always uses the Claude Code preset, without an append when context is missing or blank', () => {
+    const preset = { type: 'preset', preset: 'claude_code' };
+    expect(optionsFor(spec('worker')).systemPrompt).toEqual(preset);
+    expect(optionsFor(spec('lead', { context: ' \n\t ' })).systemPrompt).toEqual(preset);
   });
 
   it('caps the appended context at MAX_CONTEXT_BYTES without splitting a character', () => {
