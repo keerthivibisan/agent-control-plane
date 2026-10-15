@@ -40,7 +40,6 @@ import {
   CreateRepoProjectRequestSchema,
   HarnessStatusDtoSchema,
   ProjectAgentSetupDtoSchema,
-  TicketDtoSchema,
   UpdateProjectSetupRequestSchema,
 } from '@acp/core/api';
 
@@ -487,6 +486,8 @@ export async function moveTicket(client: ApiClient, ticketId: string, input: Mov
 /** POST /api/tickets/:id/start: creates a run for the ticket, which starts in Planning. */
 export function startTicket(client: ApiClient, ticketId: string) {
   return controlPost(client, boardPaths.start(ticketId), {}, TicketDetailDtoSchema);
+}
+
 // --- Project setup: wizard and settings (Phase 4, wp/p4-f-project-setup) ------------------------
 //
 // Served by P4-D (docs/phase-4/README.md §6.3). Every mutation sends the CSRF header like the

@@ -2,8 +2,6 @@ import type { AgentRunStatus, RunStatus, SessionStatus } from '@acp/core';
 import type { EventDto } from '@acp/core/api';
 import { formatCount } from './format';
 import type { TokenCategory } from './tokens';
-// Project setup (Phase 4, P4-F).
-import type { CheckRunStatus, HarnessState } from '@acp/core';
 
 /**
  * Every word the UI shows to explain itself, in one place (packages/web/DESIGN.md). Screens import
@@ -1362,23 +1360,6 @@ export const HARNESS_STATE_COPY: Readonly<Record<HarnessState, HarnessStateCopy>
   invalid: {
     word: 'Invalid',
     tip: "The checks file (.acp/harness.json) can't be read. Open the project setup to see why.",
-// --- New project wizard and project settings (Phase 4, wp/p4-f-project-setup) ------------------
-
-/** Harness states (docs/phase-4/README.md §3) as a word, a one-line explanation and a tone. */
-export const HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStatusCopy>> = {
-  ready: {
-    word: 'Ready',
-    tip: 'The project has a harness with at least one required check. Agents can verify their own changes, and a failed required check stops a plain merge.',
-    tone: 'done',
-  },
-  partial: {
-    word: 'Partial',
-    tip: 'The project has a harness, but none of its checks is required, so nothing has to pass before a merge. Mark at least one check as required.',
-    tone: 'waiting',
-  },
-  invalid: {
-    word: 'Invalid',
-    tip: "The project has a harness file (.acp/harness.json), but it can't be read. Fix the problems below; until then no checks run.",
     tone: 'problem',
   },
   none: {
@@ -1482,6 +1463,30 @@ export const BOARD_COPY = {
       text: 'There is no project at this address. It may have been removed.',
     },
   },
+} as const;
+
+// --- New project wizard and project settings (Phase 4, wp/p4-f-project-setup) ------------------
+import type { CheckRunStatus } from '@acp/core';
+
+/** Harness states (docs/phase-4/README.md §3) as a word, a one-line explanation and a tone. */
+export const SETUP_HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStatusCopy>> = {
+  ready: {
+    word: 'Ready',
+    tip: 'The project has a harness with at least one required check. Agents can verify their own changes, and a failed required check stops a plain merge.',
+    tone: 'done',
+  },
+  partial: {
+    word: 'Partial',
+    tip: 'The project has a harness, but none of its checks is required, so nothing has to pass before a merge. Mark at least one check as required.',
+    tone: 'waiting',
+  },
+  invalid: {
+    word: 'Invalid',
+    tip: "The project has a harness file (.acp/harness.json), but it can't be read. Fix the problems below; until then no checks run.",
+    tone: 'problem',
+  },
+  none: {
+    word: 'None',
     tip: "The project has no harness yet, so agents can't check their own work and nothing is checked before a merge. Let an agent build one with the ticket below.",
     tone: 'stopped',
   },

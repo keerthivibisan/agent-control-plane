@@ -5,7 +5,7 @@ import { Details } from '../../components/Details';
 import { CheckIcon } from '../../components/icons';
 import { RelativeTime } from '../../components/RelativeTime';
 import { createHarnessTicket, isProjectSetupPath, runHarnessChecks } from '../../lib/api';
-import { CHECK_STATUS_COPY, HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
+import { CHECK_STATUS_COPY, SETUP_HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
 import { formatDuration } from '../../lib/format';
 import { ActionError, StatusWord } from '../control/bits';
 import { useSetupAction } from './actions';
@@ -15,7 +15,7 @@ const H = PROJECT_SETUP_COPY.harness;
 
 /** Harness status in words with its explanation, and the problems as a list of sentences. */
 export function HarnessStatusView({ harness }: { harness: HarnessStatusDto }) {
-  const copy = HARNESS_STATE_COPY[harness.state];
+  const copy = SETUP_HARNESS_STATE_COPY[harness.state];
   return (
     <div className="flex flex-col gap-3" data-testid="harness-status">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
