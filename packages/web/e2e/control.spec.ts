@@ -87,9 +87,9 @@ async function showOnMain(request: APIRequestContext, path: string): Promise<str
   return ((await res.json()) as { content: string | null }).content;
 }
 
-/** Owner: start a run from #/control and return its id. */
+/** Owner: start a run from #/control/new (P4-G: #/control opens the board) and return its id. */
 async function startRun(page: Page, text: string, budget?: string): Promise<string> {
-  await page.goto('/#/control');
+  await page.goto('/#/control/new');
   const form = page.getByTestId('start-run');
   await form.getByLabel('Project').selectOption({ label: 'e2e-app' });
   await form.getByLabel('What should the agents do?').fill(text);
@@ -98,7 +98,7 @@ async function startRun(page: Page, text: string, budget?: string): Promise<stri
     await form.getByLabel('Budget per agent').fill(budget);
   }
   await form.getByRole('button', { name: 'Start run' }).click();
-  await expect(page).toHaveURL(/#\/control\/[^/]+$/);
+  await expect(page).toHaveURL(/#\/control\/(?!new$)[^/]+$/);
   const runId = /#\/control\/([^/]+)$/.exec(page.url())?.[1];
   if (runId === undefined) throw new Error('no run id in the URL');
   return runId;

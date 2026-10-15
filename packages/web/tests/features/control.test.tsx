@@ -475,9 +475,10 @@ describe('control panel: a run', () => {
 });
 
 describe('control panel: navigation', () => {
-  it('is in the sidebar and opens at #/control', async () => {
+  // Phase 4 (P4-G): `#/control` opens the board; the start page stays at `#/control/new`.
+  it('is in the sidebar and opens the start page at #/control/new', async () => {
     const s = server({ '/api/runs': [] });
-    window.location.hash = '#/control';
+    window.location.hash = '#/control/new';
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const link = within(nav).getByRole('link', { name: 'Control panel' });

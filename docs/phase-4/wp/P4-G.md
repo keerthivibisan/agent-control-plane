@@ -3,28 +3,29 @@
 > Progress file for P4-G. Only the agent working on P4-G edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                                   |
-| ------- | ------------------------------------------------------- |
-| Status  | in-progress                                             |
-| Owner   | frontend agent                                          |
-| Branch  | `wp/p4-g-ticket`                                        |
-| Started | 2026-10-15                                              |
-| Updated | 2026-10-15                                              |
+| Field   | Value            |
+| ------- | ---------------- |
+| Status  | in-progress      |
+| Owner   | frontend agent   |
+| Branch  | `wp/p4-g-ticket` |
+| Started | 2026-10-15       |
+| Updated | 2026-10-16       |
 
 ## Tasks
 
-- [ ] Route #/tickets/:id; #/control redirects to the board
-- [ ] Agent tree canvas with per-agent cards (role, status, branch, budget bar, activity, prompt box, Stop)
-- [ ] Side panel tabs: Chat, Activity, Changes, Checks, Approvals, Details
-- [ ] Plan review card (approve / request changes with comment, versions)
-- [ ] Merge / merge-anyway (reason) / discard; run history
+- [x] Route #/tickets/:id; #/control redirects to the board
+- [x] Agent tree canvas with per-agent cards (role, status, branch, budget bar, activity, prompt box, Stop)
+- [x] Side panel tabs: Chat, Activity, Changes, Checks, Approvals, Details
+- [x] Plan review card (approve / request changes with comment, versions)
+- [x] Merge / merge-anyway (reason) / discard; run history
 - [ ] Fixture tests; screenshots; pnpm check + e2e green
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
-| 2026-10-15 | Claimed P4-G; branch `wp/p4-g-ticket` from `main` | (this commit) | docs only |
+| Date       | What was done                                                                                                                                                           | Commit        | Checks                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
+| 2026-10-15 | Claimed P4-G; branch `wp/p4-g-ticket` from `main`                                                                                                                       | `58ad08a`     | docs only                                            |
+| 2026-10-16 | Ticket page: route, `#/control` → board (start page kept at `#/control/new`), canvas, side panel, plan card, checks, merge-anyway, history; typed client; fixture tests | (this commit) | format ✓ lint ✓ typecheck ✓ test 1407/1407 ✓ build ✓ |
 
 ## Handoff notes
 

@@ -42,6 +42,13 @@ import {
   ProjectAgentSetupDtoSchema,
   UpdateProjectSetupRequestSchema,
 } from '@acp/core/api';
+// Ticket page (Phase 4, P4-G). `CheckRunDtoSchema` and `TicketDetailDtoSchema` are imported above.
+import {
+  PlanDecisionRequestSchema,
+  TicketCommentDtoSchema,
+  TicketCommentRequestSchema,
+  UpdateTicketRequestSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -130,12 +137,20 @@ export interface ApiClient {
     signal?: AbortSignal,
     headers?: Record<string, string>,
   ): Promise<T>;
+  /** Like `post`, with PATCH (Phase 4: `PATCH /api/tickets/:id`). */
+  patch<T>(
+    path: string,
+    body: unknown,
+    schema: Schema<T>,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<T>;
 }
 
 /** Typed fetch client: every response body is parsed with its DTO schema before the UI sees it. */
 export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, init)): ApiClient {
   async function request<T>(
-    method: 'GET' | 'POST' | 'PUT',
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH',
     path: string,
     schema: Schema<T>,
     body: unknown,
@@ -218,6 +233,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       request('POST', path, schema, body, signal, headers),
     put: (path, body, schema, signal, headers) =>
       request('PUT', path, schema, body, signal, headers),
+    patch: (path, body, schema, signal, headers) =>
+      request('PATCH', path, schema, body, signal, headers),
   };
 }
 
@@ -600,4 +617,123 @@ export function getContextCandidates(client: ApiClient, projectId: string, signa
     projectSetupSchemas.contextCandidates,
     signal,
   );
+}
+
+// --- Ticket page (Phase 4, wp/p4-g-ticket) ------------------------------------------------------
+//
+// Routes from docs/phase-4/README.md §6.3, served by P4-D. Assumed response bodies (proposed to
+// P4-D): PATCH /tickets/:id, POST /tickets/:id/start and POST /tickets/:id/plans/:planId/decision →
+// TicketDetailDto; POST /tickets/:id/comments → TicketCommentDto; GET /runs/:id/checks and
+// POST /runs/:id/agents/:agentId/checks → CheckRunDto[]. The Phase 3 route
+// POST /runs/:id/agents/:agentId/message → AgentRunDto. Every mutation sends the CSRF header.
+
+export type UpdateTicketRequest = ReturnType<typeof UpdateTicketRequestSchema.parse>;
+export type TicketCommentRequest = ReturnType<typeof TicketCommentRequestSchema.parse>;
+export type PlanDecisionRequest = ReturnType<typeof PlanDecisionRequestSchema.parse>;
+
+export const ticketPaths = {
+  ticket: (id: string) => `${API_BASE}/tickets/${enc(id)}`,
+  comments: (id: string) => `${API_BASE}/tickets/${enc(id)}/comments`,
+  planDecision: (id: string, planId: string) =>
+    `${API_BASE}/tickets/${enc(id)}/plans/${enc(planId)}/decision`,
+  start: (id: string) => `${API_BASE}/tickets/${enc(id)}/start`,
+  runChecks: (runId: string) => `${API_BASE}/runs/${enc(runId)}/checks`,
+  agentChecks: (runId: string, agentId: string) =>
+    `${API_BASE}/runs/${enc(runId)}/agents/${enc(agentId)}/checks`,
+  agentMessage: (runId: string, agentId: string) =>
+    `${API_BASE}/runs/${enc(runId)}/agents/${enc(agentId)}/message`,
+} as const;
+
+export const ticketSchemas = {
+  detail: TicketDetailDtoSchema,
+  checks: CheckRunDtoSchema.array(),
+} as const;
+
+/** True for every cached ticket and run path, so a ticket-page mutation refetches just those. */
+export function isTicketPagePath(key: string): boolean {
+  return key.startsWith(`${API_BASE}/tickets`) || isControlPath(key);
+}
+
+/** A PATCH with the `X-ACP-CSRF` header; a 403 fetches a fresh token and retries once. */
+async function controlPatch<T>(
+  client: ApiClient,
+  path: string,
+  body: unknown,
+  schema: Schema<T>,
+): Promise<T> {
+  const send = async (fresh: boolean) =>
+    client.patch(path, body, schema, undefined, { [CSRF_HEADER]: await csrfToken(client, fresh) });
+  try {
+    return await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** PATCH /api/tickets/:id: title, description, type, priority or labels. */
+export async function updateTicket(
+  client: ApiClient,
+  ticketId: string,
+  input: UpdateTicketRequest,
+) {
+  const path = ticketPaths.ticket(ticketId);
+  return controlPatch(
+    client,
+    path,
+    checked(UpdateTicketRequestSchema, input, path),
+    TicketDetailDtoSchema,
+  );
+}
+
+/** POST /api/tickets/:id/comments: an owner comment on the ticket. */
+export async function addTicketComment(
+  client: ApiClient,
+  ticketId: string,
+  input: TicketCommentRequest,
+) {
+  const path = ticketPaths.comments(ticketId);
+  return controlPost(
+    client,
+    path,
+    checked(TicketCommentRequestSchema, input, path),
+    TicketCommentDtoSchema,
+  );
+}
+
+/** Approve the lead's plan, or send it back with a comment (required) for a new version. */
+export async function decidePlan(
+  client: ApiClient,
+  ticketId: string,
+  planId: string,
+  input: PlanDecisionRequest,
+) {
+  const path = ticketPaths.planDecision(ticketId, planId);
+  return controlPost(
+    client,
+    path,
+    checked(PlanDecisionRequestSchema, input, path),
+    TicketDetailDtoSchema,
+  );
+}
+
+/** POST /api/tickets/:id/start: a new run for the ticket (first start or re-run), in Planning. */
+export function rerunTicket(client: ApiClient, ticketId: string) {
+  return controlPost(client, ticketPaths.start(ticketId), {}, TicketDetailDtoSchema);
+}
+
+/** Runs the harness checks again in one helper agent's copy of the project. */
+export function runAgentChecks(client: ApiClient, runId: string, agentId: string) {
+  return controlPost(client, ticketPaths.agentChecks(runId, agentId), {}, ticketSchemas.checks);
+}
+
+/** A message to one agent, sent through the engine's `message_agent` (Phase 3 route). */
+export async function messageAgent(
+  client: ApiClient,
+  runId: string,
+  agentId: string,
+  input: ChatRequest,
+) {
+  const path = ticketPaths.agentMessage(runId, agentId);
+  return controlPost(client, path, checked(ChatRequestSchema, input, path), AgentRunDtoSchema);
 }

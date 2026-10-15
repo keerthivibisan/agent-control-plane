@@ -1706,3 +1706,269 @@ export const PROJECT_SETUP_COPY = {
     settingsLink: 'Settings',
   },
 } as const;
+
+// --- Ticket page (Phase 4, wp/p4-g-ticket) ------------------------------------------------------
+//
+// Kept inside this section (imports are hoisted). `TicketStage` and `CheckRunStatus` are imported
+// by the board and project-setup sections above; check results use `CHECK_STATUS_COPY` from there.
+import type { TicketPlanStatus } from '@acp/core';
+
+/**
+ * A ticket's board stage (README §6.2) with a tone for the status pill. The word is the board
+ * column's, so a ticket reads the same on the board and on its page. Never "completed".
+ */
+export const TICKET_STAGE_COPY: Readonly<Record<TicketStage, ControlStatusCopy>> = {
+  BACKLOG: {
+    word: STAGE_COPY.BACKLOG.word,
+    tip: 'Not planned yet. Move it to Ready on the board when it should be worked on.',
+    tone: 'stopped',
+  },
+  READY: {
+    word: STAGE_COPY.READY.word,
+    tip: 'Ready to start. Start lets the agents work on it.',
+    tone: 'waiting',
+  },
+  PLANNING: {
+    word: STAGE_COPY.PLANNING.word,
+    tip: 'The lead agent is reading the code and writing a plan for you to approve.',
+    tone: 'working',
+  },
+  PLAN_REVIEW: {
+    word: STAGE_COPY.PLAN_REVIEW.word,
+    tip: "Read the lead agent's plan, then approve it or say what should change. No helper starts before that.",
+    tone: 'waiting',
+  },
+  WORKING: {
+    word: STAGE_COPY.WORKING.word,
+    tip: 'Helper agents are working on the plan.',
+    tone: 'working',
+  },
+  NEEDS_YOU: {
+    word: STAGE_COPY.NEEDS_YOU.word,
+    tip: 'An agent asked for something and waits for your answer.',
+    tone: 'waiting',
+  },
+  IN_REVIEW: {
+    word: STAGE_COPY.IN_REVIEW.word,
+    tip: "The agents have stopped. Look at each helper agent's changes and checks, then merge or discard them.",
+    tone: 'waiting',
+  },
+  DONE: { word: STAGE_COPY.DONE.word, tip: 'Every change was merged or discarded.', tone: 'done' },
+  CANCELLED: { word: STAGE_COPY.CANCELLED.word, tip: 'This ticket was cancelled.', tone: 'stopped' },
+};
+
+export const PLAN_STATUS_COPY: Readonly<Record<TicketPlanStatus, string>> = {
+  proposed: 'Waiting for your decision',
+  approved: 'Approved',
+  'changes-requested': 'You asked for changes',
+  superseded: 'Replaced by a newer version',
+};
+
+export const TICKET_COPY = {
+  loading: 'Loading the ticket…',
+  backToBoard: 'Board',
+  openBoard: 'Open board',
+  description:
+    'The agents working on this ticket, what each one is doing, and what waits for you. Nothing changes in your project until you merge.',
+  notFound: {
+    title: 'Ticket not found',
+    text: 'There is no ticket at this address.',
+  },
+  type: { feature: 'Feature', bug: 'Bug', chore: 'Chore', harness: 'Harness' },
+  priority: {
+    low: 'Low priority',
+    medium: 'Medium priority',
+    high: 'High priority',
+    urgent: 'Urgent',
+  },
+  summary: {
+    agents: (n: number) => `${formatCount(n)} ${n === 1 ? 'agent' : 'agents'}`,
+    needsYou: (n: number) =>
+      `${formatCount(n)} ${n === 1 ? 'request waits' : 'requests wait'} for you`,
+    budget: (n: number) => `${formatCount(n)} budget tokens used`,
+    noRun: 'No run yet',
+  },
+  runPicker: {
+    label: 'Run',
+    option: (n: number, total: number, status: string) => `Run ${n} of ${total} · ${status}`,
+    earlier: 'You are looking at an earlier run of this ticket.',
+    backToLatest: 'Show the latest run',
+  },
+  lastRun: {
+    FAILED: 'The last run failed. You can start a new one.',
+    CANCELLED: 'The last run was stopped. You can start a new one.',
+  },
+  actions: {
+    start: 'Start',
+    rerun: 'Re-run',
+    starting: 'Starting…',
+    startFailed: "The run didn't start.",
+    rerunTip: 'Starts a new run on this ticket. Earlier runs stay in its history.',
+  },
+  canvas: {
+    title: 'Agents',
+    description: 'The lead agent at the top, the helper agents it started beneath it.',
+    noAgents: 'No agents yet. The lead agent appears here once the run starts.',
+    planning:
+      'The lead agent is reading the code (without changing anything) and writing a plan. You approve the plan before any helper agent starts.',
+    noHelpers: 'No helper agents yet. The lead agent starts them as the plan says.',
+    select: (role: string) => `Show the ${role} in the side panel`,
+    branchUnknown: 'Branch shown once it has changes',
+    needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'request' : 'requests'} for you`,
+    withHelpers: (n: string) => `With its helpers: ${n} budget tokens`,
+    messagePlaceholderLead: 'Message the lead…',
+    messagePlaceholder: 'Message this agent…',
+    messageLabel: (role: string) => `Message to the ${role}`,
+    send: 'Send',
+    sending: 'Sending…',
+    sendFailed: "Your message wasn't sent.",
+    tooLong: 'Keep it under 8,000 characters.',
+  },
+  panel: {
+    label: 'Selected agent',
+    tabs: {
+      chat: 'Chat',
+      activity: 'Activity',
+      changes: 'Changes',
+      checks: 'Checks',
+      approvals: 'Approvals',
+      details: 'Details',
+    },
+  },
+  activity: {
+    title: 'Activity',
+    description: 'What this agent did, newest first. Only what happened, never what was said.',
+    latest: 'Latest',
+    noSession:
+      'This agent is not linked to a Claude Code session yet, so only its latest activity is known.',
+    empty: 'Nothing recorded yet.',
+    loading: 'Loading activity…',
+    openSession: 'Open its session for everything',
+  },
+  changes: {
+    title: 'Changes',
+    leadNone: 'The lead agent never changes files. Its helper agents do, each in its own copy.',
+    notYet: 'Changes are shown here once this agent has stopped.',
+    noReview: 'No changes recorded for this agent.',
+    loading: 'Loading changes…',
+    blocked: (names: string) =>
+      `A required check failed (${names}), so Merge is blocked. Ask the agents to fix it, or merge anyway with a reason.`,
+    checksPending: 'The checks have not run on these changes yet.',
+    mergeAnyway: 'Merge anyway…',
+    mergeAnywayTitle: 'Merge although a required check failed',
+    reasonLabel: 'Why merge anyway?',
+    reasonHint: 'Required. It is kept with the review.',
+    reasonPlaceholder: 'For example: the build fails on main too; fixed in WEB-15.',
+    reasonTooLong: 'Keep the reason under 500 characters.',
+    confirmMergeAnyway: 'Merge anyway',
+    cancel: 'Cancel',
+  },
+  checks: {
+    title: 'Checks',
+    description:
+      "The project's harness checks, run in this agent's copy of the project before you merge.",
+    tip: "The commands in the project's harness (.acp/harness.json), such as tests, lint and build. Required checks must pass before you merge.",
+    none: 'No checks have run for this agent yet.',
+    leadNone: "Checks run on helper agents' changes, not on the lead agent.",
+    required: 'Required',
+    optional: 'Optional',
+    duration: (d: string) => `took ${d}`,
+    exitCode: (n: number) => `exit status ${n}`,
+    noExitCode: 'no exit status',
+    output: 'Output (last lines)',
+    noOutput: 'No output.',
+    earlier: (n: number) => `Earlier check runs (${formatCount(n)})`,
+    summary: (passed: number, total: number) =>
+      `${formatCount(passed)} of ${formatCount(total)} ${total === 1 ? 'check' : 'checks'} passed`,
+    runAgain: 'Run checks again',
+    running: 'Running…',
+    runFailed: "The checks didn't run.",
+  },
+  approvals: {
+    none: 'No requests from this agent.',
+  },
+  details: {
+    agentId: 'Agent id',
+    runId: 'Run id',
+    kind: 'Kind',
+    session: 'Claude Code session',
+    noSession: 'Not linked yet',
+    branch: 'Branch',
+    baseBranch: 'Merges into',
+    branchUnknown: 'Not known yet',
+    model: 'Model',
+    started: 'Started',
+    ended: 'Ended',
+    notEnded: 'Not ended',
+    cost: 'Estimated cost',
+    task: 'Task',
+    noTask: 'None',
+  },
+  review: {
+    title: 'Ready for your review',
+    description:
+      'The agents have stopped. Open each helper agent to look at its changes and checks, then merge or discard.',
+    open: 'Review',
+    files: (n: number | null) =>
+      n === null ? 'Files not counted' : `${formatCount(n)} changed ${n === 1 ? 'file' : 'files'}`,
+    checksFailed: 'A required check failed',
+    checksPassed: 'Required checks passed',
+    checksNone: 'Checks not run yet',
+  },
+  plan: {
+    title: 'Plan',
+    version: (n: number) => `Version ${formatCount(n)}`,
+    helpers: (n: number) => `${formatCount(n)} helper ${n === 1 ? 'agent' : 'agents'} planned`,
+    stepRole: 'Done by',
+    intro:
+      'The lead agent read the code and proposes this plan. No helper agent starts until you approve it.',
+    approve: 'Approve plan',
+    approving: 'Approving…',
+    requestChanges: 'Request changes',
+    sending: 'Sending…',
+    commentLabel: 'What should change?',
+    commentHint:
+      'Required when you request changes. The lead agent gets it and writes a new version.',
+    commentPlaceholder:
+      'For example: keep the old settings page; add the toggle to the header instead.',
+    commentRequired: 'Say what should change.',
+    failed: "Your decision wasn't saved.",
+    earlier: (n: number) => `Earlier versions (${formatCount(n)})`,
+    yourComment: 'Your comment',
+    waitingNewVersion: 'The lead agent is writing a new version of the plan.',
+  },
+  ticket: {
+    title: 'Ticket',
+    description: 'Description',
+    noDescription: 'No description.',
+    edit: 'Edit',
+    save: 'Save',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    titleLabel: 'Title',
+    saveFailed: "Your changes weren't saved.",
+    created: 'Created',
+    ticketId: 'Ticket id',
+  },
+  comments: {
+    title: 'Comments',
+    empty: 'No comments yet.',
+    you: 'You',
+    lead: 'Lead agent',
+    onPlan: (v: number) => `on plan version ${formatCount(v)}`,
+    label: 'Add a comment',
+    placeholder: 'Write a comment…',
+    add: 'Comment',
+    adding: 'Saving…',
+    failed: "Your comment wasn't saved.",
+  },
+  history: {
+    plans: 'Plan history',
+    noPlans: 'No plans yet.',
+    runs: 'Runs',
+    noRuns: 'Not started yet.',
+    run: (n: number) => `Run ${formatCount(n)}`,
+    show: 'Show',
+    showing: 'Shown above',
+  },
+} as const;

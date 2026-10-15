@@ -17,6 +17,8 @@ import { browserEventSource, useEventStream, type EventSourceFactory } from '../
 import { UsageAnalytics } from '../features/usage/UsageAnalytics';
 import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../features/project-setup/ProjectSettings';
+import { LEGACY_START_RUN, RedirectTo } from '../features/ticket/redirect';
+import { TicketPage } from '../features/ticket/TicketPage';
 import { Shell } from './Shell';
 
 function Screen({ route }: { route: Route }) {
@@ -38,13 +40,19 @@ function Screen({ route }: { route: Route }) {
     case 'usage':
       return <UsageAnalytics search={route.params} />;
     case 'control':
-      return <ControlPanel key={route.runId ?? ''} runId={route.runId} />;
+      // Phase 4 (P4-G): the control panel folds into the board and the ticket page (README §5.1).
+      // A run's own page stays; the Phase 3 start page stays at `#/control/new`.
+      if (route.runId === null) return <RedirectTo hash={href.board()} />;
+      if (route.runId === LEGACY_START_RUN) return <ControlPanel key="" runId={null} />;
+      return <ControlPanel key={route.runId} runId={route.runId} />;
     case 'board':
       return <BoardPage key={route.projectId ?? ''} projectId={route.projectId} />;
     case 'project-new':
       return <NewProjectWizard />;
     case 'project-settings':
       return <ProjectSettings key={route.id} id={route.id} />;
+    case 'ticket':
+      return <TicketPage key={route.id} id={route.id} />;
     case 'not-found':
       return (
         <EmptyState

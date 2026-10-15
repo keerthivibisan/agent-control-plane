@@ -4,7 +4,7 @@ import { useMemo, useSyncExternalStore } from 'react';
  * Hash routes (no router dependency): `#/`, `#/sessions`, `#/sessions/:id`, `#/projects`,
  * `#/projects/:id`, `#/usage` (the "Tokens" page), `#/setup`, `#/health` (the "Data health" page),
  * `#/control` and `#/control/:runId` (the control panel), `#/board` and `#/board/:projectId` (the
- * Phase 4 board; without an id it opens the last used project).
+ * Phase 4 board; without an id it opens the last used project), `#/tickets/:id` (the ticket page).
  */
 export type Route =
   | { name: 'home' }
@@ -20,6 +20,8 @@ export type Route =
   // Phase 4 (P4-F): the new project wizard and a project's settings.
   | { name: 'project-new' }
   | { name: 'project-settings'; id: string }
+  // Phase 4 (P4-G): the ticket page.
+  | { name: 'ticket'; id: string }
   | { name: 'not-found'; hash: string };
 
 function decode(segment: string): string | null {
@@ -61,6 +63,11 @@ export function parseRoute(hash: string): Route {
   if (head === 'board' && id !== undefined) {
     const decoded = decode(id);
     if (decoded) return { name: 'board', projectId: decoded };
+  }
+  // Phase 4 (P4-G): `#/tickets/:id`.
+  if (head === 'tickets' && id !== undefined) {
+    const decoded = decode(id);
+    if (decoded) return { name: 'ticket', id: decoded };
   }
   if (head === 'sessions' && id !== undefined) {
     const decoded = decode(id);
