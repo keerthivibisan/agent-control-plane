@@ -1,5 +1,6 @@
 import { ButtonLink } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { BoardPage } from '../features/board/BoardPage';
 import { CommandCenter } from '../features/command-center/CommandCenter';
 import { ControlPanel } from '../features/control/ControlPanel';
 import { DataHealthPage } from '../features/health/DataHealthPage';
@@ -36,6 +37,8 @@ function Screen({ route }: { route: Route }) {
       return <UsageAnalytics search={route.params} />;
     case 'control':
       return <ControlPanel key={route.runId ?? ''} runId={route.runId} />;
+    case 'board':
+      return <BoardPage key={route.projectId ?? ''} projectId={route.projectId} />;
     case 'not-found':
       return (
         <EmptyState

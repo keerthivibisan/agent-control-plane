@@ -14,9 +14,10 @@ import {
   type IconProps,
 } from '../components/icons';
 import { Tooltip } from '../components/Tooltip';
+import { BoardIcon } from '../features/board/icons';
 import { ControlIcon } from '../features/control/bits';
 import { paths, schemas } from '../lib/api';
-import { APP_NAME, CONNECTION_COPY, CONTROL_COPY, NAV_LABELS } from '../lib/copy';
+import { APP_NAME, BOARD_COPY, CONNECTION_COPY, CONTROL_COPY, NAV_LABELS } from '../lib/copy';
 import { useApiQuery } from '../lib/query';
 import { href, type Route } from '../lib/router';
 import { useTheme, type ThemePreference } from '../lib/theme';
@@ -30,6 +31,7 @@ interface NavItem {
 }
 
 const PRIMARY: readonly NavItem[] = [
+  { label: BOARD_COPY.nav, to: href.board(), icon: BoardIcon, match: ['board'] },
   { label: NAV_LABELS.overview, to: href.home(), icon: OverviewIcon, match: ['home'] },
   { label: CONTROL_COPY.nav, to: href.control(), icon: ControlIcon, match: ['control'] },
   {

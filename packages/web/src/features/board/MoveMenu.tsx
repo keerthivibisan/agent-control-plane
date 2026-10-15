@@ -66,7 +66,7 @@ export function MoveMenu({
       className="relative"
       onBlur={(e) => {
         // Close when focus leaves the button and the menu (a click elsewhere, or Tab away).
-        if (open && !e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+        if (open && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
       }}
     >
       <button
