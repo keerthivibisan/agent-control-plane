@@ -9,7 +9,9 @@
 
 > **Phase 4 (2026-10-13 onward): start at [`docs/phase-4/README.md`](docs/phase-4/README.md)** — the
 > Agent Workspace plan (board, projects, tickets, harness), its work packages, prompts and the
-> progress protocol. `docs/phase-4/STATUS.md` shows what is done. This HANDOFF covers Phases 1–3.
+> progress protocol. `docs/phase-4/STATUS.md` shows what is done, the live branch heads, the notes P4-D needs and the
+> open decisions (last updated 2026-10-16, when the owner paused work). This HANDOFF covers
+> Phases 1–3.
 
 - **What it is.** A local-first control plane that observes Claude Code sessions (and later Codex),
   shows what agents are doing, which session spawned which helper agent, and how many tokens each
