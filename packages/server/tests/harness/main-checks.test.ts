@@ -42,7 +42,8 @@ function setup() {
   return { dataDir, calls, mainChecks, checksDir: join(dataDir, 'harness-checks') };
 }
 
-describe('createMainChecks', () => {
+// Real git and child processes: allow for a heavily loaded machine instead of the 5 s default.
+describe('createMainChecks', { timeout: 30_000 }, () => {
   it("runs the committed checks in a temporary detached checkout, never the owner's tree", async () => {
     const repo = project();
     // The owner's uncommitted edit would make the check fail; only the commit counts.

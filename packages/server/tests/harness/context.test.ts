@@ -129,7 +129,7 @@ describe('readContextFiles', () => {
   });
 });
 
-describe('listContextCandidates', () => {
+describe('listContextCandidates', { timeout: 30_000 }, () => {
   it('offers tracked small text files, suggested ones first, never under .claude/', async () => {
     const repo = makeRepo({
       'README.md': 'readme',

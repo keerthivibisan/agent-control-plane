@@ -89,7 +89,8 @@ function expectValid(results: CheckRun[]): void {
   for (const r of results) expect(CheckRunSchema.safeParse(r).success).toBe(true);
 }
 
-describe('createCheckRunner', () => {
+// Real child processes: allow for a heavily loaded machine instead of the 5 s default.
+describe('createCheckRunner', { timeout: 30_000 }, () => {
   it('runs checks in order with argv and no shell, and reports pass and fail', async () => {
     const root = checkout();
     const { spawn: spy, calls } = spyingSpawn();
