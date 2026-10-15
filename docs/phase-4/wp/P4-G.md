@@ -5,11 +5,11 @@
 
 | Field   | Value                                                   |
 | ------- | ------------------------------------------------------- |
-| Status  | todo                                                    |
+| Status  | in-progress                                             |
 | Owner   | frontend agent                                          |
-| Branch  | `wp/p4-g-ticket` (create from `main` when you claim it) |
-| Started | —                                                       |
-| Updated | —                                                       |
+| Branch  | `wp/p4-g-ticket`                                        |
+| Started | 2026-10-15                                              |
+| Updated | 2026-10-15                                              |
 
 ## Tasks
 
@@ -24,6 +24,7 @@
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-15 | Claimed P4-G; branch `wp/p4-g-ticket` from `main` | (this commit) | docs only |
 
 ## Handoff notes
 
