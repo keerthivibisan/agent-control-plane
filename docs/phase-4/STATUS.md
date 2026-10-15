@@ -97,8 +97,8 @@ binary first on `PATH` (e.g. a shim dir linking `/usr/local/bin/pnpm`). Run the 
 
 > You are the Phase 4 coordinator for Agent Control Plane. Follow `CLAUDE.md`, `AGENTS.md` and
 > `docs/phase-4/README.md` (§9 progress protocol, §10.2 review loop). Read `docs/phase-4/STATUS.md`
-> fully. Then, in order: (1) fast-forward merge `wp/p4-f-project-setup` after re-running
-> `pnpm check`; (2) settle open decisions 1 and 2 as coordinator commits; (3) start P4-D in a new
+> fully. Then, in order: (1) rebase `wp/p4-f-project-setup` on `main` (docs-only change since), re-run
+> `pnpm check` and fast-forward merge it; (2) settle open decisions 1 and 2 as coordinator commits; (3) start P4-D in a new
 > worktree on `wp/p4-d-server` with the README §10.1 prompt plus "Notes P4-D must take in";
 > (4) resume P4-G from its branch and progress file; (5) review and merge each as it reaches
 > `review`, updating this file after every merge. Never push, never use ports 7420/5173, and ask
