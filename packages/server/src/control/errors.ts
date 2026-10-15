@@ -26,6 +26,9 @@ const REFUSAL_STATUS: Readonly<Record<RefusalCode, number>> = {
   'review-not-allowed': 409,
   'illegal-transition': 409,
   'duplicate-id': 409,
+  'plan-not-approved': 409,
+  'plan-not-found': 404,
+  'plan-not-pending': 409,
 };
 
 const snake = (code: string): string => code.replaceAll('-', '_');

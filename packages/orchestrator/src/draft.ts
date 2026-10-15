@@ -135,7 +135,12 @@ export class Draft {
    * Ends an agent and everything below it, descendants first (ADR-0013 amendment: "Stop all stops
    * descendants first"), so a parent helper cannot start replacements while its children stop.
    */
-  endAgentTree(agent: EngineAgent, to: AgentRunStatus, abort: boolean, seen = new Set<string>()): void {
+  endAgentTree(
+    agent: EngineAgent,
+    to: AgentRunStatus,
+    abort: boolean,
+    seen = new Set<string>(),
+  ): void {
     if (seen.has(agent.id)) return;
     seen.add(agent.id);
     for (const child of childrenOf(this, agent.id)) this.endAgentTree(child, to, abort, seen);

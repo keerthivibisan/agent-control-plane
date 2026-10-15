@@ -72,6 +72,9 @@ export function agentRollUp(
     pendingApprovals: state.approvals.filter((a) => a.status === 'pending' && ids.has(a.agentRunId))
       .length,
     budgetTokensUsed: agent.budgetTokensUsed,
-    subtreeBudgetTokensUsed: below.reduce((sum, a) => sum + a.budgetTokensUsed, agent.budgetTokensUsed),
+    subtreeBudgetTokensUsed: below.reduce(
+      (sum, a) => sum + a.budgetTokensUsed,
+      agent.budgetTokensUsed,
+    ),
   };
 }

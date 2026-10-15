@@ -1,9 +1,11 @@
 # @acp/orchestrator
 
-**Owner:** work package P3-A (see [docs/implementation-plan.md](/docs/implementation-plan.md), Phase 3).
+**Owner:** work package P3-A (see [docs/implementation-plan.md](/docs/implementation-plan.md), Phase 3);
+Phase 4 extensions by P4-A ([docs/phase-4/README.md](/docs/phase-4/README.md)).
 
-**Status:** [implemented] the M1 engine (P3-A). The engine is not yet wired into the server; that is
-P3-D.
+**Status:** [implemented] the M1 engine (P3-A), wired into the server by P3-D. [implemented] the
+Phase 4 engine (P4-A): plan-first ticket runs, per-run limits, depth 2 and allowlist evaluation. The
+server wiring for Phase 4 is P4-D.
 
 ## Responsibility
 
@@ -36,7 +38,7 @@ Every command is a pure function: `(state, input, ctx) → EngineResult`.
 
 | Command                                                         | When                                                             |
 | --------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `createRun(input, ctx)`                                         | `POST /api/runs`; refuses an unregistered project                |
+| `createRun(input, ctx)`                                         | `POST /api/runs`; refuses an unregistered project or bad limits  |
 | `ownerChat(state, text, ctx)`                                   | owner chat; the first message starts the lead                    |
 | `leadToolCall(state, call, ctx)`                                | each lead tool call (validated with `LeadToolInputs`)            |
 | `agentEvent(state, agentRunId, event, ctx)`                     | each `ManagedAgentEvent` from the adapter                        |
@@ -48,6 +50,13 @@ Every command is a pure function: `(state, input, ctx) → EngineResult`.
 | `requestReview(state, ctx)`                                     | the owner (the lead uses `request_review`)                       |
 | `checkReviewAction`, then `recordReview(state, id, outcome, …)` | before and after the server's git merge or discard               |
 | `recoverAfterRestart(state, ctx)`                               | on start, for every run that has not ended                       |
+| `decidePlan(state, planId, decision, ctx, comment?)`            | `POST /api/tickets/:id/plans/:planId/decision` (Phase 4)         |
+
+Phase 4 helpers (pure): `ticketLeadPrompt(ticket, limits)` builds the lead's first message for a
+ticket run; `runSettingsFromSetup(setup)` gives `{ limits, budget }` for `createRun`;
+`allowlistTarget(toolName, input)` and `evaluateAllowlist(input)` give the verdict that
+`requestPermission(state, request, ctx, { allowlist })` records; `agentRollUp`, `descendantsOf`,
+`childrenOf` and `agentDepth` read the agent tree; `pendingPlan`/`approvedPlan` read the plans.
 
 ## Rules it enforces (each one tested)
 
@@ -82,6 +91,41 @@ Every command is a pure function: `(state, input, ctx) → EngineResult`.
     is live.
   - COMPLETED once every worker's changes are merged, discarded, or `no-changes`. The lead is then
     aborted.
+
+## Phase 4 rules (P4-A; each one tested)
+
+- **Ticket runs are plan-first (ADR-0016).** `createRun` with `ticket: { ticketId, leadPrompt }`
+  returns a PLANNING run whose lead is STARTING (a `start-agent` effect with the brief). The lead's
+  `submit_plan` files plan v_n (→ PLAN_REVIEW, `plan-submitted`). `decidePlan` approves (→ RUNNING,
+  the lead is told to start helpers) or requests changes with a required comment (→ PLANNING, the
+  comment is sent to the lead; `plan-decided`). `start_agent` and every non-read-only tool use are
+  refused with `plan-not-approved` until approval. The owner can chat with the lead while it plans.
+  A lead that ends before approval fails the run. Runs without a ticket behave as in Phase 3.
+- **Limits.** `RunState.limits` (`maxConcurrentHelpers` 1–6, `maxDepth` 1–2) is checked against
+  `HARD_MAX_HELPERS`/`HARD_MAX_DEPTH`; absent means the Phase 3 limits (3, depth 1). The helper
+  limit counts live helpers over the whole tree.
+- **Depth 2.** When `maxDepth` is 2, a depth-1 helper's `start-agent` effect carries
+  `canStartHelpers: true`; it may call `start_agent`, `list_agents`, `message_agent`, `stop_agent`
+  and `agent_status` for its own children only (`CHILD_MANAGEMENT_TOOLS`), never `submit_plan` or
+  `request_review`. The lead manages the whole tree. Stopping an agent stops its descendants first;
+  Stop all aborts deepest first and the lead last. Budgets stay per agent; `agentRollUp` sums them
+  for display only.
+- **Allowlist (ADR-0013 amendment).** Helpers only; the lead always asks. `editInOwnWorktree`
+  allows Edit/Write/MultiEdit/NotebookEdit when the server-resolved real path is strictly inside
+  the helper's real worktree path and not under `.git` or `.claude`. `runHarnessChecks` allows a
+  foreground Bash command exactly equal to a check's argv joined by single spaces, and only when
+  every token is shell-inert. An allowed request is recorded as an approval with
+  `status: approved`, `decidedBy: 'allowlist'` and resolved at once. Owner decisions record
+  `decidedBy: 'owner'`, expiries `'timeout'`.
+
+## Notes for P4-D
+
+- Keep `state.limits` and `state.plans` with the live run: plans are persisted from
+  `state.plans` (`ticket_plans`), limits come from the project setup when the run is created.
+- Map the new refusal codes `plan-not-approved` (409), `plan-not-found` (404) and
+  `plan-not-pending` (409) (done in `control/errors.ts`).
+- Store the owner's plan comment as a ticket comment; the engine only sends it to the lead.
+- Resolve real paths before `evaluateAllowlist` (for a new file: the real parent plus the name).
 
 ## Notes for P3-D
 

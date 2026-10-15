@@ -3,13 +3,13 @@
 > Progress file for P4-A. Only the agent working on P4-A edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                                   |
-| ------- | ------------------------------------------------------- |
-| Status  | in-progress                                             |
-| Owner   | engine agent                                            |
-| Branch  | `wp/p4-a-engine`                                        |
-| Started | 2026-10-13                                              |
-| Updated | 2026-10-13                                              |
+| Field   | Value            |
+| ------- | ---------------- |
+| Status  | in-progress      |
+| Owner   | engine agent     |
+| Branch  | `wp/p4-a-engine` |
+| Started | 2026-10-13       |
+| Updated | 2026-10-13       |
 
 ## Tasks
 
@@ -23,9 +23,9 @@
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
-| 2026-10-13 | Claimed P4-A; branch `wp/p4-a-engine` created from `main` (8c05f68) | edba6fe | — |
+| Date       | What was done                                                                                                                                                                                                                          | Commit        | Checks            |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------- |
+| 2026-10-13 | Claimed P4-A; branch `wp/p4-a-engine` created from `main` (8c05f68)                                                                                                                                                                    | edba6fe       | —                 |
 | 2026-10-13 | WIP checkpoint after a usage-limit interruption: refusal codes, PLAN_REVIEW→FAILED edge, RunLimits/plans/decidedBy state, limits.ts, tree.ts, start_agent policy, Draft plan/limit/tree support. Not green yet (index exports pending) | (this commit) | typecheck ✗ (WIP) |
 
 ## Handoff notes

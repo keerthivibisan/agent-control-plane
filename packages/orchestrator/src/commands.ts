@@ -4,12 +4,20 @@ import { recordUsage, EMPTY_LEDGER } from './budget.js';
 import { cleanSummary, Draft, DuplicateIdError, formatTokens } from './draft.js';
 import { IllegalTransitionError, refusal } from './errors.js';
 import type { Refusal } from './errors.js';
-import { checkProjectRegistered, checkReviewAction, checkRunActive } from './policy.js';
+import { checkRunLimits, DEFAULT_RUN_LIMITS } from './limits.js';
+import {
+  checkPlanApproved,
+  checkProjectRegistered,
+  checkReviewAction,
+  checkRunActive,
+} from './policy.js';
+import type { AllowlistVerdict } from './allowlist.js';
 import type {
   EngineAgent,
   EngineApproval,
   EngineContext,
   EngineResult,
+  RunLimits,
   RunState,
 } from './state.js';
 import { isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
@@ -54,18 +62,43 @@ export interface CreateRunInput {
   title: string;
   /** Defaults to `DEFAULT_AGENT_BUDGET_TOKENS` per agent and no cost warning. */
   budget?: RunBudget;
+  /**
+   * The project's agent-tree limits (`runSettingsFromSetup`); checked against the hard ceilings.
+   * Defaults to the Phase 3 limits (3 helpers, depth 1).
+   */
+  limits?: RunLimits;
+  /**
+   * A board ticket run (ADR-0016): plan-first. The run starts in PLANNING and the lead starts at
+   * once with `leadPrompt` (the ticket brief, e.g. from `ticketLeadPrompt`). Without a ticket the
+   * run is a Phase 3 control-panel run: QUEUED until the owner's first chat message.
+   */
+  ticket?: { ticketId: string; leadPrompt: string };
   registeredProjectIds: Iterable<string>;
 }
 
 /**
- * A new run: QUEUED with its lead QUEUED. The lead starts with the owner's first chat message
- * (`ownerChat`), so nothing runs until the owner says what to do.
+ * A new run. Without a ticket: QUEUED with its lead QUEUED; the lead starts with the owner's first
+ * chat message (`ownerChat`), so nothing runs until the owner says what to do. With a ticket
+ * (plan-first, ADR-0016): PLANNING with its lead STARTING on the ticket brief (a `start-agent`
+ * effect); helpers wait for an approved plan.
  */
 export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResult<RunState> {
   const projectRefusal = checkProjectRegistered(input.projectId, input.registeredProjectIds);
   if (projectRefusal !== null) return { ok: false, refusal: projectRefusal };
   if (input.runId === input.leadAgentRunId || input.runId === '' || input.leadAgentRunId === '') {
     return { ok: false, refusal: refusal('duplicate-id', 'Run and lead ids must differ.') };
+  }
+  const limits: RunLimits = { ...(input.limits ?? DEFAULT_RUN_LIMITS) };
+  const limitsRefusal = checkRunLimits(limits);
+  if (limitsRefusal !== null) return { ok: false, refusal: limitsRefusal };
+  const ticket = input.ticket;
+  if (ticket !== undefined) {
+    if (ticket.ticketId.length === 0) {
+      return { ok: false, refusal: refusal('invalid-input', 'The ticket id is empty.') };
+    }
+    if (ticket.leadPrompt.trim().length === 0) {
+      return { ok: false, refusal: refusal('invalid-input', 'The lead prompt is empty.') };
+    }
   }
   const budget: RunBudget = input.budget ?? {
     maxTokensPerAgent: DEFAULT_AGENT_BUDGET_TOKENS,
@@ -93,8 +126,7 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     run: {
       id: input.runId,
       projectId: input.projectId,
-      // Phase 3 runs have no ticket; P4-A makes createRun ticket-aware.
-      ticketId: null,
+      ticketId: ticket?.ticketId ?? null,
       title: input.title,
       status: 'QUEUED',
       budget: { ...budget },
@@ -105,8 +137,26 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     agents: [lead],
     approvals: [],
     ledger: EMPTY_LEDGER,
+    limits,
   };
-  return { ok: true, state, effects: [], value: state };
+  if (ticket === undefined) return { ok: true, state, effects: [], value: state };
+
+  const started = applyCommand({ ...state, plans: [] }, ctx, (d) => {
+    d.setRunStatus('PLANNING');
+    const draftLead = d.lead();
+    if (draftLead === undefined) return refusal('unknown-agent', 'The run has no lead agent.');
+    d.setAgentStatus(draftLead, 'STARTING');
+    d.effects.push({
+      type: 'start-agent',
+      agentRunId: draftLead.id,
+      kind: 'lead',
+      role: draftLead.role,
+      prompt: ticket.leadPrompt,
+    });
+    return done;
+  });
+  if (!started.ok) return started;
+  return { ...started, value: started.state };
 }
 
 /**
@@ -133,7 +183,9 @@ export function ownerChat(state: RunState, text: string, ctx: EngineContext): En
       return done;
     }
 
-    if (d.run.status !== 'REVIEW') {
+    // The owner may talk with the lead while it plans and while the plan waits (ADR-0016).
+    const chatOpen = ['REVIEW', 'PLANNING', 'PLAN_REVIEW'].includes(d.run.status);
+    if (!chatOpen) {
       const runRefusal = checkRunActive(d.run.status);
       if (runRefusal !== null) return runRefusal;
     }
@@ -224,19 +276,32 @@ export function agentEvent(
   });
 }
 
+export interface RequestPermissionOptions {
+  /**
+   * The project allowlist's verdict for this request (`evaluateAllowlist`). When it allows, the
+   * request is recorded as an approval already approved with `decidedBy: 'allowlist'` and resolved
+   * at once; the agent is not parked. Ignored for the lead: the allowlist covers helpers only.
+   */
+  allowlist?: AllowlistVerdict;
+}
+
 /**
- * A non-read-only tool use (ADR-0013 §4). Opens an approval and parks the agent in WAITING_APPROVAL.
- * Refused (the server then denies the tool) when the run is stopping or not active, the agent has
- * ended, or the agent is over budget.
+ * A non-read-only tool use (ADR-0013 §4). Opens an approval and parks the agent in WAITING_APPROVAL,
+ * or, when the project allowlist pre-approves it, records an auto-approved approval (ADR-0013
+ * amendment). Refused (the server then denies the tool) when the run is stopping or not active, the
+ * plan is not approved yet (plan-first), the agent has ended, or the agent is over budget.
  */
 export function requestPermission(
   state: RunState,
   request: PermissionRequest,
   ctx: EngineContext,
+  options: RequestPermissionOptions = {},
 ): EngineResult<EngineApproval> {
   return applyCommand(state, ctx, (d) => {
     const agent = d.agent(request.agentRunId);
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
+    const planRefusal = checkPlanApproved(d.run.status);
+    if (planRefusal !== null) return planRefusal;
     const runRefusal = checkRunActive(d.run.status);
     if (runRefusal !== null) return runRefusal;
     if (!isLiveAgentStatus(agent.status)) {
@@ -247,6 +312,25 @@ export function requestPermission(
     }
     if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
     const toolName = cleanSummary(request.toolName, 'Tool');
+    if (options.allowlist?.allowed === true && agent.kind === 'worker') {
+      const auto: EngineApproval = {
+        id: d.freshId(),
+        runId: d.run.id,
+        agentRunId: agent.id,
+        kind: 'tool-use',
+        toolName,
+        toolUseId: request.toolUseId,
+        summary: cleanSummary(request.summary, toolName),
+        status: 'pending',
+        requestedAt: d.now,
+        decidedAt: null,
+        decidedBy: null,
+      };
+      d.approvals.push(auto);
+      // Recorded for audit, then resolved at once: the owner is not asked (ADR-0013 amendment).
+      d.closeApproval(auto, 'approved', { allow: true }, 'allowlist');
+      return { value: { ...auto } };
+    }
     const approval: EngineApproval = {
       id: d.freshId(),
       runId: d.run.id,
@@ -258,6 +342,7 @@ export function requestPermission(
       status: 'pending',
       requestedAt: d.now,
       decidedAt: null,
+      decidedBy: null,
     };
     d.approvals.push(approval);
     d.setAgentStatus(agent, 'WAITING_APPROVAL');
@@ -299,14 +384,21 @@ export function decideApproval(
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
 
     if (approval.kind === 'tool-use') {
-      if (decision === 'approve') d.closeApproval(approval, 'approved', { allow: true });
+      if (decision === 'approve') d.closeApproval(approval, 'approved', { allow: true }, 'owner');
       else {
         const message = options.message?.trim();
-        d.closeApproval(approval, 'denied', {
-          allow: false,
-          message:
-            message === undefined || message.length === 0 ? Draft.messages.deniedByOwner : message,
-        });
+        d.closeApproval(
+          approval,
+          'denied',
+          {
+            allow: false,
+            message:
+              message === undefined || message.length === 0
+                ? Draft.messages.deniedByOwner
+                : message,
+          },
+          'owner',
+        );
       }
       d.resumeAfterToolDecision(agent);
       return done;
@@ -314,8 +406,13 @@ export function decideApproval(
 
     // budget-raise
     if (decision === 'deny') {
-      d.closeApproval(approval, 'denied', { allow: false, message: Draft.messages.deniedByOwner });
-      d.endAgent(agent, 'CANCELLED', true);
+      d.closeApproval(
+        approval,
+        'denied',
+        { allow: false, message: Draft.messages.deniedByOwner },
+        'owner',
+      );
+      d.endAgentTree(agent, 'CANCELLED', true);
       return done;
     }
     const newLimit = options.newLimit ?? agent.budgetLimit + d.run.budget.maxTokensPerAgent;
@@ -325,7 +422,7 @@ export function decideApproval(
         `The new budget must be above the ${formatTokens(agent.budgetTokensUsed)} budget tokens already used.`,
       );
     }
-    d.closeApproval(approval, 'approved', { allow: true });
+    d.closeApproval(approval, 'approved', { allow: true }, 'owner');
     agent.budgetLimit = newLimit;
     if (agent.status === 'BLOCKED') d.resumeAfterRaise(agent);
     return done;
@@ -343,10 +440,15 @@ export function isApprovalOverdue(
 }
 
 function expireOne(d: Draft, approval: EngineApproval): void {
-  d.closeApproval(approval, 'expired', { allow: false, message: Draft.messages.deniedNoAnswer });
+  d.closeApproval(
+    approval,
+    'expired',
+    { allow: false, message: Draft.messages.deniedNoAnswer },
+    'timeout',
+  );
   const agent = d.agent(approval.agentRunId);
   if (agent === undefined) return;
-  if (approval.kind === 'budget-raise') d.endAgent(agent, 'CANCELLED', true);
+  if (approval.kind === 'budget-raise') d.endAgentTree(agent, 'CANCELLED', true);
   else d.resumeAfterToolDecision(agent);
 }
 
@@ -367,7 +469,10 @@ export function expireApprovals(
   });
 }
 
-/** Stops one agent (owner's Stop or the lead's `stop_agent`): deny its approvals, then abort. */
+/**
+ * Stops one agent (owner's Stop, or `stop_agent` from the lead or a parent helper): its helpers
+ * first (depth 2), then the agent; each one's open approvals are denied before it is aborted.
+ */
 export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContext): EngineResult {
   return applyCommand(state, ctx, (d) => {
     const agent = d.agent(agentRunId);
@@ -375,7 +480,7 @@ export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContex
     if (!isLiveAgentStatus(agent.status)) {
       return refusal('agent-not-live', 'The agent has already stopped.');
     }
-    d.endAgent(agent, 'CANCELLED', true);
+    d.endAgentTree(agent, 'CANCELLED', true);
     return done;
   });
 }
@@ -384,7 +489,7 @@ export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContex
  * Stop all (orchestration-lifecycle §2). Order matters and is part of the contract:
  * 1. the run becomes CANCELLING, so nothing new is scheduled (`start_agent` is refused);
  * 2. every pending approval is denied, releasing parked SDK callbacks;
- * 3. workers are aborted;
+ * 3. workers are aborted, deepest first (helpers of helpers before their parents);
  * 4. the lead is aborted last, so it cannot start replacements in between.
  * The run becomes CANCELLED with `completeCancellation` once the processes have ended.
  */
@@ -415,7 +520,7 @@ function stopEverything(
     }
     d.setRunStatus('CANCELLING');
     d.settlePendingApprovals(null, 'denied', Draft.messages.deniedAgentStopped);
-    for (const worker of d.liveWorkers()) d.endAgent(worker, agentStatus, true);
+    for (const worker of d.liveWorkersDeepestFirst()) d.endAgent(worker, agentStatus, true);
     const lead = d.lead();
     if (lead !== undefined) d.endAgent(lead, agentStatus, true);
     return done;
@@ -488,7 +593,7 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
       }
     }
     if (cancelling) d.setRunStatus('CANCELLED');
-    else if (['QUEUED', 'RUNNING', 'BLOCKED'].includes(d.run.status)) {
+    else if (['QUEUED', 'PLANNING', 'PLAN_REVIEW', 'RUNNING', 'BLOCKED'].includes(d.run.status)) {
       d.setRunStatus('NEEDS_REVIEW');
     }
     return done;

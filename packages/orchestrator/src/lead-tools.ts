@@ -4,12 +4,18 @@ import type { z } from 'zod';
 import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
-import { checkRunActive, checkStartAgent, isAgentOverBudget } from './policy.js';
+import { submitPlan } from './plan.js';
+import { checkRunActive, checkStartAgent, isAgentOverBudget, mayStartHelpers } from './policy.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
+import { runLimits } from './limits.js';
+import { agentDepth } from './tree.js';
 
 export interface LeadToolCall {
-  /** The agent that made the call; only the lead may (ADR-0012, depth 1). */
+  /**
+   * The agent that made the call: the lead, or a helper allowed to start helpers (depth 2), which
+   * gets the child-management tools for its own children only (ADR-0013 amendment).
+   */
   callerAgentRunId: string;
   /** Tool name as the model sent it; anything outside `LeadToolInputs` is refused. */
   name: string;
@@ -22,6 +28,15 @@ export interface LeadToolCall {
 function isLeadToolName(name: string): name is LeadToolName {
   return Object.hasOwn(LeadToolInputs, name);
 }
+
+/** Tools a depth-2 parent helper gets (`ManagedAgentSpec.canStartHelpers`); never plan or review. */
+export const CHILD_MANAGEMENT_TOOLS: readonly LeadToolName[] = Object.freeze([
+  'start_agent',
+  'list_agents',
+  'message_agent',
+  'stop_agent',
+  'agent_status',
+]);
 
 /** Field paths and messages only; never echo input values (they may hold task text). */
 function describeIssues(error: z.ZodError): string {
@@ -48,15 +63,28 @@ export function leadToolCall(
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
   if (caller.kind !== 'lead') {
-    // Workers never get lead tools; if one calls anyway, starting agents is a depth violation.
-    return {
-      ok: false,
-      refusal:
-        call.name === 'start_agent'
-          ? refusal('depth-exceeded', 'Only the lead agent can start agents.')
-          : refusal('not-lead', 'Only the lead agent can use this tool.'),
-    };
+    // A helper may manage its own children only when the run allows depth 2 (ADR-0013 amendment).
+    const childTool = CHILD_MANAGEMENT_TOOLS.includes(call.name);
+    if (!childTool || !mayStartHelpers(state, caller)) {
+      return {
+        ok: false,
+        refusal:
+          call.name === 'start_agent'
+            ? refusal(
+                'depth-exceeded',
+                runLimits(state).maxDepth === 1
+                  ? 'Only the lead agent can start agents.'
+                  : 'Helpers of helpers cannot start more agents.',
+              )
+            : refusal('not-lead', 'Only the lead agent can use this tool.'),
+      };
+    }
   }
+  /** The agents the caller manages: every helper for the lead, its own children for a helper. */
+  const manages = (a: EngineAgent): boolean =>
+    a.kind === 'worker' && (caller.kind === 'lead' || a.parentAgentRunId === caller.id);
+  const findManaged = (agentId: string): EngineAgent | undefined =>
+    state.agents.find((a) => a.id === agentId && manages(a));
 
   switch (call.name) {
     case 'start_agent': {
@@ -67,6 +95,8 @@ export function leadToolCall(
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
+        // Depth of the new helper: one below its caller.
+        const canStartHelpers = agentDepth(d, caller) + 2 <= runLimits(d).maxDepth;
         const worker: EngineAgent = {
           id,
           runId: d.run.id,
@@ -86,7 +116,14 @@ export function leadToolCall(
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
-        d.effects.push({ type: 'start-agent', agentRunId: id, kind: 'worker', role, prompt: task });
+        d.effects.push({
+          type: 'start-agent',
+          agentRunId: id,
+          kind: 'worker',
+          role,
+          prompt: task,
+          ...(canStartHelpers ? { canStartHelpers: true } : {}),
+        });
         return { value: `Started agent ${id} (${role}).` };
       });
     }
@@ -94,19 +131,27 @@ export function leadToolCall(
     case 'list_agents': {
       const parsed = LeadToolInputs.list_agents.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const workers = state.agents.filter((a) => a.kind === 'worker');
+      const workers = state.agents.filter(manages);
       return readOnly(
         state,
         workers.length === 0
           ? 'No agents started yet.'
-          : workers.map((w) => `- ${w.id}: ${w.role}, ${w.status}`).join('\n'),
+          : workers
+              .map((w) => {
+                const under =
+                  caller.kind === 'lead' && w.parentAgentRunId !== caller.id
+                    ? ` (helper of ${w.parentAgentRunId ?? 'unknown'})`
+                    : '';
+                return `- ${w.id}: ${w.role}, ${w.status}${under}`;
+              })
+              .join('\n'),
       );
     }
 
     case 'agent_status': {
       const parsed = LeadToolInputs.agent_status.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const target = findWorker(state, parsed.data.agentId);
+      const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
       return readOnly(state, describeAgent(target));
     }
@@ -116,7 +161,7 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       const runRefusal = checkRunActive(state.run.status);
       if (runRefusal !== null) return { ok: false, refusal: runRefusal };
-      const target = findWorker(state, parsed.data.agentId);
+      const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
       if (!isLiveAgentStatus(target.status)) {
         return { ok: false, refusal: refusal('agent-not-live', 'That agent has stopped.') };
@@ -141,7 +186,7 @@ export function leadToolCall(
     case 'stop_agent': {
       const parsed = LeadToolInputs.stop_agent.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const target = findWorker(state, parsed.data.agentId);
+      const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
       return withReply(stopAgent(state, target.id, ctx), `Stopped ${target.role}.`);
     }
@@ -152,17 +197,12 @@ export function leadToolCall(
       return withReply(requestReview(state, ctx), 'The owner can now review the changes.');
     }
 
-    case 'submit_plan':
-      // Contract added in P4-0; the plan phase itself is P4-A. Until then a plan cannot be filed.
-      return {
-        ok: false,
-        refusal: refusal('invalid-input', 'Plans are not supported by this engine version yet.'),
-      };
+    case 'submit_plan': {
+      const parsed = LeadToolInputs.submit_plan.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      return submitPlan(state, caller.id, parsed.data, ctx);
+    }
   }
-}
-
-function findWorker(state: RunState, agentId: string): EngineAgent | undefined {
-  return state.agents.find((a) => a.id === agentId && a.kind === 'worker');
 }
 
 function describeAgent(a: EngineAgent): string {

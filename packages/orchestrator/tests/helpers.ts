@@ -100,6 +100,61 @@ export function statusOf(state: RunState, id: string) {
   return a.status;
 }
 
+export const TICKET = 'ticket-1';
+
+/** A plan-first ticket run (ADR-0016) whose lead is RUNNING in PLANNING. */
+export function planningRun(
+  limits: { maxConcurrentHelpers: number; maxDepth: number } = {
+    maxConcurrentHelpers: 3,
+    maxDepth: 1,
+  },
+  maxTokensPerAgent = 1000,
+): RunState {
+  const created = ok(
+    createRun(
+      {
+        runId: RUN,
+        leadAgentRunId: LEAD,
+        projectId: PROJECT,
+        title: 'WEB-1 Dark mode',
+        budget: { maxTokensPerAgent, softCostUsdPerRun: null },
+        limits,
+        ticket: { ticketId: TICKET, leadPrompt: 'Ticket WEB-1: plan first' },
+        registeredProjectIds: REGISTERED,
+      },
+      makeCtx(),
+    ),
+  ).state;
+  return ok(event(created, LEAD, { type: 'started', providerSessionId: 'sess-lead', model: null }))
+    .state;
+}
+
+export const PLAN_INPUT = {
+  summary: 'Add a theme store and a settings toggle.',
+  steps: [
+    { title: 'Theme store', role: 'Store', detail: 'Persist the theme.' },
+    { title: 'Toggle', role: 'UI', detail: 'Add the switch.' },
+    { title: 'Wire up', role: 'Lead', detail: 'Check the result.' },
+  ],
+};
+
+/** The lead submits a plan; returns the state (PLAN_REVIEW) and the new plan's id. */
+export function submitPlanFor(state: RunState, prefix = 'p'): { state: RunState; planId: string } {
+  const r = ok(
+    leadToolCall(
+      state,
+      {
+        callerAgentRunId: LEAD,
+        name: 'submit_plan',
+        input: PLAN_INPUT,
+        registeredProjectIds: REGISTERED,
+      },
+      makeCtx(1500, prefix),
+    ),
+  );
+  return { state: r.state, planId: `${prefix}-1` };
+}
+
 export function agentOf(state: RunState, id: string) {
   const a = state.agents.find((x) => x.id === id);
   if (a === undefined) throw new Error(`no agent ${id}`);
