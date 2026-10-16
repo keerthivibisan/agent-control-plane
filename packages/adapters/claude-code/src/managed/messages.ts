@@ -1,5 +1,6 @@
 import type { ManagedAgentEvent, ManagedAgentSpec } from '@acp/core';
 import { z } from 'zod';
+import { emitsChatText } from './permissions.js';
 import { summarizeToolUse } from './summary.js';
 
 /**
@@ -121,7 +122,7 @@ function assistantEvents(
   const events: ManagedAgentEvent[] = [];
   // Lead text goes to the owner's chat (ADR-0015); subagent frames (`parent_tool_use_id` set) are
   // not the lead talking to the owner, and worker text is never emitted at all.
-  const leadMainThread = spec.kind === 'lead' && a.parent_tool_use_id === null;
+  const leadMainThread = emitsChatText(spec.kind) && a.parent_tool_use_id === null;
   for (const block of a.message.content) {
     const toolUse = ToolUseBlockSchema.safeParse(block);
     if (toolUse.success) {

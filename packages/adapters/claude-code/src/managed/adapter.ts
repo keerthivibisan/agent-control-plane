@@ -11,7 +11,14 @@ import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
-import { createCanUseTool, LEAD_MCP_SERVER_NAME, managedToolNames } from './permissions.js';
+import {
+  createCanUseTool,
+  isReadOnlyRole,
+  keepsInputOpen,
+  LEAD_MCP_SERVER_NAME,
+  managedToolNames,
+  READ_ONLY_DISALLOWED_TOOLS,
+} from './permissions.js';
 import { AsyncQueue } from './queue.js';
 
 /**
@@ -79,10 +86,11 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
 }
 
 /**
- * SDK options for one agent (ADR-0012, ADR-0013). Never `bypassPermissions`; no settings files
- * load; `strictMcpConfig` keeps every MCP server except ours out. Ours goes to the lead (every
- * tool) and to a worker with `canStartHelpers` (child management only); other workers get none.
- * Exported for tests.
+ * SDK options for one agent (ADR-0012, ADR-0013, ADR-0019). Never `bypassPermissions`; no
+ * settings files load; `strictMcpConfig` keeps every MCP server except ours out. Ours carries the
+ * role's tools (`managedToolNames`): the lead's set, the planner's `submit_plan`, the reviewer's
+ * `post_review`, or child management for a worker with `canStartHelpers`; other workers and the
+ * tester get none. Exported for tests.
  */
 export function buildOptions(
   spec: ManagedAgentSpec,
@@ -108,6 +116,15 @@ export function buildOptions(
       [LEAD_MCP_SERVER_NAME]: createLeadToolServer(spec.leadTools, toolNames),
     };
   }
+  // The planner and the reviewer only read (ADR-0019): no edit or shell tools in their context.
+  if (isReadOnlyRole(spec.kind)) options.disallowedTools = [...READ_ONLY_DISALLOWED_TOOLS];
+  // Project skills arrive as a run-scoped, skills-only local plugin (ADR-0019 §4, decision E);
+  // filesystem settings stay off, so nothing else from the repository loads.
+  const plugin = spec.skillPlugin;
+  if (plugin !== undefined) {
+    options.plugins = [{ type: 'local', path: plugin.path }];
+    options.skills = [...plugin.skills];
+  }
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
@@ -120,9 +137,10 @@ export function buildOptions(
  * input. Events are produced as soon as the agent starts, buffered until read, and end with exactly
  * one `finished` event.
  *
- * A worker's input is closed after a turn ends with nothing queued, so a worker that finished its
- * task ends (`finished`) and `send` then throws `ManagedAgentEndedError`. The lead's input stays
- * open for the owner's chat until `abort()`.
+ * A worker's (and the tester's and reviewer's) input is closed after a turn ends with nothing
+ * queued, so an agent that finished its task ends (`finished`) and `send` then throws
+ * `ManagedAgentEndedError`. The lead's input stays open for the owner's chat, and the planner's for
+ * the owner's plan comments, until `abort()`.
  */
 export function createManagedClaudeCode(
   options: ManagedClaudeCodeOptions = {},
@@ -167,7 +185,7 @@ function startAgent(
         for (const event of mapped.events) events.push(event);
         if (mapped.result !== null) {
           lastResult = mapped.result;
-          if (spec.kind === 'worker' && (mapped.result.queuedTurns ?? 0) === 0) input.close();
+          if (!keepsInputOpen(spec.kind) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
         }
       }
       finish(abortController.signal.aborted ? 'cancelled' : (lastResult?.outcome ?? 'error'));
