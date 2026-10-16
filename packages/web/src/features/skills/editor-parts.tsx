@@ -16,16 +16,21 @@ import { MarkdownPreview } from './markdown';
 
 const C = SKILLS_COPY;
 
+/**
+ * The template buttons. `collapsed` (an existing file) folds them away behind a summary, because
+ * replacing a saved file's text is rare there.
+ */
 export function TemplatePicker<T extends { id: string; label: string }>({
   templates,
   onPick,
+  collapsed = false,
 }: {
   templates: readonly T[];
   onPick: (t: T) => void;
+  collapsed?: boolean;
 }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="font-medium">{C.editor.templates}</span>
+  const buttons = (
+    <>
       <div className="flex flex-wrap gap-2" role="group" aria-label={C.editor.templates}>
         {templates.map((t) => (
           <Button key={t.id} onClick={() => onPick(t)} className="text-caption">
@@ -35,6 +40,22 @@ export function TemplatePicker<T extends { id: string; label: string }>({
         ))}
       </div>
       <span className="text-caption text-dim">{C.editor.templatesHint}</span>
+    </>
+  );
+  if (collapsed) {
+    return (
+      <details className="group flex flex-col gap-1.5">
+        <summary className="cursor-pointer text-caption text-dim hover:text-ink">
+          {C.editor.templates}
+        </summary>
+        <div className="mt-2 flex flex-col gap-1.5">{buttons}</div>
+      </details>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-medium">{C.editor.templates}</span>
+      {buttons}
     </div>
   );
 }
@@ -227,7 +248,7 @@ export function FileSide({
               onClick={() => setConfirming(true)}
               disabled={inUse}
               aria-describedby={inUse ? inUseId : undefined}
-              className="border-danger/40 text-danger hover:bg-danger-soft"
+              className="border-danger/40! text-danger! hover:bg-danger-soft!"
             >
               {copy.deleteButton}
             </Button>
@@ -257,7 +278,7 @@ export function FileSide({
               <Button
                 onClick={() => void doDelete()}
                 disabled={remove.pending}
-                className="border-danger bg-danger text-white hover:opacity-90"
+                className="border-danger! bg-danger! text-white! hover:opacity-90"
               >
                 {remove.pending ? C.remove.deleting : C.remove.confirm}
               </Button>

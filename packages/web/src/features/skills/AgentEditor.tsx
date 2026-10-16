@@ -239,7 +239,7 @@ export function AgentEditor({
 
   return (
     <div
-      className={isNew ? '' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
+      className={isNew ? 'max-w-4xl' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
       data-testid="agent-editor"
     >
       <Card
@@ -252,7 +252,7 @@ export function AgentEditor({
         }
       >
         <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)} noValidate>
-          <TemplatePicker templates={AGENT_TEMPLATES} onPick={pickTemplate} />
+          <TemplatePicker templates={AGENT_TEMPLATES} onPick={pickTemplate} collapsed={!isNew} />
           <Field id={ids.name} label={S.editor.name} hint={A.editor.nameHint} error={errors.name}>
             <input
               id={ids.name}

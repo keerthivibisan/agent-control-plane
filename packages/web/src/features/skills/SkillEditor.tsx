@@ -99,7 +99,7 @@ export function SkillEditor({
 
   return (
     <div
-      className={isNew ? '' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
+      className={isNew ? 'max-w-4xl' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
       data-testid="skill-editor"
     >
       <Card
@@ -112,7 +112,7 @@ export function SkillEditor({
         }
       >
         <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)} noValidate>
-          <TemplatePicker templates={SKILL_TEMPLATES} onPick={pickTemplate} />
+          <TemplatePicker templates={SKILL_TEMPLATES} onPick={pickTemplate} collapsed={!isNew} />
           <Field id={ids.name} label={C.editor.name} hint={C.editor.nameHint} error={errors.name}>
             <input
               id={ids.name}

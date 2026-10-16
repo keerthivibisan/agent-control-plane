@@ -79,6 +79,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // Redesign R-D: the Skills & Agents page (and its screenshots) on the demo server.
+      name: 'skills',
+      testMatch: 'skills.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       name: 'control',
       testMatch: 'control.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${CONTROL_PORT}` },

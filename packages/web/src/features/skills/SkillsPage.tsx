@@ -91,7 +91,9 @@ function TabBar({ back, intro, action }: { back?: ReactNode; intro?: string; act
   return (
     <div className="mb-4 flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
       {back}
-      {intro ? <p className="max-w-3xl flex-1 text-dim">{intro}</p> : <span className="flex-1" />}
+      <div className="min-w-0 flex-1">
+        {intro ? <p className="max-w-3xl text-dim">{intro}</p> : null}
+      </div>
       {action}
     </div>
   );
