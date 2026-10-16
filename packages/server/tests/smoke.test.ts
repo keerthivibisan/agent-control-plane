@@ -90,9 +90,13 @@ describe('startServer (live mode over Claude Code fixtures)', () => {
       );
       expect(candidates.map((c) => c.cwd)).toEqual(['/home/user/project']);
 
+      // Mutations need the CSRF token whenever the control panel is mounted (P4-H finding).
+      const { token } = (await (await fetch(`${base}/api/control/token`)).json()) as {
+        token: string;
+      };
       const created = await fetch(`${base}/api/projects`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-acp-csrf': token },
         body: JSON.stringify({ name: 'project', rootPath: '/home/user/project' }),
       });
       expect(created.status).toBe(201);

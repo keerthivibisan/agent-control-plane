@@ -105,25 +105,22 @@ describe('P4-H CSRF on every mutation', () => {
     expect(expectStatus(await b.get(`/api/projects/${p}`), 200)).toMatchObject({ id: p });
   }, 60_000);
 
-  // Finding (P4-H, see docs/phase-4/wp/P4-H.md "Blockers"): the Phase 1 "add an existing folder"
-  // route has no CSRF check, while every Phase 3/4 mutation has one. Remove `.fails` once fixed.
-  it.fails(
-    'POST /api/projects (add an existing folder) refuses a request without the token',
-    async () => {
-      const b = await bootWorkspace();
-      open.push(b);
-      const folder = tempDir('acp-p4h-existing-');
-      const res = await b.request(
-        'POST',
-        '/api/projects',
-        { name: 'x', rootPath: folder },
-        {
-          csrf: null,
-        },
-      );
-      expectError(res, 403, 'csrf_missing');
-    },
-  );
+  // P4-H finding, fixed by the coordinator on 2026-10-16: the Phase 1 "add an existing folder" route
+  // now needs the token too, like every Phase 3/4 mutation.
+  it('POST /api/projects (add an existing folder) refuses a request without the token', async () => {
+    const b = await bootWorkspace();
+    open.push(b);
+    const folder = tempDir('acp-p4h-existing-');
+    const res = await b.request(
+      'POST',
+      '/api/projects',
+      { name: 'x', rootPath: folder },
+      {
+        csrf: null,
+      },
+    );
+    expectError(res, 403, 'csrf_missing');
+  });
 });
 
 describe('P4-H POST /api/projects/new refusals (ADR-0017 §1)', () => {

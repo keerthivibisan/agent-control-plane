@@ -313,8 +313,21 @@ export const schemas = {
   diagnostics: DiagnosticsDtoSchema,
 } as const;
 
-export function registerProject(client: ApiClient, input: RegisterProjectInput) {
-  return client.post(paths.projects(), input, ProjectDtoSchema);
+/**
+ * Registers an existing folder. When the server runs the control panel it requires the CSRF token
+ * like every other mutation (P4-H finding); a server without it (no token route) takes the plain
+ * request.
+ */
+export async function registerProject(client: ApiClient, input: RegisterProjectInput) {
+  try {
+    await csrfToken(client, false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 404) {
+      return client.post(paths.projects(), input, ProjectDtoSchema);
+    }
+    throw e;
+  }
+  return controlPost(client, paths.projects(), input, ProjectDtoSchema);
 }
 
 // --- Control panel (Phase 3 M1, P3-E) ------------------------------------------------------------

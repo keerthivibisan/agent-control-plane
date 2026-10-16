@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import type { ServerConfig } from './config.js';
+import { requireCsrf } from './control/csrf.js';
 import { localOnlyGuard } from './http/guard.js';
 import { errorHandler, notFoundHandler, requestId } from './http/middleware.js';
 import type { Logger } from './logger.js';
@@ -38,7 +39,13 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', localOnlyGuard([deps.config.port, WEB_DEV_PORT]));
   app.use('/api', createStreamRouter(deps.stream));
   app.use('/api', createHookRouter(deps.hooks));
-  app.use('/api', createApiRouter(deps.services));
+  app.use(
+    '/api',
+    createApiRouter(
+      deps.services,
+      deps.control === undefined ? {} : { csrf: requireCsrf(deps.control.csrfToken) },
+    ),
+  );
   if (deps.control !== undefined) app.use('/api', createControlRouter(deps.control));
   if (deps.control !== undefined && deps.board !== undefined) {
     app.use('/api', createBoardRouter(deps.board, deps.control.csrfToken));

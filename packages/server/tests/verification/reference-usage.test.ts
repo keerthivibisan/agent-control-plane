@@ -135,9 +135,13 @@ describe('F1: generated scenario mixing every rule', () => {
     });
     try {
       const base = `http://127.0.0.1:${server.port}/api`;
+      // Mutations need the CSRF token whenever the control panel is mounted (P4-H finding).
+      const { token } = (await (await fetch(`${base}/control/token`)).json()) as {
+        token: string;
+      };
       const created = await fetch(`${base}/projects`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'x-acp-csrf': token },
         body: JSON.stringify({ name: 'project', rootPath: FIXTURE_ROOT }),
       });
       expect(created.status).toBe(201);

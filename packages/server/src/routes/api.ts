@@ -1,4 +1,4 @@
-import express, { Router } from 'express';
+import express, { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { badRequest } from '../errors.js';
 import type { Services } from '../services/index.js';
@@ -17,8 +17,17 @@ function param(value: string | string[] | undefined): string {
   return value;
 }
 
-export function createApiRouter(services: Services): Router {
+export interface ApiRouterOptions {
+  /**
+   * CSRF check for mutations (ADR-0013). Present whenever the control service is mounted, so
+   * registering a project needs the token like every other mutation (P4-H finding, 2026-10-16).
+   */
+  csrf?: RequestHandler;
+}
+
+export function createApiRouter(services: Services, options: ApiRouterOptions = {}): Router {
   const router = Router();
+  const csrf: RequestHandler = options.csrf ?? ((_req, _res, next) => next());
 
   router.get('/health', (_req, res) => {
     res.json(services.system.health());
@@ -44,7 +53,7 @@ export function createApiRouter(services: Services): Router {
   router.get('/projects', (_req, res) => {
     res.json(services.projects.list());
   });
-  router.post('/projects', express.json({ limit: '16kb' }), async (req, res) => {
+  router.post('/projects', csrf, express.json({ limit: '16kb' }), async (req, res) => {
     res.status(201).json(await services.projects.register(req.body));
   });
   router.get('/projects/:id', (req, res) => {
