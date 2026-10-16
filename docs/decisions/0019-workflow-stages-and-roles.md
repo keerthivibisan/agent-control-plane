@@ -118,3 +118,33 @@ Owner decision A (docs/redesign/README.md §6a). WP R-I builds it.
    - **A missing, unsafe or unparsable file** is a problem on the Workflow page. The agent starts
      without a profile and the run is not blocked.
    - **Verification:** the R-V real smoke run (owner consent) checks the init message's tool list.
+
+## Amendment (2026-10-16): a fixed tool base set per role
+
+The R-V real run (docs/research/r-v-real-run-2026-10-16.md) showed what happens to a role without
+an SDK `tools` base set. It gets every tool the local Claude Code install offers: 28–37 tools,
+for example `SendMessage`, `CronCreate`, `RemoteTrigger`, `WebFetch` and `Task`. The lead also had
+`Bash`, `Edit` and `Write`, held back only by the approval gate, although ADR-0013 §2 says it is
+read-only. Owner decision (2026-10-16): fix it before v0.0.1 (WP R-K).
+
+7. **Role toolsets.** Every managed agent gets an explicit SDK `tools` base set. An agent file
+   (§6) and the follow-up turn (ADR-0020) can only narrow it.
+   - **Base sets:**
+
+     | Role           | Built-in tools                                  |
+     | -------------- | ----------------------------------------------- |
+     | lead, planner  | `Read`, `Grep`, `Glob`                          |
+     | reviewer       | `Read`, `Grep`, `Glob`                          |
+     | worker, tester | `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash` |
+     | follow-up turn | `Read`, `Grep`, `Glob` (ADR-0020, as built)     |
+     - The lead's control tools (`mcp__acp__*`) are unchanged.
+     - `Skill` is added only when the run has a skills plugin.
+     - `MultiEdit` and `NotebookEdit` are added only if the installed Claude Code still offers
+       them as separate tools; check in `system/init`.
+
+   - **Never in a base set:** `Task`/`Agent` (subagents), web tools, cron/scheduling, messaging
+     (`SendMessage`, `ListAgents`), remote triggers, notifications, artifacts, worktree and
+     plan-mode tools. Each needs its own decision.
+   - **Skill gate:** the gate also denies a `Skill` call for any skill other than the run's
+     `acp-skills:*` names, because bundled skills load even with `settingSources: []`.
+   - **Kept as before:** read-only roles keep `disallowedTools`, and `allowedTools` is never used.

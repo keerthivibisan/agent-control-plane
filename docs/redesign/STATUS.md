@@ -17,6 +17,7 @@
 | R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | **done**                                      | `wp/r-i-agent-files`, `wp/r-i-web` | 2026-10-16 (`30ab747`) |
 | R-J | [Resume the lead's chat](README.md#6b-the-leads-chat-after-the-lead-ends-owner-decisions-2026-10-16)           | R-I      | **done**                                      | `wp/r-j-follow-up`, `wp/r-j-web`   | 2026-10-16 (`ed9b6f7`) |
 | R-V | [Verification](wp/R-V.md)                                                                                      | all      | **done** (real run 2026-10-16, owner consent) | `wp/r-v-verify`                    | 2026-10-16 (`4a0525e`) |
+| R-K | Role tool base sets (ADR-0019 §7)                                                                              | R-V      | in-progress                                   | `wp/r-k-role-tools`                | —                      |
 | R-R | Pre-release review and v0.0.1 (see below)                                                                      | R-V      | todo (owner, 2026-10-16)                      | —                                  | —                      |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
