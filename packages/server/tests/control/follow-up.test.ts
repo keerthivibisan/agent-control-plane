@@ -80,6 +80,9 @@ describe('follow-up turn through the chat route', () => {
     expect(turn.spec.skillPlugin).toBeUndefined();
     expect(turn.spec.prompt.startsWith(FOLLOW_UP_PREFACE)).toBe(true);
     expect(turn.spec.prompt.endsWith('Why a store?')).toBe(true);
+    // The turn reuses the lead's id: a lookup by id is the latest start (the e2e drivers use it).
+    expect(s.fake.byId(lead.id)).toBe(turn);
+    expect(s.fake.lead()).toBe(lead);
     let run = await s.detail(runId);
     expect(run.followUp).toEqual({ state: 'running', reason: null });
     expect(shape(run)).toEqual(before);

@@ -149,8 +149,7 @@ const driver = createServer((req, res) => {
       }
       if (req.method === 'POST' && parts[0] === 'agents' && parts.length === 3) {
         // The latest start of that agent run: a follow-up turn reuses the ended lead's id.
-        const agent = fake.agents.filter((a) => a.id === parts[1]).at(-1);
-        if (agent === undefined) throw new Error(`no fake agent ${parts[1] ?? ''}`);
+        const agent = fake.byId(parts[1] ?? '');
         return send(res, 200, await act(agent, parts[2] ?? '', await readBody(req)));
       }
       send(res, 404, { error: 'not found' });

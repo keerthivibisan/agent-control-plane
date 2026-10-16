@@ -134,7 +134,12 @@ export class FakeAgent {
 export interface FakeManagedAdapter {
   adapter: ManagedExecutionAdapter;
   agents: FakeAgent[];
+  /**
+   * The latest start of this agent run. A follow-up turn of an ended lead (ADR-0020) starts again
+   * under the lead's own id, so the first match would be the ended agent, whose `send` rejects.
+   */
   byId(id: string): FakeAgent;
+  /** The first lead start (the run's own lead, not a later follow-up turn). */
   lead(): FakeAgent;
   workers(): FakeAgent[];
 }
@@ -142,7 +147,7 @@ export interface FakeManagedAdapter {
 export function createFakeManagedAdapter(): FakeManagedAdapter {
   const agents: FakeAgent[] = [];
   const byId = (id: string): FakeAgent => {
-    const agent = agents.find((a) => a.id === id);
+    const agent = agents.findLast((a) => a.id === id);
     if (agent === undefined) throw new Error(`no fake agent ${id}`);
     return agent;
   };
