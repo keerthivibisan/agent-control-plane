@@ -287,4 +287,8 @@ test('agents: "Used by" shows the stages using each file and links to the Workfl
   await shoot(page, 'agents-used-by');
   await used.getByRole('link', { name: 'Open Final code review on the Workflow page' }).click();
   await expect(page).toHaveURL(new RegExp(`#/p/${project.id}/workflow$`));
+  // R-V: let the Workflow page finish loading, and drop the routes, so no handler is still in
+  // `route.fetch()` when the test ends ("Response has been disposed", seen once under load).
+  await expect(page.getByRole('heading', { level: 1, name: /Workflow/ })).toBeVisible();
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });

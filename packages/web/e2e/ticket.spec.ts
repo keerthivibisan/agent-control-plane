@@ -272,3 +272,36 @@ test('a done run whose conversation is gone says why it can’t be continued', a
   await expect(panel.getByRole('textbox')).toHaveCount(0);
   await shoot(page, 'follow-up-unavailable');
 });
+
+// --- R-V: a refused follow-up message shows the server's reason --------------------------------
+
+test('a follow-up the server refuses shows its reason, and the box stays usable', async ({
+  page,
+}) => {
+  const sc = followUpScenario(
+    { state: 'available', reason: null },
+    { messages: FOLLOW_UP_MESSAGES },
+  );
+  await serve(page, sc);
+  const reason = 'Another answer is still being written. Wait for it, then ask again.';
+  let calls = 0;
+  await page.route(`**/api/runs/${RUN_ID}/chat`, async (route) => {
+    calls++;
+    await route.fulfill({
+      status: 409,
+      json: { error: { code: 'follow_up_running', message: reason, requestId: 'e2e' } },
+    });
+  });
+  await page.goto(`/${TICKET_HASH}`);
+  const panel = page.getByTestId('side-panel');
+  const box = panel.getByRole('textbox', { name: 'Message to the lead agent' });
+  await box.fill('Is it done?');
+  await box.press('Enter');
+  // The owner reads the server's reason in words; the code stays under "Technical details".
+  await expect(
+    panel.getByRole('alert').filter({ hasText: "Your message wasn't sent." }),
+  ).toContainText(reason);
+  expect(calls).toBe(1);
+  await expect(box).toBeEnabled();
+  await shoot(page, 'follow-up-refused');
+});

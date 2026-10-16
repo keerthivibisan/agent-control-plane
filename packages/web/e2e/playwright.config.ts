@@ -31,6 +31,15 @@ const CONTROL_DATA_DIR = (process.env.ACP_E2E_CONTROL_DATA_DIR ??= mkdtempSync(
   join(tmpdir(), 'acp-e2e-control-'),
 ));
 process.env.ACP_E2E_DRIVER_URL ??= `http://127.0.0.1:${DRIVER_PORT}`;
+// --- R-V (redesign verification): the workspace server, a live-mode server over an empty temp
+// Claude dir with the scripted fake adapter and no project (workspace.spec.ts creates one).
+const WORKSPACE_PORT = Number(process.env.ACP_E2E_WORKSPACE_PORT ?? String(CONTROL_PORT + 10));
+const WORKSPACE_DRIVER_PORT = WORKSPACE_PORT + 1;
+const WORKSPACE_DATA_DIR = (process.env.ACP_E2E_WORKSPACE_DATA_DIR ??= mkdtempSync(
+  join(tmpdir(), 'acp-e2e-workspace-'),
+));
+process.env.ACP_E2E_WORKSPACE_DRIVER_URL ??= `http://127.0.0.1:${WORKSPACE_DRIVER_PORT}`;
+// --- end R-V
 
 export default defineConfig({
   testDir: '.',
@@ -89,6 +98,19 @@ export default defineConfig({
       testMatch: 'control.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${CONTROL_PORT}` },
     },
+    // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).
+    {
+      name: 'pages',
+      testMatch: 'pages.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    // --- R-V: P4-H's deferred owner flow on the real routes, agents scripted by the driver.
+    {
+      name: 'workspace',
+      testMatch: 'workspace.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${WORKSPACE_PORT}` },
+    },
+    // --- end R-V
   ],
   webServer: [
     {
@@ -121,5 +143,22 @@ export default defineConfig({
         ACP_DATA_DIR: CONTROL_DATA_DIR,
       },
     },
+    // --- R-V: the workspace server (packages/server/tests/verification/redesign/e2e-server.ts).
+    {
+      command:
+        'node --conditions=development --import tsx tests/verification/redesign/e2e-server.ts',
+      cwd: '../../server',
+      url: `http://127.0.0.1:${WORKSPACE_PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        ACP_PORT: String(WORKSPACE_PORT),
+        ACP_E2E_DRIVER_PORT: String(WORKSPACE_DRIVER_PORT),
+        ACP_DATA_DIR: WORKSPACE_DATA_DIR,
+      },
+    },
+    // --- end R-V
   ],
 });
