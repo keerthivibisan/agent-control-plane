@@ -5,8 +5,10 @@ import type {
   ApprovalStatus,
   OrchestrationRun,
   PermissionDecision,
+  ProjectWorkflow,
   ReviewState,
   TicketPlan,
+  WorkflowStageId,
 } from '@acp/core';
 import type { z } from 'zod';
 import type { Refusal } from './errors.js';
@@ -34,6 +36,15 @@ export interface EngineAgent extends AgentRun {
    * Its process has ended, so nothing can be sent to it. Absent/false for everyone else.
    */
   awaitingHelpers?: boolean;
+  /**
+   * The workflow stage this agent works in (ADR-0019), set for every agent of a ticket run:
+   * `plan` (planner), `orchestrate` (lead), `helpers` (workers at any depth), `code-review`
+   * (reviewer), `unit-tests` (tester). Absent for Phase 3 control-panel runs (`agent_runs.stage`
+   * null). In `lead` planner mode the lead also covers `plan`; `deriveRunWorkflow` shows that.
+   */
+  stage?: WorkflowStageId;
+  /** Reviewer only: how many findings it posted with `post_review` (a count, never the text). */
+  reviewPosts?: number;
 }
 
 /** An owner decision request (ADR-0013 §4, ADR-0014). The summary is redacted, ≤ 200 characters. */
@@ -92,6 +103,24 @@ export interface RunState {
    * ADR-0016. Absent or empty for Phase 3 runs.
    */
   plans?: readonly TicketPlan[];
+  /**
+   * The project's workflow, snapshotted when the run was created (ADR-0019). Absent means the
+   * Phase 4 flow, which `defaultProjectWorkflow()` also gives: one lead plans and orchestrates, and
+   * no code-review or unit-tests stage runs.
+   */
+  workflow?: ProjectWorkflow;
+  /**
+   * Separate planner mode: the lead's brief (ticket and instructions), kept until the owner
+   * approves a plan; the lead then starts with this brief plus the approved plan. In memory only,
+   * like the ledger; owner text only (ADR-0016).
+   */
+  leadBrief?: string;
+  /**
+   * Set by `recoverAfterRestart` when a restart interrupted this run and the workflow has a
+   * code-review or unit-tests stage: no new stage starts until the owner's `continueStages`
+   * (nothing relaunches automatically, ADR-0013 §7). Keep it with the live run.
+   */
+  stagesHeld?: boolean;
 }
 
 /** Injected so the engine stays pure and testable (AGENTS.md §6). */
@@ -119,7 +148,25 @@ export type EngineEffect =
        * amendment); the server then gives it the child-management tools (`ManagedAgentSpec`).
        */
       canStartHelpers?: boolean;
+      /**
+       * The stage's model from the run's workflow (ADR-0019), present only when the stage sets
+       * one. Absent: the project's default model, as in Phase 4.
+       */
+      model?: string;
     }
+  /**
+   * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout of the
+   * project's main branch (the "Run checks now" mechanism, ADR-0017) and start the reviewer in it,
+   * read-only. The reviewer reads the merged result there.
+   */
+  | { type: 'create-review-checkout'; agentRunId: string }
+  /** The reviewer ended (or a restart found it interrupted): remove its temporary checkout. */
+  | { type: 'remove-review-checkout'; agentRunId: string }
+  /**
+   * Store a reviewer finding as a ticket comment (author `reviewer`, ADR-0019; ADR-0016's stored
+   * scope). `body` is the reviewer's plain text, redacted and capped to the comment limit.
+   */
+  | { type: 'review-comment'; agentRunId: string; body: string }
   | { type: 'send-to-agent'; agentRunId: string; text: string }
   /** Stop the current turn but keep the session (budget cap reached). */
   | { type: 'interrupt-agent'; agentRunId: string }

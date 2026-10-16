@@ -1,8 +1,9 @@
-import type { PlanStep, Ticket, TicketPlan } from '@acp/core';
+import type { PlanStep, ProjectWorkflow, Ticket, TicketPlan } from '@acp/core';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { runLimits } from './limits.js';
 import { isAgentOverBudget } from './policy.js';
+import { isSeparatePlanner, stageModelFor, withSkills } from './stages.js';
 import type { EngineContext, EngineResult, RunLimits, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
@@ -11,6 +12,10 @@ import { isLiveAgentStatus } from './transitions.js';
  * approves (→ RUNNING) or requests changes (→ PLANNING, the comment goes to the lead, a new plan
  * version follows). Plans are owner-facing text and are stored (ADR-0016); they live in
  * `RunState.plans`, oldest first.
+ *
+ * Separate planner mode (ADR-0019): the planner, not the lead, submits and revises the plan. On
+ * approval the planner stops and the lead starts with its brief plus the approved plan; the lead
+ * cannot submit or change a plan.
  */
 
 /** The role name for steps the lead does itself; not counted as a helper. */
@@ -24,15 +29,7 @@ export function plannedHelpers(steps: readonly Pick<PlanStep, 'role'>[]): number
   return roles.size;
 }
 
-/** The plan waiting for the owner, if any. */
-export function pendingPlan(state: Pick<RunState, 'plans'>): TicketPlan | undefined {
-  return (state.plans ?? []).find((p) => p.status === 'proposed');
-}
-
-/** The approved plan of the run, if any. */
-export function approvedPlan(state: Pick<RunState, 'plans'>): TicketPlan | undefined {
-  return (state.plans ?? []).find((p) => p.status === 'approved');
-}
+export { approvedPlan, pendingPlan } from './plan-read.js';
 
 /**
  * The lead's `submit_plan` (input already validated with `LeadToolInputs.submit_plan`). Allowed only
@@ -45,9 +42,17 @@ export function submitPlan(
   ctx: EngineContext,
 ): EngineResult<string> {
   return applyCommand(state, ctx, (d) => {
-    const lead = d.lead();
-    if (lead === undefined || lead.id !== callerAgentRunId) {
-      return refusal('not-lead', 'Only the lead agent can submit a plan.');
+    const author = d.planningAgent();
+    if (author === undefined || author.id !== callerAgentRunId) {
+      if (!isSeparatePlanner(d)) {
+        return refusal('not-lead', 'Only the lead agent can submit a plan.');
+      }
+      return refusal(
+        'not-lead',
+        d.lead()?.id === callerAgentRunId
+          ? 'The planner writes the plan in this project; the approved plan cannot be changed.'
+          : 'Only the planner can submit a plan.',
+      );
     }
     if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
       return refusal('run-cancelling', 'The run is being stopped.');
@@ -119,12 +124,19 @@ export function decidePlan(
           : `This plan was already ${plan.status === 'changes-requested' ? 'sent back' : plan.status}.`,
       );
     }
-    const lead = d.lead();
-    if (lead === undefined || !isLiveAgentStatus(lead.status)) {
-      return refusal('agent-not-live', 'The lead agent has ended.');
+    const separate = isSeparatePlanner(d);
+    const author = d.planningAgent();
+    const who = separate ? 'planner' : 'lead';
+    if (author === undefined || !isLiveAgentStatus(author.status)) {
+      return refusal('agent-not-live', separate ? 'The planner has ended.' : 'The lead agent has ended.');
     }
-    if (isAgentOverBudget(lead)) {
-      return refusal('over-budget', 'The lead reached its budget; raise it before deciding.');
+    if (isAgentOverBudget(author)) {
+      return refusal('over-budget', `The ${who} reached its budget; raise it before deciding.`);
+    }
+    // Separate mode: the lead waits (QUEUED) for the approved plan and starts with it.
+    const lead = d.lead();
+    if (separate && (lead === undefined || lead.status !== 'QUEUED')) {
+      return refusal('agent-not-live', 'The lead agent has ended.');
     }
     const note = comment?.trim() ?? '';
 
@@ -136,7 +148,7 @@ export function decidePlan(
       d.effects.push({ type: 'plan-decided', planId: plan.id, status: 'changes-requested' });
       d.effects.push({
         type: 'send-to-agent',
-        agentRunId: lead.id,
+        agentRunId: author.id,
         text: `The owner asked for changes to plan v${plan.version}:\n\n${note}\n\nRevise the plan and call submit_plan again.`,
       });
       return { value: { ...plan } };
@@ -146,7 +158,25 @@ export function decidePlan(
     plan.decidedAt = d.now;
     d.setRunStatus('RUNNING');
     d.effects.push({ type: 'plan-decided', planId: plan.id, status: 'approved' });
-    const { maxConcurrentHelpers } = runLimits(d);
+    const limits = runLimits(d);
+    const { maxConcurrentHelpers } = limits;
+    if (separate && lead !== undefined) {
+      // The planner's work is done (it is read-only, so it never waits for a tool decision).
+      d.endAgent(author, author.status === 'WAITING_APPROVAL' ? 'CANCELLED' : 'SUCCEEDED', true);
+      d.setAgentStatus(lead, 'STARTING');
+      const brief = d.leadBrief ?? `Ticket run: ${d.run.title}`;
+      d.leadBrief = undefined;
+      const model = stageModelFor(d.workflow, 'lead');
+      d.effects.push({
+        type: 'start-agent',
+        agentRunId: lead.id,
+        kind: 'lead',
+        role: lead.role,
+        prompt: withSkills(approvedPlanBrief(brief, plan, note, limits), d.workflow, 'lead'),
+        ...(model !== null ? { model } : {}),
+      });
+      return { value: { ...plan } };
+    }
     d.effects.push({
       type: 'send-to-agent',
       agentRunId: lead.id,
@@ -160,6 +190,95 @@ export function decidePlan(
     });
     return { value: { ...plan } };
   });
+}
+
+type TicketBriefFields = Pick<Ticket, 'key' | 'title' | 'type' | 'priority' | 'description'>;
+
+function ticketHeader(ticket: TicketBriefFields): string[] {
+  const description = ticket.description.trim();
+  return [
+    `Ticket ${ticket.key} (${ticket.type}, ${ticket.priority} priority): ${ticket.title}`,
+    description.length > 0 ? description : '(No description.)',
+  ];
+}
+
+function depthLine(limits: RunLimits): string {
+  return limits.maxDepth >= 2
+    ? 'Helpers may start helpers of their own.'
+    : 'Helpers cannot start helpers of their own.';
+}
+
+/**
+ * The planner's first message in separate planner mode (ADR-0019): the ticket, then how to plan.
+ * The planner only reads and only has `submit_plan`.
+ */
+export function ticketPlannerPrompt(ticket: TicketBriefFields, limits: RunLimits): string {
+  return [
+    ...ticketHeader(ticket),
+    [
+      'You are the planner. Read the code you need; you cannot edit files, run commands or start helpers.',
+      `Call submit_plan with a short summary and 1 to 12 steps. Give each step the helper role that will do it, or "${LEAD_ROLE}" for steps the lead agent does itself.`,
+      'If the owner asks for changes, you will get their comment: revise the plan and call submit_plan again.',
+      'Once the owner approves the plan, a lead agent carries it out and your work is done.',
+      `Up to ${limits.maxConcurrentHelpers} helpers can work at once.`,
+      depthLine(limits),
+    ].join(' '),
+  ].join('\n\n');
+}
+
+/**
+ * The lead's brief in separate planner mode (ADR-0019), kept until approval. The engine adds the
+ * approved plan and the owner's note when it starts the lead.
+ */
+export function ticketOrchestratorPrompt(ticket: TicketBriefFields, limits: RunLimits): string {
+  return [
+    ...ticketHeader(ticket),
+    [
+      'You are the lead. A planner wrote the plan below and the owner approved it: carry it out. You cannot change the plan.',
+      `Up to ${limits.maxConcurrentHelpers} helpers can work at once.`,
+      depthLine(limits),
+    ].join(' '),
+  ].join('\n\n');
+}
+
+/** The lead's first message after approval in separate mode: its brief and the approved plan. */
+function approvedPlanBrief(
+  brief: string,
+  plan: TicketPlan,
+  note: string,
+  limits: RunLimits,
+): string {
+  return [
+    brief,
+    `The approved plan (v${plan.version}): ${plan.summary}`,
+    plan.steps
+      .map((s, i) => {
+        const detail = s.detail.trim();
+        return `${i + 1}. ${s.title} (${s.role})${detail.length > 0 ? `: ${detail}` : ''}`;
+      })
+      .join('\n'),
+    note.length > 0 ? `Owner's note: ${note}` : null,
+    `Start the helpers the plan needs with start_agent (at most ${limits.maxConcurrentHelpers} at once), then call request_review when their work is done.`,
+  ]
+    .filter((l) => l !== null)
+    .join('\n\n');
+}
+
+/**
+ * The prompts `createRun` needs for a ticket under a workflow: `leadPrompt` (and, in separate
+ * planner mode, `plannerPrompt`). Without a workflow, or in `lead` mode, this is
+ * `ticketLeadPrompt`, as in Phase 4.
+ */
+export function ticketRunPrompts(
+  ticket: TicketBriefFields,
+  limits: RunLimits,
+  workflow?: Pick<ProjectWorkflow, 'plannerMode'>,
+): { leadPrompt: string; plannerPrompt?: string } {
+  if (workflow?.plannerMode !== 'separate') return { leadPrompt: ticketLeadPrompt(ticket, limits) };
+  return {
+    leadPrompt: ticketOrchestratorPrompt(ticket, limits),
+    plannerPrompt: ticketPlannerPrompt(ticket, limits),
+  };
 }
 
 /**

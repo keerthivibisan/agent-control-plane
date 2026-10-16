@@ -1,11 +1,13 @@
-import { LeadToolInputs } from '@acp/core';
-import type { LeadToolName } from '@acp/core';
+import { LEAD_TOOL_NAMES, LeadToolInputs } from '@acp/core';
+import type { AgentRoleKind, LeadToolName } from '@acp/core';
 import type { z } from 'zod';
 import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { submitPlan } from './plan.js';
 import { checkRunActive, checkStartAgent, isAgentOverBudget, mayStartHelpers } from './policy.js';
+import { POST_REVIEW_TOOL, PostReviewInputSchema, postReview } from './review-tool.js';
+import { isSeparatePlanner } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
@@ -14,7 +16,8 @@ import { agentDepth } from './tree.js';
 export interface LeadToolCall {
   /**
    * The agent that made the call: the lead, or a helper allowed to start helpers (depth 2), which
-   * gets the child-management tools for its own children only (ADR-0013 amendment).
+   * gets the child-management tools for its own children only (ADR-0013 amendment). Also the
+   * planner (`submit_plan` only) and the reviewer (`post_review` only), ADR-0019.
    */
   callerAgentRunId: string;
   /** Tool name as the model sent it; anything outside `LeadToolInputs` is refused. */
@@ -38,6 +41,41 @@ export const CHILD_MANAGEMENT_TOOLS: readonly LeadToolName[] = Object.freeze([
   'agent_status',
 ]);
 
+/** What the planner, reviewer and tester are told when they call a tool that is not theirs. */
+const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>> = Object.freeze({
+  planner: 'The planner can only submit the plan (submit_plan).',
+  reviewer: 'The reviewer can only post its findings (post_review).',
+  tester: 'The tester has no control-plane tools.',
+});
+
+/**
+ * The control-plane tools one agent may use, for its `ManagedAgentSpec` (ADR-0019; the engine
+ * still checks every call):
+ * - lead: every lead tool; in separate planner mode, without `submit_plan`;
+ * - planner: `submit_plan`; reviewer: `post_review`;
+ * - worker: the child-management tools when it may start helpers (depth 2), else none;
+ * - tester: none.
+ */
+export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
+  const agent = state.agents.find((a) => a.id === agentRunId);
+  if (agent === undefined) return [];
+  const kind: AgentRoleKind = agent.kind;
+  switch (kind) {
+    case 'lead':
+      return isSeparatePlanner(state)
+        ? LEAD_TOOL_NAMES.filter((n) => n !== 'submit_plan')
+        : LEAD_TOOL_NAMES;
+    case 'planner':
+      return ['submit_plan'];
+    case 'reviewer':
+      return [POST_REVIEW_TOOL];
+    case 'worker':
+      return mayStartHelpers(state, agent) ? CHILD_MANAGEMENT_TOOLS : [];
+    case 'tester':
+      return [];
+  }
+}
+
 /** Field paths and messages only; never echo input values (they may hold task text). */
 function describeIssues(error: z.ZodError): string {
   return error.issues
@@ -55,6 +93,7 @@ export function leadToolCall(
   call: LeadToolCall,
   ctx: EngineContext,
 ): EngineResult<string> {
+  if (call.name === POST_REVIEW_TOOL) return postReviewCall(state, call, ctx);
   if (!isLeadToolName(call.name)) {
     return { ok: false, refusal: refusal('unknown-tool', 'That is not one of the lead tools.') };
   }
@@ -62,7 +101,12 @@ export function leadToolCall(
   if (caller === undefined) {
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
-  if (caller.kind !== 'lead') {
+  if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
+    // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review.
+    if (caller.kind !== 'planner' || call.name !== 'submit_plan') {
+      return { ok: false, refusal: refusal('not-lead', NOT_YOUR_TOOL[caller.kind]) };
+    }
+  } else if (caller.kind !== 'lead') {
     // A helper may manage its own children only when the run allows depth 2 (ADR-0013 amendment).
     const childTool = CHILD_MANAGEMENT_TOOLS.includes(call.name);
     if (!childTool || !mayStartHelpers(state, caller)) {
@@ -212,6 +256,23 @@ export function leadToolCall(
       return submitPlan(state, caller.id, parsed.data, ctx);
     }
   }
+}
+
+function postReviewCall(
+  state: RunState,
+  call: LeadToolCall,
+  ctx: EngineContext,
+): EngineResult<string> {
+  const caller = state.agents.find((a) => a.id === call.callerAgentRunId);
+  if (caller === undefined) {
+    return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
+  }
+  if (caller.kind !== 'reviewer') {
+    return { ok: false, refusal: refusal('not-lead', 'Only the reviewer can post a review.') };
+  }
+  const parsed = PostReviewInputSchema.safeParse(call.input);
+  if (!parsed.success) return invalid(parsed.error);
+  return postReview(state, caller.id, parsed.data.findings, ctx);
 }
 
 function describeAgent(a: EngineAgent): string {

@@ -3,6 +3,7 @@ import type {
   AgentRunStatus,
   OrchestrationRun,
   PermissionDecision,
+  ProjectWorkflow,
   RunStatus,
   TicketPlan,
 } from '@acp/core';
@@ -15,6 +16,18 @@ import {
   isTerminalRunStatus,
 } from './transitions.js';
 import { agentDepth, childrenOf, descendantsOf } from './tree.js';
+import {
+  hasReviewableChange,
+  isPostMergeRole,
+  isSeparatePlanner,
+  nextStage,
+  reviewerBrief,
+  stageModelFor,
+  testerBrief,
+  TESTER_TASK,
+  withSkills,
+} from './stages.js';
+import type { PostMergeStage } from './stages.js';
 import type {
   ApprovalDecider,
   EngineAgent,
@@ -52,9 +65,16 @@ export class Draft {
   ledger: UsageLedger;
   readonly plans: TicketPlan[];
   readonly limits: RunLimits | undefined;
+  readonly workflow: ProjectWorkflow | undefined;
+  /** Separate planner mode: the lead's brief until it starts (`RunState.leadBrief`). */
+  leadBrief: string | undefined;
+  /** After a restart: no stage starts until the owner continues (`RunState.stagesHeld`). */
+  stagesHeld: boolean;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
+  /** Reviewers that ended in this command; their checkouts are removed after any abort. */
+  private readonly endedReviewers: string[] = [];
 
   constructor(
     state: RunState,
@@ -67,6 +87,9 @@ export class Draft {
     this.plans = (state.plans ?? []).map((p) => ({ ...p }));
     this.hadPlans = state.plans !== undefined;
     this.limits = state.limits === undefined ? undefined : { ...state.limits };
+    this.workflow = state.workflow;
+    this.leadBrief = state.leadBrief;
+    this.stagesHeld = state.stagesHeld === true;
     this.nowIso = ctx.now.toISOString();
   }
 
@@ -82,6 +105,17 @@ export class Draft {
     return this.agents.find((a) => a.kind === 'lead');
   }
 
+  /** The separate-mode planner (ADR-0019), if the run has one. */
+  planner(): EngineAgent | undefined {
+    return this.agents.find((a) => a.kind === 'planner');
+  }
+
+  /** The agent that writes the plan: the planner in separate mode, else the lead. */
+  planningAgent(): EngineAgent | undefined {
+    return isSeparatePlanner(this) ? this.planner() : this.lead();
+  }
+
+  /** Helpers (workers at any depth). The planner, reviewer and tester are not workers. */
   workers(): EngineAgent[] {
     return this.agents.filter((a) => a.kind === 'worker');
   }
@@ -119,7 +153,9 @@ export class Draft {
     agent.status = to;
     if (!isLiveAgentStatus(to)) {
       agent.endedAt = this.now;
-      if (agent.kind === 'worker' && agent.review === null) agent.review = 'pending';
+      // Helpers and the tester leave a worktree the owner merges or discards (ADR-0019).
+      if (hasReviewableChange(agent.kind) && agent.review === null) agent.review = 'pending';
+      if (agent.kind === 'reviewer') this.endedReviewers.push(agent.id);
     }
   }
 
@@ -147,9 +183,13 @@ export class Draft {
     this.endAgent(agent, to, abort);
   }
 
-  /** Live workers, deepest first; the order in which Stop all ends them. */
-  liveWorkersDeepestFirst(): EngineAgent[] {
-    return this.liveWorkers()
+  /**
+   * Every live agent except the lead, deepest first: the order in which Stop all ends them, before
+   * the lead. Helpers of helpers come first; the planner, reviewer and tester have no parent.
+   */
+  liveNonLeadDeepestFirst(): EngineAgent[] {
+    return this.agents
+      .filter((a) => a.kind !== 'lead' && isLiveAgentStatus(a.status))
       .map((a, i) => ({ a, i, depth: agentDepth(this, a) }))
       .sort((x, y) => y.depth - x.depth || x.i - y.i)
       .map((x) => x.a);
@@ -269,9 +309,19 @@ export class Draft {
     const lead = this.lead();
     const status = this.run.status;
 
-    // Plan-first (ADR-0016): no helper exists before approval, so a lead that ends here fails the run.
+    // Plan-first (ADR-0016): no helper exists before approval, so a planning agent that ends here
+    // fails the run. In separate mode the lead waits (QUEUED) for the approved plan; if the owner
+    // stopped it, the run cannot go on either (ADR-0019).
     if (status === 'PLANNING' || status === 'PLAN_REVIEW') {
-      if (lead === undefined || !isLiveAgentStatus(lead.status)) this.setRunStatus('FAILED');
+      const planner = this.planningAgent();
+      const plannerGone = planner === undefined || !isLiveAgentStatus(planner.status);
+      const leadGone = lead === undefined || !isLiveAgentStatus(lead.status);
+      if (plannerGone || leadGone) {
+        this.setRunStatus('FAILED');
+        for (const agent of this.agents) {
+          this.endAgent(agent, 'CANCELLED', agent.status !== 'QUEUED');
+        }
+      }
       return;
     }
 
@@ -300,13 +350,78 @@ export class Draft {
       }
     }
 
+    // REVIEW covers stages 4–6 (ADR-0019): the owner reviews the helpers' changes, then the
+    // reviewer and the tester work after the merge, and the tester's change is reviewed too. The
+    // run status stays REVIEW meanwhile; `deriveRunWorkflow` says which stage is active.
     if (this.run.status === 'REVIEW') {
-      const unresolved = this.workers().some((w) => w.review === null || w.review === 'pending');
-      if (!unresolved) {
-        this.setRunStatus('COMPLETED');
-        // The conversation is over; stop the lead if it is still waiting for chat.
-        for (const agent of this.agents) this.endAgent(agent, 'CANCELLED', true);
+      const unresolved = this.agents.some(
+        (a) => hasReviewableChange(a.kind) && (a.review === null || a.review === 'pending'),
+      );
+      const stageLive = this.agents.some(
+        (a) => isPostMergeRole(a.kind) && isLiveAgentStatus(a.status),
+      );
+      if (!unresolved && !stageLive) {
+        const next = nextStage(this);
+        if (next === null) {
+          this.setRunStatus('COMPLETED');
+          // The conversation is over; stop the lead if it is still waiting for chat.
+          for (const agent of this.agents) this.endAgent(agent, 'CANCELLED', true);
+        } else if (!this.stagesHeld) {
+          this.startStage(next);
+        }
       }
+    }
+  }
+
+  /**
+   * Starts the reviewer or the tester (ADR-0019). The helpers are done and reviewed, so the lead's
+   * conversation is over and it is stopped, as at completion. The new agent counts as one helper;
+   * none is live at this point, so it always fits the run's helper limit.
+   */
+  private startStage(stage: PostMergeStage): void {
+    const lead = this.lead();
+    if (lead !== undefined) this.endAgent(lead, 'CANCELLED', true);
+    const kind = stage === 'code-review' ? 'reviewer' : 'tester';
+    const agent: EngineAgent = {
+      id: this.freshId(),
+      runId: this.run.id,
+      parentAgentRunId: null,
+      kind,
+      role: kind === 'reviewer' ? 'Reviewer' : 'Tester',
+      task: kind === 'tester' ? TESTER_TASK : null,
+      status: 'QUEUED',
+      sessionId: null,
+      budgetTokensUsed: 0,
+      createdAt: this.now,
+      endedAt: null,
+      budgetLimit: this.run.budget.maxTokensPerAgent,
+      latestActivity: null,
+      review: null,
+      reportedCostUsd: null,
+      stage,
+    };
+    if (kind === 'reviewer') agent.reviewPosts = 0;
+    this.agents.push(agent);
+    this.setAgentStatus(agent, 'STARTING');
+    if (kind === 'reviewer') {
+      this.effects.push({ type: 'create-review-checkout', agentRunId: agent.id });
+    }
+    const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
+    const model = stageModelFor(this.workflow, kind);
+    this.effects.push({
+      type: 'start-agent',
+      agentRunId: agent.id,
+      kind,
+      role: agent.role,
+      prompt: withSkills(brief, this.workflow, kind),
+      ...(model !== null ? { model } : {}),
+    });
+  }
+
+  /** Emits `remove-review-checkout` for reviewers that ended in this command, after any abort. */
+  flushCheckoutRemovals(): void {
+    for (const agentRunId of this.endedReviewers.splice(0)) {
+      this.effects.push({ type: 'remove-review-checkout', agentRunId });
     }
   }
 
@@ -320,6 +435,9 @@ export class Draft {
     };
     if (this.limits !== undefined) state.limits = this.limits;
     if (this.hadPlans || this.plans.length > 0) state.plans = this.plans;
+    if (this.workflow !== undefined) state.workflow = this.workflow;
+    if (this.leadBrief !== undefined) state.leadBrief = this.leadBrief;
+    if (this.stagesHeld) state.stagesHeld = true;
     return state;
   }
 

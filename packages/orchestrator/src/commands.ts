@@ -1,5 +1,10 @@
-import { APPROVAL_TIMEOUT_MS, DEFAULT_AGENT_BUDGET_TOKENS, TokenCountsSchema } from '@acp/core';
-import type { ManagedAgentEvent, PermissionRequest, RunBudget } from '@acp/core';
+import {
+  APPROVAL_TIMEOUT_MS,
+  DEFAULT_AGENT_BUDGET_TOKENS,
+  ProjectWorkflowSchema,
+  TokenCountsSchema,
+} from '@acp/core';
+import type { ManagedAgentEvent, PermissionRequest, ProjectWorkflow, RunBudget } from '@acp/core';
 import { recordUsage, EMPTY_LEDGER } from './budget.js';
 import { cleanSummary, Draft, DuplicateIdError, formatTokens } from './draft.js';
 import { IllegalTransitionError, refusal } from './errors.js';
@@ -12,6 +17,15 @@ import {
   checkRunActive,
 } from './policy.js';
 import type { AllowlistVerdict } from './allowlist.js';
+import {
+  hasPostMergeStages,
+  hasReviewableChange,
+  isPostMergeRole,
+  isReadOnlyRole,
+  nextStage,
+  stageModelFor,
+  withSkills,
+} from './stages.js';
 import type {
   EngineAgent,
   EngineApproval,
@@ -42,6 +56,7 @@ export function applyCommand<T>(
     const outcome = body(draft);
     if (isRefusal(outcome)) return { ok: false, refusal: outcome };
     draft.reconcile();
+    draft.flushCheckoutRemovals();
     return { ok: true, state: draft.finish(), effects: draft.effects, value: outcome.value };
   } catch (error) {
     if (error instanceof IllegalTransitionError) {
@@ -69,12 +84,50 @@ export interface CreateRunInput {
    */
   limits?: RunLimits;
   /**
-   * A board ticket run (ADR-0016): plan-first. The run starts in PLANNING and the lead starts at
-   * once with `leadPrompt` (the ticket brief, e.g. from `ticketLeadPrompt`). Without a ticket the
+   * A board ticket run (ADR-0016): plan-first. The run starts in PLANNING. Without a ticket the
    * run is a Phase 3 control-panel run: QUEUED until the owner's first chat message.
+   * - `lead` planner mode (the default): the lead starts at once with `leadPrompt` (the ticket
+   *   brief, e.g. from `ticketLeadPrompt`).
+   * - `separate` planner mode (ADR-0019): the planner starts at once with `plannerPrompt`
+   *   (required; `ticketPlannerPrompt`). `leadPrompt` is the lead's brief
+   *   (`ticketOrchestratorPrompt`); the lead starts with it, plus the approved plan, on approval.
+   * `ticketRunPrompts` builds both for a workflow.
    */
-  ticket?: { ticketId: string; leadPrompt: string };
+  ticket?: { ticketId: string; leadPrompt: string; plannerPrompt?: string };
+  /**
+   * The project's workflow (ADR-0019), snapshotted with the run. Ticket runs only. Absent, or
+   * `defaultProjectWorkflow()`, gives exactly the Phase 4 flow.
+   */
+  workflow?: ProjectWorkflow;
   registeredProjectIds: Iterable<string>;
+}
+
+/** Validates the workflow against its schema and the run (the engine never trusts its caller). */
+function checkWorkflow(input: CreateRunInput): Refusal | { workflow: ProjectWorkflow | undefined } {
+  const ticket = input.ticket;
+  if (input.workflow === undefined) {
+    if (ticket?.plannerPrompt !== undefined) {
+      return refusal('invalid-input', 'A planner prompt needs the separate planner mode.');
+    }
+    return { workflow: undefined };
+  }
+  const parsed = ProjectWorkflowSchema.safeParse(input.workflow);
+  if (!parsed.success) return refusal('invalid-input', 'The project workflow is not valid.');
+  const workflow = parsed.data;
+  if (workflow.projectId !== input.projectId) {
+    return refusal('invalid-input', 'The workflow belongs to another project.');
+  }
+  if (ticket === undefined) {
+    return refusal('invalid-input', 'A workflow applies to ticket runs only.');
+  }
+  if (workflow.plannerMode === 'separate') {
+    if (ticket.plannerPrompt === undefined || ticket.plannerPrompt.trim().length === 0) {
+      return refusal('invalid-input', 'The planner prompt is empty.');
+    }
+  } else if (ticket.plannerPrompt !== undefined) {
+    return refusal('invalid-input', 'A planner prompt needs the separate planner mode.');
+  }
+  return { workflow };
 }
 
 /**
@@ -101,6 +154,9 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
       return { ok: false, refusal: refusal('invalid-input', 'The lead prompt is empty.') };
     }
   }
+  const checked = checkWorkflow(input);
+  if ('code' in checked) return { ok: false, refusal: checked };
+  const workflow = checked.workflow;
   const budget: RunBudget = input.budget ?? {
     maxTokensPerAgent: DEFAULT_AGENT_BUDGET_TOKENS,
     softCostUsdPerRun: null,
@@ -123,6 +179,8 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     review: null,
     reportedCostUsd: null,
   };
+  // Ticket runs record each agent's workflow stage (ADR-0019); Phase 3 runs have none.
+  if (ticket !== undefined) lead.stage = 'orchestrate';
   const state: RunState = {
     run: {
       id: input.runId,
@@ -142,17 +200,44 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
   };
   if (ticket === undefined) return { ok: true, state, effects: [], value: state };
 
-  const started = applyCommand({ ...state, plans: [] }, ctx, (d) => {
+  const initial: RunState = { ...state, plans: [] };
+  if (workflow !== undefined) initial.workflow = workflow;
+  const started = applyCommand(initial, ctx, (d) => {
     d.setRunStatus('PLANNING');
     const draftLead = d.lead();
     if (draftLead === undefined) return refusal('unknown-agent', 'The run has no lead agent.');
+    if (workflow?.plannerMode === 'separate') {
+      // ADR-0019: the planner plans; the lead waits (QUEUED) for the approved plan.
+      const planner: EngineAgent = {
+        ...draftLead,
+        id: d.freshId(),
+        kind: 'planner',
+        role: 'Planner',
+        stage: 'plan',
+      };
+      d.agents.push(planner);
+      d.setAgentStatus(planner, 'STARTING');
+      d.leadBrief = ticket.leadPrompt;
+      const model = stageModelFor(workflow, 'planner');
+      d.effects.push({
+        type: 'start-agent',
+        agentRunId: planner.id,
+        kind: 'planner',
+        role: planner.role,
+        prompt: withSkills(ticket.plannerPrompt ?? '', workflow, 'planner'),
+        ...(model !== null ? { model } : {}),
+      });
+      return done;
+    }
     d.setAgentStatus(draftLead, 'STARTING');
+    const model = stageModelFor(workflow, 'lead');
     d.effects.push({
       type: 'start-agent',
       agentRunId: draftLead.id,
       kind: 'lead',
       role: draftLead.role,
-      prompt: ticket.leadPrompt,
+      prompt: withSkills(ticket.leadPrompt, workflow, 'lead'),
+      ...(model !== null ? { model } : {}),
     });
     return done;
   });
@@ -184,20 +269,25 @@ export function ownerChat(state: RunState, text: string, ctx: EngineContext): En
       return done;
     }
 
-    // The owner may talk with the lead while it plans and while the plan waits (ADR-0016).
-    const chatOpen = ['REVIEW', 'PLANNING', 'PLAN_REVIEW'].includes(d.run.status);
+    // The owner may talk with the lead while it plans and while the plan waits (ADR-0016); in
+    // separate planner mode, with the planner, which holds the conversation until approval.
+    const planning = d.run.status === 'PLANNING' || d.run.status === 'PLAN_REVIEW';
+    const chatOpen = planning || d.run.status === 'REVIEW';
     if (!chatOpen) {
       const runRefusal = checkRunActive(d.run.status);
       if (runRefusal !== null) return runRefusal;
     }
-    if (!isLiveAgentStatus(lead.status)) {
-      return refusal('agent-not-live', 'The lead agent has ended.');
+    const target = planning ? d.planningAgent() : lead;
+    if (target === undefined) return refusal('unknown-agent', 'The run has no planner.');
+    const who = target.kind === 'planner' ? 'The planner' : 'The lead agent';
+    if (!isLiveAgentStatus(target.status)) {
+      return refusal('agent-not-live', `${who} has ended.`);
     }
-    if (lead.status === 'BLOCKED') {
-      return refusal('over-budget', 'The lead agent reached its budget; raise it or stop the run.');
+    if (target.status === 'BLOCKED') {
+      return refusal('over-budget', `${who} reached its budget; raise it or stop the run.`);
     }
     d.effects.push({ type: 'chat-message', role: 'owner', text: message });
-    d.effects.push({ type: 'send-to-agent', agentRunId: lead.id, text: message });
+    d.effects.push({ type: 'send-to-agent', agentRunId: target.id, text: message });
     return done;
   });
 }
@@ -246,7 +336,9 @@ export function agentEvent(
       }
 
       case 'lead-text':
-        if (agent.kind !== 'lead') {
+        // The lead's replies, and the planner's while it holds the conversation (separate mode;
+        // published under the run's agent voice, 'lead'). Everyone else's text is dropped.
+        if (agent.kind !== 'lead' && agent.kind !== 'planner') {
           d.effects.push({ type: 'diagnostic', code: 'worker-text-dropped', agentRunId });
           return done;
         }
@@ -313,10 +405,20 @@ export function requestPermission(
   return applyCommand(state, ctx, (d) => {
     const agent = d.agent(request.agentRunId);
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
-    const planRefusal = checkPlanApproved(d.run.status);
-    if (planRefusal !== null) return planRefusal;
-    const runRefusal = checkRunActive(d.run.status);
-    if (runRefusal !== null) return runRefusal;
+    if (isReadOnlyRole(agent.kind)) {
+      return refusal(
+        'unknown-tool',
+        'The planner and the reviewer only read; they cannot edit files or run commands.',
+      );
+    }
+    // The tester works after the merge, while the run is in REVIEW (ADR-0019).
+    const testerAfterMerge = agent.kind === 'tester' && d.run.status === 'REVIEW';
+    if (!testerAfterMerge) {
+      const planRefusal = checkPlanApproved(d.run.status);
+      if (planRefusal !== null) return planRefusal;
+      const runRefusal = checkRunActive(d.run.status);
+      if (runRefusal !== null) return runRefusal;
+    }
     if (!isLiveAgentStatus(agent.status)) {
       return refusal('agent-not-live', 'The agent has ended.');
     }
@@ -325,7 +427,8 @@ export function requestPermission(
     }
     if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
     const toolName = cleanSummary(request.toolName, 'Tool');
-    if (options.allowlist?.allowed === true && agent.kind === 'worker') {
+    // The tester's allowlist is the helpers' (ADR-0019).
+    if (options.allowlist?.allowed === true && hasReviewableChange(agent.kind)) {
       const auto: EngineApproval = {
         id: d.freshId(),
         runId: d.run.id,
@@ -502,7 +605,8 @@ export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContex
  * Stop all (orchestration-lifecycle §2). Order matters and is part of the contract:
  * 1. the run becomes CANCELLING, so nothing new is scheduled (`start_agent` is refused);
  * 2. every pending approval is denied, releasing parked SDK callbacks;
- * 3. workers are aborted, deepest first (helpers of helpers before their parents);
+ * 3. every other agent is aborted, deepest first (helpers of helpers before their parents; the
+ *    planner, reviewer and tester too, ADR-0019);
  * 4. the lead is aborted last, so it cannot start replacements in between.
  * The run becomes CANCELLED with `completeCancellation` once the processes have ended.
  */
@@ -533,7 +637,7 @@ function stopEverything(
     }
     d.setRunStatus('CANCELLING');
     d.settlePendingApprovals(null, 'denied', Draft.messages.deniedAgentStopped);
-    for (const worker of d.liveWorkersDeepestFirst()) d.endAgent(worker, agentStatus, true);
+    for (const agent of d.liveNonLeadDeepestFirst()) d.endAgent(agent, agentStatus, true);
     const lead = d.lead();
     if (lead !== undefined) d.endAgent(lead, agentStatus, true);
     return done;
@@ -597,6 +701,16 @@ export function recordReview(
 export function recoverAfterRestart(state: RunState, ctx: EngineContext): EngineResult {
   return applyCommand(state, ctx, (d) => {
     const cancelling = d.run.status === 'CANCELLING';
+    const runInterrupted = ['QUEUED', 'PLANNING', 'PLAN_REVIEW', 'RUNNING', 'BLOCKED'].includes(
+      d.run.status,
+    );
+    const stageInterrupted = d.agents.some(
+      (a) => isPostMergeRole(a.kind) && isLiveAgentStatus(a.status),
+    );
+    // ADR-0019: after a restart no stage starts by itself; the owner continues (`continueStages`).
+    if (!cancelling && (runInterrupted || stageInterrupted) && hasPostMergeStages(d.workflow)) {
+      d.stagesHeld = true;
+    }
     d.settlePendingApprovals(null, 'expired', Draft.messages.deniedNoAnswer);
     // The processes are gone: no abort effects, and settled approvals have no callback to resolve.
     d.effects.length = 0;
@@ -609,6 +723,33 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     else if (['QUEUED', 'PLANNING', 'PLAN_REVIEW', 'RUNNING', 'BLOCKED'].includes(d.run.status)) {
       d.setRunStatus('NEEDS_REVIEW');
     }
+    return done;
+  });
+}
+
+/**
+ * The owner's "Continue" after a restart (ADR-0019, ADR-0013 §7): a restart interrupted the run,
+ * so the next post-merge stage waits (`RunState.stagesHeld`). Once every change is reviewed, this
+ * starts it: the code review (again, if the restart cut the reviewer off before it finished), or
+ * the unit tests. Nothing else ever relaunches an interrupted agent.
+ */
+export function continueStages(state: RunState, ctx: EngineContext): EngineResult {
+  return applyCommand(state, ctx, (d) => {
+    if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
+      return refusal('run-cancelling', 'The run is being stopped.');
+    }
+    if (!d.stagesHeld || d.run.status !== 'REVIEW') {
+      return refusal('run-not-active', 'Nothing is waiting to continue.');
+    }
+    if (d.agents.some((a) => a.kind !== 'lead' && isLiveAgentStatus(a.status))) {
+      return refusal('workers-still-running', 'Some agents are still working.');
+    }
+    if (d.agents.some((a) => hasReviewableChange(a.kind) && a.review === 'pending')) {
+      return refusal('review-not-allowed', 'Review the remaining changes first.');
+    }
+    if (nextStage(d) === null) return refusal('run-not-active', 'No stage is left to start.');
+    d.stagesHeld = false;
+    // `reconcile` starts the stage.
     return done;
   });
 }
