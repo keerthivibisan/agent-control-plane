@@ -57,6 +57,13 @@ import {
   ProjectWorkflowDtoSchema,
   UpdateWorkflowRequestSchema,
 } from '@acp/core/api';
+// Skills page (redesign, R-D).
+import {
+  SkillCommitResultDtoSchema,
+  SkillDetailDtoSchema,
+  SkillSummaryDtoSchema,
+  SkillWriteRequestSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -830,4 +837,76 @@ export async function updateWorkflow(
     checked(UpdateWorkflowRequestSchema, input, path),
     workflowSchemas.workflow,
   );
+}
+
+// --- Skills (redesign, wp/r-d-skills) -----------------------------------------------------------
+//
+// Project skills in `<repo>/.claude/skills/<slug>/SKILL.md` (ADR-0018), served by the server's
+// `routes/skills.ts`. Every mutation sends the CSRF header; a delete answers 204.
+
+export type SkillWriteRequest = ReturnType<typeof SkillWriteRequestSchema.parse>;
+
+export const skillsPaths = {
+  list: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/skills`,
+  skill: (projectId: string, name: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/skills/${enc(name)}`,
+  commit: (projectId: string, name: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/skills/${enc(name)}/commit`,
+} as const;
+
+export const skillsSchemas = {
+  list: SkillSummaryDtoSchema.array(),
+  detail: SkillDetailDtoSchema,
+  commit: SkillCommitResultDtoSchema,
+} as const;
+
+/** True for one project's cached skill list and skill pages. */
+export function isSkillsPath(projectId: string): (key: string) => boolean {
+  const base = skillsPaths.list(projectId);
+  return (key) => key === base || key.startsWith(`${base}/`);
+}
+
+/** POST …/skills: writes a new SKILL.md into the project's working tree (uncommitted). */
+export function createSkill(client: ApiClient, projectId: string, input: SkillWriteRequest) {
+  const path = skillsPaths.list(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(SkillWriteRequestSchema, input, path),
+    skillsSchemas.detail,
+  );
+}
+
+/** PUT …/skills/:name: replaces the skill's description and instructions. */
+export function updateSkill(
+  client: ApiClient,
+  projectId: string,
+  name: string,
+  input: SkillWriteRequest,
+) {
+  const path = skillsPaths.skill(projectId, name);
+  return controlPut(
+    client,
+    path,
+    checked(SkillWriteRequestSchema, input, path),
+    skillsSchemas.detail,
+  );
+}
+
+/** DELETE …/skills/:name (204): refused while a workflow stage uses the skill. */
+export async function deleteSkill(client: ApiClient, projectId: string, name: string) {
+  const path = skillsPaths.skill(projectId, name);
+  const send = async (fresh: boolean) =>
+    client.delete(path, undefined, { [CSRF_HEADER]: await csrfToken(client, fresh) });
+  try {
+    await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** POST …/skills/:name/commit: a git commit of only that skill's folder, never pushed. */
+export function commitSkill(client: ApiClient, projectId: string, name: string) {
+  return controlPost(client, skillsPaths.commit(projectId, name), {}, skillsSchemas.commit);
 }

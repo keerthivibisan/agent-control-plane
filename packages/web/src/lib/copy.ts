@@ -2498,3 +2498,124 @@ export const WORKFLOW_COPY = {
     loading: 'Loading agent files…',
   },
 } as const;
+
+// --- Skills page (redesign, wp/r-d-skills) ------------------------------------------------------
+//
+// Project skills: `.claude/skills/<name>/SKILL.md` in the project's repository (ADR-0018).
+
+import type { WorkflowStageId } from '@acp/core';
+
+export const SKILLS_COPY = {
+  page: {
+    title: 'Skills',
+    description:
+      "Instructions your agents can follow, saved as files in this project's repository. Claude Code loads them by name.",
+    newSkill: 'New skill',
+    back: 'All skills',
+    loading: 'Loading skills…',
+    tip: 'A skill is a SKILL.md file in .claude/skills/<name>/. A workflow stage that names a skill tells its agent to use it. Your personal skills in ~/.claude are never shown or changed here.',
+  },
+  empty: {
+    title: 'No skills yet',
+    text: 'Start from a template, or write one from scratch. A skill is saved as a file in this project, so it is versioned and reviewed with your code.',
+    blank: 'Blank skill',
+  },
+  card: {
+    usedBy: 'Used by',
+    notUsed: 'Not used by any stage',
+    uncommitted: 'Uncommitted',
+    uncommittedTip:
+      'The file in your working tree differs from the last commit, or was never committed. Open the skill and press Commit to record it.',
+    lastCommitted: 'Last committed',
+    neverCommitted: 'Never committed',
+    noDescription: 'No description',
+    problems: (n: number) => (n === 1 ? '1 problem' : `${formatCount(n)} problems`),
+    open: (name: string) => `Open skill ${name}`,
+  },
+  stages: {
+    plan: 'Plan',
+    orchestrate: 'Orchestrate',
+    helpers: 'Helpers',
+    review: 'Review and merge',
+    'code-review': 'Final code review',
+    'unit-tests': 'Unit tests',
+  } satisfies Record<WorkflowStageId, string>,
+  editor: {
+    newTitle: 'New skill',
+    editTitle: (name: string) => name,
+    newDescription: 'Saved to .claude/skills/<name>/SKILL.md in this project.',
+    name: 'Name',
+    nameHint:
+      'Lowercase letters, digits and dashes. It is the folder name and cannot be changed later.',
+    nameInvalid:
+      'Use lowercase letters, digits and dashes, starting with a letter or digit (up to 64).',
+    nameTaken: 'A skill with this name already exists.',
+    description: 'When to use it',
+    descriptionHint:
+      'One or two sentences. Claude Code reads this to decide when the skill applies.',
+    descriptionRequired: 'Say when the skill should be used.',
+    instructions: 'Instructions',
+    write: 'Write',
+    preview: 'Preview',
+    previewEmpty: 'Nothing to preview yet.',
+    size: (used: string) => `${used} of 64 KB`,
+    tooLarge: 'The skill is larger than 64 KB. Shorten the instructions.',
+    templates: 'Start from a template',
+    templatesHint: 'Replaces the description and instructions below.',
+    save: 'Save',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    saved: 'Saved to your working tree. It is not committed yet.',
+    unsaved: 'Unsaved changes',
+    path: 'File',
+  },
+  commit: {
+    title: 'Commit',
+    button: 'Commit',
+    committing: 'Committing…',
+    explain:
+      "Commit creates a git commit with only this skill's folder, on the branch you have checked out. Nothing else is included and nothing is pushed.",
+    clean: 'Everything in this skill is committed.',
+    saveFirst: 'Save your changes before committing.',
+    done: (commit: string, branch: string) => `Committed ${commit.slice(0, 7)} on ${branch}.`,
+    removal: (name: string) => `Deleted ${name}. Commit to record the removal in git.`,
+    commitRemoval: 'Commit removal',
+  },
+  remove: {
+    button: 'Delete skill',
+    title: (name: string) => `Delete ${name}?`,
+    text: (path: string) =>
+      `This removes ${path} from your working tree. Other files in its folder stay. Commit afterwards to record the removal.`,
+    confirm: 'Delete',
+    deleting: 'Deleting…',
+    cancel: 'Cancel',
+    inUse: (stages: string) =>
+      `Used by ${stages}. Remove it from those stages on the Workflow page before deleting it.`,
+  },
+  problems: {
+    title: 'Problems',
+  },
+  /** Friendly words for the server's typed refusals; the server's own sentence follows. */
+  refusals: {
+    conflict: 'A skill with this name already exists.',
+    not_found: 'This skill no longer exists.',
+    skill_in_use: 'A workflow stage still uses this skill.',
+    unsafe_path:
+      'The skill folder is a link or points outside the project, so the app will not touch it.',
+    too_large: 'The skill is larger than 64 KB.',
+    staged_changes:
+      'Other files are staged in git. Commit or unstage them first, so the skill commit holds only the skill.',
+    nothing_to_commit: 'There is nothing to commit for this skill.',
+    detached_head: 'No branch is checked out in the project, so there is nowhere to commit.',
+    not_a_git_repo: 'The project folder is not a git repository.',
+    git_failed: 'git could not finish the commit.',
+    fallback: 'That did not work.',
+  } as Record<string, string>,
+} as const;
+
+/** "Plan, Helpers and Final code review". */
+export function stageList(stages: readonly WorkflowStageId[]): string {
+  const words = stages.map((s) => SKILLS_COPY.stages[s]);
+  if (words.length <= 1) return words.join('');
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1] ?? ''}`;
+}

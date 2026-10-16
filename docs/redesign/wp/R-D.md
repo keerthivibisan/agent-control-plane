@@ -16,9 +16,13 @@
 
 | Date       | What was done                                                                                                                                                     | Commit        | Checks                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
-| 2026-10-16 | Claimed R-D. Read ADR-0018, redesign §4.3 and §7, the skill contracts and the server git helpers. Paused by the coordinator before any code.                      | `94dcde6`     | docs only; format:check ✓                            |
-| 2026-10-16 | Resumed and rebased on main `4261740`. Server module `src/skills/**` (front matter, ADR-0018 path layer, service, typed refusals) and 26 security and flow tests. | `13ae5ef`     | format ✓ lint ✓ typecheck ✓ test 1687/1687 ✓ build ✓ |
-| 2026-10-16 | Router `routes/skills.ts` (`createSkillsRouter`) and 4 supertest tests: the full flow, CSRF 403 on every mutation, typed refusals, not_a_git_repo.                | (this commit) | format ✓ lint ✓ typecheck ✓ test 1691/1691 ✓ build ✓ |
+| 2026-10-16 | Claimed R-D. Read ADR-0018, redesign §4.3 and §7, the skill contracts and the server git helpers. Paused by the coordinator before any code.                      | `ae95d24`     | docs only; format:check ✓                            |
+| 2026-10-16 | Resumed and rebased on main `4261740`. Server module `src/skills/**` (front matter, ADR-0018 path layer, service, typed refusals) and 26 security and flow tests. | `fdff834`     | format ✓ lint ✓ typecheck ✓ test 1687/1687 ✓ build ✓ |
+| 2026-10-16 | Router `routes/skills.ts` (`createSkillsRouter`) and 4 supertest tests: the full flow, CSRF 403 on every mutation, typed refusals, not_a_git_repo.                | `6d73c93`     | format ✓ lint ✓ typecheck ✓ test 1691/1691 ✓ build ✓ |
+| 2026-10-16 | Shared-file addition: `ApiClient.delete` for 204 responses in `lib/api.ts`, with 3 tests.                                                                         | `6dc85f2`     | format ✓ lint ✓ typecheck ✓ test 1694/1694 ✓ build ✓ |
+| 2026-10-16 | Rebased on main `59c56c4` (R-G part 1). Refuse a project whose `.claude` is the owner's `~/.claude` (home-folder project), with a test.                           | `c959c55`     | format ✓ lint ✓ typecheck ✓ test 1721/1721 ✓ build ✓ |
+| 2026-10-16 | Wiring commit: skills router in `app.ts`, service in `bootstrap.ts` with `workflowOf` = R-G's `workflowFor`; a startServer test.                                  | `3416a2e`     | format ✓ lint ✓ typecheck ✓ test 1721/1721 ✓ build ✓ |
+| 2026-10-16 | Web: Skills section in `lib/api.ts` and `lib/copy.ts`; `features/skills/**` (list, editor, templates, Markdown preview, Commit, Delete); 9 component tests.       | (this commit) | format ✓ lint ✓ typecheck ✓ test 1730/1730 ✓ build ✓ |
 
 ## Handoff notes
 
