@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
 import {
+  AgentToolNameSchema,
+  MAX_AGENT_BYTES,
   MAX_SKILL_BYTES,
   MAX_SKILL_DESCRIPTION,
   PlannerModeSchema,
@@ -102,6 +104,43 @@ export const SkillCommitResultDtoSchema = z.object({
   branch: z.string().min(1),
 });
 export type SkillCommitResultDto = z.infer<typeof SkillCommitResultDtoSchema>;
+
+// ---------------------------------------------------------------- agent definitions
+
+/** A project agent definition, `.claude/agents/<name>.md` (ADR-0018, amended 2026-10-16). */
+export const AgentDefinitionSummaryDtoSchema = z.object({
+  name: SkillNameSchema,
+  description: z.string().max(MAX_SKILL_DESCRIPTION),
+  path: RepoRelativePathSchema,
+  /** The front matter `tools` list; null means the agent inherits every tool (Claude Code default). */
+  tools: z.array(AgentToolNameSchema).nullable(),
+  model: z.string().min(1).max(100).nullable(),
+  sizeBytes: count,
+  lastCommittedAt: IsoTimestampSchema.nullable(),
+  uncommitted: z.boolean(),
+  problems: z.array(z.string().min(1)),
+});
+export type AgentDefinitionSummaryDto = z.infer<typeof AgentDefinitionSummaryDtoSchema>;
+
+export const AgentDefinitionDetailDtoSchema = AgentDefinitionSummaryDtoSchema.extend({
+  /** The Markdown body after the front matter (the agent's instructions). The owner's own file. */
+  instructions: z.string().max(MAX_AGENT_BYTES),
+});
+export type AgentDefinitionDetailDto = z.infer<typeof AgentDefinitionDetailDtoSchema>;
+
+/** POST `/api/projects/:id/agents` (create) and PUT `…/agents/:name` (replace). */
+export const AgentDefinitionWriteRequestSchema = z.object({
+  name: SkillNameSchema,
+  description: z.string().trim().min(1).max(MAX_SKILL_DESCRIPTION),
+  tools: z.array(AgentToolNameSchema).max(50).nullable(),
+  model: z.string().trim().min(1).max(100).nullable(),
+  instructions: z.string().max(MAX_AGENT_BYTES),
+});
+export type AgentDefinitionWriteRequest = z.infer<typeof AgentDefinitionWriteRequestSchema>;
+
+/** POST `…/agents/:name/commit`: commits only that file on the current branch. */
+export const AgentDefinitionCommitResultDtoSchema = SkillCommitResultDtoSchema;
+export type AgentDefinitionCommitResultDto = z.infer<typeof AgentDefinitionCommitResultDtoSchema>;
 
 // ---------------------------------------------------------------- tokens
 

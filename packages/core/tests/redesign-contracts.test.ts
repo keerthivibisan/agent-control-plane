@@ -9,6 +9,7 @@ import {
   tokenHeadline,
 } from '../src/index.js';
 import {
+  AgentDefinitionWriteRequestSchema,
   ProjectTokensDtoSchema,
   SkillWriteRequestSchema,
   UpdateWorkflowRequestSchema,
@@ -140,5 +141,37 @@ describe('token headline (redesign §4.5)', () => {
         byModel: [{ model: 'model-a', ...row }],
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('agent definition contracts (ADR-0018 amendment)', () => {
+  const base = {
+    name: 'code-reviewer',
+    description: 'Reviews a change',
+    tools: ['Read', 'Grep', 'Glob'],
+    model: null,
+    instructions: '# Review the diff',
+  };
+
+  it('accepts a definition with a tools list, or none (inherit)', () => {
+    expect(AgentDefinitionWriteRequestSchema.safeParse(base).success).toBe(true);
+    expect(AgentDefinitionWriteRequestSchema.safeParse({ ...base, tools: null }).success).toBe(
+      true,
+    );
+  });
+
+  it('refuses bad names, odd tool names and oversize bodies', () => {
+    expect(AgentDefinitionWriteRequestSchema.safeParse({ ...base, name: '../x' }).success).toBe(
+      false,
+    );
+    expect(
+      AgentDefinitionWriteRequestSchema.safeParse({ ...base, tools: ['Read; rm -rf'] }).success,
+    ).toBe(false);
+    expect(
+      AgentDefinitionWriteRequestSchema.safeParse({
+        ...base,
+        instructions: 'x'.repeat(64 * 1024 + 1),
+      }).success,
+    ).toBe(false);
   });
 });

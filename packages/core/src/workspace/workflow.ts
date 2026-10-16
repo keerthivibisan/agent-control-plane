@@ -22,6 +22,16 @@ export const SKILL_FILE = 'SKILL.md';
 export const MAX_SKILL_BYTES = 64 * 1024;
 export const MAX_SKILL_DESCRIPTION = 1024;
 
+/**
+ * Project agent definitions (Claude Code subagents): `<project>/.claude/agents/<name>.md`, Markdown
+ * with front matter (`name`, `description`, optional `tools`, `model`). Written by the app on an
+ * owner action under the same rules as skills (ADR-0018, amended 2026-10-16).
+ */
+export const AGENTS_DIR = '.claude/agents';
+export const MAX_AGENT_BYTES = 64 * 1024;
+/** A Claude Code tool name in an agent's `tools` list, e.g. `Read`, `Bash`, `mcp__server__tool`. */
+export const AgentToolNameSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_:*.-]{0,99}$/);
+
 /** The stages, in order. `review` is the owner plus harness checks; it has no agent. */
 export const WorkflowStageIdSchema = z.enum([
   'plan',
