@@ -56,7 +56,7 @@ describe('app shell', () => {
     expect(navLink('Board').getAttribute('href')).toBe('#/p/p-1/board');
     expect(navLink('Board').getAttribute('aria-current')).toBe('page');
     expect(navLink('Workflow').getAttribute('href')).toBe('#/p/p-1/workflow');
-    expect(navLink('Skills').getAttribute('href')).toBe('#/p/p-1/skills');
+    expect(navLink('Skills & Agents').getAttribute('href')).toBe('#/p/p-1/skills');
     expect(navLink('Harness').getAttribute('href')).toBe('#/p/p-1/harness');
     expect(navLink('Tokens').getAttribute('href')).toBe('#/p/p-1/tokens');
     expect(navLink('Sessions').getAttribute('href')).toBe('#/p/p-1/sessions');

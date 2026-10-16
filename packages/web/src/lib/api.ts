@@ -64,11 +64,11 @@ import {
   SkillSummaryDtoSchema,
   SkillWriteRequestSchema,
 } from '@acp/core/api';
-// Agents tab of the Skills & Agents page (redesign, R-D).
+// Agents tab of the Skills & Agents page (redesign, R-D). `AgentDefinitionSummaryDtoSchema` is
+// imported by the Workflow section above.
 import {
   AgentDefinitionCommitResultDtoSchema,
   AgentDefinitionDetailDtoSchema,
-  AgentDefinitionSummaryDtoSchema,
   AgentDefinitionWriteRequestSchema,
 } from '@acp/core/api';
 
@@ -927,7 +927,9 @@ export function commitSkill(client: ApiClient, projectId: string, name: string) 
 // Project agent files in `<repo>/.claude/agents/<slug>.md` (ADR-0018 amendment), served by the
 // server's `routes/agents.ts`, mirroring the skills routes.
 
-export type AgentDefinitionWriteRequest = ReturnType<typeof AgentDefinitionWriteRequestSchema.parse>;
+export type AgentDefinitionWriteRequest = ReturnType<
+  typeof AgentDefinitionWriteRequestSchema.parse
+>;
 
 export const agentsPaths = {
   list: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/agents`,

@@ -2509,7 +2509,7 @@ export const SKILLS_COPY = {
   page: {
     title: 'Skills & Agents',
     description:
-      "Skills and agent definitions for this project, saved as files in its repository so they are versioned with your code. Claude Code loads them by name.",
+      'Skills and agent definitions for this project, saved as files in its repository so they are versioned with your code. Claude Code loads them by name.',
     tabs: 'Skills or agents',
     skillsTab: 'Skills',
     agentsTab: 'Agents',
@@ -2656,12 +2656,15 @@ export const AGENTS_COPY = {
     toolsHint: 'Type a tool name and press Enter, or pick a common one below.',
     addTool: 'Add tool',
     removeTool: (tool: string) => `Remove ${tool}`,
-    toolInvalid: 'A tool name starts with a letter and has no spaces, for example Read or mcp__github__get_pr.',
+    toolInvalid:
+      'A tool name starts with a letter and has no spaces, for example Read or mcp__github__get_pr.',
     toolsNone: 'No tools chosen: the agent can only read the conversation it is given.',
     common: 'Common tools',
     model: 'Model',
     modelHint: 'Leave empty to use the default. For example sonnet, opus, haiku or inherit.',
     modelPlaceholder: 'Default model',
+    modelTooLong: 'A model name has at most 100 characters.',
+    tooLarge: 'The agent file is larger than 64 KB. Shorten the instructions.',
   },
   commit: {
     explain:

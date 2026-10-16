@@ -60,7 +60,14 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
     case 'settings':
       return <ProjectSettings key={projectId} id={projectId} />;
     case 'skills':
-      return <SkillsPage key={projectId} projectId={projectId} item={route.item} />;
+      return (
+        <SkillsPage
+          key={projectId}
+          projectId={projectId}
+          item={route.item}
+          tab={route.params.get('tab') === 'agents' ? 'agents' : 'skills'}
+        />
+      );
     case 'harness':
       return <HarnessPage key={projectId} projectId={projectId} />;
     case 'workflow':

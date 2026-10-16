@@ -288,9 +288,9 @@ describe('Skills in the shell (#/p/:projectId/skills)', () => {
     window.location.hash = `#/p/${SKILLS_PROJECT_ID}/skills`;
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Skills' }).getAttribute('aria-current')).toBe(
-      'page',
-    );
+    expect(
+      within(nav).getByRole('link', { name: 'Skills & Agents' }).getAttribute('aria-current'),
+    ).toBe('page');
     fireEvent.click(await screen.findByRole('button', { name: 'Open skill plan' }));
     await waitFor(() => expect(window.location.hash).toBe(`#/p/${SKILLS_PROJECT_ID}/skills/plan`));
     expect(await screen.findByTestId('skill-editor')).toBeTruthy();

@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
-import { MAX_SKILL_BYTES, SkillNameSchema } from '@acp/core';
+import { AgentToolNameSchema, MAX_AGENT_BYTES, MAX_SKILL_BYTES, SkillNameSchema } from '@acp/core';
 import { ApiError, isSkillsPath, type ApiClient } from '../../lib/api';
 import { useQueryStore } from '../../lib/query';
-import { SKILLS_COPY } from '../../lib/copy';
+import { AGENTS_COPY, SKILLS_COPY } from '../../lib/copy';
 
 export interface SkillActionState<R> {
   pending: boolean;
@@ -92,4 +92,59 @@ export function validateSkillForm(
   if (form.description.trim() === '') errors.description = C.descriptionRequired;
   if (skillFileBytes(form) > MAX_SKILL_BYTES) errors.size = C.tooLarge;
   return errors;
+}
+
+/** An agent definition being edited (`.claude/agents/<name>.md`). */
+export interface AgentForm extends SkillForm {
+  /** Null: "All tools" (no `tools` key, Claude Code's default). */
+  tools: readonly string[] | null;
+  /** Empty: the default model (no `model` key). */
+  model: string;
+}
+
+export interface AgentFormErrors extends SkillFormErrors {
+  tools?: string;
+  model?: string;
+}
+
+/** The longest list the server accepts (`AgentDefinitionWriteRequestSchema`). */
+export const MAX_AGENT_TOOLS = 50;
+
+export function isToolName(tool: string): boolean {
+  return AgentToolNameSchema.safeParse(tool).success;
+}
+
+/** About the size the server writes; the server's 64 KiB check is the real one. */
+export function agentFileBytes(form: AgentForm): number {
+  const tools = form.tools === null ? '' : `tools: ${form.tools.join(', ')}\n`;
+  const model = form.model.trim() === '' ? '' : `model: ${form.model.trim()}\n`;
+  return skillFileBytes(form) + encoder.encode(tools + model).length;
+}
+
+export function validateAgentForm(
+  form: AgentForm,
+  options: { isNew: boolean; existing: readonly string[] },
+): AgentFormErrors {
+  const errors: AgentFormErrors = validateSkillForm(form, options);
+  if (errors.name === SKILLS_COPY.editor.nameTaken) errors.name = AGENTS_COPY.editor.nameTaken;
+  if (form.tools !== null) {
+    if (form.tools.length > MAX_AGENT_TOOLS || form.tools.some((t) => !isToolName(t))) {
+      errors.tools = AGENTS_COPY.editor.toolInvalid;
+    }
+  }
+  if (form.model.trim().length > 100) errors.model = AGENTS_COPY.editor.modelTooLong;
+  if (agentFileBytes(form) > MAX_AGENT_BYTES) errors.size = AGENTS_COPY.editor.tooLarge;
+  else delete errors.size;
+  return errors;
+}
+
+/** The PUT/POST body: trimmed description, null model when empty. */
+export function agentRequest(form: AgentForm) {
+  return {
+    name: form.name,
+    description: form.description.trim(),
+    tools: form.tools === null ? null : [...form.tools],
+    model: form.model.trim() === '' ? null : form.model.trim(),
+    instructions: form.instructions,
+  };
 }

@@ -4,13 +4,35 @@
  * invented. Never import this from src/.
  */
 import {
+  AgentDefinitionDetailDtoSchema,
   SkillCommitResultDtoSchema,
   SkillDetailDtoSchema,
   SkillSummaryDtoSchema,
+  type AgentDefinitionDetailDto,
   type SkillCommitResultDto,
   type SkillDetailDto,
   type SkillSummaryDto,
 } from '@acp/core/api';
+
+/** A synthetic agent definition (`.claude/agents/<name>.md`). */
+export function agentDetail(
+  over: Partial<AgentDefinitionDetailDto> = {},
+): AgentDefinitionDetailDto {
+  const name = over.name ?? 'reviewer';
+  return AgentDefinitionDetailDtoSchema.parse({
+    name,
+    description: 'Reviews a finished change for bugs.',
+    path: `.claude/agents/${name}.md`,
+    tools: ['Read', 'Grep'],
+    model: null,
+    sizeBytes: 640,
+    lastCommittedAt: '2026-10-16T08:00:00.000Z',
+    uncommitted: false,
+    problems: [],
+    instructions: 'You are a careful reviewer.\n',
+    ...over,
+  });
+}
 
 export const SKILLS_PROJECT_ID = 'p-web';
 export const T_COMMITTED = '2026-10-16T08:00:00.000Z';
