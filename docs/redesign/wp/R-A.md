@@ -6,16 +6,17 @@
 
 | Field   | Value                                             |
 | ------- | ------------------------------------------------- |
-| Status  | todo                                              |
+| Status  | in-progress                                       |
 | Owner   | frontend agent                                    |
-| Branch  | `wp/r-a-…` (create from `main` when you claim it) |
-| Started | —                                                 |
-| Updated | —                                                 |
+| Branch  | `wp/r-a-shell`                                    |
+| Started | 2026-10-16                                        |
+| Updated | 2026-10-16                                        |
 
 ## Work log (append-only; newest last)
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-16 | Claimed R-A on `wp/r-a-shell` | (this commit) | docs only |
 
 ## Handoff notes
 
