@@ -41,6 +41,9 @@ const PHASE3_TABLES = [
 
 const PHASE4_TABLES = ['check_runs', 'project_setup', 'ticket_comments', 'ticket_plans', 'tickets'];
 
+/** Added by 0004 (R-G, project workspace redesign). */
+const REDESIGN_TABLES = ['project_workflow'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -117,9 +120,11 @@ describe('0001_observability schema (B3)', () => {
     }
   });
 
-  it('with 0002 and 0003 applied, adds exactly the Phase 3 and Phase 4 tables', () => {
+  it('with 0002-0004 applied, adds exactly the Phase 3, Phase 4 and redesign tables', () => {
     const tables = describeSchema(db).map((t) => t.table);
-    expect(tables).toEqual([...PHASE1_TABLES, ...PHASE3_TABLES, ...PHASE4_TABLES].sort());
+    expect(tables).toEqual(
+      [...PHASE1_TABLES, ...PHASE3_TABLES, ...PHASE4_TABLES, ...REDESIGN_TABLES].sort(),
+    );
   });
 
   it('matches the schema snapshot (columns, foreign keys, indexes)', () => {

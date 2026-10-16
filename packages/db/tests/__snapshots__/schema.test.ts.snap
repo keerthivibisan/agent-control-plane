@@ -33,6 +33,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "budget_tokens_limit INTEGER NOT NULL",
       "created_at TEXT NOT NULL",
       "ended_at TEXT NULL",
+      "stage TEXT NULL",
     ],
     "foreignKeys": [
       "parent_agent_run_id -> agent_runs(id) ON DELETE CASCADE",
@@ -60,6 +61,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "status TEXT NOT NULL",
       "requested_at TEXT NOT NULL",
       "decided_at TEXT NULL",
+      "decided_by TEXT NULL",
     ],
     "foreignKeys": [
       "agent_run_id -> agent_runs(id) ON DELETE CASCADE",
@@ -246,6 +248,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "updated_at TEXT NOT NULL",
       "ended_at TEXT NULL",
       "ticket_id TEXT NULL",
+      "limits TEXT NULL",
     ],
     "foreignKeys": [
       "project_id -> projects(id) ON DELETE RESTRICT",
@@ -294,6 +297,20 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "UNIQUE (u) (project_key)",
     ],
     "table": "project_setup",
+  },
+  {
+    "columns": [
+      "project_id TEXT NOT NULL PK1",
+      "workflow TEXT NOT NULL",
+      "updated_at TEXT NOT NULL",
+    ],
+    "foreignKeys": [
+      "project_id -> projects(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (project_id)",
+    ],
+    "table": "project_workflow",
   },
   {
     "columns": [

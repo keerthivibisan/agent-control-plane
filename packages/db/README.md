@@ -159,6 +159,32 @@ currentRunId? })`, `countForProject`.
 `projects.remove` throws a foreign-key error for a project with tickets or runs; the server checks
 `tickets.countForProject` / runs first and answers 409.
 
+## Redesign schema (`0004_redesign.sql`, project workspace redesign, R-G)
+
+**Status: implemented (R-G).** The table, columns, repositories and temp-file DB tests exist,
+including an upgrade test from a 0003 database. `0001`–`0003` are unchanged.
+
+| Table / column              | Notes                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `project_workflow`          | `project_id` (1:1, cascades with the project); `workflow` JSON validated with core's `ProjectWorkflowSchema` |
+| `agent_runs.stage`          | a `WorkflowStageId`; NULL for Phase 3/4 agents                                                               |
+| `approvals.decided_by`      | `owner` / `allowlist` / `timeout`; NULL while pending, when closed by the engine, and for older rows         |
+| `orchestration_runs.limits` | JSON `{ maxConcurrentHelpers, maxDepth }` at start; NULL means the Phase 3 defaults                          |
+| `ticket_comments.author`    | no schema change: `reviewer` is accepted because the author is validated with core's schema (ADR-0019)       |
+
+No new stored text: a workflow holds model and skill names only.
+
+`createRedesignRepositories(db, options?)` returns:
+
+- **workflow**: `get(projectId)` (the saved workflow; without a row, `defaultProjectWorkflow()`
+  dated at the project's registration; undefined for an unknown project), `isStored(projectId)`,
+  `put(workflow)` (creates or replaces; `not_found` for an unknown project).
+- **runAudit**: the 0004 columns on the Phase 3 tables, kept out of the orchestration repositories so
+  those stay as shipped. `setApprovalDecidedBy` / `approvalDecidersForRun`, `setRunLimits` /
+  `getRunLimits` (bounded like the project setup), `setAgentStage` / `agentStagesForRun`. Each
+  setter throws `not_found` for an unknown row. The server's run store calls them inside its commit
+  transaction.
+
 ## Usage
 
 ```ts

@@ -20,7 +20,8 @@ const SHIPPED = loadMigrations(DEFAULT_MIGRATIONS_DIR);
 
 describe('migration 0003_workspace (P4-B)', () => {
   it('ships as version 3 after untouched 0001 and 0002', () => {
-    expect(SHIPPED.map((m) => [m.version, m.name])).toEqual([
+    // Later migrations (0004, R-G) follow; the first three stay as shipped.
+    expect(SHIPPED.slice(0, 3).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
       [3, 'workspace'],
@@ -66,7 +67,7 @@ describe('migration 0003_workspace (P4-B)', () => {
       const recorded = v3.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2, 3]);
+      expect(recorded.map((r) => r.version).slice(0, 3)).toEqual([1, 2, 3]);
       // The 0001/0002 rows are unchanged, so their files were not edited.
       expect(recorded.slice(0, 2)).toEqual(v2Checksums);
       expect(v3.connection.pragma('foreign_key_check')).toEqual([]);
