@@ -5,7 +5,7 @@ import { buttonClass } from '../../components/Button';
 import { Select } from '../../components/Input';
 import { PROJECT_SETUP_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
-import { CheckboxField, ChoiceCards, NumberChoice, TextField } from '../project-setup/fields';
+import { CheckboxField, NumberChoice, TextField } from '../project-setup/fields';
 import { DEPTH_CHOICES, HELPER_CHOICES, parseTokens } from '../project-setup/setup-form';
 import type { DraftErrors, LimitsDraft, StageDraft, WorkflowDraft } from './draft';
 import { OPTIONAL_STAGES, type AgentStageId, type WorkflowRole } from './graph';
@@ -167,13 +167,15 @@ function HelperLimits({
           onChange={(n) => onLimits({ maxConcurrentHelpers: n })}
           valueText={A.helpersValue}
         />
-        <ChoiceCards<1 | 2>
+        {/* A short row like the helper count: two cards side by side don't fit the panel. */}
+        <NumberChoice
           legend={A.depth}
+          hint={A.depthOptions[limits.maxDepth].hint}
           name={`${name}-depth`}
           value={limits.maxDepth}
-          options={DEPTH_CHOICES.map((d) => ({ value: d, ...A.depthOptions[d] }))}
-          onChange={(d) => onLimits({ maxDepth: d })}
-          columns={2}
+          choices={DEPTH_CHOICES}
+          onChange={(d) => onLimits({ maxDepth: d >= 2 ? 2 : 1 })}
+          valueText={P.depthValue}
         />
         <TextField
           label={A.budget}

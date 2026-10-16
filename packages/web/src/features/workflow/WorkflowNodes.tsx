@@ -171,7 +171,7 @@ export function SkillChip({ agent }: { agent: Pick<StageAgent, 'skill' | 'skillM
         >
           <span aria-hidden="true">⚠</span>
           <span className="truncate font-mono">{agent.skill}</span>
-          <span className="shrink-0">· {C.skillMissing}</span>
+          <span className="shrink-0">({C.skillMissing})</span>
         </span>
       </Tooltip>
     );

@@ -222,7 +222,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                     </span>
                   </>
                 ) : justSaved ? (
-                  <span role="status" className="inline-flex items-center gap-1.5 text-success">
+                  <span
+                    role="status"
+                    data-testid="saved"
+                    className="inline-flex items-center gap-1.5 text-success"
+                  >
                     <CheckIcon size={16} />
                     {P.saved}
                   </span>

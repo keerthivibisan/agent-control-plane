@@ -2419,17 +2419,17 @@ export const WORKFLOW_COPY = {
   optionalTip: 'An optional stage. Turn it on or off in its panel.',
   model: 'Model',
   projectDefault: 'Project default',
-  projectDefaultNamed: (model: string) => `${model} (project default)`,
+  projectDefaultNamed: (model: string) => `${model} (default)`,
   noSkill: 'No skill',
   skillChip: (name: string) => `✦ ${name}`,
-  skillMissing: 'Skill missing',
+  skillMissing: 'missing',
   skillMissingTip: (name: string) =>
     `The skill “${name}” is no longer in this project. The agent starts without it until you pick another one.`,
   helperName: (i: number) => `Helper ${i}`,
   nestedHint: '↳ may start helpers',
   nestedTip: 'Helper depth 2: this helper may start its own helpers, within the same limit.',
   helperFacts: (max: number, depth: number, budget: string) =>
-    `Up to ${max} at once · depth ${depth} · ${budget} each`,
+    `Up to ${max} · depth ${depth} · ${budget} each`,
   select: (stage: string) => `Change ${stage}`,
   edges: {
     loop: 'Changes',
@@ -2457,6 +2457,8 @@ export const WORKFLOW_COPY = {
     skillHint: 'The agent is told to use this project skill.',
     skillMissingOption: (name: string) => `${name} (missing)`,
     enabled: 'Run this stage',
+    depthValue: (d: number) =>
+      d === 1 ? 'Only the lead starts helpers' : 'Helpers may start their own helpers',
     enabledHint: 'Off by default. When on, it runs after everything is merged.',
     limitsTitle: 'Limits',
     limitsNote: 'Shared with Settings. They also apply to the reviewer and the tester.',

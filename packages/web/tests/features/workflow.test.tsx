@@ -91,7 +91,7 @@ describe('Workflow page', () => {
     expect(within(node('plan')).getByTestId('node-model').textContent).toContain('Project default');
     expect(within(node('plan')).getByTestId('node-skill').textContent).toBe('No skill');
     expect(within(node('helpers')).getByTestId('helpers-facts').textContent).toBe(
-      'Up to 3 at once · depth 1 · 500K each',
+      'Up to 3 · depth 1 · 500K each',
     );
     expect(screen.getAllByTestId(/^wf-helper-/)).toHaveLength(3);
     expect(screen.queryByTestId('helper-nested')).toBeNull();
@@ -107,13 +107,13 @@ describe('Workflow page', () => {
     expect(within(node('plan')).queryByTestId('same-agent')).toBeNull();
     expect(within(node('plan')).getByTestId('node-model').textContent).toContain('claude-opus-4');
     expect(within(node('orchestrate')).getByTestId('node-model').textContent).toContain(
-      'claude-sonnet-4 (project default)',
+      'claude-sonnet-4 (default)',
     );
     expect(within(node('plan')).getByTestId('node-skill').textContent).toBe('✦ plan-tickets');
     const helperSkill = within(node('helpers')).getByTestId('node-skill');
     expect(helperSkill.getAttribute('data-skill')).toBe('missing');
     expect(helperSkill.textContent).toContain('release-notes');
-    expect(helperSkill.textContent).toContain('Skill missing');
+    expect(helperSkill.textContent).toContain('(missing)');
     expect(screen.getAllByTestId(/^wf-helper-/)).toHaveLength(4);
     expect(screen.getAllByTestId('helper-nested')).toHaveLength(4);
     expect(node('code-review').getAttribute('data-enabled')).toBe('true');
@@ -171,7 +171,9 @@ describe('Workflow page', () => {
     const { server: s } = render();
     await open('Helpers');
     fireEvent.click(within(panel()).getByRole('radio', { name: '2 helpers' }));
-    fireEvent.click(within(panel()).getByRole('radio', { name: /Helpers may start their own/ }));
+    fireEvent.click(
+      within(panel()).getByRole('radio', { name: 'Helpers may start their own helpers' }),
+    );
     fireEvent.change(within(panel()).getByRole('textbox', { name: /Budget per agent/ }), {
       target: { value: '250,000' },
     });

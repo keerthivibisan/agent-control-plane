@@ -150,12 +150,12 @@ export function stageOfNode(id: string): WorkflowStageId | null {
 export const NODE_W = 232;
 export const COL_GAP = 56;
 export const ROW_GAP = 80;
-export const AGENT_H = 152;
-export const GATE_H = 112;
+export const AGENT_H = 128;
+export const GATE_H = 104;
 export const TERMINAL_W = 120;
 export const TERMINAL_H = 44;
 /** The Helpers box: its header (role, limits, model, skill), then one row per helper. */
-export const HELPERS_HEADER_H = 148;
+export const HELPERS_HEADER_H = 136;
 export const HELPER_H = 36;
 export const HELPER_GAP = 8;
 export const HELPERS_PAD = 12;

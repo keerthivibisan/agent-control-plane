@@ -73,6 +73,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // Redesign R-B: the Workflow page (and its screenshots), workflow routes from fixtures.
+      name: 'workflow',
+      testMatch: 'workflow.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       name: 'control',
       testMatch: 'control.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${CONTROL_PORT}` },
