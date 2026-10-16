@@ -3,22 +3,22 @@
 > Only the coordinator edits this file. Agents record progress in `docs/redesign/wp/<WP>.md`.
 > Plan and owned paths: [README.md](README.md) §7.
 
-| WP  | Title                                               | Depends  | Status                                                              | Branch            | Merged                         |
-| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------- | ----------------- | ------------------------------ |
-| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                            | `main`            | 2026-10-16                     |
-| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                            | `wp/r-a-shell`    | 2026-10-16 (`8b70fc4`)         |
-| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | **done**                                                            | `wp/r-c-engine`   | 2026-10-16 (`6a11e67`)         |
-| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; part 2 **paused** (WIP `63d30f7`, not checked)       | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
-| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | **paused** (server + Skills page checked; Agents tab WIP `86fb1f8`) | `wp/r-d-skills`   | —                              |
-| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | **paused** (query + route checked; page WIP `c58f633`)              | `wp/r-f-tokens`   | —                              |
-| R-E | [Harness page](wp/R-E.md)                           | R-A      | **paused** (checked at `c293844`; re-run e2e + report left)         | `wp/r-e-harness`  | —                              |
-| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | **paused** (WIP `053e74d`, typecheck only)                          | `wp/r-b-workflow` | —                              |
-| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                | —                 | —                              |
-| R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                | —                 | —                              |
+| WP  | Title                                               | Depends  | Status                                      | Branch            | Merged                         |
+| --- | --------------------------------------------------- | -------- | ------------------------------------------- | ----------------- | ------------------------------ |
+| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                    | `main`            | 2026-10-16                     |
+| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                    | `wp/r-a-shell`    | 2026-10-16 (`8b70fc4`)         |
+| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | **done**                                    | `wp/r-c-engine`   | 2026-10-16 (`6a11e67`)         |
+| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; part 2 in progress (resumed) | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
+| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                       | `wp/r-d-skills`   | —                              |
+| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress (resumed)                       | `wp/r-f-tokens`   | —                              |
+| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress (resumed)                       | `wp/r-e-harness`  | —                              |
+| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | in-progress (resumed)                       | `wp/r-b-workflow` | —                              |
+| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                        | —                 | —                              |
+| R-V | [Verification](wp/R-V.md)                           | all      | todo                                        | —                 | —                              |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
-## Second pause by the owner (2026-10-16): resume from here
+## Second pause by the owner (2026-10-16), resumed the same day
 
 `main` is at `ecc58d0` + this commit, and green. R-0, R-A, R-C and R-G part 1 are merged. Each paused
 branch has a "Paused" or "Paused (2)" note in its progress file with the exact next steps, so read
@@ -32,7 +32,15 @@ it first. Agents are resumed in the same branch and worktree.
 | R-E | `.claude/worktrees/agent-af38834dec4c1148d` | `d4c08bb`   | Checked at `c293844` (1,736 ✓). **Next:** rerun the e2e with screenshots, look at the ticket and none shots, then write the report and set `review`.                                                                                                                                                             |
 | R-B | `.claude/worktrees/agent-a9ee4bd598a92e996` | `0c031c8`   | The graph builder, the view, the stage panel and the agent-files list are written (web typecheck only). **Next:** unit and component tests, Playwright with screenshots, then `pnpm check` and the report. Its layout choice (three wrapped rows) needs a look at the screenshots.                               |
 
-**Coordinator decisions on resume:**
+**Decisions settled on the second resume (2026-10-16):**
+
+- 1 (migration 0005) is **approved** after review. It is a minimal re-key of the one-lead index by
+  kind, with its own upgrade test, and no edit to 0002.
+- 2 (`stagesHeld` in the run snapshot) is **accepted**.
+- 3 (the harness history route) is **assigned to R-G**.
+- 4–6 stay with the coordinator, at merge.
+
+**Coordinator decisions on resume (as listed at the pause):**
 
 1. **Migration 0005 (R-G `1d8331a`).** It re-keys 0002's single-root index to "one lead per run",
    because the parentless planner, reviewer and tester otherwise fail to save (a probe test proves
