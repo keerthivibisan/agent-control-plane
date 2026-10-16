@@ -110,6 +110,18 @@ Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config)
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
 
+**R-R audit (2026-10-16, read-only, tree and full history):**
+
+- No secrets: token-like strings are test placeholders only. Secret scanners may flag them; add an
+  allowlist if they do.
+- No large or binary files and no databases ever committed. The fixtures are synthetic.
+- Fixed in `07f9f4a`: machine paths, another real project's name and path, and a scratch path with
+  a session id.
+- **Owner decisions:**
+  - keep the author email in history as is;
+  - keep `HANDOFF.md` while the repo is private and remove or move it before going public;
+  - push only `main` (`git push origin main`), not the 94 local agent branches.
+
 **R-K real re-check (2026-10-16, owner consent):** passed.
 
 - Each role's `system/init` tool list is exactly its base set: `Skill` only for the planner with
