@@ -4,95 +4,165 @@
 > Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope, owned paths and dependencies:
 > `docs/redesign/README.md` §7.
 
-| Field   | Value               |
-| ------- | ------------------- |
-| Status  | in-progress         |
-| Owner   | engine agent        |
-| Branch  | `wp/r-c-engine`     |
-| Started | 2026-10-16          |
-| Updated | 2026-10-16 (paused) |
+| Field   | Value           |
+| ------- | --------------- |
+| Status  | review          |
+| Owner   | engine agent    |
+| Branch  | `wp/r-c-engine` |
+| Started | 2026-10-16      |
+| Updated | 2026-10-16      |
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                                                                                                                                                                                                 | Commit  | Checks                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
-| 2026-10-16 | Claimed R-C on `wp/r-c-engine` from `main` (eb458d6).                                                                                                                                                                                                                                         | claim   | —                                                                                          |
-| 2026-10-16 | WIP engine: workflow snapshot, agent stages, separate planner, reviewer/tester stages, post_review, continueStages, controlToolsFor, prompts. Paused by owner.                                                                                                                                | fb73268 | typecheck ✗; orchestrator tests 366/366 ✓ (existing)                                       |
-| 2026-10-16 | Resumed; rebased on main (a532ef2). Decision B: `post_review` in `LeadToolInputs`, adapter lead set excludes it (297900b). Engine compiles: post_review via core schema, skills plugin names (`acp-skills:<name>`, `start-agent.skills`), policy for new roles, `deriveRunWorkflow`, exports. | next    | format ✓ lint ✓ typecheck ✓ test ✓ (server smoke/restart timeouts passed on rerun) build ✓ |
+| Date       | What was done                                                                                                                                                                 | Commit  | Checks                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| 2026-10-16 | Claimed R-C on `wp/r-c-engine` from `main` (eb458d6).                                                                                                                         | claim   | —                                                                                |
+| 2026-10-16 | WIP engine: workflow snapshot, agent stages, separate planner, reviewer/tester stages, post_review, continueStages, controlToolsFor, prompts. Paused by owner.                | 6198d90 | typecheck ✗; orchestrator tests 366/366 ✓ (existing)                             |
+| 2026-10-16 | Resumed; rebased on main (a532ef2). Decision B: `post_review` in `LeadToolInputs`; the adapter's lead set excludes it.                                                        | 1e9b64f | core 244 ✓, claude-code 269 ✓ (orchestrator still WIP)                           |
+| 2026-10-16 | Engine compiles: post_review via the core schema, skills plugin names and `start-agent.skills`, policy for the new roles, `deriveRunWorkflow`, exports.                       | cb04a86 | format ✓ lint ✓ typecheck ✓ test ✓ (two server timeouts passed on rerun) build ✓ |
+| 2026-10-16 | Tests: default equivalence, separate planner, code review, unit tests, both, Stop/Stop all, restart + Continue, skills/models, `deriveRunWorkflow`; allowlist takes any role. | 33f9d65 | format ✓ lint ✓ typecheck ✓ orchestrator 424/424 ✓                               |
+| 2026-10-16 | Adapter toolsets per role and the skills plugin (decision E), fake-query tests.                                                                                               | b233ded | format ✓ lint ✓ typecheck ✓ claude-code 283/283 ✓                                |
+| 2026-10-16 | Orchestrator README (stage rules, notes for R-G); rebased on main (c81e2f2); completion report; status `review`.                                                              | 7dbed43 | format ✓ lint ✓ typecheck ✓ test 1793/1793 ✓ build ✓                             |
 
 ## Handoff notes
 
-### Paused (2026-10-16)
+### For R-G (server wiring)
 
-Owner paused all agents. Branch `wp/r-c-engine`, WIP commit `fb73268` (not checked). Status stays
-`in-progress`. Continue on this branch; do not restart.
+The rules are in `packages/orchestrator/README.md`, "Workflow stage rules" and "Notes for R-G".
+In short:
 
-**Done (in `packages/orchestrator/src`, uncommitted-to-green):**
+1. **Create a ticket run** with the project's workflow:
 
-- `state.ts`: `RunState.workflow` (snapshot), `leadBrief` (separate mode, until the lead starts),
-  `stagesHeld` (set after a restart); `EngineAgent.stage`, `reviewPosts`; effects
-  `create-review-checkout`, `remove-review-checkout`, `review-comment`; optional `model` on
-  `start-agent`.
-- `stages.ts` (new): role→stage map, `planningAgent`, `nextStage` (code-review then unit-tests,
-  only when a helper's change was merged), skill lines (`Use the project skill \`<name>\`.`),
-stage models, reviewer and tester briefs. `plan-read.ts`(new):`pendingPlan`/`approvedPlan`
-  moved here to avoid an import cycle.
-- `draft.ts`: `planner()`, `planningAgent()`, `liveNonLeadDeepestFirst()` (Stop all covers every
-  role), tester gets `review: pending`, reconcile: separate-mode PLANNING fails if planner or the
-  QUEUED lead ends; REVIEW starts the next post-merge stage (run stays REVIEW; the lead is stopped)
-  or completes; `startStage`, `flushCheckoutRemovals` (called in `applyCommand`).
-- `commands.ts`: `createRun` takes `workflow` (validated, ticket runs only) and
-  `ticket.plannerPrompt` (separate mode); owner chat goes to the planner while planning; planner
-  text is chat (role `lead`); `requestPermission` refuses planner/reviewer, allows the tester in
-  REVIEW, allowlist covers the tester; restart sets `stagesHeld`; new `continueStages`.
-- `plan.ts`: planner submits/revises in separate mode, lead refused; approval stops the planner
-  and starts the lead with brief + approved plan; `ticketPlannerPrompt`,
-  `ticketOrchestratorPrompt`, `ticketRunPrompts`.
-- `review-tool.ts` (new): `post_review` schema and `postReview` (redacted, capped 8000 chars,
-  max 5 posts). `lead-tools.ts`: role-scoped tool checks, `post_review` routing, `controlToolsFor`.
+   ```ts
+   const { limits, budget } = runSettingsFromSetup(setup);
+   createRun(
+     {
+       runId,
+       leadAgentRunId,
+       projectId,
+       title,
+       budget,
+       limits,
+       registeredProjectIds,
+       workflow, // the project_workflow row, or omit it / defaultProjectWorkflow() for Phase 4
+       ticket: { ticketId, ...ticketRunPrompts(ticket, limits, workflow) },
+     },
+     ctx,
+   );
+   ```
 
-**Left (exact next steps):**
+   `workflow` is refused on a run without a ticket. In separate mode `ticketRunPrompts` returns
+   `plannerPrompt` too.
 
-1. Fix typecheck: `exactOptionalPropertyTypes` — change the `Pick<RunState, 'workflow'>` params in
-   `stages.ts` (`isSeparatePlanner`, `planningAgent`, `nextStage`) to
-   `{ readonly workflow?: ProjectWorkflow | undefined }`-style types; `plan.ts:182` `lead`
-   possibly undefined (narrow with the `separate && lead !== undefined` check already above).
-2. `policy.ts`: `mayStartHelpers` only for `lead`/`worker`; `checkStartAgent` counts
-   `countsAsHelper` kinds; `checkReviewAction` accepts the tester (`hasReviewableChange`).
-3. `index.ts`: export `continueStages`, `controlToolsFor`, `POST_REVIEW_TOOL`,
-   `PostReviewInputSchema`, `ticketPlannerPrompt`, `ticketOrchestratorPrompt`, `ticketRunPrompts`,
-   stage helpers.
-4. New `run-workflow.ts`: pure `deriveRunWorkflow(state, workflow?)` → `RunWorkflowDto`
-   (validate with `RunWorkflowDtoSchema` in tests); rules sketched in the stage design (off /
-   waiting / active / needs-you / done / failed / skipped; lead covers plan in lead mode).
-5. Tests: default-workflow equivalence, separate planner end to end, code-review alone,
-   unit-tests alone, both, Stop/Stop all in each stage, restart + `continueStages`, refusals.
-6. Adapter (`adapters/claude-code/src/managed/**`): role toolsets keyed on `AgentRoleKind`
-   (planner read-only + submit_plan, input kept open; reviewer read-only via `disallowedTools`,
-   input closed; tester = worker). Planner/reviewer specs and the `post_review` MCP tool are
-   **blocked** on the contract change below.
-7. README of the orchestrator, `pnpm check`, completion report, status `review`.
-
-**Open problems / decisions recorded:**
-
-- `RUN_TRANSITIONS` is pinned by an existing test, so post-merge stages run while the run stays
-  `REVIEW` (no REVIEW → RUNNING edge).
-- No new refusal codes (the server's `REFUSAL_STATUS` is exhaustive); existing codes are reused.
-- Whether Claude Code loads project skills with `settingSources: []` is unverified (R-V).
+2. **Persist:**
+   - `EngineAgent.stage` → `agent_runs.stage`;
+   - `RunState.workflow` (the snapshot): 0004 has no column for it. Store it with the run, for
+     example next to the limits in `orchestration_runs.limits` JSON, or in a new migration.
+     Without it after a reload the run behaves like the default workflow.
+   - Keep `leadBrief`, `stagesHeld` and `EngineAgent.reviewPosts` with the live run, in memory
+     like the ledger.
+3. **`start-agent` effects by `kind`:**
+   - `lead`, `planner`: read-only in the owner's project folder; deny their tool uses like the
+     lead's (the engine also refuses the planner's).
+   - `worker`, `tester`: a worktree from the current main branch (the tester's includes the merged
+     change); the tester never gets `canStartHelpers`.
+   - `reviewer`: the `create-review-checkout` effect comes just before; start it in that checkout.
+   - Spec: `kind: effect.kind`, `model: effect.model ?? setup.model`, `leadTools` for the lead,
+     the planner, the reviewer and depth-2 parent helpers (route calls through `leadToolCall`).
+   - **Skills:** when `effect.skills` is present (bare names), build the run's skills plugin from
+     the project checkout (ADR-0019 §4) and set
+     `spec.skillPlugin = { path, skills: effect.skills.map(pluginSkillName) }`, giving
+     `['acp-skills:<name>', …]`. The prompt already holds the line
+     ``Use the project skill `acp-skills:<name>`.``
+4. **New effects:**
+   - `create-review-checkout { agentRunId }`: a temporary detached worktree of main (the "Run checks
+     now" mechanism, ADR-0017);
+   - `remove-review-checkout { agentRunId }`: remove it (emitted after the reviewer's abort, and by
+     `recoverAfterRestart` for an interrupted reviewer);
+   - `review-comment { agentRunId, body }`: store a `TicketComment` with author `reviewer`,
+     `runId`, `planId: null`. The body is already redacted and capped at 8,000 characters.
+5. **Routes and checks:**
+   - expose `continueStages(state, ctx)` (an owner "Continue" action, refused with
+     `run-not-active`, `run-cancelling`, `workers-still-running` or `review-not-allowed`);
+   - serve `deriveRunWorkflow(state, workflow?)` as `RunWorkflowDto`;
+   - the server's review and checks code still tests `kind === 'worker'`
+     (`board/checks.ts:94` and `:153`, `control/service.ts:586` and `:970`,
+     `control/mappers.ts:63`, `board/service.ts:181` and `:201` helper counts): let the tester
+     through, and count the reviewer and tester as helpers;
+   - `evaluateAllowlist` now takes any `AgentRoleKind`; pass the agent's real kind.
+6. **The run stays `REVIEW`** while the reviewer and the tester work (the transition table is
+   pinned by tests). The ticket stage is then `IN_REVIEW`; the live graph shows which stage is
+   active. The ticket is DONE when the run is COMPLETED, as before.
 
 ## Blockers / proposed contract changes
 
-Adapter part blocked (not made; for the coordinator):
+None open. Decisions A (`ManagedAgentSpec.kind: AgentRoleKind`) and E (`skillPlugin`) landed on
+main. B (`post_review`) is in commit 1e9b64f on this branch. C (a planner chat role) is deferred.
 
-- `packages/core/src/adapters/managed.ts`: `ManagedAgentSpec.kind: 'lead' | 'worker'` →
-  `kind: AgentRoleKind`, so the adapter can give the planner, reviewer and tester their toolsets;
-  optionally `controlTools?: readonly string[]` from the engine's `controlToolsFor`.
-- `packages/core/src/orchestration/orchestration.ts`: add
-  `post_review: z.object({ findings: z.string().trim().min(1).max(32000) })` to `LeadToolInputs`
-  (then move it out of `orchestrator/src/review-tool.ts` and add `case 'post_review'` in
-  `leadToolCall`).
-- Optional: `ChatMessageDto.role` gains `planner`, so planner chat is not labelled `lead`.
+One possible follow-up, not needed for R-G: in separate mode the adapter still shows the lead
+`submit_plan` (the spec has no field that says the mode). The engine refuses the call with a clear
+message. A small optional contract field would hide it, for example
+`ManagedAgentSpec.controlTools?: readonly LeadToolName[]` filled from `controlToolsFor`.
 
 ## Completion report (AGENTS.md §9)
 
-_Written when the WP moves to `review`._
+## Completion report — R-C
+
+1. **Summary.** The engine takes and snapshots the project's workflow, runs the separate planner,
+   the post-merge code review and unit tests stages, records each agent's stage, and derives the
+   live stage states. The adapter gives every role its toolset and passes the skills plugin. The
+   default workflow behaves exactly like Phase 4.
+2. **Files changed.**
+   - Created: `packages/orchestrator/src/{stages,plan-read,review-tool,run-workflow}.ts`;
+     `packages/orchestrator/tests/{workflow-helpers.ts,separate-planner.test.ts,post-merge-stages.test.ts,workflow.test.ts}`;
+     `packages/adapters/claude-code/tests/managed/roles.test.ts`.
+   - Modified: `packages/orchestrator/src/{state,draft,commands,plan,lead-tools,policy,allowlist,index}.ts`,
+     `packages/orchestrator/README.md`; `packages/adapters/claude-code/src/managed/{permissions,lead-tools,adapter,messages,index}.ts`,
+     `packages/adapters/claude-code/tests/managed/{permissions,adapter}.test.ts` (lead set without
+     `post_review`); `packages/core/src/orchestration/orchestration.ts` and
+     `packages/core/tests/orchestration-contracts.test.ts` (decision B, own commit);
+     `docs/redesign/wp/R-C.md`.
+   - Deleted: none.
+3. **Commands and results** (Node 22.21.1, pnpm 10.26.1, after rebasing on main c81e2f2):
+   `pnpm check` exit 0: format ✓, lint ✓, typecheck ✓, test 1793/1793 ✓ (core 244, demo 12,
+   orchestrator 424, claude-code 283, db 153, web 354, server 323), build ✓. An earlier run had two
+   server timeouts (`smoke.test.ts`, `restart.test.ts`) that passed on rerun.
+4. **Acceptance criteria.**
+   - Workflow taken and snapshotted at run creation; default equals Phase 4: **met** (existing
+     366 tests unchanged and green; `workflow.test.ts` replays the full ticket flow with and
+     without `defaultProjectWorkflow()` and compares every effect, value and state).
+   - Separate planner (read-only, `submit_plan` only, revises on comments, stops on approval, lead
+     starts with the plan and cannot change it): **met** (`separate-planner.test.ts`).
+   - Code-review stage (read-only reviewer, detached checkout effect, `post_review` comments,
+     capped and redacted, never blocks): **met** (`post-merge-stages.test.ts`).
+   - Unit-tests stage (tester worker, fixed brief, same review and merge): **met**.
+   - Sequencing, helper limit, Stop and Stop all in every stage, restart without relaunch: **met**
+     (`stagesHeld` + `continueStages`).
+   - `stage` per agent and `deriveRunWorkflow`: **met** (validated with `RunWorkflowDtoSchema`).
+   - Skills: one line per stage skill naming `acp-skills:<name>`, names on the effect, no file
+     content: **met**.
+   - Adapter toolsets per role with fake-query tests, plus `skillPlugin`: **met**
+     (`roles.test.ts`), except that the lead in separate mode still sees `submit_plan` (engine
+     refuses it; see the follow-up above).
+   - Audit of `kind === 'lead'` / `'worker'` branches: **met** in the orchestrator (policy, lead
+     tools, permissions, allowlist, review, Stop all, chat text) and the managed adapter. Server
+     branches are listed for R-G.
+5. **Assumptions** (documented in the orchestrator README):
+   - Post-merge stages run while the run stays REVIEW, so `RUN_TRANSITIONS` is unchanged.
+   - They run only when at least one helper's change was merged.
+   - The lead is stopped when the first post-merge stage starts.
+   - A reviewer that fails or is stopped finishes its stage, and so does an owner-discarded tester
+     change. A restart-interrupted reviewer is re-run only through Continue.
+   - In lead mode the lead's model is the orchestrate stage's, else the plan stage's.
+   - Planner chat shows as `lead` (decision C).
+   - No new refusal codes; existing codes are reused.
+   - Post cap: 5 posts per reviewer.
+6. **Contract or shared-file changes:** decision B, made as approved (own commit). Nothing else is
+   needed; the optional `controlTools` field is above.
+7. **Known gaps and follow-ups:**
+   - R-G wiring (above).
+   - The workflow snapshot needs a place in the db.
+   - R-V must check in the real smoke run that skills load through the plugin and that the
+     reviewer's `disallowedTools` hold.
+   - The lead still sees `submit_plan` in separate mode.
+8. **Next recommended task:** R-G part 2 (run-service wiring of these stages).
