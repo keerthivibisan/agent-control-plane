@@ -31,7 +31,7 @@ overlapping run views. The owner wants:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ [AC] Agent Control Plane      [ ftl-rendering-harness ▾ ]          ⌘K   ☾   │  top bar: project switcher
+│ [AC] Agent Control Plane      [ my-project ▾ ]                   ⌘K   ☾   │  top bar: project switcher
 ├───────────────┬──────────────────────────────────────────────────────────────┤
 │ PROJECT       │                                                              │
 │  ▣ Board      │   page content                                               │

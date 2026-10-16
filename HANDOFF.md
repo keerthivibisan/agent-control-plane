@@ -21,7 +21,7 @@
   - A UI redesign for non-technical users is in progress (§5).
   - Phase 3 (the "master control panel" that starts and manages Claude agents from the UI) is in
     progress (§7): decisions made, ADRs written, contracts on `main`.
-- **Repo.** `/Users/grootan/Desktop/agent-control-plane` (pnpm monorepo). Branch `main` is always green.
+- **Repo.** `<repo-root>` (pnpm monorepo). Branch `main` is always green.
   Nothing has been pushed to any remote yet.
 
 ## 1. State of work
@@ -155,7 +155,7 @@ Key behaviors, all tested:
 | MIT license accepted                                                                                 | ADR-0010                                         |
 | `diagnostics()` on the adapter interface (not a `Checkpoint` error field)                            | ADR-0011                                         |
 | Command Center shows per-session latest estimated cost (`OverviewDto.latestSnapshots`), never summed | dto.ts, server README                            |
-| Real-data run approved for `/Users/grootan/Desktop/ftl-rendering-harness` only                       | `docs/research/p1-f-real-data-2026-10-10.md`     |
+| Real-data run approved for one owner-chosen real project only                                        | `docs/research/p1-f-real-data-2026-10-10.md`     |
 | Real hook payload capture approved (throwaway dir, shape-only)                                       | `docs/research/p1-c6-hook-capture-2026-10-11.md` |
 | UI redesign: "clean & calm" style; technical detail behind collapsed Details and a Data health page  | `packages/web/DESIGN.md`                         |
 | No abbreviations ("direct in/out"); always "Input tokens", "Output tokens", etc.                     | DESIGN.md glossary                               |
@@ -324,7 +324,7 @@ Prepend §8.0 to each prompt.
 
 ### 8.0 Common preamble
 
-> You are working on the Agent Control Plane repo at `/Users/grootan/Desktop/agent-control-plane`.
+> You are working on the Agent Control Plane repo at `<repo-root>`.
 > Read `HANDOFF.md` fully, then `CLAUDE.md` and `AGENTS.md`; they are binding. Work in a new git
 > worktree on the branch named below, created from `main`. Follow the toolchain notes in HANDOFF §2,
 > including the pnpm 10 PATH shim, and run `pnpm install --frozen-lockfile` first. Edit only the

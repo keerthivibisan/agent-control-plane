@@ -111,7 +111,7 @@ timeout; a ~10-line change.
      timeouts in the check list (contract gap above);
    - sentence validation; mutations with CSRF → met (tests assert the header);
    - screenshots light/dark at 1440 and 1024 → taken and reviewed:
-     `/private/tmp/claude-502/-Users-grootan-Desktop-agent-control-plane/98bce32f-14e9-4043-b8cd-73b4aa65eaeb/scratchpad/p4f-shots/`
+     a temp scratch folder (`p4f-shots/`)
      (`wizard-{1-source,2-agents,3-allowlist,4-context,5-harness}-{light,dark}-{1440,1024}.png`,
      `settings-{light,dark}-{1440,1024}.png`).
 5. **Assumptions:** error codes for `POST /api/projects/new` and the `{}` bodies (handoff notes);

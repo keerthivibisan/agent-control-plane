@@ -442,7 +442,7 @@ blocked`), the branch, a task checklist, an append-only **work log**, handoff no
 
 ### 10.1 Any WP (fill in the WP id)
 
-> You are working on the Agent Control Plane repo at `/Users/grootan/Desktop/agent-control-plane`.
+> You are working on the Agent Control Plane repo at `<repo-root>`.
 > Implement **<WP>** of Phase 4.
 >
 > 1. **Read first:** `docs/phase-4/README.md` (all of it), `AGENTS.md`, `CLAUDE.md`,

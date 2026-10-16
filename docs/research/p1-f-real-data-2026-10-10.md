@@ -1,7 +1,7 @@
 # P1-F F2: real-data run — 2026-10-10
 
 With the user's consent in chat, live mode ingested one real project
-(`/Users/grootan/Desktop/ftl-rendering-harness`) from `~/.claude`, using a temp data dir. Only the app
+(one real project the owner chose) from `~/.claude`, using a temp data dir. Only the app
 and `scripts/reference-usage.ts` read transcripts; only the aggregates below were printed. Claude Code
 runtime versions seen: 3.
 
