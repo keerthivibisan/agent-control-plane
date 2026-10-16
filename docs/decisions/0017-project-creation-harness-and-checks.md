@@ -22,7 +22,9 @@ before merge. Running a project's checks means running project code.
    (`none | invalid | partial | ready`) is read from the repository on demand. A "Build the harness"
    ticket template lets agents create it through the normal plan → approve → review flow.
 3. **Check execution policy** (a third allowed process kind, after `git` and the SDK's `claude`):
-   - `execFile(argv[0], argv.slice(1))`, **no shell**; `argv[0]` must be a bare command name
+   - `spawn(argv[0], argv.slice(1), { shell: false, detached: true })`, **no shell**; the process runs
+     in its own process group so a timeout kills its child processes too (amended 2026-10-16; the
+     first text said `execFile`, which cannot kill a check's children); `argv[0]` must be a bare command name
      (`^[a-z0-9][a-z0-9._-]*$`) resolved through `PATH` — never a path, never `sh -c`;
    - `cwd` is inside the agent's own worktree, or a temporary detached worktree of the main branch for
      "Run checks now" — never the owner's working tree;

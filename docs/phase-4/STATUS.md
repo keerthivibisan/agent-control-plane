@@ -18,7 +18,7 @@
 
 ## Live state (2026-10-16, the owner paused work; git is the source of truth)
 
-`main` is at `7df96d5` and green (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
+`main` is at `aacca2e` (+ this docs commit) and green (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
 
 | WP   | Branch           | Head      | State                                                                                                                                                                                                              | What is left                                                                                                                                                                                                       |
 | ---- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -51,24 +51,20 @@ new one from its branch.
   `invalid_root`/`not_found` (parent missing). Harness POSTs send an empty `{}` body. All mutations
   check CSRF.
 
-### Open decisions (coordinator/owner)
+### Decisions settled on 2026-10-16 (owner and coordinator)
 
-1. **P4-F contract proposal:** add `argv`, `cwd` and `timeoutSec` to `HarnessStatus.checks` so the
-   settings card can show each check's command and time limit (diff in P4-F's progress file,
-   "Blockers"). Affects P4-C's `harnessStatusOf`. Recommended: accept, as a coordinator commit
-   before P4-D starts, so P4-D builds the richer status from the start.
-2. **ADR-0017 wording:** the check runner uses `spawn(argv0, args, { shell: false, detached: true })`
-   (process group, so a timeout kills child processes), not `execFile`. Amend the ADR text; the
-   policy (argv only, no shell, timeouts, output caps) is unchanged.
-3. **P4-E behaviour to confirm with the owner:** Done tickets can't be cancelled; starting a ticket
-   asks for no confirmation; a ticket with no activity shows "Updated" with its update time.
-4. **P4-G contract proposal:** add `branch: string | null` to `AgentRunDto`, so an agent card shows its
-   worktree branch before the review. Today it shows only after `GET /runs/:id/review` reports it.
-   P4-G assumes PATCH ticket, plan decision and start all answer `TicketDetailDto`; P4-D should
-   match that.
-5. **P4-F links:** `features/project-setup/setup-form.ts` builds `#/board/:id` and `#/tickets/:id`
-   by hand. Switch them to `href.board`/`href.ticket` (both on `main` now), in P4-F or as a small
-   follow-up.
+1. **Accepted:** `HarnessStatus.checks` carries `argv`, `cwd` and `timeoutSec` (it reuses
+   `HarnessCheckSchema`). The settings card shows the command and time limit. Commit `aacca2e`.
+2. **Done:** ADR-0017 amended. The check runner is `spawn(..., { shell: false, detached: true })` (a
+   process group), not `execFile`. The policy is unchanged.
+3. **Owner kept P4-E's behaviour as built:**
+   - a Done ticket can't be cancelled;
+   - Start asks for no confirmation (the plan-review step gates real work);
+   - an untouched ticket shows "Updated".
+4. **Accepted:** `AgentRunDto.branch: string | null` (the worktree branch once the workspace exists),
+   filled by the control mapper. Commit `aacca2e`. P4-G must add `branch` to its own fixture DTOs
+   when it rebases. P4-D must answer PATCH ticket, plan decision and start with `TicketDetailDto`.
+5. **Done:** the wizard and harness panel use `href.board`/`href.ticket`. Commit `aacca2e`.
 
 **Decisions taken during review:**
 
