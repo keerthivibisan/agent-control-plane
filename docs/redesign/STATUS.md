@@ -3,18 +3,18 @@
 > Only the coordinator edits this file. Agents record progress in `docs/redesign/wp/<WP>.md`.
 > Plan and owned paths: [README.md](README.md) §7.
 
-| WP  | Title                                               | Depends  | Status                                                                    | Branch          | Merged                         |
-| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------- | --------------- | ------------------------------ |
-| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                                  | `main`          | 2026-10-16                     |
-| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                                  | `wp/r-a-shell`  | 2026-10-16 (`8b70fc4`)         |
-| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | in-progress (resumed)                                                     | `wp/r-c-engine` | —                              |
-| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | **part 1 merged**; part 2 (R-C stage wiring, skills plugin) waits for R-C | `wp/r-g-server` | part 1: 2026-10-16 (`39bd957`) |
-| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                                                     | `wp/r-d-skills` | —                              |
-| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | todo                                                                      | —               | —                              |
-| R-E | [Harness page](wp/R-E.md)                           | R-A      | todo                                                                      | —               | —                              |
-| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | todo                                                                      | —               | —                              |
-| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                      | —               | —                              |
-| R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                      | —               | —                              |
+| WP  | Title                                               | Depends  | Status                                                                    | Branch           | Merged                         |
+| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------- | ---------------- | ------------------------------ |
+| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                                  | `main`           | 2026-10-16                     |
+| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                                  | `wp/r-a-shell`   | 2026-10-16 (`8b70fc4`)         |
+| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | in-progress (resumed)                                                     | `wp/r-c-engine`  | —                              |
+| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | **part 1 merged**; part 2 (R-C stage wiring, skills plugin) waits for R-C | `wp/r-g-server`  | part 1: 2026-10-16 (`39bd957`) |
+| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                                                     | `wp/r-d-skills`  | —                              |
+| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress                                                               | `wp/r-f-tokens`  | —                              |
+| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress                                                               | `wp/r-e-harness` | —                              |
+| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | todo                                                                      | —                | —                              |
+| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                      | —                | —                              |
+| R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                      | —                | —                              |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
