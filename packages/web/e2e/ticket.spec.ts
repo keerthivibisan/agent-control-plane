@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  CSRF,
+  FOLLOW_UP_MESSAGES,
+  followUpLeadAnswer,
+  followUpOwnerMessage,
+  followUpScenario,
   PLANNER,
   PROJECT_ID,
   PROJECT_WORKFLOW_PATH,
@@ -196,4 +201,74 @@ test('a held stage: Continue starts it', async ({ page }) => {
   await shoot(page, 'held');
   await held.getByRole('button', { name: 'Continue' }).click();
   await expect.poll(() => server.posts()).toEqual([`POST /api/runs/${RUN_ID}/continue`]);
+});
+
+// --- Redesign R-J: the lead's chat after the lead ends (ADR-0020) ------------------------------
+
+test('a done run: the ended lead answers a follow-up message', async ({ page }) => {
+  const sc = followUpScenario(
+    { state: 'available', reason: null },
+    { messages: FOLLOW_UP_MESSAGES },
+  );
+  const run = sc.routes[`/api/runs/${RUN_ID}`] as Record<string, unknown>;
+  const messages = run['messages'] as unknown[];
+  const question = 'Where does the switch read the theme?';
+  let phase: 'before' | 'running' | 'answered' = 'before';
+  const sent: { csrf: string | null; body: unknown }[] = [];
+  await serve(page, sc);
+  // Registered after `serve`, so these answer first: the run moves on as the server's would.
+  await page.route(`**/api/runs/${RUN_ID}`, (route) =>
+    route.fulfill({
+      json:
+        phase === 'before'
+          ? run
+          : {
+              ...run,
+              followUp: { state: phase === 'running' ? 'running' : 'available', reason: null },
+              messages: [
+                ...messages,
+                followUpOwnerMessage(question),
+                ...(phase === 'answered' ? [followUpLeadAnswer()] : []),
+              ],
+            },
+    }),
+  );
+  await page.route(`**/api/runs/${RUN_ID}/chat`, async (route) => {
+    sent.push({
+      csrf: (await route.request().headerValue('x-acp-csrf')) ?? null,
+      body: route.request().postDataJSON() as unknown,
+    });
+    phase = 'running';
+    await route.fulfill({ status: 201, json: followUpOwnerMessage(question) });
+  });
+  await page.goto(`/${TICKET_HASH}`);
+  const panel = page.getByTestId('side-panel');
+  await expect(panel.getByRole('heading', { name: 'Lead', exact: true })).toBeVisible();
+  await expect(panel.getByTestId('chat-notice')).toContainText('The lead has finished.');
+  await expect(panel.getByTestId('chat-divider')).toHaveText('After the run ended');
+  await expect(panel.getByTestId('chat-tag')).toHaveCount(2);
+  await shoot(page, 'follow-up');
+
+  const box = panel.getByRole('textbox', { name: 'Message to the lead agent' });
+  await box.fill(question);
+  await box.press('Enter');
+  await expect(panel.getByRole('status')).toHaveText('The lead is answering…');
+  await expect(box).toBeDisabled();
+  expect(sent).toEqual([{ csrf: CSRF, body: { text: question } }]);
+  await shoot(page, 'follow-up-running');
+
+  // The answer arrives; the server's notice would refetch the run, the reload stands in for it.
+  phase = 'answered';
+  await page.reload();
+  await expect(panel.getByText('The store is in src/theme/store.ts')).toBeVisible();
+  await expect(panel.getByTestId('chat-tag')).toHaveCount(4);
+  await expect(panel.getByRole('textbox', { name: 'Message to the lead agent' })).toBeEnabled();
+});
+
+test('a done run whose conversation is gone says why it can’t be continued', async ({ page }) => {
+  await open(page, followUpScenario({ state: 'unavailable', reason: 'session-gone' }));
+  const panel = page.getByTestId('side-panel');
+  await expect(panel.getByText(/no longer has this conversation/)).toBeVisible();
+  await expect(panel.getByRole('textbox')).toHaveCount(0);
+  await shoot(page, 'follow-up-unavailable');
 });

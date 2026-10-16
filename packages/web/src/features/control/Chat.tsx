@@ -1,5 +1,5 @@
 import type { ChatMessageDto } from '@acp/core/api';
-import { useEffect, useId, useRef, type KeyboardEvent, type RefObject } from 'react';
+import { Fragment, useEffect, useId, useRef, type KeyboardEvent, type RefObject } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
@@ -12,8 +12,15 @@ import { ActionError } from './bits';
 const C = CONTROL_COPY.chat;
 const MAX_CHARS = 8000;
 
-/** Who a bubble names; the ticket page tells the planner from the lead (redesign decision C). */
-export type SpeakerOf = (m: ChatMessageDto) => { label: string; tip?: string };
+/**
+ * Who a bubble names; the ticket page tells the planner from the lead (redesign decision C), and
+ * tags a follow-up turn's messages (ADR-0020).
+ */
+export type SpeakerOf = (m: ChatMessageDto) => {
+  label: string;
+  tip?: string;
+  tag?: { label: string; tip?: string };
+};
 
 function Bubble({ m, speakerOf }: { m: ChatMessageDto; speakerOf: SpeakerOf | undefined }) {
   const owner = m.role === 'owner';
@@ -23,11 +30,21 @@ function Bubble({ m, speakerOf }: { m: ChatMessageDto; speakerOf: SpeakerOf | un
       className={`flex flex-col gap-1 ${owner ? 'items-end' : 'items-start'}`}
       data-testid="chat-message"
       data-role={m.role}
+      data-follow-up={m.followUp === true ? 'true' : undefined}
     >
       <span className="flex items-center gap-2 text-caption text-dim">
         <span className="font-medium" title={speaker.tip} data-testid="chat-speaker">
           {speaker.label}
         </span>
+        {speaker.tag ? (
+          <span
+            className="rounded-full border border-line px-1.5 text-[0.6875rem] leading-4 font-medium"
+            title={speaker.tag.tip}
+            data-testid="chat-tag"
+          >
+            {speaker.tag.label}
+          </span>
+        ) : null}
         <RelativeTime iso={m.createdAt} />
       </span>
       <p
@@ -56,6 +73,10 @@ export function Chat({
   inputRef,
   speakerOf,
   closedText,
+  notice,
+  waiting,
+  placeholder,
+  followUpDivider,
 }: {
   runId: string;
   messages: readonly ChatMessageDto[];
@@ -68,13 +89,25 @@ export function Chat({
   speakerOf?: SpeakerOf;
   /** Why the box is gone, when it is not that the run ended. */
   closedText?: string;
+  /** A short line above the box, e.g. what a message to an ended lead does (ADR-0020). */
+  notice?: string;
+  /** Set while the agent answers: the box stays but is disabled, with this line above it. */
+  waiting?: string;
+  placeholder?: string;
+  /** A divider with this text before the first follow-up message (`followUp: true`). */
+  followUpDivider?: string;
 }) {
   const send = useControlAction(sendChat);
   const listRef = useRef<HTMLOListElement>(null);
   const inputId = useId();
   const hintId = useId();
+  const noticeId = useId();
   const sorted = [...messages].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  const firstFollowUp =
+    followUpDivider === undefined ? undefined : sorted.find((m) => m.followUp === true)?.id;
   const tooLong = draft.length > MAX_CHARS;
+  const busy = waiting !== undefined;
+  const line = waiting ?? notice;
 
   // Keep the newest message in view as the conversation grows.
   useEffect(() => {
@@ -84,7 +117,7 @@ export function Chat({
 
   const submit = async () => {
     const text = draft.trim();
-    if (text.length === 0 || tooLong || send.pending) return;
+    if (text.length === 0 || tooLong || send.pending || busy) return;
     const sent = await send.run(runId, { text });
     if (sent !== null) onDraft('');
   };
@@ -107,18 +140,48 @@ export function Chat({
           className="-mx-1 flex max-h-[62vh] flex-col gap-4 overflow-y-auto px-1 pb-1"
         >
           {sorted.map((m) => (
-            <Bubble key={m.id} m={m} speakerOf={speakerOf} />
+            <Fragment key={m.id}>
+              {m.id === firstFollowUp ? (
+                <li
+                  className="flex items-center gap-3 text-caption text-dim"
+                  data-testid="chat-divider"
+                >
+                  <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                  {followUpDivider}
+                  <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                </li>
+              ) : null}
+              <Bubble m={m} speakerOf={speakerOf} />
+            </Fragment>
           ))}
         </ol>
       )}
       {open ? (
         <form
           className="mt-4 flex flex-col gap-2 border-t border-line pt-4"
+          data-testid="chat-form"
+          data-waiting={busy ? 'true' : undefined}
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
+          {line !== undefined ? (
+            <p
+              id={noticeId}
+              role={busy ? 'status' : undefined}
+              className="flex items-start gap-2 text-caption text-dim"
+              data-testid="chat-notice"
+            >
+              {busy ? (
+                <span
+                  aria-hidden="true"
+                  className="mt-1.5 inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-accent"
+                />
+              ) : null}
+              <span>{line}</span>
+            </p>
+          ) : null}
           <label htmlFor={inputId} className="sr-only">
             {C.label}
           </label>
@@ -127,12 +190,13 @@ export function Chat({
             ref={inputRef}
             rows={3}
             value={draft}
+            disabled={busy}
             onChange={(e) => onDraft(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={C.placeholder}
-            aria-describedby={hintId}
+            placeholder={placeholder ?? C.placeholder}
+            aria-describedby={line !== undefined ? `${noticeId} ${hintId}` : hintId}
             aria-invalid={tooLong ? true : undefined}
-            className={`resize-y rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 ${
+            className={`resize-y rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 disabled:cursor-not-allowed disabled:opacity-60 ${
               tooLong ? 'border-danger' : 'border-line-strong'
             }`}
           />
@@ -143,7 +207,7 @@ export function Chat({
             <Button
               type="submit"
               variant="primary"
-              disabled={send.pending || tooLong || draft.trim().length === 0}
+              disabled={busy || send.pending || tooLong || draft.trim().length === 0}
             >
               {send.pending ? C.sending : C.send}
             </Button>

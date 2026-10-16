@@ -11,6 +11,7 @@ import type {
   CheckRunDto,
   ReviewDto,
   RunDetailDto,
+  RunFollowUpDto,
   RunSummaryDto,
   RunWorkflowDto,
   TicketCommentDto,
@@ -300,4 +301,18 @@ export function runPlannerMode(
  */
 export function showRunStatus(isCurrent: boolean, status: RunStatus): boolean {
   return !isCurrent || status === 'CANCELLING' || status === 'NEEDS_REVIEW';
+}
+
+// --- The lead's chat after the lead ends (R-J; ADR-0020) -----------------------------------------
+
+/**
+ * The follow-up chat on the lead's own panel: the server's state once the lead has ended, or null
+ * while the lead is live (the server leaves `followUp` out) and on every other agent's panel, so
+ * the chat there works as before. A follow-up turn always resumes the lead, never the planner.
+ */
+export function leadFollowUp(
+  run: Pick<RunDetailDto, 'followUp'>,
+  agent: Pick<AgentRunDto, 'kind'>,
+): RunFollowUpDto | null {
+  return agent.kind === 'lead' ? (run.followUp ?? null) : null;
 }

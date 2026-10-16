@@ -2651,3 +2651,30 @@ export const STAGE_AGENT_COPY = {
   openStage: (stage: string) => `Open ${stage} on the Workflow page`,
   selectStage: (stage: string) => `Open the ${stage} settings`,
 } as const;
+
+// --- The lead's chat after the lead ends (redesign R-J, wp/r-j-web) -----------------------------
+//
+// Add-only. Once a run's lead has ended, an owner message brings it back for one answers-only turn
+// (docs/redesign/README.md §6b, ADR-0020): the line above the box, the wait for the answer, why a
+// chat can't be continued, and the follow-up bubbles.
+
+import type { FollowUpUnavailableReason } from '@acp/core/api';
+
+export const FOLLOW_UP_COPY = {
+  available:
+    'The lead has finished. A message brings it back to answer questions; it can’t change code. New work needs a new run.',
+  running: 'The lead is answering…',
+  placeholder: 'Ask the lead about this run…',
+  /** One sentence per reason (ADR-0020 §5); no box is shown. */
+  unavailable: {
+    'no-session': 'This lead never started a conversation, so it can’t be continued.',
+    'session-gone':
+      'Claude Code no longer has this conversation (it ages out after 30 days), so it can’t be continued.',
+    'managed-off': 'Managed agents are off in this app, so this chat can’t be continued.',
+  } satisfies Record<FollowUpUnavailableReason, string>,
+  /** When the server says `unavailable` without a reason. */
+  unavailableFallback: 'This chat can’t be continued.',
+  tag: 'Follow-up',
+  tagTip: 'Said after the run ended. The lead came back to answer; it reads but changes nothing.',
+  divider: 'After the run ended',
+} as const;

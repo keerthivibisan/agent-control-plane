@@ -872,3 +872,111 @@ export function heldScenario(): TicketScenario {
     },
   );
 }
+
+// --- Redesign R-J: the lead's chat after the lead ends (ADR-0020) ------------------------------
+
+/** `RunDetailDto.followUp`: absent while the lead is live; present once it ended. */
+export interface FollowUpFixture {
+  state: 'available' | 'running' | 'unavailable';
+  reason: 'no-session' | 'session-gone' | 'managed-off' | null;
+}
+
+/** The lead's last message of the run itself, before it ended. */
+const LEAD_DONE_MESSAGE: Json = {
+  id: 'm-2',
+  runId: RUN_ID,
+  role: 'lead',
+  text: 'Every change is merged. The theme switch and its store are on the main branch.',
+  createdAt: T(47),
+};
+
+/** One follow-up turn after the run: the owner asks, the resumed lead answers. */
+export const FOLLOW_UP_MESSAGES: Json[] = [
+  {
+    id: 'm-f1',
+    runId: RUN_ID,
+    role: 'owner',
+    text: 'Why does the migration keep the old darkMode key?',
+    createdAt: T(70),
+    followUp: true,
+  },
+  {
+    id: 'm-f2',
+    runId: RUN_ID,
+    role: 'lead',
+    text: 'It reads darkMode once to pick the starting theme, so nobody loses their choice. It can go after one release.',
+    createdAt: T(71),
+    followUp: true,
+  },
+];
+
+/** A follow-up message the owner sends in a test, as the chat route answers it. */
+export function followUpOwnerMessage(text: string): Json {
+  return { id: 'm-f9', runId: RUN_ID, role: 'owner', text, createdAt: T(80), followUp: true };
+}
+
+/** The resumed lead's answer to `followUpOwnerMessage`. */
+export function followUpLeadAnswer(): Json {
+  return {
+    id: 'm-f10',
+    runId: RUN_ID,
+    role: 'lead',
+    text: 'The store is in src/theme/store.ts; the switch reads it through useTheme().',
+    createdAt: T(81),
+    followUp: true,
+  };
+}
+
+/**
+ * Done, and the lead has ended (redesign R-J): the run completed with every change merged, so the
+ * server reports the chat's follow-up state. `followUp: null` leaves it out, as for a live lead.
+ * `messages` are added after the run's own chat.
+ */
+export function followUpScenario(
+  followUp: FollowUpFixture | null,
+  o: { messages?: Json[] } = {},
+): TicketScenario {
+  const detail = doneScenario().routes[ticketPath] as Json;
+  const current = detail['currentRun'] as Json;
+  const agents = (current['agents'] as Json[]).map((a) => {
+    const review = a['review'] as Json | null;
+    return {
+      ...a,
+      ...(a['id'] === LEAD ? { endedAt: T(48) } : {}),
+      ...(review !== null && review['state'] === 'pending'
+        ? { review: { ...review, state: 'merged' } }
+        : {}),
+    };
+  });
+  const run: Json = {
+    ...current,
+    agents,
+    messages: [...(current['messages'] as Json[]), LEAD_DONE_MESSAGE, ...(o.messages ?? [])],
+    ...(followUp === null ? {} : { followUp }),
+  };
+  return scenario(
+    { ...detail, currentRun: run },
+    {
+      [`${runPath}/review`]: {
+        runId: RUN_ID,
+        agents: [
+          agentReview(UI, 'Settings UI', 'merged', UI_FILES),
+          agentReview(STORE, 'Theme store', 'merged', STORE_FILES),
+          agentReview(TESTS, 'Tests', 'merged', TEST_FILES),
+          agentReview(MIGRATION, 'Migration helper', 'no-changes', []),
+        ],
+      },
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'done',
+          helpers: 'done',
+          review: 'done',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        { plan: [LEAD], orchestrate: [LEAD], helpers: [UI, STORE, TESTS, MIGRATION] },
+      ),
+    },
+  );
+}

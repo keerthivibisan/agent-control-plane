@@ -14,6 +14,7 @@ import {
   AGENT_STATUS_COPY,
   CONTROL_COPY,
   describeEvent,
+  FOLLOW_UP_COPY,
   NOT_REPORTED,
   TICKET_COPY,
 } from '../../lib/copy';
@@ -21,14 +22,22 @@ import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
 import { StatusWord } from '../control/bits';
-import { Chat } from '../control/Chat';
+import { Chat, type SpeakerOf } from '../control/Chat';
 import { canChat, isAgentLive } from '../control/run-state';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
-import { agentBranch, canHoldChat, chatAgent, chatSpeaker, hasWorktree } from './ticket-state';
+import {
+  agentBranch,
+  canHoldChat,
+  chatAgent,
+  chatSpeaker,
+  hasWorktree,
+  leadFollowUp,
+} from './ticket-state';
 
 const C = TICKET_COPY;
 const D = TICKET_COPY.details;
+const F = FOLLOW_UP_COPY;
 
 export type PanelTab = 'chat' | 'activity' | 'changes' | 'checks' | 'approvals' | 'details';
 
@@ -48,15 +57,48 @@ function chatOpen(run: RunDetailDto): boolean {
   return canChat(run.status) && agent !== undefined && isAgentLive(agent.status);
 }
 
-/** The name on a chat bubble: planner chat arrives as `lead` (decision C), so it is worked out. */
-function speakerLabel(
-  m: ChatMessageDto,
-  agents: readonly AgentRunDto[],
-): { label: string; tip?: string } {
+/**
+ * The chat's box on this agent's panel. While the lead is live (no `followUp`) it is as before
+ * R-J; once the lead ended, the lead's panel follows the server's follow-up state (ADR-0020).
+ */
+function chatBox(
+  run: RunDetailDto,
+  agent: AgentRunDto,
+): {
+  open: boolean;
+  closedText?: string;
+  notice?: string;
+  waiting?: string;
+  placeholder?: string;
+} {
+  const followUp = leadFollowUp(run, agent);
+  if (followUp === null) {
+    return {
+      open: chatOpen(run),
+      ...(canChat(run.status) ? { closedText: C.speaker.chatEnded } : {}),
+    };
+  }
+  if (followUp.state === 'unavailable') {
+    return {
+      open: false,
+      closedText: followUp.reason === null ? F.unavailableFallback : F.unavailable[followUp.reason],
+    };
+  }
+  return followUp.state === 'running'
+    ? { open: true, waiting: F.running, placeholder: F.placeholder }
+    : { open: true, notice: F.available, placeholder: F.placeholder };
+}
+
+/**
+ * The name on a chat bubble: planner chat arrives as `lead` (decision C), so it is worked out.
+ * Messages of a follow-up turn after the run carry a "Follow-up" tag (ADR-0020).
+ */
+function speakerLabel(m: ChatMessageDto, agents: readonly AgentRunDto[]): ReturnType<SpeakerOf> {
   const who = chatSpeaker(m, agents);
+  const tag = m.followUp === true ? { tag: { label: F.tag, tip: F.tagTip } } : {};
   return who === 'lead-or-planner'
-    ? { label: C.speaker[who], tip: C.speaker.leadOrPlannerTip }
-    : { label: C.speaker[who] };
+    ? { label: C.speaker[who], tip: C.speaker.leadOrPlannerTip, ...tag }
+    : { label: C.speaker[who], ...tag };
 }
 
 const ACTIVITY_LIMIT = 20;
@@ -316,12 +358,12 @@ export function SidePanel({
             <Chat
               runId={run.id}
               messages={run.messages}
-              open={chatOpen(run)}
               draft={draft}
               onDraft={setDraft}
               inputRef={chatInput}
               speakerOf={(m) => speakerLabel(m, run.agents)}
-              {...(canChat(run.status) ? { closedText: C.speaker.chatEnded } : {})}
+              followUpDivider={F.divider}
+              {...chatBox(run, agent)}
             />
           </div>
         ) : active === 'activity' ? (
