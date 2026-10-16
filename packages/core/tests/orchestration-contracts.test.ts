@@ -76,6 +76,7 @@ describe('orchestration DTOs', () => {
       budget: { used: 0, limit: DEFAULT_AGENT_BUDGET_TOKENS },
       latestActivity: null,
       review: null,
+      branch: kind === 'lead' ? null : 'acp/r1/a-1',
       createdAt: T,
       endedAt: null,
     });

@@ -226,15 +226,3 @@ export function createRepoErrorMessage(error: ApiError): string {
   }
   return R.generic;
 }
-
-// --- Links into pages other work packages own -------------------------------------------------------
-
-/** The project's board (P4-E route `#/board/:projectId`). */
-export function boardHash(projectId: string): string {
-  return `#/board/${encodeURIComponent(projectId)}`;
-}
-
-/** A ticket's page (P4-G route `#/tickets/:ticketId`). */
-export function ticketHash(ticketId: string): string {
-  return `#/tickets/${encodeURIComponent(ticketId)}`;
-}

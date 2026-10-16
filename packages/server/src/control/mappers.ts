@@ -62,6 +62,7 @@ export function toAgentDto(
       agent.kind === 'worker' && agent.review !== null
         ? { state: agent.review, changedFiles: workspace?.changedFiles ?? null }
         : null,
+    branch: workspace?.branch ?? null,
     createdAt: agent.createdAt,
     endedAt: agent.endedAt,
   };

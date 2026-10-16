@@ -252,6 +252,11 @@ describe('Project settings (#/projects/:id/settings)', () => {
     expect(within(h).getByText('Unit tests')).toBeTruthy();
     expect(within(h).getByText('Required')).toBeTruthy();
     expect(within(h).getByText('Optional')).toBeTruthy();
+    // Each check shows its exact command, folder and time limit (coordinator decision, 2026-10-16).
+    expect(within(h).getByText('pnpm test')).toBeTruthy();
+    expect(within(h).getByText('time limit 600 s')).toBeTruthy();
+    expect(within(h).getByText('pnpm lint')).toBeTruthy();
+    expect(within(h).getByText('in packages/app · time limit 120 s')).toBeTruthy();
     expect(within(h).getByText('CLAUDE.md')).toBeTruthy();
 
     expect(

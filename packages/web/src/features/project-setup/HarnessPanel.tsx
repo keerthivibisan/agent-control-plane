@@ -7,9 +7,9 @@ import { RelativeTime } from '../../components/RelativeTime';
 import { createHarnessTicket, isProjectSetupPath, runHarnessChecks } from '../../lib/api';
 import { CHECK_STATUS_COPY, SETUP_HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
 import { formatDuration } from '../../lib/format';
+import { href } from '../../lib/router';
 import { ActionError, StatusWord } from '../control/bits';
 import { useSetupAction } from './actions';
-import { ticketHash } from './setup-form';
 
 const H = PROJECT_SETUP_COPY.harness;
 
@@ -66,6 +66,14 @@ export function HarnessCheckList({ harness }: { harness: HarnessStatusDto }) {
               >
                 {c.required ? H.required : H.optional}
               </span>
+              <code className="basis-full break-all font-mono text-caption">
+                {c.argv.join(' ')}
+              </code>
+              <span className="text-caption text-dim">
+                {c.cwd === undefined
+                  ? H.timeLimit(c.timeoutSec)
+                  : `${H.inFolder(c.cwd)} · ${H.timeLimit(c.timeoutSec)}`}
+              </span>
             </li>
           ))}
         </ul>
@@ -100,7 +108,7 @@ export function HarnessTicketAction({
             <strong className="font-semibold">{H.ticketCreated(ticket.key)}</strong>{' '}
             <span className="text-dim">{H.ticketCreatedText}</span>
           </span>
-          <a href={ticketHash(ticket.id)} className="ml-auto">
+          <a href={href.ticket(ticket.id)} className="ml-auto">
             {H.openTicket}
           </a>
         </div>

@@ -1682,8 +1682,9 @@ export const PROJECT_SETUP_COPY = {
     noOutput: 'No output.',
     contextFiles: 'Context files',
     noContextFiles: 'None chosen.',
-    commandNote:
-      'The exact commands, time limits and working folders are in .acp/harness.json in the repository.',
+    commandNote: 'Checks come from .acp/harness.json in the repository.',
+    timeLimit: (sec: number) => `time limit ${sec} s`,
+    inFolder: (cwd: string) => `in ${cwd}`,
   },
   settings: {
     title: (name: string) => `${name} settings`,

@@ -191,7 +191,8 @@ export const HarnessStatusSchema = z.object({
   checkedAt: IsoTimestampSchema,
   /** Plain sentences, e.g. "Check 'test' needs a timeout." Empty when ready. */
   problems: z.array(z.string().min(1)),
-  checks: z.array(z.object({ id: slug, name: z.string().min(1), required: z.boolean() })),
+  /** The manifest's checks as declared, so the settings card can show each command and time limit. */
+  checks: z.array(HarnessCheckSchema),
 });
 export type HarnessStatus = z.infer<typeof HarnessStatusSchema>;
 

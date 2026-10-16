@@ -63,9 +63,10 @@ describe('readHarness', () => {
     const result = await readHarness(root, { now: NOW });
     expect(result.status.state).toBe('ready');
     expect(result.status.problems).toEqual([]);
+    // The status carries each check as declared (command, folder, time limit) for the settings card.
     expect(result.status.checks).toEqual([
-      { id: 'test', name: 'Unit tests', required: true },
-      { id: 'lint', name: 'Lint', required: false },
+      check(),
+      check({ id: 'lint', name: 'Lint', required: false }),
     ]);
     expect(result.manifest?.context).toEqual(['CLAUDE.md']);
     expect(HarnessStatusSchema.safeParse(result.status).success).toBe(true);

@@ -41,6 +41,7 @@ export function agent(over: Partial<AgentRunDto> & { id: string }): AgentRunDto 
     budget: { used: 0, limit: 500_000 },
     latestActivity: null,
     review: null,
+    branch: null,
     createdAt: T1,
     endedAt: null,
     ...over,

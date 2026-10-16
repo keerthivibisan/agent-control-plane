@@ -43,8 +43,21 @@ export function harness(
     state === 'none' || state === 'invalid'
       ? []
       : [
-          { id: 'test', name: 'Unit tests', required: state === 'ready' },
-          { id: 'lint', name: 'Lint', required: false },
+          {
+            id: 'test',
+            name: 'Unit tests',
+            argv: ['pnpm', 'test'],
+            timeoutSec: 600,
+            required: state === 'ready',
+          },
+          {
+            id: 'lint',
+            name: 'Lint',
+            argv: ['pnpm', 'lint'],
+            cwd: 'packages/app',
+            timeoutSec: 120,
+            required: false,
+          },
         ];
   const problems =
     state === 'invalid'

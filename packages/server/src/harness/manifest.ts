@@ -103,7 +103,7 @@ export function harnessStatusOf(raw: unknown, checkedAt: string): HarnessReadRes
     };
   }
   const manifest = parsed.data;
-  const checks = manifest.checks.map((c) => ({ id: c.id, name: c.name, required: c.required }));
+  const checks = manifest.checks.map((c) => ({ ...c }));
   const hasRequired = checks.some((c) => c.required);
   return {
     status: {

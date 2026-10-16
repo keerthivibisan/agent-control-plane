@@ -19,7 +19,6 @@ import { useSetupAction } from './actions';
 import { HarnessCheckList, HarnessStatusView, HarnessTicketAction } from './HarnessPanel';
 import { AgentFields, AllowlistFields, ContextPicker } from './SetupSections';
 import {
-  boardHash,
   draftFromSetup,
   draftToRequest,
   initialContextFiles,
@@ -165,7 +164,7 @@ export function NewProjectWizard() {
       if (saved !== null) setStep(4);
       return;
     }
-    navigate(boardHash(id));
+    navigate(href.board(id));
   };
 
   let body: ReactNode;

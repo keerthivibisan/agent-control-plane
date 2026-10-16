@@ -35,6 +35,8 @@ export const AgentRunDtoSchema = z.object({
   /** Latest content-free activity sentence, e.g. "Used tool: Edit". */
   latestActivity: z.string().min(1).nullable(),
   review: z.object({ state: ReviewStateSchema, changedFiles: count.nullable() }).nullable(),
+  /** The worker's worktree branch once its workspace exists; null for the lead or before setup. */
+  branch: z.string().min(1).nullable(),
   createdAt: IsoTimestampSchema,
   endedAt: IsoTimestampSchema.nullable(),
 });
