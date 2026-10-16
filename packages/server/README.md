@@ -95,6 +95,8 @@ new on every server start, constant-time compare). Missing → `403 csrf_missing
 | `POST /api/runs/:id/stop` (Stop all)         |                            | `RunSummaryDto`          |
 | `GET /api/runs/:id/review`                   |                            | `ReviewDto`              |
 | `POST /api/runs/:id/review`                  | `ReviewActionRequest`      | `ReviewDto`              |
+| `GET /api/runs/:id/workflow` (redesign)      |                            | `RunWorkflowDto`         |
+| `POST /api/runs/:id/continue` (redesign)     |                            | `RunDetailDto`           |
 
 Engine refusals become `ErrorDto`s with the engine's code in snake_case (`too_many_agents`,
 `project_not_registered`, `over_budget`, `run_cancelling`, `review_not_allowed`, ...; 409, or 404 for
@@ -148,6 +150,43 @@ unknown agents/approvals, 400 for invalid input). Workspace refusals do the same
 and a temp git repository. A server for e2e can be started with
 `startServer({ config, managedAdapter: createFakeManagedAdapter().adapter })` (demo mode is fine).
 
+## Workflow stages (project workspace redesign, R-G)
+
+Specs: docs/redesign/README.md §4.2, §6, ADR-0019 (as amended), ADR-0018. `src/workflow/` holds the
+project workflow service, the skill path rules and the skills plugin; the stage wiring is in
+`src/control/` (`service.ts`, `store.ts`, `review-checkouts.ts`, `roles.ts`).
+
+| Route                                           | Request                 | Response             |
+| ----------------------------------------------- | ----------------------- | -------------------- |
+| `GET /api/projects/:id/workflow` · `PUT` (CSRF) | `UpdateWorkflowRequest` | `ProjectWorkflowDto` |
+| `GET /api/runs/:id/workflow`                    |                         | `RunWorkflowDto`     |
+| `POST /api/runs/:id/continue` (CSRF)            |                         | `RunDetailDto`       |
+
+- **Run creation.** A ticket run gets the project's workflow (`project_workflow`, else the default)
+  and `ticketRunPrompts`; the engine snapshots it. The snapshot is stored with the limits in
+  `orchestration_runs.limits` (`{ maxConcurrentHelpers, maxDepth, workflow?, stagesHeld? }`).
+- **Where each role starts.** The lead and the planner read the project folder in place (their
+  permission requests are denied without asking). The reviewer reads a temporary **detached**
+  checkout of the project's HEAD (`<ACP_DATA_DIR>/review-checkouts/<run>/<agent>`, created on
+  `create-review-checkout`, removed on `remove-review-checkout`, and every leftover removed on
+  start); it is a managed path and, while it exists, an extra root of the project. Helpers and the
+  tester get a worktree from the current main branch; the tester's change goes through the same
+  review, checks and merge. Read-only roles get the control tools the engine allows them
+  (`leadTools`); the stage's model wins over the project's.
+- **Skills plugin.** When a `start-agent` names skills, they are copied from the project checkout
+  into `<ACP_DATA_DIR>/runs/<run>/skills-plugin/` (`.claude-plugin/plugin.json` named `acp-skills`,
+  `skills/<name>/SKILL.md` with the front matter reduced to `name` and `description`), under the
+  ADR-0018 path rules (no symlinks, inside the root, never `~/.claude`, 64 KiB, UTF-8). Refused
+  skills are counted (`skill-unavailable`) and the agent starts without them. The folder is removed
+  when the run ends, and every one on start.
+- **Data effects.** `review-comment` is stored as a ticket comment by `reviewer` in the commit
+  transaction; each agent's `stage` goes to `agent_runs.stage`.
+- **Notices.** A change of any stage's state (or a reviewer post) publishes `tickets-changed`.
+- **Restart.** A restart that interrupts a run with post-merge stages holds the next stage
+  (`stagesHeld`, stored); only Continue starts it, also after further restarts.
+- **Duplication.** The skill path rules (`src/workflow/skill-files.ts`) duplicate R-D's skills
+  module, which is not on main yet; replace them with it when it lands.
+
 ## Agent Workspace (Phase 4, P4-D)
 
 `src/board/` joins tickets to the Phase 3 run service; `src/routes/board.ts` is the thin HTTP layer.
@@ -166,6 +205,7 @@ are off as before. Every response is parsed by its `@acp/core/api` DTO.
 | `GET /api/projects/:id/setup` · `PUT`          | `UpdateProjectSetupRequest` (PUT)      | `ProjectAgentSetupDto`              |
 | `GET /api/projects/:id/harness`                |                                        | `HarnessStatusDto`                  |
 | `POST /api/projects/:id/harness/checks`        | `{}`                                   | `CheckRunDto[]` (main branch)       |
+| `GET /api/projects/:id/harness/checks`         |                                        | `CheckRunDto[]` (main history, 50)  |
 | `POST /api/projects/:id/harness/ticket`        | `{}`                                   | `TicketDto` (201)                   |
 | `GET /api/projects/:id/context-candidates`     |                                        | `ContextCandidateDto[]`             |
 | `GET /api/board?projectId=`                    |                                        | `BoardDto`                          |
