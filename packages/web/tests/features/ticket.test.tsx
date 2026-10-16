@@ -1,27 +1,37 @@
 import {
   ChatMessageDtoSchema,
+  ProjectWorkflowDtoSchema,
   ReviewDtoSchema,
   RunDetailDtoSchema,
+  RunWorkflowDtoSchema,
   TicketDetailDtoSchema,
 } from '@acp/core/api';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CSRF,
   LEAD,
   MIGRATION,
   PLAN_V1,
   PLAN_V2,
+  PLANNER,
   PROJECT_ID,
+  PROJECT_WORKFLOW_PATH,
+  REVIEWER,
   RUN_ID,
+  RUN_WORKFLOW_PATH,
   STORE,
+  TESTER,
   TICKET_ID,
   TOKENS,
   UI,
   branchOf,
   doneScenario,
+  heldScenario,
   inReviewScenario,
   planReviewScenario,
+  reviewedScenario,
+  stagesScenario,
   workingScenario,
   type TicketScenario,
 } from '../../e2e/ticket-fixtures';
@@ -36,6 +46,27 @@ import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../hel
 const TICKET = `/api/tickets/${TICKET_ID}`;
 const webApp = project({ id: PROJECT_ID, name: 'web-app' });
 const RUN = `/api/runs/${RUN_ID}`;
+
+// The live workflow is React Flow, which measures the DOM; jsdom has no layout (as in
+// tests/features/workflow.test.tsx).
+beforeAll(() => {
+  if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
+    class Matrix {
+      m22: number;
+      constructor(transform?: string) {
+        const scale = /scale\(([\d.]+)\)/.exec(transform ?? '')?.[1];
+        this.m22 = scale === undefined ? 1 : Number(scale);
+      }
+    }
+    Object.assign(globalThis, { DOMMatrixReadOnly: Matrix });
+  }
+  for (const prop of ['offsetWidth', 'offsetHeight'] as const) {
+    Object.defineProperty(HTMLElement.prototype, prop, { configurable: true, get: () => 800 });
+  }
+  Object.assign(SVGElement.prototype, {
+    getBBox: () => ({ x: 0, y: 0, width: 0, height: 0 }),
+  });
+});
 
 /** A fake server for one scenario that also records each mutation's CSRF header. */
 function server(sc: TicketScenario, routes: RouteTable = {}) {
@@ -66,11 +97,19 @@ describe('ticket fixtures', () => {
       workingScenario(),
       inReviewScenario(),
       doneScenario(),
+      stagesScenario(),
+      reviewedScenario(),
+      heldScenario(),
     ]) {
       expect(() => TicketDetailDtoSchema.parse(sc.routes[TICKET])).not.toThrow();
       expect(() => RunDetailDtoSchema.parse(sc.routes[RUN])).not.toThrow();
       const review = sc.routes[`${RUN}/review`];
       if (review !== undefined) expect(() => ReviewDtoSchema.parse(review)).not.toThrow();
+      const runWorkflow = sc.routes[RUN_WORKFLOW_PATH];
+      if (runWorkflow !== undefined) {
+        expect(() => RunWorkflowDtoSchema.parse(runWorkflow)).not.toThrow();
+      }
+      expect(() => ProjectWorkflowDtoSchema.parse(sc.routes[PROJECT_WORKFLOW_PATH])).not.toThrow();
     }
   });
 });
@@ -506,6 +545,177 @@ describe('ticket page: history and quick actions', () => {
     expect(text).not.toMatch(/completed/i);
     expect(text).not.toContain(RUN_ID);
     expect(text).not.toContain(PLAN_V1);
+  });
+});
+
+describe('ticket page: live workflow (redesign R-H)', () => {
+  const graph = () => screen.findByTestId('live-workflow');
+  const stageOf = (stage: string) => screen.getByTestId(`live-${stage}`);
+
+  it('shows the run’s stages with their states, reusing the Workflow page’s nodes', async () => {
+    renderTicket(server(planReviewScenario()));
+    const card = await graph();
+    expect(within(card).getByRole('heading', { name: 'Workflow' })).toBeTruthy();
+    expect(stageOf('plan').dataset.state).toBe('needs-you');
+    expect(within(stageOf('plan')).getByTestId('stage-state-word').textContent).toBe('Needs you');
+    expect(stageOf('orchestrate').dataset.state).toBe('waiting');
+    // The plan approval is ringed while a plan waits; the stages that are off say so once.
+    expect(screen.getByTestId('live-approve').dataset.state).toBe('needs-you');
+    expect(stageOf('code-review').dataset.state).toBe('off');
+    expect(within(stageOf('code-review')).queryByTestId('stage-state-word')).toBeNull();
+    // Lead mode: one lead agent covers Plan and Orchestrate (R-B's node, read-only).
+    expect(within(stageOf('plan')).getByTestId('same-agent')).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: /^Change / })).toBeNull();
+  });
+
+  it('a separate planner and the post-merge stages show as such while helpers work', async () => {
+    renderTicket(server(stagesScenario()));
+    await graph();
+    expect(screen.getByTestId('wf-node-plan').dataset.role).toBe('planner');
+    expect(stageOf('plan').dataset.state).toBe('done');
+    expect(stageOf('helpers').dataset.state).toBe('active');
+    expect(stageOf('code-review').dataset.state).toBe('waiting');
+    expect(stageOf('unit-tests').dataset.state).toBe('waiting');
+    expect(screen.getByTestId('live-helpers-row').textContent).toBe('2 agents2 working');
+    // The agent tree stays under the graph.
+    expect(screen.getByTestId('agent-canvas')).toBeTruthy();
+  });
+
+  it('hides the graph when the run has no workflow (an older run or managed agents off)', async () => {
+    const sc = workingScenario();
+    delete sc.routes[RUN_WORKFLOW_PATH];
+    renderTicket(server(sc));
+    await screen.findByTestId('agent-canvas');
+    expect(screen.queryByTestId('live-workflow')).toBeNull();
+  });
+
+  it('clicking a stage shows its agent in the side panel', async () => {
+    renderTicket(server(stagesScenario()));
+    await graph();
+    fireEvent.click(screen.getByTestId('wf-node-plan'));
+    const panel = screen.getByTestId('side-panel');
+    expect(within(panel).getByRole('heading', { name: 'Planner' })).toBeTruthy();
+  });
+
+  it('a held stage offers Continue with a plain explanation, sent with the CSRF header', async () => {
+    const s = server(heldScenario(), {
+      [`POST /api/runs/${RUN_ID}/continue`]: heldScenario().routes[RUN] as object,
+    });
+    renderTicket(s);
+    const held = await screen.findByTestId('held-stage');
+    expect(held.dataset.stage).toBe('code-review');
+    expect(held.textContent).toContain('Final code review is waiting for you');
+    expect(held.textContent).toContain('The app restarted before final code review started');
+    fireEvent.click(within(held).getByRole('button', { name: 'Continue' }));
+    await waitFor(() =>
+      expect(mutations(s).map((c) => `${c.method} ${c.path}`)).toEqual([
+        `POST /api/runs/${RUN_ID}/continue`,
+      ]),
+    );
+    expect(s.csrf).toEqual([CSRF]);
+  });
+
+  it('explains a refused Continue in words', async () => {
+    renderTicket(
+      server(heldScenario(), {
+        [`POST /api/runs/${RUN_ID}/continue`]: jsonResponse(409, {
+          error: { code: 'run_not_active', message: 'Nothing waits', requestId: 'r-c' },
+        }),
+      }),
+    );
+    const held = await screen.findByTestId('held-stage');
+    fireEvent.click(within(held).getByRole('button', { name: 'Continue' }));
+    expect(await within(held).findByText(/The stage didn’t start/)).toBeTruthy();
+  });
+
+  it('offers no Continue when the tester’s own change waits for review', async () => {
+    renderTicket(server(reviewedScenario()));
+    await graph();
+    expect(stageOf('unit-tests').dataset.state).toBe('needs-you');
+    expect(screen.queryByTestId('held-stage')).toBeNull();
+    // The tester's change is in the review list like a helper's.
+    expect(within(screen.getByTestId('review-list')).getByText('Tester')).toBeTruthy();
+  });
+});
+
+describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', () => {
+  it('labels planner, reviewer and tester cards; only the tester has a branch', async () => {
+    renderTicket(server(reviewedScenario()));
+    const term = (id: string) =>
+      within(screen.getByTestId(`agent-${id}`)).getByTestId('agent-term').textContent;
+    await screen.findByTestId('agent-canvas');
+    expect(term(PLANNER)).toBe('Planner agent');
+    expect(term(LEAD)).toBe('Lead agent');
+    expect(term(UI)).toBe('Helper agent');
+    expect(term(REVIEWER)).toBe('Reviewer agent');
+    expect(term(TESTER)).toBe('Tester agent');
+    expect(within(screen.getByTestId(`agent-${PLANNER}`)).queryByTestId('agent-branch')).toBeNull();
+    expect(
+      within(screen.getByTestId(`agent-${REVIEWER}`)).queryByTestId('agent-branch'),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId(`agent-${TESTER}`)).getByTestId('agent-branch').textContent,
+    ).toBe(`…/${TESTER}`);
+    // The tree follows the flow: planner first, the reviewer and tester after the lead's helpers.
+    const order = [...screen.getByTestId('agent-canvas').querySelectorAll('article')].map((a) =>
+      a.getAttribute('data-kind'),
+    );
+    expect(order).toEqual(['planner', 'lead', 'worker', 'worker', 'reviewer', 'tester']);
+  });
+
+  it('shows reviewer comments with their own label, and points to them from the graph', async () => {
+    renderTicket(server(reviewedScenario()));
+    const comments = await screen.findByTestId('comments');
+    const reviewer = comments.querySelector<HTMLElement>('[data-author="reviewer"]');
+    if (reviewer === null) throw new Error('no reviewer comment');
+    expect(within(reviewer).getByTestId('comment-author').textContent).toBe('Reviewer');
+    expect(within(reviewer).getByTestId('comment-author').dataset.tone).toBe('accent');
+    expect(reviewer.textContent).toContain('a selector would avoid re-renders');
+    const owner = comments.querySelector<HTMLElement>('[data-author="owner"]');
+    expect(owner && within(owner).getByTestId('comment-author').textContent).toBe('You');
+    expect((await screen.findByTestId('reviewer-findings-link')).textContent).toBe(
+      '1 finding from the reviewer in the comments below',
+    );
+  });
+
+  it('names the planner and the lead in the chat from when the planner ended (decision C)', async () => {
+    renderTicket(server(stagesScenario()));
+    const panel = await screen.findByTestId('side-panel');
+    // The run is past planning: the panel opens on the lead, the agent the chat reaches now.
+    expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
+    const speakers = within(panel)
+      .getAllByTestId('chat-speaker')
+      .map((s) => s.textContent);
+    expect(speakers).toEqual(['Planner agent', 'You', 'Lead agent']);
+    // The planner keeps its chat tab; its finished card has no prompt box.
+    fireEvent.click(screen.getByRole('button', { name: 'Show the Planner in the side panel' }));
+    expect(
+      within(screen.getByTestId('side-panel')).getByRole('tab', { name: 'Chat' }),
+    ).toBeTruthy();
+    expect(within(screen.getByTestId(`agent-${PLANNER}`)).queryByRole('textbox')).toBeNull();
+    expect(within(screen.getByTestId(`agent-${LEAD}`)).getByRole('textbox')).toBeTruthy();
+  });
+
+  it('closes the chat once the agent it reaches has stopped, though the run is in review', async () => {
+    renderTicket(server(heldScenario()));
+    const panel = await screen.findByTestId('side-panel');
+    expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
+    expect(within(panel).queryByRole('textbox')).toBeNull();
+    expect(within(panel).getByText(/has finished its work, so the chat is closed/)).toBeTruthy();
+    expect(within(screen.getByTestId(`agent-${LEAD}`)).queryByRole('textbox')).toBeNull();
+  });
+
+  it('uses one word for plan review: the stage pill, not a second run status', async () => {
+    renderTicket(server(planReviewScenario()));
+    await screen.findByTestId('plan-card');
+    expect(screen.getByTestId('ticket-stage').textContent).toContain('Plan review');
+    expect(screen.getByTestId('ticket-summary').textContent).not.toContain('Plan');
+    // The run picker uses the same word as the pill.
+    expect(screen.getByRole('combobox', { name: 'Run' }).textContent).toContain(
+      'Run 2 of 2 · Plan review',
+    );
+    expect(document.body.textContent).not.toContain('Plan ready for you');
+    expect(screen.getByTestId('ticket-summary').textContent).toContain('1 agent');
   });
 });
 

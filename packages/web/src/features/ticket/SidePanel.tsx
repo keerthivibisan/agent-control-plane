@@ -1,4 +1,10 @@
-import type { AgentRunDto, CheckRunDto, ReviewDto, RunDetailDto } from '@acp/core/api';
+import type {
+  AgentRunDto,
+  ChatMessageDto,
+  CheckRunDto,
+  ReviewDto,
+  RunDetailDto,
+} from '@acp/core/api';
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ButtonLink } from '../../components/Button';
 import { EstimatedCost } from '../../components/EstimatedCost';
@@ -16,20 +22,41 @@ import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
 import { StatusWord } from '../control/bits';
 import { Chat } from '../control/Chat';
-import { canChat } from '../control/run-state';
+import { canChat, isAgentLive } from '../control/run-state';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
-import { agentBranch } from './ticket-state';
+import { agentBranch, canHoldChat, chatAgent, chatSpeaker, hasWorktree } from './ticket-state';
 
 const C = TICKET_COPY;
 const D = TICKET_COPY.details;
 
 export type PanelTab = 'chat' | 'activity' | 'changes' | 'checks' | 'approvals' | 'details';
 
-/** Chat is with the lead only (README §5.3); a helper's tabs start at Activity. */
+/**
+ * Chat is with the lead (README §5.3), and with a separate planner, which holds the conversation
+ * until the plan is approved (ADR-0019); every other agent's tabs start at Activity.
+ */
 export function tabsFor(agent: Pick<AgentRunDto, 'kind'>): PanelTab[] {
   const all: PanelTab[] = ['chat', 'activity', 'changes', 'checks', 'approvals', 'details'];
-  return agent.kind === 'lead' ? all : all.filter((t) => t !== 'chat');
+  return canHoldChat(agent.kind) ? all : all.filter((t) => t !== 'chat');
+}
+
+/** The chat box stays while the run takes chat and the agent it reaches is still working. */
+function chatOpen(run: RunDetailDto): boolean {
+  const target = chatAgent(run);
+  const agent = run.agents.find((a) => a.id === target?.id);
+  return canChat(run.status) && agent !== undefined && isAgentLive(agent.status);
+}
+
+/** The name on a chat bubble: planner chat arrives as `lead` (decision C), so it is worked out. */
+function speakerLabel(
+  m: ChatMessageDto,
+  agents: readonly AgentRunDto[],
+): { label: string; tip?: string } {
+  const who = chatSpeaker(m, agents);
+  return who === 'lead-or-planner'
+    ? { label: C.speaker[who], tip: C.speaker.leadOrPlannerTip }
+    : { label: C.speaker[who] };
 }
 
 const ACTIVITY_LIMIT = 20;
@@ -116,9 +143,7 @@ function DetailsTab({
       className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2"
       data-testid="details"
     >
-      <Row label={D.kind}>
-        {agent.kind === 'lead' ? CONTROL_COPY.terms.lead.term : CONTROL_COPY.terms.worker.term}
-      </Row>
+      <Row label={D.kind}>{C.roles[agent.kind].term}</Row>
       <Row label={D.task}>
         {agent.task ? (
           <span className="whitespace-pre-wrap">{agent.task}</span>
@@ -126,7 +151,7 @@ function DetailsTab({
           <span className="text-dim">{D.noTask}</span>
         )}
       </Row>
-      {agent.kind === 'worker' ? (
+      {hasWorktree(agent.kind) ? (
         <>
           <Row label={D.branch}>
             {branch ? (
@@ -243,8 +268,11 @@ export function SidePanel({
       className="flex min-w-0 flex-col rounded-card border border-line bg-panel shadow-card"
     >
       <header className="flex flex-col gap-1 px-5 pt-4">
-        <span className="text-caption tracking-wide text-dim uppercase">
-          {agent.kind === 'lead' ? CONTROL_COPY.terms.lead.term : CONTROL_COPY.terms.worker.term}
+        <span
+          className="text-caption tracking-wide text-dim uppercase"
+          title={C.roles[agent.kind].tip}
+        >
+          {C.roles[agent.kind].term}
         </span>
         <h2 className="text-title font-semibold break-words">{agent.role}</h2>
         <StatusWord status={AGENT_STATUS_COPY[agent.status]} value={agent.status} />
@@ -288,10 +316,12 @@ export function SidePanel({
             <Chat
               runId={run.id}
               messages={run.messages}
-              open={canChat(run.status)}
+              open={chatOpen(run)}
               draft={draft}
               onDraft={setDraft}
               inputRef={chatInput}
+              speakerOf={(m) => speakerLabel(m, run.agents)}
+              {...(canChat(run.status) ? { closedText: C.speaker.chatEnded } : {})}
             />
           </div>
         ) : active === 'activity' ? (

@@ -1,12 +1,19 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  PLANNER,
   PROJECT_ID,
+  PROJECT_WORKFLOW_PATH,
+  RUN_ID,
   fixtureProject,
   STORE,
+  TESTER,
   TICKET_ID,
   UI,
+  heldScenario,
   inReviewScenario,
   planReviewScenario,
+  reviewedScenario,
+  stagesScenario,
   workingScenario,
   type TicketScenario,
 } from './ticket-fixtures.js';
@@ -28,12 +35,22 @@ async function withFixtureProject(page: Page): Promise<void> {
   });
 }
 
-async function serve(page: Page, sc: TicketScenario): Promise<void> {
+async function serve(page: Page, sc: TicketScenario): Promise<{ posts: () => string[] }> {
+  const posts: string[] = [];
   await withFixtureProject(page);
+  // The project's workflow for the live graph (redesign R-H).
+  await page.route(`**${PROJECT_WORKFLOW_PATH}`, (route) =>
+    route.fulfill({ json: sc.routes[PROJECT_WORKFLOW_PATH] }),
+  );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') {
-      await route.fulfill({ status: 200, json: sc.routes[`/api/tickets/${TICKET_ID}`] });
+      posts.push(`${route.request().method()} ${url.pathname}`);
+      const run = sc.routes[`/api/runs/${RUN_ID}`];
+      await route.fulfill({
+        status: 200,
+        json: url.pathname.endsWith('/continue') ? run : sc.routes[`/api/tickets/${TICKET_ID}`],
+      });
       return;
     }
     const body = sc.routes[url.pathname];
@@ -46,15 +63,17 @@ async function serve(page: Page, sc: TicketScenario): Promise<void> {
     }
     await route.fulfill({ status: 200, json: body });
   });
+  return { posts: () => [...posts] };
 }
 
 /** Redesign (R-A): the ticket page lives under its project. */
 const TICKET_HASH = `#/p/${PROJECT_ID}/tickets/${TICKET_ID}`;
 
-async function open(page: Page, sc: TicketScenario): Promise<void> {
-  await serve(page, sc);
+async function open(page: Page, sc: TicketScenario): Promise<{ posts: () => string[] }> {
+  const server = await serve(page, sc);
   await page.goto(`/${TICKET_HASH}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
+  return server;
 }
 
 async function shoot(page: Page, name: string): Promise<void> {
@@ -128,4 +147,53 @@ test('in review: a failed required check blocks Merge', async ({ page }) => {
   await panel.getByRole('tab', { name: 'Checks' }).click();
   await expect(panel.getByTestId('check-build')).toContainText('Failed');
   await shoot(page, 'in-review-checks');
+});
+
+// --- Redesign R-H: the live workflow, the new roles, reviewer comments and Continue -----------
+
+test('plan review: the live workflow shows the plan waiting for you', async ({ page }) => {
+  await open(page, planReviewScenario());
+  const graph = page.getByTestId('live-workflow');
+  await expect(graph.getByTestId('live-plan')).toHaveAttribute('data-state', 'needs-you');
+  await expect(graph.getByTestId('live-approve')).toHaveAttribute('data-state', 'needs-you');
+  await expect(page.getByTestId('ticket-summary')).not.toContainText('Plan ready for you');
+});
+
+test('working with stages: a separate planner, helpers at work, review stages waiting', async ({
+  page,
+}) => {
+  await open(page, stagesScenario());
+  const graph = page.getByTestId('live-workflow');
+  await expect(graph.getByTestId('wf-node-plan')).toHaveAttribute('data-role', 'planner');
+  await expect(graph.getByTestId('live-helpers')).toHaveAttribute('data-state', 'active');
+  await expect(graph.getByTestId('live-code-review')).toHaveAttribute('data-state', 'waiting');
+  await expect(page.getByTestId(`agent-${PLANNER}`).getByTestId('agent-term')).toHaveText(
+    'Planner agent',
+  );
+  await expect(page.getByTestId('side-panel').getByTestId('chat-speaker').first()).toHaveText(
+    'Planner agent',
+  );
+  await shoot(page, 'stages');
+});
+
+test('in review with stages: reviewer findings and the tester’s change', async ({ page }) => {
+  await open(page, reviewedScenario());
+  await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-unit-tests')).toHaveAttribute('data-state', 'needs-you');
+  await expect(page.getByTestId('held-stage')).toHaveCount(0);
+  const reviewer = page.getByTestId('comments').locator('[data-author="reviewer"]');
+  await expect(reviewer.getByTestId('comment-author')).toHaveText('Reviewer');
+  await expect(page.getByTestId(`agent-${TESTER}`).getByTestId('agent-term')).toHaveText(
+    'Tester agent',
+  );
+  await shoot(page, 'reviewed');
+});
+
+test('a held stage: Continue starts it', async ({ page }) => {
+  const server = await open(page, heldScenario());
+  const held = page.getByTestId('held-stage');
+  await expect(held).toContainText('Final code review is waiting for you');
+  await shoot(page, 'held');
+  await held.getByRole('button', { name: 'Continue' }).click();
+  await expect.poll(() => server.posts()).toEqual([`POST /api/runs/${RUN_ID}/continue`]);
 });

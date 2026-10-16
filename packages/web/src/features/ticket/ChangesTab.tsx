@@ -9,7 +9,7 @@ import { ActionError, ConfirmAction, dangerButtonClass } from '../control/bits';
 import { DiffView } from '../control/ReviewPanel';
 import { isAgentLive } from '../control/run-state';
 import { useTicketAction } from './actions';
-import { agentChecks, mergeGate } from './ticket-state';
+import { agentChecks, hasWorktree, mergeGate } from './ticket-state';
 
 const C = TICKET_COPY.changes;
 const R = CONTROL_COPY.review;
@@ -202,6 +202,7 @@ export function ChangesTab({
   checks: readonly CheckRunDto[];
 }) {
   if (agent.kind === 'lead') return <p className="text-dim">{C.leadNone}</p>;
+  if (!hasWorktree(agent.kind)) return <p className="text-dim">{C.readOnlyNone}</p>;
   if (review === undefined) {
     return <p className="text-dim">{isAgentLive(agent.status) ? C.notYet : C.noReview}</p>;
   }

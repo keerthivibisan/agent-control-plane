@@ -1,15 +1,24 @@
-import type { CheckRunStatus, RunStatus } from '@acp/core';
+import type {
+  AgentRoleKind,
+  CheckRunStatus,
+  PlannerMode,
+  RunStatus,
+  WorkflowStageId,
+} from '@acp/core';
 import type {
   AgentRunDto,
+  ChatMessageDto,
   CheckRunDto,
   ReviewDto,
   RunDetailDto,
   RunSummaryDto,
+  RunWorkflowDto,
   TicketCommentDto,
   TicketDetailDto,
   TicketPlanDto,
+  WorkflowStageState,
 } from '@acp/core/api';
-import type { AgentNode } from '../control/run-state';
+import { isAgentLive as isLiveAgentStatus, type AgentNode } from '../control/run-state';
 
 /**
  * Pure rules the ticket page reads from a `TicketDetailDto` (docs/phase-4/README.md §5.3). The
@@ -165,6 +174,130 @@ export function agentBranch(
   agent: Pick<AgentRunDto, 'kind' | 'branch'>,
   review: Pick<ReviewDto['agents'][number], 'branch'> | undefined,
 ): string | null {
-  if (agent.kind === 'lead') return null;
+  if (!hasWorktree(agent.kind)) return null;
   return agent.branch ?? review?.branch ?? null;
+}
+
+// --- Redesign roles and stages (R-H; ADR-0019) ----------------------------------------------------
+
+/** The id of the ticket's comments block, so "N findings in the comments below" can scroll to it. */
+export const COMMENTS_ID = 'ticket-comments';
+
+/** Roles that work in their own git worktree: helpers and the tester. The rest only read. */
+export function hasWorktree(kind: AgentRoleKind): boolean {
+  return kind === 'worker' || kind === 'tester';
+}
+
+/** Order of the agent tree's roots: the flow's order (plan, orchestrate, review, tests). */
+export const ROOT_ORDER: Readonly<Record<AgentRoleKind, number>> = {
+  planner: 0,
+  lead: 1,
+  worker: 2,
+  reviewer: 3,
+  tester: 4,
+};
+
+/** The planner holds the owner's conversation until the plan is approved (ADR-0019). */
+const PLANNING: ReadonlySet<RunStatus> = new Set(['QUEUED', 'PLANNING', 'PLAN_REVIEW']);
+
+/**
+ * The agent the owner's chat reaches now: the planner while a separate planner plans, else the
+ * lead (the engine's `ownerChat`). Null for a run with neither.
+ */
+export function chatAgent(
+  run: Pick<RunDetailDto, 'status' | 'agents'>,
+): Pick<AgentRunDto, 'id' | 'kind'> | null {
+  const planner = run.agents.find((a) => a.kind === 'planner');
+  if (planner !== undefined && PLANNING.has(run.status)) return planner;
+  return run.agents.find((a) => a.kind === 'lead') ?? null;
+}
+
+/** Agents whose card and panel offer the chat: the lead, and a separate planner. */
+export function canHoldChat(kind: AgentRoleKind): boolean {
+  return kind === 'lead' || kind === 'planner';
+}
+
+export type ChatSpeaker = 'owner' | 'lead' | 'planner' | 'lead-or-planner';
+
+/**
+ * Who wrote a chat message the server stores as `lead` (decision C: planner text is published
+ * under the lead's voice). Only what the run detail proves:
+ * - no planner in the run: the lead;
+ * - before the planner ended: the planner (the lead waits, QUEUED, until the plan is approved,
+ *   and approving ends the planner);
+ * - after the planner ended: the lead;
+ * - otherwise (no planner end yet, but the lead is no longer waiting): "Lead or planner".
+ */
+export function chatSpeaker(
+  message: Pick<ChatMessageDto, 'role' | 'createdAt'>,
+  agents: readonly Pick<AgentRunDto, 'kind' | 'status' | 'endedAt'>[],
+): ChatSpeaker {
+  if (message.role === 'owner') return 'owner';
+  const planner = agents.find((a) => a.kind === 'planner');
+  if (planner === undefined) return 'lead';
+  const lead = agents.find((a) => a.kind === 'lead');
+  if (planner.endedAt === null) {
+    return lead === undefined || lead.status === 'QUEUED' ? 'planner' : 'lead-or-planner';
+  }
+  if (message.createdAt < planner.endedAt) return 'planner';
+  if (message.createdAt > planner.endedAt) return 'lead';
+  return 'lead-or-planner';
+}
+
+export type PostMergeStage = Extract<WorkflowStageId, 'code-review' | 'unit-tests'>;
+
+/**
+ * The post-merge stage a restart held, waiting for the owner's Continue (R-G: shown as
+ * `needs-you` with no live agent of that stage while the run is in REVIEW). The tester's own
+ * change waiting for review is also `needs-you`, but then a tester exists, so it is not held.
+ */
+export function heldStage(
+  workflow: Pick<RunWorkflowDto, 'stages'> | undefined,
+  run: Pick<RunDetailDto, 'status' | 'agents'>,
+): PostMergeStage | null {
+  if (workflow === undefined || run.status !== 'REVIEW') return null;
+  for (const s of workflow.stages) {
+    if (s.stage !== 'code-review' && s.stage !== 'unit-tests') continue;
+    if (s.state !== 'needs-you') continue;
+    const agents = run.agents.filter((a) => s.agentRunIds.includes(a.id));
+    if (s.stage === 'unit-tests' && agents.length > 0) continue;
+    if (agents.some((a) => isLiveAgentStatus(a.status))) continue;
+    return s.stage;
+  }
+  return null;
+}
+
+/** The run's live state per stage; stages the route didn't list read as waiting. */
+export function stageStates(
+  workflow: Pick<RunWorkflowDto, 'stages'>,
+): Readonly<Record<WorkflowStageId, WorkflowStageState>> {
+  const out: Record<WorkflowStageId, WorkflowStageState> = {
+    plan: 'waiting',
+    orchestrate: 'waiting',
+    helpers: 'waiting',
+    review: 'waiting',
+    'code-review': 'waiting',
+    'unit-tests': 'waiting',
+  };
+  for (const s of workflow.stages) out[s.stage] = s.state;
+  return out;
+}
+
+/** The run's planner mode, from its agents: a planner agent means a separate planner. */
+export function runPlannerMode(
+  run: Pick<RunDetailDto, 'agents'>,
+  fallback: PlannerMode,
+): PlannerMode {
+  if (run.agents.some((a) => a.kind === 'planner')) return 'separate';
+  // A ticket run creates its lead (and planner) at start, so no planner means the lead plans.
+  return run.agents.some((a) => a.kind === 'lead') ? 'lead' : fallback;
+}
+
+/**
+ * The run status word under the header repeats the ticket's stage pill for a current run (plan
+ * review read "Plan review" there and "Plan ready for you" here before R-H), so it is shown only
+ * for an earlier run, or when it says something the stage doesn't (stopping, interrupted).
+ */
+export function showRunStatus(isCurrent: boolean, status: RunStatus): boolean {
+  return !isCurrent || status === 'CANCELLING' || status === 'NEEDS_REVIEW';
 }

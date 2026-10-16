@@ -72,8 +72,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 | Route                                      | Page                                                                |
 | ------------------------------------------ | ------------------------------------------------------------------- |
 | `#/p/:projectId/board`                     | Board                                                               |
-| `#/p/:projectId/workflow`                  | Workflow (R-B; not available yet)                                   |
-| `#/p/:projectId/skills`, `…/skills/:name`  | Skills (R-D; not available yet)                                     |
+| `#/p/:projectId/workflow`                  | Workflow (stages, agents, limits; R-B)                              |
+| `#/p/:projectId/skills`, `…/skills/:name`  | Skills & Agents (`?tab=agents` for the Agents tab; R-D)             |
 | `#/p/:projectId/harness`                   | Harness (R-E)                                                       |
 | `#/p/:projectId/tokens`                    | Tokens (R-F: new work vs cache reuse, by session/ticket/role/model) |
 | `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                |

@@ -1,5 +1,7 @@
 import {
   CheckRunDtoSchema,
+  ProjectWorkflowDtoSchema,
+  RunWorkflowDtoSchema,
   TicketDetailDtoSchema,
   type CheckRunDto,
   type TicketDetailDto,
@@ -8,22 +10,32 @@ import { describe, expect, it } from 'vitest';
 import {
   PLAN_V1,
   PLAN_V2,
+  PROJECT_WORKFLOW_PATH,
+  RUN_WORKFLOW_PATH,
   STORE,
   TICKET_ID,
   UI,
   doneScenario,
+  heldScenario,
   inReviewScenario,
   planReviewScenario,
+  reviewedScenario,
+  stagesScenario,
   workingScenario,
 } from '../../e2e/ticket-fixtures';
 import { buildAgentTree } from '../../src/features/control/run-state';
+import { liveGraph } from '../../src/features/ticket/LiveWorkflow';
 import { tabsFor } from '../../src/features/ticket/SidePanel';
 import {
   agentBranch,
   agentChecks,
   canStopRun,
+  chatAgent,
+  chatSpeaker,
   commentsOnPlan,
   descendantsBudget,
+  hasWorktree,
+  heldStage,
   lastRunNote,
   mergeGate,
   pendingByAgent,
@@ -31,6 +43,9 @@ import {
   plansOfRun,
   runBudgetUsed,
   runNumber,
+  runPlannerMode,
+  showRunStatus,
+  stageStates,
   startAction,
 } from '../../src/features/ticket/ticket-state';
 
@@ -163,9 +178,120 @@ describe('agents', () => {
     expect(d.currentRun && [...pendingByAgent(d.currentRun)]).toEqual([[STORE, 1]]);
   });
 
-  it('gives the chat tab to the lead only', () => {
+  it('gives the chat tab to the lead and a separate planner only', () => {
     expect(tabsFor({ kind: 'lead' })[0]).toBe('chat');
-    expect(tabsFor({ kind: 'worker' })).not.toContain('chat');
+    expect(tabsFor({ kind: 'planner' })[0]).toBe('chat');
+    for (const kind of ['worker', 'reviewer', 'tester'] as const) {
+      expect(tabsFor({ kind })).not.toContain('chat');
+    }
+  });
+});
+
+describe('redesign roles and stages (R-H)', () => {
+  const runOf = (sc: { routes: Record<string, unknown> }) => {
+    const run = detailOf(sc).currentRun;
+    if (run === null) throw new Error('no run');
+    return run;
+  };
+  const workflowOf = (sc: { routes: Record<string, unknown> }) =>
+    RunWorkflowDtoSchema.parse(sc.routes[RUN_WORKFLOW_PATH]);
+  const T = (min: number) => new Date(Date.UTC(2026, 9, 15, 9, min)).toISOString();
+  const msg = (role: 'owner' | 'lead', createdAt: string) => ({ role, createdAt });
+
+  it('tells planner chat from lead chat only by what the run proves (decision C)', () => {
+    const agents = runOf(stagesScenario()).agents; // the planner ended at 09:09
+    expect(chatSpeaker(msg('lead', T(5)), agents)).toBe('planner');
+    expect(chatSpeaker(msg('lead', T(11)), agents)).toBe('lead');
+    expect(chatSpeaker(msg('lead', T(9)), agents)).toBe('lead-or-planner');
+    expect(chatSpeaker(msg('owner', T(5)), agents)).toBe('owner');
+    // No planner: every reply is the lead's.
+    expect(chatSpeaker(msg('lead', T(5)), runOf(workingScenario()).agents)).toBe('lead');
+    // A planner still at work while the lead waits: the planner.
+    const planning = [
+      { kind: 'planner' as const, status: 'RUNNING' as const, endedAt: null },
+      { kind: 'lead' as const, status: 'QUEUED' as const, endedAt: null },
+    ];
+    expect(chatSpeaker(msg('lead', T(5)), planning)).toBe('planner');
+    // Not ended, yet the lead no longer waits: can't be told apart.
+    const unclear = [
+      { kind: 'planner' as const, status: 'RUNNING' as const, endedAt: null },
+      { kind: 'lead' as const, status: 'RUNNING' as const, endedAt: null },
+    ];
+    expect(chatSpeaker(msg('lead', T(5)), unclear)).toBe('lead-or-planner');
+  });
+
+  it('the chat reaches the planner while it plans, else the lead', () => {
+    const stages = runOf(stagesScenario());
+    expect(chatAgent(stages)?.kind).toBe('lead');
+    expect(chatAgent({ ...stages, status: 'PLAN_REVIEW' })?.kind).toBe('planner');
+    expect(chatAgent(runOf(planReviewScenario()))?.kind).toBe('lead');
+  });
+
+  it('finds a stage held after a restart, never the tester’s own change waiting for review', () => {
+    expect(heldStage(workflowOf(heldScenario()), runOf(heldScenario()))).toBe('code-review');
+    expect(heldStage(workflowOf(reviewedScenario()), runOf(reviewedScenario()))).toBeNull();
+    expect(heldStage(workflowOf(inReviewScenario()), runOf(inReviewScenario()))).toBeNull();
+    expect(heldStage(undefined, runOf(heldScenario()))).toBeNull();
+    // A held unit-tests stage: no tester yet.
+    const held = workflowOf(heldScenario());
+    const tests = {
+      stages: held.stages.map((s) =>
+        s.stage === 'code-review'
+          ? { ...s, state: 'done' as const }
+          : s.stage === 'unit-tests'
+            ? { ...s, state: 'needs-you' as const }
+            : s,
+      ),
+    };
+    expect(heldStage(tests, runOf(heldScenario()))).toBe('unit-tests');
+    // Only while the run is in review.
+    expect(heldStage(held, { ...runOf(heldScenario()), status: 'RUNNING' })).toBeNull();
+  });
+
+  it('reads the planner mode from the run’s agents', () => {
+    expect(runPlannerMode(runOf(stagesScenario()), 'lead')).toBe('separate');
+    expect(runPlannerMode(runOf(workingScenario()), 'separate')).toBe('lead');
+    expect(runPlannerMode({ agents: [] }, 'separate')).toBe('separate');
+  });
+
+  it('drops the run status under the header for the current run, keeps it for an earlier one', () => {
+    expect(showRunStatus(true, 'PLAN_REVIEW')).toBe(false);
+    expect(showRunStatus(true, 'RUNNING')).toBe(false);
+    expect(showRunStatus(true, 'NEEDS_REVIEW')).toBe(true);
+    expect(showRunStatus(false, 'PLAN_REVIEW')).toBe(true);
+  });
+
+  it('only helpers and the tester have a worktree branch', () => {
+    expect(hasWorktree('worker')).toBe(true);
+    expect(hasWorktree('tester')).toBe(true);
+    for (const kind of ['lead', 'planner', 'reviewer'] as const) {
+      expect(hasWorktree(kind)).toBe(false);
+      expect(agentBranch({ kind, branch: 'x' }, { branch: 'y' })).toBeNull();
+    }
+  });
+
+  it('builds the live graph from the run: its planner mode, its optional stages, one helper row', () => {
+    const sc = stagesScenario();
+    const project = ProjectWorkflowDtoSchema.parse(sc.routes[PROJECT_WORKFLOW_PATH]);
+    const g = liveGraph(runOf(sc), project, workflowOf(sc));
+    const node = (id: string) => g.nodes.find((n) => n.id === id);
+    expect(node('plan')?.data).toMatchObject({ role: 'planner', sameAgentAs: null });
+    expect(node('code-review')?.data).toMatchObject({ enabled: true });
+    expect(g.nodes.filter((n) => n.type === 'helper')).toHaveLength(1);
+    // The helpers box still states the project's limit.
+    expect(node('helpers')?.data).toMatchObject({ maxHelpers: 3 });
+    // A run whose optional stages are off draws them off, whatever the project says now.
+    const off = liveGraph(runOf(planReviewScenario()), project, workflowOf(planReviewScenario()));
+    expect(off.nodes.find((n) => n.id === 'unit-tests')?.data).toMatchObject({ enabled: false });
+    expect(off.nodes.find((n) => n.id === 'plan')?.data).toMatchObject({ role: 'lead' });
+  });
+
+  it('reads every stage state, and a missing one as waiting', () => {
+    const states = stageStates({
+      stages: [{ stage: 'plan', state: 'done', agentRunIds: [] }],
+    });
+    expect(states.plan).toBe('done');
+    expect(states.helpers).toBe('waiting');
   });
 });
 

@@ -12,8 +12,12 @@ import { ActionError } from './bits';
 const C = CONTROL_COPY.chat;
 const MAX_CHARS = 8000;
 
-function Bubble({ m }: { m: ChatMessageDto }) {
+/** Who a bubble names; the ticket page tells the planner from the lead (redesign decision C). */
+export type SpeakerOf = (m: ChatMessageDto) => { label: string; tip?: string };
+
+function Bubble({ m, speakerOf }: { m: ChatMessageDto; speakerOf: SpeakerOf | undefined }) {
   const owner = m.role === 'owner';
+  const speaker = speakerOf?.(m) ?? { label: owner ? C.you : C.lead };
   return (
     <li
       className={`flex flex-col gap-1 ${owner ? 'items-end' : 'items-start'}`}
@@ -21,7 +25,9 @@ function Bubble({ m }: { m: ChatMessageDto }) {
       data-role={m.role}
     >
       <span className="flex items-center gap-2 text-caption text-dim">
-        <span className="font-medium">{owner ? C.you : C.lead}</span>
+        <span className="font-medium" title={speaker.tip} data-testid="chat-speaker">
+          {speaker.label}
+        </span>
         <RelativeTime iso={m.createdAt} />
       </span>
       <p
@@ -48,6 +54,8 @@ export function Chat({
   draft,
   onDraft,
   inputRef,
+  speakerOf,
+  closedText,
 }: {
   runId: string;
   messages: readonly ChatMessageDto[];
@@ -56,6 +64,10 @@ export function Chat({
   draft: string;
   onDraft: (text: string) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  /** The bubble's name; by default "You" or the lead agent. */
+  speakerOf?: SpeakerOf;
+  /** Why the box is gone, when it is not that the run ended. */
+  closedText?: string;
 }) {
   const send = useControlAction(sendChat);
   const listRef = useRef<HTMLOListElement>(null);
@@ -95,7 +107,7 @@ export function Chat({
           className="-mx-1 flex max-h-[62vh] flex-col gap-4 overflow-y-auto px-1 pb-1"
         >
           {sorted.map((m) => (
-            <Bubble key={m.id} m={m} />
+            <Bubble key={m.id} m={m} speakerOf={speakerOf} />
           ))}
         </ol>
       )}
@@ -139,7 +151,7 @@ export function Chat({
           <ActionError error={send.error} message={C.failed} />
         </form>
       ) : (
-        <p className="mt-4 border-t border-line pt-4 text-dim">{C.closed}</p>
+        <p className="mt-4 border-t border-line pt-4 text-dim">{closedText ?? C.closed}</p>
       )}
     </Card>
   );

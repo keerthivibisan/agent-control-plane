@@ -102,7 +102,12 @@ async function withFixtureProject(page: Page): Promise<void> {
   });
 }
 
-async function shoot(page: Page, name: string, beforeEach?: () => Promise<void>): Promise<void> {
+async function shoot(
+  page: Page,
+  name: string,
+  beforeEach?: () => Promise<void>,
+  fullPage = false,
+): Promise<void> {
   if (SHOTS === undefined) return;
   for (const width of [1440, 1024]) {
     for (const scheme of ['light', 'dark'] as const) {
@@ -111,7 +116,7 @@ async function shoot(page: Page, name: string, beforeEach?: () => Promise<void>)
       await page.waitForTimeout(400);
       if (beforeEach) await beforeEach();
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: `${SHOTS}/shell-${name}-${width}-${scheme}.png` });
+      await page.screenshot({ path: `${SHOTS}/shell-${name}-${width}-${scheme}.png`, fullPage });
     }
   }
 }
@@ -142,6 +147,11 @@ test('the board in the shell; the switcher remembers the project for #/', async 
   await expect(page.getByText('Rate limit the public API')).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page');
+  // R-H: the project name heads the board; the top-bar switcher is the only project picker.
+  await expect(page.getByRole('heading', { level: 1, name: 'demo-api' })).toBeVisible();
+  await expect(page.getByTestId('board-counts')).toHaveText('2 running·1 needs you');
+  await expect(page.getByRole('combobox', { name: 'Project' })).toHaveCount(0);
+  await expect(page.getByTestId('board-stats')).toHaveCount(0);
   await shoot(page, 'board');
 
   // The front door reopens the last project.
@@ -232,4 +242,51 @@ test('the ticket page in the shell', async ({ page }) => {
     page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Board' }),
   ).toHaveAttribute('aria-current', 'page');
   await shoot(page, 'ticket');
+});
+
+test('settings: the project, its board key, context files, and links to Workflow and Harness', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  // Synthetic setup and context files (R-H); the project itself is the demo server's.
+  await page.route(`**/api/projects/${project.id}/setup`, (route) =>
+    route.fulfill({
+      json: {
+        projectId: project.id,
+        projectKey: 'API',
+        planFirst: true,
+        maxConcurrentHelpers: 3,
+        maxDepth: 1,
+        defaultBudgetTokensPerAgent: 500_000,
+        model: null,
+        allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
+        contextFiles: ['CLAUDE.md'],
+        updatedAt: T(0),
+      },
+    }),
+  );
+  await page.route(`**/api/projects/${project.id}/context-candidates`, (route) =>
+    route.fulfill({
+      json: [
+        { path: 'CLAUDE.md', sizeBytes: 2_480, suggested: true },
+        { path: 'README.md', sizeBytes: 5_120, suggested: true },
+        { path: 'docs/architecture.md', sizeBytes: 9_870, suggested: false },
+      ],
+    }),
+  );
+  await page.goto(`/#/p/${project.id}/settings`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  const card = page.getByTestId('settings-project');
+  await expect(card).toContainText('demo-api');
+  await expect(card.getByLabel('Board key')).toHaveValue('API');
+  await expect(page.getByTestId('settings-context').getByLabel('CLAUDE.md')).toBeChecked();
+  await expect(
+    page.getByTestId('settings-workflow-link').getByRole('link', { name: 'Open Workflow' }),
+  ).toHaveAttribute('href', `#/p/${project.id}/workflow`);
+  await expect(
+    page.getByTestId('settings-harness-link').getByRole('link', { name: 'Open Harness' }),
+  ).toHaveAttribute('href', `#/p/${project.id}/harness`);
+  await expect(page.getByText('Helpers at once')).toHaveCount(0);
+  await shoot(page, 'settings', undefined, true);
 });

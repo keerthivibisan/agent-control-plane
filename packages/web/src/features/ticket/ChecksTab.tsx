@@ -9,7 +9,7 @@ import { formatDuration } from '../../lib/format';
 import { ActionError } from '../control/bits';
 import { isAgentLive } from '../control/run-state';
 import { useTicketAction } from './actions';
-import { agentChecks, mergeGate } from './ticket-state';
+import { agentChecks, hasWorktree, mergeGate } from './ticket-state';
 
 const C = TICKET_COPY.checks;
 
@@ -94,6 +94,7 @@ export function ChecksTab({
 }) {
   const again = useTicketAction(runAgentChecks);
   if (agent.kind === 'lead') return <p className="text-dim">{C.leadNone}</p>;
+  if (!hasWorktree(agent.kind)) return <p className="text-dim">{C.readOnlyNone}</p>;
   const { latest, earlier } = agentChecks(checks, agent.id);
   const gate = mergeGate(latest);
   return (

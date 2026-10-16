@@ -3,13 +3,14 @@ import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { addTicketComment, updateTicket } from '../../lib/api';
 import { RUN_STATUS_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError, StatusWord } from '../control/bits';
 import { useTicketAction } from './actions';
 import { EarlierPlans } from './PlanReview';
-import { runNumber } from './ticket-state';
+import { COMMENTS_ID, runNumber } from './ticket-state';
 
 const C = TICKET_COPY;
 const MAX_DESCRIPTION = 20_000;
@@ -107,7 +108,7 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
   const sorted = [...detail.comments].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   const tooLong = body.length > MAX_COMMENT;
   return (
-    <div className="flex flex-col gap-3" data-testid="comments">
+    <div className="flex scroll-mt-24 flex-col gap-3" data-testid="comments" id={COMMENTS_ID}>
       <h3 className="font-medium">{C.comments.title}</h3>
       {sorted.length === 0 ? (
         <p className="text-dim">{C.comments.empty}</p>
@@ -115,18 +116,30 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
         <ol className="flex flex-col gap-3">
           {sorted.map((c) => {
             const version = c.planId ? versionOf.get(c.planId) : undefined;
+            const reviewer = c.author === 'reviewer';
             return (
               <li key={c.id} className="flex flex-col gap-1" data-author={c.author}>
-                <span className="flex flex-wrap items-center gap-x-2 text-caption text-dim">
-                  <span className="font-medium text-ink">
-                    {c.author === 'owner' ? C.comments.you : C.comments.lead}
-                  </span>
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-dim">
+                  {reviewer ? (
+                    // The reviewer's findings get their own label, apart from you and the lead.
+                    <Pill tone="accent" testId="comment-author" title={C.comments.reviewerTip}>
+                      {C.comments.reviewer}
+                    </Pill>
+                  ) : (
+                    <span className="font-medium text-ink" data-testid="comment-author">
+                      {c.author === 'owner' ? C.comments.you : C.comments.lead}
+                    </span>
+                  )}
                   {version !== undefined ? <span>{C.comments.onPlan(version)}</span> : null}
                   <RelativeTime iso={c.createdAt} />
                 </span>
                 <p
                   className={`rounded-card px-3.5 py-2.5 whitespace-pre-wrap ${
-                    c.author === 'owner' ? 'bg-accent-soft' : 'border border-line bg-sunken'
+                    c.author === 'owner'
+                      ? 'bg-accent-soft'
+                      : reviewer
+                        ? 'border border-l-4 border-line border-l-accent bg-panel'
+                        : 'border border-line bg-sunken'
                   }`}
                 >
                   {c.body}

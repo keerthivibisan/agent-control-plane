@@ -8,7 +8,7 @@ import { BudgetBar } from '../control/AgentTree';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { buildAgentTree, isAgentLive, type AgentNode } from '../control/run-state';
 import { useTicketAction } from './actions';
-import { descendantsBudget } from './ticket-state';
+import { canHoldChat, descendantsBudget, hasWorktree, ROOT_ORDER } from './ticket-state';
 
 const C = TICKET_COPY.canvas;
 const A = CONTROL_COPY.agents;
@@ -24,6 +24,8 @@ export interface CanvasContext {
   pending: ReadonlyMap<string, number>;
   /** Worktree branch per helper id, once its workspace exists (`agentBranch`). */
   branches: ReadonlyMap<string, string>;
+  /** The agent the owner's chat reaches now (`chatAgent`): the planner or the lead. */
+  chatAgentId: string | null;
 }
 
 /** "acp/run-1/agent-ui" → "…/agent-ui": the part that tells helpers apart. */
@@ -37,7 +39,9 @@ function shortBranch(branch: string): string {
  * `message_agent`, like the lead would.
  */
 function PromptBox({ agent, runId }: { agent: AgentRunDto; runId: string }) {
-  const lead = agent.kind === 'lead';
+  // The lead's and the planner's box goes to the chat (the engine routes it to whichever of the
+  // two holds the conversation); a helper's through `message_agent`.
+  const lead = canHoldChat(agent.kind);
   const chat = useTicketAction(sendChat);
   const direct = useTicketAction(messageAgent);
   const action = lead ? chat : direct;
@@ -77,7 +81,13 @@ function PromptBox({ agent, runId }: { agent: AgentRunDto; runId: string }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={lead ? C.messagePlaceholderLead : C.messagePlaceholder}
+          placeholder={
+            agent.kind === 'planner'
+              ? C.messagePlaceholderPlanner
+              : lead
+                ? C.messagePlaceholderLead
+                : C.messagePlaceholder
+          }
           aria-invalid={tooLong ? true : undefined}
           className={`min-w-0 flex-1 rounded-control border bg-canvas px-2 py-1.5 text-caption text-ink placeholder:text-dim/70 ${
             tooLong ? 'border-danger' : 'border-line'
@@ -127,7 +137,13 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
   const waiting = ctx.pending.get(agent.id) ?? 0;
   const branch = ctx.branches.get(agent.id);
   const helpersBudget = descendantsBudget(node);
-  const term = lead ? CONTROL_COPY.terms.lead : CONTROL_COPY.terms.worker;
+  const term = TICKET_COPY.roles[agent.kind];
+  // Chat reaches the agent that holds the conversation now; helpers take a direct message while
+  // they work. The reviewer and the tester run after review, when the engine takes no messages.
+  // The engine refuses chat to an agent that has ended, so the box goes with it.
+  const promptable = canHoldChat(agent.kind)
+    ? ctx.chatAgentId === agent.id && live
+    : agent.kind === 'worker' && live;
   return (
     <article
       aria-label={agent.role}
@@ -135,6 +151,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       data-selected={selected ? 'true' : undefined}
       // A click anywhere on the card selects it; the header button is the keyboard way.
       onClick={() => ctx.onSelect(agent.id)}
+      data-kind={agent.kind}
       className={`relative flex w-48 flex-col gap-2 rounded-card border bg-panel px-3 py-3 text-left shadow-card transition-shadow ${
         selected ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong'
       } ${waiting > 0 ? 'border-t-4 border-t-warning' : ''}`}
@@ -147,7 +164,13 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
           aria-label={C.select(agent.role)}
           className="rounded-control text-left"
         >
-          <span className="block text-caption tracking-wide text-dim uppercase">{term.term}</span>
+          <span
+            className="block text-caption tracking-wide text-dim uppercase"
+            data-testid="agent-term"
+            title={term.tip}
+          >
+            {term.term}
+          </span>
           <span className="block font-semibold break-words">{agent.role}</span>
         </button>
         <StatusWord status={AGENT_STATUS_COPY[agent.status]} value={agent.status} withTip={false} />
@@ -157,7 +180,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
           ⚠ {C.needsYou(waiting)}
         </p>
       ) : null}
-      {lead ? null : (
+      {!hasWorktree(agent.kind) ? null : (
         <p className="text-caption" data-testid="agent-branch">
           {branch ? (
             <span className="font-mono" title={branch}>
@@ -179,7 +202,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
         {agent.latestActivity ?? <span className="text-unavailable">{A.noActivity}</span>}
       </p>
       <div className="flex flex-col gap-2">
-        {ctx.canMessage && (lead || live) ? <PromptBox agent={agent} runId={ctx.runId} /> : null}
+        {ctx.canMessage && promptable ? <PromptBox agent={agent} runId={ctx.runId} /> : null}
         {live ? (
           <ConfirmAction
             label={A.stop}
@@ -234,7 +257,10 @@ export function AgentCanvas({
   note,
   ...ctx
 }: CanvasContext & { agents: readonly AgentRunDto[]; note?: string | undefined }) {
-  const tree = buildAgentTree(agents);
+  // Roots in the flow's order: the planner, the lead with its helpers, then the reviewer and tester.
+  const tree = buildAgentTree(agents).sort(
+    (a, b) => ROOT_ORDER[a.agent.kind] - ROOT_ORDER[b.agent.kind],
+  );
   const helpers = agents.filter((a) => a.kind === 'worker').length;
   return (
     <Card title={C.title} description={C.description} testId="agent-canvas" padded={false}>

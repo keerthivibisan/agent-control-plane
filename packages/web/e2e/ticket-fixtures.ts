@@ -279,6 +279,76 @@ export interface TicketScenario {
 
 const ticketPath = `/api/tickets/${TICKET_ID}`;
 const runPath = `/api/runs/${RUN_ID}`;
+/** `GET /api/projects/:id/workflow` (R-G): the project's stages, setup and skills. */
+export const PROJECT_WORKFLOW_PATH = `/api/projects/${PROJECT_ID}/workflow`;
+/** `GET /api/runs/:id/workflow` (R-G): the run's stage states. */
+export const RUN_WORKFLOW_PATH = `${runPath}/workflow`;
+
+// --- Redesign R-H: the live workflow (stage states), new roles, reviewer comments --------------
+
+export const PLANNER = 'ag-planner';
+export const REVIEWER = 'ag-reviewer';
+export const TESTER = 'ag-tester';
+
+type StageId = 'plan' | 'orchestrate' | 'helpers' | 'review' | 'code-review' | 'unit-tests';
+type StageState = 'off' | 'waiting' | 'active' | 'needs-you' | 'done' | 'failed' | 'skipped';
+
+/** The project's workflow as `GET /api/projects/:id/workflow` answers it. */
+export function projectWorkflow(o: { separate?: boolean; postMerge?: boolean } = {}): Json {
+  const stage = (over: Json = {}) => ({ model: null, skill: null, ...over });
+  return {
+    workflow: {
+      projectId: PROJECT_ID,
+      plannerMode: o.separate === true ? 'separate' : 'lead',
+      stages: {
+        plan: stage(o.separate === true ? { skill: 'plan-tickets' } : {}),
+        orchestrate: stage(),
+        helpers: stage(),
+        review: { requireChecks: true },
+        'code-review': stage({ enabled: o.postMerge === true, skill: 'code-review' }),
+        'unit-tests': stage({ enabled: o.postMerge === true }),
+      },
+      // Saved before the run started, so the graph shows the run's own settings.
+      updatedAt: '2026-10-14T08:00:00.000Z',
+    },
+    setup: {
+      projectId: PROJECT_ID,
+      projectKey: 'WEB',
+      planFirst: true,
+      maxConcurrentHelpers: 3,
+      maxDepth: 2,
+      defaultBudgetTokensPerAgent: 50_000,
+      model: null,
+      allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
+      contextFiles: ['CLAUDE.md'],
+      updatedAt: '2026-10-14T08:00:00.000Z',
+    },
+    skills: ['code-review', 'plan-tickets'],
+  };
+}
+
+/** `GET /api/runs/:id/workflow`: every stage in workflow order, with its state and agents. */
+export function runWorkflow(
+  states: Record<StageId, StageState>,
+  agents: Partial<Record<StageId, string[]>> = {},
+): Json {
+  const order: StageId[] = [
+    'plan',
+    'orchestrate',
+    'helpers',
+    'review',
+    'code-review',
+    'unit-tests',
+  ];
+  return {
+    runId: RUN_ID,
+    stages: order.map((stage) => ({
+      stage,
+      state: states[stage],
+      agentRunIds: agents[stage] ?? [],
+    })),
+  };
+}
 
 function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): TicketScenario {
   return {
@@ -286,6 +356,7 @@ function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): Tick
       [ticketPath]: detail,
       [runPath]: detail['currentRun'] as Json,
       '/api/control/token': { token: CSRF },
+      [PROJECT_WORKFLOW_PATH]: projectWorkflow(),
       ...extra,
     },
   };
@@ -294,14 +365,29 @@ function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): Tick
 /** Plan review: version 2 waits for the owner; version 1 was sent back with a comment. */
 export function planReviewScenario(): TicketScenario {
   const run = runDetail('PLAN_REVIEW', [lead('RUNNING', 18_400, 'Used tool: Read')]);
-  return scenario({
-    ticket: ticket('ACTIVE', 'PLAN_REVIEW'),
-    runs: [runSummary(RUN_ID, 'PLAN_REVIEW'), OLD_RUN],
-    currentRun: run,
-    plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'proposed')],
-    comments: COMMENTS,
-    checks: [],
-  });
+  return scenario(
+    {
+      ticket: ticket('ACTIVE', 'PLAN_REVIEW'),
+      runs: [runSummary(RUN_ID, 'PLAN_REVIEW'), OLD_RUN],
+      currentRun: run,
+      plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'proposed')],
+      comments: COMMENTS,
+      checks: [],
+    },
+    {
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'needs-you',
+          orchestrate: 'waiting',
+          helpers: 'waiting',
+          review: 'waiting',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        { plan: [LEAD], orchestrate: [LEAD] },
+      ),
+    },
+  );
 }
 
 /** Agents working: three helpers, two of them with a helper of their own; one approval waits. */
@@ -415,6 +501,21 @@ export function workingScenario(): TicketScenario {
           ]),
         ],
       },
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'active',
+          helpers: 'needs-you',
+          review: 'waiting',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        {
+          plan: [LEAD],
+          orchestrate: [LEAD],
+          helpers: [UI, STORE, TESTS, MIGRATION, TOKENS],
+        },
+      ),
     },
   );
 }
@@ -486,6 +587,17 @@ export function inReviewScenario(): TicketScenario {
           agentReview(MIGRATION, 'Migration helper', 'no-changes', []),
         ],
       },
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'done',
+          helpers: 'done',
+          review: 'needs-you',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        { plan: [LEAD], orchestrate: [LEAD], helpers: [UI, STORE, TESTS, MIGRATION] },
+      ),
     },
   );
 }
@@ -501,4 +613,262 @@ export function doneScenario(): TicketScenario {
     runs: [runSummary(RUN_ID, 'COMPLETED', { endedAt: T(50) }), OLD_RUN],
     currentRun: run,
   });
+}
+
+/** The separate planner of the redesign scenarios: it planned, and ended when the plan was approved. */
+function planner(): Json {
+  return agent({
+    id: PLANNER,
+    parentAgentRunId: null,
+    kind: 'planner',
+    role: 'Planner',
+    status: 'SUCCEEDED',
+    branch: null,
+    budget: { used: 16_900, limit: 200_000 },
+    latestActivity: 'Finished its turn',
+    createdAt: T(2),
+    endedAt: T(9),
+  });
+}
+
+/** Chat in separate mode: the planner's reply before approval, the lead's after (both `lead`). */
+const SEPARATE_MESSAGES: Json[] = [
+  {
+    id: 'm-1',
+    runId: RUN_ID,
+    role: 'lead',
+    text: 'I read the settings page and the theme code. My plan is ready for you.',
+    createdAt: T(5),
+  },
+  {
+    id: 'm-2',
+    runId: RUN_ID,
+    role: 'owner',
+    text: 'Looks good. Keep the tests small.',
+    createdAt: T(9),
+  },
+  {
+    id: 'm-3',
+    runId: RUN_ID,
+    role: 'lead',
+    text: 'Starting the helpers for the theme store and the settings switch now.',
+    createdAt: T(11),
+  },
+];
+
+/**
+ * Working, with stages (redesign): a separate planner that finished, the lead running two
+ * helpers, and the reviewer and tester stages on, waiting for the merge.
+ */
+export function stagesScenario(): TicketScenario {
+  const agents = [
+    planner(),
+    { ...lead('RUNNING', 30_200, 'Started a helper agent: Theme store'), createdAt: T(2) },
+    agent({
+      id: UI,
+      role: 'Settings UI',
+      task: 'Add the theme switch to the settings page.',
+      status: 'RUNNING',
+      budget: { used: 14_000, limit: 50_000 },
+      latestActivity: 'Used tool: Edit',
+      createdAt: T(10),
+    }),
+    agent({
+      id: STORE,
+      role: 'Theme store',
+      task: 'Write the theme store and remember the choice.',
+      status: 'RUNNING',
+      budget: { used: 9_400, limit: 50_000 },
+      latestActivity: 'Used tool: Write',
+      createdAt: T(11),
+    }),
+  ];
+  const run = runDetail('RUNNING', agents, { messages: SEPARATE_MESSAGES });
+  return scenario(
+    {
+      ticket: ticket('ACTIVE', 'WORKING'),
+      runs: [runSummary(RUN_ID, 'RUNNING', { agentCount: 4 }), OLD_RUN],
+      currentRun: run,
+      plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'approved')],
+      comments: COMMENTS,
+      checks: [],
+    },
+    {
+      [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'active',
+          helpers: 'active',
+          review: 'waiting',
+          'code-review': 'waiting',
+          'unit-tests': 'waiting',
+        },
+        { plan: [PLANNER], orchestrate: [LEAD], helpers: [UI, STORE] },
+      ),
+    },
+  );
+}
+
+const REVIEWER_COMMENT: Json = {
+  id: 'c-r1',
+  ticketId: TICKET_ID,
+  runId: RUN_ID,
+  planId: null,
+  author: 'reviewer',
+  body: 'ThemeSwitch reads the store on every render; a selector would avoid re-renders. The migration keeps the old "darkMode" key; remove it once read.',
+  createdAt: T(47),
+};
+
+/** The helpers' merged work after the post-merge stages (redesign): agents and their reviews. */
+function mergedAgents(): Json[] {
+  const done = (over: Json & { id: string }) =>
+    agent({ status: 'SUCCEEDED', latestActivity: 'Finished its turn', endedAt: T(38), ...over });
+  return [
+    planner(),
+    { ...lead('CANCELLED', 41_800, 'Finished its turn'), endedAt: T(44) },
+    done({
+      id: UI,
+      role: 'Settings UI',
+      budget: { used: 31_000, limit: 50_000 },
+      review: { state: 'merged', changedFiles: 2 },
+    }),
+    done({
+      id: STORE,
+      role: 'Theme store',
+      budget: { used: 27_400, limit: 50_000 },
+      review: { state: 'merged', changedFiles: 3 },
+      createdAt: T(11),
+    }),
+  ];
+}
+
+const MERGED_REVIEWS = [
+  agentReview(UI, 'Settings UI', 'merged', UI_FILES),
+  agentReview(STORE, 'Theme store', 'merged', STORE_FILES),
+];
+
+/**
+ * In review with stages (redesign): the reviewer posted its findings as a ticket comment, and the
+ * tester's unit tests wait for review and merge.
+ */
+export function reviewedScenario(): TicketScenario {
+  const agents = [
+    ...mergedAgents(),
+    agent({
+      id: REVIEWER,
+      parentAgentRunId: null,
+      kind: 'reviewer',
+      role: 'Reviewer',
+      status: 'SUCCEEDED',
+      branch: null,
+      budget: { used: 12_300, limit: 50_000 },
+      latestActivity: 'Finished its turn',
+      createdAt: T(45),
+      endedAt: T(47),
+    }),
+    agent({
+      id: TESTER,
+      parentAgentRunId: null,
+      kind: 'tester',
+      role: 'Tester',
+      status: 'SUCCEEDED',
+      budget: { used: 19_600, limit: 50_000 },
+      latestActivity: 'Finished its turn',
+      review: { state: 'pending', changedFiles: 1 },
+      createdAt: T(48),
+      endedAt: T(55),
+    }),
+  ];
+  const run = runDetail('REVIEW', agents, { messages: SEPARATE_MESSAGES });
+  return scenario(
+    {
+      ticket: ticket('ACTIVE', 'IN_REVIEW'),
+      runs: [runSummary(RUN_ID, 'REVIEW', { agentCount: agents.length }), OLD_RUN],
+      currentRun: run,
+      plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'approved')],
+      comments: [...COMMENTS, REVIEWER_COMMENT],
+      checks: [
+        check(TESTER, 'test', 'Unit tests', 'passed', { startedAt: T(56) }),
+        check(TESTER, 'lint', 'Lint', 'passed', { required: false, startedAt: T(56) }),
+      ],
+    },
+    {
+      [`${runPath}/review`]: {
+        runId: RUN_ID,
+        agents: [...MERGED_REVIEWS, agentReview(TESTER, 'Tester', 'pending', TEST_FILES)],
+      },
+      [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'done',
+          helpers: 'done',
+          review: 'done',
+          'code-review': 'done',
+          'unit-tests': 'needs-you',
+        },
+        {
+          plan: [PLANNER],
+          orchestrate: [LEAD],
+          helpers: [UI, STORE],
+          'code-review': [REVIEWER],
+          'unit-tests': [TESTER],
+        },
+      ),
+    },
+  );
+}
+
+/**
+ * A held stage (redesign): the app restarted while the reviewer worked. The reviewer is
+ * interrupted, and the final code review waits for the owner's Continue.
+ */
+export function heldScenario(): TicketScenario {
+  const agents = [
+    ...mergedAgents(),
+    agent({
+      id: REVIEWER,
+      parentAgentRunId: null,
+      kind: 'reviewer',
+      role: 'Reviewer',
+      status: 'NEEDS_REVIEW',
+      branch: null,
+      budget: { used: 4_100, limit: 50_000 },
+      latestActivity: 'Used tool: Read',
+      createdAt: T(45),
+      endedAt: T(46),
+    }),
+  ];
+  const run = runDetail('REVIEW', agents, { messages: SEPARATE_MESSAGES });
+  return scenario(
+    {
+      ticket: ticket('ACTIVE', 'IN_REVIEW'),
+      runs: [runSummary(RUN_ID, 'REVIEW', { agentCount: agents.length }), OLD_RUN],
+      currentRun: run,
+      plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'approved')],
+      comments: COMMENTS,
+      checks: [],
+    },
+    {
+      [`${runPath}/review`]: { runId: RUN_ID, agents: MERGED_REVIEWS },
+      [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'done',
+          helpers: 'done',
+          review: 'done',
+          'code-review': 'needs-you',
+          'unit-tests': 'waiting',
+        },
+        {
+          plan: [PLANNER],
+          orchestrate: [LEAD],
+          helpers: [UI, STORE],
+          'code-review': [REVIEWER],
+        },
+      ),
+    },
+  );
 }

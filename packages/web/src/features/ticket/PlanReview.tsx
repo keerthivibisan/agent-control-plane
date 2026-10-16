@@ -70,7 +70,11 @@ function PlanComments({ comments }: { comments: readonly TicketCommentDto[] }) {
           className="rounded-control border-l-2 border-warning bg-warning-soft px-3 py-2"
         >
           <span className="text-caption font-medium">
-            {c.author === 'owner' ? C.yourComment : TICKET_COPY.comments.lead}
+            {c.author === 'owner'
+              ? C.yourComment
+              : c.author === 'reviewer'
+                ? TICKET_COPY.comments.reviewer
+                : TICKET_COPY.comments.lead}
           </span>
           <p className="whitespace-pre-wrap">{c.body}</p>
         </li>

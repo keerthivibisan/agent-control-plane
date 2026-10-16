@@ -203,32 +203,34 @@ function SettingsBody({ project }: { project: ProjectDto }) {
     projectSetupSchemas.contextCandidates,
   );
   return (
-    <div className="flex max-w-4xl flex-col gap-6">
+    <div className="max-w-4xl">
       <PageHeader title={S.title} tip={S.tip} description={S.description} />
-      <QueryView query={setup}>
-        {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
-      </QueryView>
-      <Card title={S.elsewhere.title} testId="settings-elsewhere">
-        <ul className="-my-3 flex flex-col divide-y divide-line">
-          <MovedRow
-            icon={<WorkflowIcon size={18} />}
-            text={S.elsewhere.workflow}
-            link={S.elsewhere.workflowLink}
-            to={href.projectPage(id, 'workflow')}
-            testId="settings-workflow-link"
-          />
-          <MovedRow
-            icon={<HarnessIcon size={18} />}
-            text={S.elsewhere.harness}
-            link={S.elsewhere.harnessLink}
-            to={href.projectPage(id, 'harness')}
-            testId="settings-harness-link"
-          />
-        </ul>
-      </Card>
-      <Card title={S.danger} testId="settings-danger" className="border-danger/30">
-        <p className="max-w-3xl text-dim">{S.dangerText}</p>
-      </Card>
+      <div className="flex flex-col gap-6">
+        <QueryView query={setup}>
+          {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
+        </QueryView>
+        <Card title={S.elsewhere.title} testId="settings-elsewhere">
+          <ul className="-my-3 flex flex-col divide-y divide-line">
+            <MovedRow
+              icon={<WorkflowIcon size={18} />}
+              text={S.elsewhere.workflow}
+              link={S.elsewhere.workflowLink}
+              to={href.projectPage(id, 'workflow')}
+              testId="settings-workflow-link"
+            />
+            <MovedRow
+              icon={<HarnessIcon size={18} />}
+              text={S.elsewhere.harness}
+              link={S.elsewhere.harnessLink}
+              to={href.projectPage(id, 'harness')}
+              testId="settings-harness-link"
+            />
+          </ul>
+        </Card>
+        <Card title={S.danger} testId="settings-danger" className="border-danger/30">
+          <p className="max-w-3xl text-dim">{S.dangerText}</p>
+        </Card>
+      </div>
     </div>
   );
 }

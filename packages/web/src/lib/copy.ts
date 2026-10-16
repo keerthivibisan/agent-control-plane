@@ -878,8 +878,9 @@ export const RUN_STATUS_COPY: Readonly<Record<RunStatus, ControlStatusCopy>> = {
     tone: 'working',
   },
   PLAN_REVIEW: {
-    word: 'Plan ready for you',
-    tip: 'Read the plan, then approve it or say what should change. No helper starts before that.',
+    // The board's stage word (R-H): one word for plan review everywhere.
+    word: 'Plan review',
+    tip: 'A plan is ready for you. Read it, then approve it or say what should change. No helper starts before that.',
     tone: 'waiting',
   },
   RUNNING: { word: 'Running', tip: 'Agents are working.', tone: 'working' },
@@ -1590,12 +1591,12 @@ export const TICKET_STAGE_COPY: Readonly<Record<TicketStage, ControlStatusCopy>>
   },
   PLANNING: {
     word: STAGE_COPY.PLANNING.word,
-    tip: 'The lead agent is reading the code and writing a plan for you to approve.',
+    tip: 'An agent is reading the code and writing a plan for you to approve.',
     tone: 'working',
   },
   PLAN_REVIEW: {
     word: STAGE_COPY.PLAN_REVIEW.word,
-    tip: "Read the lead agent's plan, then approve it or say what should change. No helper starts before that.",
+    tip: 'A plan is ready for you. Approve it or say what should change. No helper starts before that.',
     tone: 'waiting',
   },
   WORKING: {
@@ -1669,18 +1670,79 @@ export const TICKET_COPY = {
     startFailed: "The run didn't start.",
     rerunTip: 'Starts a new run on this ticket. Earlier runs stay in its history.',
   },
+  roles: {
+    lead: {
+      term: 'Lead agent',
+      tip: 'The main agent of the run. It reads your project but never edits it, and hands parts of the ticket to helper agents.',
+    },
+    worker: {
+      term: 'Helper agent',
+      tip: 'An agent started for one part of the ticket. It works in its own copy of your project, so your files stay untouched until you merge its changes.',
+    },
+    planner: {
+      term: 'Planner agent',
+      tip: 'A read-only agent that writes the plan and revises it on your comments. The lead starts once you approve it.',
+    },
+    reviewer: {
+      term: 'Reviewer agent',
+      tip: 'A read-only agent that reads the merged result and posts its findings as ticket comments. It never blocks a merge.',
+    },
+    tester: {
+      term: 'Tester agent',
+      tip: 'An agent that writes unit tests for the merged change in its own copy. You review and merge them like any change.',
+    },
+  },
+  speaker: {
+    owner: 'You',
+    lead: 'Lead agent',
+    planner: 'Planner agent',
+    'lead-or-planner': 'Lead or planner',
+    leadOrPlannerTip:
+      'This message came from the lead agent or the planner; the app can’t tell which one wrote it.',
+    chatEnded: 'The agent you chat with has finished its work, so the chat is closed.',
+  },
+  workflow: {
+    title: 'Workflow',
+    description: 'Where this run is: each stage of the project’s workflow, live.',
+    tip: 'The stages come from the project’s Workflow page. Models and skills on the stages are the project’s current settings. Click a stage to show its agent in the side panel.',
+    changedSince:
+      'The workflow settings changed after this run started; the models and skills shown are the current ones.',
+    graphLabel: 'This run’s workflow stages',
+    states: {
+      off: 'Off',
+      waiting: 'Waiting',
+      active: 'Working',
+      'needs-you': 'Needs you',
+      done: 'Done',
+      failed: 'Failed',
+      skipped: 'Skipped',
+    },
+    helperNone: 'No helpers yet',
+    helpersWorking: (n: number) => `${formatCount(n)} working`,
+    reviewerComments: (n: number) =>
+      `${formatCount(n)} ${n === 1 ? 'finding' : 'findings'} from the reviewer in the comments below`,
+    held: {
+      title: (stage: string) => `${stage} is waiting for you`,
+      text: (stage: string) =>
+        `The app restarted before ${stage.toLowerCase()} started, so it was not started on its own. Continue starts it now.`,
+      action: 'Continue',
+      pending: 'Starting…',
+      failed: 'The stage didn’t start.',
+    },
+  },
   canvas: {
     title: 'Agents',
-    description: 'The lead agent at the top, the helper agents it started beneath it.',
-    noAgents: 'No agents yet. The lead agent appears here once the run starts.',
+    description: 'Every agent of this run. Helpers sit beneath the agent that started them.',
+    noAgents: 'No agents yet. They appear here once the run starts.',
     planning:
-      'The lead agent is reading the code (without changing anything) and writing a plan. You approve the plan before any helper agent starts.',
+      'An agent is reading the code (without changing anything) and writing a plan. You approve the plan before any helper agent starts.',
     noHelpers: 'No helper agents yet. The lead agent starts them as the plan says.',
     select: (role: string) => `Show the ${role} in the side panel`,
     branchUnknown: 'No branch yet',
     needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'request' : 'requests'} for you`,
     withHelpers: (n: string) => `With its helpers: ${n} budget tokens`,
     messagePlaceholderLead: 'Message the lead…',
+    messagePlaceholderPlanner: 'Message the planner…',
     messagePlaceholder: 'Send a message…',
     messageLabel: (role: string) => `Message to the ${role}`,
     send: 'Send',
@@ -1712,6 +1774,7 @@ export const TICKET_COPY = {
   changes: {
     title: 'Changes',
     leadNone: 'The lead agent never changes files. Its helper agents do, each in its own copy.',
+    readOnlyNone: 'This agent only reads; it never changes files.',
     notYet: 'Changes are shown here once this agent has stopped.',
     noReview: 'No changes recorded for this agent.',
     loading: 'Loading changes…',
@@ -1734,6 +1797,7 @@ export const TICKET_COPY = {
     tip: "The commands in the project's harness (.acp/harness.json), such as tests, lint and build. Required checks must pass before you merge.",
     none: 'No checks have run for this agent yet.',
     leadNone: "Checks run on helper agents' changes, not on the lead agent.",
+    readOnlyNone: 'Checks run on changes, and this agent only reads.',
     required: 'Required',
     optional: 'Optional',
     duration: (d: string) => `took ${d}`,
@@ -1785,21 +1849,21 @@ export const TICKET_COPY = {
     helpers: (n: number) => `${formatCount(n)} helper ${n === 1 ? 'agent' : 'agents'} planned`,
     stepRole: 'Done by',
     intro:
-      'The lead agent read the code and proposes this plan. No helper agent starts until you approve it.',
+      'An agent read the code and proposes this plan. No helper agent starts until you approve it.',
     approve: 'Approve plan',
     approving: 'Approving…',
     requestChanges: 'Request changes',
     sending: 'Sending…',
     commentLabel: 'What should change?',
     commentHint:
-      'Required when you request changes. The lead agent gets it and writes a new version.',
+      'Required when you request changes. The agent that plans gets it and writes a new version.',
     commentPlaceholder:
       'For example: keep the old settings page; add the toggle to the header instead.',
     commentRequired: 'Say what should change.',
     failed: "Your decision wasn't saved.",
     earlier: (n: number) => `Earlier versions (${formatCount(n)})`,
     yourComment: 'Your comment',
-    waitingNewVersion: 'The lead agent is writing a new version of the plan.',
+    waitingNewVersion: 'A new version of the plan is being written.',
   },
   ticket: {
     title: 'Ticket',
@@ -1819,6 +1883,9 @@ export const TICKET_COPY = {
     empty: 'No comments yet.',
     you: 'You',
     lead: 'Lead agent',
+    reviewer: 'Reviewer',
+    reviewerTip:
+      'Posted by the reviewer agent after the merge (the Final code review stage). Its findings never block a merge.',
     onPlan: (v: number) => `on plan version ${formatCount(v)}`,
     label: 'Add a comment',
     placeholder: 'Write a comment…',

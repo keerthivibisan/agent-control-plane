@@ -6,7 +6,7 @@ import type {
   TicketDetailDto,
 } from '@acp/core/api';
 import { useId, useState } from 'react';
-import { ButtonLink } from '../../components/Button';
+import { Button, ButtonLink } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
@@ -29,10 +29,12 @@ import { AgentCanvas } from './AgentCanvas';
 import { PlanCard } from './PlanReview';
 import { SidePanel, type PanelTab } from './SidePanel';
 import { TicketInfo } from './TicketInfo';
+import { LiveWorkflow } from './LiveWorkflow';
 import {
   agentBranch,
   agentChecks,
   canStopRun,
+  chatAgent,
   lastRunNote,
   mergeGate,
   pendingByAgent,
@@ -40,6 +42,7 @@ import {
   plansOfRun,
   runBudgetUsed,
   runNumber,
+  showRunStatus,
   startAction,
 } from './ticket-state';
 
@@ -70,15 +73,14 @@ function StartButton({ ticketId, kind }: { ticketId: string; kind: 'start' | 're
   const start = useTicketAction(rerunTicket);
   return (
     <div className="flex max-w-md flex-col items-end gap-2">
-      <button
-        type="button"
+      <Button
+        variant="primary"
         title={kind === 'rerun' ? C.actions.rerunTip : undefined}
         disabled={start.pending}
         onClick={() => void start.run(ticketId)}
-        className="inline-flex items-center gap-1.5 rounded-control border border-accent bg-accent px-3 py-1.5 font-medium text-accent-ink hover:opacity-90 disabled:opacity-50"
       >
         {start.pending ? C.actions.starting : kind === 'rerun' ? C.actions.rerun : C.actions.start}
-      </button>
+      </Button>
       <ActionError error={start.error} message={C.actions.startFailed} />
     </div>
   );
@@ -121,8 +123,11 @@ function RunPicker({
   );
 }
 
-/** "4 agents · 1 request waits for you · 182,000 budget tokens used". */
-function Summary({ run }: { run: RunDetailDto | undefined }) {
+/**
+ * "4 agents · 1 request waits for you · 182,000 budget tokens used". The run's status word is
+ * left out for the current run: the stage pill in the header already says it, in the board's word.
+ */
+function Summary({ run, isCurrent }: { run: RunDetailDto | undefined; isCurrent: boolean }) {
   if (run === undefined) return <p className="text-dim">{C.summary.noRun}</p>;
   const waiting = run.approvals.filter((a) => a.status === 'pending').length;
   return (
@@ -130,10 +135,14 @@ function Summary({ run }: { run: RunDetailDto | undefined }) {
       className="flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums"
       data-testid="ticket-summary"
     >
-      <StatusWord status={RUN_STATUS_COPY[run.status]} value={run.status} />
-      <span aria-hidden="true" className="text-dim">
-        ·
-      </span>
+      {showRunStatus(isCurrent, run.status) ? (
+        <>
+          <StatusWord status={RUN_STATUS_COPY[run.status]} value={run.status} />
+          <span aria-hidden="true" className="text-dim">
+            ·
+          </span>
+        </>
+      ) : null}
       <span>{C.summary.agents(run.agents.length)}</span>
       {waiting > 0 ? (
         <>
@@ -206,13 +215,9 @@ function ReviewList({
                       : C.review.checksNone}
                 </span>
               </span>
-              <button
-                type="button"
-                onClick={() => onOpen(a.id)}
-                className="ml-auto inline-flex items-center rounded-control border border-line bg-panel px-3 py-1 font-medium hover:bg-sunken"
-              >
+              <Button size="sm" className="ml-auto" onClick={() => onOpen(a.id)}>
                 {C.review.open}
-              </button>
+              </Button>
             </li>
           );
         })}
@@ -221,8 +226,10 @@ function ReviewList({
   );
 }
 
+/** The agent the panel opens on: the one you chat with now (planner or lead), else the first. */
 function defaultAgent(run: RunDetailDto): AgentRunDto | undefined {
-  return run.agents.find((a) => a.kind === 'lead') ?? run.agents[0];
+  const chat = chatAgent(run);
+  return run.agents.find((a) => a.id === chat?.id) ?? run.agents[0];
 }
 
 function RunView({
@@ -265,9 +272,18 @@ function RunView({
   const selected = run.agents.find((a) => a.id === selectedId) ?? defaultAgent(run);
   const pending = run.approvals.filter((a) => a.status === 'pending');
   const planning = run.status === 'PLANNING' || run.status === 'QUEUED';
+  const reviewerComments = detail.comments.filter(
+    (c) => c.author === 'reviewer' && c.runId === run.id,
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
+      <LiveWorkflow
+        run={run}
+        projectId={detail.ticket.projectId}
+        reviewerComments={reviewerComments}
+        onSelectAgent={(id, stage) => onSelect(id, stage === 'review' ? 'changes' : undefined)}
+      />
       {pending.length > 0 ? <Approvals approvals={pending} agents={run.agents} /> : null}
       <ReviewList
         run={run}
@@ -293,6 +309,7 @@ function RunView({
               canMessage={isCurrent && canChat(run.status)}
               pending={pendingByAgent(run)}
               branches={branches}
+              chatAgentId={chatAgent(run)?.id ?? null}
               note={planning ? C.canvas.planning : undefined}
             />
           )}
@@ -383,7 +400,7 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
         }
       />
       <div className="mb-6 flex flex-col gap-3">
-        <Summary run={run} />
+        <Summary run={run} isCurrent={isCurrent} />
         {note !== null ? (
           <p
             role="status"
