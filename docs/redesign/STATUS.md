@@ -110,6 +110,19 @@ Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config)
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
 
+**After v0.0.1 (2026-10-17):**
+
+- The owner pushed `main` and tag `v0.0.1` (→ `3197ebb`) to the private repository.
+- **CI triggers (owner decision):** CI runs by itself only on code pushes to `main`. Docs-only and
+  Markdown changes are skipped, and other branches and PRs run it only by hand
+  (`workflow_dispatch`).
+- **First CI run:** 3 R-V tests failed because their temp repos had no git identity. macOS git
+  guessed one; the Linux runner could not.
+- **Fix (`b1d3382`):**
+  - `GIT_TEST_ENV` now sets `user.useConfigOnly=true`;
+  - the redesign harness uses a fixed `GIT_TEST_IDENTITY_ENV`.
+- **CI on GitHub passed** (owner report).
+
 **R-R done (2026-10-17):**
 
 - Merged: the functional fixes (`29934da`: agent-file delete refused while in use, the read-only
