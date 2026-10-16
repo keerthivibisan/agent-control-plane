@@ -107,6 +107,25 @@ Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config)
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
 
+**R-I backend review (2026-10-16):** merged `d55ff27` (`wp/r-i-agent-files`). Scope OK
+(orchestrator, server, adapter, `provider-adapters.md` §11.1, its progress file). Read and
+confirmed:
+
+- `server/src/workflow/agent-profile.ts` reads only the owner's checkout through R-D's path rules;
+  any front-matter problem means no profile; logs carry reason codes only.
+- The adapter appends the instructions under a heading. `profileToolNames` is the SDK `tools`
+  base set: built-ins only, minus the read-only limits, plus `Skill` with a plugin. The gate
+  denies unlisted built-ins. `allowedTools` is never set.
+- The model order is stage > file > project > provider (`resolveAgentModel`).
+
+The coordinator re-ran pnpm check (1,995 tests). Proposed contract fields (`ProjectWorkflowDto.agents`,
+`AgentDefinitionSummaryDto.usedBy`) were not taken: the web part uses `GET /agents` and
+`stagesUsingAgent`. Follow-ups:
+
+- refuse deleting an agent file that a stage uses, like skills do;
+- the duplicate path rules in `server/src/workflow/skill-*.ts`;
+- R-V checks the init tool list, `Task`→`Agent`, and the profile text in the prompt.
+
 **R-H review (2026-10-16):** scope OK (web plus its progress file; two small allowed edits in
 `control/Chat.tsx` and the plan-review status word). Continue uses `controlPost` (CSRF). No raw
 HTML. Rebased on main (`43b9d57`), then the coordinator re-ran pnpm check (1,956 tests) and the full
