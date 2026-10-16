@@ -278,13 +278,13 @@ describe('Workflow page', () => {
     expect(panel().getAttribute('data-stage')).toBeNull();
   });
 
-  it('lists agent files as available, not mapped', async () => {
+  it('lists agent files; with no stage using them, each says so (R-I)', async () => {
     const files = AgentDefinitionSummaryDtoSchema.array().parse(agentFilesFixture());
     render(defaultWorkflowDto(), { [`${BASE}/agents`]: files });
     const card = await screen.findByTestId('agent-files');
     expect(within(card).getByTestId('agent-file-db-migrator').textContent).toContain('3 tools');
     expect(within(card).getByTestId('agent-file-docs-writer').textContent).toContain('All tools');
-    expect(within(card).getAllByText('Not mapped')).toHaveLength(2);
+    expect(within(card).getAllByText('Not used by any stage')).toHaveLength(2);
   });
 
   it('hides the agent files list while the route answers 404', async () => {

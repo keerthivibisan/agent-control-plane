@@ -94,7 +94,7 @@ describe('Skills & Agents tabs', () => {
     for (const label of ['Code reviewer', 'Test writer', 'Planner', 'Blank agent']) {
       expect(within(empty).getByRole('button', { name: label })).toBeTruthy();
     }
-    expect(screen.getByText(/Workflow stages do not use them yet/)).toBeTruthy();
+    expect(screen.getByText(/A workflow stage can use one/)).toBeTruthy();
   });
 
   it('opens the Agents tab from its address in the shell', async () => {
@@ -230,7 +230,7 @@ describe('Agents tab', () => {
     fireEvent.click(commit);
     expect(await within(editor).findByText('Committed abc1234 on main.')).toBeTruthy();
 
-    // Agent files are not mapped to stages yet, so Delete is never blocked.
+    // Delete is never blocked: a stage whose agent file is gone starts without it (ADR-0019 §6).
     fireEvent.click(within(editor).getByRole('button', { name: 'Delete agent' }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete planner?' });
     expect(dialog.textContent).toContain('.claude/agents/planner.md');

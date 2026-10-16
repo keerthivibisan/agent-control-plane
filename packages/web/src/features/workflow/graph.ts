@@ -3,7 +3,7 @@ import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
 /**
  * The Workflow page's process graph (docs/redesign/README.md §4.2, ADR-0019), built only from data:
- * the project's workflow (stages on or off, planner mode, models, skills) and its agent setup
+ * the project's workflow (stages on or off, planner mode, models, skills, agent files) and its agent setup
  * (helpers, depth, budget, allowlist). Nothing here is hardcoded per project, so the ticket page's
  * live graph and a later editable workflow (README §7a) can reuse the same nodes and edges.
  *
@@ -53,7 +53,22 @@ export type StageAgent = {
   skill: SkillName | null;
   /** The mapped skill isn't among the project's skills; the agent starts without it (ADR-0019 §4). */
   skillMissing: boolean;
+  /** The stage's agent file (`.claude/agents/<name>.md`, ADR-0019 §6); null when it has none. */
+  agent: SkillName | null;
+  /** The named agent file isn't among the project's agent files; the agent starts without it. */
+  agentMissing: boolean;
+  /**
+   * The agent file's own model, which the stage uses when it has none of its own (stage > file >
+   * project). Undefined when the project's agent files aren't known to the caller.
+   */
+  agentModel: string | null | undefined;
 };
+
+/** What the graph needs from one project agent file (`AgentDefinitionSummaryDto`). */
+export interface AgentFileRef {
+  name: string;
+  model: string | null;
+}
 
 export type AgentNodeData = StageAgent & {
   stage: Exclude<AgentStageId, 'helpers'>;
@@ -191,29 +206,40 @@ export interface EdgeLabels {
 const DEFAULT_LABELS: EdgeLabels = { loop: 'Changes', bypass: 'Off: skipped' };
 
 /**
- * Builds the graph. `skills` is the project's skill list (`ProjectWorkflowDto.skills`); without it
- * no mapped skill is flagged as missing, because there is nothing to compare against.
+ * Builds the graph. `skills` is the project's skill list (`ProjectWorkflowDto.skills`) and
+ * `agentFiles` its agent files (`GET …/agents`); without one, nothing of that kind is flagged as
+ * missing, because there is nothing to compare against.
  */
 export function buildWorkflowGraph(
   workflow: WorkflowShape,
   setup: SetupShape,
   skills?: readonly string[],
   labels: EdgeLabels = DEFAULT_LABELS,
+  agentFiles?: readonly AgentFileRef[],
 ): WorkflowGraph {
   const s = workflow.stages;
   const known = skills === undefined ? null : new Set(skills);
+  const files =
+    agentFiles === undefined ? null : new Map(agentFiles.map((f) => [f.name, f.model] as const));
   const agent = (
     role: WorkflowRole,
     workspace: AgentWorkspace,
-    stage: { model: string | null; skill: SkillName | null },
-  ): StageAgent => ({
-    role,
-    workspace,
-    model: stage.model,
-    projectModel: setup.model,
-    skill: stage.skill,
-    skillMissing: stage.skill !== null && known !== null && !known.has(stage.skill),
-  });
+    stage: { model: string | null; skill: SkillName | null; agent?: SkillName | null | undefined },
+  ): StageAgent => {
+    const file = stage.agent ?? null;
+    return {
+      role,
+      workspace,
+      model: stage.model,
+      projectModel: setup.model,
+      skill: stage.skill,
+      skillMissing: stage.skill !== null && known !== null && !known.has(stage.skill),
+      agent: file,
+      agentMissing: file !== null && files !== null && !files.has(file),
+      // A missing file has no model; an unknown list leaves it unknown.
+      agentModel: file === null ? null : files === null ? undefined : (files.get(file) ?? null),
+    };
+  };
   const leadMode = workflow.plannerMode === 'lead';
   const helpers = Math.max(1, setup.maxConcurrentHelpers);
   const helpersH = helpersHeight(helpers);

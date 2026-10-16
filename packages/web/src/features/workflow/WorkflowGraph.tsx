@@ -1,7 +1,8 @@
 import type { WorkflowStageId } from '@acp/core';
 import { Controls, ReactFlow, useReactFlow, useStore, type NodeMouseHandler } from '@xyflow/react';
 import { useEffect, useMemo } from 'react';
-import { WORKFLOW_COPY } from '../../lib/copy';
+import { SessionsIcon } from '../../components/icons';
+import { STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import {
   EDGE_STYLE,
   stageOfNode,
@@ -140,6 +141,12 @@ export function WorkflowLegend() {
           ✦
         </span>
         {L.skill}
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="inline-flex items-center rounded-full border border-line-strong bg-sunken px-1.5 py-0.5">
+          <SessionsIcon size={12} className="text-accent" />
+        </span>
+        {STAGE_AGENT_COPY.legend}
       </li>
     </ul>
   );

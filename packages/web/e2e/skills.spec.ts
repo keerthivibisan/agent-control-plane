@@ -259,3 +259,32 @@ test('agents: the tab, the list, an agent with tools, and a new one from a templ
     model: null,
   });
 });
+
+// --- Agent files on stages (redesign R-I, wp/r-i-web) -------------------------------------------
+
+test('agents: "Used by" shows the stages using each file and links to the Workflow page', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  await serve(page, project.id, SKILLS, AGENTS);
+  // The demo project's workflow, with `reviewer` on two stages (synthetic).
+  await page.route(`**/api/projects/${project.id}/workflow`, async (route) => {
+    const real = (await (await route.fetch()).json()) as {
+      workflow: { stages: Record<string, Json> };
+    };
+    const stages = real.workflow.stages;
+    stages['code-review'] = { ...stages['code-review'], enabled: true, agent: 'reviewer' };
+    stages['plan'] = { ...stages['plan'], agent: 'reviewer' };
+    await route.fulfill({ json: real });
+  });
+  await page.goto(`/#/p/${project.id}/skills?tab=agents`);
+  const used = page.getByTestId('agent-card-reviewer').getByTestId('agent-used-by');
+  await expect(used.getByRole('link')).toHaveText(['Plan', 'Final code review']);
+  await expect(page.getByTestId('agent-card-chores').getByTestId('agent-used-by')).toHaveText(
+    'Not used by any stage',
+  );
+  await shoot(page, 'agents-used-by');
+  await used.getByRole('link', { name: 'Open Final code review on the Workflow page' }).click();
+  await expect(page).toHaveURL(new RegExp(`#/p/${project.id}/workflow$`));
+});

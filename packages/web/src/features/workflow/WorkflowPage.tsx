@@ -86,16 +86,20 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
   const saveWorkflow = useSetupAction(updateWorkflow, invalidate);
   const saveSetup = useSetupAction(updateProjectSetup, invalidate);
   const panelRef = useRef<HTMLElement>(null);
+  // The project's agent files (R-D's route): offered per stage, and a named file that is gone is
+  // flagged. Undefined while loading or not served, so nothing is flagged without a list.
+  const agentFiles = useApiQuery(workflowPaths.agents(projectId), workflowSchemas.agents).data;
 
   const workflowDirty = !sameWorkflow(workflow, savedWorkflow);
   const limitsDirty = !sameLimits(limits, savedLimits);
   const dirty = workflowDirty || limitsDirty;
   const pending = saveWorkflow.pending || saveSetup.pending;
 
+  const view = useMemo(() => workflowView(workflow), [workflow]);
+  const drafted = useMemo(() => ({ ...dto.workflow, ...view }), [dto.workflow, view]);
   const graph = useMemo(
-    () =>
-      buildWorkflowGraph(workflowView(workflow), setupView(dto.setup, limits), dto.skills, C.edges),
-    [workflow, limits, dto.setup, dto.skills],
+    () => buildWorkflowGraph(view, setupView(dto.setup, limits), dto.skills, C.edges, agentFiles),
+    [view, limits, dto.setup, dto.skills, agentFiles],
   );
 
   const select = useCallback((stage: WorkflowStageId) => setSelected(stage), []);
@@ -189,6 +193,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                   limits={limits}
                   setup={dto.setup}
                   skills={dto.skills}
+                  agentFiles={agentFiles}
                   errors={errors}
                   onWorkflow={changeWorkflow}
                   onLimits={changeLimits}
@@ -235,7 +240,8 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
             </div>
           ) : null}
         </aside>
-        <AgentFiles projectId={projectId} />
+        {/* "Used by" follows the draft, like the graph. */}
+        <AgentFiles projectId={projectId} workflow={drafted} onSelect={select} />
       </div>
     </div>
   );

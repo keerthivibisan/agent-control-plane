@@ -1,9 +1,9 @@
 import type { WorkflowStageId } from '@acp/core';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
-import { CheckIcon, TicketIcon } from '../../components/icons';
+import { CheckIcon, SessionsIcon, TicketIcon } from '../../components/icons';
 import { Tooltip } from '../../components/Tooltip';
-import { WORKFLOW_COPY } from '../../lib/copy';
+import { STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import type {
   AgentNode,
@@ -18,6 +18,7 @@ import type {
 } from './graph';
 
 const C = WORKFLOW_COPY;
+const AF = STAGE_AGENT_COPY;
 
 /**
  * The node views of the workflow graph (graph.ts builds their data). Every view renders the same
@@ -128,32 +129,64 @@ function WorkspaceTag({ workspace }: { workspace: AgentWorkspace }) {
   );
 }
 
-function modelText(agent: Pick<StageAgent, 'model' | 'projectModel'>): string {
-  if (agent.model !== null) return agent.model;
-  return agent.projectModel === null ? C.projectDefault : C.projectDefaultNamed(agent.projectModel);
+/** The model the stage's agent gets: stage > agent file > project > Claude Code (ADR-0019 §6). */
+export function modelText(
+  agent: Pick<StageAgent, 'model' | 'projectModel' | 'agent' | 'agentModel'>,
+): { text: string; own: boolean; fileModel?: string } {
+  if (agent.model !== null) return { text: agent.model, own: true };
+  if (agent.agent !== null) {
+    if (typeof agent.agentModel === 'string') {
+      return {
+        text: AF.modelFromFile(agent.agentModel),
+        own: true,
+        fileModel: agent.agentModel,
+      };
+    }
+    // The file list isn't known here (the ticket page's live graph): don't guess which applies.
+    if (agent.agentModel === undefined) return { text: AF.modelFileOrDefault, own: false };
+  }
+  return {
+    text:
+      agent.projectModel === null ? C.projectDefault : C.projectDefaultNamed(agent.projectModel),
+    own: false,
+  };
 }
 
 function ModelLine({ agent }: { agent: StageAgent }) {
-  const text = modelText(agent);
+  const { text, own, fileModel } = modelText(agent);
   return (
-    <p className="flex min-w-0 items-baseline gap-1.5 text-caption" data-testid="node-model">
+    <p
+      className="flex min-w-0 items-baseline gap-1.5 text-caption"
+      data-testid="node-model"
+      title={text}
+    >
       <span className="shrink-0 text-dim">{C.model}</span>
-      <span
-        className={`min-w-0 truncate ${agent.model === null ? 'text-dim italic' : 'font-mono'}`}
-        title={text}
-      >
-        {text}
-      </span>
+      {fileModel !== undefined ? (
+        // The model may be cut short; where it comes from stays readable.
+        <>
+          <span className="min-w-0 truncate font-mono">{fileModel}</span>{' '}
+          <span className="-ml-1 shrink-0 text-dim">{AF.modelFromFileSuffix}</span>
+        </>
+      ) : (
+        <span className={`min-w-0 truncate ${own ? 'font-mono' : 'text-dim italic'}`}>{text}</span>
+      )}
     </p>
   );
 }
 
 /** "✦ code-review", "No skill", or a warning when the mapped skill is gone (ADR-0019 §4). */
-export function SkillChip({ agent }: { agent: Pick<StageAgent, 'skill' | 'skillMissing'> }) {
+export function SkillChip({
+  agent,
+  compact = false,
+}: {
+  agent: Pick<StageAgent, 'skill' | 'skillMissing'>;
+  /** Shares its line with the agent chip: "(missing)" is for screen readers only. */
+  compact?: boolean;
+}) {
   if (agent.skill === null) {
     return (
       <span
-        className="inline-flex w-fit max-w-full items-center rounded-full border border-dashed border-line-strong px-2 py-0.5 text-caption text-dim"
+        className="inline-flex w-fit max-w-full min-w-0 items-center rounded-full border border-dashed border-line-strong px-2 py-0.5 text-caption text-dim"
         data-testid="node-skill"
         data-skill="none"
       >
@@ -165,25 +198,70 @@ export function SkillChip({ agent }: { agent: Pick<StageAgent, 'skill' | 'skillM
     return (
       <Tooltip content={C.skillMissingTip(agent.skill)} focusable={false} className="min-w-0">
         <span
-          className="inline-flex w-fit max-w-full items-center gap-1 rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning"
+          className="inline-flex w-fit max-w-full min-w-0 items-center gap-1 rounded-full border border-warning/40 bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning"
           data-testid="node-skill"
           data-skill="missing"
         >
           <span aria-hidden="true">⚠</span>
           <span className="truncate font-mono">{agent.skill}</span>
-          <span className="shrink-0">({C.skillMissing})</span>
+          <span className={compact ? 'sr-only' : 'shrink-0'}>({C.skillMissing})</span>
         </span>
       </Tooltip>
     );
   }
   return (
     <span
-      className="inline-flex w-fit max-w-full items-center rounded-full border border-accent/25 bg-accent-soft px-2 py-0.5 text-caption font-medium text-accent"
+      className="inline-flex w-fit max-w-full min-w-0 items-center rounded-full border border-accent/25 bg-accent-soft px-2 py-0.5 text-caption font-medium text-accent"
       data-testid="node-skill"
       data-skill="set"
     >
       <span className="truncate">{C.skillChip(agent.skill)}</span>
     </span>
+  );
+}
+
+/**
+ * The stage's agent file (ADR-0019 §6): its name with the agent icon, or a warning when the file
+ * is gone. Nothing when the stage has none, so a node without one reads as before.
+ */
+export function AgentChip({ agent }: { agent: Pick<StageAgent, 'agent' | 'agentMissing'> }) {
+  if (agent.agent === null) return null;
+  const missing = agent.agentMissing;
+  return (
+    <Tooltip
+      content={missing ? AF.missingTip(agent.agent) : AF.chipTip(agent.agent)}
+      focusable={false}
+      className="inline-flex min-w-0"
+    >
+      <span
+        className={`inline-flex w-fit max-w-full min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-medium ${
+          missing
+            ? 'border-warning/40 bg-warning-soft text-warning'
+            : 'border-line-strong bg-sunken text-ink'
+        }`}
+        data-testid="node-agent"
+        data-agent={missing ? 'missing' : 'set'}
+      >
+        {missing ? (
+          <span aria-hidden="true">⚠</span>
+        ) : (
+          <SessionsIcon size={12} className="shrink-0 text-accent" />
+        )}
+        <span className="truncate">{agent.agent}</span>
+        {/* Next to the skill chip there is no room for the word; ⚠, the tone and the tip say it. */}
+        {missing ? <span className="sr-only">({AF.missing})</span> : null}
+      </span>
+    </Tooltip>
+  );
+}
+
+/** The agent file, then the skill, on one line ("test-writer + ✦ unit-tests", redesign §6a). */
+function UsesLine({ agent }: { agent: StageAgent }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <AgentChip agent={agent} />
+      <SkillChip agent={agent} compact={agent.agent !== null} />
+    </div>
   );
 }
 
@@ -237,7 +315,7 @@ export function AgentNodeView({ data, id }: NodeProps<AgentNode>) {
           ) : null}
         </StageTitle>
         <ModelLine agent={data} />
-        <SkillChip agent={data} />
+        <UsesLine agent={data} />
       </div>
     </div>
   );
@@ -261,7 +339,7 @@ export function HelpersNodeView({ data }: NodeProps<HelpersNode>) {
         )}
       </p>
       <ModelLine agent={data} />
-      <SkillChip agent={data} />
+      <UsesLine agent={data} />
     </div>
   );
 }

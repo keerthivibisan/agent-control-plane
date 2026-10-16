@@ -15,20 +15,21 @@
 
 ## Tasks
 
-- [ ] 1. Stage panel: "Agent file" picker (None + project agent files) on the five agent stages,
+- [x] 1. Stage panel: "Agent file" picker (None + project agent files) on the five agent stages,
       with plain helper text; the draft saves `agent` (absent for None)
-- [ ] 2. Graph nodes: agent chip next to the skill chip; the ticket page's live graph shows it too
-- [ ] 3. Missing-file warning on the node and in the panel
-- [ ] 4. Skills & Agents: "Used by" stage chips per agent file (`stagesUsingAgent`), linking to
+- [x] 2. Graph nodes: agent chip next to the skill chip; the ticket page's live graph shows it too
+- [x] 3. Missing-file warning on the node and in the panel
+- [x] 4. Skills & Agents: "Used by" stage chips per agent file (`stagesUsingAgent`), linking to
       Workflow; Workflow's agent files card shows the same instead of "Not mapped"
-- [ ] 5. Model placeholder "From agent file: <model>" when the stage has no model
-- [ ] 6. Tests (unit, component, e2e) and screenshots light/dark at 1440 and 1024
+- [x] 5. Model placeholder "From agent file: <model>" when the stage has no model
+- [x] 6. Tests (unit, component, e2e) and screenshots light/dark at 1440 and 1024
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                   | Commit | Checks    |
-| ---------- | ------------------------------- | ------ | --------- |
-| 2026-10-16 | Claimed R-I web on `wp/r-i-web` | (this) | docs only |
+| Date       | What was done                                                                                                                         | Commit    | Checks                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------- |
+| 2026-10-16 | Claimed R-I web on `wp/r-i-web`                                                                                                       | `b320fda` | docs only                                             |
+| 2026-10-16 | Agent file picker, agent chip, missing-file warning, model from the file, Used by on both pages; 16 unit/component tests, 2 e2e tests | (this)    | pnpm check ✓: test 1,972/1,972 (web 455); e2e 40/40 ✓ |
 
 ## Handoff notes
 

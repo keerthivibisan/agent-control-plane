@@ -1,9 +1,9 @@
 import { HARD_MAX_HELPERS, type WorkflowStageId } from '@acp/core';
-import type { ProjectAgentSetupDto } from '@acp/core/api';
+import type { AgentDefinitionSummaryDto, ProjectAgentSetupDto } from '@acp/core/api';
 import { useId, type ReactNode } from 'react';
 import { buttonClass } from '../../components/Button';
 import { Select } from '../../components/Input';
-import { PROJECT_SETUP_COPY, WORKFLOW_COPY } from '../../lib/copy';
+import { PROJECT_SETUP_COPY, STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 import { CheckboxField, NumberChoice, TextField } from '../project-setup/fields';
 import { DEPTH_CHOICES, HELPER_CHOICES, parseTokens } from '../project-setup/setup-form';
@@ -14,6 +14,9 @@ const C = WORKFLOW_COPY;
 const P = WORKFLOW_COPY.panel;
 const A = PROJECT_SETUP_COPY.agents;
 const L = PROJECT_SETUP_COPY.allowlist;
+const AF = STAGE_AGENT_COPY;
+/** Roles that never edit files; an agent file's tools can't change that (ADR-0019 §6). */
+const READ_ONLY_ROLES: readonly WorkflowRole[] = ['planner', 'lead', 'reviewer'];
 
 export interface StagePanelProps {
   projectId: string;
@@ -22,6 +25,8 @@ export interface StagePanelProps {
   limits: LimitsDraft;
   setup: ProjectAgentSetupDto;
   skills: readonly string[];
+  /** The project's agent files; undefined while the list isn't known (loading or not served). */
+  agentFiles: readonly AgentDefinitionSummaryDto[] | undefined;
   errors: DraftErrors;
   onWorkflow: (next: WorkflowDraft) => void;
   onLimits: (patch: Partial<LimitsDraft>) => void;
@@ -91,6 +96,88 @@ function SkillSelect({
   );
 }
 
+/**
+ * The stage's agent file (ADR-0019 §6): "None" or one of the project's `.claude/agents/*.md`.
+ * `files` is undefined while the list isn't known; the saved choice is still shown, never flagged.
+ */
+function AgentFileSelect({
+  projectId,
+  value,
+  files,
+  readOnly,
+  onChange,
+}: {
+  projectId: string;
+  value: string | null;
+  files: readonly AgentDefinitionSummaryDto[] | undefined;
+  /** The role is read-only (planner, lead, reviewer): say the file can't change that. */
+  readOnly: boolean;
+  onChange: (agent: string | null) => void;
+}) {
+  const id = useId();
+  const names = files?.map((f) => f.name) ?? [];
+  const missing = value !== null && files !== undefined && !names.includes(value);
+  const unknown = value !== null && files === undefined;
+  const problems = files?.find((f) => f.name === value)?.problems ?? [];
+  return (
+    <div className="flex min-w-0 flex-col gap-1" data-testid="agent-file-field">
+      <label htmlFor={id} className="font-medium">
+        {AF.label}
+      </label>
+      <Select
+        id={id}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+        aria-describedby={`${id}-hint`}
+        aria-invalid={missing ? true : undefined}
+        className={missing ? 'border-warning' : ''}
+      >
+        <option value="">{AF.none}</option>
+        {missing ? <option value={value}>{AF.missingOption(value)}</option> : null}
+        {unknown ? <option value={value}>{value}</option> : null}
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </Select>
+      <span id={`${id}-hint`} className="text-caption text-dim">
+        {AF.hint}
+        {readOnly ? ` ${AF.readOnlyHint}` : ''}{' '}
+        <a
+          href={href.projectPage(projectId, 'skills', { tab: 'agents' })}
+          className="text-accent hover:underline"
+        >
+          {AF.manage}
+        </a>
+      </span>
+      {missing ? (
+        <p
+          role="status"
+          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning"
+          data-testid="agent-missing"
+        >
+          ⚠ {AF.missingWarning}
+        </p>
+      ) : null}
+      {problems.length > 0 ? (
+        <div
+          role="status"
+          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning"
+          data-testid="agent-problems"
+        >
+          <p>⚠ {AF.problems}</p>
+          <ul className="list-disc pl-5">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-4 border-t border-line pt-5">
@@ -103,19 +190,34 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 
-/** The fields of one agent stage: planner mode (plan/orchestrate), on/off, model and skill. */
+/** The model field's placeholder: what an empty field means (stage > agent file > project). */
+export function modelPlaceholder(
+  agent: string | null,
+  agentFiles: readonly AgentDefinitionSummaryDto[] | undefined,
+  projectModel: string | null,
+): string {
+  const fileModel =
+    agent === null ? null : (agentFiles?.find((f) => f.name === agent)?.model ?? null);
+  if (fileModel !== null) return AF.modelPlaceholder(fileModel);
+  return projectModel ?? P.modelPlaceholderDefault;
+}
+
+/** The fields of one agent stage: planner mode (plan/orchestrate), on/off, agent file, model, skill. */
 function AgentStageFields({
+  projectId,
   stage,
   workflow,
   setup,
   skills,
+  agentFiles,
   errors,
   onWorkflow,
-}: Omit<StagePanelProps, 'stage' | 'limits' | 'onLimits' | 'projectId'> & { stage: AgentStageId }) {
+}: Omit<StagePanelProps, 'stage' | 'limits' | 'onLimits'> & { stage: AgentStageId }) {
   const draft = workflow.stages[stage];
   const change = (patch: Partial<StageDraft>) =>
     onWorkflow({ ...workflow, stages: { ...workflow.stages, [stage]: { ...draft, ...patch } } });
   const optional = OPTIONAL_STAGES.includes(stage);
+  const role = roleOf(stage, workflow);
   return (
     <div className="flex flex-col gap-5">
       {stage === 'plan' || stage === 'orchestrate' ? (
@@ -134,13 +236,20 @@ function AgentStageFields({
           onChange={(enabled) => change({ enabled })}
         />
       ) : null}
+      <AgentFileSelect
+        projectId={projectId}
+        value={draft.agent}
+        files={agentFiles}
+        readOnly={READ_ONLY_ROLES.includes(role)}
+        onChange={(agent) => change({ agent })}
+      />
       <TextField
         label={C.model}
-        hint={P.modelHint}
+        hint={draft.agent === null ? P.modelHint : AF.modelHint}
         error={errors[stage]}
         value={draft.model}
         onChange={(model) => change({ model })}
-        placeholder={setup.model ?? P.modelPlaceholderDefault}
+        placeholder={modelPlaceholder(draft.agent, agentFiles, setup.model)}
         mono
       />
       <SkillSelect value={draft.skill} skills={skills} onChange={(skill) => change({ skill })} />

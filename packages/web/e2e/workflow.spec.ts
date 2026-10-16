@@ -4,6 +4,7 @@ import {
   WF_CSRF,
   WF_PROJECT_ID,
   agentFilesFixture,
+  agentWorkflowDto,
   defaultWorkflowDto,
   fullWorkflowDto,
 } from './workflow-fixtures.js';
@@ -160,4 +161,63 @@ test('everything on: separate planner, four helpers at depth 2, a missing skill'
   await node(page, 'review').click();
   await expect(panel(page).getByRole('link', { name: 'Open the Harness page' })).toBeVisible();
   await shoot(page, 'full-review');
+});
+
+// --- Agent files on stages (redesign R-I, wp/r-i-web) -------------------------------------------
+
+test('agent files: chips on the nodes, a missing file, the picker and its save', async ({
+  page,
+}) => {
+  const served = await serve(page, agentWorkflowDto());
+  await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
+  await expect(page.getByTestId('agent-files')).toBeVisible();
+  const helpersAgent = node(page, 'helpers').getByTestId('node-agent');
+  await expect(helpersAgent).toHaveText('db-migrator');
+  await expect(helpersAgent).toHaveAttribute('data-agent', 'set');
+  await expect(node(page, 'unit-tests').getByTestId('node-model')).toContainText(
+    'claude-haiku-4 (agent file)',
+  );
+  const missing = node(page, 'code-review').getByTestId('node-agent');
+  await expect(missing).toHaveAttribute('data-agent', 'missing');
+  await expect(missing).toContainText('test-writer');
+  // Both chips fit inside the node, side by side.
+  for (const id of ['helpers', 'code-review']) {
+    const box = await node(page, id).boundingBox();
+    for (const chip of ['node-agent', 'node-skill']) {
+      const c = await node(page, id).getByTestId(chip).boundingBox();
+      expect(box && c && c.x + c.width <= box.x + box.width + 1).toBe(true);
+    }
+  }
+  await expect(
+    page.getByTestId('agent-file-docs-writer').getByTestId('agent-used-by'),
+  ).toHaveAttribute('data-used', 'unit-tests');
+
+  await node(page, 'code-review').click();
+  await expect(panel(page).getByTestId('agent-missing')).toContainText(
+    'Agent file not found — the agent starts without it.',
+  );
+  await shoot(page, 'agent-missing');
+
+  const picker = panel(page).getByRole('combobox', { name: 'Agent file' });
+  await picker.selectOption('docs-writer');
+  await expect(panel(page).getByTestId('agent-missing')).toHaveCount(0);
+  await expect(panel(page).getByRole('textbox', { name: 'Model' })).toHaveAttribute(
+    'placeholder',
+    'From agent file: claude-haiku-4',
+  );
+  await expect(missing).toHaveAttribute('data-agent', 'set');
+  await shoot(page, 'agent-picked');
+  await panel(page).getByRole('button', { name: 'Save' }).click();
+  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
+  expect(served.puts[0]).toMatchObject({
+    path: 'workflow',
+    body: { stages: { 'code-review': { enabled: true, agent: 'docs-writer' } } },
+  });
+
+  await picker.selectOption({ label: 'None' });
+  await panel(page).getByRole('button', { name: 'Save' }).click();
+  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
+  const cleared = served.puts[1]?.body as { stages: Record<string, Record<string, unknown>> };
+  expect(cleared.stages['code-review']).not.toHaveProperty('agent');
+  expect(cleared.stages['helpers']).toMatchObject({ agent: 'db-migrator' });
 });

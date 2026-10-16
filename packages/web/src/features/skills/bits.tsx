@@ -25,19 +25,42 @@ export function UncommittedBadge() {
   );
 }
 
-/** "Used by" as stage chips, or a quiet line when no stage uses the skill. */
-export function StageChips({ stages }: { stages: readonly WorkflowStageId[] }) {
+const CHIP =
+  'rounded-full border border-accent/30 bg-accent-soft px-2 py-px text-caption font-medium text-accent';
+
+/**
+ * "Used by" as stage chips, or a quiet line when no stage uses the file. With `link` (R-I), each
+ * chip is a link to the Workflow page, where the mapping is changed.
+ */
+export function StageChips({
+  stages,
+  link,
+  linkLabel,
+}: {
+  stages: readonly WorkflowStageId[];
+  link?: string | undefined;
+  linkLabel?: ((stage: string) => string) | undefined;
+}) {
   if (stages.length === 0) return <span className="text-dim">{C.card.notUsed}</span>;
   return (
     <ul className="flex flex-wrap gap-1.5" aria-label={C.card.usedBy}>
-      {stages.map((s) => (
-        <li
-          key={s}
-          className="rounded-full border border-accent/30 bg-accent-soft px-2 py-px text-caption font-medium text-accent"
-        >
-          {C.stages[s]}
-        </li>
-      ))}
+      {stages.map((s) =>
+        link === undefined ? (
+          <li key={s} className={CHIP}>
+            {C.stages[s]}
+          </li>
+        ) : (
+          <li key={s}>
+            <a
+              href={link}
+              aria-label={linkLabel?.(C.stages[s])}
+              className={`${CHIP} inline-block hover:border-accent/60 hover:underline`}
+            >
+              {C.stages[s]}
+            </a>
+          </li>
+        ),
+      )}
     </ul>
   );
 }

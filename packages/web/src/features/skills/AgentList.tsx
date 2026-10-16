@@ -1,10 +1,11 @@
+import type { WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionSummaryDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { RelativeTime } from '../../components/RelativeTime';
 import { SessionsIcon } from '../../components/icons';
-import { AGENTS_COPY, SKILLS_COPY } from '../../lib/copy';
-import { ProblemList, UncommittedBadge } from './bits';
+import { AGENTS_COPY, SKILLS_COPY, STAGE_AGENT_COPY } from '../../lib/copy';
+import { ProblemList, StageChips, UncommittedBadge } from './bits';
 import { AGENT_TEMPLATES, type AgentTemplate } from './agent-templates';
 
 const A = AGENTS_COPY;
@@ -39,7 +40,22 @@ export function ToolChips({ tools }: { tools: readonly string[] | null }) {
   );
 }
 
-function AgentCard({ agent, onOpen }: { agent: AgentDefinitionSummaryDto; onOpen: () => void }) {
+/** Which workflow stages use each agent file (R-I), and where to change that. */
+export interface AgentUsage {
+  usedBy: (name: string) => readonly WorkflowStageId[];
+  /** The Workflow page. */
+  href: string;
+}
+
+function AgentCard({
+  agent,
+  usage,
+  onOpen,
+}: {
+  agent: AgentDefinitionSummaryDto;
+  usage: AgentUsage | undefined;
+  onOpen: () => void;
+}) {
   return (
     <li
       data-testid={`agent-card-${agent.name}`}
@@ -78,6 +94,18 @@ function AgentCard({ agent, onOpen }: { agent: AgentDefinitionSummaryDto; onOpen
         <dd className={agent.model === null ? 'text-dim' : 'font-mono text-caption'}>
           {agent.model ?? A.card.defaultModel}
         </dd>
+        {usage !== undefined ? (
+          <>
+            <dt className="text-caption text-dim">{S.card.usedBy}</dt>
+            <dd data-testid="agent-used-by">
+              <StageChips
+                stages={usage.usedBy(agent.name)}
+                link={usage.href}
+                linkLabel={STAGE_AGENT_COPY.openStage}
+              />
+            </dd>
+          </>
+        ) : null}
       </dl>
       <ProblemList problems={agent.problems} />
       <p className="mt-auto border-t border-line pt-3 text-caption text-dim">
@@ -106,10 +134,13 @@ export function AgentTemplateButtons({ onPick }: { onPick: (t: AgentTemplate | n
 
 export function AgentList({
   agents,
+  usage,
   onOpen,
   onNew,
 }: {
   agents: readonly AgentDefinitionSummaryDto[];
+  /** Undefined while the workflow isn't known: the cards then leave "Used by" out. */
+  usage?: AgentUsage | undefined;
   onOpen: (name: string) => void;
   onNew: (template: AgentTemplate | null) => void;
 }) {
@@ -129,7 +160,7 @@ export function AgentList({
   return (
     <ul className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3" aria-label={S.page.agentsTab}>
       {agents.map((a) => (
-        <AgentCard key={a.name} agent={a} onOpen={() => onOpen(a.name)} />
+        <AgentCard key={a.name} agent={a} usage={usage} onOpen={() => onOpen(a.name)} />
       ))}
     </ul>
   );

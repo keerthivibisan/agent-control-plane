@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { stagesUsingAgent } from '@acp/core';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { ErrorNotice } from '../../components/ErrorNotice';
@@ -13,6 +14,8 @@ import {
   isSkillsPath,
   skillsPaths,
   skillsSchemas,
+  workflowPaths,
+  workflowSchemas,
   type ApiClient,
   type ApiError,
 } from '../../lib/api';
@@ -21,7 +24,7 @@ import { useApiQuery } from '../../lib/query';
 import { href, navigate } from '../../lib/router';
 import { useSkillAction } from './actions';
 import { AgentEditor } from './AgentEditor';
-import { AgentList } from './AgentList';
+import { AgentList, type AgentUsage } from './AgentList';
 import type { AgentTemplate } from './agent-templates';
 import { RefusalNotice } from './bits';
 import { SkillEditor } from './SkillEditor';
@@ -255,6 +258,18 @@ function AgentsTab({ projectId }: { projectId: string }) {
   const list = useApiQuery(agentsPaths.list(projectId), agentsSchemas.list);
   const names = (list.data ?? []).map((a) => a.name);
   const toList = () => setView({ kind: 'list' });
+  // Which stages use each file (R-I): from the saved workflow; left out while it isn't known.
+  const saved = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow).data;
+  const usage = useMemo<AgentUsage | undefined>(
+    () =>
+      saved === undefined
+        ? undefined
+        : {
+            usedBy: (name) => stagesUsingAgent(saved.workflow, name),
+            href: href.projectPage(projectId, 'workflow'),
+          },
+    [saved, projectId],
+  );
 
   if (view.kind === 'new' || view.kind === 'edit') {
     return (
@@ -312,6 +327,7 @@ function AgentsTab({ projectId }: { projectId: string }) {
       ) : null}
       <AgentList
         agents={list.data}
+        usage={usage}
         onOpen={(name) => setView({ kind: 'edit', name })}
         onNew={(template) => setView({ kind: 'new', template })}
       />

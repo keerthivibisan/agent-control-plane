@@ -23,6 +23,8 @@ export interface StageDraft {
   /** As typed; empty means the project default. */
   model: string;
   skill: SkillName | null;
+  /** The stage's agent file (`.claude/agents/<name>.md`); null is "None" (ADR-0019 §6). */
+  agent: SkillName | null;
   /** Only the optional stages can be off; the others stay true. */
   enabled: boolean;
 }
@@ -45,9 +47,13 @@ export type DraftErrors = Partial<Record<AgentStageId, string>> & { budget?: str
 
 export function workflowDraft(workflow: ProjectWorkflowDto['workflow']): WorkflowDraft {
   const s = workflow.stages;
-  const stage = (st: { model: string | null; skill: SkillName | null }, enabled = true) => ({
+  const stage = (
+    st: { model: string | null; skill: SkillName | null; agent?: SkillName | null | undefined },
+    enabled = true,
+  ): StageDraft => ({
     model: st.model ?? '',
     skill: st.skill,
+    agent: st.agent ?? null,
     enabled,
   });
   return {
@@ -80,7 +86,12 @@ function modelOf(raw: string): string | null {
 /** The draft as the graph shows it: what the page would save. */
 export function workflowView(draft: WorkflowDraft): WorkflowShape {
   const s = draft.stages;
-  const agent = (st: StageDraft) => ({ model: modelOf(st.model), skill: st.skill });
+  // "None" leaves `agent` out, so a workflow without agent files saves as it always did.
+  const agent = (st: StageDraft) => ({
+    model: modelOf(st.model),
+    skill: st.skill,
+    ...(st.agent === null ? {} : { agent: st.agent }),
+  });
   return {
     plannerMode: draft.plannerMode,
     stages: {
@@ -153,7 +164,12 @@ export function setupRequest(
 }
 
 function sameStage(a: StageDraft, b: StageDraft): boolean {
-  return a.model.trim() === b.model.trim() && a.skill === b.skill && a.enabled === b.enabled;
+  return (
+    a.model.trim() === b.model.trim() &&
+    a.skill === b.skill &&
+    a.agent === b.agent &&
+    a.enabled === b.enabled
+  );
 }
 
 export function sameWorkflow(a: WorkflowDraft, b: WorkflowDraft): boolean {

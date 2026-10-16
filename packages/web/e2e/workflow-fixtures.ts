@@ -107,3 +107,22 @@ export function agentFilesFixture(): Json[] {
     },
   ];
 }
+
+// --- Agent files on stages (redesign R-I, wp/r-i-web) -------------------------------------------
+
+/**
+ * Stages that use agent files: Helpers use `db-migrator` (no model of its own), Unit tests use
+ * `docs-writer` (model `claude-haiku-4`), and Final code review names `test-writer`, which is not
+ * among the project's agent files (`agentFilesFixture`).
+ */
+export function agentWorkflowDto(): Json {
+  return {
+    workflow: workflowFixture({
+      helpers: { agent: 'db-migrator', skill: 'unit-tests' },
+      codeReview: { enabled: true, agent: 'test-writer', skill: 'code-review' },
+      unitTests: { enabled: true, agent: 'docs-writer' },
+    }),
+    setup: setupFixture({ model: 'claude-sonnet-4' }),
+    skills: [...SKILLS],
+  };
+}

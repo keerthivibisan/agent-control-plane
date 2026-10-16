@@ -2273,7 +2273,7 @@ export const TOKENS_COPY = {
 export const WORKFLOW_COPY = {
   title: 'Workflow',
   description: 'How agents work on a ticket, from plan to merge. Select a stage to change it.',
-  tip: 'The stages are fixed for now: you can turn the optional ones on or off and give each agent a model and a skill. Editable workflows, with your own agents and connections, come later.',
+  tip: 'The stages are fixed for now: you can turn the optional ones on or off and give each agent a model, a skill and an agent file. Editable workflows, with your own agents and connections, come later.',
   flowSentence:
     'An agent plans the ticket and you approve the plan. The lead then hands parts to helpers, each in its own copy of the project. You merge their work once the required checks pass. A reviewer and a tester can follow.',
   graphLabel: 'Workflow graph',
@@ -2414,10 +2414,9 @@ export const WORKFLOW_COPY = {
   },
   agents: {
     title: 'Agent files',
-    tip: 'Claude Code agent definitions in this project’s .claude/agents folder. They are available, but no stage uses them yet: mapping a stage to an agent file comes later.',
-    description: 'Available, not mapped to a stage yet.',
+    tip: 'Claude Code agent definitions in this project’s .claude/agents folder. Pick one for a stage in its panel: its instructions are added, its model is the stage default, and its tools can only narrow the role’s tools.',
+    description: 'Each stage can use one. Pick it in the stage’s panel.',
     empty: 'No agent files in .claude/agents.',
-    notMapped: 'Not mapped',
     allTools: 'All tools',
     tools: (n: number) => countOf(n, 'tool'),
     loading: 'Loading agent files…',
@@ -2547,7 +2546,7 @@ export const SKILLS_COPY = {
 export const AGENTS_COPY = {
   page: {
     intro:
-      'Agent definitions are Claude Code subagents: a name, when to use it, which tools it may use, a model and its instructions. Your own Claude Code sessions can hand work to them. Workflow stages do not use them yet.',
+      'Agent definitions are Claude Code subagents: a name, when to use it, which tools it may use, a model and its instructions. A workflow stage can use one: pick it in the stage’s panel on the Workflow page.',
     newAgent: 'New agent',
     back: 'All agents',
     loading: 'Loading agents…',
@@ -2619,3 +2618,34 @@ export function stageList(stages: readonly WorkflowStageId[]): string {
   if (words.length <= 1) return words.join('');
   return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1] ?? ''}`;
 }
+
+// --- Agent files on workflow stages (redesign R-I, wp/r-i-web) ----------------------------------
+//
+// Add-only. A stage uses one project agent file, `.claude/agents/<name>.md` (docs/redesign §6a,
+// ADR-0019 §6): the picker in the stage panel, the chip on graph nodes, and "Used by".
+
+export const STAGE_AGENT_COPY = {
+  label: 'Agent file',
+  none: 'None',
+  hint: 'Its instructions are added to this stage’s agent, and its model is used when the stage has none. Its tools can only narrow what this role may do.',
+  readOnlyHint: 'This role stays read-only whatever the file lists.',
+  missingOption: (name: string) => `${name} (not found)`,
+  missing: 'not found',
+  missingTip: (name: string) =>
+    `Agent file not found: .claude/agents/${name}.md. The agent starts without it.`,
+  missingWarning: 'Agent file not found — the agent starts without it.',
+  problems: 'This file has problems, so the agent may start without it:',
+  chipTip: (name: string) =>
+    `This stage’s agent uses .claude/agents/${name}.md: its instructions, its model when the stage has none, and only the tools the role allows.`,
+  manage: 'Open Skills & Agents',
+  modelPlaceholder: (model: string) => `From agent file: ${model}`,
+  modelHint: 'Leave empty to use the agent file’s model, else the project default.',
+  modelFromFile: (model: string) => `${model} (agent file)`,
+  modelFromFileSuffix: '(agent file)',
+  modelFileOrDefault: 'Agent file or default',
+  legend: 'The agent file the stage uses',
+  usedBy: 'Used by',
+  notUsed: 'Not used by any stage',
+  openStage: (stage: string) => `Open ${stage} on the Workflow page`,
+  selectStage: (stage: string) => `Open the ${stage} settings`,
+} as const;
