@@ -3,18 +3,18 @@
 > Only the coordinator edits this file. Agents record progress in `docs/redesign/wp/<WP>.md`.
 > Plan and owned paths: [README.md](README.md) §7.
 
-| WP  | Title                                               | Depends  | Status                                                                    | Branch           | Merged                         |
-| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------- | ---------------- | ------------------------------ |
-| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                                  | `main`           | 2026-10-16                     |
-| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                                  | `wp/r-a-shell`   | 2026-10-16 (`8b70fc4`)         |
-| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | in-progress (resumed)                                                     | `wp/r-c-engine`  | —                              |
-| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | **part 1 merged**; part 2 (R-C stage wiring, skills plugin) waits for R-C | `wp/r-g-server`  | part 1: 2026-10-16 (`39bd957`) |
-| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                                                     | `wp/r-d-skills`  | —                              |
-| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress                                                               | `wp/r-f-tokens`  | —                              |
-| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress                                                               | `wp/r-e-harness` | —                              |
-| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | todo                                                                      | —                | —                              |
-| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                      | —                | —                              |
-| R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                      | —                | —                              |
+| WP  | Title                                               | Depends  | Status                                                              | Branch            | Merged                         |
+| --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------- | ----------------- | ------------------------------ |
+| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                            | `main`            | 2026-10-16                     |
+| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                            | `wp/r-a-shell`    | 2026-10-16 (`8b70fc4`)         |
+| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | **done**                                                            | `wp/r-c-engine`   | 2026-10-16 (`6a11e67`)         |
+| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; **part 2 in progress** (stage wiring, skills plugin) | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
+| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (scope + agent files, owner request)                    | `wp/r-d-skills`   | —                              |
+| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress                                                         | `wp/r-f-tokens`   | —                              |
+| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress                                                         | `wp/r-e-harness`  | —                              |
+| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | in-progress                                                         | `wp/r-b-workflow` | —                              |
+| R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                | —                 | —                              |
+| R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                | —                 | —                              |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
@@ -29,6 +29,25 @@ in its progress file with the exact next steps. Read it first.
 | R-C | `.claude/worktrees/agent-a2d3226375ace63e6` | **Done, in WIP `fb73268`:** workflow snapshot, agent stages, separate planner, reviewer and tester after merge, `post_review`, `continueStages`, Stop covers every role. **Left:** fix the typecheck (`exactOptionalPropertyTypes`, `plan.ts:182`); finish `policy.ts`; exports; `deriveRunWorkflow`; all new tests (including default-workflow equivalence); README. Adapter toolsets are blocked on contract decisions A and B below.           |
 | R-G | `.claude/worktrees/agent-a64edec75e61b9de3` | Claimed, with the design in its note. **Next:** migration `0004_redesign.sql` and an upgrade test, `repositories/redesign/{workflow,audit}.ts`, `decidedBy`/limits wiring, `GET/PUT /api/projects/:id/workflow`, tests. Part 2 waits for R-C.                                                                                                                                                                                                     |
 | R-D | `.claude/worktrees/agent-a2bf7f960a015159c` | Claimed, with the design in its note. **Next:** the `src/skills/` service and tests, the router with supertest security tests, the Skills page with tests and screenshots, and the app.ts/bootstrap lines for R-G.                                                                                                                                                                                                                                |
+
+**R-C review (2026-10-16):** scope OK (orchestrator and adapter, plus the approved decision-B core
+commit). Adapter toolsets read and confirmed:
+
+- the planner and reviewer get `disallowedTools` for Bash, Edit, Write and the like, and are denied
+  anything but in-folder reads;
+- the reviewer alone has `post_review`; the lead's set excludes it, and the engine refuses it from
+  anyone else;
+- the skills plugin is passed with `settingSources: []` kept.
+
+Default-workflow equivalence is tested. pnpm check was re-run (1,793 ✓). Known gap: in separate mode
+the lead still sees `submit_plan`; the engine refuses it. An optional `ManagedAgentSpec.controlTools`
+would hide it (later).
+
+**Owner requests (2026-10-16):**
+
+- agent definition files (`.claude/agents/<name>.md`): ADR-0018 is amended, contracts are added in
+  `5353095`, and R-D's scope is widened to "Skills & Agents";
+- the process graph is R-B, started now. Editable workflows are recorded for later (README §7a).
 
 **R-A review (2026-10-16):** scope OK. The edits outside R-A's paths are link-helper and import
 updates plus the removal of `ProjectsList` (All projects replaces it). No raw HTML. The coordinator
