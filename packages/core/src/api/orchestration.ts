@@ -70,6 +70,8 @@ export type ChatMessageDto = z.infer<typeof ChatMessageDtoSchema>;
 export const RunSummaryDtoSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
+  /** The board ticket this run works on; null for a Phase 3 control-panel run (redesign decision D). */
+  ticketId: z.string().min(1).nullable(),
   title: z.string().min(1),
   status: RunStatusSchema,
   agentCount: count,

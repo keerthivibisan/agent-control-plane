@@ -24,6 +24,7 @@ export function toRunSummary(item: RunListItem): RunSummaryDto {
   return {
     id: item.id,
     projectId: item.projectId,
+    ticketId: item.ticketId,
     title: item.title,
     status: item.status,
     agentCount: item.agentCount,

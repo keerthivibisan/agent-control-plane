@@ -87,6 +87,7 @@ function runSummary(id: string, status: string, over: Json = {}): Json {
   return {
     id,
     projectId: PROJECT_ID,
+    ticketId: TICKET_ID,
     title: 'WEB-12 Dark mode toggle',
     status,
     agentCount: 1,

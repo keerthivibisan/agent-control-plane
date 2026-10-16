@@ -113,6 +113,7 @@ export function runDetail(over: Partial<RunDetailDto> = {}): RunDetailDto {
   return RunDetailDtoSchema.parse({
     id: RUN_ID,
     projectId: 'p-1',
+    ticketId: null,
     title: 'Settings page',
     status: 'RUNNING',
     agentCount: 3,
@@ -148,6 +149,7 @@ export function runDetail(over: Partial<RunDetailDto> = {}): RunDetailDto {
 export function runSummary(over: Partial<RunSummaryDto> & { id: string }): RunSummaryDto {
   return RunSummaryDtoSchema.parse({
     projectId: 'p-1',
+    ticketId: null,
     title: 'Settings page',
     status: 'RUNNING',
     agentCount: 3,

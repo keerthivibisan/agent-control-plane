@@ -83,6 +83,7 @@ describe('orchestration DTOs', () => {
     const run = RunDetailDtoSchema.parse({
       id: 'r1',
       projectId: 'p1',
+      ticketId: null,
       title: 'Add rate limiting',
       status: 'RUNNING',
       agentCount: 2,
