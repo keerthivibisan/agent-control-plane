@@ -38,13 +38,6 @@ export const PlusIcon = (p: IconProps) => (
   </Svg>
 );
 
-export const GearIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <circle cx="12" cy="12" r="3" />
-    <path d="M12 2.5v3M12 18.5v3M4.2 6.7l2.1 1.2M17.7 16.1l2.1 1.2M4.2 17.3l2.1-1.2M17.7 7.9l2.1-1.2" />
-  </Svg>
-);
-
 export const MoveIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M5 12h14M15 8l4 4-4 4M9 8 5 12l4 4" />

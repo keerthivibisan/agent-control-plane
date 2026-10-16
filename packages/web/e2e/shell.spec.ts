@@ -138,7 +138,7 @@ test('the board in the shell; the switcher remembers the project for #/', async 
   const project = await demoApi(request);
   await withTickets(page, project.id);
   await page.goto(`/#/p/${project.id}/board`);
-  await expect(page.getByTestId('board-stats')).toBeVisible();
+  await expect(page.getByTestId('board-counts')).toBeVisible();
   await expect(page.getByText('Rate limit the public API')).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page');
@@ -193,7 +193,7 @@ test('the ⌘K palette jumps to a ticket by key and closes with Esc', async ({ p
   const project = await demoApi(request);
   await withTickets(page, project.id);
   await page.goto(`/#/p/${project.id}/board`);
-  await expect(page.getByTestId('board-stats')).toBeVisible();
+  await expect(page.getByTestId('board-counts')).toBeVisible();
 
   const palette = page.getByRole('dialog', { name: 'Command palette' });
   const openPalette = async () => {

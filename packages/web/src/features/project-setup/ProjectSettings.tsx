@@ -1,13 +1,8 @@
-import type {
-  ContextCandidateDto,
-  HarnessStatusDto,
-  ProjectAgentSetupDto,
-  ProjectDto,
-} from '@acp/core/api';
-import { useMemo, useState, type FormEvent } from 'react';
-import { Button } from '../../components/Button';
+import type { ContextCandidateDto, ProjectAgentSetupDto, ProjectDto } from '@acp/core/api';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { CheckIcon } from '../../components/icons';
+import { CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
@@ -24,46 +19,62 @@ import type { QueryState } from '../../lib/query-store';
 import { href } from '../../lib/router';
 import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
-import { FormSection } from './fields';
-import {
-  HarnessCheckList,
-  HarnessStatusView,
-  HarnessTicketAction,
-  RunChecksNow,
-} from './HarnessPanel';
-import { AgentFields, AllowlistFields, ContextPicker } from './SetupSections';
-import {
-  draftFromSetup,
-  draftToRequest,
-  sameDraft,
-  type SetupDraft,
-  type SetupErrors,
-} from './setup-form';
+import { TextField } from './fields';
+import { ContextPicker } from './SetupSections';
+import { draftFromSetup, draftToRequest, type SetupDraft, type SetupErrors } from './setup-form';
 
 const C = PROJECT_SETUP_COPY;
+const S = PROJECT_SETUP_COPY.settings;
 
 /**
- * The AI work environment form. The draft starts from the saved setup; after a save the refetched
- * setup equals the draft again, so "unsaved changes" clears without resetting what is typed.
+ * What Settings edits (docs/redesign/README.md §4.7): the board key, the project's default model
+ * and the context files. Agent limits and the allowlist moved to the Workflow page.
  */
-function EnvironmentForm({
-  projectId,
+type SettingsDraft = Pick<SetupDraft, 'projectKey' | 'model' | 'contextFiles'>;
+
+function pickDraft(setup: ProjectAgentSetupDto): SettingsDraft {
+  const { projectKey, model, contextFiles } = draftFromSetup(setup);
+  return { projectKey, model, contextFiles };
+}
+
+function sameSettings(a: SettingsDraft, b: SettingsDraft): boolean {
+  return (
+    a.projectKey === b.projectKey &&
+    a.model === b.model &&
+    a.contextFiles.length === b.contextFiles.length &&
+    a.contextFiles.every((f, i) => f === b.contextFiles[i])
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="font-medium">{label}</dt>
+      <dd className="min-w-0 break-words text-dim">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * The project and context cards in one form. The PUT body is the setup as saved now with only
+ * these fields changed, so a limit saved on the Workflow page meanwhile is never overwritten.
+ */
+function SettingsForm({
+  project,
   setup,
-  harness,
   candidates,
 }: {
-  projectId: string;
+  project: ProjectDto;
   setup: ProjectAgentSetupDto;
-  harness: HarnessStatusDto | undefined;
   candidates: QueryState<ContextCandidateDto[]>;
 }) {
-  const saved = useMemo(() => draftFromSetup(setup), [setup]);
-  const [draft, setDraft] = useState<SetupDraft>(saved);
+  const saved = useMemo(() => pickDraft(setup), [setup]);
+  const [draft, setDraft] = useState<SettingsDraft>(saved);
   const [errors, setErrors] = useState<SetupErrors>({});
   const [justSaved, setJustSaved] = useState(false);
-  const invalidate = useMemo(() => isProjectSetupPath(projectId), [projectId]);
+  const invalidate = useMemo(() => isProjectSetupPath(project.id), [project.id]);
   const save = useSetupAction(updateProjectSetup, invalidate);
-  const dirty = !sameDraft(draft, saved);
+  const dirty = !sameSettings(draft, saved);
 
   const change = (patch: Partial<SetupDraft>) => {
     setJustSaved(false);
@@ -72,47 +83,65 @@ function EnvironmentForm({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const r = draftToRequest(draft, candidates.data);
+    const r = draftToRequest({ ...draftFromSetup(setup), ...draft }, candidates.data);
     if (!r.ok) {
       setErrors(r.errors);
       return;
     }
     setErrors({});
-    if ((await save.run(projectId, r.request)) !== null) setJustSaved(true);
+    if ((await save.run(project.id, r.request)) !== null) setJustSaved(true);
   };
 
   return (
     <form
       noValidate
-      aria-label={C.settings.environment}
+      aria-label={S.formLabel}
       onSubmit={(e) => void submit(e)}
-      className="flex flex-col gap-8 [&>section+section]:border-t [&>section+section]:border-line [&>section+section]:pt-8"
+      className="flex flex-col gap-6"
     >
-      <FormSection
-        title={C.agents.title}
-        description={C.agents.description}
-        testId="settings-agents"
-      >
-        <AgentFields draft={draft} errors={errors} onChange={change} />
-      </FormSection>
-      <FormSection
-        title={C.allowlist.title}
-        description={C.allowlist.description}
-        testId="settings-allowlist"
-      >
-        <AllowlistFields draft={draft} onChange={change} harness={harness} />
-      </FormSection>
-      <FormSection
-        title={C.context.title}
-        description={C.context.description}
-        testId="settings-context"
-      >
-        <ContextPicker draft={draft} errors={errors} onChange={change} candidates={candidates} />
-      </FormSection>
-      <ActionError error={save.error} message={C.settings.saveFailed} />
-      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-3 rounded-b-card border-t border-line bg-panel/95 px-5 py-3 backdrop-blur">
+      <Card title={S.project.title} description={S.project.description} testId="settings-project">
+        <div className="flex flex-col gap-6">
+          <dl className="grid gap-6 sm:grid-cols-2">
+            <Fact label={S.project.name}>{project.name}</Fact>
+            <Fact label={S.project.folder}>
+              <span className="font-mono text-caption">{project.rootPath}</span>
+            </Fact>
+          </dl>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <TextField
+              label={S.project.boardKey}
+              hint={S.project.boardKeyHint}
+              error={errors.projectKey}
+              value={draft.projectKey}
+              onChange={(v) => change({ projectKey: v.toUpperCase() })}
+              placeholder="WEB"
+              mono
+              inputClassName="max-w-32 uppercase"
+            />
+            <TextField
+              label={S.project.model}
+              hint={S.project.modelHint}
+              error={errors.model}
+              value={draft.model}
+              onChange={(v) => change({ model: v })}
+              placeholder={C.agents.modelPlaceholder}
+              mono
+            />
+          </div>
+        </div>
+      </Card>
+      <Card title={C.context.title} description={C.context.description} testId="settings-context">
+        <ContextPicker
+          draft={{ ...draftFromSetup(setup), ...draft }}
+          errors={errors}
+          onChange={change}
+          candidates={candidates}
+        />
+      </Card>
+      <ActionError error={save.error} message={S.saveFailed} />
+      <div className="flex flex-wrap items-center gap-3" data-testid="settings-save">
         <Button type="submit" variant="primary" disabled={!dirty || save.pending}>
-          {save.pending ? C.settings.saving : C.settings.save}
+          {save.pending ? S.saving : S.save}
         </Button>
         {dirty ? (
           <>
@@ -124,14 +153,14 @@ function EnvironmentForm({
               }}
               disabled={save.pending}
             >
-              {C.settings.reset}
+              {S.reset}
             </Button>
-            <span className="text-caption text-dim">{C.settings.unsaved}</span>
+            <span className="text-caption text-dim">{S.unsaved}</span>
           </>
         ) : justSaved ? (
           <span role="status" className="inline-flex items-center gap-1.5 text-success">
             <CheckIcon size={16} />
-            {C.settings.saved}
+            {S.saved}
           </span>
         ) : null}
       </div>
@@ -139,90 +168,76 @@ function EnvironmentForm({
   );
 }
 
-function HarnessCard({
-  projectId,
-  harness,
-  contextFiles,
+/** One line that says where a setting lives now, with a link there. */
+function MovedRow({
+  icon,
+  text,
+  link,
+  to,
+  testId,
 }: {
-  projectId: string;
-  harness: QueryState<HarnessStatusDto>;
-  contextFiles: readonly string[] | undefined;
+  icon: ReactNode;
+  text: string;
+  link: string;
+  to: string;
+  testId: string;
 }) {
   return (
-    <Card title={C.harness.title} description={C.harness.description} testId="settings-harness">
-      <QueryView query={harness}>
-        {(h) => (
-          <div className="flex flex-col gap-6">
-            <HarnessStatusView harness={h} />
-            <HarnessCheckList harness={h} />
-            {contextFiles !== undefined ? (
-              <div className="flex flex-col gap-1.5">
-                <h4 className="font-medium">{C.harness.contextFiles}</h4>
-                {contextFiles.length === 0 ? (
-                  <p className="text-dim">{C.harness.noContextFiles}</p>
-                ) : (
-                  <ul className="flex flex-wrap gap-1.5">
-                    {contextFiles.map((f) => (
-                      <li
-                        key={f}
-                        className="rounded bg-sunken px-1.5 py-0.5 font-mono text-caption"
-                      >
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-            <RunChecksNow projectId={projectId} harness={h} />
-            <HarnessTicketAction projectId={projectId} prominent={h.state === 'none'} />
-          </div>
-        )}
-      </QueryView>
-    </Card>
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3" data-testid={testId}>
+      <span aria-hidden="true" className="text-dim">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">{text}</span>
+      <ButtonLink href={to} size="sm">
+        {link}
+      </ButtonLink>
+    </li>
   );
 }
 
 function SettingsBody({ project }: { project: ProjectDto }) {
   const id = project.id;
   const setup = useApiQuery(projectSetupPaths.setup(id), projectSetupSchemas.setup);
-  const harness = useApiQuery(projectSetupPaths.harness(id), projectSetupSchemas.harness);
   const candidates = useApiQuery(
     projectSetupPaths.contextCandidates(id),
     projectSetupSchemas.contextCandidates,
   );
   return (
     <div className="flex max-w-4xl flex-col gap-6">
-      <PageHeader
-        eyebrow={<a href={href.project(id)}>← {C.settings.back(project.name)}</a>}
-        title={C.settings.title(project.name)}
-        description={C.settings.description}
-      />
-      <Card
-        title={C.settings.environment}
-        description={C.settings.environmentDescription}
-        testId="settings-environment"
-      >
-        <QueryView query={setup}>
-          {(s) => (
-            <EnvironmentForm
-              projectId={id}
-              setup={s}
-              harness={harness.data}
-              candidates={candidates}
-            />
-          )}
-        </QueryView>
+      <PageHeader title={S.title} tip={S.tip} description={S.description} />
+      <QueryView query={setup}>
+        {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
+      </QueryView>
+      <Card title={S.elsewhere.title} testId="settings-elsewhere">
+        <ul className="-my-3 flex flex-col divide-y divide-line">
+          <MovedRow
+            icon={<WorkflowIcon size={18} />}
+            text={S.elsewhere.workflow}
+            link={S.elsewhere.workflowLink}
+            to={href.projectPage(id, 'workflow')}
+            testId="settings-workflow-link"
+          />
+          <MovedRow
+            icon={<HarnessIcon size={18} />}
+            text={S.elsewhere.harness}
+            link={S.elsewhere.harnessLink}
+            to={href.projectPage(id, 'harness')}
+            testId="settings-harness-link"
+          />
+        </ul>
       </Card>
-      <HarnessCard projectId={id} harness={harness} contextFiles={setup.data?.contextFiles} />
-      <Card title={C.settings.danger} testId="settings-danger" className="border-danger/30">
-        <p className="max-w-3xl text-dim">{C.settings.dangerText}</p>
+      <Card title={S.danger} testId="settings-danger" className="border-danger/30">
+        <p className="max-w-3xl text-dim">{S.dangerText}</p>
       </Card>
     </div>
   );
 }
 
-/** `#/projects/:id/settings`: the project's AI work environment, harness and danger zone (§5.4). */
+/**
+ * `#/p/:projectId/settings` (docs/redesign/README.md §4.7): the project's name and folder, its
+ * board key and default model, the context files, links to where limits and checks live now, and
+ * the danger zone.
+ */
 export function ProjectSettings({ id }: { id: string }) {
   const project = useApiQuery(paths.project(id), schemas.project);
   return <QueryView query={project}>{(p) => <SettingsBody project={p} />}</QueryView>;

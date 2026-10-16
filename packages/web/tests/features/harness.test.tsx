@@ -245,7 +245,7 @@ describe('⌘K "Run checks"', () => {
     });
     window.location.hash = `#/p/${PROJECT_ID}/board`;
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
-    await screen.findByTestId('board-stats');
+    await screen.findByTestId('board-counts');
     fireEvent.keyDown(window, { key: 'k', metaKey: true });
     const box = within(screen.getByRole('dialog')).getByRole('combobox');
     fireEvent.change(box, { target: { value: 'run checks' } });

@@ -37,7 +37,7 @@ function server(routes: RouteTable = {}) {
 type Server = ReturnType<typeof server>;
 
 const posts = (s: Server) => s.calls.filter((c) => c.method === 'POST');
-const renderBoard = (s: Server, projectId: string | null = PROJECT_ID) =>
+const renderBoard = (s: Server, projectId: string = PROJECT_ID) =>
   renderWithApi(<BoardPage projectId={projectId} />, s);
 
 async function findCard(key: string): Promise<HTMLElement> {
@@ -96,22 +96,29 @@ describe('board: layout and honest numbers', () => {
     ).toBeTruthy();
   });
 
-  it('shows token types side by side, never one total, and no board-wide cost', async () => {
+  it('heads the board with the project name, one live line and New ticket (README §4.1)', async () => {
     renderBoard(server());
-    const stats = await screen.findByTestId('board-stats');
-    const tokens = within(stats).getByTestId('board-tokens');
-    expect(tokens.textContent).toContain('1.2M input tokens');
-    expect(tokens.textContent).toContain('84.3K output tokens');
-    expect(tokens.textContent).toContain('310K cache write tokens');
-    expect(tokens.textContent).toContain('3.1M cache read tokens');
-    // 1,204,000 + 84,300 + 310,000 + 3,100,000 = 4,698,300 must never appear.
-    expect(stats.textContent).not.toMatch(/4\.7M|4,698,300/);
-    expect(stats.textContent).toContain(
-      'Estimated cost: shown on each ticket for its latest run; never added up',
+    const heading = await screen.findByRole('heading', { level: 1, name: webProject.name });
+    const header = heading.closest('header');
+    if (header === null) throw new Error('no page header');
+    await waitFor(() =>
+      expect(within(header).getByTestId('board-counts').textContent).toBe('3 running·3 need you'),
     );
-    expect(stats.textContent).not.toMatch(/\$/);
-    expect(within(stats).getByTestId('harness').textContent).toContain('Ready');
-    expect(within(stats).getByTestId('board-counts').textContent).toBe('3 running·3 need you');
+    // Token tiles, the harness pill and a board-wide cost moved to Tokens and Harness.
+    expect(screen.queryByTestId('board-stats')).toBeNull();
+    expect(screen.queryByTestId('board-tokens')).toBeNull();
+    expect(screen.queryByTestId('harness')).toBeNull();
+    expect(header.textContent).not.toMatch(/\$|input tokens/);
+    expect(within(header).getByRole('link', { name: 'Tokens' }).getAttribute('href')).toBe(
+      `#/p/${PROJECT_ID}/tokens`,
+    );
+    expect(within(header).getByRole('link', { name: 'Harness' }).getAttribute('href')).toBe(
+      `#/p/${PROJECT_ID}/harness`,
+    );
+    expect(within(header).getByRole('button', { name: 'New ticket' })).toBeTruthy();
+    // The top bar's switcher is the only project picker.
+    expect(screen.queryByRole('combobox', { name: 'Project' })).toBeNull();
+    expect(within(header).queryByRole('link', { name: /Setup|New project/ })).toBeNull();
   });
 
   it('cards show key, type, priority, labels, helpers, budget tokens, needs-you and cost', async () => {
@@ -143,33 +150,23 @@ describe('board: layout and honest numbers', () => {
   });
 });
 
-describe('board: project switcher and empty states', () => {
-  it('opens the last used project for #/board and remembers the one shown', async () => {
-    window.localStorage.setItem('acp.board.lastProject', OTHER_PROJECT_ID);
+describe('board: the project in the address, and empty states', () => {
+  it('shows the project from the address, without fetching the project list', async () => {
     const s = server({
       [`/api/board?projectId=${OTHER_PROJECT_ID}`]: board({ project: apiProject }, []),
     });
-    renderBoard(s, null);
+    renderBoard(s, OTHER_PROJECT_ID);
     expect(await screen.findByTestId('board-empty')).toBeTruthy();
-    expect(s.calls.some((c) => c.path === `/api/board?projectId=${OTHER_PROJECT_ID}`)).toBe(true);
-    const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Project' });
-    expect(select.value).toBe(OTHER_PROJECT_ID);
-    fireEvent.change(select, { target: { value: PROJECT_ID } });
-    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`);
-  });
-
-  it('asks for a project first when none is added', async () => {
-    renderBoard(server({ '/api/projects': [] }), null);
-    const empty = await screen.findByTestId('board-no-projects');
-    expect(within(empty).getByText('Add a project first')).toBeTruthy();
-    expect(within(empty).getByRole('link', { name: 'New project' }).getAttribute('href')).toBe(
-      '#/projects/new',
-    );
+    expect(screen.getByRole('heading', { level: 1, name: apiProject.name })).toBeTruthy();
+    expect(s.calls.some((c) => c.path === '/api/projects')).toBe(false);
   });
 
   it('says so when the project does not exist', async () => {
     renderBoard(server(), 'gone');
     expect(await screen.findByText('Project not found')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'All projects' }).getAttribute('href')).toBe(
+      '#/projects',
+    );
   });
 
   it('does not blame the project when the server lacks the board route', async () => {
@@ -440,6 +437,6 @@ describe('board: app shell', () => {
     expect(links[0]?.textContent).toBe('Board');
     expect(links[0]?.getAttribute('href')).toBe(`#/p/${PROJECT_ID}/board`);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
-    expect(await screen.findByTestId('board-stats')).toBeTruthy();
+    expect(await screen.findByTestId('board-counts')).toBeTruthy();
   });
 });

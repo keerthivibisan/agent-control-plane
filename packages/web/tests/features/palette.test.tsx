@@ -106,7 +106,7 @@ afterEach(() => window.localStorage.clear());
 describe('command palette', () => {
   it('opens with ⌘K or Ctrl+K as a labelled dialog with focus in the search field', async () => {
     renderApp();
-    await screen.findByTestId('board-stats');
+    await screen.findByTestId('board-counts');
     open();
     const dialog = screen.getByRole('dialog', { name: 'Command palette' });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
@@ -119,7 +119,7 @@ describe('command palette', () => {
 
   it('moves with the arrows, keeps Tab inside, opens a ticket by key with Enter', async () => {
     renderApp();
-    await screen.findByTestId('board-stats');
+    await screen.findByTestId('board-counts');
     fireEvent.click(screen.getByTestId('open-palette'));
     const box = combobox();
     const options = () => within(screen.getByRole('listbox')).getAllByRole('option');
@@ -143,7 +143,7 @@ describe('command palette', () => {
 
   it('says when nothing matches', async () => {
     renderApp();
-    await screen.findByTestId('board-stats');
+    await screen.findByTestId('board-counts');
     open();
     fireEvent.change(combobox(), { target: { value: 'no such thing' } });
     expect(within(screen.getByRole('dialog')).getByRole('status').textContent).toBe(
@@ -167,7 +167,7 @@ describe('command palette', () => {
     const { s } = renderApp({
       [`POST /api/projects/${PROJECT_ID}/tickets`]: () => jsonResponse(201, created),
     });
-    await screen.findByTestId('board-stats');
+    await screen.findByTestId('board-counts');
     open();
     fireEvent.change(combobox(), { target: { value: 'new ticket' } });
     fireEvent.keyDown(combobox(), { key: 'Enter' });

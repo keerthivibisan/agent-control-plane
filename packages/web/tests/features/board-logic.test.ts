@@ -1,6 +1,5 @@
 import { TICKET_STAGES } from '@acp/core';
 import { describe, expect, it } from 'vitest';
-import { defaultProjectId } from '../../src/features/board/last-project';
 import {
   allowedMoves,
   boardColumns,
@@ -61,14 +60,6 @@ describe('board moves (README §5.2: only owner-settable moves)', () => {
   it('parses labels: trimmed, blanks and repeats dropped', () => {
     expect(parseLabels(' ui, dark mode,,ui , ')).toEqual(['ui', 'dark mode']);
     expect(parseLabels('')).toEqual([]);
-  });
-
-  it('opens the remembered project if it still exists, else the first', () => {
-    const list = [{ id: 'a' }, { id: 'b' }];
-    expect(defaultProjectId(list, 'b')).toBe('b');
-    expect(defaultProjectId(list, 'gone')).toBe('a');
-    expect(defaultProjectId(list, null)).toBe('a');
-    expect(defaultProjectId([], 'b')).toBeNull();
   });
 });
 

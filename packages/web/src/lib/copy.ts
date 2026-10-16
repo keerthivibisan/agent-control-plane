@@ -362,141 +362,14 @@ export function describeEvent(event: Pick<EventDto, 'eventType' | 'payload'>): s
   }
 }
 
-// --- Tokens, Projects and Project pages (phase 2, wp/ui-tokens) ---------------------------------
+// --- Shared counting words (phase 2, wp/ui-tokens; its pages were replaced by the redesign) -----
 
 /** "1 session" / "12 sessions": a count with its noun, so a number never stands alone. */
 export function countOf(n: number, singular: string, plural = `${singular}s`): string {
   return `${formatCount(n)} ${n === 1 ? singular : plural}`;
 }
 
-export type UsageGroupWord = 'project' | 'session' | 'model' | 'day';
 export type DatePreset = '7d' | '30d' | 'all' | 'custom';
-
-const GROUP_WORDS: Readonly<Record<UsageGroupWord, string>> = {
-  project: 'Project',
-  session: 'Session',
-  model: 'Model',
-  day: 'Day',
-};
-
-/** Wording for the Tokens page (`#/usage`). */
-export const TOKENS_PAGE = {
-  explainer: {
-    title: 'What the four token types mean',
-    intro:
-      'A token is a small piece of text, roughly part of a word. Claude Code reports how many tokens each reply used, in four types:',
-    why: 'They are priced differently (cache read is much cheaper than normal input), so this app always shows them side by side and never adds them into one total.',
-    hide: 'Hide',
-    show: 'What do these mean?',
-  },
-  filters: {
-    label: 'Token filters',
-    dates: 'Dates',
-    presets: {
-      '7d': 'Last 7 days',
-      '30d': 'Last 30 days',
-      all: 'All time',
-      custom: 'Custom',
-    } satisfies Record<DatePreset, string>,
-    from: 'From',
-    to: 'To',
-    utcNote: 'Days are counted in UTC.',
-    project: 'Project',
-    allProjects: 'All projects',
-    groupBy: 'Group by',
-    clear: 'Clear filters',
-  },
-  groupWords: GROUP_WORDS,
-  stats: {
-    label: 'Tokens in the selected range',
-    notReportedNote: 'No usage record in this range reported this type.',
-  },
-  charts: {
-    title: 'Tokens per day',
-    inputOutput: 'Input and output tokens per day',
-    cache: 'Prompt cache tokens per day',
-    note: 'Lines are not stacked. A gap means that day did not report this type; it is not zero. Days with no usage are left out.',
-    showTable: 'Show as table',
-    showChart: 'Show as chart',
-    dayAxis: 'Day (UTC)',
-    tokensAxis: 'Tokens',
-    tableLabel: 'Tokens per day',
-  },
-  undated: (n: number) =>
-    n === 1
-      ? '1 usage record has no date, so it is not on the charts. It is included in the numbers above and the table below.'
-      : `${formatCount(n)} usage records have no date, so they are not on the charts. They are included in the numbers above and the table below.`,
-  breakdown: {
-    title: (group: UsageGroupWord) => `Tokens by ${GROUP_WORDS[group].toLowerCase()}`,
-    countedOnce:
-      "Each session's own tokens are counted once; helper agents count under themselves.",
-    sortedByDay: 'Newest day first.',
-    sortedByOutput: 'Most output tokens first.',
-    partial: 'Partial',
-  },
-  cost: {
-    text: "Looking for cost? Each session's page shows the estimated cost Claude Code reported.",
-    link: 'Go to sessions',
-  },
-  emptyRange: {
-    title: 'No token usage in this range',
-    text: 'Try a longer date range or another project.',
-  },
-} as const;
-
-/** Wording for the Projects list (`#/projects`). */
-export const PROJECTS_PAGE = {
-  add: 'Add a project',
-  tableLabel: 'Projects',
-  columns: {
-    project: 'Project',
-    folder: 'Folder',
-    sessions: 'Sessions',
-    running: 'Running now',
-    lastActivity: 'Last activity',
-  },
-  sessions: (n: number) => countOf(n, 'session'),
-  running: (n: number) => (n === 0 ? 'None' : `${formatCount(n)} running`),
-  noActivity: 'No activity yet',
-} as const;
-
-/** Wording for one project's page (`#/projects/:id`). */
-export const PROJECT_PAGE = {
-  back: 'All projects',
-  folder: 'Folder',
-  lastActivity: 'Last activity',
-  tokens: {
-    title: 'Tokens used in this project',
-    description:
-      "All time. Each session's own tokens, counted once; helper agents count under themselves.",
-  },
-  seeTokens: 'See tokens by day',
-  openInTokens: 'Open in Tokens',
-  sessions: {
-    title: 'Sessions in this project',
-    columns: {
-      session: 'Session',
-      status: 'Status',
-      helpers: 'Helper agents',
-      tokens: 'Tokens (this session)',
-      lastActivity: 'Last activity',
-    },
-    isHelper: 'Helper agent',
-    helpers: (n: number) => (n === 0 ? 'None' : countOf(n, 'helper agent')),
-    empty: {
-      title: 'No sessions yet',
-      text: 'Sessions appear here once Claude Code runs inside this folder.',
-    },
-  },
-  pager: {
-    label: 'Pages',
-    first: 'First page',
-    previous: 'Previous',
-    next: 'Next',
-    page: (n: number) => `Page ${formatCount(n)}`,
-    updating: 'Updating…',
-  },
-} as const;
 
 /* -------------------------------------------------------------------------------------------- */
 /* Overview, Setup and Data health screens (phase 2, wp/ui-overview). Add-only section.          */
@@ -1374,26 +1247,15 @@ export const BOARD_COPY = {
   nav: 'Board',
   page: {
     title: 'Board',
-    description:
-      'Your tickets, from idea to merged change. The lead agent plans each one; you approve the plan and review the changes.',
+    description: 'Your tickets, from idea to merged change.',
+    tip: 'An agent plans each ticket; you approve the plan, then review and merge the changes. Each card shows its latest run’s estimated cost; costs are never added up.',
   },
   loading: 'Loading the board…',
-  switcher: { label: 'Project' },
   newTicket: 'New ticket',
-  newProject: 'New project',
-  setup: 'Setup',
-  harness: {
-    term: 'Harness',
-    tip: 'The checks in your project (tests, lint, build) that let agents verify their own work, listed in .acp/harness.json.',
-  },
+  links: { tokens: 'Tokens', harness: 'Harness' },
   stats: {
     running: (n: number) => `${formatCount(n)} running`,
     needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'needs' : 'need'} you`,
-    tokens: 'Tokens, last 7 days',
-    tokensTip:
-      "Tokens used by this project's agent runs in the last 7 days, by type. Token types are priced differently, so they are never added up.",
-    cost: 'Estimated cost',
-    costNote: 'shown on each ticket for its latest run; never added up',
   },
   card: {
     helpers: (n: number) => `${formatCount(n)} ${n === 1 ? 'helper' : 'helpers'}`,
@@ -1451,17 +1313,14 @@ export const BOARD_COPY = {
     created: (key: string) => `Created ${key} in Backlog.`,
   },
   empty: {
-    noProjects: {
-      title: 'Add a project first',
-      text: 'The board holds tickets for a project. Add an existing git folder or create a new repository.',
-    },
     noTickets: {
       title: 'No tickets yet',
-      text: 'Write a first ticket. The lead agent plans it with you before anything changes.',
+      text: 'Write a first ticket. An agent plans it with you before anything changes.',
     },
     notFound: {
       title: 'Project not found',
       text: 'There is no project at this address. It may have been removed.',
+      action: 'All projects',
     },
   },
 } as const;
@@ -1668,33 +1527,34 @@ export const PROJECT_SETUP_COPY = {
     ticketFailed: "The ticket couldn't be created.",
     ticketExplain:
       'A ready-written ticket asks an agent to add fast checks and write .acp/harness.json. You approve its plan and review its changes like any other ticket.',
-    runChecks: 'Run checks now',
-    runningChecks: 'Running checks…',
-    runChecksHint:
-      'Runs every check on a read-only copy of the main branch. Your files are not changed.',
-    runChecksUnavailable: 'Checks can run once the project has a valid harness.',
-    runFailed: "The checks couldn't be run.",
-    results: 'Latest results',
-    noResults: 'The checks ran, but none reported a result.',
-    duration: (text: string) => `took ${text}`,
-    exitCode: (code: number | null) =>
-      code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
-    output: 'Output (last part)',
-    noOutput: 'No output.',
-    contextFiles: 'Context files',
-    noContextFiles: 'None chosen.',
     commandNote: 'Checks come from .acp/harness.json in the repository.',
     timeLimit: (sec: number) => `time limit ${sec} s`,
     inFolder: (cwd: string) => `in ${cwd}`,
   },
   settings: {
-    title: (name: string) => `${name} settings`,
-    description:
-      'The AI work environment for this project: how agents work, what they may do without asking, what they read first, and its harness.',
-    back: (name: string) => name,
-    environment: 'AI work environment',
-    environmentDescription:
-      'Applies to runs started from now on. Running agents keep their settings.',
+    title: 'Settings',
+    description: 'The project, its board key and what every agent reads first.',
+    tip: 'Changes apply to runs started from now on. Running agents keep their settings.',
+    formLabel: 'Project settings',
+    project: {
+      title: 'Project',
+      description: 'Where the project lives, and how its tickets are numbered.',
+      name: 'Name',
+      folder: 'Folder',
+      boardKey: 'Board key',
+      boardKeyHint: 'Starts every ticket number on this project’s board, for example WEB-12.',
+      model: 'Default model',
+      modelHint:
+        'Used by every agent whose workflow stage names no model. Leave empty for Claude Code’s default.',
+    },
+    elsewhere: {
+      title: 'Agents and checks',
+      workflow:
+        'Agent limits, the budget per agent and pre-approved actions are set on the Workflow page.',
+      workflowLink: 'Open Workflow',
+      harness: 'The checks for the agents’ work, and their results, are on the Harness page.',
+      harnessLink: 'Open Harness',
+    },
     save: 'Save changes',
     saving: 'Saving…',
     saved: 'Saved.',
@@ -1704,7 +1564,6 @@ export const PROJECT_SETUP_COPY = {
     danger: 'Danger zone',
     dangerText:
       'Removing a project from this app isn’t available yet. When it is, it will never delete the folder or its git history, and it won’t be possible while the project has tickets or runs.',
-    settingsLink: 'Settings',
   },
 } as const;
 

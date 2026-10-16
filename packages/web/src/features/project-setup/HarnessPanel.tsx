@@ -1,12 +1,10 @@
-import type { CheckRunDto, HarnessStatusDto } from '@acp/core/api';
+import type { HarnessStatusDto } from '@acp/core/api';
 import { useMemo } from 'react';
 import { Button } from '../../components/Button';
-import { Details } from '../../components/Details';
 import { CheckIcon } from '../../components/icons';
 import { RelativeTime } from '../../components/RelativeTime';
-import { createHarnessTicket, isProjectSetupPath, runHarnessChecks } from '../../lib/api';
-import { CHECK_STATUS_COPY, SETUP_HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
-import { formatDuration } from '../../lib/format';
+import { createHarnessTicket, isProjectSetupPath } from '../../lib/api';
+import { SETUP_HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 import { ActionError, StatusWord } from '../control/bits';
 import { useSetupAction } from './actions';
@@ -124,74 +122,6 @@ export function HarnessTicketAction({
         </div>
       )}
       <ActionError error={action.error} message={H.ticketFailed} />
-    </div>
-  );
-}
-
-function CheckResult({ run }: { run: CheckRunDto }) {
-  const copy = CHECK_STATUS_COPY[run.status];
-  return (
-    <li className="flex flex-col gap-1.5 px-3 py-2.5" data-check={run.checkId}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium">{run.name}</span>
-        <StatusWord status={copy} value={run.status} />
-        <span className="text-caption text-dim">
-          {run.required ? H.required : H.optional} · {H.duration(formatDuration(run.durationMs))}
-        </span>
-      </div>
-      <Details summary={H.output}>
-        <p className="mb-2 text-caption text-dim">{H.exitCode(run.exitCode)}</p>
-        {run.outputTail.length > 0 ? (
-          <pre className="max-h-72 overflow-auto rounded-control bg-sunken p-3 font-mono text-caption whitespace-pre-wrap">
-            {run.outputTail}
-          </pre>
-        ) : (
-          <p className="text-dim">{H.noOutput}</p>
-        )}
-      </Details>
-    </li>
-  );
-}
-
-/** "Run checks now" on the main branch (read-only) and the results of that run. */
-export function RunChecksNow({
-  projectId,
-  harness,
-}: {
-  projectId: string;
-  harness: HarnessStatusDto;
-}) {
-  const invalidate = useMemo(() => isProjectSetupPath(projectId), [projectId]);
-  const action = useSetupAction(runHarnessChecks, invalidate);
-  const runnable = harness.state === 'ready' || harness.state === 'partial';
-  return (
-    <div className="flex flex-col gap-2" data-testid="run-checks">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={!runnable || action.pending} onClick={() => void action.run(projectId)}>
-          {action.pending ? H.runningChecks : H.runChecks}
-        </Button>
-        <span className="text-caption text-dim">
-          {runnable ? H.runChecksHint : H.runChecksUnavailable}
-        </span>
-      </div>
-      <ActionError error={action.error} message={H.runFailed} />
-      {action.result ? (
-        <div className="flex flex-col gap-1.5">
-          <h4 className="font-medium">{H.results}</h4>
-          {action.result.length === 0 ? (
-            <p className="text-dim">{H.noResults}</p>
-          ) : (
-            <ul
-              aria-label={H.results}
-              className="flex flex-col divide-y divide-line rounded-control border border-line"
-            >
-              {action.result.map((r) => (
-                <CheckResult key={r.id} run={r} />
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

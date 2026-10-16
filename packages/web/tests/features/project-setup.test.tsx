@@ -2,18 +2,10 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NewProjectWizard } from '../../src/features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../../src/features/project-setup/ProjectSettings';
-import { ProjectPage } from '../../src/features/project/ProjectPage';
 import type { FetchLike } from '../../src/lib/api';
 import { CSRF } from '../fixtures/control';
 import { project } from '../fixtures/dto';
-import {
-  PROJECT_ID,
-  candidates,
-  checkRuns,
-  harness,
-  harnessTicket,
-  setup,
-} from '../fixtures/project-setup';
+import { PROJECT_ID, candidates, harness, harnessTicket, setup } from '../fixtures/project-setup';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
 const P = `/api/projects/${PROJECT_ID}`;
@@ -33,7 +25,6 @@ function server(routes: RouteTable = {}, initialSetup = setup()) {
       return jsonResponse(200, current);
     },
     [`POST ${P}/harness/ticket`]: jsonResponse(201, harnessTicket()),
-    [`POST ${P}/harness/checks`]: checkRuns(),
     ...routes,
   });
   const csrf: (string | null)[] = [];
@@ -232,110 +223,82 @@ describe('New project wizard (#/projects/new)', () => {
   });
 });
 
-describe('Project settings (#/projects/:id/settings)', () => {
-  it('shows the AI work environment, the harness and the danger zone', async () => {
+describe('Project settings (#/p/:id/settings, docs/redesign/README.md §4.7)', () => {
+  it('shows the project, its board key and model, context files, links and the danger zone', async () => {
     const s = server({
       [`${P}/setup`]: setup({ contextFiles: ['CLAUDE.md'], model: 'some-model' }),
-      [`${P}/harness`]: harness('ready'),
     });
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
-    expect(await screen.findByRole('heading', { level: 1, name: 'web-app settings' })).toBeTruthy();
-    const env = await screen.findByTestId('settings-environment');
-    expect(within(env).getByLabelText<HTMLInputElement>('Model').value).toBe('some-model');
-    expect(within(env).getByRole('button', { name: 'Save changes' })).toHaveProperty(
-      'disabled',
-      true,
-    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy();
+    const card = await screen.findByTestId('settings-project');
+    expect(within(card).getByText('web-app')).toBeTruthy();
+    expect(within(card).getByText('/work/web-app')).toBeTruthy();
+    expect(within(card).getByLabelText<HTMLInputElement>('Board key').value).toBe('WEB');
+    expect(within(card).getByLabelText<HTMLInputElement>('Default model').value).toBe('some-model');
+    const context = screen.getByTestId('settings-context');
+    expect(within(context).getByLabelText<HTMLInputElement>('CLAUDE.md').checked).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save changes' })).toHaveProperty('disabled', true);
 
-    const h = screen.getByTestId('settings-harness');
-    expect(within(h).getByText('Ready')).toBeTruthy();
-    expect(within(h).getByText('Unit tests')).toBeTruthy();
-    expect(within(h).getByText('Required')).toBeTruthy();
-    expect(within(h).getByText('Optional')).toBeTruthy();
-    // Each check shows its exact command, folder and time limit (coordinator decision, 2026-10-16).
-    expect(within(h).getByText('pnpm test')).toBeTruthy();
-    expect(within(h).getByText('time limit 600 s')).toBeTruthy();
-    expect(within(h).getByText('pnpm lint')).toBeTruthy();
-    expect(within(h).getByText('in packages/app · time limit 120 s')).toBeTruthy();
-    expect(within(h).getByText('CLAUDE.md')).toBeTruthy();
+    // Limits and the allowlist live on Workflow now; the harness on its own page.
+    expect(screen.queryByText('Helpers at once')).toBeNull();
+    expect(screen.queryByText('Pre-approved actions')).toBeNull();
+    expect(screen.queryByTestId('settings-harness')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run checks now' })).toBeNull();
+    const workflow = screen.getByTestId('settings-workflow-link');
+    expect(within(workflow).getByRole('link', { name: 'Open Workflow' }).getAttribute('href')).toBe(
+      `#/p/${PROJECT_ID}/workflow`,
+    );
+    const harnessRow = screen.getByTestId('settings-harness-link');
+    expect(
+      within(harnessRow).getByRole('link', { name: 'Open Harness' }).getAttribute('href'),
+    ).toBe(`#/p/${PROJECT_ID}/harness`);
+    expect(s.calls.some((c) => c.path === `${P}/harness`)).toBe(false);
 
     expect(
       within(screen.getByTestId('settings-danger')).getByText(/never delete the folder/),
     ).toBeTruthy();
   });
 
-  it('runs the checks on main and shows each result with its output', async () => {
-    const s = server({ [`${P}/harness`]: harness('partial') });
+  it('saves edits with PUT, keeping the limits as saved, and clears the unsaved note', async () => {
+    const s = server({}, setup({ maxConcurrentHelpers: 4, maxDepth: 2 }));
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
-    const h = await screen.findByTestId('settings-harness');
-    expect(await within(h).findByText('Partial')).toBeTruthy();
-    expect(
-      within(h).getByText('No check is required, so nothing has to pass before a merge.'),
-    ).toBeTruthy();
-    fireEvent.click(within(h).getByRole('button', { name: 'Run checks now' }));
-    const results = await within(h).findByRole('list', { name: 'Latest results' });
-    expect(within(results).getByText('Passed')).toBeTruthy();
-    expect(within(results).getByText('Failed')).toBeTruthy();
-    expect(within(results).getByText(/took 4s/)).toBeTruthy();
-    expect(within(results).getByText(/x is never used/)).toBeTruthy();
-    expect(within(results).getByText('Exit code 1')).toBeTruthy();
-    expect(s.csrf).toEqual([CSRF]);
-  });
-
-  it('cannot run checks without a valid harness, and says why', async () => {
-    renderWithApi(
-      <ProjectSettings id={PROJECT_ID} />,
-      server({ [`${P}/harness`]: harness('invalid') }),
-    );
-    const h = await screen.findByTestId('settings-harness');
-    expect(await within(h).findByText("Check 'test' needs a timeout.")).toBeTruthy();
-    expect(within(h).getByRole('button', { name: 'Run checks now' })).toHaveProperty(
-      'disabled',
-      true,
-    );
-    expect(
-      within(h).getByText('Checks can run once the project has a valid harness.'),
-    ).toBeTruthy();
-  });
-
-  it('saves edits with PUT and clears the unsaved note', async () => {
-    const s = server();
-    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
-    const env = await screen.findByTestId('settings-environment');
-    fireEvent.click(await within(env).findByLabelText('README.md'));
-    expect(within(env).getByText('You have unsaved changes.')).toBeTruthy();
-    fireEvent.click(within(env).getByRole('button', { name: 'Save changes' }));
-    expect(await within(env).findByText('Saved.')).toBeTruthy();
+    const context = await screen.findByTestId('settings-context');
+    fireEvent.click(await within(context).findByLabelText('README.md'));
+    fireEvent.change(screen.getByLabelText('Board key'), { target: { value: 'app' } });
+    expect(screen.getByText('You have unsaved changes.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('Saved.')).toBeTruthy();
     expect(s.calls.find((c) => c.method === 'PUT')?.body).toMatchObject({
+      projectKey: 'APP',
       contextFiles: ['README.md'],
+      maxConcurrentHelpers: 4,
+      maxDepth: 2,
     });
     expect(s.csrf).toEqual([CSRF]);
+  });
+
+  it('checks the board key in a sentence before saving', async () => {
+    const s = server();
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    fireEvent.change(await screen.findByLabelText('Board key'), { target: { value: 'W' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText(/Use 2 to 6 capital letters/)).toBeTruthy();
+    expect(s.calls.some((c) => c.method === 'PUT')).toBe(false);
   });
 
   it('shows a save refusal in plain words', async () => {
     const s = server({
       [`PUT ${P}/setup`]: jsonResponse(400, {
-        error: { code: 'invalid_request', message: 'limit above the ceiling', requestId: 'r-2' },
+        error: { code: 'invalid_request', message: 'key already used', requestId: 'r-2' },
       }),
     });
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
-    const env = await screen.findByTestId('settings-environment');
-    fireEvent.click(await within(env).findByLabelText('6 helpers'));
-    fireEvent.click(within(env).getByRole('button', { name: 'Save changes' }));
+    fireEvent.change(await screen.findByLabelText('Default model'), {
+      target: { value: 'other-model' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(
-      await within(env).findByText(/Your changes couldn't be saved\. limit above the ceiling/),
+      await screen.findByText(/Your changes couldn't be saved\. key already used/),
     ).toBeTruthy();
-  });
-
-  it('is linked from the project page', async () => {
-    renderWithApi(
-      <ProjectPage id={PROJECT_ID} />,
-      server({
-        [`/api/projects/${PROJECT_ID}/sessions`]: { items: [], page: { nextCursor: null } },
-      }),
-    );
-    expect((await screen.findByRole('link', { name: 'Settings' })).getAttribute('href')).toBe(
-      `#/p/${PROJECT_ID}/settings`,
-    );
   });
 });

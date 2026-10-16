@@ -1,58 +1,50 @@
-import type { ProjectDto, TicketCardDto } from '@acp/core/api';
-import { useEffect, useId, useState } from 'react';
+import type { BoardDto, TicketCardDto } from '@acp/core/api';
+import { useState } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
+import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { HarnessIcon, TokensIcon } from '../../components/icons';
+import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
-import { boardPaths, boardSchemas, moveTicket, paths, schemas, startTicket } from '../../lib/api';
+import { boardPaths, boardSchemas, moveTicket, startTicket } from '../../lib/api';
 import { BOARD_COPY, STAGE_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
-import { href, navigate } from '../../lib/router';
+import { href } from '../../lib/router';
 import { ActionError } from '../control/bits';
 import { useBoardAction } from './actions';
 import { BoardColumns } from './BoardColumns';
-import { BoardStats } from './BoardStats';
 import { Dialog } from './Dialog';
-import { BoardIcon, GearIcon, PlusIcon } from './icons';
-import { defaultProjectId, readLastProject, rememberProject } from './last-project';
+import { BoardIcon, PlusIcon } from './icons';
 import { boardColumns, moveRequest, ticketCount, type MoveTarget } from './moves';
 import { NewTicketDialog } from './NewTicketDialog';
 
 const C = BOARD_COPY;
 
 /**
- * Pages P4-F adds (README §5.4–5.5). Plain hashes here so this WP doesn't edit P4-F's router
- * entries; the coordinator can switch them to `href` helpers once both are merged.
+ * "2 running · 1 needs you": the board's one live line (docs/redesign/README.md §4.1). The token
+ * tiles and the harness state have their own pages now, linked from the header.
  */
-const projectSetupHash = (id: string) => `#/projects/${encodeURIComponent(id)}/settings`;
-const NEW_PROJECT_HASH = '#/projects/new';
-
-function ProjectSwitcher({ projects, current }: { projects: ProjectDto[]; current: string }) {
-  const id = useId();
+export function LiveLine({ stats }: { stats: BoardDto['stats'] }) {
   return (
-    <span className="inline-flex items-center gap-2">
-      <label htmlFor={id} className="sr-only">
-        {C.switcher.label}
-      </label>
-      <select
-        id={id}
-        value={current}
-        onChange={(e) => navigate(href.board(e.target.value))}
-        className="max-w-72 truncate rounded-control border border-line-strong bg-panel py-1 pr-8 pl-3 text-title font-semibold text-ink"
-      >
-        {projects.some((p) => p.id === current) ? null : <option value={current}>…</option>}
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+    <span className="inline-flex flex-wrap items-center gap-2" data-testid="board-counts">
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`inline-block size-2 rounded-full ${stats.runningRuns > 0 ? 'bg-status-active ring-3 ring-status-active/20' : 'bg-status-stale'}`}
+        />
+        {C.stats.running(stats.runningRuns)}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className={stats.needsYou > 0 ? 'font-medium text-warning' : ''}>
+        {C.stats.needsYou(stats.needsYou)}
+      </span>
     </span>
   );
 }
 
 type Feedback = { tone: 'ok'; text: string } | null;
 
-function Board({ projectId, projects }: { projectId: string; projects: ProjectDto[] }) {
+function Board({ projectId }: { projectId: string }) {
   const board = useApiQuery(boardPaths.board(projectId), boardSchemas.board);
   const move = useBoardAction(moveTicket);
   const start = useBoardAction(startTicket);
@@ -63,9 +55,6 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
   const [failed, setFailed] = useState<string | null>(null);
 
   const loaded = board.data !== undefined;
-  useEffect(() => {
-    if (loaded) rememberProject(projectId);
-  }, [loaded, projectId]);
 
   const perform = async (ticket: TicketCardDto, target: MoveTarget) => {
     setFeedback(null);
@@ -113,8 +102,8 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
         title={C.empty.notFound.title}
         text={C.empty.notFound.text}
         action={
-          <ButtonLink href={href.board()} variant="primary">
-            {C.page.title}
+          <ButtonLink href={href.projects()} variant="primary">
+            {C.empty.notFound.action}
           </ButtonLink>
         }
       />
@@ -123,31 +112,28 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
 
   return (
     <div>
-      <header className="mb-5 flex flex-wrap items-end gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
-          <h1 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-page font-semibold tracking-tight">
-            <span>{C.page.title}</span>
-            <span aria-hidden="true" className="text-title text-dim">
-              ▸
-            </span>
-            <ProjectSwitcher projects={projects} current={projectId} />
-          </h1>
-          <p className="mt-1 max-w-3xl text-dim">{C.page.description}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={() => setCreating(true)} disabled={!loaded}>
-            <PlusIcon size={16} />
-            {C.newTicket}
-          </Button>
-          <ButtonLink href={projectSetupHash(projectId)}>
-            <GearIcon size={16} />
-            {C.setup}
-          </ButtonLink>
-          <ButtonLink href={NEW_PROJECT_HASH} variant="quiet">
-            {C.newProject}
-          </ButtonLink>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={C.page.title}
+        title={board.data?.project.name ?? C.page.title}
+        tip={C.page.tip}
+        description={board.data ? <LiveLine stats={board.data.stats} /> : C.page.description}
+        actions={
+          <>
+            <ButtonLink href={href.projectPage(projectId, 'tokens')} variant="quiet">
+              <TokensIcon size={16} />
+              {C.links.tokens}
+            </ButtonLink>
+            <ButtonLink href={href.projectPage(projectId, 'harness')} variant="quiet">
+              <HarnessIcon size={16} />
+              {C.links.harness}
+            </ButtonLink>
+            <Button variant="primary" onClick={() => setCreating(true)} disabled={!loaded}>
+              <PlusIcon size={16} />
+              {C.newTicket}
+            </Button>
+          </>
+        }
+      />
 
       <p role="status" className="sr-only">
         {feedback?.text ?? ''}
@@ -170,9 +156,8 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
       <QueryView query={board} loading={C.loading}>
         {(b) => (
           <>
-            <BoardStats board={b} />
             {ticketCount(b) === 0 ? (
-              <div className="mb-5 rounded-card border border-line bg-panel shadow-card">
+              <Card className="mb-6">
                 <EmptyState
                   compact
                   testId="board-empty"
@@ -186,7 +171,7 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
                     </Button>
                   }
                 />
-              </div>
+              </Card>
             ) : null}
             <BoardColumns columns={boardColumns(b)} busyId={busyId} onMove={onMove} />
           </>
@@ -216,9 +201,8 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
             <Button data-autofocus onClick={() => setConfirmCancel(null)}>
               {C.cancel.keep}
             </Button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-control border border-danger/40 bg-danger-soft px-3 py-1.5 font-medium text-danger transition-colors hover:border-danger"
+            <Button
+              variant="danger"
               onClick={() => {
                 const ticket = confirmCancel;
                 setConfirmCancel(null);
@@ -226,7 +210,7 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
               }}
             >
               {C.cancel.confirm}
-            </button>
+            </Button>
           </div>
         </Dialog>
       ) : null}
@@ -235,38 +219,9 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
 }
 
 /**
- * `#/board` and `#/board/:projectId` (Phase 4, README §5.1–5.2): one project's tickets in columns
- * by stage. Without an id it opens the last used project, else the first.
+ * `#/p/:projectId/board` (docs/redesign/README.md §4.1): one project's tickets in columns by stage.
+ * The project comes from the address; the top bar's switcher is the only project picker.
  */
-export function BoardPage({ projectId }: { projectId: string | null }) {
-  const projects = useApiQuery(paths.projects(), schemas.projects);
-  return (
-    <QueryView query={projects} loading={C.loading}>
-      {(list) => {
-        const id = projectId ?? defaultProjectId(list, readLastProject());
-        if (id === null) {
-          return (
-            <div>
-              <header className="mb-6">
-                <h1 className="text-page font-semibold tracking-tight">{C.page.title}</h1>
-                <p className="mt-1 max-w-3xl text-dim">{C.page.description}</p>
-              </header>
-              <EmptyState
-                testId="board-no-projects"
-                icon={<BoardIcon size={22} />}
-                title={C.empty.noProjects.title}
-                text={C.empty.noProjects.text}
-                action={
-                  <ButtonLink href={NEW_PROJECT_HASH} variant="primary">
-                    {C.newProject}
-                  </ButtonLink>
-                }
-              />
-            </div>
-          );
-        }
-        return <Board key={id} projectId={id} projects={list} />;
-      }}
-    </QueryView>
-  );
+export function BoardPage({ projectId }: { projectId: string }) {
+  return <Board key={projectId} projectId={projectId} />;
 }
