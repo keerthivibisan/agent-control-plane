@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { HarnessCheck, ProjectAllowlist } from '@acp/core';
+import type { AgentRoleKind, HarnessCheck, ProjectAllowlist } from '@acp/core';
+import { hasReviewableChange } from './stages.js';
 
 /**
  * Per-project allowlist of pre-approved safe actions (ADR-0013 amendment). Pure: the server
@@ -94,8 +95,11 @@ export type AllowlistVerdict =
 
 export interface AllowlistInput {
   allowlist: ProjectAllowlist;
-  /** Only helpers are covered (README §4.1 step 3); the lead always asks. */
-  agentKind: 'lead' | 'worker';
+  /**
+   * Only helpers are covered (README §4.1 step 3), and the tester, whose allowlist is the
+   * helpers' (ADR-0019); the lead always asks, and the planner and reviewer never edit.
+   */
+  agentKind: AgentRoleKind;
   /** From `allowlistTarget`; null asks. */
   target: AllowlistTarget | null;
   /**
@@ -114,7 +118,13 @@ const ask = (reason: string): AllowlistVerdict => ({ allowed: false, reason });
 /** Decides whether the project allowlist pre-approves one tool call (ADR-0013 amendment). */
 export function evaluateAllowlist(input: AllowlistInput): AllowlistVerdict {
   const { allowlist, target } = input;
-  if (input.agentKind !== 'worker') return ask('The lead agent always asks.');
+  if (!hasReviewableChange(input.agentKind)) {
+    return ask(
+      input.agentKind === 'lead'
+        ? 'The lead agent always asks.'
+        : 'Only helpers and the tester are covered by the allowlist.',
+    );
+  }
   if (target === null) return ask('This action is not covered by the allowlist.');
 
   if (target.kind === 'edit') {

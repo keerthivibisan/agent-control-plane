@@ -378,6 +378,8 @@ export class Draft {
    * none is live at this point, so it always fits the run's helper limit.
    */
   private startStage(stage: PostMergeStage): void {
+    // A reviewer that just ended gives back its checkout before the next stage starts.
+    this.flushCheckoutRemovals();
     const lead = this.lead();
     if (lead !== undefined) this.endAgent(lead, 'CANCELLED', true);
     const kind = stage === 'code-review' ? 'reviewer' : 'tester';
