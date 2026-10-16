@@ -4,8 +4,9 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: v0.0.1 (first release, private preview).** Session observability, the managed agent
-> workspace and the project workspace redesign are implemented and verified. Two real runs against
+> **Status: v0.0.1 (first preview).** Session monitoring, projects and tickets with managed agent
+> runs, the workflow, skills and agent files, harness checks and token reports are implemented and
+> verified. Two real runs against
 > Claude Code passed on 2026-10-16 ([docs/research/r-v-real-run-2026-10-16.md](docs/research/r-v-real-run-2026-10-16.md)).
 >
 > **Implemented and tested** (about 2,100 unit and integration tests, plus 49 browser end-to-end
@@ -16,7 +17,7 @@ provider is Claude Code. Codex support will follow through a separate adapter.
 >   - usage accounting with dedup by message id;
 >   - subagent and fork relationships;
 >   - optional hooks.
-> - **A project-first workspace in the browser:**
+> - **A workspace per project in the browser:**
 >   - **Board** of tickets;
 >   - **Workflow:** the fixed stages, each with its own model, skill and agent file;
 >   - **Skills & Agents:** edit `.claude/skills` and `.claude/agents` files, then commit them;

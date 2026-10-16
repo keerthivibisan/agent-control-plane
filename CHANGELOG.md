@@ -1,72 +1,91 @@
 # Changelog
 
-All notable changes are listed here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow semantic versioning;
-before 1.0, minor versions may break things.
+All notable changes to this project will be documented in this file.
 
-## [0.0.1] — 2026-10-16
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-First release, private preview.
+## [Unreleased]
+
+## [0.0.1] - 2026-10-17
+
+The first preview of Agent Control Plane. It is a local app that lets you see your Claude Code
+sessions and run Claude agents on your project's tickets, with you approving each step. This is
+an early version: features and data formats may change in any release before 1.0.0.
 
 ### Added
 
-**Session observability (Phase 1)**
+**Session monitoring**
 
-- Claude Code session discovery and incremental transcript reading (byte offsets that survive a
-  restart).
-- Usage accounting:
-  - dedup by `(provider, messageId)`;
-  - the observation with max output is selected;
-  - usage is attributed to the earliest occurrence;
-  - cumulative snapshots are never summed;
-  - missing usage is `null`, never 0.
-- Subagent and fork relationships from evidence only. An unknown parent stays unknown.
-- Evidence-based session status (active, idle, ended, stale).
-- An optional hook receiver.
-- REST API with live updates (SSE). Events are persisted before they are published.
-- Demo mode with a separate database.
+- Your Claude Code sessions appear automatically, read-only from `~/.claude/projects`, and update
+  live while you work.
+- Each session shows its subagents as a tree. Parent and child links come only from what Claude Code
+  records.
+- Session status: active, idle, ended or stale.
+- Token usage counts each message once, and data that is missing shows as unavailable, never as
+  zero.
+- Optional Claude Code hooks for faster live updates.
 
-**Managed orchestration and the agent workspace (Phases 3 and 4)**
+**Projects and tickets**
 
-- Managed Claude Code agents through the Agent SDK:
-  - a lead and up to 3 helpers, each in its own git worktree;
-  - owner approval for edits and commands;
-  - per-agent token budgets, Stop and Stop all;
-  - restarts never relaunch work.
-- Projects, a ticket board, and plan-first runs: a plan, then your approval or a request for
-  changes.
-- Harness checks: required checks must pass before a merge, and you merge each change.
+- Register a project folder and track work on a ticket board.
+- Each ticket run starts with a plan. You approve it or ask for changes before any work begins.
+- A lead agent hands parts of the plan to up to 3 helper agents. Each helper works in its own copy
+  of the project (a git worktree), so your working folder is never edited by an agent.
+- You approve each edit and command an agent wants to make.
+- You review each helper's changes and merge or discard them. Nothing merges on its own.
+- Required checks, such as your tests or lint, must pass before a change can be merged.
+- Each agent has a token budget. Stop and Stop all are always available.
+- After the app restarts, interrupted work waits for you and is never relaunched on its own.
 
-**Project workspace redesign**
+**Workflow**
 
-- A project-first UI: Board, Workflow, Skills & Agents, Harness, Tokens, Sessions and Settings.
-- Workflow stages:
-  - plan, orchestrate, helpers, review and merge;
-  - an optional read-only final code review and a unit-tests stage;
-  - each stage with its own model, skill and agent file;
-  - a live workflow graph on the ticket page.
-- Project skills (`.claude/skills/<name>/SKILL.md`) and agent files (`.claude/agents/<name>.md`)
-  edited in the UI and committed on your action (ADR-0018). Skills reach managed agents through a
-  run-scoped plugin, and agent files add instructions and can only narrow tools (ADR-0019 §6).
-- A fixed tool set per role (ADR-0019 §7). The lead, planner and reviewer are read-only.
-- After a run ends, a message resumes its lead for one answers-only turn (ADR-0020).
-- Tokens per project: new work vs cache reuse, per day, session, ticket, role and model.
+- A Workflow page shows how a ticket moves from plan to merge as a graph.
+- Optional stages:
+  - a planner agent separate from the lead;
+  - a read-only final code review after the merge, posted as ticket comments;
+  - a unit-test writer.
+- Set a model, a project skill and an agent file for each stage.
+- The ticket page shows a live view of where each run is in the workflow.
+- After a run has finished, you can ask its lead agent questions. It reads the project and answers,
+  but cannot change anything.
+
+**Skills and agent files**
+
+- Create, edit and delete project skills (`.claude/skills/<name>/SKILL.md`) and agent files
+  (`.claude/agents/<name>.md`) in the app, then commit them with one click.
+- A stage's agent file adds its instructions to that stage's agent. Its tool list can only narrow
+  what the agent may use, never widen it.
+- A skill or agent file that a stage uses cannot be deleted until it is removed from that stage.
+
+**Harness checks**
+
+- Define the checks your project runs.
+- Run them on the main branch on demand and see the history of past check runs.
+
+**Tokens**
+
+- Token usage per project, split into new work and cache reuse.
+- Breakdowns per day, session, ticket, agent role and model.
+
+**Demo mode**
+
+- `ACP_MODE=demo` runs the app on sample data in its own database, separate from your real data.
 
 ### Security
 
-- Local only: the server binds 127.0.0.1, mutating routes need a CSRF token, and there is no
-  telemetry.
-- Managed agents run with `settingSources: []`, `permissionMode: 'default'` and strict MCP config.
-  `allowedTools` is never used.
-- No conversation content is stored except the owner's chat with the lead (ADR-0009, ADR-0015).
-  Logs are redacted.
+- Everything runs on your machine:
+  - the server listens on `127.0.0.1` only;
+  - requests that change data need a per-page token;
+  - there is no telemetry.
+- Managed agents ignore the repository's and your own Claude Code settings, so a repository
+  cannot grant itself permissions or run hooks.
+- Each agent role gets only the tools it needs:
+  - the planner, lead and reviewer cannot edit files or run commands;
+  - tools such as web access, messaging, scheduling and subagents are not available to any role.
+- Prompts, replies and tool output are not stored. The only exception is your chat with the lead
+  agent. Logs are redacted.
+- The app never reads Claude Code's session credential files, settings files or prompt history.
 
-### Verified
-
-- About 2,100 unit and integration tests and 49 browser end-to-end tests.
-- Real runs against Claude Code:
-  - P3-F (2026-10-13);
-  - R-V and the R-K re-check (2026-10-16), aggregate-only:
-    [docs/research/r-v-real-run-2026-10-16.md](docs/research/r-v-real-run-2026-10-16.md).
-
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...HEAD
 [0.0.1]: https://github.com/keerthivibisan/agent-control-plane/releases/tag/v0.0.1
