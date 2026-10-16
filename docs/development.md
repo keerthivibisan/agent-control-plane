@@ -116,5 +116,6 @@ Only the coordinator adds or upgrades dependencies, because it changes the share
 
 `.github/workflows/ci.yml` runs on Ubuntu with the Node version from `.nvmrc` and pnpm from
 `packageManager`. Steps: `pnpm install --frozen-lockfile`, then format check, lint, typecheck, test,
-and build. It runs only when started by hand (`workflow_dispatch`, from the Actions tab on GitHub), so it uses no
-Actions minutes unless you run it. Run `pnpm check` locally before every push.
+and build. It runs on pushes to `main` and on pull requests, skipping changes that touch only `docs/**` or
+Markdown files, and can be started by hand from the Actions tab (`workflow_dispatch`). Run
+`pnpm check` locally before every push.
