@@ -4,18 +4,19 @@
 > Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope, owned paths and dependencies:
 > `docs/redesign/README.md` §7.
 
-| Field   | Value                                             |
-| ------- | ------------------------------------------------- |
-| Status  | todo                                              |
-| Owner   | full-stack agent                                  |
-| Branch  | `wp/r-f-…` (create from `main` when you claim it) |
-| Started | —                                                 |
-| Updated | —                                                 |
+| Field   | Value            |
+| ------- | ---------------- |
+| Status  | in-progress      |
+| Owner   | full-stack agent |
+| Branch  | `wp/r-f-tokens`  |
+| Started | 2026-10-16       |
+| Updated | 2026-10-16       |
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
+| Date       | What was done                   | Commit | Checks |
+| ---------- | ------------------------------- | ------ | ------ |
+| 2026-10-16 | Claimed R-F on `wp/r-f-tokens`. | claim  | —      |
 
 ## Handoff notes
 
