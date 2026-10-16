@@ -3,6 +3,7 @@ import type {
   ApprovalDto,
   ChatMessageDto,
   RunDetailDto,
+  RunFollowUpDto,
   RunSummaryDto,
 } from '@acp/core/api';
 import type { OrchestratorMessageRow, RunListItem, StoredAgentRun, WorkspaceRow } from '@acp/db';
@@ -19,6 +20,8 @@ export interface DetailExtras {
   stored: readonly StoredAgentRun[];
   workspaces: readonly WorkspaceRow[];
   messages: readonly OrchestratorMessageRow[];
+  /** `followUpView`: absent while the lead is live. */
+  followUp?: RunFollowUpDto;
 }
 
 export function toRunSummary(item: RunListItem): RunSummaryDto {
@@ -85,20 +88,56 @@ export function toApprovalDto(a: EngineApproval): ApprovalDto {
   };
 }
 
-export function toChatMessageDto(m: OrchestratorMessageRow): ChatMessageDto {
-  return { id: m.id, runId: m.runId, role: m.role, text: m.text, createdAt: m.createdAt };
+export function toChatMessageDto(m: OrchestratorMessageRow, followUp = false): ChatMessageDto {
+  const dto: ChatMessageDto = {
+    id: m.id,
+    runId: m.runId,
+    role: m.role,
+    text: m.text,
+    createdAt: m.createdAt,
+  };
+  if (followUp) dto.followUp = true;
+  return dto;
+}
+
+/**
+ * Which stored messages belong to follow-up turns (ADR-0020), derived without a new column: the
+ * lead ended at `leadEndedAt`, and while it is ended a message is stored only by a follow-up turn,
+ * which always starts with the owner's message. So a message is a follow-up one when it was
+ * stored after the lead ended, at or after the first owner message stored after that; a late
+ * reply of the ending lead itself, before any such owner message, is not. `messages` is oldest
+ * first (one page; a follow-up reply whose owner message is on an older page is not marked).
+ */
+export function followUpMessageIds(
+  messages: readonly OrchestratorMessageRow[],
+  leadEndedAt: string | null,
+): Set<string> {
+  const ids = new Set<string>();
+  if (leadEndedAt === null) return ids;
+  const end = Date.parse(leadEndedAt);
+  let open = false;
+  for (const m of messages) {
+    if (!(Date.parse(m.createdAt) > end)) continue;
+    if (m.role === 'owner') open = true;
+    if (open) ids.add(m.id);
+  }
+  return ids;
 }
 
 export function toRunDetail(state: RunState, extras: DetailExtras): RunDetailDto {
   const sessions = new Map(extras.stored.map((a) => [a.id, a.sessionId]));
   const workspaces = new Map(extras.workspaces.map((w) => [w.agentRunId, w]));
-  return {
+  const lead = state.agents.find((a) => a.kind === 'lead');
+  const followUps = followUpMessageIds(extras.messages, lead?.endedAt ?? null);
+  const detail: RunDetailDto = {
     ...summaryOf(state),
     budget: { ...state.run.budget },
     agents: state.agents.map((a) =>
       toAgentDto(a, sessions.get(a.id) ?? null, workspaces.get(a.id)),
     ),
     approvals: state.approvals.map(toApprovalDto),
-    messages: extras.messages.map(toChatMessageDto),
+    messages: extras.messages.map((m) => toChatMessageDto(m, followUps.has(m.id))),
   };
+  if (extras.followUp !== undefined) detail.followUp = { ...extras.followUp };
+  return detail;
 }

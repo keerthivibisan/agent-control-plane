@@ -1,7 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ErrorDtoSchema, ReviewDtoSchema, RunDetailDtoSchema } from '@acp/core/api';
+import { ChatMessageDtoSchema, ReviewDtoSchema, RunDetailDtoSchema } from '@acp/core/api';
 import { silentLogger } from '../../../src/logger.js';
 import { createFakeManagedAdapter } from '../../control/fake-adapter.js';
 import {
@@ -118,9 +118,15 @@ describe('P3-F restart mid-run (ADR-0013 §7)', () => {
         expect(existsSync(builder.spec.cwd)).toBe(true);
         expect(existsSync(writer.spec.cwd)).toBe(true);
 
+        // ADR-0020: the owner's message brings the ended lead back for one answers-only turn
+        // (an owner action, never automatic); the run stays NEEDS_REVIEW.
         const chat = await second.post(`/api/runs/${runId}/chat`, { text: 'hello?' });
-        expect(chat.status).toBe(409);
-        expect(ErrorDtoSchema.parse(chat.body).error.code).toBe('run_not_active');
+        expect(chat.status).toBe(200);
+        expect(ChatMessageDtoSchema.parse(chat.body).followUp).toBe(true);
+        const followUp = await waitFor(() => fake2.agents[0], 'the follow-up turn');
+        expect(followUp.spec.followUp).toEqual({ resumeSessionId: `sess-${lead.id}` });
+        followUp.finish();
+        await waitForRun(second, runId, (r) => r.followUp?.state === 'available', 'turn ended');
 
         const review = ReviewDtoSchema.parse((await second.get(`/api/runs/${runId}/review`)).body);
         expect(review.agents.map((a) => [a.role, a.files.map((f) => f.path)])).toEqual([

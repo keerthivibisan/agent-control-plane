@@ -79,11 +79,17 @@ describe('P4-H restart mid-run', () => {
       409,
       'plan_not_pending',
     );
-    expectError(
+    // ADR-0020: the owner's message brings the ended lead back for one answers-only turn (an
+    // owner action, never a relaunch); the run stays NEEDS_REVIEW.
+    const chat = expectStatus(
       await second.post(`/api/runs/${a.runId}/chat`, { text: 'are you there?' }),
-      409,
-      'run_not_active',
+      200,
     );
+    expect(chat).toMatchObject({ followUp: true });
+    const followUp = await waitFor(() => second.fake.agents[0], 'the follow-up turn');
+    expect(followUp.spec.followUp).toBeDefined();
+    followUp.finish();
+    expect((await ticketDetail(second, planning.id)).currentRun?.status).toBe('NEEDS_REVIEW');
 
     // The board, the setup and the harness still load.
     const board = await boardOf(second, project.id);
@@ -100,8 +106,8 @@ describe('P4-H restart mid-run', () => {
         expectStatus(await second.get(`/api/projects/${project.id}/harness`), 200),
       ).state,
     ).toBe('none');
-    // Nothing was relaunched by the new process.
-    expect(second.fake.agents).toEqual([]);
+    // Nothing was relaunched by the new process (only the owner's follow-up turn ran).
+    expect(second.fake.agents.filter((x) => x.spec.followUp === undefined)).toEqual([]);
 
     // The owner cancels the interrupted ticket and starts it again: only then does a lead start.
     expectStatus(
@@ -115,7 +121,8 @@ describe('P4-H restart mid-run', () => {
     expect(rerun.runs).toHaveLength(2);
     expect(rerun.currentRun?.status).toBe('PLANNING');
     expect(rerun.ticket.stage).toBe('PLANNING');
-    await waitFor(() => (second.fake.agents.length > 0 ? true : undefined), 'the new lead');
-    expect(second.fake.agents.map((x) => x.spec.kind)).toEqual(['lead']);
+    const fresh = () => second.fake.agents.filter((x) => x.spec.followUp === undefined);
+    await waitFor(() => (fresh().length > 0 ? true : undefined), 'the new lead');
+    expect(fresh().map((x) => x.spec.kind)).toEqual(['lead']);
   }, 60_000);
 });

@@ -52,10 +52,14 @@ import {
   decidePlan,
   deriveRunWorkflow,
   expireApprovals,
+  followUpChat,
+  followUpEvent,
+  followUpView,
   isAgentOverBudget,
   isApprovalOverdue,
   isLiveAgentStatus,
   isRunPastDeadline,
+  leadHasEnded,
   leadToolCall,
   ownerChat,
   pluginSkillName,
@@ -65,6 +69,7 @@ import {
   requestPermission,
   runLimits,
   stopAgent,
+  stopFollowUp,
   timeOutRun,
   type AllowlistTarget,
   type AllowlistVerdict,
@@ -72,6 +77,7 @@ import {
   type EngineContext,
   type EngineEffect,
   type EngineResult,
+  type FollowUpFacts,
   type PlanDecision,
   type Refusal,
   type RunLimits,
@@ -150,6 +156,9 @@ export const PLANNER_READ_ONLY_MESSAGE =
   'The planner works read-only in the project. Write the plan with submit_plan; helpers make the changes after approval.';
 export const REVIEWER_READ_ONLY_MESSAGE =
   'The reviewer only reads the merged result. Post your findings with post_review.';
+/** A follow-up turn's tool use the adapter's gate did not settle (ADR-0020): denied, never asked. */
+export const FOLLOW_UP_READ_ONLY_MESSAGE =
+  'This run has ended: you can only read the project and answer. New work needs a new run.';
 
 /** Terminal run states: the run's temporary files (its skills plugin) can go. */
 const TERMINAL: readonly RunStatus[] = ['COMPLETED', 'FAILED', 'CANCELLED'];
@@ -327,6 +336,11 @@ interface LiveRun {
   setup?: Promise<AgentSetup>;
   /** Reviewers' checkouts being made or in use, by agent run id (null: creating it failed). */
   reviewCheckouts: Map<string, Promise<ReviewCheckout | null>>;
+  /**
+   * The ended lead's follow-up turn process (ADR-0020), kept apart from `handles`: the lead's
+   * agent record stays ended, and a run's cancellation never waits for it.
+   */
+  followUp: ManagedAgentHandle | undefined;
 }
 
 /** What `launch` needs from a `start-agent` effect. */
@@ -424,6 +438,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       workspaces: new Map(),
       cancellingSince: state.run.status === 'CANCELLING' ? deps.now().getTime() : null,
       reviewCheckouts: new Map(),
+      followUp: undefined,
     };
   }
 
@@ -557,6 +572,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // Stored as a ticket comment in the same transaction (RunStore.commit); the board layer
           // publishes the ticket notice.
           logger.log('info', 'review comment stored', { runId, agentRunId: effect.agentRunId });
+          break;
+        case 'start-follow-up':
+          startFollowUp(live, effect);
+          break;
+        case 'abort-follow-up':
+          live.followUp?.abort();
           break;
         case 'create-review-checkout':
           createReviewCheckout(live, effect.agentRunId);
@@ -884,7 +905,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function agentFileFor(
     live: LiveRun,
     projectRoot: string,
-    effect: Extract<EngineEffect, { type: 'start-agent' }>,
+    effect: { agentRunId: string; agent?: string },
   ): Promise<{ profile: AgentProfile; model: string | null } | undefined> {
     const name = effect.agent;
     if (name === undefined) return undefined;
@@ -911,6 +932,137 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       });
       return undefined;
     }
+  }
+
+  /** What the engine needs to know about a run's follow-up chat (ADR-0020). */
+  function followUpFacts(live: LiveRun): FollowUpFacts {
+    const lead = live.state.agents.find((a) => a.kind === 'lead');
+    const link =
+      lead === undefined
+        ? undefined
+        : store.repos.agentRunSessions
+            .listForAgentRun(lead.id)
+            .find((l) => l.provider === 'claude-code' && l.relation === 'primary');
+    return {
+      managed: deps.enabled && deps.adapter !== undefined,
+      leadSessionId: link?.providerSessionId ?? null,
+      leadProcessActive:
+        lead !== undefined && (live.handles.has(lead.id) || live.starting.has(lead.id)),
+    };
+  }
+
+  function hasFollowUpTurn(live: LiveRun): boolean {
+    return (live.state.followUp?.turn ?? null) !== null;
+  }
+
+  /** Ends the turn under way when it could not start at all: not a gone session. */
+  function endFollowUp(live: LiveRun): void {
+    const finished: ManagedAgentEvent = {
+      type: 'finished',
+      outcome: 'cancelled',
+      reportedCostUsd: null,
+    };
+    defer(() => {
+      if (hasFollowUpTurn(live)) apply(live, (s, c) => followUpEvent(s, finished, c));
+    });
+  }
+
+  /**
+   * `start-follow-up` (ADR-0020): resumes the ended lead's saved session in the project root, where
+   * the lead ran, with the lead's project context and stage agent file (whose tools only narrow
+   * further), answers-only. No lead tools and no skills: the adapter gives it no control-plane
+   * tool at all.
+   */
+  function startFollowUp(
+    live: LiveRun,
+    effect: Extract<EngineEffect, { type: 'start-follow-up' }>,
+  ): void {
+    const runId = live.state.run.id;
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    const adapter = deps.adapter;
+    if (project === undefined || adapter === undefined) {
+      logger.log('warn', 'follow-up start failed', { runId, code: 'unavailable' });
+      endFollowUp(live);
+      return;
+    }
+    track(
+      (async () => {
+        const setup = await setupFor(live);
+        const agentFile = await agentFileFor(live, project.rootPath, effect);
+        const turn = live.state.followUp?.turn ?? null;
+        if (closed || turn === null) return;
+        if (turn.aborting) {
+          endFollowUp(live);
+          return;
+        }
+        const spec: ManagedAgentSpec = {
+          agentRunId: effect.agentRunId,
+          kind: 'lead',
+          cwd: project.rootPath,
+          prompt: effect.prompt,
+          model: resolveAgentModel({
+            stage: effect.model,
+            agentFile: agentFile?.model,
+            project: setup.model,
+          }),
+          followUp: { resumeSessionId: effect.resumeSessionId },
+        };
+        if (setup.context.trim() !== '') spec.context = setup.context;
+        if (agentFile !== undefined) spec.profile = agentFile.profile;
+        let handle: ManagedAgentHandle;
+        try {
+          handle = adapter.start(spec, {
+            requestPermission: () => {
+              countDiagnostic('follow-up-tool-denied');
+              logger.log('info', 'follow-up tool use denied', { runId });
+              return Promise.resolve({ allow: false, message: FOLLOW_UP_READ_ONLY_MESSAGE });
+            },
+          });
+        } catch (error) {
+          logger.log('warn', 'follow-up start failed', { runId, ...errorFields(error) });
+          endFollowUp(live);
+          return;
+        }
+        live.followUp = handle;
+        logger.log('info', 'follow-up turn started', { runId, agentRunId: effect.agentRunId });
+        const pumping = pumpFollowUp(live, handle).catch((error: unknown) => {
+          logger.log('error', 'follow-up pump failed', errorFields(error));
+        });
+        pumps.add(pumping);
+        void pumping.finally(() => pumps.delete(pumping));
+      })(),
+    );
+  }
+
+  /**
+   * The follow-up turn's events go to the engine's follow-up command, never to `agentEvent`: the
+   * lead's agent record stays as it ended. A stream that ends without `finished` (or throws) ended
+   * in an error, which before any answer means the resume failed (the session is gone).
+   */
+  async function pumpFollowUp(live: LiveRun, handle: ManagedAgentHandle): Promise<void> {
+    const runId = live.state.run.id;
+    try {
+      for await (const event of handle.events) {
+        if (closed) break;
+        const result = apply(live, (s, c) => followUpEvent(s, event, c));
+        if (!result.ok) {
+          logger.log('warn', 'follow-up event refused', { runId, code: result.refusal.code });
+        }
+      }
+    } catch (error) {
+      logger.log('warn', 'follow-up stream failed', { runId, ...errorFields(error) });
+    }
+    if (live.followUp === handle) live.followUp = undefined;
+    if (closed) return;
+    if (hasFollowUpTurn(live)) {
+      apply(live, (s, c) =>
+        followUpEvent(s, { type: 'finished', outcome: 'error', reportedCostUsd: null }, c),
+      );
+    }
+    logger.log('info', 'follow-up turn ended', {
+      runId,
+      sessionGone: live.state.followUp?.sessionGone === true,
+    });
   }
 
   function removeSkillsPlugin(runId: string): void {
@@ -1241,10 +1393,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   function detail(live: LiveRun): RunDetailDto {
     const runId = live.state.run.id;
+    const followUp = followUpView(live.state, followUpFacts(live));
     return toRunDetail(live.state, {
       stored: store.repos.agentRuns.listForRun(runId),
       workspaces: store.repos.workspaces.listForRun(runId),
       messages: store.repos.messages.list(runId, { limit: MAX_PAGE_SIZE }),
+      ...(followUp !== undefined && { followUp }),
     });
   }
 
@@ -1449,6 +1603,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       permissions.clear();
       for (const live of runs.values()) {
         for (const handle of live.handles.values()) handle.abort();
+        live.followUp?.abort();
       }
       // An agent stream that ignores abort must not hold up shutdown past the grace period;
       // nothing it emits is recorded any more (`closed`).
@@ -1498,6 +1653,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     chat(runId, body) {
       const input = ChatRequestSchema.parse(body);
       const live = get(runId);
+      if (leadHasEnded(live.state)) {
+        // ADR-0020: the owner's message brings the ended lead back for one answers-only turn.
+        const facts = followUpFacts(live);
+        applyOrThrow(live, (s, c) => followUpChat(s, input.text, c, facts));
+        logger.log('info', 'follow-up turn requested', { runId });
+        const [stored] = store.repos.messages.list(runId, { limit: 1 });
+        if (stored === undefined || stored.role !== 'owner') {
+          throw new HttpError(500, 'internal_error', 'The message was not stored');
+        }
+        return toChatMessageDto(stored, true);
+      }
       applyOrThrow(live, (s, c) => ownerChat(s, input.text, c));
       // Stored in the same synchronous step, so the newest message is this one.
       const [stored] = store.repos.messages.list(runId, { limit: 1 });
@@ -1535,6 +1701,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     stopAgent(runId, agentRunId) {
       const live = get(runId);
+      const agent = live.state.agents.find((a) => a.id === agentRunId);
+      if (agent?.kind === 'lead' && leadHasEnded(live.state) && hasFollowUpTurn(live)) {
+        // The owner's Stop on the ended lead ends its follow-up turn (ADR-0020).
+        applyOrThrow(live, stopFollowUp);
+        logger.log('info', 'follow-up turn stopped by owner', { runId });
+        return agentDto(live, agentRunId);
+      }
       applyOrThrow(live, (s, c) => stopAgent(s, agentRunId, c));
       logger.log('info', 'agent stopped by owner', { runId, agentRunId });
       return agentDto(live, agentRunId);

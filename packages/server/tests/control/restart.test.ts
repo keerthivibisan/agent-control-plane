@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ReviewDtoSchema } from '@acp/core/api';
-import { expectError, setupControl } from './helpers.js';
+import { setupControl } from './helpers.js';
 
 /*
  * Restart (ADR-0013 §7): a server that stops while agents work never relaunches them. The new
@@ -40,11 +40,16 @@ describe('restart', () => {
     expect(existsSync(second.worktree(runId, worker.id))).toBe(true);
     expect(existsSync(orphan)).toBe(false);
 
-    expectError(
-      await second.post(`/api/runs/${runId}/chat`, { text: 'hi' }),
-      409,
-      'run_not_active',
-    );
+    // ADR-0020: the owner's message brings the ended lead back for one answers-only turn. It is an
+    // owner action, not a relaunch, and the run stays NEEDS_REVIEW.
+    const chat = await second.post(`/api/runs/${runId}/chat`, { text: 'hi' });
+    expect(chat.status).toBe(200);
+    expect(chat.body).toMatchObject({ role: 'owner', text: 'hi', followUp: true });
+    await second.control.idle();
+    const followUp = second.fake.agents[0];
+    expect(followUp?.spec.followUp).toEqual({ resumeSessionId: `sess-${first.fake.lead().id}` });
+    followUp?.finish();
+    expect((await second.detail(runId)).status).toBe('NEEDS_REVIEW');
 
     const review = ReviewDtoSchema.parse((await second.get(`/api/runs/${runId}/review`)).body);
     expect(review.agents[0]?.files.map((f) => f.path)).toEqual(['made.txt']);

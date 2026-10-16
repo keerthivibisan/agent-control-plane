@@ -351,7 +351,11 @@ describe('stop', () => {
     expect(run.status).toBe('CANCELLED');
     expect(run.agents.map((x) => x.status)).toEqual(['CANCELLED', 'CANCELLED', 'CANCELLED']);
     expectError(await s.post(`/api/runs/${runId}/stop`), 409, 'run_cancelling');
-    expectError(await s.post(`/api/runs/${runId}/chat`, { text: 'hi' }), 409, 'run_cancelling');
+    // ADR-0020: once the lead has ended, a message resumes it for one answers-only turn.
+    const chat = await s.post(`/api/runs/${runId}/chat`, { text: 'hi' });
+    expect(chat.status).toBe(200);
+    expect(chat.body).toMatchObject({ followUp: true });
+    expect((await s.detail(runId)).status).toBe('CANCELLED');
   });
 
   it('a run past its deadline is timed out by the sweep', async () => {
