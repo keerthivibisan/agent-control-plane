@@ -150,7 +150,8 @@ export type EngineEffect =
       canStartHelpers?: boolean;
       /**
        * The stage's model from the run's workflow (ADR-0019), present only when the stage sets
-       * one. Absent: the project's default model, as in Phase 4.
+       * one. Absent: the stage's agent file's model, else the project's default model, as in
+       * Phase 4 (`resolveAgentModel`).
        */
       model?: string;
       /**
@@ -160,6 +161,13 @@ export type EngineEffect =
        * The prompt already names each as `acp-skills:<name>`.
        */
       skills?: string[];
+      /**
+       * The project agent file (`.claude/agents/<name>.md`) of this agent's stage (ADR-0019 §6),
+       * present only when the stage names one. The server reads it from the project checkout and
+       * sets `ManagedAgentSpec.profile`; its `model` applies only when `model` above is absent
+       * (`resolveAgentModel`). A missing or unsafe file never blocks the start.
+       */
+      agent?: string;
     }
   /**
    * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout of the

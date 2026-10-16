@@ -16,7 +16,9 @@ import {
   recordReview,
   recoverAfterRestart,
   requestPermission,
+  resolveAgentModel,
   skillLine,
+  stageAgentFor,
 } from '../src/index.js';
 import type { EngineEffect, EngineResult, RunState } from '../src/index.js';
 import { LEAD, PROJECT, REGISTERED, RUN, TICKET, makeCtx, ok, refused } from './helpers.js';
@@ -300,6 +302,106 @@ describe('skills and models per stage', () => {
     const start = startOf(ok(createWithWorkflow(workflow())).effects);
     expect(start).not.toHaveProperty('skills');
     expect(start).not.toHaveProperty('model');
+  });
+});
+
+describe('agent files per stage (ADR-0019 §6)', () => {
+  const startOf = (effects: readonly EngineEffect[]) => {
+    const e = effects.find((x) => x.type === 'start-agent');
+    if (e?.type !== 'start-agent') throw new Error('no start-agent effect');
+    return e;
+  };
+
+  it("names the stage's agent file on the effect, next to its skills, without changing the prompt", () => {
+    const wf = workflow({
+      skills: { orchestrate: 'planning' },
+      agents: { orchestrate: 'lead-file' },
+    });
+    const start = startOf(ok(createWithWorkflow(wf)).effects);
+    expect(start.agent).toBe('lead-file');
+    expect(start.skills).toEqual(['planning']);
+    expect(start.prompt).toBe(
+      'Ticket WEB-1: plan first\n\nUse the project skill `acp-skills:planning`.',
+    );
+    // No stage model: the effect leaves the model to the server (file model, then project).
+    expect(start).not.toHaveProperty('model');
+  });
+
+  it('gives the lead in lead mode the orchestrate file, else the plan file', () => {
+    expect(stageAgentFor(workflow({ agents: { plan: 'p', orchestrate: 'o' } }), 'lead')).toBe('o');
+    expect(stageAgentFor(workflow({ agents: { plan: 'p' } }), 'lead')).toBe('p');
+    const separate = workflow({ plannerMode: 'separate', agents: { plan: 'p' } });
+    expect(stageAgentFor(separate, 'lead')).toBeNull();
+    expect(stageAgentFor(separate, 'planner')).toBe('p');
+  });
+
+  it('gives the planner, helpers, reviewer and tester their own stage file', () => {
+    const wf = workflow({
+      plannerMode: 'separate',
+      codeReview: true,
+      unitTests: true,
+      agents: {
+        plan: 'planner-file',
+        helpers: 'helper-file',
+        'code-review': 'reviewer-file',
+        'unit-tests': 'tester-file',
+      },
+    });
+    expect(startOf(ok(createWithWorkflow(wf)).effects).agent).toBe('planner-file');
+    expect(stageAgentFor(wf, 'worker')).toBe('helper-file');
+    expect(stageAgentFor(wf, 'reviewer')).toBe('reviewer-file');
+    expect(stageAgentFor(wf, 'tester')).toBe('tester-file');
+    expect(stageAgentFor(wf, 'lead')).toBeNull();
+  });
+
+  it('puts the helper file on a worker start, with the stage model when one is set', () => {
+    const wf = workflow({
+      agents: { helpers: 'frontend-dev' },
+      models: { helpers: 'claude-haiku' },
+    });
+    const worker = startOf(
+      ok(
+        leadToolCall(
+          approved(wf),
+          {
+            callerAgentRunId: LEAD,
+            name: 'start_agent',
+            input: { role: 'UI', task: 'Add the toggle' },
+            registeredProjectIds: REGISTERED,
+          },
+          makeCtx(2000, 'w'),
+        ),
+      ).effects,
+    );
+    expect(worker).toMatchObject({ agent: 'frontend-dev', model: 'claude-haiku' });
+    expect(worker.prompt).toBe('Add the toggle');
+  });
+
+  it('adds nothing without an agent file (absent or null), so the effect is unchanged', () => {
+    const plain = startOf(ok(createWithWorkflow(workflow())).effects);
+    expect(plain).not.toHaveProperty('agent');
+    const wf = workflow();
+    const withNull: ProjectWorkflow = {
+      ...wf,
+      stages: { ...wf.stages, orchestrate: { ...wf.stages.orchestrate, agent: null } },
+    };
+    expect(startOf(ok(createWithWorkflow(withNull)).effects)).toEqual(plain);
+    expect(stageAgentFor(undefined, 'lead')).toBeNull();
+  });
+
+  it('resolves the model: stage > agent file > project > provider default', () => {
+    expect(resolveAgentModel({ stage: 'stage-m', agentFile: 'file-m', project: 'proj-m' })).toBe(
+      'stage-m',
+    );
+    expect(resolveAgentModel({ stage: undefined, agentFile: 'file-m', project: 'proj-m' })).toBe(
+      'file-m',
+    );
+    expect(resolveAgentModel({ stage: null, agentFile: null, project: 'proj-m' })).toBe('proj-m');
+    expect(resolveAgentModel({ stage: undefined, agentFile: undefined, project: null })).toBeNull();
+    // A blank value is no choice: the next one applies.
+    expect(resolveAgentModel({ stage: undefined, agentFile: '  ', project: 'proj-m' })).toBe(
+      'proj-m',
+    );
   });
 });
 

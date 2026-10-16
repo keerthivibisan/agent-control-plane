@@ -30,29 +30,43 @@ type StageOverrides = {
   models?: Partial<
     Record<'plan' | 'orchestrate' | 'helpers' | 'code-review' | 'unit-tests', string>
   >;
+  /** Stage agent files (ADR-0019 §6); a stage without one has no `agent` key, as stored rows. */
+  agents?: Partial<
+    Record<'plan' | 'orchestrate' | 'helpers' | 'code-review' | 'unit-tests', string>
+  >;
 };
 
 export function workflow(o: StageOverrides = {}): ProjectWorkflow {
   const wf = defaultProjectWorkflow(PROJECT, WF_TIME);
   const skill = (k: keyof NonNullable<StageOverrides['skills']>) => o.skills?.[k] ?? null;
   const model = (k: keyof NonNullable<StageOverrides['models']>) => o.models?.[k] ?? null;
+  const agent = (k: keyof NonNullable<StageOverrides['agents']>) => {
+    const name = o.agents?.[k];
+    return name === undefined ? {} : { agent: name };
+  };
   return {
     ...wf,
     plannerMode: o.plannerMode ?? 'lead',
     stages: {
-      plan: { model: model('plan'), skill: skill('plan') },
-      orchestrate: { model: model('orchestrate'), skill: skill('orchestrate') },
-      helpers: { model: model('helpers'), skill: skill('helpers') },
+      plan: { model: model('plan'), skill: skill('plan'), ...agent('plan') },
+      orchestrate: {
+        model: model('orchestrate'),
+        skill: skill('orchestrate'),
+        ...agent('orchestrate'),
+      },
+      helpers: { model: model('helpers'), skill: skill('helpers'), ...agent('helpers') },
       review: { requireChecks: true },
       'code-review': {
         enabled: o.codeReview ?? false,
         model: model('code-review'),
         skill: skill('code-review'),
+        ...agent('code-review'),
       },
       'unit-tests': {
         enabled: o.unitTests ?? false,
         model: model('unit-tests'),
         skill: skill('unit-tests'),
+        ...agent('unit-tests'),
       },
     },
   };

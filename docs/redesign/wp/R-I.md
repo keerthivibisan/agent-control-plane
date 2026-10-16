@@ -18,7 +18,7 @@ their tests, this file.
 
 ## Tasks
 
-- [ ] 1. Engine: the stage's agent-file name on the `start-agent` effect; model precedence
+- [x] 1. Engine: the stage's agent-file name on the `start-agent` effect; model precedence
       (stage > file > project > provider default) as a pure, tested helper
 - [ ] 2. Server: read and parse `<project root>/.claude/agents/<name>.md` from the owner's checkout
       with R-D's module; build `spec.profile`; missing/unsafe/oversize/unparsable → no profile,
@@ -29,9 +29,10 @@ their tests, this file.
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                       | Commit | Checks    |
-| ---------- | ----------------------------------- | ------ | --------- |
-| 2026-10-16 | Claimed R-I (backend) on the branch | (this) | docs only |
+| Date       | What was done                                                          | Commit    | Checks                                            |
+| ---------- | ---------------------------------------------------------------------- | --------- | ------------------------------------------------- |
+| 2026-10-16 | Claimed R-I (backend) on the branch                                    | `230d899` | docs only                                         |
+| 2026-10-16 | Engine: `agent` on `start-agent`, `stageAgentFor`, `resolveAgentModel` | (this)    | pnpm check ✓: test 1,962/1,962 (orchestrator 430) |
 
 ## Handoff notes
 

@@ -157,7 +157,7 @@ export function stagesForRole(
 function agentStage(
   workflow: ProjectWorkflow,
   stage: WorkflowStageId,
-): { model: string | null; skill: string | null } | null {
+): { model: string | null; skill: string | null; agent?: string | null | undefined } | null {
   const s = workflow.stages;
   switch (stage) {
     case 'plan':
@@ -227,21 +227,57 @@ export function stageModelFor(
 }
 
 /**
+ * The project agent file (`.claude/agents/<name>.md`) the workflow gives this role, or null
+ * (ADR-0019 §6). An agent uses at most one file: the lead in `lead` mode uses the orchestrate
+ * stage's file, else the plan stage's, the same order as `stageModelFor`.
+ */
+export function stageAgentFor(
+  workflow: ProjectWorkflow | undefined,
+  kind: AgentRoleKind,
+): string | null {
+  if (workflow === undefined) return null;
+  for (const stage of [...stagesForRole(kind, workflow)].reverse()) {
+    const agent = agentStage(workflow, stage)?.agent ?? null;
+    if (agent !== null) return agent;
+  }
+  return null;
+}
+
+/**
+ * The model an agent runs with (ADR-0019 §6): an explicit stage model, else the stage's agent
+ * file's `model`, else the project's default model, else null (the provider default). The engine
+ * never reads files, so it puts only the stage model on the effect (`model`) and the file's name
+ * (`agent`); the server reads the file and resolves the model with this function.
+ */
+export function resolveAgentModel(input: {
+  stage: string | null | undefined;
+  agentFile: string | null | undefined;
+  project: string | null | undefined;
+}): string | null {
+  for (const candidate of [input.stage, input.agentFile, input.project]) {
+    if (candidate !== null && candidate !== undefined && candidate.trim() !== '') return candidate;
+  }
+  return null;
+}
+
+/**
  * The launch fields of a `start-agent` effect for this role under the workflow: the prompt with
- * its skill lines, plus `model` and `skills` only when the workflow sets them, so a run without
- * a workflow (or with the default one) gets exactly the Phase 4 effect.
+ * its skill lines, plus `model`, `skills` and `agent` only when the workflow sets them, so a run
+ * without a workflow (or with the default one) gets exactly the Phase 4 effect.
  */
 export function launchFields(
   prompt: string,
   workflow: ProjectWorkflow | undefined,
   kind: AgentRoleKind,
-): { prompt: string; model?: string; skills?: string[] } {
+): { prompt: string; model?: string; skills?: string[]; agent?: string } {
   const model = stageModelFor(workflow, kind);
   const skills = skillsFor(workflow, kind);
+  const agent = stageAgentFor(workflow, kind);
   return {
     prompt: withSkills(prompt, workflow, kind),
     ...(model !== null ? { model } : {}),
     ...(skills.length > 0 ? { skills } : {}),
+    ...(agent !== null ? { agent } : {}),
   };
 }
 
