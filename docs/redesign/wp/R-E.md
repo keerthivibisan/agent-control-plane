@@ -4,18 +4,19 @@
 > Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope, owned paths and dependencies:
 > `docs/redesign/README.md` §7.
 
-| Field   | Value                                             |
-| ------- | ------------------------------------------------- |
-| Status  | todo                                              |
-| Owner   | frontend agent                                    |
-| Branch  | `wp/r-e-…` (create from `main` when you claim it) |
-| Started | —                                                 |
-| Updated | —                                                 |
+| Field   | Value            |
+| ------- | ---------------- |
+| Status  | in-progress      |
+| Owner   | frontend agent   |
+| Branch  | `wp/r-e-harness` |
+| Started | 2026-10-16       |
+| Updated | 2026-10-16       |
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
+| Date       | What was done                   | Commit | Checks    |
+| ---------- | ------------------------------- | ------ | --------- |
+| 2026-10-16 | Claimed R-E on `wp/r-e-harness` | (this) | docs only |
 
 ## Handoff notes
 
