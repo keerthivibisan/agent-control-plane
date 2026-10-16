@@ -1,0 +1,33 @@
+# R-J — The lead's chat after the lead ends (backend: engine, server, adapter)
+
+> Progress file for the backend part of R-J. Only the agent working on it edits it (coordinator:
+> `docs/redesign/STATUS.md`). Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope:
+> `docs/redesign/README.md` §6b; spec: ADR-0020; research:
+> `docs/research/sdk-session-resume-2026-10-16.md`. The web part (chat box on ended runs) is a
+> separate agent on its own branch.
+
+| Field   | Value              |
+| ------- | ------------------ |
+| Status  | in-progress        |
+| Owner   | backend agent      |
+| Branch  | `wp/r-j-follow-up` |
+| Started | 2026-10-16         |
+| Updated | 2026-10-16         |
+
+Owned paths: `packages/orchestrator/**`, `packages/server/**`, `packages/adapters/claude-code/**`,
+their tests, this file, `docs/provider-adapters.md` (managed execution).
+
+## Tasks
+
+- [ ] 1. Engine: follow-up command accepted on ended runs; never changes run status; one turn at a
+      time; follow-up state (`available | running | unavailable`)
+- [ ] 2. Server: chat route starts a follow-up turn when the lead has ended; linked session id;
+      turn budget from project limits; "can't be continued" reasons; no relaunch on restart
+- [ ] 3. Adapter: SDK `resume` (no fork), read-only toolset, no `acp` MCP server, one turn
+- [ ] 4. Docs: `docs/provider-adapters.md` managed execution; proposed README text here
+
+## Work log (append-only; newest last)
+
+| Date       | What was done                       | Commit | Checks    |
+| ---------- | ----------------------------------- | ------ | --------- |
+| 2026-10-16 | Claimed R-J (backend) on the branch | (this) | docs only |
