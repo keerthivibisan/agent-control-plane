@@ -60,10 +60,17 @@ export function ProblemList({ problems }: { problems: readonly string[] }) {
  * A failed skills action: the server's typed refusal in plain words, then its own sentence. A
  * connection or contract failure is shown as the standard notice.
  */
-export function RefusalNotice({ error }: { error: ApiError | null }) {
+export function RefusalNotice({
+  error,
+  refusals,
+}: {
+  error: ApiError | null;
+  /** Words for this kind of file, over the skills defaults. */
+  refusals?: Readonly<Record<string, string>> | undefined;
+}) {
   if (error === null) return null;
   if (error.kind !== 'http' || error.code === null) return <ErrorNotice error={error} />;
-  const friendly = C.refusals[error.code] ?? C.refusals['fallback'];
+  const friendly = refusals?.[error.code] ?? C.refusals[error.code] ?? C.refusals['fallback'];
   return (
     <div
       role="alert"

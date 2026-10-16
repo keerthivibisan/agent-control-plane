@@ -1989,7 +1989,7 @@ export const SHELL_COPY = {
     pages: {
       board: 'Board',
       workflow: 'Workflow',
-      skills: 'Skills',
+      skills: 'Skills & Agents',
       harness: 'Harness',
       tokens: 'Tokens',
       sessions: 'Sessions',
@@ -2507,13 +2507,16 @@ import type { WorkflowStageId } from '@acp/core';
 
 export const SKILLS_COPY = {
   page: {
-    title: 'Skills',
+    title: 'Skills & Agents',
     description:
-      "Instructions your agents can follow, saved as files in this project's repository. Claude Code loads them by name.",
+      "Skills and agent definitions for this project, saved as files in its repository so they are versioned with your code. Claude Code loads them by name.",
+    tabs: 'Skills or agents',
+    skillsTab: 'Skills',
+    agentsTab: 'Agents',
     newSkill: 'New skill',
     back: 'All skills',
     loading: 'Loading skills…',
-    tip: 'A skill is a SKILL.md file in .claude/skills/<name>/. A workflow stage that names a skill tells its agent to use it. Your personal skills in ~/.claude are never shown or changed here.',
+    tip: 'A skill is a SKILL.md file in .claude/skills/<name>/; a workflow stage that names a skill tells its agent to use it. An agent definition is a .claude/agents/<name>.md file (a Claude Code subagent). Your personal ~/.claude is never shown or changed here.',
   },
   empty: {
     title: 'No skills yet',
@@ -2597,6 +2600,8 @@ export const SKILLS_COPY = {
   },
   /** Friendly words for the server's typed refusals; the server's own sentence follows. */
   refusals: {
+    csrf_missing: 'The app could not confirm this was you. Reload the page and try again.',
+    csrf_invalid: 'The app could not confirm this was you. Reload the page and try again.',
     conflict: 'A skill with this name already exists.',
     not_found: 'This skill no longer exists.',
     skill_in_use: 'A workflow stage still uses this skill.',
@@ -2610,6 +2615,73 @@ export const SKILLS_COPY = {
     not_a_git_repo: 'The project folder is not a git repository.',
     git_failed: 'git could not finish the commit.',
     fallback: 'That did not work.',
+  } as Record<string, string>,
+} as const;
+
+/** The Agents tab: `.claude/agents/<name>.md`, Claude Code subagents (ADR-0018 amendment). */
+export const AGENTS_COPY = {
+  page: {
+    intro:
+      'Agent definitions are Claude Code subagents: a name, when to use it, which tools it may use, a model and its instructions. Your own Claude Code sessions can hand work to them. Workflow stages do not use them yet.',
+    newAgent: 'New agent',
+    back: 'All agents',
+    loading: 'Loading agents…',
+  },
+  empty: {
+    title: 'No agent definitions yet',
+    text: 'Start from a template, or write one from scratch. Each agent is one file in .claude/agents/, versioned and reviewed with your code.',
+    blank: 'Blank agent',
+  },
+  card: {
+    tools: 'Tools',
+    allTools: 'All tools',
+    noTools: 'No tools',
+    model: 'Model',
+    defaultModel: 'Default model',
+    more: (n: number) => `+${formatCount(n)} more`,
+    open: (name: string) => `Open agent ${name}`,
+  },
+  editor: {
+    newTitle: 'New agent',
+    newDescription: 'Saved to .claude/agents/<name>.md in this project.',
+    nameHint:
+      'Lowercase letters, digits and dashes. It is the file name and cannot be changed later.',
+    nameTaken: 'An agent with this name already exists.',
+    descriptionHint:
+      'One or two sentences. Claude Code reads this to decide when to hand work to the agent.',
+    tools: 'Tools',
+    allTools: 'All tools',
+    allToolsHint:
+      "The agent can use every tool your session has (Claude Code's default). Turn this off to choose.",
+    toolsHint: 'Type a tool name and press Enter, or pick a common one below.',
+    addTool: 'Add tool',
+    removeTool: (tool: string) => `Remove ${tool}`,
+    toolInvalid: 'A tool name starts with a letter and has no spaces, for example Read or mcp__github__get_pr.',
+    toolsNone: 'No tools chosen: the agent can only read the conversation it is given.',
+    common: 'Common tools',
+    model: 'Model',
+    modelHint: 'Leave empty to use the default. For example sonnet, opus, haiku or inherit.',
+    modelPlaceholder: 'Default model',
+  },
+  commit: {
+    explain:
+      'Commit creates a git commit with only this agent file, on the branch you have checked out. Nothing else is included and nothing is pushed.',
+    clean: 'Everything in this agent file is committed.',
+  },
+  remove: {
+    button: 'Delete agent',
+    text: (path: string) =>
+      `This removes ${path} from your working tree. Commit afterwards to record the removal.`,
+  },
+  refusals: {
+    conflict: 'An agent with this name already exists.',
+    not_found: 'This agent definition no longer exists.',
+    unsafe_path:
+      'The agents folder or file is a link or points outside the project, so the app will not touch it.',
+    too_large: 'The agent file is larger than 64 KB.',
+    staged_changes:
+      'Other files are staged in git. Commit or unstage them first, so the commit holds only this agent file.',
+    nothing_to_commit: 'There is nothing to commit for this agent.',
   } as Record<string, string>,
 } as const;
 

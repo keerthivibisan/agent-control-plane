@@ -64,6 +64,13 @@ import {
   SkillSummaryDtoSchema,
   SkillWriteRequestSchema,
 } from '@acp/core/api';
+// Agents tab of the Skills & Agents page (redesign, R-D).
+import {
+  AgentDefinitionCommitResultDtoSchema,
+  AgentDefinitionDetailDtoSchema,
+  AgentDefinitionSummaryDtoSchema,
+  AgentDefinitionWriteRequestSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -894,8 +901,12 @@ export function updateSkill(
 }
 
 /** DELETE …/skills/:name (204): refused while a workflow stage uses the skill. */
-export async function deleteSkill(client: ApiClient, projectId: string, name: string) {
-  const path = skillsPaths.skill(projectId, name);
+export function deleteSkill(client: ApiClient, projectId: string, name: string) {
+  return controlDelete(client, skillsPaths.skill(projectId, name));
+}
+
+/** A DELETE with the `X-ACP-CSRF` header; a 403 fetches a fresh token and retries once. */
+async function controlDelete(client: ApiClient, path: string): Promise<void> {
   const send = async (fresh: boolean) =>
     client.delete(path, undefined, { [CSRF_HEADER]: await csrfToken(client, fresh) });
   try {
@@ -909,4 +920,72 @@ export async function deleteSkill(client: ApiClient, projectId: string, name: st
 /** POST …/skills/:name/commit: a git commit of only that skill's folder, never pushed. */
 export function commitSkill(client: ApiClient, projectId: string, name: string) {
   return controlPost(client, skillsPaths.commit(projectId, name), {}, skillsSchemas.commit);
+}
+
+// --- Agent definitions (redesign, wp/r-d-skills) ------------------------------------------------
+//
+// Project agent files in `<repo>/.claude/agents/<slug>.md` (ADR-0018 amendment), served by the
+// server's `routes/agents.ts`, mirroring the skills routes.
+
+export type AgentDefinitionWriteRequest = ReturnType<typeof AgentDefinitionWriteRequestSchema.parse>;
+
+export const agentsPaths = {
+  list: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/agents`,
+  agent: (projectId: string, name: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/agents/${enc(name)}`,
+  commit: (projectId: string, name: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/agents/${enc(name)}/commit`,
+} as const;
+
+export const agentsSchemas = {
+  list: AgentDefinitionSummaryDtoSchema.array(),
+  detail: AgentDefinitionDetailDtoSchema,
+  commit: AgentDefinitionCommitResultDtoSchema,
+} as const;
+
+/** True for one project's cached agent list and agent pages. */
+export function isAgentsPath(projectId: string): (key: string) => boolean {
+  const base = agentsPaths.list(projectId);
+  return (key) => key === base || key.startsWith(`${base}/`);
+}
+
+/** POST …/agents: writes a new agent file into the project's working tree (uncommitted). */
+export function createAgent(
+  client: ApiClient,
+  projectId: string,
+  input: AgentDefinitionWriteRequest,
+) {
+  const path = agentsPaths.list(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(AgentDefinitionWriteRequestSchema, input, path),
+    agentsSchemas.detail,
+  );
+}
+
+/** PUT …/agents/:name: replaces the agent's name, description, tools, model and instructions. */
+export function updateAgent(
+  client: ApiClient,
+  projectId: string,
+  name: string,
+  input: AgentDefinitionWriteRequest,
+) {
+  const path = agentsPaths.agent(projectId, name);
+  return controlPut(
+    client,
+    path,
+    checked(AgentDefinitionWriteRequestSchema, input, path),
+    agentsSchemas.detail,
+  );
+}
+
+/** DELETE …/agents/:name (204). */
+export function deleteAgent(client: ApiClient, projectId: string, name: string) {
+  return controlDelete(client, agentsPaths.agent(projectId, name));
+}
+
+/** POST …/agents/:name/commit: a commit of only that agent file, never pushed. */
+export function commitAgent(client: ApiClient, projectId: string, name: string) {
+  return controlPost(client, agentsPaths.commit(projectId, name), {}, agentsSchemas.commit);
 }

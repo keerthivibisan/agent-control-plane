@@ -27,6 +27,8 @@ function toApiError(e: unknown): ApiError {
 export function useSkillAction<A extends unknown[], R>(
   projectId: string,
   fn: (client: ApiClient, projectId: string, ...args: A) => Promise<R>,
+  /** Which cached paths to refetch afterwards (default: the project's skills). */
+  scope: (projectId: string) => (key: string) => boolean = isSkillsPath,
 ) {
   const store = useQueryStore();
   const [state, setState] = useState<SkillActionState<R>>({
@@ -45,10 +47,10 @@ export function useSkillAction<A extends unknown[], R>(
         setState({ pending: false, error: toApiError(e), result: null });
         return null;
       } finally {
-        store.invalidate(isSkillsPath(projectId));
+        store.invalidate(scope(projectId));
       }
     },
-    [store, fn, projectId],
+    [store, fn, projectId, scope],
   );
   const reset = useCallback(() => setState({ pending: false, error: null, result: null }), []);
   return { ...state, run, reset };
