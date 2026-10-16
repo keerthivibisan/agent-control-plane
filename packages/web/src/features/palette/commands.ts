@@ -1,5 +1,5 @@
 import type { ProjectPageDef } from '../../app/project-pages';
-import { PALETTE_COPY, SHELL_COPY } from '../../lib/copy';
+import { HARNESS_PAGE_COPY, PALETTE_COPY, SHELL_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 
 /**
@@ -9,7 +9,10 @@ import { href } from '../../lib/router';
 export type CommandGroup = 'actions' | 'pages' | 'projects' | 'tickets';
 
 export type CommandAction =
-  { kind: 'go'; hash: string } | { kind: 'new-ticket'; projectId: string };
+  | { kind: 'go'; hash: string }
+  | { kind: 'new-ticket'; projectId: string }
+  // Redesign R-E: "Run checks" on the main branch, then open the Harness page with the result.
+  | { kind: 'run-checks'; projectId: string };
 
 export interface Command {
   id: string;
@@ -45,6 +48,17 @@ export function buildCommands({ projects, current, pages, tickets }: CommandInpu
       hint: current.name,
       keywords: 'create add ticket task',
       action: { kind: 'new-ticket', projectId: current.id },
+    });
+  }
+  // Redesign R-E: only where the Harness page exists to show the results.
+  if (current !== null && pages.some((p) => p.id === 'harness' && p.available)) {
+    out.push({
+      id: 'action:run-checks',
+      group: 'actions',
+      label: HARNESS_PAGE_COPY.palette.runChecks,
+      hint: current.name,
+      keywords: HARNESS_PAGE_COPY.palette.keywords,
+      action: { kind: 'run-checks', projectId: current.id },
     });
   }
   out.push({

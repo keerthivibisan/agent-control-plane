@@ -34,7 +34,7 @@ export const PROJECT_PAGES: readonly ProjectPageDef[] = [
   // R-D.
   { id: 'skills', label: L.skills, icon: SkillsIcon, available: false },
   // R-E.
-  { id: 'harness', label: L.harness, icon: HarnessIcon, available: false },
+  { id: 'harness', label: L.harness, icon: HarnessIcon, available: true },
   // Today's Tokens page filtered to the project, until R-F replaces it.
   { id: 'tokens', label: L.tokens, icon: TokensIcon, available: true },
   { id: 'sessions', label: L.sessions, icon: SessionsIcon, available: true },

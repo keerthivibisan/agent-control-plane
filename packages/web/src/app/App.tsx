@@ -3,6 +3,7 @@ import { EmptyState } from '../components/EmptyState';
 import { AllProjectsPage } from '../features/all-projects/AllProjectsPage';
 import { BoardPage } from '../features/board/BoardPage';
 import { ControlPanel } from '../features/control/ControlPanel';
+import { HarnessPage } from '../features/harness/HarnessPage';
 import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../features/project-setup/ProjectSettings';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
@@ -57,9 +58,10 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
       return <SessionExplorer search={scopedParams(route.params, projectId)} />;
     case 'settings':
       return <ProjectSettings key={projectId} id={projectId} />;
+    case 'harness':
+      return <HarnessPage key={projectId} projectId={projectId} />;
     case 'workflow': // R-B
     case 'skills': // R-D
-    case 'harness': // R-E
       return <NotFound />;
   }
 }

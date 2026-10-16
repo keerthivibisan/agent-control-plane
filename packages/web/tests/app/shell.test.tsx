@@ -55,13 +55,14 @@ describe('app shell', () => {
     renderApp(fakeServer({ '/api/projects': [alpha, beta] }).fetch);
     expect(navLink('Board').getAttribute('href')).toBe('#/p/p-1/board');
     expect(navLink('Board').getAttribute('aria-current')).toBe('page');
+    expect(navLink('Harness').getAttribute('href')).toBe('#/p/p-1/harness');
     expect(navLink('Tokens').getAttribute('href')).toBe('#/p/p-1/tokens');
     expect(navLink('Sessions').getAttribute('href')).toBe('#/p/p-1/sessions');
     expect(navLink('Settings').getAttribute('href')).toBe('#/p/p-1/settings');
     expect(navLink('All projects').getAttribute('href')).toBe('#/projects');
     expect(navLink('Data health').getAttribute('href')).toBe('#/health');
     // Pages not built yet have no entry (AGENTS.md rule 10: no placeholder pages).
-    for (const name of ['Workflow', 'Skills', 'Harness']) {
+    for (const name of ['Workflow', 'Skills']) {
       expect(within(nav()).queryByRole('link', { name })).toBeNull();
     }
     // The old global entries are gone.

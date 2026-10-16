@@ -12,6 +12,7 @@ import { PROJECT_PAGES } from '../../app/project-pages';
 import {
   ArrowRightIcon,
   GridIcon,
+  HarnessIcon,
   HealthIcon,
   PlusSmallIcon,
   ProjectsIcon,
@@ -21,8 +22,9 @@ import {
 } from '../../components/icons';
 import { boardPaths, boardSchemas } from '../../lib/api';
 import { PALETTE_COPY } from '../../lib/copy';
-import { useApiQuery } from '../../lib/query';
-import { navigate } from '../../lib/router';
+import { useApiQuery, useQueryStore } from '../../lib/query';
+import { href, navigate } from '../../lib/router';
+import { mainCheckRunsFor } from '../harness/main-check-runs';
 import { buildCommands, filterCommands, type Command, type CommandGroup } from './commands';
 
 const C = PALETTE_COPY;
@@ -36,6 +38,7 @@ const GROUP_ICON: Record<CommandGroup, ComponentType<IconProps>> = {
 
 function pageIcon(c: Command): ComponentType<IconProps> {
   if (c.id === 'page:health' || c.id === 'page:connection') return HealthIcon;
+  if (c.id === 'action:run-checks') return HarnessIcon;
   const id = c.id.startsWith('page:') ? c.id.slice(5) : null;
   return PROJECT_PAGES.find((p) => p.id === id)?.icon ?? GROUP_ICON[c.group];
 }
@@ -57,6 +60,7 @@ export function CommandPalette({
   onClose: () => void;
   onNewTicket: (projectId: string) => void;
 }) {
+  const store = useQueryStore();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,7 +100,11 @@ export function CommandPalette({
     if (c === undefined) return;
     onClose();
     if (c.action.kind === 'go') navigate(c.action.hash);
-    else onNewTicket(c.action.projectId);
+    else if (c.action.kind === 'run-checks') {
+      // The run lives in the store, so the Harness page shows it while it runs and after.
+      void mainCheckRunsFor(store).start(c.action.projectId);
+      navigate(href.projectPage(c.action.projectId, 'harness'));
+    } else onNewTicket(c.action.projectId);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

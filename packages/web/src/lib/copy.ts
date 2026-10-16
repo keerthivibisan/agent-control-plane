@@ -2080,3 +2080,134 @@ export const PALETTE_COPY = {
   newProject: 'New project',
   hint: '↑↓ to move · Enter to open · Esc to close',
 } as const;
+
+// --- Harness page (redesign R-E, wp/r-e-harness) -----------------------------------------------
+// Add-only. Check results reuse CHECK_STATUS_COPY and ticket stages TICKET_STAGE_COPY (above).
+
+/** "90 s", "5 min", "1 min 30 s": a check's time limit. */
+export function formatSeconds(sec: number): string {
+  if (sec < 60) return `${formatCount(sec)} s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s === 0 ? `${formatCount(m)} min` : `${formatCount(m)} min ${s} s`;
+}
+
+export const HARNESS_PAGE_COPY = {
+  title: 'Harness',
+  description: "Does this project have checks for the agents' work, and do they pass?",
+  tip: 'A harness is the project’s own checks (tests, lint, build), listed in .acp/harness.json in the repository. Agents use them to verify their changes, and you see the results before you merge.',
+  loading: 'Reading the harness…',
+  status: {
+    title: 'Status',
+    headline: {
+      none: 'No harness yet',
+      invalid: 'Invalid',
+      partial: 'Partial',
+      ready: 'Ready',
+    },
+    text: {
+      none: 'This project has no checks for agents yet, so nothing is checked before a merge.',
+      invalid: "The checks file can't be used. Until it is fixed, no checks run.",
+      partial: 'Checks are set up, but none is required, so nothing has to pass before a merge.',
+      ready: 'Checks are set up, and the required ones must pass before a plain merge.',
+    },
+    problems: 'What needs fixing',
+    readAt: 'Read from the repository',
+    refresh: 'Check again',
+    refreshing: 'Checking…',
+    cacheTip:
+      'This page reads the project folder each time. After a merge, the board and the project cards can show the old harness state for about 10 seconds.',
+    counts: (total: number, required: number) =>
+      `${countOf(total, 'check')} · ${formatCount(required)} required`,
+  },
+  build: {
+    title: 'Let an agent build the harness',
+    text: 'A ready-written ticket asks an agent to add fast checks and write .acp/harness.json. You approve its plan and review its changes.',
+    create: 'Build the harness',
+    creating: 'Creating the ticket…',
+    failed: "The ticket couldn't be created.",
+    ticket: 'Harness ticket',
+    open: 'Open ticket',
+    created: (key: string) => `Added ${key} to the board. Start it from there.`,
+    noChecksTip:
+      'This ticket’s own review runs no checks. Checks come from the project’s main branch, which has no harness until you merge this ticket’s changes.',
+    newFolderTip:
+      'Expect a question while it works: the agent creates .acp/harness.json in a new .acp folder, and writing into a folder that doesn’t exist yet always asks you, even when edits are pre-approved.',
+  },
+  checks: {
+    title: 'Checks',
+    description: 'Listed in .acp/harness.json and run one at a time.',
+    tip: 'Each command runs directly, without a shell, in a temporary copy of the project. It is stopped when it runs past its time limit.',
+    label: 'Harness checks',
+    name: 'Check',
+    command: 'Command',
+    folder: 'Folder',
+    timeLimit: 'Time limit',
+    projectFolder: 'Project folder',
+    required: 'Required',
+    optional: 'Optional',
+    requiredTip: 'Must pass before a plain merge.',
+    optionalTip: 'Shown with the results, but never blocks a merge.',
+    none: 'No checks listed',
+    noneText: 'The harness file lists no checks yet.',
+  },
+  runs: {
+    title: 'Runs on the main branch',
+    tip: 'Run checks now runs every check on a temporary copy of the main branch’s last commit. Your files are not changed, and uncommitted changes to .acp/harness.json are not used.',
+    run: 'Run checks now',
+    running: 'Running checks…',
+    runningText: 'The checks run one at a time. This can take as long as their time limits.',
+    unavailable: 'Checks can run once the project has a valid harness.',
+    description: 'Runs you started since you opened the app.',
+    latest: 'Latest run',
+    started: 'Started',
+    earlier: 'Earlier in this session',
+    historyTip:
+      'Only runs started since you opened the app are listed. The app keeps older runs, but can’t list them here yet.',
+    summary: (passed: number, total: number) =>
+      `${formatCount(passed)} of ${countOf(total, 'check')} passed`,
+    requiredFailed: (n: number) => `${countOf(n, 'required check')} did not pass`,
+    noResults: 'No checks ran.',
+    noResultsText:
+      'The main branch’s last commit has no usable harness file. Merge or commit .acp/harness.json first.',
+    resultsLabel: 'Check results',
+    duration: (text: string) => `took ${text}`,
+    exitCode: (code: number | null) =>
+      code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
+    output: 'Output (last part)',
+    noOutput: 'No output.',
+    empty: 'No runs yet',
+    emptyText: 'Run the checks on the main branch to see whether they pass.',
+    failed: "The checks couldn't be run.",
+    errors: {
+      checks_running:
+        'Checks are already running on the main branch, maybe from another tab. Wait for them to finish, then try again.',
+      not_a_git_repo:
+        'The project folder is not a git repository, so there is no main branch to check.',
+      no_commits: 'The project has no commits yet, so there is no main branch to check.',
+      invalid_root: "The project folder can't be used. Check that it still exists.",
+      not_found: 'This project was not found. It may have been removed.',
+    } as Readonly<Record<string, string>>,
+  },
+  usage: {
+    title: 'Where checks run',
+    review: {
+      title: "When a ticket's work enters review",
+      text: "Each helper's changes are checked in its own copy of the project.",
+      tip: 'Right after a ticket enters review, its checks start by themselves. Until they finish, “Run checks again” on the ticket answers that checks are already running.',
+    },
+    demand: {
+      title: 'When you ask',
+      text: "Here, on the main branch, or on a ticket for one helper's changes.",
+    },
+    merge: {
+      title: 'Before a merge',
+      text: 'A failed required check blocks a plain merge. “Merge anyway” needs a reason, which is kept on the ticket.',
+    },
+    workflow: 'Review & merge in the workflow',
+  },
+  palette: {
+    runChecks: 'Run checks',
+    keywords: 'harness checks tests lint build verify main branch',
+  },
+} as const;
