@@ -55,6 +55,7 @@ describe('app shell', () => {
     renderApp(fakeServer({ '/api/projects': [alpha, beta] }).fetch);
     expect(navLink('Board').getAttribute('href')).toBe('#/p/p-1/board');
     expect(navLink('Board').getAttribute('aria-current')).toBe('page');
+    expect(navLink('Workflow').getAttribute('href')).toBe('#/p/p-1/workflow');
     expect(navLink('Harness').getAttribute('href')).toBe('#/p/p-1/harness');
     expect(navLink('Tokens').getAttribute('href')).toBe('#/p/p-1/tokens');
     expect(navLink('Sessions').getAttribute('href')).toBe('#/p/p-1/sessions');
@@ -62,7 +63,7 @@ describe('app shell', () => {
     expect(navLink('All projects').getAttribute('href')).toBe('#/projects');
     expect(navLink('Data health').getAttribute('href')).toBe('#/health');
     // Pages not built yet have no entry (AGENTS.md rule 10: no placeholder pages).
-    for (const name of ['Workflow', 'Skills']) {
+    for (const name of ['Skills']) {
       expect(within(nav()).queryByRole('link', { name })).toBeNull();
     }
     // The old global entries are gone.
@@ -147,7 +148,7 @@ describe('app shell', () => {
   });
 
   it('an unknown address or an unbuilt page says so and links to All projects', async () => {
-    for (const hash of ['#/nope', '#/p/p-1/workflow']) {
+    for (const hash of ['#/nope', '#/p/p-1/skills']) {
       window.location.hash = hash;
       const { unmount } = renderApp(fakeServer({}).fetch);
       expect(await screen.findByText('Page not found')).toBeTruthy();
@@ -178,7 +179,8 @@ describe('project switcher', () => {
   it('keeps the page when switching, and goes to the board from elsewhere', () => {
     expect(switchTarget(parseRoute('#/p/p-1/tokens?groupBy=day'), 'p-2')).toBe('#/p/p-2/tokens');
     expect(switchTarget(parseRoute('#/p/p-1/tickets/t-1'), 'p-2')).toBe('#/p/p-2/board');
-    expect(switchTarget(parseRoute('#/p/p-1/workflow'), 'p-2')).toBe('#/p/p-2/board');
+    expect(switchTarget(parseRoute('#/p/p-1/workflow'), 'p-2')).toBe('#/p/p-2/workflow');
+    expect(switchTarget(parseRoute('#/p/p-1/skills'), 'p-2')).toBe('#/p/p-2/board');
     expect(switchTarget(parseRoute('#/projects'), 'p-2')).toBe('#/p/p-2/board');
   });
 

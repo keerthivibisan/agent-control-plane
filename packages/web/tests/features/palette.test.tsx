@@ -35,6 +35,7 @@ describe('palette commands', () => {
     const pages = all.filter((c) => c.group === 'pages');
     expect(ids(pages)).toEqual([
       'page:board',
+      'page:workflow',
       'page:harness',
       'page:tokens',
       'page:sessions',
@@ -43,8 +44,8 @@ describe('palette commands', () => {
       'page:health',
       'page:connection',
     ]);
-    // Unavailable pages (Workflow, Skills) are never offered.
-    expect(all.some((c) => c.id === 'page:workflow')).toBe(false);
+    // Unavailable pages (Skills) are never offered.
+    expect(all.some((c) => c.id === 'page:skills')).toBe(false);
     expect(pages[0]?.action).toEqual({ kind: 'go', hash: `#/p/${PROJECT_ID}/board` });
     expect(all.find((c) => c.id === 'ticket:t-3')?.action).toEqual({
       kind: 'go',
