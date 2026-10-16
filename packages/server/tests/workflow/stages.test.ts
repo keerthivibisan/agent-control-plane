@@ -292,6 +292,147 @@ describe('skills plugin (ADR-0019 §4)', () => {
   });
 });
 
+describe('stage agent files (ADR-0019 §6)', () => {
+  const SETUP = {
+    projectKey: 'WEB',
+    maxConcurrentHelpers: 3,
+    maxDepth: 1,
+    defaultBudgetTokensPerAgent: 100_000,
+    model: 'claude-project-model',
+    allowlist: { editInOwnWorktree: false, runHarnessChecks: false },
+    contextFiles: [],
+  };
+
+  function agentFile(name: string, extra: string[], body: string): string {
+    return [
+      '---',
+      `name: ${name}`,
+      'description: Synthetic test agent.',
+      ...extra,
+      '---',
+      body,
+    ].join('\n');
+  }
+
+  function writeAgent(root: string, name: string, text: string): void {
+    mkdirSync(join(root, '.claude', 'agents'), { recursive: true });
+    writeFileSync(join(root, '.claude', 'agents', `${name}.md`), text);
+  }
+
+  it("gives the lead the file's instructions and tools; the file model beats the project's", async () => {
+    const s = await setupBoard();
+    expect((await s.send('put', `/api/projects/${s.project.id}/setup`, SETUP)).status).toBe(200);
+    writeAgent(
+      s.repo,
+      'lead-style',
+      agentFile(
+        'lead-style',
+        ['tools: Read, Grep, Bash', 'model: claude-file-model', 'permissionMode: acceptEdits'],
+        'Plan in three steps at most.\n',
+      ),
+    );
+    const st = stages();
+    st.orchestrate = { model: null, skill: null, agent: 'lead-style' };
+    await saveWorkflow(s, { plannerMode: 'lead', stages: st });
+    await startReady(s);
+
+    const lead = s.fake.lead();
+    expect(lead.spec.profile).toEqual({
+      name: 'lead-style',
+      instructions: 'Plan in three steps at most.\n',
+      tools: ['Read', 'Grep', 'Bash'],
+    });
+    expect(lead.spec.model).toBe('claude-file-model');
+    // The file goes to the system prompt (adapter), not into the first message.
+    expect(lead.spec.prompt).not.toContain('three steps');
+    expect(JSON.stringify(lead.spec.profile)).not.toContain('acceptEdits');
+    expect(s.control.counters().diagnostics['agent-file-unavailable']).toBeUndefined();
+  });
+
+  it("an explicit stage model wins over the file's; a helper's file comes from the owner's checkout", async () => {
+    const s = await setupBoard({
+      files: {
+        'README.md': 'hello\n',
+        'src/app.ts': 'export {};\n',
+        '.claude/agents/frontend-dev.md': agentFile(
+          'frontend-dev',
+          ['tools: Read'],
+          'Committed.\n',
+        ),
+      },
+    });
+    expect((await s.send('put', `/api/projects/${s.project.id}/setup`, SETUP)).status).toBe(200);
+    // The owner's uncommitted edit is what runs; the helper's worktree still has the committed one.
+    writeAgent(
+      s.repo,
+      'frontend-dev',
+      agentFile('frontend-dev', ['tools: Read, Edit', 'model: claude-file-model'], 'Owner copy.\n'),
+    );
+    const st = stages();
+    st.helpers = { model: 'claude-stage-model', skill: null, agent: 'frontend-dev' };
+    await saveWorkflow(s, { plannerMode: 'lead', stages: st });
+    const { ticket } = await s.startTicket();
+    expect(s.fake.lead().spec.profile).toBeUndefined();
+    await s.submitPlan();
+    await approvePlan(s, ticket.id);
+    await s.fake.lead().callLead('start_agent', { role: 'Builder', task: 'Build the toggle' });
+    await s.settle();
+
+    const worker = agentOf(s, 'worker');
+    expect(worker.spec.cwd).not.toBe(s.repo);
+    expect(worker.spec.profile).toEqual({
+      name: 'frontend-dev',
+      instructions: 'Owner copy.\n',
+      tools: ['Read', 'Edit'],
+    });
+    expect(worker.spec.model).toBe('claude-stage-model');
+    expect(
+      readFileSync(join(worker.spec.cwd, '.claude', 'agents', 'frontend-dev.md'), 'utf8'),
+    ).toContain('Committed.');
+  });
+
+  it('starts the agent without a profile when the file is missing or unparsable, and counts it', async () => {
+    const entries: { message: string; fields: unknown }[] = [];
+    const s = await setupBoard({
+      logger: { log: (_level, message, fields) => entries.push({ message, fields }) },
+    });
+    expect((await s.send('put', `/api/projects/${s.project.id}/setup`, SETUP)).status).toBe(200);
+    writeAgent(
+      s.repo,
+      'broken',
+      '---\nname: broken\ntools: Read\ntools: Bash\n---\nSECRET-BODY-TEXT\n',
+    );
+    const st = stages();
+    st.plan = { model: null, skill: null, agent: 'broken' };
+    st['code-review'] = { enabled: false, model: null, skill: null, agent: 'gone-agent' };
+    await saveWorkflow(s, { plannerMode: 'separate', stages: st });
+    await startReady(s);
+
+    const planner = agentOf(s, 'planner');
+    expect(planner.spec.profile).toBeUndefined();
+    expect(planner.spec.model).toBe('claude-project-model');
+    expect(s.control.counters().diagnostics['agent-file-unavailable']).toBe(1);
+    const logged = entries.filter((e) => e.message === 'project agent file unavailable');
+    expect(logged).toHaveLength(1);
+    expect(logged[0]?.fields).toMatchObject({ agentFile: 'broken', problem: 'unparsable' });
+    expect(JSON.stringify(entries)).not.toContain('SECRET-BODY-TEXT');
+  });
+
+  it('a missing file for the lead: started without a profile, the run goes on', async () => {
+    const s = await setupBoard();
+    const st = stages();
+    st.orchestrate = { model: null, skill: null, agent: 'gone-agent' };
+    await saveWorkflow(s, { plannerMode: 'lead', stages: st });
+    const { ticket } = await s.startTicket();
+    const lead = s.fake.lead();
+    expect(lead.spec.profile).toBeUndefined();
+    expect(lead.spec.model).toBeNull();
+    expect(s.control.counters().diagnostics['agent-file-unavailable']).toBe(1);
+    await s.submitPlan();
+    expect((await s.detail(ticket.id)).plans).toHaveLength(1);
+  });
+});
+
 describe('Continue after a restart (ADR-0019, ADR-0013 §7)', () => {
   it('holds the interrupted code review until the owner continues, across restarts', async () => {
     const first = await setupBoard();

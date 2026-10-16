@@ -88,6 +88,28 @@ describe('PUT /api/projects/:id/workflow (R-G)', () => {
     expect(s.workflow.workflowFor(s.project.id)).toEqual(dto.workflow);
   });
 
+  it('round-trips stage agent files; a stage without one stays without (R-I)', async () => {
+    const s = await setupBoard();
+    const body = update();
+    body.stages.plan = { ...body.stages.plan, agent: 'planner-style' };
+    body.stages['code-review'] = { ...body.stages['code-review'], agent: null };
+    // Not in the repo: allowed; the agent starts without it (ADR-0019 §6).
+    body.stages['unit-tests'] = { ...body.stages['unit-tests'], agent: 'gone-agent' };
+    const res = await s.send('put', `/api/projects/${s.project.id}/workflow`, body);
+    expect(res.status).toBe(200);
+    const saved = dtoOf(res).workflow.stages;
+    expect(saved.plan.agent).toBe('planner-style');
+    expect(saved['code-review'].agent).toBeNull();
+    expect(saved['unit-tests'].agent).toBe('gone-agent');
+    expect(saved.helpers).not.toHaveProperty('agent');
+    const again = dtoOf(await s.get(`/api/projects/${s.project.id}/workflow`));
+    expect(again.workflow.stages).toEqual(saved);
+
+    const bad = update();
+    bad.stages.plan = { ...bad.stages.plan, agent: '../../etc/passwd' };
+    expect((await s.send('put', `/api/projects/${s.project.id}/workflow`, bad)).status).toBe(400);
+  });
+
   it('takes the project from the path, never from the body', async () => {
     const s = await setupBoard();
     const other = s.repos.projects.insert({ name: 'other', rootPath: '/home/user/other' });

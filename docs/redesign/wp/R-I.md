@@ -20,7 +20,7 @@ their tests, this file.
 
 - [x] 1. Engine: the stage's agent-file name on the `start-agent` effect; model precedence
       (stage > file > project > provider default) as a pure, tested helper
-- [ ] 2. Server: read and parse `<project root>/.claude/agents/<name>.md` from the owner's checkout
+- [x] 2. Server: read and parse `<project root>/.claude/agents/<name>.md` from the owner's checkout
       with R-D's module; build `spec.profile`; missing/unsafe/oversize/unparsable → no profile,
       counted diagnostic, run not blocked; workflow PUT/GET round-trip `agent`
 - [ ] 3. Adapter: profile instructions appended to the system prompt; tools narrowed with the SDK
@@ -29,10 +29,11 @@ their tests, this file.
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                          | Commit    | Checks                                            |
-| ---------- | ---------------------------------------------------------------------- | --------- | ------------------------------------------------- |
-| 2026-10-16 | Claimed R-I (backend) on the branch                                    | `230d899` | docs only                                         |
-| 2026-10-16 | Engine: `agent` on `start-agent`, `stageAgentFor`, `resolveAgentModel` | (this)    | pnpm check ✓: test 1,962/1,962 (orchestrator 430) |
+| Date       | What was done                                                                                                                   | Commit    | Checks                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------- |
+| 2026-10-16 | Claimed R-I (backend) on the branch                                                                                             | `230d899` | docs only                                         |
+| 2026-10-16 | Engine: `agent` on `start-agent`, `stageAgentFor`, `resolveAgentModel`                                                          | `1820261` | pnpm check ✓: test 1,962/1,962 (orchestrator 430) |
+| 2026-10-16 | Server: agent file read from the checkout (R-D path rules) → `spec.profile`; model precedence; counted `agent-file-unavailable` | (this)    | pnpm check ✓: test 1,978/1,978 (server 399)       |
 
 ## Handoff notes
 

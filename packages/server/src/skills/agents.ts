@@ -18,7 +18,8 @@ import { createFileStore, type ProjectRef } from './store.js';
  * amendment). Same path rules, writes, git state and commit as skills (`store.ts`). The front matter
  * is `name`, `description`, an optional `tools` list and an optional `model`; the app writes no
  * other keys. A hand-edited file's other keys are kept as they are and reported as a problem.
- * Agent files are not mapped to workflow stages yet, so nothing guards their delete.
+ * A workflow stage may use an agent file (ADR-0019 §6, `workflow/agent-profile.ts`); its delete is
+ * not guarded, because a missing stage file never blocks a run (the agent starts without it).
  */
 
 export interface AgentsServiceDeps {

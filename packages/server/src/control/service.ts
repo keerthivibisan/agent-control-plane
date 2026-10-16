@@ -59,6 +59,7 @@ import {
   leadToolCall,
   ownerChat,
   pluginSkillName,
+  resolveAgentModel,
   recordReview,
   recoverAfterRestart,
   requestPermission,
@@ -85,6 +86,11 @@ import {
   type WorkspaceManager,
 } from '../workspace/index.js';
 import { createSkillsPlugins, type SkillsPlugins } from '../workflow/skills-plugin.js';
+import {
+  createAgentProfiles,
+  type AgentProfile,
+  type AgentProfiles,
+} from '../workflow/agent-profile.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
 import { createCsrfToken } from './csrf.js';
 import { refusalError, workspaceError } from './errors.js';
@@ -244,6 +250,8 @@ export interface ControlServiceDeps {
   reviewCheckouts?: ReviewCheckouts;
   /** The run-scoped skills plugins (ADR-0019 §4); defaults to `<dataDir>/runs/<runId>/…`. */
   skillsPlugins?: SkillsPlugins;
+  /** Reads a stage's project agent file (ADR-0019 §6); injected so tests use a temp home. */
+  agentProfiles?: AgentProfiles;
 }
 
 export interface ControlCounters {
@@ -328,9 +336,11 @@ interface LaunchInput {
   cwd: string;
   prompt: string;
   setup: AgentSetup;
-  /** The stage's model (`start-agent.model`); else the project's. */
+  /** The stage's model (`start-agent.model`); else the agent file's, else the project's. */
   model?: string | undefined;
   plugin?: { path: string; skills: readonly string[] } | undefined;
+  /** The stage's agent file (ADR-0019 §6), when it could be read; its `model` is the fallback. */
+  agentFile?: { profile: AgentProfile; model: string | null } | undefined;
   canStartHelpers?: boolean;
 }
 
@@ -352,6 +362,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   const reviewCheckouts =
     deps.reviewCheckouts ?? createReviewCheckouts({ dataDir: deps.dataDir, git: deps.git, logger });
   const skillsPlugins = deps.skillsPlugins ?? createSkillsPlugins({ dataDir: deps.dataDir });
+  const agentProfiles = deps.agentProfiles ?? createAgentProfiles();
   /** Reviewer checkouts in use, for the observation pipeline's roots (by agent run id). */
   const activeCheckouts = new Map<string, { projectId: string; checkout: ReviewCheckout }>();
   const newId = deps.newId ?? (() => randomUUID());
@@ -714,7 +725,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const kind = effect.kind;
     const base = { agentRunId, kind, prompt: effect.prompt, model: effect.model };
     if (kind === 'lead' || kind === 'planner') {
-      if (hooks.agentSetup === undefined && effect.skills === undefined) {
+      if (
+        hooks.agentSetup === undefined &&
+        effect.skills === undefined &&
+        effect.agent === undefined
+      ) {
         launch(live, { ...base, cwd: project.rootPath, setup: NO_SETUP });
         return;
       }
@@ -723,9 +738,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         (async () => {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
+          const agentFile = await agentFileFor(live, project.rootPath, effect);
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, cwd: project.rootPath, setup, plugin });
+          launch(live, { ...base, cwd: project.rootPath, setup, plugin, agentFile });
         })(),
       );
       return;
@@ -744,9 +760,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           }
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
+          const agentFile = await agentFileFor(live, project.rootPath, effect);
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, cwd: checkout.cwd, setup, plugin });
+          launch(live, { ...base, cwd: checkout.cwd, setup, plugin, agentFile });
         })(),
       );
       return;
@@ -804,10 +821,20 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         live.workspaces.set(agentRunId, ws);
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, project.rootPath, effect);
+        // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
+        const agentFile = await agentFileFor(live, project.rootPath, effect);
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
-        launch(live, { ...base, prompt, cwd: ws.cwd, setup, plugin, canStartHelpers });
+        launch(live, {
+          ...base,
+          prompt,
+          cwd: ws.cwd,
+          setup,
+          plugin,
+          agentFile,
+          canStartHelpers,
+        });
       })(),
     );
   }
@@ -843,6 +870,43 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       logger.log('warn', 'skills plugin failed', {
         runId,
         agentRunId: effect.agentRunId,
+        ...errorFields(error),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * The stage's project agent file for this agent (ADR-0019 §6), read from the owner's project
+   * checkout. Never rejects: a missing, unsafe, oversize or unparsable file is counted and logged
+   * by reason (never its contents), and the agent starts without a profile.
+   */
+  async function agentFileFor(
+    live: LiveRun,
+    projectRoot: string,
+    effect: Extract<EngineEffect, { type: 'start-agent' }>,
+  ): Promise<{ profile: AgentProfile; model: string | null } | undefined> {
+    const name = effect.agent;
+    if (name === undefined) return undefined;
+    const runId = live.state.run.id;
+    try {
+      const read = await agentProfiles.read(projectRoot, name);
+      if (read.ok) return { profile: read.profile, model: read.model };
+      countDiagnostic('agent-file-unavailable');
+      logger.log('warn', 'project agent file unavailable', {
+        runId,
+        agentRunId: effect.agentRunId,
+        // A slug (`SkillNameSchema`) from the owner's workflow, not free text.
+        agentFile: name,
+        problem: read.problem,
+      });
+      return undefined;
+    } catch (error) {
+      countDiagnostic('agent-file-unavailable');
+      logger.log('warn', 'project agent file unavailable', {
+        runId,
+        agentRunId: effect.agentRunId,
+        problem: 'unreadable',
         ...errorFields(error),
       });
       return undefined;
@@ -940,8 +1004,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       kind,
       cwd: input.cwd,
       prompt: input.prompt,
-      // ADR-0019: the stage's model, else the project's (Phase 4).
-      model: input.model ?? setup.model,
+      // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4).
+      model: resolveAgentModel({
+        stage: input.model,
+        agentFile: input.agentFile?.model,
+        project: setup.model,
+      }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
     if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers) {
@@ -953,6 +1021,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     if (kind === 'worker' && canStartHelpers) spec.canStartHelpers = true;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
+    if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
     let handle: ManagedAgentHandle;
     try {
       handle = adapter.start(spec, {

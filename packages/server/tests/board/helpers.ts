@@ -15,6 +15,7 @@ import { createProjectHarness } from '../../src/board/harness.js';
 import { createBoardService } from '../../src/board/service.js';
 import { createWorkflowService } from '../../src/workflow/service.js';
 import { createSkillsPlugins } from '../../src/workflow/skills-plugin.js';
+import { createAgentProfiles } from '../../src/workflow/agent-profile.js';
 import {
   createControlService,
   type ControlService,
@@ -109,6 +110,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     publish: base.publish,
     sweepIntervalMs: null,
     skillsPlugins: createSkillsPlugins({ dataDir, skills: { homeDir } }),
+    agentProfiles: createAgentProfiles({ homeDir }),
     workspace: hooks,
   });
   const workspace = createWorkspaceRepositories(db, { now });
