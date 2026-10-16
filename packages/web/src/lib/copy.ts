@@ -197,8 +197,9 @@ export const PAGES = {
     title: 'Project',
     description: 'Sessions that ran inside this folder and the tokens they used.',
   },
+  // Redesign (R-A): Setup moved under Data health as its "Connection" section.
   setup: {
-    title: 'Setup',
+    title: 'Connection',
     description: 'Add project folders and, optionally, connect Claude Code hooks.',
   },
   health: {
@@ -1975,4 +1976,105 @@ export const TICKET_COPY = {
     show: 'Show',
     showing: 'Shown above',
   },
+} as const;
+
+// --- Shell, All projects and the command palette (redesign R-A, wp/r-a-shell) ------------------
+// Add-only. Page WPs add their own sections below; nav labels for their pages live here.
+
+export const SHELL_COPY = {
+  topBar: { label: 'App bar', home: 'Agent Control Plane home' },
+  nav: {
+    label: 'Main',
+    project: 'Project',
+    pages: {
+      board: 'Board',
+      workflow: 'Workflow',
+      skills: 'Skills',
+      harness: 'Harness',
+      tokens: 'Tokens',
+      sessions: 'Sessions',
+      settings: 'Settings',
+    },
+    allProjects: 'All projects',
+    health: 'Data health',
+  },
+  switcher: {
+    button: (name: string) => `Project: ${name}. Switch project`,
+    none: 'Choose a project',
+    unknown: 'Unknown project',
+    allProjects: 'All projects',
+    menu: 'Switch project',
+    yourProjects: 'Your projects',
+    newProject: 'New project',
+    empty: 'No projects yet.',
+  },
+  palette: {
+    open: 'Search or jump to…',
+    shortcut: '⌘K',
+  },
+  theme: {
+    label: (word: string) => `Theme: ${word}. Change theme`,
+    tip: 'Change theme: system → light → dark',
+  },
+  health: {
+    tabs: 'Data health sections',
+    overview: 'Overview',
+    connection: 'Connection',
+  },
+  redirect: {
+    opening: 'Opening…',
+    ticketMissing: {
+      title: 'Ticket not found',
+      text: 'There is no ticket at this address. It may have been removed.',
+    },
+    runMissing: {
+      title: 'Run not found',
+      text: 'There is no run at this address. It may have been removed.',
+    },
+  },
+  notFound: { action: 'Go to All projects' },
+} as const;
+
+export const ALL_PROJECTS_COPY = {
+  title: 'All projects',
+  description: 'Every project you added, what its agents are doing, and what needs you.',
+  newProject: 'New project',
+  addFolder: 'Add an existing folder',
+  cardsLabel: 'Your projects',
+  sessions: (n: number) => countOf(n, 'session'),
+  running: (n: number) => `${formatCount(n)} running`,
+  needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'needs' : 'need'} you`,
+  runsTip:
+    "Agent runs working on this project's tickets right now, and the approvals or plan reviews waiting for you.",
+  runsUnavailable: 'Board not available',
+  harness: 'Harness',
+  lastActivity: 'Last activity',
+  noActivity: 'No activity yet',
+  across: {
+    title: 'Across your projects',
+    tip: 'Claude Code sessions in all your projects: what runs now, what waits for you, and the tokens they used.',
+  },
+  empty: {
+    title: 'Add your first project',
+    text: 'Pick a folder where you use Claude Code, or create a new repository. Everything else is per project.',
+  },
+} as const;
+
+export const PALETTE_COPY = {
+  title: 'Command palette',
+  input: 'Search projects, pages and tickets',
+  placeholder: 'Jump to a project, page or ticket…',
+  results: 'Results',
+  none: 'Nothing matches.',
+  loadingTickets: 'Loading tickets…',
+  groups: {
+    actions: 'Actions',
+    pages: 'Pages',
+    projects: 'Projects',
+    tickets: 'Tickets',
+  },
+  newTicket: 'New ticket',
+  newTicketIn: (project: string) => `New ticket in ${project}`,
+  newProject: 'New project',
+  hint: '↑↓ to move · Enter to open · Esc to close',
 } as const;

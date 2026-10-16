@@ -29,7 +29,7 @@ export function RunList() {
                   <li key={r.id} className="relative rounded-control px-2 py-2.5 hover:bg-sunken">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <a
-                        href={href.control(r.id)}
+                        href={href.run(r)}
                         className="min-w-0 flex-1 truncate font-medium text-ink no-underline after:absolute after:inset-0 hover:underline"
                       >
                         {r.title}

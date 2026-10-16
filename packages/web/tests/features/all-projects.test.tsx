@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { CommandCenter } from '../../src/features/command-center/CommandCenter';
+import { AcrossProjects } from '../../src/features/all-projects/AcrossProjects';
 import { capabilities, event, overview, partialUsage, project, session, T1 } from '../fixtures/dto';
 import { fakeServer, renderWithApi } from '../helpers';
 
@@ -8,16 +8,17 @@ const hooksOn = capabilities({
   hooks: { receiverUrl: 'http://127.0.0.1:7420/api/hooks/claude-code', receivedAny: true },
 });
 
-describe('Overview (#/)', () => {
+describe('All projects: across your projects (the former Overview)', () => {
   it('shows every headline number from the overview DTO, with units', async () => {
     const o = overview({
       projectCount: 3,
       sessionsByStatus: { active: 7, idle: 11, stale: 13, ended: 17, unknown: 0 },
       needsAttention: [session({ id: 's-attn', title: 'Waiting on me', lastAttentionAt: T1 })],
     });
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': o }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': o }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'Across your projects' })).toBeTruthy();
+    await screen.findByTestId('stat-running');
     expect(screen.getByTestId('stat-running').textContent).toContain('7 sessions');
     expect(screen.getByTestId('stat-need-you').textContent).toContain('1 session');
     expect(screen.getByTestId('stat-projects').textContent).toContain('3 folders');
@@ -37,7 +38,7 @@ describe('Overview (#/)', () => {
     const o = overview({
       sessionsByStatus: { active: 0, idle: 0, stale: 0, ended: 0, unknown: 2 },
     });
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': o }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': o }));
     const counts = await screen.findByTestId('sessions-by-status');
     expect(counts.querySelector('[data-status-count="unknown"]')?.textContent).toBe(
       'Unknown2 sessions',
@@ -46,7 +47,7 @@ describe('Overview (#/)', () => {
 
   it('shows token types side by side, missing ones as "Not reported", never a total', async () => {
     const o = overview({ totals: partialUsage });
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': o }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': o }));
     const tokens = await screen.findByRole('region', { name: 'Tokens used' });
     const value = (c: string) => tokens.querySelector(`dd[data-category="${c}"]`)?.textContent;
     expect(value('input')).toBe('10');
@@ -80,7 +81,7 @@ describe('Overview (#/)', () => {
       ],
     });
     renderWithApi(
-      <CommandCenter />,
+      <AcrossProjects />,
       fakeServer({
         '/api/overview': o,
         '/api/capabilities': hooksOn,
@@ -107,39 +108,23 @@ describe('Overview (#/)', () => {
   });
 
   it('says plainly when nothing runs and points to Setup when hooks never arrived', async () => {
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': overview() }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': overview() }));
     expect(await screen.findByText('Nothing running')).toBeTruthy();
     const hooksOff = await screen.findByTestId('hooks-off');
     expect(hooksOff.textContent).toContain('Live updates are off');
     expect(within(hooksOff).getByRole('link', { name: 'Set up live updates' })).toBeTruthy();
     expect(
       within(hooksOff).getByRole('link', { name: 'Set up live updates' }).getAttribute('href'),
-    ).toBe('#/setup');
+    ).toBe('#/health/connection');
   });
 
   it('says nothing needs you once hooks are connected', async () => {
     renderWithApi(
-      <CommandCenter />,
+      <AcrossProjects />,
       fakeServer({ '/api/overview': overview(), '/api/capabilities': hooksOn }),
     );
     expect(await screen.findByText('Nothing needs you')).toBeTruthy();
     expect(screen.queryByTestId('hooks-off')).toBeNull();
-  });
-
-  it('with no projects, shows only a get-started card that links to Setup', async () => {
-    renderWithApi(
-      <CommandCenter />,
-      fakeServer({ '/api/overview': overview({ projectCount: 0, candidateRootCount: 2 }) }),
-    );
-    const card = await screen.findByTestId('get-started');
-    expect(card.textContent).toContain('Add your first project');
-    expect(card.textContent).toContain('2 folders with Claude Code activity were found');
-    expect(
-      within(card).getByRole('link', { name: 'Add a project folder' }).getAttribute('href'),
-    ).toBe('#/setup');
-    // The register form and diagnostics moved to Setup and Data health.
-    expect(screen.queryByRole('form')).toBeNull();
-    expect(screen.queryByTestId('sessions-by-status')).toBeNull();
   });
 
   it('lists estimated cost per session, "Not reported" never $0, and no total', async () => {
@@ -161,7 +146,7 @@ describe('Overview (#/)', () => {
         },
       ],
     });
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': o }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': o }));
 
     const card = await screen.findByRole('region', { name: 'Estimated cost by session' });
     expect(card.textContent).toContain('Claude Code makes this estimate, not this app');
@@ -188,7 +173,7 @@ describe('Overview (#/)', () => {
   });
 
   it('says when no cost was reported yet', async () => {
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': overview() }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': overview() }));
     expect((await screen.findByTestId('latest-snapshots-empty')).textContent).toContain(
       'No cost reported yet',
     );
@@ -209,7 +194,7 @@ describe('Overview (#/)', () => {
         event({ id: 39, eventType: 'session.observed', sessionId: null, occurredAt: null }),
       ],
     });
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': o }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': o }));
 
     const feed = await screen.findByTestId('activity-feed');
     const item = (id: number) => feed.querySelector(`[data-event-id="${id}"]`) as HTMLElement;
@@ -233,7 +218,7 @@ describe('Overview (#/)', () => {
     const recentEvents = Array.from({ length: 14 }, (_, i) =>
       event({ id: i + 1, eventType: 'session.turn_ended', payload: {} }),
     );
-    renderWithApi(<CommandCenter />, fakeServer({ '/api/overview': overview({ recentEvents }) }));
+    renderWithApi(<AcrossProjects />, fakeServer({ '/api/overview': overview({ recentEvents }) }));
     const feed = await screen.findByTestId('activity-feed');
     expect(feed.querySelectorAll('li').length).toBe(10);
   });

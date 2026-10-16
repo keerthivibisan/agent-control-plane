@@ -64,7 +64,7 @@ export function StartRun() {
       const sent = await chat.run(run.id, { text });
       if (sent === null) unsentFirstMessages.set(run.id, text);
     }
-    navigate(href.control(run.id));
+    navigate(href.run(run));
   };
 
   const pending = start.pending || chat.pending;

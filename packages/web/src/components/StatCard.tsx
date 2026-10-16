@@ -23,19 +23,18 @@ export function StatCard({
 }) {
   const body = (
     <>
-      <div className="pr-6 text-dim">{label}</div>
-      <div className="mt-1 text-stat font-semibold tracking-tight tabular-nums">{value}</div>
-      {sublabel ? <div className="mt-0.5 text-caption text-dim">{sublabel}</div> : null}
+      <div className="pr-6 text-caption font-medium text-dim">{label}</div>
+      <div className="mt-2 text-stat font-semibold tracking-tight tabular-nums">{value}</div>
+      {sublabel ? <div className="mt-1 text-caption text-dim">{sublabel}</div> : null}
     </>
   );
-  const frame =
-    'block h-full min-w-0 rounded-card border border-line bg-panel px-5 py-4 shadow-card';
+  const frame = 'block h-full min-w-0 rounded-card border border-line bg-panel p-5 shadow-card';
   return (
     <div className="relative min-w-0" data-testid={testId}>
       {href ? (
         <a
           href={href}
-          className={`${frame} text-ink no-underline transition-colors hover:border-line-strong hover:bg-sunken`}
+          className={`${frame} text-ink no-underline transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised`}
         >
           {body}
         </a>

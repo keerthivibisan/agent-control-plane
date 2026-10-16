@@ -145,7 +145,7 @@ export function TicketCard({
 
       <a
         id={`ticket-${ticket.id}`}
-        href={href.ticket(ticket.id)}
+        href={href.ticket(ticket)}
         draggable={false}
         className="font-medium break-words text-ink no-underline hover:text-accent hover:underline"
       >

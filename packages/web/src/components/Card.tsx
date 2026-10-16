@@ -28,7 +28,8 @@ export function Card({
 }) {
   const titleId = useId();
   const hasHeader = title !== undefined || actions !== undefined;
-  const body = padded ? `px-5 pb-5 ${hasHeader ? 'pt-3' : 'pt-5'}` : hasHeader ? 'pt-3' : '';
+  // 8-pt rhythm (DESIGN.md): 24px padding, 16px between the header and the body.
+  const body = padded ? `px-6 pb-6 ${hasHeader ? 'pt-4' : 'pt-6'}` : hasHeader ? 'pt-4' : '';
   return (
     <section
       aria-labelledby={title !== undefined ? titleId : undefined}
@@ -36,10 +37,10 @@ export function Card({
       className={`min-w-0 rounded-card border border-line bg-panel shadow-card ${className}`}
     >
       {hasHeader ? (
-        <header className="flex flex-wrap items-start gap-x-3 gap-y-1 px-5 pt-4">
+        <header className="flex flex-wrap items-start gap-x-3 gap-y-1 px-6 pt-5">
           <div className="min-w-0 flex-1">
             {title !== undefined ? (
-              <h2 className="flex items-center gap-1 text-title font-semibold">
+              <h2 className="flex items-center gap-1 text-title font-semibold tracking-tight">
                 <span id={titleId}>{title}</span>
                 {tip ? <InfoTip tip={tip} label={title} /> : null}
               </h2>

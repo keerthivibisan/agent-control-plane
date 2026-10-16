@@ -15,7 +15,7 @@ import { PAGES, PROJECT_PAGE, PROJECT_SETUP_COPY, PROJECTS_PAGE } from '../../li
 import { sessionLabel } from '../../lib/format';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
-import { FolderPath } from '../projects/ProjectsList';
+import { FolderPath } from '../all-projects/project-bits';
 import { TokenStats } from '../usage/TokenStats';
 import { usageHref } from '../usage/usage-params';
 import { SessionsPager } from './SessionsPager';

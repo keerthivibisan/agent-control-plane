@@ -108,7 +108,7 @@ export function HarnessTicketAction({
             <strong className="font-semibold">{H.ticketCreated(ticket.key)}</strong>{' '}
             <span className="text-dim">{H.ticketCreatedText}</span>
           </span>
-          <a href={href.ticket(ticket.id)} className="ml-auto">
+          <a href={href.ticket(ticket)} className="ml-auto">
             {H.openTicket}
           </a>
         </div>

@@ -1,18 +1,16 @@
 import type { SessionStatus } from '@acp/core';
 import type { OverviewDto } from '@acp/core/api';
-import { ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { ProjectsIcon } from '../../components/icons';
-import { PageHeader } from '../../components/PageHeader';
+import { SectionHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import { RelativeTime } from '../../components/RelativeTime';
 import { StatCard } from '../../components/StatCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TokenBreakdown } from '../../components/TokenBreakdown';
 import { paths, schemas } from '../../lib/api';
-import { EMPTY, OVERVIEW_COPY, PAGES, STATUS_COPY } from '../../lib/copy';
+import { ALL_PROJECTS_COPY, EMPTY, OVERVIEW_COPY, STATUS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { ActivityFeed } from './ActivityFeed';
@@ -25,50 +23,26 @@ const MAIN_STATUSES: readonly SessionStatus[] = ['active', 'idle', 'stale', 'end
 function StatusCounts({ counts }: { counts: OverviewDto['sessionsByStatus'] }) {
   const statuses = counts.unknown > 0 ? [...MAIN_STATUSES, 'unknown' as const] : MAIN_STATUSES;
   return (
-    <Card title={OVERVIEW_COPY.statusCard.title} description={OVERVIEW_COPY.statusCard.description}>
+    <Card title={OVERVIEW_COPY.statusCard.title} tip={OVERVIEW_COPY.statusCard.description}>
       <ul
         data-testid="sessions-by-status"
         className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         aria-label={OVERVIEW_COPY.statusCard.title}
       >
         {statuses.map((s) => (
-          <li key={s} className="min-w-0">
-            <a
-              href={href.sessions({ status: s })}
-              data-status-count={s}
-              aria-label={`${STATUS_COPY[s].word}: ${OVERVIEW_COPY.sessions(counts[s])}`}
-              className="block rounded-control border border-line px-4 py-3 text-ink no-underline transition-colors hover:border-line-strong hover:bg-sunken"
-            >
-              <StatusBadge status={s} withTip={false} />
-              <div className="mt-1 text-title font-semibold tabular-nums">
-                {OVERVIEW_COPY.sessions(counts[s])}
-              </div>
-            </a>
+          <li
+            key={s}
+            data-status-count={s}
+            aria-label={`${STATUS_COPY[s].word}: ${OVERVIEW_COPY.sessions(counts[s])}`}
+            className="min-w-0 rounded-control border border-line bg-sunken/40 px-4 py-3"
+          >
+            <StatusBadge status={s} withTip={false} />
+            <div className="mt-1 text-title font-semibold tabular-nums">
+              {OVERVIEW_COPY.sessions(counts[s])}
+            </div>
           </li>
         ))}
       </ul>
-    </Card>
-  );
-}
-
-function GetStarted({ unadded }: { unadded: number }) {
-  return (
-    <Card testId="get-started">
-      <EmptyState
-        icon={<ProjectsIcon size={22} />}
-        title={OVERVIEW_COPY.getStarted.title}
-        text={
-          <>
-            {OVERVIEW_COPY.getStarted.text}
-            {unadded > 0 ? <> {OVERVIEW_COPY.getStarted.found(unadded)}</> : null}
-          </>
-        }
-        action={
-          <ButtonLink href={href.setup()} variant="primary">
-            {OVERVIEW_COPY.getStarted.action}
-          </ButtonLink>
-        }
-      />
     </Card>
   );
 }
@@ -89,19 +63,7 @@ function Lists({
   const noHooks = hooksReceived === false;
   return (
     <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
-      <Card
-        title={OVERVIEW_COPY.running.title}
-        tip={STATUS_COPY.active.tip}
-        description={OVERVIEW_COPY.running.description}
-        actions={
-          o.activeSessions.length > 0 ? (
-            <a href={href.sessions({ status: 'active' })} className="text-caption">
-              {OVERVIEW_COPY.running.link}
-            </a>
-          ) : undefined
-        }
-        testId="running-now"
-      >
+      <Card title={OVERVIEW_COPY.running.title} tip={STATUS_COPY.active.tip} testId="running-now">
         {o.activeSessions.length === 0 ? (
           <EmptyState compact title={EMPTY.running.title} text={EMPTY.running.text} />
         ) : (
@@ -114,7 +76,7 @@ function Lists({
       </Card>
       <Card
         title={OVERVIEW_COPY.waiting.title}
-        description={OVERVIEW_COPY.waiting.description}
+        tip={OVERVIEW_COPY.waiting.description}
         testId="waiting-for-you"
       >
         {o.needsAttention.length > 0 ? (
@@ -145,7 +107,7 @@ function Lists({
   );
 }
 
-function Overview({
+function Summary({
   o,
   projectNames,
   hooksReceived,
@@ -154,8 +116,6 @@ function Overview({
   projectNames: ReadonlyMap<string, string>;
   hooksReceived: boolean | undefined;
 }) {
-  if (o.projectCount === 0) return <GetStarted unadded={o.candidateRootCount} />;
-
   // Names the overview already has, so activity lines can say which session acted.
   const sessionNames = new Map<string, string>();
   for (const s of o.latestSnapshots) if (s.title !== null) sessionNames.set(s.sessionId, s.title);
@@ -170,7 +130,6 @@ function Overview({
           label={OVERVIEW_COPY.stats.running.label}
           tip={OVERVIEW_COPY.stats.running.tip}
           value={OVERVIEW_COPY.sessions(o.sessionsByStatus.active)}
-          href={href.sessions({ status: 'active' })}
         />
         <StatCard
           testId="stat-need-you"
@@ -188,20 +147,10 @@ function Overview({
           label={OVERVIEW_COPY.stats.projects.label}
           tip={OVERVIEW_COPY.stats.projects.tip}
           value={OVERVIEW_COPY.folders(o.projectCount)}
-          href={href.projects()}
         />
       </div>
       <StatusCounts counts={o.sessionsByStatus} />
-      <Card
-        title={OVERVIEW_COPY.tokens.title}
-        description={OVERVIEW_COPY.tokens.description}
-        actions={
-          <a href={href.usage()} className="text-caption">
-            {OVERVIEW_COPY.tokens.link}
-          </a>
-        }
-        testId="tokens-used"
-      >
+      <Card title={OVERVIEW_COPY.tokens.title} tip={OVERVIEW_COPY.tokens.description} testId="tokens-used">
         <TokenBreakdown usage={o.totals} label={OVERVIEW_COPY.tokens.title} />
       </Card>
       <Lists o={o} projectNames={projectNames} hooksReceived={hooksReceived} />
@@ -213,27 +162,32 @@ function Overview({
   );
 }
 
-/** `#/`: what your Claude Code sessions are doing right now, from GET /api/overview. */
-export function CommandCenter() {
+/**
+ * The cross-project part of All projects (it replaces the Overview page, docs/redesign/README.md
+ * §3): Claude Code sessions in every project, from GET /api/overview.
+ */
+export function AcrossProjects() {
   const overview = useApiQuery(paths.overview(), schemas.overview);
   const projects = useApiQuery(paths.projects(), schemas.projects);
   const caps = useApiQuery(paths.capabilities(), schemas.capabilities);
   const projectNames = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
 
   return (
-    <div>
-      <PageHeader title={PAGES.overview.title} description={PAGES.overview.description} />
-      {/* Project names and the hooks hint come from these; their failures are shown, not hidden. */}
-      {[projects.error, caps.error].map((error) =>
-        error ? (
-          <div key={error.path} className="mb-4">
-            <ErrorNotice error={error} />
-          </div>
-        ) : null,
-      )}
+    <section aria-labelledby="across-projects" data-testid="across-projects">
+      <SectionHeader
+        id="across-projects"
+        title={ALL_PROJECTS_COPY.across.title}
+        tip={ALL_PROJECTS_COPY.across.tip}
+      />
+      {/* The hooks hint comes from capabilities; its failure is shown, not hidden. */}
+      {caps.error ? (
+        <div className="mb-4">
+          <ErrorNotice error={caps.error} />
+        </div>
+      ) : null}
       <QueryView query={overview}>
         {(o) => (
-          <Overview
+          <Summary
             o={o}
             projectNames={projectNames}
             hooksReceived={
@@ -244,6 +198,6 @@ export function CommandCenter() {
           />
         )}
       </QueryView>
-    </div>
+    </section>
   );
 }

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
 import { ProjectPage } from '../../src/features/project/ProjectPage';
-import { runningByProject } from '../../src/features/projects/ProjectsList';
+import { runningByProject } from '../../src/features/all-projects/project-bits';
 import { createApiClient } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
 import { page, partialUsage, project, session, usage, usageSummary } from '../fixtures/dto';

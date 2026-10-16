@@ -78,7 +78,7 @@ describe('board routes', () => {
     expect(parseRoute('#/board/p-1')).toEqual({ name: 'board', projectId: 'p-1' });
     expect(parseRoute(href.board('a b/c'))).toEqual({ name: 'board', projectId: 'a b/c' });
     expect(parseRoute('#/board/p-1/x').name).toBe('not-found');
-    expect(href.ticket('t 1')).toBe('#/tickets/t%201');
+    expect(href.ticket({ id: 't 1', projectId: 'p-1' })).toBe('#/p/p-1/tickets/t%201');
   });
 });
 

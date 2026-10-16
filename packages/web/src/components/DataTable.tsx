@@ -47,7 +47,7 @@ export function DataTable<T>({
             <th
               key={c.key}
               scope="col"
-              className={`px-4 py-2.5 text-caption font-medium whitespace-nowrap text-dim ${c.align === 'right' ? 'text-right' : ''}`}
+              className={`px-4 py-3 text-caption font-medium tracking-wide whitespace-nowrap text-dim uppercase first:pl-6 last:pr-6 ${c.align === 'right' ? 'text-right' : ''}`}
             >
               {c.header ?? c.label}
             </th>
@@ -70,7 +70,7 @@ export function DataTable<T>({
                 <td
                   key={c.key}
                   data-label={c.label}
-                  className={`flex items-baseline justify-between gap-3 py-1 before:shrink-0 before:text-caption before:text-dim before:content-[attr(data-label)] lg:table-cell lg:px-4 lg:py-3 lg:align-middle lg:before:content-none ${
+                  className={`flex items-baseline justify-between gap-3 py-1 before:shrink-0 before:text-caption before:text-dim before:content-[attr(data-label)] lg:table-cell lg:px-4 lg:py-3.5 lg:align-middle lg:before:content-none lg:first:pl-6 lg:last:pr-6 ${
                     c.align === 'right' ? 'lg:text-right' : ''
                   } ${c.className ?? ''}`}
                 >
