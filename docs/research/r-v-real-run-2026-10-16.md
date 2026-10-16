@@ -72,3 +72,32 @@ the listed tools.
   `Grep`, `Glob`, `Edit`, `Write`, `Bash`, and `Skill` only with a plugin. Leave `Task`/`Agent` and
   the web tools out unless a decision adds them.
 - Record the decision in ADR-0019 §6 / ADR-0013.
+
+## Re-check after R-K (2026-10-16, owner consent)
+
+The same driver, on main `a90420f`, with fixed tool base sets per role (ADR-0019 §7). The run
+COMPLETED, every stage was `done`, and there were 2 merges.
+
+| Role           | `system/init` tools (exact)                                          |
+| -------------- | -------------------------------------------------------------------- |
+| planner        | `Glob`, `Grep`, `Read`, `Skill`, `mcp__acp__submit_plan`             |
+| lead           | `Glob`, `Grep`, `Read`, and its seven `mcp__acp__*` control tools    |
+| worker, tester | `Bash`, `Edit`, `Glob`, `Grep`, `Read`, `Write`                      |
+| reviewer       | `Read`, `mcp__acp__post_review` (the agent file narrowed it to Read) |
+| follow-up      | `Glob`, `Grep`, `Read`                                               |
+
+- None of the extra tools came back: no `SendMessage`, `CronCreate`, `RemoteTrigger`, web tools or
+  `Task`.
+- The skill and the agent file still reached their agents (marker words). The follow-up resumed
+  the lead's own session, the status did not change, and no chat text reached the logs.
+- **Budget tokens fell from ~96k to ~29k:**
+
+  | Agent    | Budget tokens |
+  | -------- | ------------- |
+  | planner  | 8,218         |
+  | lead     | 9,198         |
+  | worker   | 3,855         |
+  | reviewer | 4,602         |
+  | tester   | 3,126         |
+
+  Fewer tool definitions make a much smaller first-turn context.

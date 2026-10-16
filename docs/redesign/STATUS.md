@@ -17,7 +17,7 @@
 | R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | **done**                                      | `wp/r-i-agent-files`, `wp/r-i-web` | 2026-10-16 (`30ab747`) |
 | R-J | [Resume the lead's chat](README.md#6b-the-leads-chat-after-the-lead-ends-owner-decisions-2026-10-16)           | R-I      | **done**                                      | `wp/r-j-follow-up`, `wp/r-j-web`   | 2026-10-16 (`ed9b6f7`) |
 | R-V | [Verification](wp/R-V.md)                                                                                      | all      | **done** (real run 2026-10-16, owner consent) | `wp/r-v-verify`                    | 2026-10-16 (`4a0525e`) |
-| R-K | Role tool base sets (ADR-0019 §7)                                                                              | R-V      | **done** (real re-check pending consent)      | `wp/r-k-role-tools`                | 2026-10-16 (`3b6cea3`) |
+| R-K | Role tool base sets (ADR-0019 §7)                                                                              | R-V      | **done** (real re-check passed)               | `wp/r-k-role-tools`                | 2026-10-16 (`3b6cea3`) |
 | R-R | Pre-release review and v0.0.1 (see below)                                                                      | R-V      | todo (owner, 2026-10-16)                      | —                                  | —                      |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
@@ -109,6 +109,15 @@ code:
 Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config) were rebuilt as
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
+
+**R-K real re-check (2026-10-16, owner consent):** passed.
+
+- Each role's `system/init` tool list is exactly its base set: `Skill` only for the planner with
+  the plugin, the `acp` control tools, and the reviewer narrowed to `Read`.
+- No extra tools.
+- Budget tokens fell from ~96k to ~29k.
+
+Details are in `docs/research/r-v-real-run-2026-10-16.md`. Next: R-R.
 
 **R-K review (2026-10-16):** merged `3b6cea3` (`wp/r-k-role-tools`). Scope OK (adapter,
 verification tests, `provider-adapters.md` §11.1, its progress file). Read and confirmed:
