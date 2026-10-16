@@ -44,6 +44,33 @@ describe('migration 0005_stage_agents (R-G Part 2)', () => {
     ]);
   });
 
+  it('gives the tester a worktree record, never the planner or the reviewer', () => {
+    const s = setupWorkspace();
+    const { run } = ticketWithRun(s);
+    const add = (kind: 'planner' | 'reviewer' | 'tester') =>
+      s.orch.agentRuns.insert({
+        runId: run.id,
+        kind,
+        parentAgentRunId: null,
+        role: kind,
+        task: kind === 'tester' ? 'Write unit tests for the merged change.' : null,
+      });
+    const workspace = (agentRunId: string) =>
+      s.orch.workspaces.insert({
+        runId: run.id,
+        agentRunId,
+        worktreePath: `/data/worktrees/${run.id}/${agentRunId}`,
+        branch: `acp/${run.id}/${agentRunId}`,
+        baseBranch: 'main',
+        baseCommit: 'a'.repeat(40),
+      });
+    const tester = add('tester');
+    expect(workspace(tester.id)).toMatchObject({ agentRunId: tester.id, state: 'active' });
+    for (const kind of ['planner', 'reviewer'] as const) {
+      expect(thrown(() => workspace(add(kind).id))).toMatchObject({ code: 'invalid_input' });
+    }
+  });
+
   it('still allows exactly one lead per run', () => {
     const s = setupWorkspace();
     const { run } = ticketWithRun(s);

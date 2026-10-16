@@ -149,8 +149,11 @@ export function createManagedWorkspacesRepository(
       return c.transaction((): WorkspaceRow => {
         const kind = workerKind.get(agentRunId, runId) as string | undefined;
         if (kind === undefined) throw new DbError('not_found', 'agent run not found in this run');
-        // The lead runs read-only in the project root and never gets a worktree (ADR-0013 §2).
-        if (kind !== 'worker') throw new DbError('invalid_input', 'only workers get a worktree');
+        // The lead runs read-only in the project root and never gets a worktree (ADR-0013 §2);
+        // neither do the planner and the reviewer. The tester works in its own (ADR-0019).
+        if (kind !== 'worker' && kind !== 'tester') {
+          throw new DbError('invalid_input', 'only helpers and the tester get a worktree');
+        }
         const id = ctx.newId();
         const at = ctx.now().toISOString();
         guardWrite('managed workspace', () =>
