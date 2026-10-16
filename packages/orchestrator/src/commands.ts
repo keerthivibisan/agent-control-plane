@@ -8,6 +8,7 @@ import type { ManagedAgentEvent, PermissionRequest, ProjectWorkflow, RunBudget }
 import { recordUsage, EMPTY_LEDGER } from './budget.js';
 import { cleanSummary, Draft, DuplicateIdError, formatTokens } from './draft.js';
 import { IllegalTransitionError, refusal } from './errors.js';
+import { abortFollowUpTurn } from './follow-up.js';
 import type { Refusal } from './errors.js';
 import { checkRunLimits, DEFAULT_RUN_LIMITS } from './limits.js';
 import {
@@ -631,6 +632,8 @@ function stopEverything(
       return refusal('run-not-active', 'The run has already ended.');
     }
     d.setRunStatus('CANCELLING');
+    // An ended lead's follow-up turn (ADR-0020) ends with the run's agents.
+    abortFollowUpTurn(d);
     d.settlePendingApprovals(null, 'denied', Draft.messages.deniedAgentStopped);
     for (const agent of d.liveNonLeadDeepestFirst()) d.endAgent(agent, agentStatus, true);
     const lead = d.lead();
@@ -709,6 +712,8 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     d.settlePendingApprovals(null, 'expired', Draft.messages.deniedNoAnswer);
     // The processes are gone: no abort effects, and settled approvals have no callback to resolve.
     d.effects.length = 0;
+    // An interrupted follow-up turn just ends (ADR-0020 §3); nothing resumes it.
+    if (d.followUp !== undefined) d.followUp = { ...d.followUp, turn: null };
     for (const agent of d.agents) {
       if (isLiveAgentStatus(agent.status)) {
         d.setAgentStatus(agent, cancelling ? 'CANCELLED' : 'NEEDS_REVIEW');

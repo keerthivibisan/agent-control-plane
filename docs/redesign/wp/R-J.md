@@ -19,7 +19,7 @@ their tests, this file, `docs/provider-adapters.md` (managed execution).
 
 ## Tasks
 
-- [ ] 1. Engine: follow-up command accepted on ended runs; never changes run status; one turn at a
+- [x] 1. Engine: follow-up command accepted on ended runs; never changes run status; one turn at a
       time; follow-up state (`available | running | unavailable`)
 - [ ] 2. Server: chat route starts a follow-up turn when the lead has ended; linked session id;
       turn budget from project limits; "can't be continued" reasons; no relaunch on restart
@@ -28,6 +28,7 @@ their tests, this file, `docs/provider-adapters.md` (managed execution).
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                       | Commit | Checks    |
-| ---------- | ----------------------------------- | ------ | --------- |
-| 2026-10-16 | Claimed R-J (backend) on the branch | (this) | docs only |
+| Date       | What was done                                                                                                                      | Commit    | Checks                                            |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------- |
+| 2026-10-16 | Claimed R-J (backend) on the branch                                                                                                | `7a0e9d0` | docs only                                         |
+| 2026-10-16 | Engine: `followUpChat`/`followUpEvent`/`stopFollowUp`/`followUpView`, in-memory `RunState.followUp`, Stop all and restart handling | (this)    | pnpm check ✓: test 2,035/2,035 (orchestrator 451) |

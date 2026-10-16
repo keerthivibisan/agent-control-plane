@@ -50,6 +50,17 @@ export type {
   CreateRunInput,
   RequestPermissionOptions,
 } from './commands.js';
+export {
+  FOLLOW_UP_PREFACE,
+  followUpBudgetTokens,
+  followUpChat,
+  followUpEvent,
+  followUpPrompt,
+  followUpView,
+  leadHasEnded,
+  stopFollowUp,
+} from './follow-up.js';
+export type { FollowUpFacts } from './follow-up.js';
 export { CHILD_MANAGEMENT_TOOLS, controlToolsFor, leadToolCall } from './lead-tools.js';
 export { cleanReviewBody } from './review-tool.js';
 export { deriveRunWorkflow } from './run-workflow.js';

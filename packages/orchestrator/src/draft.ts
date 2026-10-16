@@ -33,6 +33,7 @@ import type {
   EngineApproval,
   EngineContext,
   EngineEffect,
+  FollowUpState,
   RunLimits,
   RunState,
 } from './state.js';
@@ -69,6 +70,8 @@ export class Draft {
   leadBrief: string | undefined;
   /** After a restart: no stage starts until the owner continues (`RunState.stagesHeld`). */
   stagesHeld: boolean;
+  /** The ended lead's follow-up chat (`RunState.followUp`, ADR-0020). */
+  followUp: FollowUpState | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -89,6 +92,11 @@ export class Draft {
     this.workflow = state.workflow;
     this.leadBrief = state.leadBrief;
     this.stagesHeld = state.stagesHeld === true;
+    const followUp = state.followUp;
+    this.followUp =
+      followUp === undefined
+        ? undefined
+        : { ...followUp, turn: followUp.turn === null ? null : { ...followUp.turn } };
     this.nowIso = ctx.now.toISOString();
   }
 
@@ -437,6 +445,7 @@ export class Draft {
     if (this.workflow !== undefined) state.workflow = this.workflow;
     if (this.leadBrief !== undefined) state.leadBrief = this.leadBrief;
     if (this.stagesHeld) state.stagesHeld = true;
+    if (this.followUp !== undefined) state.followUp = this.followUp;
     return state;
   }
 

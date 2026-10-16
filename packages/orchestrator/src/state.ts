@@ -121,6 +121,37 @@ export interface RunState {
    * (nothing relaunches automatically, ADR-0013 §7). Keep it with the live run.
    */
   stagesHeld?: boolean;
+  /**
+   * The chat with the lead after it ended (ADR-0020). In memory only, like the ledger: a restart
+   * forgets it, so an interrupted turn just ends and a gone session is found again on the next try.
+   * Absent until the owner's first follow-up message.
+   */
+  followUp?: FollowUpState;
+}
+
+/** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
+export interface FollowUpState {
+  /** A resume failed (ADR-0020 §5): the saved conversation is gone, so no turn starts any more. */
+  sessionGone: boolean;
+  /** The turn under way, or null between turns. */
+  turn: FollowUpTurn | null;
+}
+
+export interface FollowUpTurn {
+  /** The lead's linked provider session the turn resumes (never forked). */
+  resumeSessionId: string;
+  /** Budget tokens this turn may use (ADR-0014 measure), from the run's per-agent budget. */
+  budgetLimit: number;
+  /**
+   * This turn's own usage, deduplicated by message id like every ledger. Kept apart from the run's
+   * ledger so the lead's own budget (stored with the agent) never changes after it ended.
+   */
+  ledger: UsageLedger;
+  budgetTokensUsed: number;
+  /** The session answered (usage or a reply arrived): the resume worked. */
+  resumed: boolean;
+  /** The turn was asked to stop (budget, Stop, Stop all); its `finished` is still to come. */
+  aborting: boolean;
 }
 
 /** Injected so the engine stays pure and testable (AGENTS.md §6). */
@@ -193,6 +224,22 @@ export type EngineEffect =
   /** Store and publish a chat line (ADR-0015). Only owner text and the lead's replies. */
   | { type: 'chat-message'; role: 'owner' | 'lead'; text: string }
   | { type: 'link-session'; agentRunId: string; providerSessionId: string }
+  /**
+   * A follow-up turn of the ended lead (ADR-0020): resume its saved session `resumeSessionId` in
+   * the project root, answers-only (read-only tools, no control tools), for this one message.
+   * `prompt` is the app's preface plus the owner's message. `model` and `agent` are the lead's
+   * stage model and agent file, as for its `start-agent` (no skills: answers only).
+   */
+  | {
+      type: 'start-follow-up';
+      agentRunId: string;
+      resumeSessionId: string;
+      prompt: string;
+      model?: string;
+      agent?: string;
+    }
+  /** End the follow-up turn under way (budget reached, the owner's Stop, Stop all). */
+  | { type: 'abort-follow-up'; agentRunId: string }
   /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */
@@ -202,7 +249,12 @@ export type EngineEffect =
   /** Content-free diagnostics: count them, never log the payload. */
   | {
       type: 'diagnostic';
-      code: 'worker-text-dropped' | 'invalid-usage' | 'event-after-end';
+      code:
+        | 'worker-text-dropped'
+        | 'invalid-usage'
+        | 'event-after-end'
+        | 'follow-up-session-changed'
+        | 'follow-up-over-budget';
       agentRunId: string;
     };
 

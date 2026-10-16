@@ -41,6 +41,10 @@ export const REFUSAL_CODES = [
   'plan-not-found',
   /** The plan is not the one waiting for the owner's decision (already decided or superseded). */
   'plan-not-pending',
+  /** The ended lead's chat cannot be continued (ADR-0020 §5: no session, session gone, managed off). */
+  'follow-up-unavailable',
+  /** A follow-up turn is under way; one at a time per run (ADR-0020). */
+  'follow-up-running',
 ] as const;
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 
