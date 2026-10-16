@@ -9,9 +9,11 @@ import { createApiRouter } from './routes/api.js';
 import { createBoardRouter } from './routes/board.js';
 import { createControlRouter } from './routes/control.js';
 import { createStreamRouter, type StreamDeps } from './routes/stream.js';
+import { createWorkflowRouter } from './routes/workflow.js';
 import type { BoardService } from './board/service.js';
 import type { ControlService } from './control/service.js';
 import type { Services } from './services/index.js';
+import type { WorkflowService } from './workflow/service.js';
 import { mountStatic } from './static.js';
 
 /** The Vite dev server proxies to this server, so its origin is also a legitimate caller. */
@@ -27,6 +29,8 @@ export interface AppDeps {
   control?: ControlService;
   /** The Agent Workspace board (Phase 4); mounted with the control panel, which owns the CSRF token. */
   board?: BoardService;
+  /** Project workflows (redesign, R-G); mounted with the board, under the same CSRF token. */
+  workflow?: WorkflowService;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -49,6 +53,9 @@ export function createApp(deps: AppDeps): Express {
   if (deps.control !== undefined) app.use('/api', createControlRouter(deps.control));
   if (deps.control !== undefined && deps.board !== undefined) {
     app.use('/api', createBoardRouter(deps.board, deps.control.csrfToken));
+    if (deps.workflow !== undefined) {
+      app.use('/api', createWorkflowRouter(deps.workflow, deps.control.csrfToken));
+    }
   }
   app.use('/api', notFoundHandler);
   if (deps.staticDir !== undefined) mountStatic(app, deps.staticDir);

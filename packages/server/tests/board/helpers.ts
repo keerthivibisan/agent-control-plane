@@ -7,6 +7,7 @@ import { createApp } from '../../src/app.js';
 import { createCheckService, type CheckService } from '../../src/board/checks.js';
 import { createProjectHarness } from '../../src/board/harness.js';
 import { createBoardService } from '../../src/board/service.js';
+import { createWorkflowService } from '../../src/workflow/service.js';
 import {
   createControlService,
   type ControlService,
@@ -115,6 +116,16 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     logger,
   });
   Object.assign(hooks, board.controlHooks());
+  // The owner's home is a temp directory, so the real ~/.claude is never listed.
+  const homeDir = tempDir('acp-board-home-');
+  const workflow = createWorkflowService({
+    db,
+    repos,
+    setupFor: (projectId) => board.getSetup(projectId),
+    now,
+    publish: base.publish,
+    skills: { homeDir },
+  });
   await control.start();
   const app = createApp({
     config: base.config,
@@ -132,6 +143,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     },
     control,
     board,
+    workflow,
   });
   const token = control.csrfToken;
   const send = (method: 'post' | 'put' | 'patch' | 'delete', path: string, body?: unknown) => {
@@ -190,6 +202,8 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     app,
     control,
     board,
+    workflow,
+    homeDir,
     checks,
     fake,
     repo,

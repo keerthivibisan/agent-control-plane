@@ -78,6 +78,7 @@ export function toApprovalDto(a: EngineApproval): ApprovalDto {
     toolName: a.toolName,
     summary: a.summary,
     status: a.status,
+    decidedBy: a.decidedBy ?? null,
     requestedAt: a.requestedAt,
     decidedAt: a.decidedAt,
   };

@@ -3,10 +3,12 @@ import {
   DbError,
   MAX_ORCHESTRATOR_MESSAGE_LENGTH,
   createOrchestrationRepositories,
+  createRedesignRepositories,
   createWorkspaceRepositories,
   withTransaction,
   type AcpDatabase,
   type OrchestrationRepositories,
+  type RedesignRepositories,
   type WorkspaceRepositories,
   type WorkspaceRow,
 } from '@acp/db';
@@ -16,6 +18,7 @@ import {
   type EngineAgent,
   type EngineApproval,
   type EngineEffect,
+  type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
 import type { OrchestrationRun, TicketPlan } from '@acp/core';
@@ -35,11 +38,14 @@ export interface RunStore {
    * Throws, and writes nothing, if any write fails.
    */
   commit(prev: RunState | null, next: RunState, effects: readonly EngineEffect[]): void;
+  /** Migration 0004 columns: approval deciders, run limits, agent stages (R-G). */
+  readonly redesignRepos: RedesignRepositories;
   /**
-   * Rebuilds an engine state from the database (restart, or a run not held in memory). Plans come
-   * back with the run; the limits, `awaitingHelpers` and an approval's `decidedBy` are not stored
-   * (no column for them yet), so a reloaded run has the Phase 3 limits and no decider. Live runs
-   * are never reloaded while the server runs, and after a restart nothing is relaunched.
+   * Rebuilds an engine state from the database (restart, or a run not held in memory). Plans, the
+   * limits snapshot and each approval's `decidedBy` come back with the run (migration 0004; rows
+   * written before it have no limits, so they keep the Phase 3 defaults, and no decider).
+   * `awaitingHelpers` is not stored: after a restart no agent is live. Live runs are never
+   * reloaded while the server runs, and after a restart nothing is relaunched.
    */
   load(runId: string): RunState | undefined;
 }
@@ -54,6 +60,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
   const repoOptions = { now: deps.now, newId: () => ids.shift() ?? randomUUID() };
   const repos = createOrchestrationRepositories(deps.db, repoOptions);
   const workspaceRepos = createWorkspaceRepositories(deps.db, repoOptions);
+  const redesignRepos = createRedesignRepositories(deps.db, repoOptions);
 
   /** Runs one insert with the engine's id; the slot is always empty again afterwards. */
   function withId<T>(id: string, insert: () => T): T {
@@ -64,6 +71,17 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     } finally {
       ids.length = 0;
     }
+  }
+
+  function sameLimits(a: RunLimits | undefined, b: RunLimits | undefined): boolean {
+    return a?.maxConcurrentHelpers === b?.maxConcurrentHelpers && a?.maxDepth === b?.maxDepth;
+  }
+
+  /** The limits snapshot at start (ADR-0013 amendment); absent means the Phase 3 defaults. */
+  function syncLimits(prev: RunState | null, next: RunState): void {
+    if (prev !== null && sameLimits(prev.limits, next.limits)) return;
+    if (prev === null && next.limits === undefined) return;
+    redesignRepos.runAudit.setRunLimits(next.run.id, next.limits ?? null);
   }
 
   function syncRun(prev: OrchestrationRun | null, next: OrchestrationRun): void {
@@ -145,6 +163,12 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     if (next.status !== 'pending' && prev?.status !== next.status) {
       repos.approvals.decide(next.id, next.status, next.decidedAt ?? undefined);
     }
+    // Who decided (ApprovalDto.decidedBy). Written when it is first known or changes; the engine
+    // leaves it null when it closed the approval because the agent or run stopped.
+    const decidedBy = next.decidedBy ?? null;
+    if (decidedBy !== (prev?.decidedBy ?? null)) {
+      redesignRepos.runAudit.setApprovalDecidedBy(next.id, decidedBy);
+    }
   }
 
   /**
@@ -209,9 +233,11 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
   return {
     repos,
     workspaceRepos,
+    redesignRepos,
     commit(prev, next, effects) {
       withTransaction(deps.db, () => {
         syncRun(prev?.run ?? null, next.run);
+        syncLimits(prev, next);
         const prevAgents = new Map(prev?.agents.map((a) => [a.id, a]));
         for (const agent of next.agents) syncAgent(prevAgents.get(agent.id), agent);
         const prevApprovals = new Map(prev?.approvals.map((a) => [a.id, a]));
@@ -249,13 +275,17 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
             : (workspaces.get(a.id)?.reviewState ?? 'pending'),
         reportedCostUsd: null,
       }));
+      const deciders = redesignRepos.runAudit.approvalDecidersForRun(runId);
       const approvals: EngineApproval[] = repos.approvals.listForRun(runId).map((a) => ({
         ...a,
         // The SDK's tool-use id is only needed while the callback is parked; it is not stored.
         toolUseId: null,
+        decidedBy: deciders.get(a.id) ?? null,
       }));
       // Usage is only accounted while agents are live; after a restart they never are again.
       const state: RunState = { run, agents, approvals, ledger: EMPTY_LEDGER };
+      const limits = redesignRepos.runAudit.getRunLimits(runId);
+      if (limits !== null) state.limits = limits;
       if (run.ticketId !== null) state.plans = workspaceRepos.plans.listForRun(runId);
       return state;
     },

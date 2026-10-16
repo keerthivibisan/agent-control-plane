@@ -14,6 +14,7 @@ import { createApp } from './app.js';
 import { createCheckService } from './board/checks.js';
 import { createProjectHarness } from './board/harness.js';
 import { createBoardService } from './board/service.js';
+import { createWorkflowService } from './workflow/service.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
 import { ensureHookToken } from './hooks/token.js';
@@ -239,6 +240,13 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     logger,
   });
   Object.assign(workspaceHooks, board.controlHooks());
+  const workflow = createWorkflowService({
+    db,
+    repos,
+    setupFor: (projectId) => board.getSetup(projectId),
+    now,
+    publish: (n) => notifier.publish(n),
+  });
 
   const app = createApp({
     config,
@@ -256,6 +264,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     },
     control: controlService,
     board,
+    workflow,
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();
