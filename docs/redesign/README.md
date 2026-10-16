@@ -120,7 +120,15 @@ flowchart LR
   the planner writes and revises the plan, and the lead receives the approved plan and runs the
   helpers. A project can choose "same agent" (today's behavior) or "separate agents".
 
-### 4.3 Skills (new)
+### 4.3 Skills & Agents (new; agent files added 2026-10-16)
+
+The owner also asked for agent definition files: `.claude/agents/<name>.md`, Claude Code subagents.
+The page has two tabs, **Skills** and **Agents**. Agents work like skills: a list, New and Edit (name,
+description, tools as a chip list or "all tools", model, instructions), Save, Commit, and Delete with
+confirmation. ADR-0018's amendment sets the rules. Mapping a stage to an agent definition is a later
+decision; for now the Workflow page lists agent files as "available, not mapped".
+
+#### Skills tab
 
 - **List:** the skills in the project repo's `.claude/skills/*/SKILL.md`, as name, description, which
   workflow stages use it, last changed, and whether the file has uncommitted changes.
@@ -259,6 +267,14 @@ Use Phase 4's protocol (`docs/phase-4/README.md` §9) with these paths:
 - the index: `docs/redesign/STATUS.md`, which only the coordinator edits.
 
 The prompt is Phase 4's §10.1 with "Phase 4" replaced by "the redesign" and this file as the spec.
+
+## 7a. Later: editable workflows
+
+The owner wants users eventually to edit the flow: add their own agents and stages, and connect them
+as they choose. That is a later phase. The fixed stages ship first (ADR-0019). The Workflow page's
+graph is built from data (`WORKFLOW_STAGES` plus the project's workflow), so a later editable graph
+can reuse the same view, as long as the engine can enforce the plan-first, owner-gated and
+worktree-isolated rules for any graph. That needs its own ADR.
 
 ## 8. Risks and open points
 

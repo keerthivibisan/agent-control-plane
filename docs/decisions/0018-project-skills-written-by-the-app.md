@@ -58,3 +58,26 @@ they change what agents do, so writing them needs an explicit, narrow exception.
 - AGENTS.md rule 6 gains this exception. Tests must cover the path rules: symlinked `.claude`, a
   `..` slug, an oversize file, and staged unrelated files refused at commit.
 - The Skills page shows git state, so the owner always knows what changed in their tree.
+
+## Amendment (2026-10-16): agent definition files
+
+The owner asked to add and edit **agent definitions** (Claude Code subagents) from the UI as well. The
+same decision applies, with these specifics:
+
+- **Scope of writes:** exactly `<registered project root>/.claude/agents/<slug>.md` (`AGENTS_DIR`),
+  where `<slug>` matches `SkillNameSchema`. All the §3 path rules apply: realpath the root, refuse
+  symlinked `.claude`, `.claude/agents` or files, write atomically, and cap the size at
+  `MAX_AGENT_BYTES` (64 KiB). Writes happen only on an owner action, with CSRF.
+- **File format:** front matter `name`, `description`, optional `tools` (a list of tool names,
+  `AgentToolNameSchema`) and optional `model`, followed by the instructions. The app writes no other
+  front-matter keys (`permissionMode`, `hooks`, `mcpServers`, …) even if a hand-edited file has them.
+  The page shows such keys as a problem: "kept as is, not used by the app".
+- **Commit:** a separate owner action, `git commit -m "chore(agents): <create|update|remove> <slug>"`,
+  with the same refusal when other files are staged.
+- **Use by managed agents:** not yet. Mapping a workflow stage to an agent definition, or giving the
+  stage agents these definitions as subagents through the run's skills plugin (whose `agents/` is
+  copied with front matter reduced to `name`, `description`, `tools` and `model`), is a later decision.
+  It needs a real-run check that copied definitions cannot widen permissions. Until then, agent files
+  serve the owner's own Claude Code sessions and are shown on the Workflow page as "available, not
+  mapped".
+- AGENTS.md rule 6 is amended to name `.claude/agents/<slug>.md` next to skills.
