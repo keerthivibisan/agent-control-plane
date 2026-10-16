@@ -113,6 +113,7 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
         toolName,
         toolUseId: toolUseID,
         summary: summarizeToolUse(toolName, input, spec.cwd),
+        input,
       });
       if (options.signal.aborted) return { behavior: 'deny', message: DENY_ABORTED, toolUseID };
       return decision.allow

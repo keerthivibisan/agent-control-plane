@@ -41,6 +41,12 @@ export interface PermissionRequest {
   toolUseId: string | null;
   /** Short, redacted description for the panel, e.g. "Edit src/app.ts" (max 200 chars). */
   summary: string;
+  /**
+   * The tool's raw input, only so the project allowlist can see which file an edit targets or
+   * which command runs (ADR-0013 amendment). It is held in memory while the request is decided,
+   * and never stored, logged or sent to the UI (ADR-0009).
+   */
+  input?: unknown;
 }
 
 export type PermissionDecision = { allow: true } | { allow: false; message: string };

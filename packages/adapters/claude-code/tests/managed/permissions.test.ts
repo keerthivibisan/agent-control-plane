@@ -66,6 +66,15 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     }
   });
 
+  it('passes the raw tool input with the request, for the project allowlist only', async () => {
+    const { canUseTool, requests } = setup('worker');
+    const input = { file_path: 'src/app.ts', old_string: 'a', new_string: 'b' };
+    await canUseTool('Edit', input, opts());
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.input).toEqual(input);
+    expect(requests[0]?.summary).toBe('Edit src/app.ts');
+  });
+
   it('asks before a read outside the directory or one Claude Code flags as blocked', async () => {
     const { canUseTool, requests } = setup('worker');
     await canUseTool('Read', { file_path: '/home/me/.ssh/id_rsa' }, opts());
@@ -86,14 +95,23 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
       opts(),
     );
     expect(decision).toEqual({ behavior: 'allow', toolUseID: 'toolu_1' });
+    const input = {
+      file_path: `${CWD}/src/app.ts`,
+      old_string: 'SECRET-A',
+      new_string: 'SECRET-B',
+    };
+    // The summary the owner sees is content-free; the raw input travels separately, only for the
+    // project allowlist (held in memory, never stored or shown).
     expect(requests).toEqual([
       {
         agentRunId: 'agent-worker',
         toolName: 'Edit',
         toolUseId: 'toolu_1',
         summary: 'Edit src/app.ts',
+        input,
       },
     ]);
+    expect(requests[0]?.summary).not.toContain('SECRET');
   });
 
   it('asks before shell commands and shows only the command name', async () => {

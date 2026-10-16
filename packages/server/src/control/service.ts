@@ -287,13 +287,12 @@ interface LiveRun {
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
 /**
- * The raw tool input of a permission request, for the project allowlist. The core v1 contract's
- * `PermissionRequest` does not carry it yet, so no request can be pre-approved and every one asks
- * the owner (fail closed). Blocked on a contract change: docs/phase-4/wp/P4-D.md, "Blockers".
+ * The raw tool input of a permission request, used only to match it against the project allowlist.
+ * It never reaches the engine state, the database, the logs or the UI: `parkForOwner` passes named
+ * fields only (ADR-0009, ADR-0013 amendment).
  */
 function toolInputOf(request: PermissionRequest): unknown {
-  void request;
-  return undefined;
+  return request.input;
 }
 
 export function createControlService(deps: ControlServiceDeps): ControlService {

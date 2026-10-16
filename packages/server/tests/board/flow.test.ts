@@ -5,6 +5,7 @@ import {
   BoardDtoSchema,
   CheckRunDtoSchema,
   ReviewDtoSchema,
+  RunDetailDtoSchema,
   TicketDetailDtoSchema,
 } from '@acp/core/api';
 import { createRunStore } from '../../src/control/store.js';
@@ -367,5 +368,82 @@ describe('cancel, context and depth 2', () => {
     const worker = s.fake.workers()[0];
     expect(worker?.spec.canStartHelpers).toBeUndefined();
     expect(worker?.spec.leadTools).toBeUndefined();
+  });
+});
+
+describe('project allowlist (ADR-0013 amendment)', () => {
+  it("auto-approves an edit in the helper's own worktree, asks for one outside it, and never exposes the tool input", async () => {
+    const s = await setupBoard();
+    await s.send('put', `/api/projects/${s.project.id}/setup`, {
+      ...SETUP,
+      allowlist: { editInOwnWorktree: true, runHarnessChecks: false },
+    });
+    const { ticket } = await s.startTicket();
+    await s.submitPlan();
+    const plan = (await s.detail(ticket.id)).plans[0];
+    await s.post(`/api/tickets/${ticket.id}/plans/${plan?.id ?? ''}/decision`, {
+      decision: 'approve',
+    });
+    await s.fake.lead().callLead('start_agent', { role: 'Builder', task: 'Build it' });
+    await s.settle();
+    const worker = s.fake.workers()[0];
+    if (worker === undefined) throw new Error('no worker');
+    worker.started();
+    const runId = (await s.detail(ticket.id)).currentRun?.id ?? '';
+    const wt = s.worktree(runId, worker.id);
+
+    // Inside its own worktree: approved by the allowlist without asking the owner.
+    const SECRET = 'OLD-STRING-SECRET';
+    await expect(
+      worker.ask('Edit', 'Edit src/app.ts', {
+        file_path: join(wt, 'src', 'app.ts'),
+        old_string: SECRET,
+        new_string: 'x',
+      }),
+    ).resolves.toEqual({ allow: true });
+
+    // Outside it (the owner's checkout): the owner is asked.
+    const outside = worker.ask('Edit', 'Edit README.md', {
+      file_path: join(s.repo, 'README.md'),
+      old_string: SECRET,
+      new_string: 'y',
+    });
+    await s.settle();
+    const raw = (await s.get(`/api/runs/${runId}`)).body as unknown;
+    const run = RunDetailDtoSchema.parse(raw);
+    // The first was approved with no owner decision. Who decided ("allowlist") is not persisted until
+    // migration 0004 adds approvals.decided_by (STATUS.md, P4-D review notes).
+    expect(run.approvals.map((a) => [a.summary, a.status])).toEqual([
+      ['Edit src/app.ts', 'approved'],
+      ['Edit README.md', 'pending'],
+    ]);
+    // The raw input is used for matching only: it is not in the API response.
+    expect(JSON.stringify(raw)).not.toContain(SECRET);
+
+    const pending = run.approvals.find((a) => a.status === 'pending');
+    await s.post(`/api/approvals/${pending?.id ?? ''}`, { decision: 'deny' });
+    await expect(outside).resolves.toMatchObject({ allow: false });
+  });
+
+  it('asks the owner for every edit while the allowlist is off', async () => {
+    const s = await setupBoard();
+    const { ticket } = await s.startTicket();
+    await s.submitPlan();
+    const plan = (await s.detail(ticket.id)).plans[0];
+    await s.post(`/api/tickets/${ticket.id}/plans/${plan?.id ?? ''}/decision`, {
+      decision: 'approve',
+    });
+    await s.fake.lead().callLead('start_agent', { role: 'Builder', task: 'Build it' });
+    await s.settle();
+    const worker = s.fake.workers()[0];
+    if (worker === undefined) throw new Error('no worker');
+    worker.started();
+    const runId = (await s.detail(ticket.id)).currentRun?.id ?? '';
+    void worker.ask('Edit', 'Edit src/app.ts', {
+      file_path: join(s.worktree(runId, worker.id), 'src', 'app.ts'),
+    });
+    await s.settle();
+    const run = RunDetailDtoSchema.parse((await s.get(`/api/runs/${runId}`)).body);
+    expect(run.approvals.map((a) => a.status)).toEqual(['pending']);
   });
 });

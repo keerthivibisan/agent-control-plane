@@ -113,12 +113,13 @@ export class FakeAgent {
   }
 
   /** What the SDK's `canUseTool` does for a non-read-only tool. */
-  ask(toolName: string, summary: string): Promise<PermissionDecision> {
+  ask(toolName: string, summary: string, input?: unknown): Promise<PermissionDecision> {
     return this.callbacks.requestPermission({
       agentRunId: this.id,
       toolName,
       toolUseId: `tu-${toolName}`,
       summary,
+      ...(input === undefined ? {} : { input }),
     });
   }
 
