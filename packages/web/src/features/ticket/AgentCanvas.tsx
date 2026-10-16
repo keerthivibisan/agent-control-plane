@@ -2,7 +2,7 @@ import type { AgentRunDto } from '@acp/core/api';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { Card } from '../../components/Card';
 import { messageAgent, sendChat, stopAgent } from '../../lib/api';
-import { AGENT_STATUS_COPY, CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
+import { AGENT_FINISHED_COPY, AGENT_STATUS_COPY, CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import { BudgetBar } from '../control/AgentTree';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
@@ -26,12 +26,23 @@ export interface CanvasContext {
   branches: ReadonlyMap<string, string>;
   /** The agent the owner's chat reaches now (`chatAgent`): the planner or the lead. */
   chatAgentId: string | null;
+  /** Agents the engine closed after good work (`closedByEngine`): they read "Finished". */
+  finished: ReadonlySet<string>;
 }
 
-/** "acp/run-1/agent-ui" → "…/agent-ui": the part that tells helpers apart. */
-function shortBranch(branch: string): string {
+/** Longer last parts (the engine's agent UUIDs) keep their first 8 characters. */
+const SHORT_PART = 12;
+
+/**
+ * "acp/run-1/agent-ui" → "…/agent-ui": the part that tells helpers apart; the engine's
+ * "acp/<run uuid>/<agent uuid>" → "…/0ff5eab0". The card's title has the full branch, and the
+ * Details tab shows it in full.
+ */
+export function shortBranch(branch: string): string {
   const parts = branch.split('/');
-  return parts.length > 2 ? `…/${parts[parts.length - 1] ?? branch}` : branch;
+  if (parts.length <= 2) return branch;
+  const last = parts[parts.length - 1] ?? branch;
+  return `…/${last.length > SHORT_PART ? last.slice(0, 8) : last}`;
 }
 
 /**
@@ -173,7 +184,13 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
           </span>
           <span className="block font-semibold break-words">{agent.role}</span>
         </button>
-        <StatusWord status={AGENT_STATUS_COPY[agent.status]} value={agent.status} withTip={false} />
+        <StatusWord
+          status={
+            ctx.finished.has(agent.id) ? AGENT_FINISHED_COPY : AGENT_STATUS_COPY[agent.status]
+          }
+          value={agent.status}
+          withTip={false}
+        />
       </header>
       {waiting > 0 ? (
         <p className="w-fit rounded-full bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning">
@@ -183,7 +200,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       {!hasWorktree(agent.kind) ? null : (
         <p className="text-caption" data-testid="agent-branch">
           {branch ? (
-            <span className="font-mono" title={branch}>
+            <span className="block truncate font-mono" title={branch}>
               {shortBranch(branch)}
             </span>
           ) : (

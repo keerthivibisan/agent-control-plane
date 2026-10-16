@@ -1,4 +1,5 @@
 import type { DiagnosticsDto } from '@acp/core/api';
+import type { ReactNode } from 'react';
 import { DataTable, type Column } from '../../components/DataTable';
 import { Details } from '../../components/Details';
 import { PageHeader } from '../../components/PageHeader';
@@ -110,8 +111,11 @@ function RawDetails({ d }: { d: DiagnosticsDto }) {
   );
 }
 
-/** `#/health`: is the data trustworthy? A verdict first, then what was skipped and why. */
-export function DataHealthPage() {
+/**
+ * `#/health`: is the data trustworthy? A verdict first, then what was skipped and why. `tabs`
+ * (Data health's section switcher) sits under the title, as on every other page.
+ */
+export function DataHealthPage({ tabs }: { tabs?: ReactNode } = {}) {
   const diagnostics = useApiQuery(paths.diagnostics(), schemas.diagnostics);
   const caps = useApiQuery(paths.capabilities(), schemas.capabilities);
   return (
@@ -125,6 +129,7 @@ export function DataHealthPage() {
           </>
         }
       />
+      {tabs}
       <div className="flex flex-col gap-6">
         <QueryView query={diagnostics}>
           {(d) => (

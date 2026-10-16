@@ -56,6 +56,12 @@ export function toSessionFilters(p: ExplorerParams): SessionFilters {
   };
 }
 
-export function hasFilters(p: ExplorerParams): boolean {
-  return Object.values(toSessionFilters(p)).some((v) => v !== undefined);
+/**
+ * Whether the owner narrowed the list. Inside a project (`scopeProjectId`) the project comes from
+ * the address, so it is not a filter.
+ */
+export function hasFilters(p: ExplorerParams, scopeProjectId?: string): boolean {
+  return Object.entries(toSessionFilters(p)).some(
+    ([key, v]) => v !== undefined && !(key === 'projectId' && v === scopeProjectId),
+  );
 }

@@ -15,7 +15,7 @@ import { useApiQuery } from '../../lib/query';
 import { RangeControl } from './RangeControl';
 import { TokensBreakdown } from './TokensBreakdown';
 import { CACHE, formatDayLong, NEW_WORK, TokensChart, type DayRow } from './TokensChart';
-import { TokenTiles } from './TokenTiles';
+import { CountsOnly, TokenTiles } from './TokenTiles';
 import { readTokensParams, toRangeQuery, type TokensParams } from './tokens-params';
 
 const systemNow = () => new Date();
@@ -92,14 +92,19 @@ function Charts({ data }: { data: ProjectTokensDto }) {
 
 function Body({ data, params }: { data: ProjectTokensDto; params: TokensParams }) {
   if (data.totals.recordCount === 0 && params.preset === 'all') {
+    // Runs or sessions without usage keep their counts in view; usage stays unreported, not 0.
+    const counted = data.runs > 0 || data.sessions.total > 0;
     return (
-      <Card>
-        <EmptyState
-          icon={<TokensIcon size={22} />}
-          title={TOKENS_COPY.empty.title}
-          text={TOKENS_COPY.empty.text}
-        />
-      </Card>
+      <div className="flex flex-col gap-6">
+        {counted ? <CountsOnly data={data} /> : null}
+        <Card>
+          <EmptyState
+            icon={<TokensIcon size={22} />}
+            title={TOKENS_COPY.empty.title}
+            text={counted ? TOKENS_COPY.empty.withRuns : TOKENS_COPY.empty.text}
+          />
+        </Card>
+      </div>
     );
   }
   return (

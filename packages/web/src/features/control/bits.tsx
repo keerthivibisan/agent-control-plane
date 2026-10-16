@@ -4,8 +4,10 @@ import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import type { IconProps } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
+import type { AgentRunDto, RunDetailDto } from '@acp/core/api';
 import type { ApiError } from '../../lib/api';
-import type { ControlStatusCopy } from '../../lib/copy';
+import { AGENT_FINISHED_COPY, AGENT_STATUS_COPY, type ControlStatusCopy } from '../../lib/copy';
+import { closedByEngine } from './run-state';
 
 /** Dot per tone: color plus shape, so color is never the only signal (DESIGN.md principle 4). */
 const DOT: Record<ControlStatusCopy['tone'], string> = {
@@ -15,6 +17,14 @@ const DOT: Record<ControlStatusCopy['tone'], string> = {
   stopped: 'border-2 border-status-stale bg-transparent',
   problem: 'bg-danger',
 };
+
+/** An agent's status in words; "Finished" for a lead the engine closed after good work. */
+export function agentStatusCopy(
+  agent: Pick<AgentRunDto, 'status' | 'endedAt'>,
+  run: Pick<RunDetailDto, 'status' | 'endedAt' | 'agents'>,
+): ControlStatusCopy {
+  return closedByEngine(agent, run) ? AGENT_FINISHED_COPY : AGENT_STATUS_COPY[agent.status];
+}
 
 /** A run or agent status as dot + word (+ ⓘ). */
 export function StatusWord({

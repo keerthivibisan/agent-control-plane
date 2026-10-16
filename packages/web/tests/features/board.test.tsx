@@ -87,13 +87,48 @@ describe('board: layout and honest numbers', () => {
     expect(within(cancelled).queryByTestId('ticket-card')).toBeNull();
     fireEvent.click(within(cancelled).getByRole('button', { name: 'Show cancelled (1)' }));
     expect(within(screen.getByTestId('column-CANCELLED')).getByText('Old idea')).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByTestId('column-CANCELLED')).getByRole('button', {
+        name: 'Hide cancelled',
+      }),
+    );
+    expect(screen.getByTestId('column-CANCELLED').dataset.collapsed).toBe('true');
     expect(
       within(screen.getByTestId('column-WORKING')).getByText('Rate limit the public API'),
     ).toBeTruthy();
-    // Empty columns explain themselves.
-    expect(
-      within(screen.getByTestId('column-PLANNING')).getByText(/Drop a ready ticket here/),
-    ).toBeTruthy();
+  });
+
+  it('folds empty columns into rails that unfold and still explain themselves', async () => {
+    renderBoard(server());
+    await screen.findAllByTestId('ticket-card');
+    const folded = screen
+      .getAllByTestId(/^column-/)
+      .filter((c) => c.dataset.collapsed === 'true')
+      .map((c) => c.dataset.testid);
+    // Planning and In review have no ticket in the fixture; Cancelled folds by default.
+    expect(folded).toEqual(['column-PLANNING', 'column-IN_REVIEW', 'column-CANCELLED']);
+    expect(screen.getByTestId('column-WORKING').dataset.collapsed).toBeUndefined();
+    const planning = screen.getByTestId('column-PLANNING');
+    const show = within(planning).getByRole('button', { name: 'Show planning (0)' });
+    expect(show.getAttribute('title')).toMatch(/Drop a ready ticket here/);
+    fireEvent.click(show);
+    const open = screen.getByTestId('column-PLANNING');
+    expect(open.dataset.collapsed).toBeUndefined();
+    expect(within(open).getByText(/Drop a ready ticket here/)).toBeTruthy();
+    fireEvent.click(within(open).getByRole('button', { name: 'Hide planning' }));
+    expect(screen.getByTestId('column-PLANNING').dataset.collapsed).toBe('true');
+    // jsdom has no layout, so the row never overflows and shows no scroll hint.
+    expect(screen.queryByTestId('board-scroll-on')).toBeNull();
+  });
+
+  it('a folded empty column still takes a drop', async () => {
+    renderBoard(server());
+    const card = await findCard('WEB-13');
+    const dt = dataTransfer();
+    fireEvent.dragStart(card, { dataTransfer: dt });
+    const planning = screen.getByTestId('column-PLANNING');
+    expect(planning.dataset.collapsed).toBe('true');
+    expect(fireEvent.dragOver(planning, { dataTransfer: dt })).toBe(false);
   });
 
   it('heads the board with the project name, one live line and New ticket (README §4.1)', async () => {
@@ -181,6 +216,9 @@ describe('board: the project in the address, and empty states', () => {
   it('offers a first ticket on an empty board', async () => {
     renderBoard(server({ [BOARD]: board({}, []) }));
     const empty = await screen.findByTestId('board-empty');
+    // The empty state alone, not with nine empty columns under it.
+    expect(screen.queryByTestId('board-columns')).toBeNull();
+    expect(screen.queryAllByTestId(/^column-/)).toHaveLength(0);
     fireEvent.click(within(empty).getByRole('button', { name: 'New ticket' }));
     expect(screen.getByRole('dialog', { name: 'New ticket' })).toBeTruthy();
   });

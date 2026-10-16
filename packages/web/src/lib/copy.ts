@@ -180,6 +180,7 @@ export const PAGES = {
   sessions: {
     title: 'Sessions',
     description: 'Every Claude Code session in your projects, and how they relate to each other.',
+    inProject: 'Every Claude Code session in this project, and how they relate to each other.',
   },
   session: {
     title: 'Session',
@@ -245,6 +246,7 @@ export const EMPTY = {
   sessions: {
     title: 'No sessions yet',
     text: 'Sessions appear here once Claude Code runs inside one of your projects.',
+    textInProject: 'Sessions appear here once Claude Code runs inside this project.',
   },
   sessionsFiltered: {
     title: 'No matching sessions',
@@ -934,6 +936,16 @@ export const AGENT_STATUS_COPY: Readonly<Record<AgentRunStatus, ControlStatusCop
   },
 };
 
+/**
+ * A `CANCELLED` agent the engine closed after its part went well (`closedByEngine`): the lead
+ * when the reviewer or tester starts, or any open agent when the run completes.
+ */
+export const AGENT_FINISHED_COPY: ControlStatusCopy = {
+  word: 'Finished',
+  tip: 'Its part is done. The app closed it when the next step started.',
+  tone: 'done',
+};
+
 export const CONTROL_COPY = {
   nav: 'Control panel',
   page: {
@@ -1010,6 +1022,13 @@ export const CONTROL_COPY = {
     /** Prefilled when the owner clicks Message on a helper agent's card. */
     messageFor: (role: string) => `Please tell the ${role}: `,
     relayNote: 'The lead agent passes your message on to its helper agents.',
+    /** The same box for the agent it reaches, e.g. "planner agent" (ticket page side panel). */
+    withAgent: (who: string) => ({
+      title: `Chat with the ${who}`,
+      label: `Message to the ${who}`,
+      placeholder: `Message the ${who}…`,
+      empty: { text: `Tell the ${who} what you want done.` },
+    }),
   },
   agents: {
     title: 'Agents',
@@ -1266,8 +1285,14 @@ export const BOARD_COPY = {
   },
   column: {
     count: (n: number) => `${formatCount(n)} ${n === 1 ? 'ticket' : 'tickets'}`,
-    showCancelled: (n: number) => `Show cancelled (${formatCount(n)})`,
-    hideCancelled: 'Hide cancelled',
+    /** A folded column (Cancelled, or an empty one): its button's name. */
+    show: (word: string, n: number) => `Show ${word.toLowerCase()} (${formatCount(n)})`,
+    hide: 'Hide',
+    hideLabel: (word: string) => `Hide ${word.toLowerCase()}`,
+    scrollBack: 'Scroll to earlier columns',
+    scrollOn: 'Scroll to later columns',
+    /** Tickets in the columns out of view to the right. */
+    moreTickets: (n: number) => `${formatCount(n)} more ${n === 1 ? 'ticket' : 'tickets'}`,
   },
   move: {
     button: 'Move',
@@ -2160,6 +2185,7 @@ export const TOKENS_COPY = {
     'Derived: summed from the usage Claude Code reported, each reply counted once. Helper agents count under themselves.',
   tiles: {
     label: 'Tokens at a glance',
+    countsLabel: 'Sessions and runs',
     sessions: 'Sessions',
     sessionsTip: 'One Claude Code conversation, from when it starts until it exits.',
     sessionsWithUsage: (n: number) => `${formatCount(n)} reported token usage`,
@@ -2260,6 +2286,9 @@ export const TOKENS_COPY = {
   empty: {
     title: 'No token usage yet',
     text: "Tokens appear here once this project's Claude Code sessions report usage.",
+    /** The project has sessions or agent runs, but none reported usage yet. */
+    withRuns:
+      'Usage appears here once the app observes these Claude Code sessions and they report tokens.',
   },
   emptyRange: {
     title: 'No token usage in this range',

@@ -53,10 +53,11 @@ export function WorkflowGraph({
   return (
     <div
       className="w-full overflow-hidden"
-      // The canvas takes the graph's own shape, so it fills the width without empty bands.
+      // The canvas takes the graph's own shape, so it fills the width without empty bands, but
+      // never grows past the viewport: the whole flow, Done included, fits on screen.
       style={{
         aspectRatio: `${graph.width} / ${graph.height + 40}`,
-        maxHeight: 780,
+        maxHeight: 'min(780px, calc(100vh - 18rem))',
         minHeight: 420,
       }}
       data-testid="workflow-graph"
@@ -84,7 +85,8 @@ export function WorkflowGraph({
           proOptions={{ hideAttribution: true }}
         >
           <FitOnChange shape={shape} />
-          <Controls showInteractive={false} position="bottom-right" />
+          {/* Top left, in a row: the corner the flow never uses (the Done edge runs bottom right). */}
+          <Controls showInteractive={false} position="top-left" orientation="horizontal" />
         </ReactFlow>
       </WorkflowGraphContext.Provider>
     </div>

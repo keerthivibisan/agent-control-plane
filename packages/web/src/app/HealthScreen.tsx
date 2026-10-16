@@ -15,23 +15,22 @@ const TABS: readonly { id: HealthTab; label: string; to: string }[] = [
  * the Setup page (`#/health/connection`: project folders and hooks; docs/redesign/README.md §3).
  */
 export function HealthScreen({ tab }: { tab: HealthTab }) {
-  return (
-    <div>
-      <nav aria-label={C.tabs} className="mb-6 inline-flex rounded-control bg-sunken p-1">
-        {TABS.map((t) => (
-          <a
-            key={t.id}
-            href={t.to}
-            aria-current={t.id === tab ? 'page' : undefined}
-            className={`rounded-[0.375rem] px-3 py-1.5 font-medium no-underline transition-colors ${
-              t.id === tab ? 'bg-panel text-ink shadow-card' : 'text-dim hover:text-ink'
-            }`}
-          >
-            {t.label}
-          </a>
-        ))}
-      </nav>
-      {tab === 'overview' ? <DataHealthPage /> : <SetupPage />}
-    </div>
+  // Under the page title, like every page's own controls (R-V visual problem 9).
+  const tabs = (
+    <nav aria-label={C.tabs} className="-mt-2 mb-6 inline-flex rounded-control bg-sunken p-1">
+      {TABS.map((t) => (
+        <a
+          key={t.id}
+          href={t.to}
+          aria-current={t.id === tab ? 'page' : undefined}
+          className={`rounded-[0.375rem] px-3 py-1.5 font-medium no-underline transition-colors ${
+            t.id === tab ? 'bg-panel text-ink shadow-card' : 'text-dim hover:text-ink'
+          }`}
+        >
+          {t.label}
+        </a>
+      ))}
+    </nav>
   );
+  return tab === 'overview' ? <DataHealthPage tabs={tabs} /> : <SetupPage tabs={tabs} />;
 }

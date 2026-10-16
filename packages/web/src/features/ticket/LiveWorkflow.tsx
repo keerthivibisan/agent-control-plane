@@ -38,6 +38,7 @@ import {
   type HelperNode,
   type HelpersNode,
   type ReviewNode,
+  type TerminalNode,
   type WorkflowGraph,
   type WorkflowNode,
 } from '../workflow/graph';
@@ -68,6 +69,8 @@ const C = TICKET_COPY.workflow;
 interface LiveRun {
   states: Readonly<Record<WorkflowStageId, WorkflowStageState>>;
   helpers: readonly AgentRunDto[];
+  /** The run completed (every change merged or discarded): the Done node is lit. */
+  completed: boolean;
 }
 
 const LiveRunContext = createContext<LiveRun | null>(null);
@@ -155,6 +158,21 @@ function LiveGateNode(props: NodeProps<GateNode>) {
   );
 }
 
+/** The end of the flow: lit, with a "Done" word, once the run completed. */
+function LiveTerminalNode(props: NodeProps<TerminalNode>) {
+  const live = useContext(LiveRunContext);
+  const lit = props.data.terminal === 'done' && live?.completed === true;
+  return (
+    <div
+      className={`relative h-full w-full rounded-full ${lit ? 'ring-2 ring-success/70 ring-offset-2 ring-offset-panel' : ''}`}
+      data-testid={`live-${props.data.terminal}`}
+      data-state={lit ? 'done' : undefined}
+    >
+      <TerminalNodeView {...props} />
+    </div>
+  );
+}
+
 const HANDLE = 'opacity-0! border-0! size-1.5! min-w-0! min-h-0! pointer-events-none!';
 
 /** The helpers box's one row: how many helpers there are, and how many work or wait for you. */
@@ -188,7 +206,7 @@ const liveNodeTypes = {
   helper: LiveHelperRow,
   gate: LiveGateNode,
   review: LiveReviewNode,
-  terminal: TerminalNodeView,
+  terminal: LiveTerminalNode,
 };
 
 const FIT = {
@@ -298,8 +316,9 @@ export function LiveWorkflow({
         : {
             states: stageStates(rw),
             helpers: run.agents.filter((a) => a.kind === 'worker'),
+            completed: run.status === 'COMPLETED',
           },
-    [rw, run.agents],
+    [rw, run.agents, run.status],
   );
   if (rw === undefined || pw === undefined || graph === null || live === null) return null;
 

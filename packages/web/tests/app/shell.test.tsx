@@ -136,6 +136,23 @@ describe('app shell', () => {
     expect(await screen.findByTestId('hooks-status')).toBeTruthy();
   });
 
+  it('Data health: the section tabs sit under the title; the switcher shows the remembered project', async () => {
+    window.localStorage.setItem('acp.lastProject', 'p-2');
+    window.location.hash = '#/health';
+    renderApp(
+      fakeServer({ '/api/projects': [alpha, beta], '/api/diagnostics/ingestion': diagnostics() })
+        .fetch,
+    );
+    const title = await screen.findByRole('heading', { level: 1, name: 'Data health' });
+    const tabs = screen.getByRole('navigation', { name: 'Data health sections' });
+    // The title comes first in the document, then the tabs.
+    expect(title.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      await screen.findByRole('button', { name: 'Project: beta. Switch project' }),
+    ).toBeTruthy();
+    expect(navLink('Board').getAttribute('href')).toBe('#/p/p-2/board');
+  });
+
   it('#/setup redirects to the Connection section without a history entry', async () => {
     window.location.hash = '#/setup';
     const length = window.history.length;

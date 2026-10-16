@@ -42,8 +42,8 @@ function Step({
   );
 }
 
-/** `#/setup`: connect the app to your work, step by step. */
-export function SetupPage() {
+/** `#/setup`: connect the app to your work, step by step. `tabs` sits under the title. */
+export function SetupPage({ tabs }: { tabs?: ReactNode } = {}) {
   const caps = useApiQuery(paths.capabilities(), schemas.capabilities);
   return (
     <div>
@@ -56,6 +56,7 @@ export function SetupPage() {
           </>
         }
       />
+      {tabs}
       <ol className="flex flex-col gap-6">
         <Step n={1}>
           <Card

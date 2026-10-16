@@ -23,7 +23,7 @@ import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
-import { canChat, hasReview } from '../control/run-state';
+import { canChat, closedByEngine, hasReview } from '../control/run-state';
 import { useTicketAction } from './actions';
 import { AgentCanvas } from './AgentCanvas';
 import { PlanCard } from './PlanReview';
@@ -310,6 +310,7 @@ function RunView({
               pending={pendingByAgent(run)}
               branches={branches}
               chatAgentId={chatAgent(run)?.id ?? null}
+              finished={new Set(run.agents.filter((a) => closedByEngine(a, run)).map((a) => a.id))}
               note={planning ? C.canvas.planning : undefined}
             />
           )}

@@ -607,12 +607,27 @@ export function doneScenario(): TicketScenario {
   const base = inReviewScenario();
   const detail = base.routes[ticketPath] as Json;
   const run = { ...(detail['currentRun'] as Json), status: 'COMPLETED', endedAt: T(50) };
-  return scenario({
-    ...detail,
-    ticket: ticket('DONE', 'DONE'),
-    runs: [runSummary(RUN_ID, 'COMPLETED', { endedAt: T(50) }), OLD_RUN],
-    currentRun: run,
-  });
+  return scenario(
+    {
+      ...detail,
+      ticket: ticket('DONE', 'DONE'),
+      runs: [runSummary(RUN_ID, 'COMPLETED', { endedAt: T(50) }), OLD_RUN],
+      currentRun: run,
+    },
+    {
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'done',
+          orchestrate: 'done',
+          helpers: 'done',
+          review: 'done',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        { plan: [LEAD], orchestrate: [LEAD], helpers: [UI, STORE, TESTS, MIGRATION] },
+      ),
+    },
+  );
 }
 
 /** The separate planner of the redesign scenarios: it planned, and ended when the plan was approved. */
@@ -710,6 +725,42 @@ export function stagesScenario(): TicketScenario {
   );
 }
 
+/**
+ * Plan review with a separate planner (R-R visual): the planner wrote plan 2 and holds the chat;
+ * the lead waits (QUEUED) until the plan is approved.
+ */
+export function plannerReviewScenario(): TicketScenario {
+  const agents = [
+    { ...planner(), status: 'RUNNING', endedAt: null, latestActivity: 'Used tool: Read' },
+    { ...lead('QUEUED', 0, 'Used tool: Read'), latestActivity: null },
+  ];
+  const run = runDetail('PLAN_REVIEW', agents);
+  return scenario(
+    {
+      ticket: ticket('ACTIVE', 'PLAN_REVIEW'),
+      runs: [runSummary(RUN_ID, 'PLAN_REVIEW', { agentCount: 2 }), OLD_RUN],
+      currentRun: run,
+      plans: [plan(PLAN_V1, 1, 'changes-requested'), plan(PLAN_V2, 2, 'proposed')],
+      comments: COMMENTS,
+      checks: [],
+    },
+    {
+      [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true }),
+      [RUN_WORKFLOW_PATH]: runWorkflow(
+        {
+          plan: 'needs-you',
+          orchestrate: 'waiting',
+          helpers: 'waiting',
+          review: 'waiting',
+          'code-review': 'off',
+          'unit-tests': 'off',
+        },
+        { plan: [PLANNER], orchestrate: [LEAD] },
+      ),
+    },
+  );
+}
+
 const REVIEWER_COMMENT: Json = {
   id: 'c-r1',
   ticketId: TICKET_ID,
@@ -726,7 +777,8 @@ function mergedAgents(): Json[] {
     agent({ status: 'SUCCEEDED', latestActivity: 'Finished its turn', endedAt: T(38), ...over });
   return [
     planner(),
-    { ...lead('CANCELLED', 41_800, 'Finished its turn'), endedAt: T(44) },
+    // The engine closes the lead in the step that starts the reviewer (createdAt T(45)).
+    { ...lead('CANCELLED', 41_800, 'Finished its turn'), endedAt: T(45) },
     done({
       id: UI,
       role: 'Settings UI',

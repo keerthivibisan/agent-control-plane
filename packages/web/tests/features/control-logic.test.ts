@@ -3,6 +3,7 @@ import {
   budgetView,
   buildAgentTree,
   canChat,
+  closedByEngine,
   diffLines,
   isRunLive,
   splitApprovals,
@@ -15,6 +16,49 @@ import { CSRF, LEAD_ID, agent, approval, builder, lead, tester } from '../fixtur
 import { fakeServer } from '../helpers';
 
 const shape = (n: AgentNode): unknown => ({ id: n.agent.id, children: n.children.map(shape) });
+
+describe('closedByEngine (a lead closed after good work reads "Finished")', () => {
+  const T = '2026-10-15T09:45:00.000Z';
+  const ended = { status: 'CANCELLED' as const, endedAt: T };
+  const reviewer = { kind: 'reviewer' as const, createdAt: T };
+
+  it('holds when the run completed in the same step', () => {
+    expect(closedByEngine(ended, { status: 'COMPLETED', endedAt: T, agents: [] })).toBe(true);
+  });
+
+  it('holds when the reviewer or tester started in the same step', () => {
+    expect(closedByEngine(ended, { status: 'REVIEW', endedAt: null, agents: [reviewer] })).toBe(
+      true,
+    );
+    const tester = { kind: 'tester' as const, createdAt: T };
+    expect(closedByEngine(ended, { status: 'COMPLETED', endedAt: 'x', agents: [tester] })).toBe(
+      true,
+    );
+  });
+
+  it('does not hold for an owner stop, a stopped run, a timeout or a live agent', () => {
+    const earlier = { status: 'CANCELLED' as const, endedAt: '2026-10-15T09:40:00.000Z' };
+    expect(closedByEngine(earlier, { status: 'REVIEW', endedAt: null, agents: [reviewer] })).toBe(
+      false,
+    );
+    expect(closedByEngine(earlier, { status: 'COMPLETED', endedAt: T, agents: [] })).toBe(false);
+    // Stop all: the run is CANCELLED, never COMPLETED.
+    expect(closedByEngine(ended, { status: 'CANCELLED', endedAt: T, agents: [reviewer] })).toBe(
+      false,
+    );
+    const timedOut = { status: 'TIMED_OUT' as const, endedAt: T };
+    expect(closedByEngine(timedOut, { status: 'COMPLETED', endedAt: T, agents: [] })).toBe(false);
+    const live = { status: 'RUNNING' as const, endedAt: null };
+    expect(closedByEngine(live, { status: 'REVIEW', endedAt: null, agents: [reviewer] })).toBe(
+      false,
+    );
+    // A helper starting at that instant is not a stage the engine closes the lead for.
+    const helper = { kind: 'worker' as const, createdAt: T };
+    expect(closedByEngine(ended, { status: 'REVIEW', endedAt: null, agents: [helper] })).toBe(
+      false,
+    );
+  });
+});
 
 describe('buildAgentTree', () => {
   it('puts the lead on top and its helper agents beneath it in start order', () => {

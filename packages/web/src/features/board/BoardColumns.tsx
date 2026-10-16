@@ -1,6 +1,7 @@
 import type { TicketStage } from '@acp/core';
 import type { TicketCardDto } from '@acp/core/api';
-import { useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react';
+import { ChevronRightIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { BOARD_COPY, STAGE_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
@@ -89,6 +90,7 @@ function Column({
     <section
       aria-label={s.word}
       data-testid={`column-${column.stage}`}
+      data-tickets={column.tickets.length}
       {...handlers}
       className={`flex w-64 shrink-0 flex-col rounded-card bg-sunken transition-[opacity,background-color] ${tone}`}
     >
@@ -100,9 +102,10 @@ function Column({
           <button
             type="button"
             onClick={onCollapse}
+            aria-label={C.hideLabel(s.word)}
             className="rounded-control px-1.5 py-0.5 text-caption text-dim hover:bg-panel hover:text-ink"
           >
-            {C.hideCancelled}
+            {C.hide}
           </button>
         ) : null}
       </header>
@@ -129,8 +132,11 @@ function Column({
   );
 }
 
-/** Cancelled, folded into a slim strip by default (README §5.2); still a drop target. */
-function CollapsedCancelled({
+/**
+ * A folded column: Cancelled by default, and every empty column, so the columns with tickets fit
+ * on screen. Still a drop target; a click unfolds it.
+ */
+function Rail({
   column,
   drop,
   onExpand,
@@ -139,34 +145,125 @@ function CollapsedCancelled({
   drop: DropProps;
   onExpand: () => void;
 }) {
-  const { handlers, tone } = useDropTarget('CANCELLED', drop);
+  const { handlers, tone } = useDropTarget(column.stage, drop);
+  const s = STAGE_COPY[column.stage];
+  const n = column.tickets.length;
   return (
     <section
-      aria-label={STAGE_COPY.CANCELLED.word}
-      data-testid="column-CANCELLED"
+      aria-label={s.word}
+      data-testid={`column-${column.stage}`}
       data-collapsed="true"
+      data-tickets={n}
       {...handlers}
       className={`flex w-12 shrink-0 flex-col items-center rounded-card bg-sunken py-3 transition-[opacity,background-color] ${tone}`}
     >
       <button
         type="button"
         onClick={onExpand}
+        aria-label={C.show(s.word, n)}
+        title={n === 0 ? `${s.word}: ${s.empty}` : s.tip}
         className="flex flex-1 flex-col items-center gap-2 rounded-control px-1 py-1 text-dim hover:text-ink"
       >
         <span className="rounded-full bg-panel px-1.5 text-caption tabular-nums" aria-hidden="true">
-          {formatCount(column.tickets.length)}
+          {formatCount(n)}
         </span>
-        <span className="text-caption font-medium [writing-mode:vertical-rl]">
-          {C.showCancelled(column.tickets.length)}
+        <span className="text-caption font-medium [writing-mode:vertical-rl]" aria-hidden="true">
+          {s.word}
         </span>
       </button>
     </section>
   );
 }
 
+interface Overflow {
+  back: boolean;
+  on: boolean;
+  /** Tickets in the columns whose middle is past the right edge. */
+  hiddenOn: number;
+}
+
+const NO_OVERFLOW: Overflow = { back: false, on: false, hiddenOn: 0 };
+
 /**
- * The board's columns, one per stage, scrolling sideways when they don't fit. Dragging a card
- * highlights the columns it may go to and dims the rest.
+ * Whether the row scrolls either way, measured on scroll and resize. jsdom has no layout, so
+ * there the row never overflows and no hint shows.
+ */
+function useOverflow(ref: RefObject<HTMLDivElement | null>, shape: string): Overflow {
+  const [state, setState] = useState<Overflow>(NO_OVERFLOW);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      const right = el.scrollLeft + el.clientWidth;
+      let hiddenOn = 0;
+      for (const col of el.querySelectorAll<HTMLElement>('[data-tickets]')) {
+        if (col.offsetLeft + col.offsetWidth / 2 > right) hiddenOn += Number(col.dataset.tickets);
+      }
+      const next = { back: el.scrollLeft > 1, on: el.scrollLeft < max - 1, hiddenOn };
+      setState((s) =>
+        s.back === next.back && s.on === next.on && s.hiddenOn === next.hiddenOn ? s : next,
+      );
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
+  }, [ref, shape]);
+  return state;
+}
+
+/**
+ * The fade at a hidden edge of the row, with its scroll button. The fade lets drops through; the
+ * button also scrolls while a card is dragged over it.
+ */
+function Edge({
+  side,
+  label,
+  count,
+  onScroll,
+}: {
+  side: 'back' | 'on';
+  label: string;
+  count?: string | undefined;
+  onScroll: (step: number) => void;
+}) {
+  const back = side === 'back';
+  return (
+    <div
+      className={`pointer-events-none absolute top-0 bottom-4 flex w-20 items-center ${
+        back
+          ? 'left-0 justify-start bg-gradient-to-r from-canvas to-transparent'
+          : 'right-0 justify-end bg-gradient-to-l from-canvas to-transparent'
+      }`}
+      data-testid={`board-scroll-${side}`}
+    >
+      <button
+        type="button"
+        onClick={() => onScroll(back ? -1 : 1)}
+        onDragOver={() => onScroll(back ? -0.05 : 0.05)}
+        aria-label={count ? `${label} (${count})` : label}
+        title={label}
+        className="pointer-events-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-panel px-2 text-caption font-medium text-ink shadow-raised hover:border-accent"
+      >
+        {count ? <span className="whitespace-nowrap">{count}</span> : null}
+        <ChevronRightIcon size={16} className={back ? 'rotate-180' : ''} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The board's columns, one per stage. Empty columns and Cancelled fold into narrow rails; when
+ * the rest still doesn't fit, the row scrolls sideways with a fade and a button at each hidden
+ * edge, the right one saying how many tickets are out of view. Dragging a card highlights the
+ * columns it may go to and dims the rest.
  */
 export function BoardColumns({
   columns,
@@ -178,7 +275,16 @@ export function BoardColumns({
   onMove: (ticket: TicketCardDto, target: MoveTarget) => void;
 }) {
   const [dragging, setDragging] = useState<TicketCardDto | null>(null);
-  const [showCancelled, setShowCancelled] = useState(false);
+  // Folded columns the owner opened.
+  const [opened, setOpened] = useState<ReadonlySet<TicketStage>>(new Set());
+  const scroller = useRef<HTMLDivElement>(null);
+  const toggle = (stage: TicketStage, open: boolean) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(stage);
+      else next.delete(stage);
+      return next;
+    });
   const drop: DropProps = {
     dragging,
     onDrop: (ticket, target) => {
@@ -193,30 +299,56 @@ export function BoardColumns({
     onDragStart: setDragging,
     onDragEnd: () => setDragging(null),
   };
+  const foldable = (c: BoardColumn) => c.stage === 'CANCELLED' || c.tickets.length === 0;
+  const shape = columns
+    .map((c) => `${c.stage}:${c.tickets.length}:${opened.has(c.stage) ? 1 : 0}`)
+    .join(',');
+  const overflow = useOverflow(scroller, shape);
+  const scrollBy = (step: number) => {
+    const el = scroller.current;
+    if (el === null) return;
+    const left = Math.round(el.clientWidth * 0.8 * step);
+    // A drag-over nudge is small and instant; a click pages smoothly.
+    if (Math.abs(step) < 1) el.scrollLeft += left;
+    else el.scrollBy({ left, behavior: 'smooth' });
+  };
 
   return (
-    <div className="relative -mx-1 overflow-x-auto px-1 pt-1 pb-4" data-testid="board-columns">
-      <div className="flex min-h-[28rem] items-stretch gap-3">
-        {columns.map((column) =>
-          column.stage === 'CANCELLED' && !showCancelled ? (
-            <CollapsedCancelled
-              key={column.stage}
-              column={column}
-              drop={drop}
-              onExpand={() => setShowCancelled(true)}
-            />
-          ) : (
-            <Column
-              key={column.stage}
-              column={column}
-              {...common}
-              {...(column.stage === 'CANCELLED'
-                ? { onCollapse: () => setShowCancelled(false) }
-                : {})}
-            />
-          ),
-        )}
+    <div className="relative">
+      <div
+        ref={scroller}
+        className="relative -mx-1 overflow-x-auto px-1 pt-1 pb-4"
+        data-testid="board-columns"
+      >
+        <div className="flex min-h-[28rem] items-stretch gap-3">
+          {columns.map((column) =>
+            foldable(column) && !opened.has(column.stage) ? (
+              <Rail
+                key={column.stage}
+                column={column}
+                drop={drop}
+                onExpand={() => toggle(column.stage, true)}
+              />
+            ) : (
+              <Column
+                key={column.stage}
+                column={column}
+                {...common}
+                {...(foldable(column) ? { onCollapse: () => toggle(column.stage, false) } : {})}
+              />
+            ),
+          )}
+        </div>
       </div>
+      {overflow.back ? <Edge side="back" label={C.scrollBack} onScroll={scrollBy} /> : null}
+      {overflow.on ? (
+        <Edge
+          side="on"
+          label={C.scrollOn}
+          count={overflow.hiddenOn > 0 ? C.moreTickets(overflow.hiddenOn) : undefined}
+          onScroll={scrollBy}
+        />
+      ) : null}
     </div>
   );
 }

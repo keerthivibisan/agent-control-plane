@@ -23,14 +23,14 @@ import { SessionList } from './SessionList';
 
 const PAGE_SIZE = 50;
 
-function NoSessions({ params }: { params: ExplorerParams }) {
-  if (hasFilters(params)) {
+function NoSessions({ params, scope }: { params: ExplorerParams; scope: string | undefined }) {
+  if (hasFilters(params, scope)) {
     return (
       <EmptyState
         title={EMPTY.sessionsFiltered.title}
         text={EMPTY.sessionsFiltered.text}
         action={
-          <ButtonLink href={explorerHref({})} variant="secondary">
+          <ButtonLink href={explorerHref({ projectId: scope })} variant="secondary">
             {SESSIONS_COPY.filters.clear}
           </ButtonLink>
         }
@@ -41,7 +41,7 @@ function NoSessions({ params }: { params: ExplorerParams }) {
     <EmptyState
       icon={<SessionsIcon size={22} />}
       title={EMPTY.sessions.title}
-      text={EMPTY.sessions.text}
+      text={scope === undefined ? EMPTY.sessions.text : EMPTY.sessions.textInProject}
       action={
         <ButtonLink href={href.setup()} variant="primary">
           {SESSIONS_COPY.table.addProject}
@@ -51,7 +51,7 @@ function NoSessions({ params }: { params: ExplorerParams }) {
   );
 }
 
-function SessionsBody({ params }: { params: ExplorerParams }) {
+function SessionsBody({ params, scope }: { params: ExplorerParams; scope: string | undefined }) {
   const pager = useCursorStack();
   const projects = useApiQuery(paths.projects(), schemas.projects);
   const projectNames = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
@@ -67,7 +67,7 @@ function SessionsBody({ params }: { params: ExplorerParams }) {
             <SessionList
               sessions={p.items}
               projectNames={projectNames}
-              empty={<NoSessions params={params} />}
+              empty={<NoSessions params={params} scope={scope} />}
             />
             {pager.pageNumber > 1 || p.page.nextCursor !== null ? (
               <div className="flex justify-end border-t border-line px-4 py-3">
@@ -88,17 +88,32 @@ function SessionsBody({ params }: { params: ExplorerParams }) {
   );
 }
 
-/** `#/sessions`: every session in your projects, filters, and how they relate. */
-export function SessionExplorer({ search }: { search: URLSearchParams }) {
+/**
+ * `#/p/:projectId/sessions`: the project's sessions, filters, and how they relate. Without
+ * `projectId` (tests, an older address) it lists every project's sessions with a Project filter.
+ */
+export function SessionExplorer({
+  search,
+  projectId,
+}: {
+  search: URLSearchParams;
+  /** The project in the address: no Project filter, and the copy says "this project". */
+  projectId?: string;
+}) {
   const params = readExplorerParams(search);
   // Remount the list (and its page stack) whenever the filters change.
   const filterKey = JSON.stringify(toSessionFilters(params));
   return (
     <div>
-      <PageHeader title={PAGES.sessions.title} description={PAGES.sessions.description} />
+      <PageHeader
+        title={PAGES.sessions.title}
+        description={
+          projectId === undefined ? PAGES.sessions.description : PAGES.sessions.inProject
+        }
+      />
       <div className="flex flex-col gap-6">
-        <Filters key={params.q ?? ''} params={params} />
-        <SessionsBody key={filterKey} params={params} />
+        <Filters key={params.q ?? ''} params={params} scopeProjectId={projectId} />
+        <SessionsBody key={filterKey} params={params} scope={projectId} />
       </div>
     </div>
   );

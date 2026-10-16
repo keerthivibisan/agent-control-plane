@@ -152,6 +152,18 @@ test('the board in the shell; the switcher remembers the project for #/', async 
   await expect(page.getByTestId('board-counts')).toHaveText('2 running·1 needs you');
   await expect(page.getByRole('combobox', { name: 'Project' })).toHaveCount(0);
   await expect(page.getByTestId('board-stats')).toHaveCount(0);
+  // R-R visual: empty columns fold into rails; the rest scroll sideways with a hint that counts
+  // the tickets out of view (1280 px wide: Done is past the edge).
+  await expect(page.getByTestId('column-PLANNING')).toHaveAttribute('data-collapsed', 'true');
+  await expect(page.getByTestId('column-WORKING')).not.toHaveAttribute('data-collapsed', 'true');
+  const later = page.getByTestId('board-scroll-on').getByRole('button');
+  await expect(later).toHaveText('1 more ticket');
+  const done = page.getByRole('region', { name: 'Done' }).getByText('Build the harness');
+  await expect(done).not.toBeInViewport();
+  await later.click();
+  await expect(done).toBeInViewport();
+  await page.getByTestId('board-scroll-back').getByRole('button').click();
+  await expect(page.getByTestId('board-scroll-back')).toHaveCount(0);
   await shoot(page, 'board');
 
   // The front door reopens the last project.

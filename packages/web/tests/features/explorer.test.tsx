@@ -11,6 +11,7 @@ import {
   tree,
   usageSummary,
 } from '../fixtures/dto';
+import { paths } from '../../src/lib/api';
 import { fakeServer, renderWithApi } from '../helpers';
 
 const parent = session({ id: 's-1', title: 'Fix login', childCount: 1 });
@@ -78,6 +79,47 @@ describe('Sessions page', () => {
     expect(await screen.findByText('Third')).toBeTruthy();
     expect(server.calls.map((c) => c.path)).toContain('/api/sessions?cursor=cur-2&limit=50');
     expect(screen.getByText('Page 2')).toBeTruthy();
+  });
+
+  it('inside a project: no Project filter, and the copy says "this project"', async () => {
+    const scoped = {
+      ...routes,
+      [paths.sessions({ projectId: 'p-1', limit: 50 })]: page(sessions),
+      [paths.sessions({ projectId: 'p-1', status: 'stale', limit: 50 })]: page([]),
+    };
+    const { unmount } = renderWithApi(
+      <SessionExplorer search={new URLSearchParams('projectId=p-1')} projectId="p-1" />,
+      fakeServer(scoped),
+    );
+    const header = (await screen.findByRole('heading', { name: 'Sessions', level: 1 })).closest(
+      'header',
+    );
+    expect(header?.textContent).toContain('in this project');
+    expect(header?.textContent).not.toContain('your projects');
+    const form = screen.getByRole('form', { name: 'Session filters' });
+    expect(within(form).queryByRole('combobox', { name: /^Project/ })).toBeNull();
+    // The project from the address is not a filter: no "Clear filters".
+    expect(within(form).queryByRole('link', { name: /Clear/ })).toBeNull();
+    await waitFor(() => expect(rowOf('s-1')).toBeTruthy());
+    unmount();
+
+    // A real filter is cleared back to the project, not to every project.
+    renderWithApi(
+      <SessionExplorer
+        search={new URLSearchParams('projectId=p-1&status=stale')}
+        projectId="p-1"
+      />,
+      fakeServer(scoped),
+    );
+    const clear = await screen.findAllByRole('link', { name: /Clear/ });
+    for (const link of clear) expect(link.getAttribute('href')).toBe('#/p/p-1/sessions');
+  });
+
+  it('lists every project with a Project filter outside a project', async () => {
+    renderWithApi(<SessionExplorer search={new URLSearchParams()} />, fakeServer(routes));
+    const form = await screen.findByRole('form', { name: 'Session filters' });
+    expect(within(form).getByRole('combobox', { name: /^Project/ })).toBeTruthy();
+    expect(screen.getByText(/in your projects/)).toBeTruthy();
   });
 
   it('applies filters from the hash, and a status change updates the hash', async () => {

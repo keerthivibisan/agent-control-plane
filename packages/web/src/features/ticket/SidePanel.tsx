@@ -11,7 +11,6 @@ import { EstimatedCost } from '../../components/EstimatedCost';
 import { RelativeTime } from '../../components/RelativeTime';
 import { paths, schemas } from '../../lib/api';
 import {
-  AGENT_STATUS_COPY,
   CONTROL_COPY,
   describeEvent,
   FOLLOW_UP_COPY,
@@ -21,7 +20,7 @@ import {
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
-import { StatusWord } from '../control/bits';
+import { agentStatusCopy, StatusWord } from '../control/bits';
 import { Chat, type SpeakerOf } from '../control/Chat';
 import { canChat, isAgentLive } from '../control/run-state';
 import { ChangesTab } from './ChangesTab';
@@ -87,6 +86,15 @@ function chatBox(
   return followUp.state === 'running'
     ? { open: true, waiting: F.running, placeholder: F.placeholder }
     : { open: true, notice: F.available, placeholder: F.placeholder };
+}
+
+/**
+ * Who the chat box reaches, in words: the planner while it plans, else the lead (`chatAgent`), so
+ * the planner's panel never says "lead agent" while the planner holds the conversation.
+ */
+function chatWho(run: RunDetailDto, agent: AgentRunDto): string {
+  const kind = chatAgent(run)?.kind ?? agent.kind;
+  return C.roles[kind].term.toLowerCase();
 }
 
 /**
@@ -317,7 +325,7 @@ export function SidePanel({
           {C.roles[agent.kind].term}
         </span>
         <h2 className="text-title font-semibold break-words">{agent.role}</h2>
-        <StatusWord status={AGENT_STATUS_COPY[agent.status]} value={agent.status} />
+        <StatusWord status={agentStatusCopy(agent, run)} value={agent.status} />
       </header>
       <div
         role="tablist"
@@ -363,6 +371,7 @@ export function SidePanel({
               inputRef={chatInput}
               speakerOf={(m) => speakerLabel(m, run.agents)}
               followUpDivider={F.divider}
+              who={chatWho(run, agent)}
               {...chatBox(run, agent)}
             />
           </div>

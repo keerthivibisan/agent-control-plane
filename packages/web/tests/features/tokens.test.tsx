@@ -253,6 +253,27 @@ describe('TokensPage (R-F)', () => {
     renderPage('', { [PATH]: emptyProjectTokens() });
     expect(await screen.findByText('No token usage yet')).toBeTruthy();
     expect(screen.queryByRole('group', { name: 'Tokens at a glance' })).toBeNull();
+    // Nothing to count either: the empty state alone.
+    expect(screen.queryByTestId('token-counts')).toBeNull();
+  });
+
+  it('keeps the run and session counts when runs have no observed usage yet', async () => {
+    renderPage('', {
+      [PATH]: emptyProjectTokens({
+        sessions: { total: 0, withUsage: 0 },
+        runs: 2,
+        ticketsWithRuns: 1,
+      }),
+    });
+    expect(await screen.findByText('No token usage yet')).toBeTruthy();
+    const counts = screen.getByRole('group', { name: 'Sessions and runs' });
+    expect(within(counts).getByTestId('tile-runs').textContent).toContain('2');
+    expect(within(counts).getByTestId('tile-runs').textContent).toContain('for 1 ticket');
+    expect(within(counts).getByTestId('tile-sessions').textContent).toContain('0 reported');
+    expect(screen.getByText(/once the app observes these Claude Code sessions/)).toBeTruthy();
+    // No token figure: usage that was never reported is not shown as 0 tokens.
+    expect(screen.queryByRole('group', { name: 'Tokens at a glance' })).toBeNull();
+    expect(screen.queryByTestId('tile-new-work')).toBeNull();
   });
 
   it('keeps tiles in an empty range and says so in the charts', async () => {

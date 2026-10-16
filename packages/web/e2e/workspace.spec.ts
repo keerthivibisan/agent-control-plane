@@ -115,6 +115,9 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await expect(page).toHaveURL(/#\/p\/[^/]+\/board$/);
   const projectId = /#\/p\/([^/]+)\/board$/.exec(page.url())?.[1] ?? '';
   await expect(page.getByRole('heading', { level: 1, name: 'shop' })).toBeVisible();
+  // R-R visual: an empty board is the empty state alone, without nine empty columns.
+  await expect(page.getByTestId('board-empty')).toBeVisible();
+  await expect(page.getByTestId('board-columns')).toHaveCount(0);
   await shoot(page, 'board-empty');
   const nav = page.getByRole('navigation', { name: 'Main' });
 
@@ -157,6 +160,22 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await expect(page.getByTestId('wf-node-code-review').getByTestId('node-agent')).toHaveText(
     'reviewer',
   );
+  // R-R visual: at 1440 × 900 the whole flow, Done included, is on screen, and the zoom controls
+  // stay clear of the Done node.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(page.getByTestId('wf-node-done')).toBeInViewport({ ratio: 1 });
+  const doneBox = await page.getByTestId('wf-node-done').boundingBox();
+  const controlsBox = await page.locator('.react-flow__controls').boundingBox();
+  if (doneBox === null || controlsBox === null) throw new Error('no Done node or controls');
+  const apart =
+    controlsBox.x + controlsBox.width <= doneBox.x ||
+    doneBox.x + doneBox.width <= controlsBox.x ||
+    controlsBox.y + controlsBox.height <= doneBox.y ||
+    doneBox.y + doneBox.height <= controlsBox.y;
+  expect(apart).toBe(true);
+  await expect(panel.getByRole('button', { name: 'Save' })).toBeInViewport();
+  await page.setViewportSize({ width: 1280, height: 720 });
   await shoot(page, 'workflow-saved', false);
   // The agent file now says which stage uses it.
   await nav.getByRole('link', { name: 'Skills & Agents' }).click();
@@ -207,6 +226,15 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   const card = page.getByTestId('plan-card');
   await expect(card).toContainText('Add the field and check the code at checkout');
   await expect(page.getByTestId('live-plan')).toHaveAttribute('data-state', 'needs-you');
+  // R-R visual: the planner holds the chat, and the side panel says so.
+  const planPanel = page.getByTestId('side-panel');
+  await expect(
+    planPanel.getByRole('heading', { name: 'Chat with the planner agent' }),
+  ).toBeVisible();
+  await expect(
+    planPanel.getByRole('textbox', { name: 'Message to the planner agent' }),
+  ).toBeVisible();
+  await expect(planPanel).not.toContainText('lead agent');
   await shoot(page, 'plan-review');
   // Request changes: the comment reaches the planner, which writes version 2.
   const change = 'Also limit the code to 20 characters.';
@@ -285,6 +313,15 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await act(request, reviewer.id, 'finish');
   await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'done');
   await expect(page.getByRole('button', { name: 'About status Done' })).toBeVisible();
+  // R-R visual: the run completed, so the Done node is lit, and the lead the engine closed when
+  // the review started reads "Finished" (its status stays CANCELLED).
+  await expect(page.getByTestId('live-done')).toHaveAttribute('data-state', 'done');
+  const leadCard = page.getByRole('article', { name: 'Lead' });
+  await expect(leadCard.locator('[data-status="CANCELLED"]')).toHaveText('Finished');
+  // The helper's branch is the engine's UUID branch, shown short with the full one as its title.
+  const branch = page.getByRole('article', { name: 'Builder' }).getByTestId('agent-branch');
+  await expect(branch).toHaveText(/^…\/[0-9a-f]{8}$/);
+  await expect(branch.locator('[title^="acp/"]')).toHaveCount(1);
   await shoot(page, 'done');
 
   // ---- Follow-up: the ended lead answers a question; the page updates with no reload.
@@ -312,6 +349,8 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   // The board shows the ticket in Done.
   await nav.getByRole('link', { name: 'Board' }).click();
   await expect(page.getByRole('region', { name: 'Done' })).toContainText('SHOP-1');
+  // R-R visual: the empty columns fold, so the Done ticket is on screen.
+  await expect(page.getByRole('region', { name: 'Done' }).getByText('SHOP-1')).toBeInViewport();
   await shoot(page, 'board-done');
 
   // The other project pages on a real, new project.
@@ -320,6 +359,11 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await shoot(page, 'harness');
   await nav.getByRole('link', { name: 'Tokens' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Tokens');
+  // R-R visual: a run but no observed session: the counts stay, with why there is no usage.
+  await expect(page.getByText('No token usage yet')).toBeVisible();
+  await expect(page.getByTestId('tile-runs')).toContainText('for 1 ticket');
+  await expect(page.getByText(/once the app observes these Claude Code sessions/)).toBeVisible();
+  await expect(page.getByTestId('tile-new-work')).toHaveCount(0);
   await shoot(page, 'tokens');
   await nav.getByRole('link', { name: 'Settings' }).click();
   await expect(page.getByTestId('settings-project').getByLabel('Board key')).toHaveValue('SHOP');

@@ -34,6 +34,27 @@ export function canChat(status: RunStatus): boolean {
   return !ENDED_RUN.has(status) && status !== 'CANCELLING';
 }
 
+/**
+ * True when the engine, not the owner or a timeout, closed this agent as `CANCELLED` after the
+ * work went well (R-R visual): it ends the lead in the same step that starts the reviewer or the
+ * tester, and every agent still open in the step that completes the run, so the end time is the
+ * same instant as that agent's start or the run's end. An owner's Stop has its own time, and a
+ * timeout is `TIMED_OUT`, so both still read "Stopped" / "Timed out". The status is unchanged.
+ */
+export function closedByEngine(
+  agent: Pick<AgentRunDto, 'status' | 'endedAt'>,
+  run: Pick<RunDetailDto, 'status' | 'endedAt'> & {
+    agents: readonly Pick<AgentRunDto, 'kind' | 'createdAt'>[];
+  },
+): boolean {
+  if (agent.status !== 'CANCELLED' || agent.endedAt === null) return false;
+  if (run.status === 'COMPLETED' && run.endedAt === agent.endedAt) return true;
+  if (run.status !== 'REVIEW' && run.status !== 'COMPLETED') return false;
+  return run.agents.some(
+    (a) => (a.kind === 'reviewer' || a.kind === 'tester') && a.createdAt === agent.endedAt,
+  );
+}
+
 export interface AgentNode {
   agent: AgentRunDto;
   children: AgentNode[];

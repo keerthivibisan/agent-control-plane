@@ -110,11 +110,11 @@ test('Sessions in the project, one session, and back', async ({ page, request })
   const items = Array.isArray(listed) ? listed : (listed.items ?? []);
   expect(items.length).toBeGreaterThan(0);
   await shoot(page, 'sessions');
-  // The page is scoped to this project: its filter starts on it, and the API's sessions are the
-  // ones listed.
-  await expect(page.getByRole('main').getByRole('combobox', { name: 'Project' })).toHaveValue(
-    project.id,
-  );
+  // The page is scoped to this project: no Project filter (R-R visual), its copy says so, and
+  // the API's sessions are the ones listed.
+  await expect(page.getByRole('main').getByRole('combobox', { name: 'Project' })).toHaveCount(0);
+  await expect(page.getByRole('main')).toContainText('Every Claude Code session in this project');
+  await expect(page.getByRole('main')).not.toContainText('in your projects');
   for (const s of items.slice(0, 3)) {
     await expect(page.getByRole('main')).toContainText(s.id.slice(0, 8));
   }
@@ -126,9 +126,21 @@ test('Sessions in the project, one session, and back', async ({ page, request })
   await shoot(page, 'session');
 });
 
-test('Data health and its Connection tab', async ({ page }) => {
+test('Data health and its Connection tab', async ({ page, request }) => {
+  // A project used before: the global page keeps it in the switcher and the sidebar.
+  const project = await demoApi(request);
+  await page.goto(`/#/p/${project.id}/board`);
+  await expect(h1(page)).toContainText('demo-api');
   await page.goto('/#/health');
   await expect(h1(page)).toContainText('Data health');
+  await expect(
+    page.getByRole('button', { name: 'Project: demo-api. Switch project' }),
+  ).toBeVisible();
+  // R-R visual: the section tabs sit under the page title, as on every other page.
+  const tabs = page.getByRole('navigation', { name: 'Data health sections' });
+  const titleBox = await h1(page).boundingBox();
+  const tabsBox = await tabs.boundingBox();
+  expect(titleBox && tabsBox && tabsBox.y > titleBox.y).toBe(true);
   await shoot(page, 'health');
   await page.goto('/#/health/connection');
   await expect(h1(page)).toContainText('Connection');

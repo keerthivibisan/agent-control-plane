@@ -77,6 +77,7 @@ export function Chat({
   waiting,
   placeholder,
   followUpDivider,
+  who,
 }: {
   runId: string;
   messages: readonly ChatMessageDto[];
@@ -96,7 +97,13 @@ export function Chat({
   placeholder?: string;
   /** A divider with this text before the first follow-up message (`followUp: true`). */
   followUpDivider?: string;
+  /**
+   * Who the box reaches, for the title, label and placeholder ("the planner agent"); by default
+   * the lead agent.
+   */
+  who?: string;
 }) {
+  const words = who === undefined ? C : C.withAgent(who);
   const send = useControlAction(sendChat);
   const listRef = useRef<HTMLOListElement>(null);
   const inputId = useId();
@@ -130,13 +137,13 @@ export function Chat({
   };
 
   return (
-    <Card title={C.title} testId="chat">
+    <Card title={words.title} testId="chat">
       {sorted.length === 0 ? (
-        <EmptyState compact title={C.empty.title} text={C.empty.text} />
+        <EmptyState compact title={C.empty.title} text={words.empty.text} />
       ) : (
         <ol
           ref={listRef}
-          aria-label={C.title}
+          aria-label={words.title}
           className="-mx-1 flex max-h-[62vh] flex-col gap-4 overflow-y-auto px-1 pb-1"
         >
           {sorted.map((m) => (
@@ -183,7 +190,7 @@ export function Chat({
             </p>
           ) : null}
           <label htmlFor={inputId} className="sr-only">
-            {C.label}
+            {words.label}
           </label>
           <textarea
             id={inputId}
@@ -193,7 +200,7 @@ export function Chat({
             disabled={busy}
             onChange={(e) => onDraft(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={placeholder ?? C.placeholder}
+            placeholder={placeholder ?? words.placeholder}
             aria-describedby={line !== undefined ? `${noticeId} ${hintId}` : hintId}
             aria-invalid={tooLong ? true : undefined}
             className={`resize-y rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 disabled:cursor-not-allowed disabled:opacity-60 ${

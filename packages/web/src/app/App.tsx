@@ -56,7 +56,9 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
     case 'tokens':
       return <TokensPage key={projectId} projectId={projectId} search={route.params} />;
     case 'sessions':
-      return <SessionExplorer search={scopedParams(route.params, projectId)} />;
+      return (
+        <SessionExplorer search={scopedParams(route.params, projectId)} projectId={projectId} />
+      );
     case 'settings':
       return <ProjectSettings key={projectId} id={projectId} />;
     case 'skills':

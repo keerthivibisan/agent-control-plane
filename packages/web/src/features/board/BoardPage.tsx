@@ -154,28 +154,27 @@ function Board({ projectId }: { projectId: string }) {
       ) : null}
 
       <QueryView query={board} loading={C.loading}>
-        {(b) => (
-          <>
-            {ticketCount(b) === 0 ? (
-              <Card className="mb-6">
-                <EmptyState
-                  compact
-                  testId="board-empty"
-                  icon={<BoardIcon size={18} />}
-                  title={C.empty.noTickets.title}
-                  text={C.empty.noTickets.text}
-                  action={
-                    <Button variant="primary" onClick={() => setCreating(true)}>
-                      <PlusIcon size={16} />
-                      {C.newTicket}
-                    </Button>
-                  }
-                />
-              </Card>
-            ) : null}
+        {(b) =>
+          // An empty board is the empty state alone: nine empty columns say nothing more.
+          ticketCount(b) === 0 ? (
+            <Card>
+              <EmptyState
+                testId="board-empty"
+                icon={<BoardIcon size={22} />}
+                title={C.empty.noTickets.title}
+                text={C.empty.noTickets.text}
+                action={
+                  <Button variant="primary" onClick={() => setCreating(true)}>
+                    <PlusIcon size={16} />
+                    {C.newTicket}
+                  </Button>
+                }
+              />
+            </Card>
+          ) : (
             <BoardColumns columns={boardColumns(b)} busyId={busyId} onMove={onMove} />
-          </>
-        )}
+          )
+        }
       </QueryView>
 
       {creating ? (

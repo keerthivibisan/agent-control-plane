@@ -151,7 +151,8 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
 
   return (
     <div className="grid grid-cols-1 items-start gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_23rem]">
-      <Card title={C.graphTitle} description={C.flowSentence} padded={false} testId="workflow-card">
+      {/* The flow sentence is the title's ⓘ, so the graph starts higher on the page. */}
+      <Card title={C.graphTitle} tip={C.flowSentence} padded={false} testId="workflow-card">
         <div className="px-3 pt-2">
           <WorkflowGraph graph={graph} selected={selected} onSelect={select} />
         </div>

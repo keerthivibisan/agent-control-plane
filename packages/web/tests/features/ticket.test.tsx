@@ -30,12 +30,14 @@ import {
   heldScenario,
   inReviewScenario,
   planReviewScenario,
+  plannerReviewScenario,
   reviewedScenario,
   stagesScenario,
   workingScenario,
   type TicketScenario,
 } from '../../e2e/ticket-fixtures';
 import { App } from '../../src/app/App';
+import { shortBranch } from '../../src/features/ticket/AgentCanvas';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { createApiClient, updateTicket, type FetchLike } from '../../src/lib/api';
 import { parseRoute } from '../../src/lib/router';
@@ -100,6 +102,7 @@ describe('ticket fixtures', () => {
       stagesScenario(),
       reviewedScenario(),
       heldScenario(),
+      plannerReviewScenario(),
     ]) {
       expect(() => TicketDetailDtoSchema.parse(sc.routes[TICKET])).not.toThrow();
       expect(() => RunDetailDtoSchema.parse(sc.routes[RUN])).not.toThrow();
@@ -716,6 +719,67 @@ describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', ()
     );
     expect(document.body.textContent).not.toContain('Plan ready for you');
     expect(screen.getByTestId('ticket-summary').textContent).toContain('1 agent');
+  });
+});
+
+describe('ticket page: R-R visual fixes', () => {
+  const graph = () => screen.findByTestId('live-workflow');
+  const status = (id: string) =>
+    within(screen.getByTestId(`agent-${id}`)).getByText(/^(Finished|Stopped|Finished its task)$/)
+      .textContent;
+
+  it('names the planner in the chat while the planner holds it', async () => {
+    renderTicket(server(plannerReviewScenario()));
+    const panel = await screen.findByTestId('side-panel');
+    expect(within(panel).getByRole('heading', { name: 'Planner' })).toBeTruthy();
+    const chat = within(panel).getByTestId('chat');
+    expect(within(chat).getByRole('heading', { name: 'Chat with the planner agent' })).toBeTruthy();
+    const box = within(panel).getByRole('textbox', { name: 'Message to the planner agent' });
+    expect(box.getAttribute('placeholder')).toBe('Message the planner agent…');
+    expect(panel.textContent).not.toContain('lead agent');
+  });
+
+  it('shortens an engine branch to 8 characters, keeping short names', () => {
+    const uuid = '0ff5eab0-6f16-4c02-9b1e-3c3d4e5f6a7b';
+    expect(shortBranch(`acp/2c91dc6e-ffa2-465d-b30c-baca5569d5ce/${uuid}`)).toBe('…/0ff5eab0');
+    expect(shortBranch('acp/run-1/agent-ui')).toBe('…/agent-ui');
+    expect(shortBranch('feature/x')).toBe('feature/x');
+  });
+
+  it('a lead the engine closed for the next stage reads "Finished", with its status kept', async () => {
+    renderTicket(server(reviewedScenario()));
+    await screen.findByTestId('agent-canvas');
+    expect(status(LEAD)).toBe('Finished');
+    expect(
+      within(screen.getByTestId(`agent-${LEAD}`))
+        .getByText('Finished')
+        .closest('[data-status]')
+        ?.getAttribute('data-status'),
+    ).toBe('CANCELLED');
+    fireEvent.click(screen.getByRole('button', { name: 'Show the Lead in the side panel' }));
+    expect(within(screen.getByTestId('side-panel')).getByText('Finished')).toBeTruthy();
+  });
+
+  it('a lead the owner stopped still reads "Stopped"', async () => {
+    const sc = reviewedScenario();
+    const run = sc.routes[RUN] as { agents: { id: string; endedAt: string | null }[] };
+    // Stopped earlier, on its own: not the instant the reviewer started.
+    for (const a of run.agents) if (a.id === LEAD) a.endedAt = '2026-10-15T09:40:00.000Z';
+    renderTicket(server(sc));
+    await screen.findByTestId('agent-canvas');
+    expect(status(LEAD)).toBe('Stopped');
+  });
+
+  it('lights the Done node once the run completed, and only then', async () => {
+    const { unmount } = renderTicket(server(doneScenario()));
+    await graph();
+    const done = await screen.findByTestId('live-done');
+    expect(done.dataset.state).toBe('done');
+    expect(screen.getByTestId('live-ticket').dataset.state).toBeUndefined();
+    unmount();
+    renderTicket(server(reviewedScenario()));
+    await graph();
+    expect((await screen.findByTestId('live-done')).dataset.state).toBeUndefined();
   });
 });
 

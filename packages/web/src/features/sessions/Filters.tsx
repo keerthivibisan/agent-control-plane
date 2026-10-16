@@ -30,7 +30,14 @@ function Field({ label, tip, children }: { label: string; tip?: string; children
  * The provider filter appears only when more than one provider is connected. Selects apply at
  * once; the search applies on Enter. Remount (key) when the URL changes so the box follows it.
  */
-export function Filters({ params }: { params: ExplorerParams }) {
+export function Filters({
+  params,
+  scopeProjectId,
+}: {
+  params: ExplorerParams;
+  /** Inside a project: the project is the address, so there is no Project filter. */
+  scopeProjectId?: string | undefined;
+}) {
   const projects = useApiQuery(paths.projects(), schemas.projects);
   const capabilities = useApiQuery(paths.capabilities(), schemas.capabilities);
   // Models observed in usage records, from the usage summary grouped by model.
@@ -53,20 +60,22 @@ export function Filters({ params }: { params: ExplorerParams }) {
       aria-label={COPY.label}
       className="flex flex-wrap items-end gap-x-4 gap-y-3"
     >
-      <Field label={COPY.project}>
-        <select
-          className={`${fieldClass} w-48`}
-          value={params.projectId ?? ''}
-          onChange={(e) => go({ projectId: e.target.value || undefined })}
-        >
-          <option value="">{COPY.allProjects}</option>
-          {projects.data?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {scopeProjectId === undefined ? (
+        <Field label={COPY.project}>
+          <select
+            className={`${fieldClass} w-48`}
+            value={params.projectId ?? ''}
+            onChange={(e) => go({ projectId: e.target.value || undefined })}
+          >
+            <option value="">{COPY.allProjects}</option>
+            {projects.data?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
       <Field label={COPY.status}>
         <select
           className={`${fieldClass} w-36`}
@@ -128,9 +137,9 @@ export function Filters({ params }: { params: ExplorerParams }) {
           {COPY.find}
         </Button>
       </div>
-      {hasFilters(params) ? (
+      {hasFilters(params, scopeProjectId) ? (
         <ButtonLink
-          href={explorerHref({ root: params.root, view: params.view })}
+          href={explorerHref({ projectId: scopeProjectId, root: params.root, view: params.view })}
           variant="quiet"
           className="h-9"
         >

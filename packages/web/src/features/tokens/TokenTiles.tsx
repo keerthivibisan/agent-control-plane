@@ -10,6 +10,46 @@ function exact(value: number | null): string | null {
   return TOKENS_COPY.tiles.tokens(value);
 }
 
+/** The sessions and agent-runs tiles: counts of records, never token usage. */
+function CountTiles({ data }: { data: ProjectTokensDto }) {
+  const t = TOKENS_COPY.tiles;
+  return (
+    <>
+      <StatCard
+        label={t.sessions}
+        tip={t.sessionsTip}
+        testId="tile-sessions"
+        value={<span className="tabular-nums">{formatCount(data.sessions.total)}</span>}
+        sublabel={t.sessionsWithUsage(data.sessions.withUsage)}
+      />
+      <StatCard
+        label={t.runs}
+        tip={t.runsTip}
+        testId="tile-runs"
+        value={<span className="tabular-nums">{formatCount(data.runs)}</span>}
+        sublabel={t.runsTickets(data.ticketsWithRuns)}
+      />
+    </>
+  );
+}
+
+/**
+ * Only the two count tiles, for a project with sessions or runs but no reported usage yet: the
+ * token tiles would all read "Not reported", so they wait until there is usage.
+ */
+export function CountsOnly({ data }: { data: ProjectTokensDto }) {
+  return (
+    <div
+      role="group"
+      aria-label={TOKENS_COPY.tiles.countsLabel}
+      data-testid="token-counts"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5"
+    >
+      <CountTiles data={data} />
+    </div>
+  );
+}
+
 /**
  * The page's five headline tiles (docs/redesign/README.md §4.5): sessions, agent runs, new work,
  * total processed and the cache reuse share. Figures come from `tokenHeadline()` on the server;
@@ -28,20 +68,7 @@ export function TokenTiles({ data }: { data: ProjectTokensDto }) {
       data-testid="token-tiles"
       className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
     >
-      <StatCard
-        label={t.sessions}
-        tip={t.sessionsTip}
-        testId="tile-sessions"
-        value={<span className="tabular-nums">{formatCount(data.sessions.total)}</span>}
-        sublabel={t.sessionsWithUsage(data.sessions.withUsage)}
-      />
-      <StatCard
-        label={t.runs}
-        tip={t.runsTip}
-        testId="tile-runs"
-        value={<span className="tabular-nums">{formatCount(data.runs)}</span>}
-        sublabel={t.runsTickets(data.ticketsWithRuns)}
-      />
+      <CountTiles data={data} />
       <StatCard
         label={t.newWork}
         tip={t.newWorkTip}
