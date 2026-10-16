@@ -14,7 +14,7 @@
 | P4-F | [Project wizard and settings UI](wp/P4-F.md)                 | P4-0              | **done**                                                                             | `wp/p4-f-project-setup` | 2026-10-16 (`7df96d5`) |
 | P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | **done**                                                                             | `wp/p4-g-ticket`        | 2026-10-16 (`da45a0c`) |
 | P4-D | [Server wiring](wp/P4-D.md)                                  | P4-A, B, C, I     | **done** (allowlist input blocked on a contract change, see below)                   | `wp/p4-d-server`        | 2026-10-16 (`ab9d433`) |
-| P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | todo: **unblocked** (needs the allowlist-input change for its allowlisted-edit step) | `wp/p4-h-verify`        | —                      |
+| P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | **done** (server-side). The browser e2e and the real smoke run moved to redesign R-V | `wp/p4-h-verify`        | 2026-10-16 (`c91aa3a`) |
 
 ## Live state (2026-10-16, the owner paused work; git is the source of truth)
 
@@ -63,6 +63,15 @@ new one from its branch.
    filled by the control mapper. Commit `aacca2e`. P4-G must add `branch` to its own fixture DTOs
    when it rebases. P4-D must answer PATCH ticket, plan decision and start with `TicketDetailDto`.
 5. **Done:** the wizard and harness panel use `href.board`/`href.ticket`. Commit `aacca2e`.
+
+**P4-H review notes (2026-10-16):** test-only scope. It is merged after a rebase and a re-run of
+pnpm check. Its CSRF finding (POST /api/projects) is fixed by the coordinator. These behaviours are by
+design but worth a UI line, which the redesign's R-E/R-H should add:
+
+- the "Build the harness" ticket's own review runs no checks;
+- a write into a folder that doesn't exist yet still asks the owner even with edits pre-approved;
+- "Run checks" during review checks answers `checks_running`;
+- the harness status is cached for 10 s and a merge doesn't clear it.
 
 **P4-D review notes (2026-10-16):** reviewed `create-repo.ts` (exclusive `mkdir`; `rm` only on the
 folder it just made; git argv only), `control/allowlist.ts` (realpath before the verdict; unresolvable
