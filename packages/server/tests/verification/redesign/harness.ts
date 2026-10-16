@@ -12,7 +12,7 @@ import { loadConfig } from '../../../src/config.js';
 import { createLogger } from '../../../src/logger.js';
 import { createGitRunner } from '../../../src/workspace/index.js';
 import { createFakeManagedAdapter } from '../../control/fake-adapter.js';
-import { GIT_TEST_ENV, tempDir } from '../../workspace/helpers.js';
+import { GIT_TEST_IDENTITY_ENV, tempDir } from '../../workspace/helpers.js';
 import { expectStatus, waitFor, type Reply, type WorkspaceServer } from '../workspace/harness.js';
 
 /*
@@ -130,7 +130,8 @@ export async function bootRedesign(options: RedesignBootOptions = {}): Promise<R
     port: 0,
     logger: createLogger((line) => logs.push(line)),
     managedAdapter: tee.adapter,
-    git: createGitRunner({ env: GIT_TEST_ENV }),
+    // Skills and agent files are committed as the owner (ADR-0018): give the test repo an identity.
+    git: createGitRunner({ env: GIT_TEST_IDENTITY_ENV }),
   });
   const base = `http://127.0.0.1:${server.port}`;
   const responses: string[] = [];

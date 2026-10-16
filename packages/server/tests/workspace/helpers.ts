@@ -14,6 +14,24 @@ import { createGitRunner, type ExecFileFn, type GitRunner } from '../../src/work
 export const GIT_TEST_ENV: Readonly<Record<string, string>> = {
   GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_CONFIG_NOSYSTEM: '1',
+  // Never guess an identity from the user name and host name: macOS can, a CI runner can't, so a
+  // test that commits without an identity must fail everywhere, not only on CI.
+  GIT_CONFIG_COUNT: '1',
+  GIT_CONFIG_KEY_0: 'user.useConfigOnly',
+  GIT_CONFIG_VALUE_0: 'true',
+};
+
+/**
+ * `GIT_TEST_ENV` plus a fixed identity, as an owner's git config would give it. Set as config through
+ * the environment, so an explicit `git -c user.name=…` (the app's own commits) still wins.
+ */
+export const GIT_TEST_IDENTITY_ENV: Readonly<Record<string, string>> = {
+  ...GIT_TEST_ENV,
+  GIT_CONFIG_COUNT: '3',
+  GIT_CONFIG_KEY_1: 'user.name',
+  GIT_CONFIG_VALUE_1: 'Test Owner',
+  GIT_CONFIG_KEY_2: 'user.email',
+  GIT_CONFIG_VALUE_2: 'owner@example.invalid',
 };
 
 const cleanups: (() => void)[] = [];
