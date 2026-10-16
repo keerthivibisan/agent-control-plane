@@ -4,18 +4,31 @@ import type { Server } from 'node:http';
 import { createClaudeCodeAdapter, createManagedClaudeCode } from '@acp/adapter-claude-code';
 import { createDemoAdapter } from '@acp/adapter-demo';
 import type { ManagedExecutionAdapter, ObservationAdapter } from '@acp/core';
-import { createQueries, createRepositories, openDatabase } from '@acp/db';
+import {
+  createQueries,
+  createRepositories,
+  createWorkspaceRepositories,
+  openDatabase,
+} from '@acp/db';
 import { createApp } from './app.js';
+import { createCheckService } from './board/checks.js';
+import { createProjectHarness } from './board/harness.js';
+import { createBoardService } from './board/service.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
 import { ensureHookToken } from './hooks/token.js';
-import { createLogger, type Logger } from './logger.js';
+import { createLogger, errorFields, type Logger } from './logger.js';
 import { createNotifier } from './notifier.js';
 import { createPipeline } from './pipeline/ingest.js';
 import { createScheduler } from './scheduler.js';
 import { createServices } from './services/index.js';
 import { managedAgentEnv } from './control/env.js';
-import { createControlService, type ControlService } from './control/service.js';
+import {
+  createControlService,
+  type ControlService,
+  type ControlWorkspaceHooks,
+} from './control/service.js';
+import { createCheckRunner, createMainChecks, type CheckRunner } from './harness/index.js';
 import { createGitRunner, createWorkspaceManager, type GitRunner } from './workspace/index.js';
 
 /** The demo projects live only in the separate demo database (AGENTS.md §3.9). */
@@ -45,6 +58,8 @@ export interface StartOptions {
   managedAdapter?: ManagedExecutionAdapter;
   /** Tests: git for the workspace manager (isolated from the user's git config). */
   git?: GitRunner;
+  /** Tests and the e2e: the harness check runner (default: the real one, ADR-0017). */
+  checkRunner?: CheckRunner;
   /** Tests: control-service timing overrides. */
   control?: { approvalTimeoutMs?: number; sweepIntervalMs?: number | null; cancelGraceMs?: number };
 }
@@ -143,6 +158,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
 
   const managedAdapter = resolveManagedAdapter(config, options.managedAdapter);
   const git = options.git ?? createGitRunner();
+  // Filled in by the board service below; the control service reads it at call time.
+  const workspaceHooks: ControlWorkspaceHooks = {};
   const controlService = createControlService({
     db,
     repos,
@@ -156,6 +173,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     publish: (n) => notifier.publish(n),
     runTimeoutMs: config.runTimeoutMs,
     flushIngestion: () => scheduler.pollNow(),
+    workspace: workspaceHooks,
     ...options.control,
   });
   controlRef.current = controlService;
@@ -186,6 +204,42 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     requestPoll,
     isManagedPath: (cwd) => controlService.isManagedPath(cwd),
   });
+  // Phase 4 board: one shared check runner for the whole server (ADR-0017: one check at a time).
+  const workspaceRepos = createWorkspaceRepositories(db, { now });
+  const projectHarness = createProjectHarness({ repos, workspace: workspaceRepos, now, logger });
+  const checkRunner = options.checkRunner ?? createCheckRunner({ logger, now });
+  const mainChecks = createMainChecks({
+    dataDir: config.dataDir,
+    runner: checkRunner,
+    git,
+    now,
+    logger,
+  });
+  const checks = createCheckService({
+    repos,
+    workspace: workspaceRepos,
+    control: controlService,
+    runner: checkRunner,
+    mainChecks,
+    harness: projectHarness,
+    publish: (n) => notifier.publish(n),
+    logger,
+  });
+  const board = createBoardService({
+    db,
+    repos,
+    queries,
+    projects: services.projects,
+    control: controlService,
+    harness: projectHarness,
+    checks,
+    git,
+    now,
+    publish: (n) => notifier.publish(n),
+    logger,
+  });
+  Object.assign(workspaceHooks, board.controlHooks());
+
   const app = createApp({
     config,
     logger,
@@ -201,9 +255,17 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       now,
     },
     control: controlService,
+    board,
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();
+  try {
+    // Temporary main-branch checkouts a crash left behind (P4-C handoff).
+    const removed = await mainChecks.cleanupOrphans();
+    logger.log('info', 'orphan check checkouts cleaned', { removed });
+  } catch (error) {
+    logger.log('warn', 'orphan check checkout cleanup failed', errorFields(error));
+  }
 
   let server: Server;
   try {
@@ -212,6 +274,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       s.once('error', reject);
     });
   } catch (error) {
+    await checks.close();
     await controlService.close();
     db.close();
     throw error;
@@ -229,7 +292,9 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await scheduler.stop();
-      // Agents are aborted without recording anything: the next start marks them NEEDS_REVIEW.
+      // A running check is stopped; agents are aborted without recording anything, and the next
+      // start marks them NEEDS_REVIEW.
+      await checks.close();
       await controlService.close();
       db.close();
     },

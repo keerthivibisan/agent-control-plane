@@ -12,7 +12,7 @@ import {
 import { requireCsrf } from '../control/csrf.js';
 import { managedDisabled } from '../control/errors.js';
 import type { ControlService } from '../control/service.js';
-import { badRequest } from '../errors.js';
+import { out, param } from './respond.js';
 
 /**
  * Control-panel routes (Phase 3 M1, ADR-0013). Thin: parse, call the run service, and send the
@@ -21,22 +21,6 @@ import { badRequest } from '../errors.js';
  */
 
 const RunSummaryListSchema = z.array(RunSummaryDtoSchema);
-
-/** A response that fails its own DTO is a server bug: a 500, never a 400 blamed on the client. */
-class ResponseContractError extends Error {
-  override readonly name = 'ResponseContractError';
-}
-
-function out<T extends z.ZodType>(schema: T, value: z.input<T>): z.infer<T> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new ResponseContractError('response does not match its DTO');
-  return parsed.data;
-}
-
-function param(value: string | string[] | undefined): string {
-  if (typeof value !== 'string' || value === '') throw badRequest('Missing path parameter');
-  return value;
-}
 
 export function createControlRouter(control: ControlService): Router {
   const router = Router();
