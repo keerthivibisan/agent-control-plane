@@ -6,16 +6,17 @@
 
 | Field   | Value                                             |
 | ------- | ------------------------------------------------- |
-| Status  | todo                                              |
+| Status  | in-progress                                       |
 | Owner   | engine agent                                      |
-| Branch  | `wp/r-c-…` (create from `main` when you claim it) |
-| Started | —                                                 |
-| Updated | —                                                 |
+| Branch  | `wp/r-c-engine`                                   |
+| Started | 2026-10-16                                        |
+| Updated | 2026-10-16                                        |
 
 ## Work log (append-only; newest last)
 
 | Date | What was done | Commit | Checks |
 | ---- | ------------- | ------ | ------ |
+| 2026-10-16 | Claimed R-C on `wp/r-c-engine` from `main` (eb458d6). | claim | — |
 
 ## Handoff notes
 
