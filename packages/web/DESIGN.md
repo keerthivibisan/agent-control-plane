@@ -74,7 +74,7 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 | `#/p/:projectId/board`                     | Board                                                    |
 | `#/p/:projectId/workflow`                  | Workflow (R-B; not available yet)                        |
 | `#/p/:projectId/skills`, `…/skills/:name`  | Skills (R-D; not available yet)                          |
-| `#/p/:projectId/harness`                   | Harness (R-E; not available yet)                         |
+| `#/p/:projectId/harness`                   | Harness (R-E)                                            |
 | `#/p/:projectId/tokens`                    | Tokens (today's usage page filtered to the project; R-F) |
 | `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)     |
 | `#/p/:projectId/settings`                  | Settings                                                 |

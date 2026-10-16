@@ -11,7 +11,7 @@
 | R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; part 2 in progress (resumed) | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
 | R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                       | `wp/r-d-skills`   | —                              |
 | R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress (resumed)                       | `wp/r-f-tokens`   | —                              |
-| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress (resumed)                       | `wp/r-e-harness`  | —                              |
+| R-E | [Harness page](wp/R-E.md)                           | R-A      | **done**                                    | `wp/r-e-harness`  | 2026-10-16 (`2e1c346`)         |
 | R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | in-progress (resumed)                       | `wp/r-b-workflow` | —                              |
 | R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                        | —                 | —                              |
 | R-V | [Verification](wp/R-V.md)                           | all      | todo                                        | —                 | —                              |
@@ -91,6 +91,16 @@ in its progress file with the exact next steps. Read it first.
 | R-C | `.claude/worktrees/agent-a2d3226375ace63e6` | **Done, in WIP `fb73268`:** workflow snapshot, agent stages, separate planner, reviewer and tester after merge, `post_review`, `continueStages`, Stop covers every role. **Left:** fix the typecheck (`exactOptionalPropertyTypes`, `plan.ts:182`); finish `policy.ts`; exports; `deriveRunWorkflow`; all new tests (including default-workflow equivalence); README. Adapter toolsets are blocked on contract decisions A and B below.           |
 | R-G | `.claude/worktrees/agent-a64edec75e61b9de3` | Claimed, with the design in its note. **Next:** migration `0004_redesign.sql` and an upgrade test, `repositories/redesign/{workflow,audit}.ts`, `decidedBy`/limits wiring, `GET/PUT /api/projects/:id/workflow`, tests. Part 2 waits for R-C.                                                                                                                                                                                                     |
 | R-D | `.claude/worktrees/agent-a2bf7f960a015159c` | Claimed, with the design in its note. **Next:** the `src/skills/` service and tests, the router with supertest security tests, the Skills page with tests and screenshots, and the app.ts/bootstrap lines for R-G.                                                                                                                                                                                                                                |
+
+**R-E review (2026-10-16):** scope OK. The edits outside its own paths are the allowed shell
+plug-in, palette additions and copy section. No raw HTML. The coordinator re-ran pnpm check and the
+full e2e (24/24) and looked at the screenshots. Merged after the coordinator fixed the recurring
+smoke-test flake on main (`67001cd`: wait for the subagent edge). Follow-ups:
+
+- once R-G's history route lands, switch `RunsCard` to it (3 small web changes, listed in
+  `wp/R-E.md`);
+- move `useSetupAction` out of `project-setup`;
+- R-H replaces the Settings harness card with a link.
 
 **R-C review (2026-10-16):** scope OK (orchestrator and adapter, plus the approved decision-B core
 commit). Adapter toolsets read and confirmed:
