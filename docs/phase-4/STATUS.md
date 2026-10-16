@@ -3,27 +3,26 @@
 > Only the coordinator edits this file, when a WP is merged or a wave starts. Agents record their
 > progress in `docs/phase-4/wp/<WP>.md` (README §9).
 
-| WP   | Title                                                        | Depends           | Status                                       | Branch                  | Merged                 |
-| ---- | ------------------------------------------------------------ | ----------------- | -------------------------------------------- | ----------------------- | ---------------------- |
-| P4-0 | [Contracts, ADRs and core logic](wp/P4-0.md)                 | owner approval    | **done**                                     | `wp/p4-0-contracts`     | 2026-10-13 (`8c05f68`) |
-| P4-I | [Adapter: context, nested helpers, submit_plan](wp/P4-I.md)  | P4-0              | **done**                                     | `wp/p4-i-adapter`       | 2026-10-15 (`3cf7066`) |
-| P4-B | [Database: migration 0003 and repositories](wp/P4-B.md)      | P4-0              | **done**                                     | `wp/p4-b-db`            | 2026-10-16 (`1f55b92`) |
-| P4-A | [Engine: plan phase, limits, depth 2, allowlist](wp/P4-A.md) | P4-0              | **done**                                     | `wp/p4-a-engine`        | 2026-10-16 (`b4ab73b`) |
-| P4-C | [Harness: manifest, context files, check runner](wp/P4-C.md) | P4-0              | **done**                                     | `wp/p4-c-harness`       | 2026-10-16 (`c0a5ea0`) |
-| P4-E | [Board UI](wp/P4-E.md)                                       | P4-0              | **done**                                     | `wp/p4-e-board`         | 2026-10-16 (`5044b73`) |
-| P4-F | [Project wizard and settings UI](wp/P4-F.md)                 | P4-0              | **done**                                     | `wp/p4-f-project-setup` | 2026-10-16 (`7df96d5`) |
-| P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | **done**                                     | `wp/p4-g-ticket`        | 2026-10-16 (`da45a0c`) |
-| P4-D | [Server wiring](wp/P4-D.md)                                  | P4-A, B, C, I     | todo: **unblocked**, all dependencies merged | `wp/p4-d-server`        | —                      |
-| P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | todo                                         | `wp/p4-h-verify`        | —                      |
+| WP   | Title                                                        | Depends           | Status                                                                               | Branch                  | Merged                 |
+| ---- | ------------------------------------------------------------ | ----------------- | ------------------------------------------------------------------------------------ | ----------------------- | ---------------------- |
+| P4-0 | [Contracts, ADRs and core logic](wp/P4-0.md)                 | owner approval    | **done**                                                                             | `wp/p4-0-contracts`     | 2026-10-13 (`8c05f68`) |
+| P4-I | [Adapter: context, nested helpers, submit_plan](wp/P4-I.md)  | P4-0              | **done**                                                                             | `wp/p4-i-adapter`       | 2026-10-15 (`3cf7066`) |
+| P4-B | [Database: migration 0003 and repositories](wp/P4-B.md)      | P4-0              | **done**                                                                             | `wp/p4-b-db`            | 2026-10-16 (`1f55b92`) |
+| P4-A | [Engine: plan phase, limits, depth 2, allowlist](wp/P4-A.md) | P4-0              | **done**                                                                             | `wp/p4-a-engine`        | 2026-10-16 (`b4ab73b`) |
+| P4-C | [Harness: manifest, context files, check runner](wp/P4-C.md) | P4-0              | **done**                                                                             | `wp/p4-c-harness`       | 2026-10-16 (`c0a5ea0`) |
+| P4-E | [Board UI](wp/P4-E.md)                                       | P4-0              | **done**                                                                             | `wp/p4-e-board`         | 2026-10-16 (`5044b73`) |
+| P4-F | [Project wizard and settings UI](wp/P4-F.md)                 | P4-0              | **done**                                                                             | `wp/p4-f-project-setup` | 2026-10-16 (`7df96d5`) |
+| P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | **done**                                                                             | `wp/p4-g-ticket`        | 2026-10-16 (`da45a0c`) |
+| P4-D | [Server wiring](wp/P4-D.md)                                  | P4-A, B, C, I     | **done** (allowlist input blocked on a contract change, see below)                   | `wp/p4-d-server`        | 2026-10-16 (`ab9d433`) |
+| P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | todo: **unblocked** (needs the allowlist-input change for its allowlisted-edit step) | `wp/p4-h-verify`        | —                      |
 
 ## Live state (2026-10-16, the owner paused work; git is the source of truth)
 
-`main` is at `da45a0c` (+ docs) and green (P4-G merged: check 1,601 ✓, e2e 14/14 ✓) (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
+`main` is at `ab9d433` (+ docs) and green: every WP except P4-H is merged (check 1,637 ✓, e2e 14/14 ✓ on 2026-10-16) (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
 
-| WP   | Branch           | Head | State                                | What is left                                                                |
-| ---- | ---------------- | ---- | ------------------------------------ | --------------------------------------------------------------------------- |
-| P4-D | `wp/p4-d-server` | —    | not started; all dependencies merged | Start with the README §10.1 prompt **plus the notes below**                 |
-| P4-H | `wp/p4-h-verify` | —    | not started                          | After D, F and G. The real smoke run needs the owner's consent at that time |
+| WP   | Branch           | Head | State       | What is left                                                                |
+| ---- | ---------------- | ---- | ----------- | --------------------------------------------------------------------------- |
+| P4-H | `wp/p4-h-verify` | —    | not started | After D, F and G. The real smoke run needs the owner's consent at that time |
 
 **Agent worktrees** (on this machine): P4-F `.claude/worktrees/agent-a9d7d236a63ab508e`, P4-G
 `…agent-a67043b516f28adae`. Merged WPs' worktrees can be removed. If a worktree is gone, create a
@@ -64,6 +63,21 @@ new one from its branch.
    filled by the control mapper. Commit `aacca2e`. P4-G must add `branch` to its own fixture DTOs
    when it rebases. P4-D must answer PATCH ticket, plan decision and start with `TicketDetailDto`.
 5. **Done:** the wizard and harness panel use `href.board`/`href.ticket`. Commit `aacca2e`.
+
+**P4-D review notes (2026-10-16):** reviewed `create-repo.ts` (exclusive `mkdir`; `rm` only on the
+folder it just made; git argv only), `control/allowlist.ts` (realpath before the verdict; unresolvable
+targets ask the owner) and CSRF on every board mutation. Open items:
+
+- **Blocked contract (coordinator):** `PermissionRequest` has no tool input, so the allowlist can't
+  match yet and every request asks the owner. The proposed diff is in `wp/P4-D.md`: an in-memory
+  `input?: unknown`, never stored or logged.
+- **Proposed (later):** migration 0004 to persist `approvals.decided_by` and
+  `orchestration_runs.limits`.
+- **P4-C inconsistency:** "Run checks now" reads the manifest from the repository root, while
+  everything else reads it from the project folder. They differ only for projects that are a
+  subfolder of their repository.
+- **Web (small):** the board shows "Project not found" for any 404. Limit it to a `not_found`
+  ErrorDto.
 
 **P4-G review notes (2026-10-16):** the `ticket` Playwright project in `e2e/playwright.config.ts` is
 accepted. Follow-ups for later:
