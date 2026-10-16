@@ -14,9 +14,11 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                                                | Commit        | Checks                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------- |
-| 2026-10-16 | Claimed R-D. Read ADR-0018, redesign §4.3 and §7, the skill contracts and the server git helpers. Paused by the coordinator before any code. | (this commit) | docs only; format:check ✓ |
+| Date       | What was done                                                                                                                                                     | Commit        | Checks                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- |
+| 2026-10-16 | Claimed R-D. Read ADR-0018, redesign §4.3 and §7, the skill contracts and the server git helpers. Paused by the coordinator before any code.                      | `94dcde6`     | docs only; format:check ✓                            |
+| 2026-10-16 | Resumed and rebased on main `4261740`. Server module `src/skills/**` (front matter, ADR-0018 path layer, service, typed refusals) and 26 security and flow tests. | `13ae5ef`     | format ✓ lint ✓ typecheck ✓ test 1687/1687 ✓ build ✓ |
+| 2026-10-16 | Router `routes/skills.ts` (`createSkillsRouter`) and 4 supertest tests: the full flow, CSRF 403 on every mutation, typed refusals, not_a_git_repo.                | (this commit) | format ✓ lint ✓ typecheck ✓ test 1691/1691 ✓ build ✓ |
 
 ## Handoff notes
 
