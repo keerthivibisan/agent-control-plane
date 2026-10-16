@@ -3,8 +3,6 @@ import { ButtonLink } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorNotice } from '../components/ErrorNotice';
 import {
-  boardPaths,
-  boardSchemas,
   controlPaths,
   controlSchemas,
   paths,
@@ -61,20 +59,7 @@ function TicketRedirect({ ticketId }: { ticketId: string }) {
 
 function RunRedirect({ runId }: { runId: string }) {
   const run = useApiQuery(controlPaths.run(runId), controlSchemas.run);
-  const projectId = run.data?.projectId ?? null;
-  const board = useApiQuery(
-    projectId === null ? null : boardPaths.board(projectId),
-    boardSchemas.board,
-  );
-  if (run.data) {
-    if (board.data) {
-      const tickets = board.data.columns.flatMap((c) => c.tickets);
-      return <RedirectTo hash={runTarget(run.data, tickets)} />;
-    }
-    // Without a board (an older server, or a project without one) the run page still works.
-    if (board.error) return <RedirectTo hash={runTarget(run.data, null)} />;
-    return <Opening />;
-  }
+  if (run.data) return <RedirectTo hash={runTarget(run.data)} />;
   if (isNotFound(run.error)) return <Missing copy={C.runMissing} />;
   if (run.error) return <ErrorNotice error={run.error} />;
   return <Opening />;

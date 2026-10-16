@@ -64,13 +64,11 @@ export function planRedirect(legacy: LegacyRoute, ctx: RedirectContext): Redirec
 }
 
 /**
- * A run opens on its ticket when a ticket's current run is this run; otherwise (a Phase 3 run, or
- * an older run of a ticket) on its run page. `tickets` is null when the board could not be read.
+ * A run opens on its ticket (`RunSummaryDto.ticketId`, decision D); a Phase 3 run without a
+ * ticket opens on its run page.
  */
-export function runTarget(
-  run: { id: string; projectId: string },
-  tickets: readonly { id: string; projectId: string; currentRunId: string | null }[] | null,
-): string {
-  const ticket = tickets?.find((t) => t.currentRunId === run.id);
-  return ticket === undefined ? href.run(run) : href.ticket(ticket);
+export function runTarget(run: { id: string; projectId: string; ticketId: string | null }): string {
+  return run.ticketId === null
+    ? href.run(run)
+    : href.ticket({ id: run.ticketId, projectId: run.projectId });
 }

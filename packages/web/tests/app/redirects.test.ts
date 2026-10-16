@@ -67,19 +67,13 @@ describe('old addresses redirect to their new home', () => {
 });
 
 describe('a run opens on its ticket when it has one', () => {
-  const run = { id: 'r-1', projectId: 'p-1' };
-  it('goes to the ticket whose current run it is', () => {
-    const tickets = [
-      { id: 't-0', projectId: 'p-1', currentRunId: 'r-0' },
-      { id: 't-1', projectId: 'p-1', currentRunId: 'r-1' },
-    ];
-    expect(runTarget(run, tickets)).toBe('#/p/p-1/tickets/t-1');
+  it('goes to its ticket (RunSummaryDto.ticketId), also for an older run of the ticket', () => {
+    expect(runTarget({ id: 'r-1', projectId: 'p-1', ticketId: 't 1' })).toBe(
+      '#/p/p-1/tickets/t%201',
+    );
   });
 
-  it('otherwise (a Phase 3 run, or no board) goes to the run page', () => {
-    expect(runTarget(run, [{ id: 't-0', projectId: 'p-1', currentRunId: null }])).toBe(
-      '#/p/p-1/runs/r-1',
-    );
-    expect(runTarget(run, null)).toBe('#/p/p-1/runs/r-1');
+  it('a Phase 3 run without a ticket goes to its run page', () => {
+    expect(runTarget({ id: 'r-1', projectId: 'p-1', ticketId: null })).toBe('#/p/p-1/runs/r-1');
   });
 });

@@ -488,4 +488,27 @@ describe('control panel: navigation', () => {
     const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(within(nav).queryByRole('link', { name: 'Control panel' })).toBeNull();
   });
+
+  it('#/control/:runId opens the run page of a run without a ticket', async () => {
+    const s = server({ [`/api/runs/${RUN_ID}`]: runDetail({ ticketId: null }) });
+    window.location.hash = `#/control/${RUN_ID}`;
+    const before = window.history.length;
+    render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/p-1/runs/${RUN_ID}`));
+    expect(window.history.length).toBe(before);
+    expect(await screen.findByTestId('run-facts')).toBeTruthy();
+  });
+
+  it('#/control/:runId of a ticket run goes to the ticket page', async () => {
+    const s = server({ [`/api/runs/${RUN_ID}`]: runDetail({ ticketId: 't-7' }) });
+    window.location.hash = `#/control/${RUN_ID}`;
+    render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
+    await waitFor(() => expect(window.location.hash).toBe('#/p/p-1/tickets/t-7'));
+  });
+
+  it('#/control/:runId says when the run does not exist', async () => {
+    window.location.hash = '#/control/nope';
+    render(<App store={new QueryStore(createApiClient(server({}).fetch))} eventSource={null} />);
+    expect(await screen.findByText('Run not found')).toBeTruthy();
+  });
 });
