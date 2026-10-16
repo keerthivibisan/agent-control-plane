@@ -17,6 +17,7 @@
 | R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | **done**                         | `wp/r-i-agent-files`, `wp/r-i-web` | 2026-10-16 (`30ab747`) |
 | R-J | [Resume the lead's chat](README.md#6b-the-leads-chat-after-the-lead-ends-owner-decisions-2026-10-16)           | R-I      | in-progress (contract `861d380`) | `wp/r-j-follow-up`, `wp/r-j-web`   | —                      |
 | R-V | [Verification](wp/R-V.md)                                                                                      | all      | todo                             | —                                  | —                      |
+| R-R | Pre-release review and v0.0.1 (see below)                                                                      | R-V      | todo (owner, 2026-10-16)         | —                                  | —                      |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
@@ -107,6 +108,32 @@ code:
 Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config) were rebuilt as
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
+
+**R-J web review (2026-10-16):** merged `0224740` (`wp/r-j-web`). Scope OK (web plus its progress
+file; `Chat.tsx` gains optional props only; no contract change; no raw HTML). The coordinator re-ran
+pnpm check (2,028 tests) and the e2e (42/42), and looked at the follow-up screenshot. It only acts
+when `RunDetailDto.followUp` is present, so it is inert until the R-J backend merges. Follow-ups:
+
+- the backend must publish a run stream notice when a follow-up reply lands, so "running" goes
+  back to "available" without a reload;
+- the UI reads the refusal's message, not its code.
+
+**Owner decision (2026-10-16), release:** after R-V comes **R-R, a pre-release review and v0.0.1**.
+The repository stays **private** for the first one or two releases. Note: on a private repository,
+GitHub Actions minutes count against the plan's monthly free minutes. CI is one Ubuntu job on
+pushes to `main` and on PRs, with a 20-minute cap, and is well within them; check the account's
+Actions budget is $0. R-R checklist:
+
+- scan the tree and history for secrets, tokens and personal data: absolute `/Users/...` paths,
+  emails, real transcript content in `test-fixtures/`;
+- README "Status" lists only what is implemented and verified; docs flipped [planned] →
+  [implemented] only where true;
+- `HANDOFF.md`, `AGENTS.md` and `CLAUDE.md` read well for outside contributors;
+- versions `0.0.0` → `0.0.1` in every `package.json` (a coordinator change, lockfile untouched),
+  a `CHANGELOG.md`, and tag `v0.0.1`;
+- the first CI run on GitHub (it has never run there): fix any Linux-only issue, e.g. the native
+  `better-sqlite3` build;
+- the owner pushes, or asks the coordinator to.
 
 **R-I web review (2026-10-16):** merged `30ab747` (`wp/r-i-web`). Scope OK (web plus its progress
 file; no contract or `api.ts` change; no raw HTML). The coordinator re-ran pnpm check (2,012 tests)
