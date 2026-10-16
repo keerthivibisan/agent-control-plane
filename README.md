@@ -4,22 +4,39 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: Phase 1 (session observability) is done and verified on real data. Phase 3 milestone M1
-> (the control panel for managed Claude agents) is done and passed a real smoke run.** CI has not run
-> yet (nothing is pushed).
+> **Status: v0.0.1 (first release, private preview).** Session observability, the managed agent
+> workspace and the project workspace redesign are implemented and verified. Two real runs against
+> Claude Code passed on 2026-10-16 ([docs/research/r-v-real-run-2026-10-16.md](docs/research/r-v-real-run-2026-10-16.md)).
 >
-> **Implemented and tested** (1,315 unit and integration tests, plus 11 browser end-to-end tests):
+> **Implemented and tested** (about 2,100 unit and integration tests, plus 49 browser end-to-end
+> tests):
 >
-> - observing Claude Code sessions: discovery, incremental reading, usage accounting with dedup,
->   subagent and fork relationships, hooks (optional);
-> - the server: ingestion pipeline, REST API, live updates, hook receiver, in demo and live mode;
-> - the web UI in plain language: Overview, Sessions with a family tree, session detail, Tokens,
->   Projects, Setup and Data health;
-> - **Control panel** (`#/control`): chat with a lead Claude agent that starts up to 3 helper agents,
->   each in its own git worktree; you approve every edit or command, review each diff and merge or
->   discard. Budgets, Stop and Stop all, safe restarts.
+> - **Observing Claude Code sessions:**
+>   - discovery and incremental reading;
+>   - usage accounting with dedup by message id;
+>   - subagent and fork relationships;
+>   - optional hooks.
+> - **A project-first workspace in the browser:**
+>   - **Board** of tickets;
+>   - **Workflow:** the fixed stages, each with its own model, skill and agent file;
+>   - **Skills & Agents:** edit `.claude/skills` and `.claude/agents` files, then commit them;
+>   - **Harness** checks;
+>   - **Tokens:** new work vs cache reuse;
+>   - **Sessions**, **Settings** and **Data health**.
+> - **Managed runs per ticket:**
+>   1. A planner proposes a plan, and you approve it or ask for changes.
+>   2. A lead starts up to 3 helper agents, each in its own git worktree.
+>   3. You approve edits and commands, then review and merge each change once the required checks
+>      pass.
+>   4. An optional read-only code reviewer and a unit-test writer follow.
+>   5. After a run ends, you can still ask its lead questions (answers only).
+> - **Guardrails:** every role has a fixed tool set; budgets, Stop and Stop all, and safe restarts
+>   apply throughout.
+> - **Local only:** the server binds 127.0.0.1, and no conversation content is stored except the
+>   owner's chat with the lead (ADR-0015).
 >
-> See [HANDOFF.md](HANDOFF.md) and [docs/implementation-plan.md](docs/implementation-plan.md).
+> See [CHANGELOG.md](CHANGELOG.md), [docs/redesign/README.md](docs/redesign/README.md) and
+> [docs/implementation-plan.md](docs/implementation-plan.md).
 
 ## The problem
 
@@ -64,15 +81,16 @@ See [docs/security.md](docs/security.md).
 
 ## Planned features
 
-| Feature                                                                                                                              | Phase | Status                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------- |
-| Core contracts (events, usage, sessions, provenance, adapter interface)                                                              | 0     | **implemented**                                                   |
-| Project registration, Claude Code session discovery, subagent tree, usage accounting, Command Center, Session Explorer, live updates | 1     | **in progress** (server and demo mode done; live adapter pending) |
-| Usage reliability, cost estimation with provenance, restart recovery                                                                 | 2     | planned                                                           |
-| Managed orchestration (planning, at most 3 children, budgets, worktrees, validation)                                                 | 3     | planned                                                           |
-| Harness Lab                                                                                                                          | 4     | planned                                                           |
-| Codex adapter                                                                                                                        | 5     | planned                                                           |
-| Evidence-driven recommendations                                                                                                      | 6     | research                                                          |
+| Feature                                                                                                   | Phase | Status                    |
+| --------------------------------------------------------------------------------------------------------- | ----- | ------------------------- |
+| Core contracts (events, usage, sessions, provenance, adapter interface)                                   | 0     | **implemented**           |
+| Session observability: discovery, subagent tree, usage accounting, live updates                           | 1     | **implemented, verified** |
+| Usage reliability, pricing table, OpenTelemetry, purge                                                    | 2     | planned                   |
+| Managed orchestration: lead and helpers, budgets, worktrees, approvals                                    | 3     | **M1 implemented**        |
+| Agent workspace: board, tickets, plan-first runs, harness checks, workflow stages, skills and agent files | 4     | **implemented, verified** |
+| Harness Lab                                                                                               | 5     | planned                   |
+| Codex adapter                                                                                             | 6     | planned                   |
+| Evidence-driven recommendations                                                                           | 7     | research                  |
 
 See [docs/roadmap.md](docs/roadmap.md).
 
@@ -99,6 +117,15 @@ pnpm install
 ```bash
 pnpm check
 ```
+
+To run the app (server on 127.0.0.1:7420, web UI on http://127.0.0.1:5173):
+
+```bash
+pnpm dev
+```
+
+It reads your Claude Code data (`~/.claude/projects`) read-only. Set `ACP_MODE=demo` for sample
+data in a separate database, or `ACP_MANAGED=off` to turn managed agents off.
 
 `pnpm check` runs format check, lint, typecheck, tests, and build. Details are in
 [docs/development.md](docs/development.md).

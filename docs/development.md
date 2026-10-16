@@ -31,7 +31,7 @@ pnpm install
 | `pnpm format` / `pnpm format:check` | Prettier                                                                  | whole repo    |
 | `pnpm build`                        | builds each package with a `build` script                                 | `@acp/core`   |
 | `pnpm check`                        | runs all of the above in order (the same as CI)                           |               |
-| `pnpm dev`                          | **does not exist yet.** It will be added by P1-D (server) and P1-E (web)  | —             |
+| `pnpm dev`                          | the server (127.0.0.1:7420) and the web UI (127.0.0.1:5173) in watch mode | server, web   |
 
 Package scripts are added by the work package that lands the package's first source file. **A package
 without source has no `test`, `typecheck`, or `build` script**, so root commands report only what really
@@ -99,6 +99,7 @@ Only the coordinator adds or upgrades dependencies, because it changes the share
 | `ACP_MODE`                                    | `live`                                 | `live`, or `demo` (demo adapter, `demo.sqlite`) |
 | `ACP_POLL_INTERVAL_MS`                        | `5000`                                 | transcript scan interval                        |
 | `ACP_ACTIVE_WINDOW_MS` / `ACP_STALE_AFTER_MS` | `120000` / `1800000`                   | status thresholds                               |
+| `ACP_MANAGED`                                 | on in live mode, off in demo mode      | `off` turns managed agents (Agent SDK) off      |
 
 ## 6. Testing rules
 
