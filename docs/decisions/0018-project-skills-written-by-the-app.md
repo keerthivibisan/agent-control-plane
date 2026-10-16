@@ -74,10 +74,16 @@ same decision applies, with these specifics:
   The page shows such keys as a problem: "kept as is, not used by the app".
 - **Commit:** a separate owner action, `git commit -m "chore(agents): <create|update|remove> <slug>"`,
   with the same refusal when other files are staged.
-- **Use by managed agents:** not yet. Mapping a workflow stage to an agent definition, or giving the
-  stage agents these definitions as subagents through the run's skills plugin (whose `agents/` is
-  copied with front matter reduced to `name`, `description`, `tools` and `model`), is a later decision.
-  It needs a real-run check that copied definitions cannot widen permissions. Until then, agent files
-  serve the owner's own Claude Code sessions and are shown on the Workflow page as "available, not
-  mapped".
+- **Use by managed agents (updated 2026-10-16, owner decision A):** a workflow stage may _use_ one
+  agent file (ADR-0019 §6). The server reads it from the project checkout under the §3 path rules.
+  The app uses only:
+  - the body (appended to the agent's instructions);
+  - `model` (the stage default);
+  - `tools` (it can only narrow the role's tools, never widen them, and never through
+    `allowedTools`).
+
+  Every other key is ignored. Files are never copied into the run's skills plugin, and they are
+  not offered as subagents (option B, a later decision). An unmapped agent file serves only the
+  owner's own Claude Code sessions.
+
 - AGENTS.md rule 6 is amended to name `.claude/agents/<slug>.md` next to skills.

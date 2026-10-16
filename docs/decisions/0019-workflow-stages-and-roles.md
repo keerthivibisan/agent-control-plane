@@ -92,3 +92,29 @@ unit-tests`.
   `orchestration_runs.limits`, and the comment author `reviewer`.
 - The default workflow equals Phase 4, so existing projects behave exactly as before until the owner
   changes their workflow.
+
+## Amendment (2026-10-16): a stage uses one agent file
+
+Owner decision A (docs/redesign/README.md §6a). WP R-I builds it.
+
+6. **Stage agent files.**
+   - Each agent stage (plan, orchestrate, helpers, code-review, unit-tests) may name one project
+     agent file `.claude/agents/<name>.md` (`agent` in `ProjectWorkflow`; absent or null means none).
+   - The **server** reads the file from the owner's project checkout under ADR-0018's path rules,
+     never from an agent worktree, and builds `ManagedAgentSpec.profile`.
+   - **Instructions:** the body is appended to the system prompt after the project context files.
+   - **Model:** stage model > file model > project model > provider default.
+   - **Tools only narrow** (docs/research/sdk-tool-narrowing-2026-10-16.md):
+     - the adapter sets the SDK `tools` base set to the file's built-in tools, kept only where the
+       role allows them, plus `Skill` when the run has a skills plugin;
+     - read-only roles keep their `disallowedTools`;
+     - the gate denies any built-in not in the list;
+     - the role's `mcp__acp__*` control tools always stay;
+     - `allowedTools` is never used, because it auto-approves;
+     - a null `tools` list keeps the role's normal set.
+   - **Ignored keys:** every other front-matter key (`permissionMode`, `hooks`, `mcpServers`,
+     `skills`, `memory`, `initialPrompt`, …) is ignored, because several of them can widen
+     permissions. Skills come only from the stage's skill mapping (§4).
+   - **A missing, unsafe or unparsable file** is a problem on the Workflow page. The agent starts
+     without a profile and the run is not blocked.
+   - **Verification:** the R-V real smoke run (owner consent) checks the init message's tool list.
