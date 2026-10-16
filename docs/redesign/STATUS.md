@@ -13,8 +13,8 @@
 | R-F | [Tokens: query, route, page](wp/R-F.md)                                                                        | R-0, R-A | **done**                  | `wp/r-f-tokens`   | 2026-10-16 (`9725a2c`) |
 | R-E | [Harness page](wp/R-E.md)                                                                                      | R-A      | **done**                  | `wp/r-e-harness`  | 2026-10-16 (`2e1c346`) |
 | R-B | [Workflow page](wp/R-B.md)                                                                                     | R-A, R-G | **done**                  | `wp/r-b-workflow` | 2026-10-16 (`ffaa619`) |
-| R-H | [Board, ticket, settings simplification](wp/R-H.md)                                                            | R-A, R-G | in-progress               | `wp/r-h-polish`   | —                      |
-| R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | todo (planned 2026-10-16) | —                 | —                      |
+| R-H | [Board, ticket, settings simplification](wp/R-H.md)                                                            | R-A, R-G | **done**                  | `wp/r-h-polish`   | 2026-10-16 (`1f1a186`) |
+| R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | todo (contract `21cf2ab`) | —                 | —                      |
 | R-V | [Verification](wp/R-V.md)                                                                                      | all      | todo                      | —                 | —                      |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
@@ -107,7 +107,18 @@ Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config)
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
 
-**Follow-ups for R-H, or coordinator commits:**
+**R-H review (2026-10-16):** scope OK (web plus its progress file; two small allowed edits in
+`control/Chat.tsx` and the plan-review status word). Continue uses `controlPost` (CSRF). No raw
+HTML. Rebased on main (`43b9d57`), then the coordinator re-ran pnpm check (1,956 tests) and the full
+e2e (38/38), and looked at the ticket (stages, held + Continue) and board screenshots. Done from the
+list below: the board select, the removed pages, the Settings link, the one Helpers description,
+the live graph + Continue, the planner chat label and the RunsCard history route. Still open:
+`skill-names.ts`/`skill-files.ts` → `listSkillFolders`, the DESIGN.md rows, the
+`reference-usage.test.ts` timeout, moving `useSetupAction`, and the palette dark lightness. The live
+graph shows the project's current models and skills (`RunWorkflowDto` keeps no snapshot); the card
+says so when the workflow changed after the run started.
+
+**Follow-ups for R-H, or coordinator commits (most done in R-H, see above):**
 
 - the board's own project select (owner, 2026-10-16: "removed the project switching in board");
 - remove `features/usage/**`, `features/project/ProjectPage.tsx` and `features/ticket/redirect.tsx`;
