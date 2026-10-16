@@ -53,6 +53,8 @@ export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = ['post_review'];
  * disagree. The engine checks every call again (`leadToolCall`).
  */
 export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[] {
+  // A follow-up turn of an ended lead answers only (ADR-0020 §2): no control-plane tool at all.
+  if (spec.followUp !== undefined) return [];
   switch (spec.kind) {
     case 'lead':
       return LEAD_ROLE_TOOL_NAMES;
@@ -87,6 +89,37 @@ export const READ_ONLY_DISALLOWED_TOOLS: readonly string[] = [
   'Write',
   'NotebookEdit',
 ];
+
+/**
+ * The built-in base set of a follow-up turn (ADR-0020 §2, research 2026-10-16): it reads and
+ * answers. Nothing else is in its context, and the gate denies anything else as well.
+ */
+export const FOLLOW_UP_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
+
+/**
+ * Removed from a follow-up turn's context on top of the base set: the read-only roles' list plus
+ * subagents (`Agent`, older `Task`), which could otherwise act with tools of their own.
+ */
+export const FOLLOW_UP_DISALLOWED_TOOLS: readonly string[] = [
+  ...READ_ONLY_DISALLOWED_TOOLS,
+  'Agent',
+  'Task',
+];
+
+/** True for a follow-up turn of an ended lead (ADR-0020). */
+export function isFollowUp(spec: Pick<ManagedAgentSpec, 'followUp'>): boolean {
+  return spec.followUp !== undefined;
+}
+
+/**
+ * A follow-up turn's SDK `tools` base set: `FOLLOW_UP_TOOLS`, narrowed further by the lead stage's
+ * agent file when it lists tools (ADR-0019 §6 only narrows). Never `Skill`: no plugin is given.
+ */
+export function followUpToolNames(spec: ManagedAgentSpec): readonly string[] {
+  const listed = spec.profile?.tools ?? null;
+  if (listed === null) return FOLLOW_UP_TOOLS;
+  return FOLLOW_UP_TOOLS.filter((name) => listed.includes(name));
+}
 
 const MCP_PREFIX = 'mcp__';
 
@@ -134,6 +167,11 @@ export function keepsInputOpen(kind: AgentRoleKind): boolean {
   return kind === 'lead' || kind === 'planner';
 }
 
+/** Whether this agent's input stays open after a turn: never for a follow-up turn (one turn). */
+export function specKeepsInputOpen(spec: Pick<ManagedAgentSpec, 'kind' | 'followUp'>): boolean {
+  return !isFollowUp(spec) && keepsInputOpen(spec.kind);
+}
+
 /** Roles whose main-thread text is chat for the owner (ADR-0015): the lead, and the planner. */
 export function emitsChatText(kind: AgentRoleKind): boolean {
   return kind === 'lead' || kind === 'planner';
@@ -152,6 +190,8 @@ export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
 export const DENY_NOT_IN_AGENT_FILE = "This stage's agent file does not list this tool.";
+export const DENY_FOLLOW_UP =
+  'This run has ended: you can only read files in the project and answer. New work needs a new run.';
 
 /** The lead tool name for `mcp__acp__<name>`, or null when the name is not one of ours. */
 export function leadToolName(toolName: string): string | null {
@@ -196,6 +236,7 @@ function readsOnlyInside(
  * A rejected or failed request, or an aborted agent, is a deny: the callback never throws.
  */
 export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallbacks): CanUseTool {
+  if (isFollowUp(spec)) return followUpGate(spec);
   const ownTools: ReadonlySet<string> = new Set(managedToolNames(spec));
   const narrowed = profileToolNames(spec);
   // The gate accepts a listed tool under either of its names (`Task`/`Agent`).
@@ -257,5 +298,21 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
     } catch {
       return { behavior: 'deny', message: DENY_NO_DECISION, toolUseID };
     }
+  };
+}
+
+/**
+ * The gate of a follow-up turn (ADR-0020 §2): only its read-only tools, and only for targets
+ * inside its folder (the project root), are allowed. Everything else is denied without asking the
+ * owner: there is no approval for an ended run.
+ */
+function followUpGate(spec: ManagedAgentSpec): CanUseTool {
+  const allowed: ReadonlySet<string> = new Set(followUpToolNames(spec));
+  return (toolName, input, options): Promise<PermissionResult> => {
+    const toolUseID = options.toolUseID;
+    if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec.cwd, options)) {
+      return Promise.resolve({ behavior: 'allow', toolUseID });
+    }
+    return Promise.resolve({ behavior: 'deny', message: DENY_FOLLOW_UP, toolUseID });
   };
 }

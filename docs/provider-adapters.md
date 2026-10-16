@@ -378,6 +378,32 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     `finished: cancelled`. Messages that are still in flight are dropped; the transcript still has
     them for observation.
   - `reportedCostUsd` is the latest result's `total_cost_usd`.
+- **Follow-up turn of an ended lead** (`spec.followUp`, R-J, ADR-0020) **[implemented; fake-query
+  tests only]**:
+  - `resume: spec.followUp.resumeSessionId` with `forkSession: false`, in `spec.cwd` (the server
+    passes the lead's own folder, the project root, where the session is stored). The session keeps
+    its id, so the transcript tailer keeps attributing usage to the lead through its existing
+    `agent_run_sessions` link; no new link is made.
+  - Answers only: `tools: ['Read', 'Grep', 'Glob']` (narrowed further by the lead stage's agent
+    file, never widened), `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS` plus `Agent` and `Task`,
+    `mcpServers: {}` (no `acp` server, so no control-plane tool), no skills plugin. The gate
+    allows only those tools for targets inside `cwd` and denies anything else without asking
+    ("This run has ended: …"). `permissionMode: 'default'`, `settingSources: []` and
+    `strictMcpConfig: true` as always; `allowedTools` is never set. Every option is passed again,
+    since a resumed process restores none of them (research 2026-10-16 §3).
+  - One turn: the input is closed after the first `result` with nothing queued, so `finished`
+    follows; `send()` rejects with `ManagedFollowUpSendError`.
+  - The system prompt is passed as for the lead but is not rebuilt on resume (research §4); the
+    answers-only rule is stated in the app's preface to the owner's message (engine
+    `FOLLOW_UP_PREFACE`) and enforced by the options and the gate.
+  - A failed resume (an error result, or a throw) ends with `finished: error`. The adapter does
+    not pre-check with `getSessionInfo`: it returns `undefined` also for a session "with no
+    extractable summary", which would wrongly report a session as gone, and it reads the session
+    store from the server process. The engine treats an error before the session answered (no
+    usage, no reply) as `session-gone`.
+  - Unverified until the R-V real run (owner consent): that resume keeps the id and the
+    conversation, that the stream carries only new messages, and the exact failure shape for a
+    missing session.
 
 ### 11.2 SDK facts from the 0.3.296 declarations (unverified at runtime)
 

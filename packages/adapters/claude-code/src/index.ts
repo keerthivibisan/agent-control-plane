@@ -7,6 +7,7 @@ export {
   createManagedClaudeCode,
   LEAD_MCP_SERVER_NAME,
   ManagedAgentEndedError,
+  ManagedFollowUpSendError,
   MAX_SUMMARY_LENGTH,
   READ_ONLY_TOOLS,
   summarizeToolUse,

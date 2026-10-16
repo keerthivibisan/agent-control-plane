@@ -13,12 +13,14 @@ import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
 import {
   createCanUseTool,
+  FOLLOW_UP_DISALLOWED_TOOLS,
+  followUpToolNames,
   isReadOnlyRole,
-  keepsInputOpen,
   LEAD_MCP_SERVER_NAME,
   managedToolNames,
   profileToolNames,
   READ_ONLY_DISALLOWED_TOOLS,
+  specKeepsInputOpen,
 } from './permissions.js';
 import { AsyncQueue } from './queue.js';
 
@@ -46,6 +48,15 @@ export interface ManagedClaudeCodeOptions {
    * default (the process inherits `process.env`).
    */
   env?: Readonly<Record<string, string>>;
+}
+
+/** Thrown by `send` on a follow-up turn, which takes exactly one message (ADR-0020). */
+export class ManagedFollowUpSendError extends Error {
+  readonly code = 'managed_follow_up_one_message';
+  constructor(agentRunId: string) {
+    super(`Follow-up turn of ${agentRunId} takes one message`);
+    this.name = 'ManagedFollowUpSendError';
+  }
 }
 
 /** Thrown by `send` once the agent has finished or been aborted. */
@@ -150,11 +161,33 @@ export function buildOptions(
     options.plugins = [{ type: 'local', path: plugin.path }];
     options.skills = [...plugin.skills];
   }
+  if (spec.followUp !== undefined) applyFollowUp(options, spec, spec.followUp.resumeSessionId);
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };
   return options;
+}
+
+/**
+ * A follow-up turn of an ended lead (ADR-0020, docs/research/sdk-session-resume-2026-10-16.md):
+ * - `resume` the lead's saved session, never forked (`forkSession: false`), so the session keeps
+ *   its id and usage keeps flowing to the lead through its session link; `cwd` is the lead's own
+ *   folder (the caller passes the project root), where the session is stored;
+ * - answers only: the `tools` base set is `Read`, `Grep`, `Glob` (narrowed further by the lead
+ *   stage's agent file), with the read-only `disallowedTools` plus subagents; no MCP server at all
+ *   (no control-plane tools); no skills plugin;
+ * - the options are passed again in full, since a resumed process restores none of them.
+ * `allowedTools` is never set. The input closes after the one turn (`specKeepsInputOpen`).
+ */
+function applyFollowUp(options: Options, spec: ManagedAgentSpec, resumeSessionId: string): void {
+  options.resume = resumeSessionId;
+  options.forkSession = false;
+  options.tools = [...followUpToolNames(spec)];
+  options.disallowedTools = [...FOLLOW_UP_DISALLOWED_TOOLS];
+  options.mcpServers = {};
+  delete options.plugins;
+  delete options.skills;
 }
 
 /**
@@ -165,7 +198,8 @@ export function buildOptions(
  * A worker's (and the tester's and reviewer's) input is closed after a turn ends with nothing
  * queued, so an agent that finished its task ends (`finished`) and `send` then throws
  * `ManagedAgentEndedError`. The lead's input stays open for the owner's chat, and the planner's for
- * the owner's plan comments, until `abort()`.
+ * the owner's plan comments, until `abort()`. A follow-up turn of an ended lead (ADR-0020) takes
+ * its one message and ends after that turn.
  */
 export function createManagedClaudeCode(
   options: ManagedClaudeCodeOptions = {},
@@ -210,7 +244,7 @@ function startAgent(
         for (const event of mapped.events) events.push(event);
         if (mapped.result !== null) {
           lastResult = mapped.result;
-          if (!keepsInputOpen(spec.kind) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
+          if (!specKeepsInputOpen(spec) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
         }
       }
       finish(abortController.signal.aborted ? 'cancelled' : (lastResult?.outcome ?? 'error'));
@@ -225,6 +259,9 @@ function startAgent(
   return {
     events,
     send(text) {
+      if (spec.followUp !== undefined) {
+        return Promise.reject(new ManagedFollowUpSendError(spec.agentRunId));
+      }
       if (!input.push(userMessage(text))) {
         return Promise.reject(new ManagedAgentEndedError(spec.agentRunId));
       }
