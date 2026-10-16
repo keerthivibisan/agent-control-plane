@@ -1,11 +1,14 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { SkillDetailDto, SkillSummaryDto } from '@acp/core/api';
+import { App } from '../../src/app/App';
 import { SkillsPage } from '../../src/features/skills/SkillsPage';
 import { parseMarkdown } from '../../src/features/skills/markdown';
 import { SKILL_TEMPLATES } from '../../src/features/skills/templates';
-import type { FetchLike } from '../../src/lib/api';
+import { createApiClient, type FetchLike } from '../../src/lib/api';
+import { QueryStore } from '../../src/lib/query-store';
 import { CSRF } from '../fixtures/control';
+import { project } from '../fixtures/dto';
 import { SKILLS_PROJECT_ID, commitResult, skillDetail } from '../fixtures/skills';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
@@ -274,6 +277,36 @@ describe('Skills page', () => {
     expect((await screen.findByRole('alert')).textContent).toContain(
       'The project folder is not a git repository.',
     );
+  });
+});
+
+describe('Skills in the shell (#/p/:projectId/skills)', () => {
+  it('opens from the sidebar address, and a skill gets its own address', async () => {
+    const s = server([skillDetail({ name: 'plan' })], {
+      '/api/projects': [project({ id: SKILLS_PROJECT_ID, name: 'web-app' })],
+    });
+    window.location.hash = `#/p/${SKILLS_PROJECT_ID}/skills`;
+    render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'Skills' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Open skill plan' }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/${SKILLS_PROJECT_ID}/skills/plan`));
+    expect(await screen.findByTestId('skill-editor')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /All skills/ }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/${SKILLS_PROJECT_ID}/skills`));
+    expect(await screen.findByTestId('skill-card-plan')).toBeTruthy();
+  });
+
+  it('opens one skill directly from its address', async () => {
+    const s = server([skillDetail({ name: 'docs', usedBy: ['helpers'] })], {
+      '/api/projects': [project({ id: SKILLS_PROJECT_ID, name: 'web-app' })],
+    });
+    window.location.hash = `#/p/${SKILLS_PROJECT_ID}/skills/docs`;
+    render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
+    const status = await screen.findByTestId('skill-status');
+    expect(within(status).getByText('Helpers')).toBeTruthy();
   });
 });
 

@@ -32,7 +32,7 @@ export const PROJECT_PAGES: readonly ProjectPageDef[] = [
   // R-B.
   { id: 'workflow', label: L.workflow, icon: WorkflowIcon, available: true },
   // R-D.
-  { id: 'skills', label: L.skills, icon: SkillsIcon, available: false },
+  { id: 'skills', label: L.skills, icon: SkillsIcon, available: true },
   // R-E.
   { id: 'harness', label: L.harness, icon: HarnessIcon, available: true },
   // R-F.

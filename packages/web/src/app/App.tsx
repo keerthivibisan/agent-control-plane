@@ -8,6 +8,7 @@ import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../features/project-setup/ProjectSettings';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
+import { SkillsPage } from '../features/skills/SkillsPage';
 import { TicketPage } from '../features/ticket/TicketPage';
 import { TokensPage } from '../features/tokens/TokensPage';
 import { WorkflowPage } from '../features/workflow/WorkflowPage';
@@ -58,12 +59,12 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
       return <SessionExplorer search={scopedParams(route.params, projectId)} />;
     case 'settings':
       return <ProjectSettings key={projectId} id={projectId} />;
+    case 'skills':
+      return <SkillsPage key={projectId} projectId={projectId} item={route.item} />;
     case 'harness':
       return <HarnessPage key={projectId} projectId={projectId} />;
     case 'workflow':
       return <WorkflowPage key={projectId} projectId={projectId} />;
-    case 'skills': // R-D
-      return <NotFound />;
   }
 }
 

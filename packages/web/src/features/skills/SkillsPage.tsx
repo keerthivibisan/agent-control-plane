@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { commitSkill, skillsPaths, skillsSchemas } from '../../lib/api';
 import { SKILLS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
+import { href, navigate } from '../../lib/router';
 import { useSkillAction } from './actions';
 import { RefusalNotice } from './bits';
 import { SkillEditor } from './SkillEditor';
@@ -89,8 +90,9 @@ function EditView({
 /**
  * The Skills page (docs/redesign/README.md §4.3): the project's own skills in
  * `.claude/skills/<name>/SKILL.md`, a new/edit form with templates and a preview, Save and Commit,
- * and Delete when no workflow stage uses the skill. Self-contained: the shell mounts it at
- * `#/p/:projectId/skills` (and `…/skills/:name` with `item`).
+ * and Delete when no workflow stage uses the skill. The shell mounts it at `#/p/:projectId/skills`
+ * and `…/skills/:name` (`item`); opening a skill or going back updates the address, so a skill has
+ * a link. "New skill" has no address of its own.
  */
 export function SkillsPage({
   projectId,
@@ -99,13 +101,23 @@ export function SkillsPage({
   projectId: string;
   item?: string | null;
 }) {
-  const [view, setView] = useState<View>(
-    item === null ? { kind: 'list' } : { kind: 'edit', name: item },
-  );
+  const viewFor = (name: string | null): View =>
+    name === null ? { kind: 'list' } : { kind: 'edit', name };
+  const [view, setView] = useState<View>(viewFor(item));
+  // The address changed (back button, a link, our own navigate): follow it, keeping other state.
+  const [shownItem, setShownItem] = useState(item);
+  if (item !== shownItem) {
+    setShownItem(item);
+    setView(viewFor(item));
+  }
   const [removed, setRemoved] = useState<string | null>(null);
   const list = useApiQuery(skillsPaths.list(projectId), skillsSchemas.list);
   const names = (list.data ?? []).map((s) => s.name);
-  const toList = () => setView({ kind: 'list' });
+  const open = (name: string | null) => {
+    setView(viewFor(name));
+    navigate(name === null ? href.projectPage(projectId, 'skills') : href.skill(projectId, name));
+  };
+  const toList = () => open(null);
 
   const header = (
     <PageHeader
@@ -140,7 +152,7 @@ export function SkillsPage({
         projectId={projectId}
         template={view.template}
         existing={names}
-        onCreated={(name) => setView({ kind: 'edit', name })}
+        onCreated={(name) => open(name)}
         onCancel={toList}
         onDeleted={() => undefined}
       />
@@ -175,7 +187,7 @@ export function SkillsPage({
         ) : null}
         <SkillList
           skills={list.data}
-          onOpen={(name) => setView({ kind: 'edit', name })}
+          onOpen={(name) => open(name)}
           onNew={(template) => setView({ kind: 'new', template })}
         />
       </>
