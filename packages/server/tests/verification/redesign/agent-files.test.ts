@@ -77,8 +77,9 @@ describe('R-V: stage agent files reaching the lead (HTTP, real adapter options)'
     const { lead } = await startLead(b, p);
     expect(lead.spec.profile).toMatchObject({ name: 'orch-file' });
     const sdk = b.sdkFor(lead.id);
-    // `Agent` is a built-in: kept for the lead, which is not a read-only role.
-    expect(sdk.tools).toEqual(['Read', 'Grep', 'Glob', 'Agent']);
+    // The file only narrows the lead's base set (ADR-0019 §7): its `Agent` is not added.
+    expect(sdk.tools).toEqual(['Read', 'Grep', 'Glob']);
+    expect(sdk.allowedTools).toBeUndefined();
     // No stage model, no file model, no project model: the provider default (no `model`).
     expect(sdk.model).toBeUndefined();
     expect(appendedPrompt(sdk)).toContain('RV-ORCH-FILE-BODY');
@@ -101,8 +102,8 @@ describe('R-V: stage agent files reaching the lead (HTTP, real adapter options)'
       tools: null,
     });
     const sdk = b.sdkFor(lead.id);
-    // "All tools" (no `tools` in the file) means the role's normal set: no narrowing.
-    expect(sdk.tools).toBeUndefined();
+    // "All tools" (no `tools` in the file) means the role's base set (ADR-0019 §7): no narrowing.
+    expect(sdk.tools).toEqual(['Read', 'Grep', 'Glob']);
     expect(sdk.model).toBe('claude-plan-file-model');
   });
 

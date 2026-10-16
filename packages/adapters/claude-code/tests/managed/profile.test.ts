@@ -10,10 +10,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createManagedClaudeCode } from '../../src/index.js';
 import { agentFileHeading } from '../../src/managed/adapter.js';
 import {
+  agentToolNames,
   DENY_NOT_IN_AGENT_FILE,
+  DENY_NOT_IN_ROLE,
   DENY_READ_ONLY,
   READ_ONLY_DISALLOWED_TOOLS,
-  profileToolNames,
+  roleBaseTools,
 } from '../../src/managed/permissions.js';
 import { fakeQuery, idle } from './fake-query.js';
 
@@ -246,23 +248,29 @@ describe('agent file tools only narrow (ADR-0019 §6)', () => {
     });
   });
 
-  it('treats Task and Agent as one tool', async () => {
-    const use = canUseTool(optionsFor(spec('worker', { profile: profile(['Task']) })));
+  it('never adds a tool outside the base set: Task and Agent stay out under either name', async () => {
+    const cb = callbacks();
+    const options = optionsFor(spec('worker', { profile: profile(['Task', 'Agent', 'Read']) }), cb);
+    expect(options.tools).toEqual(['Read']);
+    const use = canUseTool(options);
     for (const name of ['Task', 'Agent']) {
-      await expect(use(name, {}, toolOpts())).resolves.toMatchObject({ behavior: 'allow' });
+      await expect(use(name, {}, toolOpts())).resolves.toEqual({
+        behavior: 'deny',
+        message: DENY_NOT_IN_ROLE,
+        toolUseID: 'toolu_1',
+      });
     }
-    expect(profileToolNames(spec('worker', { profile: profile(['Agent', 'Agent']) }))).toEqual([
-      'Agent',
-    ]);
+    expect(cb.requests).toEqual([]);
   });
 
-  it('null tools keep every role exactly as before', async () => {
+  it("null tools keep the role's base set", async () => {
     for (const kind of ALL_KINDS) {
       const withNull = optionsFor(spec(kind, { profile: profile(null) }));
       const without = optionsFor(spec(kind));
-      expect(withNull).not.toHaveProperty('tools');
+      expect(withNull.tools).toEqual([...roleBaseTools(kind)]);
+      expect(withNull.tools).toEqual(without.tools);
       expect(withNull.disallowedTools).toEqual(without.disallowedTools);
-      expect(profileToolNames(spec(kind, { profile: profile(null) }))).toBeNull();
+      expect(agentToolNames(spec(kind, { profile: profile(null) }))).toEqual(roleBaseTools(kind));
     }
     const cb = callbacks();
     const use = canUseTool(optionsFor(spec('worker', { profile: profile(null) }), cb));

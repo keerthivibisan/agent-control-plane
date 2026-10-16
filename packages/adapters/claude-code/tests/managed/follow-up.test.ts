@@ -149,7 +149,9 @@ describe('follow-up options (ADR-0020 §2, §4)', () => {
     const options = optionsFor(lead);
     expect(options.resume).toBeUndefined();
     expect(options.forkSession).toBeUndefined();
-    expect(options.tools).toBeUndefined();
+    // The lead's own base set (ADR-0019 §7): the same read-only tools, plus its control tools.
+    expect(options.tools).toEqual(['Read', 'Grep', 'Glob']);
+    expect(options).not.toHaveProperty('disallowedTools');
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
   });
 });

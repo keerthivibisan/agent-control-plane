@@ -2,6 +2,7 @@ import path from 'node:path';
 import { LEAD_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
 import { isInside, summarizeToolUse, targetPath } from './summary.js';
 
 /** Name of the lead's in-process MCP server; its tools appear as `mcp__acp__<name>`. */
@@ -72,8 +73,9 @@ export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[
 /**
  * Roles that only read (ADR-0019): the planner reads the owner's tree, the reviewer a detached
  * checkout of the merged result. They get no edit or shell tools at all (`READ_ONLY_DISALLOWED_TOOLS`),
- * and anything but an in-folder read is denied without asking. The lead is read-only too, but
- * keeps the Phase 3 behaviour: the server denies its tool uses (ADR-0013 §2).
+ * and anything but an in-folder read is denied without asking. The lead is read-only too
+ * (ADR-0013 §2): its base set has no edit or shell tool (`READ_ONLY_BASE_TOOLS`), so the gate
+ * denies those without asking, but a read outside its folder still asks the owner.
  */
 export function isReadOnlyRole(kind: AgentRoleKind): boolean {
   return kind === 'planner' || kind === 'reviewer';
@@ -91,10 +93,40 @@ export const READ_ONLY_DISALLOWED_TOOLS: readonly string[] = [
 ];
 
 /**
+ * The built-in base set of a reading role (ADR-0019 §7): the lead (read-only in the project root,
+ * ADR-0013 §2), the planner and the reviewer. No edit or shell tool is in their context at all.
+ */
+export const READ_ONLY_BASE_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
+
+/**
+ * The built-in base set of a role that changes code in its own worktree (ADR-0019 §7): a worker
+ * and the tester. Edits and shell commands still ask the owner (or the project allowlist).
+ * - `MultiEdit` and `NotebookEdit` are left out: the R-V real run (SDK 0.3.296) offered no
+ *   `MultiEdit`, and no stage edits notebooks (`Edit` and `Write` cover the work);
+ * - `BashOutput`/`KillShell` (background shells) are left out, so no approved command keeps
+ *   running in the background.
+ */
+export const EDITING_BASE_TOOLS: readonly string[] = [
+  ...READ_ONLY_BASE_TOOLS,
+  'Edit',
+  'Write',
+  'Bash',
+];
+
+/**
+ * A role's fixed built-in base set (ADR-0019 §7). Everything else the installed Claude Code offers
+ * (subagents, web, cron, messaging, remote triggers, notifications, artifacts, worktree and
+ * plan-mode tools, as the R-V run's `system/init` listed them) stays out of every role's context.
+ */
+export function roleBaseTools(kind: AgentRoleKind): readonly string[] {
+  return kind === 'worker' || kind === 'tester' ? EDITING_BASE_TOOLS : READ_ONLY_BASE_TOOLS;
+}
+
+/**
  * The built-in base set of a follow-up turn (ADR-0020 §2, research 2026-10-16): it reads and
  * answers. Nothing else is in its context, and the gate denies anything else as well.
  */
-export const FOLLOW_UP_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
+export const FOLLOW_UP_TOOLS: readonly string[] = READ_ONLY_BASE_TOOLS;
 
 /**
  * Removed from a follow-up turn's context on top of the base set: the read-only roles' list plus
@@ -116,47 +148,56 @@ export function isFollowUp(spec: Pick<ManagedAgentSpec, 'followUp'>): boolean {
  * agent file when it lists tools (ADR-0019 §6 only narrows). Never `Skill`: no plugin is given.
  */
 export function followUpToolNames(spec: ManagedAgentSpec): readonly string[] {
-  const listed = spec.profile?.tools ?? null;
-  if (listed === null) return FOLLOW_UP_TOOLS;
-  return FOLLOW_UP_TOOLS.filter((name) => listed.includes(name));
+  return narrowedBy(FOLLOW_UP_TOOLS, spec.profile?.tools ?? null);
+}
+
+/** `base` kept only where the stage's agent file lists the tool; a null list keeps all of it. */
+function narrowedBy(base: readonly string[], listed: readonly string[] | null): string[] {
+  return listed === null ? [...base] : base.filter((name) => listed.includes(name));
+}
+
+/** The name of Claude Code's skills tool. */
+export const SKILL_TOOL = 'Skill';
+
+/**
+ * The SDK `tools` base set of one agent (ADR-0019 §6, §7). It is always set and never widened:
+ * - the role's fixed base set (`roleBaseTools`); a follow-up turn's is `followUpToolNames`;
+ * - narrowed by the stage's agent file when it lists tools: only names in both stay, so a file
+ *   can never add a tool (`Bash` for a reviewer, `Agent`, `WebFetch`). MCP entries in the file
+ *   do nothing: the role's `mcp__acp__*` control tools are MCP, unaffected by `tools`, and
+ *   `strictMcpConfig` keeps every other server out;
+ * - plus `Skill` exactly when the run has a skills plugin, whatever the file lists (skills come
+ *   only from the stage's skill mapping, ADR-0019 §4); never for a follow-up turn.
+ * Nothing is approved by it, and `allowedTools` is never used.
+ */
+export function agentToolNames(spec: ManagedAgentSpec): readonly string[] {
+  if (isFollowUp(spec)) return followUpToolNames(spec);
+  const names = narrowedBy(roleBaseTools(spec.kind), spec.profile?.tools ?? null);
+  if (spec.skillPlugin !== undefined) names.push(SKILL_TOOL);
+  return names;
 }
 
 const MCP_PREFIX = 'mcp__';
 
-/** A built-in tool name as an agent file lists it (`Read`, `Bash`), not an MCP one (`mcp__…`). */
-function isBuiltInToolName(name: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9_]*$/.test(name) && !name.startsWith(MCP_PREFIX);
-}
-
-/** `Task` is the older name of `Agent` (Claude Code 2.1.63); either name means the same tool. */
-const TOOL_ALIASES: Readonly<Record<string, string>> = { Task: 'Agent', Agent: 'Task' };
+/**
+ * The input of a `Skill` call as Claude Code sends it (`{ skill, args? }`). Only the name is
+ * read; any other shape is not trusted, and the call is denied.
+ */
+const SkillCallSchema = z.object({ skill: z.string().min(1) });
 
 /**
- * The built-in tools a stage's agent file narrows this agent to (ADR-0019 §6,
- * docs/research/sdk-tool-narrowing-2026-10-16.md), or null when it does not narrow (no profile,
- * or a profile whose file lists no `tools`). The list is the SDK `tools` base set:
- * - only the file's built-in names: MCP entries are dropped, because the role's own
- *   `mcp__acp__*` control tools always stay (they are the stage's contract) and no other MCP
- *   server runs (`strictMcpConfig`);
- * - only where the role allows them: a read-only role (planner, reviewer) never gets
- *   `READ_ONLY_DISALLOWED_TOOLS`, whatever the file lists;
- * - `Skill` exactly when the run has a skills plugin (skills come only from the stage's skill
- *   mapping, ADR-0019 §4).
- * It only narrows: nothing is approved by it, and `allowedTools` is never used.
+ * True when a `Skill` call names one of the run's plugin skills (`acp-skills:<name>`, ADR-0019 §4,
+ * §7). Bundled skills (`update-config`, `schedule`, …) load even with `settingSources: []`, and the
+ * SDK `skills` option did not hide them in the R-V run, so the gate checks the name itself. A
+ * leading `/` (the slash-command form) names the same skill.
  */
-export function profileToolNames(spec: ManagedAgentSpec): readonly string[] | null {
-  const listed = spec.profile?.tools ?? null;
-  if (listed === null) return null;
-  const roleDenied: ReadonlySet<string> = new Set(
-    isReadOnlyRole(spec.kind) ? READ_ONLY_DISALLOWED_TOOLS : [],
-  );
-  const names: string[] = [];
-  for (const name of listed) {
-    if (!isBuiltInToolName(name) || name === 'Skill' || roleDenied.has(name)) continue;
-    if (!names.includes(name)) names.push(name);
-  }
-  if (spec.skillPlugin !== undefined) names.push('Skill');
-  return names;
+export function isRunSkillCall(spec: ManagedAgentSpec, input: Record<string, unknown>): boolean {
+  const plugin = spec.skillPlugin;
+  if (plugin === undefined) return false;
+  const parsed = SkillCallSchema.safeParse(input);
+  if (!parsed.success) return false;
+  const raw = parsed.data.skill;
+  return plugin.skills.includes(raw.startsWith('/') ? raw.slice(1) : raw);
 }
 
 /**
@@ -190,6 +231,8 @@ export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
 export const DENY_NOT_IN_AGENT_FILE = "This stage's agent file does not list this tool.";
+export const DENY_NOT_IN_ROLE = "This tool is not part of this agent's role.";
+export const DENY_SKILL = "Only this stage's project skills (acp-skills:…) can be used.";
 export const DENY_FOLLOW_UP =
   'This run has ended: you can only read files in the project and answer. New work needs a new run.';
 
@@ -224,31 +267,45 @@ function readsOnlyInside(
 }
 
 /**
- * The `canUseTool` callback for one managed agent (ADR-0013 §4 and its 2026-10-13 amendment):
+ * Why a built-in tool outside the agent's effective set (`agentToolNames`) is denied:
+ * - a role tool the stage's agent file does not list: the file narrowed it away;
+ * - an edit or shell tool for a reading role (lead, planner, reviewer): it only reads;
+ * - anything else (`Skill` without a plugin, `WebFetch`, `Agent`, `SendMessage`, …): not in the
+ *   role's base set.
+ */
+function outsideSetMessage(spec: ManagedAgentSpec, toolName: string): string {
+  const base = roleBaseTools(spec.kind);
+  if (base.includes(toolName)) return DENY_NOT_IN_AGENT_FILE;
+  if (!base.includes('Edit') && READ_ONLY_DISALLOWED_TOOLS.includes(toolName)) {
+    return DENY_READ_ONLY;
+  }
+  return DENY_NOT_IN_ROLE;
+}
+
+/**
+ * The `canUseTool` callback for one managed agent (ADR-0013 §4 and its 2026-10-13 amendment,
+ * ADR-0019 §6 and §7):
  * - the agent's own control-plane tools (`managedToolNames`) from our in-process server, and
  *   in-directory read-only tools, are allowed;
  * - a worker, tester, planner or reviewer calling any other `mcp__acp__*` tool is denied outright
  *   (depth 1, ADR-0012; a depth-2 parent helper never gets `submit_plan` or `request_review`);
- * - with a stage agent file that lists tools (ADR-0019 §6), a built-in tool not in that list
- *   (`profileToolNames`) is denied without asking, a second layer behind the SDK `tools` base set;
+ * - a built-in tool outside the agent's effective set (`agentToolNames`: the role's base set,
+ *   narrowed by its agent file, `Skill` with a plugin) is denied without asking, a second layer
+ *   behind the SDK `tools` base set. So the lead, which is read-only (ADR-0013 §2), is never
+ *   asked about edits or shell commands, and no role is asked about web, subagent or messaging
+ *   tools;
+ * - a `Skill` call is allowed, without asking, only for one of the run's plugin skills
+ *   (`isRunSkillCall`); any other skill name or input shape is denied;
  * - a read-only role (planner, reviewer) is denied anything else without asking (ADR-0019);
- * - everything else asks the owner through `callbacks.requestPermission`, with a redacted summary.
- * A rejected or failed request, or an aborted agent, is a deny: the callback never throws.
+ * - everything else (an edit or `Bash` of a worker or tester, a lead's read outside its folder)
+ *   asks the owner through `callbacks.requestPermission`, with a redacted summary.
+ * A rejected or failed request, or an aborted agent, is a deny: the callback never throws. Tool
+ * input is never logged.
  */
 export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallbacks): CanUseTool {
   if (isFollowUp(spec)) return followUpGate(spec);
   const ownTools: ReadonlySet<string> = new Set(managedToolNames(spec));
-  const narrowed = profileToolNames(spec);
-  // The gate accepts a listed tool under either of its names (`Task`/`Agent`).
-  const fileTools: ReadonlySet<string> | null =
-    narrowed === null
-      ? null
-      : new Set(
-          narrowed.flatMap((name) => {
-            const alias = TOOL_ALIASES[name];
-            return alias === undefined ? [name] : [name, alias];
-          }),
-        );
+  const effective: ReadonlySet<string> = new Set(agentToolNames(spec));
   return async (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
     if (toolName.startsWith(LEAD_TOOL_PREFIX)) {
@@ -275,8 +332,15 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
       }
       // An unknown `mcp__acp__*` name, or one from another server, is not ours: ask like any tool.
     }
-    if (fileTools !== null && !toolName.startsWith(MCP_PREFIX) && !fileTools.has(toolName)) {
-      return { behavior: 'deny', message: DENY_NOT_IN_AGENT_FILE, toolUseID };
+    if (!toolName.startsWith(MCP_PREFIX)) {
+      if (!effective.has(toolName)) {
+        return { behavior: 'deny', message: outsideSetMessage(spec, toolName), toolUseID };
+      }
+      if (toolName === SKILL_TOOL) {
+        return isRunSkillCall(spec, input)
+          ? { behavior: 'allow', toolUseID }
+          : { behavior: 'deny', message: DENY_SKILL, toolUseID };
+      }
     }
     if (readsOnlyInside(toolName, input, spec.cwd, options)) {
       return { behavior: 'allow', toolUseID };

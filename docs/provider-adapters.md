@@ -343,25 +343,61 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     unparsable file starts the agent without a profile and counts `agent-file-unavailable`.
   - The body is appended to the system prompt after the context, under the heading
     `=== Stage agent file .claude/agents/<name>.md (…) ===`, capped at `MAX_AGENT_BYTES` (64 KiB).
-  - A non-null `profile.tools` sets the SDK `tools` base set (`profileToolNames`): the file's
-    built-in names only (MCP entries are dropped), without `READ_ONLY_DISALLOWED_TOOLS` for the
-    planner and reviewer, plus `Skill` exactly when a skills plugin is set. Read-only roles keep
-    their `disallowedTools`; the role's `mcp__acp__*` tools always stay (MCP, unaffected by
-    `tools`). `canUseTool` also denies any built-in not in the list ("This stage's agent file does
-    not list this tool."), accepting `Task` and `Agent` as one tool. `allowedTools` is never set.
-    Null `tools` changes nothing.
-  - Unverified until the R-V real smoke run (owner consent): that the init message's tool list
-    matches the base set, and that `Task` in `tools` enables `Agent` on current CLIs.
+  - A non-null `profile.tools` narrows the role's base set (next bullet): only tools in both
+    stay, so a file never adds one (`Bash` for a reviewer or the lead, `Agent`/`Task`,
+    `WebFetch`). MCP entries in the file do nothing; the role's `mcp__acp__*` tools always stay
+    (MCP, unaffected by `tools`). `Skill` comes only with a skills plugin, whatever the file
+    lists. `canUseTool` denies a role tool the file does not list ("This stage's agent file does
+    not list this tool."). Null `tools` keeps the role's base set. `allowedTools` is never set.
+  - Verified in the R-V real run (docs/research/r-v-real-run-2026-10-16.md): the reviewer's
+    `system/init` tools were exactly its narrowed `tools` (`Read`) plus `mcp__acp__post_review`.
+- **Role tool base sets** (R-K, ADR-0019 §7) **[implemented; fake-query tests only]**: every
+  managed agent gets an explicit SDK `tools` list (`agentToolNames`):
+
+  | Role                      | `tools`                                                                |
+  | ------------------------- | ---------------------------------------------------------------------- |
+  | lead, planner, reviewer   | `Read`, `Grep`, `Glob` (`READ_ONLY_BASE_TOOLS`)                        |
+  | worker, tester            | `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash` (`EDITING_BASE_TOOLS`) |
+  | follow-up turn (ADR-0020) | `Read`, `Grep`, `Glob` (unchanged)                                     |
+  - `Skill` is appended exactly when the run has a skills plugin (never for a follow-up turn).
+  - Why: without a base set, the R-V real run's `system/init` listed 28–37 tools for the planner,
+    lead, worker and tester, including `SendMessage`, `ListAgents`, `CronCreate`,
+    `ScheduleWakeup`, `RemoteTrigger`, `PushNotification`, `WebFetch`, `WebSearch`, `Monitor`,
+    `EnterWorktree`, `Artifact*` and `Task`, and the lead had `Bash`, `Edit` and `Write`, held back
+    only by the approval gate (ADR-0013 §2 says the lead is read-only). Some of these may run
+    without reaching `canUseTool` (research 2026-10-16 §6).
+  - Left out on purpose: `MultiEdit` (the R-V worker's `init` did not offer it), `NotebookEdit`
+    (no stage edits notebooks; `Edit` and `Write` cover the work), `BashOutput`/`KillShell` (no
+    background shells), the older `LS` name, and everything ADR-0019 §7 lists as never in a base
+    set (subagents, web, cron, messaging, remote triggers, notifications, artifacts, worktree and
+    plan-mode tools).
+  - The planner and reviewer keep `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`; the lead,
+    worker and tester set none (the base set already excludes the lead's edit and shell tools).
+  - Unverified until a consented re-check: that `system/init` for each role then lists exactly
+    the base set (plus `Skill` and the role's `mcp__acp__*` tools).
+
 - `canUseTool`:
-  - Allows `Read`, `Glob`, `Grep` and `LS` when their target path is inside the agent's `cwd`
+  - Denies, without asking, any built-in (non-`mcp__`) tool outside the agent's effective set
+    (`agentToolNames`), a second layer behind the SDK `tools` list: "This tool is not part of
+    this agent's role.", or for an edit or shell tool of the lead, planner or reviewer "This agent
+    only reads files inside its folder.". So the lead is never asked about edits or commands.
+  - A `Skill` call (in the set only with a plugin) is allowed without asking only when its input
+    parses as `{ skill: string }` and names one of the run's `acp-skills:*` skills (a leading `/`
+    is accepted). Bundled skills such as `update-config` load even with `settingSources: []`, so
+    any other name, or any other input shape, is denied ("Only this stage's project skills …").
+    The input is never logged.
+  - Allows `Read`, `Glob` and `Grep` when their target path is inside the agent's `cwd`
     (lexically) and Claude Code did not flag a `blockedPath`.
   - Allows the agent's own `mcp__acp__<tool>` (from `managedToolNames`) when
     `mcpServer.source === 'sdk'`, or when the field is absent (older CLIs). The SDK says trust is
     keyed on `source`, not on the name.
   - Denies a worker any other `mcp__acp__*` without asking: every one for a plain worker, and
     `submit_plan`, `request_review`, unknown names or another server's tools for a parent helper.
-  - Everything else goes to `requestPermission`, with a summary of the tool name plus its target path
-    (or, for `Bash`, only the command name), redacted and at most 200 characters.
+  - The planner and reviewer are denied anything else without asking.
+  - Everything else (a worker's or tester's `Edit`, `Write` or `Bash`, a lead's read outside its
+    folder, another MCP server's tool) goes to `requestPermission`, with a summary of the tool name
+    plus its target path (or, for `Bash`, only the command name), redacted and at most 200
+    characters.
   - A rejected request, or an aborted signal, gives a deny.
 - Message mapping:
   - `system/init` → `started` (once; the CLI re-sends `init` on each turn of a headless run).

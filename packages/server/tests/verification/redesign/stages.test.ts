@@ -54,8 +54,10 @@ afterEach(async () => {
   for (const b of open.splice(0)) await b.close();
 });
 
-/** The adapter's gate message for a tool the stage's agent file does not list. */
+/** The adapter's gate message for a role tool the stage's agent file does not list. */
 const NOT_IN_AGENT_FILE = "This stage's agent file does not list this tool.";
+/** The adapter's gate message for an edit or shell tool of a reading role (ADR-0019 §7). */
+const READ_ONLY = 'This agent only reads files inside its folder.';
 
 const MARK = {
   planFile: 'RV-PLAN-FILE-INSTRUCTIONS',
@@ -195,8 +197,13 @@ describe('R-V: a ticket through every redesign stage (HTTP, fake agents, real ad
     const plannerPrompt = appendedPrompt(plannerSdk);
     expect(plannerPrompt).toContain('=== Stage agent file .claude/agents/plan-style.md');
     expect(plannerPrompt).toContain(MARK.planFile);
-    // The real gate: Bash isn't in the narrowed list; an in-folder read runs without asking.
+    // The real gate: Bash is outside the planner's base set, and Glob, which the file does not
+    // list, was narrowed away; an in-folder read runs without asking.
     await expect(gate(plannerSdk, 'Bash', { command: 'ls' })).resolves.toMatchObject({
+      behavior: 'deny',
+      message: READ_ONLY,
+    });
+    await expect(gate(plannerSdk, 'Glob', { pattern: '*.ts' })).resolves.toMatchObject({
       behavior: 'deny',
       message: NOT_IN_AGENT_FILE,
     });
@@ -220,7 +227,8 @@ describe('R-V: a ticket through every redesign stage (HTTP, fake agents, real ad
       200,
     );
 
-    // ---- Orchestrate: the lead gets the approved plan; its file narrows but keeps its tools.
+    // ---- Orchestrate: the lead gets the approved plan; its file narrows its read-only base set
+    // (the file's Bash is not added, ADR-0019 §7) and keeps its control tools.
     const lead = await agentOfKind(b, 'lead');
     await waitFor(() => (planner.ended ? true : undefined), 'the planner to end');
     expect(lead.spec).toMatchObject({
@@ -232,8 +240,20 @@ describe('R-V: a ticket through every redesign stage (HTTP, fake agents, real ad
     expect(lead.spec.prompt).toContain('Add the field and validate the code');
     expect(lead.spec.skillPlugin).toBeUndefined();
     const leadSdk = b.sdkFor(lead.id);
-    expect(leadSdk.tools).toEqual(['Read', 'Grep', 'Bash']);
+    expect(leadSdk.tools).toEqual(['Read', 'Grep']);
     expect(leadSdk.disallowedTools).toBeUndefined();
+    expect(leadSdk.allowedTools).toBeUndefined();
+    expect(Object.keys(leadSdk.mcpServers ?? {})).toEqual(['acp']);
+    // The lead is read-only (ADR-0013 §2): its edits and commands are denied, never asked.
+    for (const [tool, input] of [
+      ['Bash', { command: 'git status' }],
+      ['Edit', { file_path: join(root, 'README.md'), old_string: 'a', new_string: 'b' }],
+    ] as const) {
+      await expect(gate(leadSdk, tool, input)).resolves.toMatchObject({
+        behavior: 'deny',
+        message: READ_ONLY,
+      });
+    }
     expect(leadSdk.plugins).toBeUndefined();
     expect(leadSdk.model).toBe('claude-project-model');
     expect(appendedPrompt(leadSdk)).toContain(MARK.leadFile);
@@ -321,7 +341,9 @@ describe('R-V: a ticket through every redesign stage (HTTP, fake agents, real ad
     expect(tester.spec.profile).toBeUndefined();
     expect(tester.spec.cwd).not.toBe(root);
     const testerSdk = b.sdkFor(tester.id);
-    expect(testerSdk.tools).toBeUndefined();
+    // The tester's base set (ADR-0019 §7), with `Skill` for its plugin.
+    expect(testerSdk.tools).toEqual(['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'Skill']);
+    expect(testerSdk.allowedTools).toBeUndefined();
     expect(testerSdk.skills).toEqual(['acp-skills:unit-tests']);
     expect(testerSdk.model).toBe('claude-tester-stage-model');
     expect(appendedPrompt(testerSdk)).not.toContain('Stage agent file');

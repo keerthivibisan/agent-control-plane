@@ -12,13 +12,13 @@ import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
 import {
+  agentToolNames,
   createCanUseTool,
   FOLLOW_UP_DISALLOWED_TOOLS,
   followUpToolNames,
   isReadOnlyRole,
   LEAD_MCP_SERVER_NAME,
   managedToolNames,
-  profileToolNames,
   READ_ONLY_DISALLOWED_TOOLS,
   specKeepsInputOpen,
 } from './permissions.js';
@@ -122,7 +122,8 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
  * settings files load; `strictMcpConfig` keeps every MCP server except ours out. Ours carries the
  * role's tools (`managedToolNames`): the lead's set, the planner's `submit_plan`, the reviewer's
  * `post_review`, or child management for a worker with `canStartHelpers`; other workers and the
- * tester get none. Exported for tests.
+ * tester get none. The built-in `tools` base set is the role's (`agentToolNames`, ADR-0019 §7).
+ * Exported for tests.
  */
 export function buildOptions(
   spec: ManagedAgentSpec,
@@ -150,10 +151,11 @@ export function buildOptions(
   }
   // The planner and the reviewer only read (ADR-0019): no edit or shell tools in their context.
   if (isReadOnlyRole(spec.kind)) options.disallowedTools = [...READ_ONLY_DISALLOWED_TOOLS];
-  // A stage agent file's `tools` only narrow the built-in base set (ADR-0019 §6). Never
-  // `allowedTools`, which would auto-approve calls before the gate.
-  const fileTools = profileToolNames(spec);
-  if (fileTools !== null) options.tools = [...fileTools];
+  // Every role gets an explicit built-in base set (ADR-0019 §7): without one, the agent gets every
+  // tool the local Claude Code offers (the R-V real run saw 28–37, `SendMessage` and `WebFetch`
+  // among them). A stage agent file's `tools` only narrow it (§6). Never `allowedTools`, which
+  // would auto-approve calls before the gate.
+  options.tools = [...agentToolNames(spec)];
   // Project skills arrive as a run-scoped, skills-only local plugin (ADR-0019 §4, decision E);
   // filesystem settings stay off, so nothing else from the repository loads.
   const plugin = spec.skillPlugin;
