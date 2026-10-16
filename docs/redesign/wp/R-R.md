@@ -20,7 +20,7 @@ Owned paths: `packages/server/src/skills/**`, `packages/server/tests/**`,
 
 ## Tasks
 
-- [ ] 1. Refuse deleting an agent file a workflow stage uses (409, like skills); web shows the
+- [x] 1. Refuse deleting an agent file a workflow stage uses (409, like skills); web shows the
       server's message
 - [ ] 2. Agent templates match the role base sets ("Code reviewer" read-only, no shell commands)
 - [ ] 3. `docs/provider-adapters.md` §11 header cites the real runs (P3-F, R-V)
@@ -28,6 +28,7 @@ Owned paths: `packages/server/src/skills/**`, `packages/server/tests/**`,
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done              | Commit | Checks    |
-| ---------- | -------------------------- | ------ | --------- |
-| 2026-10-16 | Claimed R-R part 1 on main | (this) | docs only |
+| Date       | What was done                                                                                                           | Commit    | Checks                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------ |
+| 2026-10-16 | Claimed R-R part 1 on main                                                                                              | `90d9d64` | docs only                      |
+| 2026-10-16 | Task 1: agent-file delete refused while a stage uses it (409 `agent_in_use`); web disables Delete and shows the refusal | (this)    | pnpm check ✓: test 2,093/2,093 |

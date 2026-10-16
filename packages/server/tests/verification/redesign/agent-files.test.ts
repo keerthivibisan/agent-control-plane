@@ -137,7 +137,7 @@ describe('R-V: stage agent files reaching the lead (HTTP, real adapter options)'
     expect((await ticketDetail(b, ticket.id)).plans).toHaveLength(1);
   });
 
-  it('deleting an agent file that a stage uses (documents the current behaviour)', async () => {
+  it('refuses deleting an agent file that a stage uses (409, like skills), then allows it', async () => {
     const b = await bootRedesign();
     open.push(b);
     const p = await project(b);
@@ -145,12 +145,22 @@ describe('R-V: stage agent files reaching the lead (HTTP, real adapter options)'
     const stages = defaultStages();
     stages.orchestrate = { model: null, skill: null, agent: 'in-use' };
     await saveWorkflow(b, p.id, { plannerMode: 'lead', stages });
-    // Skills in use are refused with 409 (ADR-0018). For agent files the R-I review listed the
-    // same refusal as a follow-up; today the delete goes through and the stage then reports the
-    // file missing (the agent starts without it). Kept as a record; see R-V.md findings.
-    const res = await b.del(`/api/projects/${p.id}/agents/in-use`);
-    expect(res.status).toBe(204);
+    // R-V finding 1, fixed in R-R: the saved workflow guards the file, as it does a skill.
+    const refused = await b.del(`/api/projects/${p.id}/agents/in-use`);
+    expect(refused.status).toBe(409);
+    expect(refused.body).toMatchObject({
+      error: {
+        code: 'agent_in_use',
+        message:
+          'The agent file is used by these workflow stages: Orchestrate. Remove it from them first.',
+      },
+    });
+    // The file is still there, so the stage still gets it.
     const { lead } = await startLead(b, p);
-    expect(lead.spec.profile).toBeUndefined();
+    expect(lead.spec.profile).toMatchObject({ name: 'in-use' });
+
+    // Once no stage names it, the delete goes through.
+    await saveWorkflow(b, p.id, { plannerMode: 'lead', stages: defaultStages() });
+    expect((await b.del(`/api/projects/${p.id}/agents/in-use`)).status).toBe(204);
   });
 });

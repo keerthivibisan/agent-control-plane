@@ -256,7 +256,12 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     logger,
     workflowOf: (projectId) => workflow.workflowFor(projectId),
   });
-  const agents = createAgentsService({ git, logger });
+  // Agent files (ADR-0018 amendment): a file a stage uses can't be deleted either.
+  const agents = createAgentsService({
+    git,
+    logger,
+    workflowOf: (projectId) => workflow.workflowFor(projectId),
+  });
 
   const app = createApp({
     config,

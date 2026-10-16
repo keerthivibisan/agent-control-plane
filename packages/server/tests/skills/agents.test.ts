@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { MAX_AGENT_BYTES } from '@acp/core';
+import { MAX_AGENT_BYTES, defaultProjectWorkflow } from '@acp/core';
 import {
   AgentDefinitionDetailDtoSchema,
   AgentDefinitionSummaryDtoSchema,
@@ -15,7 +15,7 @@ import { errorHandler, notFoundHandler, requestId } from '../../src/http/middlew
 import { createAgentsRouter } from '../../src/routes/agents.js';
 import { parseAgentFile, serializeAgentFile } from '../../src/skills/index.js';
 import { git, head, tempDir, write } from '../workspace/helpers.js';
-import { setupSkills, snapshot } from './helpers.js';
+import { SKILLS_NOW, setupSkills, snapshot } from './helpers.js';
 
 /** Agent definitions (ADR-0018 amendment): `.claude/agents/<slug>.md`, same rules as skills. */
 
@@ -226,6 +226,29 @@ describe('agents service', () => {
     expect(head(root)).toBe(at);
   });
 
+  it('refuses to delete an agent file a workflow stage uses, naming the stages (409)', async () => {
+    const { root, project, agents, state } = setupSkills();
+    await agents.create(project, agent('reviewer'));
+    const w = defaultProjectWorkflow('p1', SKILLS_NOW.toISOString());
+    w.stages.orchestrate.agent = 'reviewer';
+    // A stage that is switched off still names the file, so it still counts (as for skills).
+    w.stages['code-review'] = { enabled: false, model: null, skill: null, agent: 'reviewer' };
+    state.workflow = w;
+    const error = await agents.delete(project, 'reviewer').catch((e: unknown) => e);
+    expect(error).toMatchObject({ status: 409, code: 'agent_in_use' });
+    expect((error as Error).message).toBe(
+      'The agent file is used by these workflow stages: Orchestrate, Final code review. Remove it from them first.',
+    );
+    expect(existsSync(join(root, FILE))).toBe(true);
+
+    // Another file, and the same file once no stage names it, delete as before.
+    await agents.create(project, agent('planner'));
+    await agents.delete(project, 'planner');
+    state.workflow = defaultProjectWorkflow('p1', SKILLS_NOW.toISOString());
+    await agents.delete(project, 'reviewer');
+    expect(existsSync(join(root, FILE))).toBe(false);
+  });
+
   it("never opens the owner's personal ~/.claude/agents", async () => {
     const { agents, homeDir } = setupSkills();
     git(homeDir, 'init', '--quiet', '-b', 'main');
@@ -308,5 +331,19 @@ describe('agents routes', () => {
     expect([bad.status, code(bad)]).toEqual([400, 'invalid_request']);
     const unknown = await request(app).get('/api/projects/zzz/agents');
     expect([unknown.status, code(unknown)]).toEqual([404, 'not_found']);
+  });
+
+  it('answers 409 agent_in_use with the stage names when a stage uses the file', async () => {
+    const { app, root, state } = setupApi();
+    expect(
+      (await request(app).post(base).set(CSRF_HEADER, TOKEN).send(agent('reviewer'))).status,
+    ).toBe(201);
+    state.workflow.stages.helpers.agent = 'reviewer';
+    const refused = await request(app).delete(`${base}/reviewer`).set(CSRF_HEADER, TOKEN);
+    expect(refused.status).toBe(409);
+    const { error } = ErrorDtoSchema.parse(refused.body);
+    expect(error.code).toBe('agent_in_use');
+    expect(error.message).toContain('Helpers');
+    expect(existsSync(join(root, FILE))).toBe(true);
   });
 });

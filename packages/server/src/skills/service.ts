@@ -4,7 +4,6 @@ import {
   defaultProjectWorkflow,
   stagesUsingSkill,
   type ProjectWorkflow,
-  type WorkflowStageId,
 } from '@acp/core';
 import {
   SkillWriteRequestSchema,
@@ -17,6 +16,7 @@ import type { Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/index.js';
 import { skillError } from './errors.js';
 import { parseSkillFile, serializeSkillFile } from './frontmatter.js';
+import { inUseError } from './in-use.js';
 import { listSkillFolders, skillTarget } from './paths.js';
 import { createFileStore, type ProjectRef } from './store.js';
 
@@ -46,15 +46,6 @@ export interface SkillsService {
   delete(project: SkillProject, name: string): Promise<void>;
   commit(project: SkillProject, name: string): Promise<SkillCommitResultDto>;
 }
-
-const STAGE_LABEL: Record<WorkflowStageId, string> = {
-  plan: 'Plan',
-  orchestrate: 'Orchestrate',
-  helpers: 'Helpers',
-  review: 'Review and merge',
-  'code-review': 'Final code review',
-  'unit-tests': 'Unit tests',
-};
 
 /** The request body; an oversize text gets `too_large` rather than a generic schema error. */
 function parseWrite(body: unknown): SkillWriteRequest {
@@ -137,12 +128,7 @@ export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
       },
       async beforeDelete(project, name) {
         const stages = await usedBy(project, name);
-        if (stages.length > 0) {
-          throw skillError(
-            'skill_in_use',
-            `The skill is used by these workflow stages: ${stages.map((s) => STAGE_LABEL[s]).join(', ')}. Remove it from them first.`,
-          );
-        }
+        if (stages.length > 0) throw inUseError('skill_in_use', 'skill', stages);
       },
     },
   );

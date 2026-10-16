@@ -1,4 +1,4 @@
-import { stagesUsingAgent } from '@acp/core';
+import { stagesUsingAgent, type WorkflowStageId } from '@acp/core';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
@@ -228,12 +228,14 @@ function AgentDetailView({
   existing,
   back,
   onDeleted,
+  usedBy,
 }: {
   projectId: string;
   name: string;
   existing: readonly string[];
   back: () => void;
   onDeleted: (name: string) => void;
+  usedBy: readonly WorkflowStageId[] | undefined;
 }) {
   const { data, error } = useApiQuery(agentsPaths.agent(projectId, name), agentsSchemas.detail);
   if (error !== null && data === undefined) return <Failure error={error} refusals={A.refusals} />;
@@ -247,6 +249,7 @@ function AgentDetailView({
       onCreated={() => undefined}
       onCancel={back}
       onDeleted={onDeleted}
+      usedBy={usedBy}
     />
   );
 }
@@ -290,6 +293,7 @@ function AgentsTab({ projectId }: { projectId: string }) {
             name={view.name}
             existing={names}
             back={toList}
+            usedBy={usage?.usedBy(view.name)}
             onDeleted={(name) => {
               setRemoved(name);
               toList();

@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
+import type { WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionDetailDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -20,6 +21,14 @@ import { FileSide, InstructionsField, TemplatePicker } from './editor-parts';
 
 const A = AGENTS_COPY;
 const S = SKILLS_COPY;
+/**
+ * The agents refusals plus `agent_in_use` (R-R: the server refuses deleting a file a stage uses,
+ * as for skills). Belongs in `AGENTS_COPY.refusals`; kept here while another WP edits `copy.ts`.
+ */
+const REFUSALS: Readonly<Record<string, string>> = {
+  ...A.refusals,
+  agent_in_use: 'A workflow stage still uses this agent file.',
+};
 const MODEL_SUGGESTIONS = ['sonnet', 'opus', 'haiku', 'inherit'];
 
 function sameForm(a: AgentForm, b: AgentForm): boolean {
@@ -172,6 +181,7 @@ export function AgentEditor({
   onCreated,
   onCancel,
   onDeleted,
+  usedBy,
 }: {
   projectId: string;
   detail?: AgentDefinitionDetailDto;
@@ -180,6 +190,11 @@ export function AgentEditor({
   onCreated: (name: string) => void;
   onCancel: () => void;
   onDeleted: (name: string) => void;
+  /**
+   * The stages that use this file (from the saved workflow); Delete is disabled while any does,
+   * as for skills. Undefined while the workflow isn't known: the server still refuses.
+   */
+  usedBy?: readonly WorkflowStageId[] | undefined;
 }) {
   const isNew = detail === undefined;
   const initial: AgentForm = detail
@@ -319,7 +334,7 @@ export function AgentEditor({
             bytes={agentFileBytes(form)}
             sizeError={sizeError}
           />
-          <RefusalNotice error={save.error} refusals={A.refusals} />
+          <RefusalNotice error={save.error} refusals={REFUSALS} />
           {saved && !isNew ? (
             <p role="status" className="text-success">
               {S.editor.saved}
@@ -344,6 +359,7 @@ export function AgentEditor({
           projectId={projectId}
           file={detail}
           dirty={dirty}
+          {...(usedBy !== undefined && { usedBy })}
           commitFn={commitAgent}
           deleteFn={deleteAgent}
           scope={isAgentsPath}
@@ -352,7 +368,7 @@ export function AgentEditor({
             commitClean: A.commit.clean,
             deleteButton: A.remove.button,
             deleteText: A.remove.text,
-            refusals: A.refusals,
+            refusals: REFUSALS,
           }}
           details={
             <div className="flex flex-col gap-1">

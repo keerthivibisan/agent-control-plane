@@ -9,6 +9,7 @@ export type SkillErrorCode =
   | 'not_found'
   | 'conflict'
   | 'skill_in_use'
+  | 'agent_in_use'
   | 'unsafe_path'
   | 'too_large'
   | 'staged_changes'
@@ -22,6 +23,7 @@ const STATUS: Record<SkillErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   skill_in_use: 409,
+  agent_in_use: 409,
   unsafe_path: 400,
   too_large: 413,
   staged_changes: 409,

@@ -139,7 +139,8 @@ export interface SideCopy {
 
 /**
  * The column next to a saved file: its path and git state, Commit, problems and Delete. `usedBy`
- * (skills) shows the stages and blocks Delete while any stage uses the file.
+ * (skills, and agent files once the workflow is known) shows the stages and blocks Delete while
+ * any stage uses the file; the server refuses that delete too (`skill_in_use`, `agent_in_use`).
  */
 export function FileSide({
   projectId,

@@ -6,6 +6,7 @@ import { AGENT_TEMPLATES } from '../../src/features/skills/agent-templates';
 import { SkillsPage } from '../../src/features/skills/SkillsPage';
 import { createApiClient, type FetchLike } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
+import { agentWorkflowDto } from '../../e2e/workflow-fixtures';
 import { CSRF } from '../fixtures/control';
 import { project } from '../fixtures/dto';
 import { SKILLS_PROJECT_ID, agentDetail, commitResult } from '../fixtures/skills';
@@ -14,8 +15,15 @@ import { fakeServer, jsonResponse, renderWithApi } from '../helpers';
 const P = `/api/projects/${SKILLS_PROJECT_ID}`;
 const AG = `${P}/agents`;
 
-/** A fake agents server that keeps state like the real one (writes, deletes, commits). */
-function server(initial: AgentDefinitionDetailDto[] = []) {
+/**
+ * A fake agents server that keeps state like the real one (writes, deletes, commits). `workflow`
+ * answers `GET …/workflow` (left out: the page doesn't know which stages use a file);
+ * `deleteRefusal` makes every DELETE answer that 409, as the server does for a file in use.
+ */
+function server(
+  initial: AgentDefinitionDetailDto[] = [],
+  options: { workflow?: unknown; deleteRefusal?: { code: string; message: string } } = {},
+) {
   const agents = new Map(initial.map((a) => [a.name, a]));
   const summary = (d: AgentDefinitionDetailDto): AgentDefinitionSummaryDto => {
     const { instructions: _i, ...rest } = d;
@@ -25,6 +33,7 @@ function server(initial: AgentDefinitionDetailDto[] = []) {
     '/api/control/token': { token: CSRF },
     '/api/projects': [project({ id: SKILLS_PROJECT_ID, name: 'web-app' })],
     [`${P}/skills`]: [],
+    ...(options.workflow !== undefined && { [`${P}/workflow`]: options.workflow }),
     [AG]: () => jsonResponse(200, [...agents.values()].map(summary)),
     [`POST ${AG}`]: (body: unknown) => {
       const created = agentDetail({
@@ -64,6 +73,8 @@ function server(initial: AgentDefinitionDetailDto[] = []) {
       });
       agents.set(name, next);
       res = jsonResponse(200, next);
+    } else if (options.deleteRefusal !== undefined) {
+      res = jsonResponse(409, { error: { ...options.deleteRefusal, requestId: 'r' } });
     } else {
       agents.delete(name);
       res = new Response(null, { status: 204 });
@@ -230,7 +241,8 @@ describe('Agents tab', () => {
     fireEvent.click(commit);
     expect(await within(editor).findByText('Committed abc1234 on main.')).toBeTruthy();
 
-    // Delete is never blocked: a stage whose agent file is gone starts without it (ADR-0019 §6).
+    // The page doesn't know the workflow here, so Delete is offered (the server would refuse a
+    // file a stage uses: next tests).
     fireEvent.click(within(editor).getByRole('button', { name: 'Delete agent' }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete planner?' });
     expect(dialog.textContent).toContain('.claude/agents/planner.md');
@@ -248,6 +260,48 @@ describe('Agents tab', () => {
       tools: ['Read'],
       model: 'opus',
     });
+  });
+
+  it('disables Delete with an explanation while a stage uses the agent file', async () => {
+    const s = server([agentDetail({ name: 'db-migrator' })], { workflow: agentWorkflowDto() });
+    openAgents(s);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open agent db-migrator' }));
+    const editor = await screen.findByTestId('agent-editor');
+    const del = within(editor).getByTestId('skill-delete');
+    await waitFor(() =>
+      expect(
+        within(del).getByRole<HTMLButtonElement>('button', { name: 'Delete agent' }).disabled,
+      ).toBe(true),
+    );
+    expect(del.textContent).toContain(
+      'Used by Helpers. Remove it from those stages on the Workflow page',
+    );
+    expect(within(editor).getByTestId('skill-status').textContent).toContain('Helpers');
+    expect(mutations(s)).toEqual([]);
+  });
+
+  it("shows the server's refusal when a stage uses the file (409 agent_in_use)", async () => {
+    // No workflow on the page (for example not loaded yet): the server's guard answers.
+    const message =
+      'The agent file is used by these workflow stages: Orchestrate. Remove it from them first.';
+    const s = server([agentDetail({ name: 'planner' })], {
+      deleteRefusal: { code: 'agent_in_use', message },
+    });
+    openAgents(s);
+    fireEvent.click(await screen.findByRole('button', { name: 'Open agent planner' }));
+    const editor = await screen.findByTestId('agent-editor');
+    fireEvent.click(within(editor).getByRole('button', { name: 'Delete agent' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete planner?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.getAttribute('data-refusal')).toBe('agent_in_use');
+    expect(alert.textContent).toContain('A workflow stage still uses this agent file.');
+    expect(alert.textContent).toContain(message);
+    // Nothing was removed: the editor stays, the refusal stays next to Delete, no removal notice.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(within(within(editor).getByTestId('skill-delete')).getByRole('alert')).toBeTruthy();
+    expect(screen.queryByTestId('removal-notice')).toBeNull();
+    expect(s.agents.has('planner')).toBe(true);
   });
 
   it('refuses a taken name before sending', async () => {

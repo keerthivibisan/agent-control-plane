@@ -1,4 +1,10 @@
-import { AgentToolNameSchema, MAX_AGENT_BYTES, MAX_SKILL_DESCRIPTION } from '@acp/core';
+import {
+  AgentToolNameSchema,
+  MAX_AGENT_BYTES,
+  MAX_SKILL_DESCRIPTION,
+  stagesUsingAgent,
+  type ProjectWorkflow,
+} from '@acp/core';
 import {
   AgentDefinitionWriteRequestSchema,
   type AgentDefinitionCommitResultDto,
@@ -10,6 +16,7 @@ import type { Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/index.js';
 import { skillError } from './errors.js';
 import { parseAgentFile, serializeAgentFile } from './frontmatter.js';
+import { inUseError } from './in-use.js';
 import { agentTarget, listAgentFiles } from './paths.js';
 import { createFileStore, type ProjectRef } from './store.js';
 
@@ -18,12 +25,18 @@ import { createFileStore, type ProjectRef } from './store.js';
  * amendment). Same path rules, writes, git state and commit as skills (`store.ts`). The front matter
  * is `name`, `description`, an optional `tools` list and an optional `model`; the app writes no
  * other keys. A hand-edited file's other keys are kept as they are and reported as a problem.
- * A workflow stage may use an agent file (ADR-0019 §6, `workflow/agent-profile.ts`); its delete is
- * not guarded, because a missing stage file never blocks a run (the agent starts without it).
+ * A workflow stage may use an agent file (ADR-0019 §6, `workflow/agent-profile.ts`). Deleting one
+ * a stage names is refused, as for skills: a missing stage file never blocks a run, but the stage
+ * would then start without the instructions the owner picked for it.
  */
 
 export interface AgentsServiceDeps {
   git: GitRunner;
+  /**
+   * The project's saved workflow, for the delete guard. Required, unlike the skills default: the
+   * default workflow names no agent file, so a default would silently turn the guard off.
+   */
+  workflowOf: (projectId: string) => ProjectWorkflow | Promise<ProjectWorkflow>;
   logger?: Logger;
   /** The owner's home folder, whose `.claude` is never opened. Injected so tests never use it. */
   homeDir?: string;
@@ -144,6 +157,10 @@ export function createAgentsService(deps: AgentsServiceDeps): AgentsService {
         }),
       toDetail: (_project, file) =>
         Promise.resolve(toAgentDetail({ ...file, relFile: file.target.relFile })),
+      async beforeDelete(project, name) {
+        const stages = stagesUsingAgent(await deps.workflowOf(project.id), name);
+        if (stages.length > 0) throw inUseError('agent_in_use', 'agent file', stages);
+      },
     },
   );
 

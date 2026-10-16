@@ -80,7 +80,12 @@ export function setupSkills(
     workflowOf: () => state.workflow,
     logger,
   });
-  const agents = createAgentsService({ homeDir, git, logger });
+  const agents = createAgentsService({
+    homeDir,
+    git,
+    logger,
+    workflowOf: () => state.workflow,
+  });
   return { root, project, skills, agents, logs: lines, state, calls, homeDir };
 }
 
