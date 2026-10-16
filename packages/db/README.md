@@ -184,8 +184,8 @@ have no parent. The repository still requires a lead without a parent and a work
   dated at the project's registration; undefined for an unknown project), `isStored(projectId)`,
   `put(workflow)` (creates or replaces; `not_found` for an unknown project).
 - **runAudit**: the 0004 columns on the Phase 3 tables, kept out of the orchestration repositories so
-  those stay as shipped. `setApprovalDecidedBy` / `approvalDecidersForRun`, `setRunLimits` /
-  `getRunLimits` (bounded like the project setup), `setAgentStage` / `agentStagesForRun`. Each
+  those stay as shipped. `setApprovalDecidedBy` / `approvalDecidersForRun`, `setRunSnapshot` /
+  `getRunSnapshot` (bounded like the project setup), `setAgentStage` / `agentStagesForRun`. Each
   setter throws `not_found` for an unknown row. The server's run store calls them inside its commit
   transaction.
 

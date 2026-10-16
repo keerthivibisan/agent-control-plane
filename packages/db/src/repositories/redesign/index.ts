@@ -21,5 +21,10 @@ export function createRedesignRepositories(
 }
 
 export type { ProjectWorkflowInput, ProjectWorkflowRepository } from './workflow.js';
-export { APPROVAL_DECIDERS, StoredRunLimitsSchema } from './run-audit.js';
-export type { ApprovalDecider, RunAuditRepository, StoredRunLimits } from './run-audit.js';
+export { APPROVAL_DECIDERS, StoredRunLimitsSchema, StoredRunSnapshotParser } from './run-audit.js';
+export type {
+  ApprovalDecider,
+  RunAuditRepository,
+  StoredRunLimits,
+  StoredRunSnapshot,
+} from './run-audit.js';

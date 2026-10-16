@@ -109,12 +109,12 @@ describe('run audit repository (R-G)', () => {
     const store = setup();
     const { run } = ticketWithRun(store);
     const audit = store.redesign.runAudit;
-    expect(audit.getRunLimits(run.id)).toBeNull();
-    audit.setRunLimits(run.id, { maxConcurrentHelpers: 4, maxDepth: 2 });
-    expect(audit.getRunLimits(run.id)).toEqual({ maxConcurrentHelpers: 4, maxDepth: 2 });
-    audit.setRunLimits(run.id, null);
-    expect(audit.getRunLimits(run.id)).toBeNull();
-    expect(audit.getRunLimits('nope')).toBeNull();
+    expect(audit.getRunSnapshot(run.id)).toBeNull();
+    audit.setRunSnapshot(run.id, { maxConcurrentHelpers: 4, maxDepth: 2 });
+    expect(audit.getRunSnapshot(run.id)).toEqual({ maxConcurrentHelpers: 4, maxDepth: 2 });
+    audit.setRunSnapshot(run.id, null);
+    expect(audit.getRunSnapshot(run.id)).toBeNull();
+    expect(audit.getRunSnapshot('nope')).toBeNull();
 
     for (const limits of [
       { maxConcurrentHelpers: 0, maxDepth: 1 },
@@ -123,18 +123,43 @@ describe('run audit repository (R-G)', () => {
       { maxConcurrentHelpers: 2, maxDepth: 1, extra: true },
     ]) {
       expect(
-        thrown(() => audit.setRunLimits(run.id, limits)),
+        thrown(() => audit.setRunSnapshot(run.id, limits)),
         JSON.stringify(limits),
       ).toMatchObject({ code: 'invalid_input' });
     }
     expect(
-      thrown(() => audit.setRunLimits('nope', { maxConcurrentHelpers: 1, maxDepth: 1 })),
+      thrown(() => audit.setRunSnapshot('nope', { maxConcurrentHelpers: 1, maxDepth: 1 })),
     ).toMatchObject({ code: 'not_found' });
 
     store.db.connection
       .prepare('UPDATE orchestration_runs SET limits = ? WHERE id = ?')
       .run('{"maxConcurrentHelpers":"x"}', run.id);
-    expect(thrown(() => audit.getRunLimits(run.id))).toBeInstanceOf(StoredValueError);
+    expect(thrown(() => audit.getRunSnapshot(run.id))).toBeInstanceOf(StoredValueError);
+  });
+
+  it('stores the workflow snapshot and the held-stages flag with the limits (R-G Part 2)', () => {
+    const store = setup();
+    const { run } = ticketWithRun(store);
+    const audit = store.redesign.runAudit;
+    const workflow = defaultProjectWorkflow(store.projectId, '2026-10-16T09:00:00.000Z');
+    workflow.stages['code-review'] = { enabled: true, model: null, skill: 'code-review' };
+    const snapshot = { maxConcurrentHelpers: 2, maxDepth: 1, workflow, stagesHeld: true as const };
+    audit.setRunSnapshot(run.id, snapshot);
+    expect(audit.getRunSnapshot(run.id)).toEqual(snapshot);
+
+    const bad = [
+      { maxConcurrentHelpers: 2, maxDepth: 1, stagesHeld: false },
+      { maxConcurrentHelpers: 2, maxDepth: 1, workflow: { plannerMode: 'chaos' } },
+      { workflow },
+    ];
+    for (const value of bad) {
+      const wrong = value as unknown as typeof snapshot;
+      expect(
+        thrown(() => audit.setRunSnapshot(run.id, wrong)),
+        JSON.stringify(value),
+      ).toMatchObject({ code: 'invalid_input' });
+    }
+    expect(audit.getRunSnapshot(run.id)).toEqual(snapshot);
   });
 
   it('stores an agent run stage', () => {

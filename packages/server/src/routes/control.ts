@@ -8,6 +8,7 @@ import {
   ReviewDtoSchema,
   RunDetailDtoSchema,
   RunSummaryDtoSchema,
+  RunWorkflowDtoSchema,
 } from '@acp/core/api';
 import { requireCsrf } from '../control/csrf.js';
 import { managedDisabled } from '../control/errors.js';
@@ -48,6 +49,14 @@ export function createControlRouter(control: ControlService): Router {
   });
   router.post('/runs/:id/chat', csrf, json, (req, res) => {
     res.json(out(ChatMessageDtoSchema, control.chat(param(req.params['id']), req.body)));
+  });
+  // Redesign (ADR-0019): each workflow stage's live state, and the owner's Continue after a
+  // restart held the next post-merge stage. Continue answers the run, like the other run actions.
+  router.get('/runs/:id/workflow', (req, res) => {
+    res.json(out(RunWorkflowDtoSchema, control.runWorkflow(param(req.params['id']))));
+  });
+  router.post('/runs/:id/continue', csrf, (req, res) => {
+    res.json(out(RunDetailDtoSchema, control.continueRun(param(req.params['id']))));
   });
   router.post('/runs/:id/stop', csrf, (req, res) => {
     res.json(out(RunSummaryDtoSchema, control.stopRun(param(req.params['id']))));

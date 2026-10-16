@@ -9,19 +9,21 @@ import {
   type AcpDatabase,
   type OrchestrationRepositories,
   type RedesignRepositories,
+  type StoredRunSnapshot,
   type WorkspaceRepositories,
   type WorkspaceRow,
 } from '@acp/db';
 import {
+  DEFAULT_RUN_LIMITS,
   EMPTY_LEDGER,
   isLiveAgentStatus,
   type EngineAgent,
   type EngineApproval,
   type EngineEffect,
-  type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
 import type { OrchestrationRun, TicketPlan } from '@acp/core';
+import { hasReviewableChange } from './roles.js';
 
 /**
  * Persists engine states (orchestration-lifecycle §1: every transition is persisted before its
@@ -34,18 +36,20 @@ export interface RunStore {
   readonly workspaceRepos: WorkspaceRepositories;
   /**
    * Writes the difference between `prev` (null for a new run) and `next` in one transaction,
-   * together with the chat lines and session links among `effects` (they are data, not actions).
+   * together with the chat lines, session links and reviewer comments among `effects` (they are
+   * data, not actions).
    * Throws, and writes nothing, if any write fails.
    */
   commit(prev: RunState | null, next: RunState, effects: readonly EngineEffect[]): void;
-  /** Migration 0004 columns: approval deciders, run limits, agent stages (R-G). */
+  /** Migration 0004 columns: approval deciders, the run snapshot, agent stages (R-G). */
   readonly redesignRepos: RedesignRepositories;
   /**
    * Rebuilds an engine state from the database (restart, or a run not held in memory). Plans, the
-   * limits snapshot and each approval's `decidedBy` come back with the run (migration 0004; rows
-   * written before it have no limits, so they keep the Phase 3 defaults, and no decider).
-   * `awaitingHelpers` is not stored: after a restart no agent is live. Live runs are never
-   * reloaded while the server runs, and after a restart nothing is relaunched.
+   * run snapshot (limits, workflow, held stages), each agent's stage and each approval's
+   * `decidedBy` come back with the run (migration 0004; rows written before it have no snapshot,
+   * so they keep the Phase 3 defaults, and no decider). `awaitingHelpers`, `leadBrief` and
+   * `reviewPosts` are kept with the live run only: after a restart no agent is live. Live runs are
+   * never reloaded while the server runs, and after a restart nothing is relaunched.
    */
   load(runId: string): RunState | undefined;
 }
@@ -53,6 +57,11 @@ export interface RunStore {
 export interface RunStoreDeps {
   db: AcpDatabase;
   now: () => Date;
+}
+
+/** `EngineAgent.stage` is optional: absent (not undefined) for agents without one. */
+function withStage(stage: EngineAgent['stage'] | null): Pick<EngineAgent, 'stage'> {
+  return stage === null || stage === undefined ? {} : { stage };
 }
 
 export function createRunStore(deps: RunStoreDeps): RunStore {
@@ -73,15 +82,32 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
   }
 
-  function sameLimits(a: RunLimits | undefined, b: RunLimits | undefined): boolean {
-    return a?.maxConcurrentHelpers === b?.maxConcurrentHelpers && a?.maxDepth === b?.maxDepth;
+  /**
+   * What `orchestration_runs.limits` holds for a state: the limits (ADR-0013 amendment), the
+   * workflow snapshot (ADR-0019) and the held-stages flag. Null when there is none of them (a
+   * Phase 3 run). A workflow without limits stores the Phase 3 defaults, which is what the engine
+   * applies to such a run anyway.
+   */
+  function snapshotOf(state: RunState): StoredRunSnapshot | null {
+    if (state.limits === undefined && state.workflow === undefined && state.stagesHeld !== true) {
+      return null;
+    }
+    const limits = state.limits ?? DEFAULT_RUN_LIMITS;
+    const snapshot: StoredRunSnapshot = {
+      maxConcurrentHelpers: limits.maxConcurrentHelpers,
+      maxDepth: limits.maxDepth,
+    };
+    if (state.workflow !== undefined) snapshot.workflow = state.workflow;
+    // Stored so a second restart cannot start a held stage by itself (`continueStages` only).
+    if (state.stagesHeld === true) snapshot.stagesHeld = true;
+    return snapshot;
   }
 
-  /** The limits snapshot at start (ADR-0013 amendment); absent means the Phase 3 defaults. */
-  function syncLimits(prev: RunState | null, next: RunState): void {
-    if (prev !== null && sameLimits(prev.limits, next.limits)) return;
-    if (prev === null && next.limits === undefined) return;
-    redesignRepos.runAudit.setRunLimits(next.run.id, next.limits ?? null);
+  function syncSnapshot(prev: RunState | null, next: RunState): void {
+    const after = snapshotOf(next);
+    const before = prev === null ? null : snapshotOf(prev);
+    if (JSON.stringify(after) === JSON.stringify(before)) return;
+    redesignRepos.runAudit.setRunSnapshot(next.run.id, after);
   }
 
   function syncRun(prev: OrchestrationRun | null, next: OrchestrationRun): void {
@@ -128,7 +154,11 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       if (next.budgetTokensUsed !== 0) {
         repos.agentRuns.setBudgetTokensUsed(next.id, next.budgetTokensUsed);
       }
+      if (next.stage !== undefined) redesignRepos.runAudit.setAgentStage(next.id, next.stage);
       return;
+    }
+    if (prev.stage !== next.stage) {
+      redesignRepos.runAudit.setAgentStage(next.id, next.stage ?? null);
     }
     if (prev.status !== next.status || prev.endedAt !== next.endedAt) {
       repos.agentRuns.setStatus(next.id, next.status, {
@@ -204,8 +234,24 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
   }
 
-  function applyDataEffects(runId: string, effects: readonly EngineEffect[]): void {
+  function applyDataEffects(next: RunState, effects: readonly EngineEffect[]): void {
+    const runId = next.run.id;
     for (const effect of effects) {
+      if (effect.type === 'review-comment') {
+        // ADR-0019: a reviewer finding is a ticket comment (ADR-0016's stored scope). The engine
+        // already redacted it and capped it at the comment limit.
+        const ticketId = next.run.ticketId;
+        if (ticketId === null)
+          throw new DbError('invalid_input', 'a review comment needs a ticket');
+        workspaceRepos.comments.insert({
+          ticketId,
+          runId,
+          planId: null,
+          author: 'reviewer',
+          body: effect.body,
+        });
+        continue;
+      }
       if (effect.type === 'chat-message') {
         // ADR-0015: owner messages and lead replies only. A reply longer than the column allows
         // is cut rather than losing the whole transition.
@@ -237,7 +283,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     commit(prev, next, effects) {
       withTransaction(deps.db, () => {
         syncRun(prev?.run ?? null, next.run);
-        syncLimits(prev, next);
+        syncSnapshot(prev, next);
         const prevAgents = new Map(prev?.agents.map((a) => [a.id, a]));
         for (const agent of next.agents) syncAgent(prevAgents.get(agent.id), agent);
         const prevApprovals = new Map(prev?.approvals.map((a) => [a.id, a]));
@@ -245,7 +291,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           syncApproval(prevApprovals.get(approval.id), approval);
         }
         syncPlans(prev?.plans ?? [], next.plans ?? []);
-        applyDataEffects(next.run.id, effects);
+        applyDataEffects(next, effects);
       });
     },
     load(runId) {
@@ -254,6 +300,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       const workspaces = new Map<string, WorkspaceRow>(
         repos.workspaces.listForRun(runId).map((w) => [w.agentRunId, w]),
       );
+      const stages = redesignRepos.runAudit.agentStagesForRun(runId);
       const agents: EngineAgent[] = repos.agentRuns.listForRun(runId).map((a) => ({
         id: a.id,
         runId: a.runId,
@@ -270,10 +317,11 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         // Kept in memory only (content-free, but not part of the audit trail).
         latestActivity: null,
         review:
-          a.kind === 'lead' || isLiveAgentStatus(a.status)
+          !hasReviewableChange(a.kind) || isLiveAgentStatus(a.status)
             ? null
             : (workspaces.get(a.id)?.reviewState ?? 'pending'),
         reportedCostUsd: null,
+        ...withStage(stages.get(a.id) ?? null),
       }));
       const deciders = redesignRepos.runAudit.approvalDecidersForRun(runId);
       const approvals: EngineApproval[] = repos.approvals.listForRun(runId).map((a) => ({
@@ -284,8 +332,15 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       }));
       // Usage is only accounted while agents are live; after a restart they never are again.
       const state: RunState = { run, agents, approvals, ledger: EMPTY_LEDGER };
-      const limits = redesignRepos.runAudit.getRunLimits(runId);
-      if (limits !== null) state.limits = limits;
+      const snapshot = redesignRepos.runAudit.getRunSnapshot(runId);
+      if (snapshot !== null) {
+        state.limits = {
+          maxConcurrentHelpers: snapshot.maxConcurrentHelpers,
+          maxDepth: snapshot.maxDepth,
+        };
+        if (snapshot.workflow !== undefined) state.workflow = snapshot.workflow;
+        if (snapshot.stagesHeld === true) state.stagesHeld = true;
+      }
       if (run.ticketId !== null) state.plans = workspaceRepos.plans.listForRun(runId);
       return state;
     },

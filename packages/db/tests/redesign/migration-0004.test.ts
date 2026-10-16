@@ -86,7 +86,7 @@ describe('migration 0004_redesign (R-G)', () => {
       expect(orch.approvals.getById(approval.id)).toMatchObject({ status: 'approved' });
       const audit = createRedesignRepositories(v4).runAudit;
       expect(audit.approvalDecidersForRun(run.id).get(approval.id)).toBeNull();
-      expect(audit.getRunLimits(run.id)).toBeNull();
+      expect(audit.getRunSnapshot(run.id)).toBeNull();
       expect([...audit.agentStagesForRun(run.id).values()]).toEqual([null, null]);
       expect(createWorkspaceRepositories(v4).comments.listForTicket(ticket.id)).toHaveLength(1);
 
@@ -101,7 +101,7 @@ describe('migration 0004_redesign (R-G)', () => {
 
       // The upgraded database takes the 0004 writes, including reviewer comments.
       audit.setApprovalDecidedBy(approval.id, 'owner');
-      audit.setRunLimits(run.id, { maxConcurrentHelpers: 2, maxDepth: 1 });
+      audit.setRunSnapshot(run.id, { maxConcurrentHelpers: 2, maxDepth: 1 });
       audit.setAgentStage(lead.id, 'orchestrate');
       expect(audit.approvalDecidersForRun(run.id).get(approval.id)).toBe('owner');
       const reviewer = createWorkspaceRepositories(v4).comments.insert({

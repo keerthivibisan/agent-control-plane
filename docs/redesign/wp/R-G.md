@@ -32,9 +32,88 @@ Part 2 (R-C wiring): **in progress** since R-C merged (`6a11e67`).
 | 2026-10-16 | Resumed; rebased on main `a532ef2`. Migration 0004, redesign repositories, db tests, README        | `178094d` | format ✓ lint ✓ typecheck ✓ test (db 153; server 306/309, 3 environmental, pass on rerun) ✓ build ✓                    |
 | 2026-10-16 | Workflow routes and service, skill-name listing, run store writes/loads decidedBy and limits       | `e067f98` | format ✓ lint ✓ typecheck ✓ test core 243 / demo 12 / orch 366 / adapter 268 / db 153 / web 321 / server 323 ✓ build ✓ |
 | 2026-10-16 | Set `review` for Part 1; Part 2 waiting for R-C                                                    | `39bd957` | docs-only; checks as in `e067f98`                                                                                      |
-| 2026-10-16 | Part 2 started: rebased on main `fcdc125` (R-C merged)                                             | this      | docs-only                                                                                                              |
+| 2026-10-16 | Part 2 started: rebased on main `fcdc125` (R-C merged)                                             | `see log` | docs-only                                                                                                              |
+| 2026-10-16 | Migration 0005 (one-lead index by kind; shared path, needs approval)                               | `see log` | format ✓ lint (db) ✓ typecheck (db) ✓ test db 157/157 ✓                                                                |
+| 2026-10-16 | WIP Part 2 server wiring (paused by the owner)                                                     | this      | not checked: server typecheck ✓; server tests 321/323 before a test fix (see Paused (2))                               |
 
 ## Handoff notes
+
+### Paused (2) (2026-10-16)
+
+**Done (committed, the last commit is a WIP):**
+
+- Migration `0005_stage_agents.sql`, in its own commit. **This is a shared path and needs
+  coordinator approval.**
+  - It re-keys `agent_runs_one_lead` by `kind = 'lead'`.
+  - R-C's planner, reviewer and tester have no parent, so 0002's "one agent without a parent per
+    run" index rejected them. A probe test showed the conflict.
+- db `runAudit.setRunSnapshot` / `getRunSnapshot` (renamed from `…RunLimits`). The `limits` JSON
+  now holds `{ maxConcurrentHelpers, maxDepth, workflow?, stagesHeld? }`.
+  - `stagesHeld` is stored so that a second restart cannot start a held stage inside
+    `recoverAfterRestart`. Its effects are dropped there, so the stage would be stuck in STARTING.
+- Server, in the WIP commit:
+  - `control/store.ts`: writes and loads the snapshot, `agent_runs.stage`, and `review-comment` as
+    a `reviewer` ticket comment in the commit transaction. On load, the review state is only for
+    reviewable kinds.
+  - `control/review-checkouts.ts`: a detached checkout of HEAD under `<dataDir>/review-checkouts`,
+    with orphan cleanup.
+  - `workflow/skill-files.ts`: the path rules.
+  - `workflow/skills-plugin.ts`: builds `<dataDir>/runs/<runId>/skills-plugin` with the front
+    matter reduced to `name` and `description`, `O_NOFOLLOW` reads, atomic writes, and
+    `cleanupAll`.
+  - `control/roles.ts`: the role helpers.
+  - `control/service.ts`:
+    - `start-agent` per kind: the lead and planner in the project, the reviewer in its checkout,
+      and the worker and tester in a worktree;
+    - `spec.kind`, `model ?? setup.model`, `leadTools` for the lead, planner, reviewer and depth-2
+      parents, and `skillPlugin`;
+    - the new effects, and read-only denial for the planner and reviewer;
+    - the allowlist gets the real kind;
+    - the tester's empty-review handling, and the plugin removed when the run ends;
+    - `continueRun` and `runWorkflow`;
+    - review checkouts and plugins cleaned in `start()`, and review checkouts in
+      `isManagedPath` and `extraRoots`.
+  - `board/service.ts`: `startTicket` uses the workflow and `ticketRunPrompts`; helper counts use
+    `countsAsHelper`; stage changes publish `tickets-changed`; checks run on the tester's change.
+  - `board/checks.ts` and `control/mappers.ts` let the tester through.
+  - Routes: `GET /api/runs/:id/workflow` → `RunWorkflowDto`, and
+    `POST /api/runs/:id/continue` (CSRF) → `RunDetailDto`.
+
+**State of the checks:**
+
+- The server typecheck passed.
+- Server tests: 321/323.
+  - The audit test failed because the snapshot now includes the workflow. It is changed to
+    `toMatchObject`, but not rerun.
+  - `smoke.test.ts` is the known environmental flake.
+- The full `pnpm check` has not been run.
+
+**Next steps, exactly:**
+
+1. Rerun `pnpm --filter @acp/server test`, fix what fails, then run the full `pnpm check`.
+2. Update `tests/board/helpers.ts` to pass `skillsPlugins: createSkillsPlugins({ dataDir, skills:
+{ homeDir } })` into `createControlService`, so tests never touch the real `~/.claude`.
+3. Write the tests, in `packages/server/tests/workflow/`, with the fake adapter and temp repos:
+   - the separate-planner flow: the planner spec is kind `planner` in the project with
+     `leadTools`, its tool use is denied, and the lead starts after approval;
+   - the reviewer: a checkout is created and the spec cwd is in it, `post_review` → a `reviewer`
+     comment, and the checkout is removed when it ends;
+   - the tester: a worktree, then review, checks and merge, and the run COMPLETED;
+   - the skills plugin: `allowed-tools` stripped, a symlinked skill folder refused, and
+     `spec.skillPlugin.skills = ['acp-skills:<name>']`;
+   - Continue after a restart: restart a server over the same database, with `stagesHeld` loaded,
+     then Continue starts the reviewer;
+   - the `RunWorkflowDto` states;
+   - unit tests for `parseSkillFile` and `reducedSkill`.
+4. Update the docs (server README if any, this file) and write the §9 report. Set `review`.
+
+**Open problems:**
+
+- Migration 0005 needs coordinator approval (shared path).
+- R-D's skills module is not on main, so `skill-files.ts` duplicates its path rules.
+- A reviewer checkout made before a restart is removed by `start()` (`cleanupOrphans`), not by the
+  `remove-review-checkout` effect of `recoverAfterRestart`. The server drops recovery effects, as
+  before.
 
 ### What R-B (Workflow page) and R-H (ticket page) can rely on now
 

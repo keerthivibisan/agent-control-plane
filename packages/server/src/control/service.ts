@@ -5,12 +5,14 @@ import {
   APPROVAL_TIMEOUT_MS,
   HARD_MAX_DEPTH,
   isPathInside,
+  type AgentRoleKind,
   type ManagedAgentEvent,
   type ManagedAgentSpec,
   type ManagedAgentHandle,
   type ManagedExecutionAdapter,
   type PermissionDecision,
   type PermissionRequest,
+  type ProjectWorkflow,
   type RegisteredRoot,
   type RunBudget,
   type RunStatus,
@@ -27,6 +29,7 @@ import {
   type ReviewDto,
   type RunDetailDto,
   type RunSummaryDto,
+  type RunWorkflowDto,
   type StreamNoticeDto,
 } from '@acp/core/api';
 import {
@@ -43,9 +46,11 @@ import {
   cancelRun,
   checkReviewAction,
   completeCancellation,
+  continueStages,
   createRun,
   decideApproval,
   decidePlan,
+  deriveRunWorkflow,
   expireApprovals,
   isAgentOverBudget,
   isApprovalOverdue,
@@ -53,6 +58,7 @@ import {
   isRunPastDeadline,
   leadToolCall,
   ownerChat,
+  pluginSkillName,
   recordReview,
   recoverAfterRestart,
   requestPermission,
@@ -78,6 +84,7 @@ import {
   type Workspace,
   type WorkspaceManager,
 } from '../workspace/index.js';
+import { createSkillsPlugins, type SkillsPlugins } from '../workflow/skills-plugin.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
 import { createCsrfToken } from './csrf.js';
 import { refusalError, workspaceError } from './errors.js';
@@ -89,6 +96,12 @@ import {
   toRunDetail,
   toRunSummary,
 } from './mappers.js';
+import {
+  createReviewCheckouts,
+  type ReviewCheckout,
+  type ReviewCheckouts,
+} from './review-checkouts.js';
+import { hasReviewableChange, isReadOnlyRole } from './roles.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
 
@@ -127,6 +140,13 @@ const DEFAULT_CANCEL_GRACE_MS = 10_000;
 
 export const LEAD_READ_ONLY_MESSAGE =
   'The lead agent works read-only in the project. Start a worker agent to change files or run commands.';
+export const PLANNER_READ_ONLY_MESSAGE =
+  'The planner works read-only in the project. Write the plan with submit_plan; helpers make the changes after approval.';
+export const REVIEWER_READ_ONLY_MESSAGE =
+  'The reviewer only reads the merged result. Post your findings with post_review.';
+
+/** Terminal run states: the run's temporary files (its skills plugin) can go. */
+const TERMINAL: readonly RunStatus[] = ['COMPLETED', 'FAILED', 'CANCELLED'];
 
 /**
  * Added to the first message of a helper that may start helpers (depth 2). The adapter ends a
@@ -183,8 +203,12 @@ export interface TicketRunInput {
   projectId: string;
   ticketId: string;
   title: string;
-  /** The lead's brief (`ticketLeadPrompt`). */
+  /** The lead's brief (`ticketRunPrompts`: `ticketLeadPrompt`, or the orchestrator's brief). */
   leadPrompt: string;
+  /** Separate planner mode (ADR-0019): the planner's brief (`ticketRunPrompts`). */
+  plannerPrompt?: string;
+  /** The project's workflow, snapshotted with the run (ADR-0019). */
+  workflow?: ProjectWorkflow;
   limits: RunLimits;
   budget: RunBudget;
   /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
@@ -216,6 +240,10 @@ export interface ControlServiceDeps {
   csrfToken?: string;
   /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
   workspace?: ControlWorkspaceHooks;
+  /** The reviewer's temporary checkouts (ADR-0019); defaults to `<dataDir>/review-checkouts`. */
+  reviewCheckouts?: ReviewCheckouts;
+  /** The run-scoped skills plugins (ADR-0019 §4); defaults to `<dataDir>/runs/<runId>/…`. */
+  skillsPlugins?: SkillsPlugins;
 }
 
 export interface ControlCounters {
@@ -253,6 +281,13 @@ export interface ControlService {
   reviewAction(runId: string, body: unknown): Promise<ReviewDto>;
   /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
   createTicketRun(input: TicketRunInput): RunDetailDto;
+  /**
+   * The owner's Continue after a restart (ADR-0019, `continueStages`): starts the post-merge stage
+   * the restart held. Refused while an agent works, a change is unreviewed, or nothing waits.
+   */
+  continueRun(runId: string): RunDetailDto;
+  /** Each workflow stage's live state on the run (`deriveRunWorkflow`). */
+  runWorkflow(runId: string): RunWorkflowDto;
   /** The owner's decision on the plan waiting in PLAN_REVIEW; returns the decided plan. */
   decidePlan(runId: string, planId: string, decision: PlanDecision, comment?: string): TicketPlan;
   /** The run's engine state if this process holds it (live or loaded); never loads it. */
@@ -282,6 +317,21 @@ interface LiveRun {
   cancellingSince: number | null;
   /** The project's context and model, read once when the run's first agent starts. */
   setup?: Promise<AgentSetup>;
+  /** Reviewers' checkouts being made or in use, by agent run id (null: creating it failed). */
+  reviewCheckouts: Map<string, Promise<ReviewCheckout | null>>;
+}
+
+/** What `launch` needs from a `start-agent` effect. */
+interface LaunchInput {
+  agentRunId: string;
+  kind: AgentRoleKind;
+  cwd: string;
+  prompt: string;
+  setup: AgentSetup;
+  /** The stage's model (`start-agent.model`); else the project's. */
+  model?: string | undefined;
+  plugin?: { path: string; skills: readonly string[] } | undefined;
+  canStartHelpers?: boolean;
 }
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
@@ -299,6 +349,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   const { logger } = deps;
   const hooks: ControlWorkspaceHooks = deps.workspace ?? {};
   const store: RunStore = createRunStore({ db: deps.db, now: deps.now });
+  const reviewCheckouts =
+    deps.reviewCheckouts ?? createReviewCheckouts({ dataDir: deps.dataDir, git: deps.git, logger });
+  const skillsPlugins = deps.skillsPlugins ?? createSkillsPlugins({ dataDir: deps.dataDir });
+  /** Reviewer checkouts in use, for the observation pipeline's roots (by agent run id). */
+  const activeCheckouts = new Map<string, { projectId: string; checkout: ReviewCheckout }>();
   const newId = deps.newId ?? (() => randomUUID());
   const csrfToken = deps.csrfToken ?? createCsrfToken();
   const runTimeoutMs = deps.runTimeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
@@ -318,14 +373,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   let closed = false;
   let sweepTimer: ReturnType<typeof setInterval> | undefined;
 
+  /** Agent folders under the data dir: helpers' worktrees and reviewers' checkouts. */
   const worktreesDirs = (() => {
-    const dir = join(deps.dataDir, 'worktrees');
-    const dirs = [dir];
-    try {
-      const real = join(realpathSync(deps.dataDir), 'worktrees');
-      if (real !== dir) dirs.push(real);
-    } catch {
-      // The data dir does not exist yet; the plain path is enough.
+    const dirs: string[] = [];
+    for (const name of ['worktrees', 'review-checkouts']) {
+      const dir = join(deps.dataDir, name);
+      dirs.push(dir);
+      try {
+        const real = join(realpathSync(deps.dataDir), name);
+        if (real !== dir) dirs.push(real);
+      } catch {
+        // The data dir does not exist yet; the plain path is enough.
+      }
     }
     return dirs;
   })();
@@ -353,6 +412,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       pendingSends: new Map(),
       workspaces: new Map(),
       cancellingSince: state.run.status === 'CANCELLING' ? deps.now().getTime() : null,
+      reviewCheckouts: new Map(),
     };
   }
 
@@ -482,6 +542,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'link-session':
           // Stored in the same transaction as the state (RunStore.commit).
           break;
+        case 'review-comment':
+          // Stored as a ticket comment in the same transaction (RunStore.commit); the board layer
+          // publishes the ticket notice.
+          logger.log('info', 'review comment stored', { runId, agentRunId: effect.agentRunId });
+          break;
+        case 'create-review-checkout':
+          createReviewCheckout(live, effect.agentRunId);
+          break;
+        case 'remove-review-checkout':
+          removeReviewCheckout(live, effect.agentRunId);
+          break;
         case 'plan-submitted':
         case 'plan-decided':
           // The plan is in the state and stored with it; the board layer publishes the notice.
@@ -519,6 +590,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (status === 'CANCELLING') defer(() => maybeCompleteCancellation(live));
     if (status === 'REVIEW' && prev.run.status !== 'REVIEW') {
       defer(() => resolveEmptyReviews(live));
+    } else if (status === 'REVIEW') {
+      // The tester ends while the run is already in review (ADR-0019): same empty-review rule.
+      const pendingBefore = new Set(
+        prev.agents.filter((a) => a.review === 'pending').map((a) => a.id),
+      );
+      if (live.state.agents.some((a) => a.review === 'pending' && !pendingBefore.has(a.id))) {
+        defer(() => resolveEmptyReviews(live));
+      }
+    }
+    if (TERMINAL.includes(status) && !TERMINAL.includes(prev.run.status)) {
+      removeSkillsPlugin(live.state.run.id);
     }
     if (status !== prev.run.status) {
       logger.log('info', 'run status changed', { runId: live.state.run.id, status });
@@ -579,11 +661,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     live.cancellingSince = null;
   }
 
-  /** A worker that never got a worktree has nothing to review: record that, not a fake diff. */
+  /** A helper or tester that never got a worktree has nothing to review: record that, not a fake diff. */
   function resolveEmptyReviews(live: LiveRun): void {
     if (closed || live.state.run.status !== 'REVIEW') return;
     for (const agent of live.state.agents) {
-      if (agent.kind !== 'worker' || agent.review !== 'pending') continue;
+      if (!hasReviewableChange(agent.kind) || agent.review !== 'pending') continue;
       if (live.starting.has(agent.id) || live.workspaces.has(agent.id)) continue;
       if (store.repos.workspaces.getByAgentRun(agent.id) !== undefined) continue;
       apply(live, (s, c) => recordReview(s, agent.id, 'no-changes', c));
@@ -602,6 +684,24 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     });
   }
 
+  /**
+   * The agent may still start: the run is open and it was not stopped while its folder, setup or
+   * skills were being prepared. Otherwise its queued messages go and a pending cancellation may
+   * finish.
+   */
+  function stillStarting(live: LiveRun, agentRunId: string): boolean {
+    const agent = live.state.agents.find((a) => a.id === agentRunId);
+    if (!closed && agent?.status === 'STARTING') return true;
+    live.pendingSends.delete(agentRunId);
+    defer(() => maybeCompleteCancellation(live));
+    return false;
+  }
+
+  /**
+   * Where each role starts (ADR-0013 §2, ADR-0019): the lead and the planner read the owner's
+   * project in place; the reviewer reads its temporary checkout of the main branch; helpers and
+   * the tester work in their own worktree, made from the current main branch.
+   */
   function startAgent(live: LiveRun, effect: Extract<EngineEffect, { type: 'start-agent' }>): void {
     const runId = live.state.run.id;
     const agentRunId = effect.agentRunId;
@@ -611,31 +711,51 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       endWithError(live, agentRunId);
       return;
     }
-    if (effect.kind === 'lead') {
-      // The lead reads the owner's project in place; every change goes through a worker.
-      if (hooks.agentSetup === undefined) {
-        launch(live, agentRunId, 'lead', project.rootPath, effect.prompt, NO_SETUP);
+    const kind = effect.kind;
+    const base = { agentRunId, kind, prompt: effect.prompt, model: effect.model };
+    if (kind === 'lead' || kind === 'planner') {
+      if (hooks.agentSetup === undefined && effect.skills === undefined) {
+        launch(live, { ...base, cwd: project.rootPath, setup: NO_SETUP });
         return;
       }
       live.starting.add(agentRunId);
       track(
         (async () => {
           const setup = await setupFor(live);
+          const plugin = await pluginFor(live, project.rootPath, effect);
           live.starting.delete(agentRunId);
-          const lead = live.state.agents.find((a) => a.id === agentRunId);
-          if (closed || lead?.status !== 'STARTING') {
+          if (!stillStarting(live, agentRunId)) return;
+          launch(live, { ...base, cwd: project.rootPath, setup, plugin });
+        })(),
+      );
+      return;
+    }
+    if (kind === 'reviewer') {
+      live.starting.add(agentRunId);
+      track(
+        (async () => {
+          const checkout = await (live.reviewCheckouts.get(agentRunId) ?? Promise.resolve(null));
+          if (checkout === null) {
+            live.starting.delete(agentRunId);
             live.pendingSends.delete(agentRunId);
-            defer(() => maybeCompleteCancellation(live));
+            logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-checkout' });
+            endWithError(live, agentRunId);
             return;
           }
-          launch(live, agentRunId, 'lead', project.rootPath, effect.prompt, setup);
+          const setup = await setupFor(live);
+          const plugin = await pluginFor(live, project.rootPath, effect);
+          live.starting.delete(agentRunId);
+          if (!stillStarting(live, agentRunId)) return;
+          launch(live, { ...base, cwd: checkout.cwd, setup, plugin });
         })(),
       );
       return;
     }
     const worker = live.state.agents.find((a) => a.id === agentRunId);
     // Depth 2 (ADR-0013 amendment): the engine marks the helper; the server checks the rule again.
+    // The tester never starts helpers (ADR-0019).
     const canStartHelpers =
+      kind === 'worker' &&
       effect.canStartHelpers === true &&
       worker !== undefined &&
       runLimits(live.state).maxDepth === HARD_MAX_DEPTH &&
@@ -683,15 +803,109 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         live.workspaces.set(agentRunId, ws);
         const setup = await setupFor(live);
+        const plugin = await pluginFor(live, project.rootPath, effect);
         live.starting.delete(agentRunId);
-        const agent = live.state.agents.find((a) => a.id === agentRunId);
-        if (closed || agent?.status !== 'STARTING') {
-          // Stopped while its worktree was being made; the worktree stays for review or discard.
-          live.pendingSends.delete(agentRunId);
-          defer(() => maybeCompleteCancellation(live));
-          return;
+        // Stopped while its worktree was being made: the worktree stays for review or discard.
+        if (!stillStarting(live, agentRunId)) return;
+        launch(live, { ...base, prompt, cwd: ws.cwd, setup, plugin, canStartHelpers });
+      })(),
+    );
+  }
+
+  /**
+   * The run's skills plugin for this agent (ADR-0019 §4), copied from the project's checkout.
+   * Never rejects: a skill that cannot be copied is left out and counted, and the agent starts
+   * without it.
+   */
+  async function pluginFor(
+    live: LiveRun,
+    projectRoot: string,
+    effect: Extract<EngineEffect, { type: 'start-agent' }>,
+  ): Promise<{ path: string; skills: readonly string[] } | undefined> {
+    const wanted = effect.skills ?? [];
+    if (wanted.length === 0) return undefined;
+    const runId = live.state.run.id;
+    try {
+      const built = await skillsPlugins.build({ runId, projectRoot, skills: wanted });
+      if (built.refused.length > 0) {
+        counters.diagnostics['skill-unavailable'] =
+          (counters.diagnostics['skill-unavailable'] ?? 0) + built.refused.length;
+        logger.log('warn', 'project skill unavailable', {
+          runId,
+          agentRunId: effect.agentRunId,
+          count: built.refused.length,
+        });
+      }
+      if (built.skills.length === 0) return undefined;
+      return { path: built.path, skills: built.skills.map(pluginSkillName) };
+    } catch (error) {
+      countDiagnostic('skills-plugin-failed');
+      logger.log('warn', 'skills plugin failed', {
+        runId,
+        agentRunId: effect.agentRunId,
+        ...errorFields(error),
+      });
+      return undefined;
+    }
+  }
+
+  function removeSkillsPlugin(runId: string): void {
+    track(
+      skillsPlugins.remove(runId).catch((error: unknown) => {
+        logger.log('warn', 'skills plugin removal failed', { runId, ...errorFields(error) });
+      }),
+    );
+  }
+
+  /** `create-review-checkout`: the reviewer's `start-agent`, which follows, waits for it. */
+  function createReviewCheckout(live: LiveRun, agentRunId: string): void {
+    const runId = live.state.run.id;
+    const projectId = live.state.run.projectId;
+    const project = deps.repos.projects.getById(projectId);
+    const made: Promise<ReviewCheckout | null> =
+      project === undefined
+        ? Promise.resolve(null)
+        : reviewCheckouts.create(project.rootPath, runId, agentRunId).then(
+            (checkout) => {
+              activeCheckouts.set(agentRunId, { projectId, checkout });
+              logger.log('info', 'review checkout created', { runId, agentRunId });
+              return checkout;
+            },
+            (error: unknown) => {
+              logger.log('warn', 'review checkout failed', {
+                runId,
+                agentRunId,
+                code: error instanceof WorkspaceError ? error.code : errorFields(error).errorName,
+              });
+              return null;
+            },
+          );
+    live.reviewCheckouts.set(agentRunId, made);
+    track(made);
+  }
+
+  /** `remove-review-checkout`: after the reviewer's abort; waits for a checkout still being made. */
+  function removeReviewCheckout(live: LiveRun, agentRunId: string): void {
+    const runId = live.state.run.id;
+    const made = live.reviewCheckouts.get(agentRunId);
+    live.reviewCheckouts.delete(agentRunId);
+    // Not made by this process (a restart): `start` removes every leftover checkout.
+    if (made === undefined) return;
+    track(
+      (async () => {
+        const checkout = await made;
+        activeCheckouts.delete(agentRunId);
+        if (checkout === null) return;
+        try {
+          await reviewCheckouts.remove(checkout);
+          logger.log('info', 'review checkout removed', { runId, agentRunId });
+        } catch (error) {
+          logger.log('warn', 'review checkout removal failed', {
+            runId,
+            agentRunId,
+            ...errorFields(error),
+          });
         }
-        launch(live, agentRunId, 'worker', ws.cwd, prompt, setup, canStartHelpers);
       })(),
     );
   }
@@ -712,30 +926,33 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return live.setup;
   }
 
-  function launch(
-    live: LiveRun,
-    agentRunId: string,
-    kind: 'lead' | 'worker',
-    cwd: string,
-    prompt: string,
-    setup: AgentSetup,
-    canStartHelpers = false,
-  ): void {
+  function launch(live: LiveRun, input: LaunchInput): void {
     const runId = live.state.run.id;
+    const { agentRunId, kind, setup } = input;
+    const canStartHelpers = input.canStartHelpers === true;
     const adapter = deps.adapter;
     if (adapter === undefined) {
       endWithError(live, agentRunId);
       return;
     }
-    const spec: ManagedAgentSpec = { agentRunId, kind, cwd, prompt, model: setup.model };
+    const spec: ManagedAgentSpec = {
+      agentRunId,
+      kind,
+      cwd: input.cwd,
+      prompt: input.prompt,
+      // ADR-0019: the stage's model, else the project's (Phase 4).
+      model: input.model ?? setup.model,
+    };
     if (setup.context.trim() !== '') spec.context = setup.context;
-    if (kind === 'lead' || canStartHelpers) {
+    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers) {
       // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
-      // engine scopes a parent helper's calls to its own children (`leadToolCall`).
+      // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
+      // to its own children, the planner's to submit_plan, the reviewer's to post_review.
       spec.leadTools = (name, input) =>
         new Promise<string>((resolve) => resolve(leadTool(live, agentRunId, name, input)));
     }
     if (kind === 'worker' && canStartHelpers) spec.canStartHelpers = true;
+    if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     let handle: ManagedAgentHandle;
     try {
       handle = adapter.start(spec, {
@@ -831,7 +1048,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   function askOwner(
     live: LiveRun,
     agentRunId: string,
-    kind: 'lead' | 'worker',
+    kind: AgentRoleKind,
     request: PermissionRequest,
   ): Promise<PermissionDecision> {
     const runId = live.state.run.id;
@@ -840,6 +1057,15 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       counters.leadToolUsesDenied++;
       logger.log('info', 'lead tool use denied', { runId, agentRunId, code: 'lead-read-only' });
       return Promise.resolve({ allow: false, message: LEAD_READ_ONLY_MESSAGE });
+    }
+    if (isReadOnlyRole(kind)) {
+      // ADR-0019: the planner and the reviewer only read; their tool uses are denied the same way.
+      countDiagnostic('read-only-tool-denied');
+      logger.log('info', 'read-only agent tool use denied', { runId, agentRunId, kind });
+      return Promise.resolve({
+        allow: false,
+        message: kind === 'planner' ? PLANNER_READ_ONLY_MESSAGE : REVIEWER_READ_ONLY_MESSAGE,
+      });
     }
     const target = allowlistTarget(request.toolName, toolInputOf(request));
     const readAllowlist = hooks.allowlist;
@@ -850,7 +1076,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return (async () => {
       let verdict: AllowlistVerdict | undefined;
       try {
-        verdict = await checkAllowlist(live, agentRunId, target, readAllowlist);
+        verdict = await checkAllowlist(live, agentRunId, kind, target, readAllowlist);
       } catch (error) {
         // Fail closed: the owner is asked.
         logger.log('warn', 'allowlist check failed', { runId, agentRunId, ...errorFields(error) });
@@ -862,6 +1088,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function checkAllowlist(
     live: LiveRun,
     agentRunId: string,
+    agentKind: AgentRoleKind,
     target: AllowlistTarget,
     readAllowlist: NonNullable<ControlWorkspaceHooks['allowlist']>,
   ): Promise<AllowlistVerdict | undefined> {
@@ -870,7 +1097,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const row = store.repos.workspaces.getByAgentRun(agentRunId);
     const ws =
       row === undefined || row.state !== 'active' ? undefined : await workspaceFor(live, row);
-    return allowlistVerdict({ target, context, workspace: ws ?? null });
+    return allowlistVerdict({ target, context, workspace: ws ?? null, agentKind });
   }
 
   /**
@@ -966,8 +1193,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const live = get(runId);
     const agents: ReviewDto['agents'] = [];
     for (const agent of live.state.agents) {
-      // Live workers are still changing their tree; they are reviewed once they stop.
-      if (agent.kind !== 'worker' || agent.review === null) continue;
+      // Live helpers and testers are still changing their tree; they are reviewed once they stop.
+      if (!hasReviewableChange(agent.kind) || agent.review === null) continue;
       const row = store.repos.workspaces.getByAgentRun(agent.id);
       if (row === undefined) continue;
       const base = {
@@ -1114,6 +1341,15 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     csrfToken,
 
     async start() {
+      // No agent survives a restart: reviewers' checkouts and skills plugins are temporary
+      // (ADR-0019). Removed even with managed agents off, since nothing can use them.
+      try {
+        const checkouts = await reviewCheckouts.cleanupOrphans();
+        const plugins = await skillsPlugins.cleanupAll();
+        logger.log('info', 'temporary agent folders cleaned', { checkouts, plugins });
+      } catch (error) {
+        logger.log('warn', 'temporary agent folder cleanup failed', errorFields(error));
+      }
       if (!deps.enabled) return;
       // Worktrees the database still references stay, NEEDS_REVIEW ones included.
       const keep = store.repos.workspaces
@@ -1336,7 +1572,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           title: input.title.slice(0, 200),
           budget: input.budget,
           limits: input.limits,
-          ticket: { ticketId: input.ticketId, leadPrompt: input.leadPrompt },
+          ticket: {
+            ticketId: input.ticketId,
+            leadPrompt: input.leadPrompt,
+            ...(input.plannerPrompt !== undefined && { plannerPrompt: input.plannerPrompt }),
+          },
+          ...(input.workflow !== undefined && { workflow: input.workflow }),
           registeredProjectIds: projectIds(),
         },
         ctx(),
@@ -1351,6 +1592,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       afterCommit(null, live.state);
       logger.log('info', 'ticket run created', { runId, projectId: input.projectId });
       return detail(live);
+    },
+
+    continueRun(runId) {
+      const live = get(runId);
+      applyOrThrow(live, continueStages);
+      logger.log('info', 'stages continued by owner', { runId });
+      return detail(live);
+    },
+
+    runWorkflow(runId) {
+      return deriveRunWorkflow(get(runId).state);
     },
 
     decidePlan(runId, planId, decision, comment) {
@@ -1371,9 +1623,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     extraRoots() {
-      return store.repos.workspaces
+      const roots = store.repos.workspaces
         .listActive()
         .map((w) => ({ projectId: w.projectId, rootPath: w.worktreePath }));
+      // A reviewer's session is the project's too, while its checkout exists.
+      for (const { projectId, checkout } of activeCheckouts.values()) {
+        roots.push({ projectId, rootPath: checkout.path });
+      }
+      return roots;
     },
 
     isManagedPath(cwd) {

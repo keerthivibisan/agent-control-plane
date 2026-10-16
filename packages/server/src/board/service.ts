@@ -30,6 +30,7 @@ import {
 import {
   MAX_PAGE_SIZE,
   createOrchestrationRepositories,
+  createRedesignRepositories,
   createWorkspaceRepositories,
   type AcpDatabase,
   type OrchestrationRepositories,
@@ -38,13 +39,15 @@ import {
   type WorkspaceRepositories,
 } from '@acp/db';
 import {
+  deriveRunWorkflow,
   isLiveAgentStatus,
   runSettingsFromSetup,
-  ticketLeadPrompt,
+  ticketRunPrompts,
   type RunState,
 } from '@acp/orchestrator';
 import { managedDisabled } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
+import { countsAsHelper } from '../control/roles.js';
 import type { ControlService, ControlWorkspaceHooks } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
 import { HarnessError, listContextCandidates } from '../harness/index.js';
@@ -134,6 +137,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   const orch: OrchestrationRepositories = createOrchestrationRepositories(deps.db, {
     now: deps.now,
   });
+  const redesign = createRedesignRepositories(deps.db, { now: deps.now });
 
   // ------------------------------------------------------------------ helpers
 
@@ -178,7 +182,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     return {
       status: state.run.status,
       pendingApprovals: state.approvals.filter((a) => a.status === 'pending').length,
-      helpersLive: state.agents.filter((a) => a.kind === 'worker' && isLiveAgentStatus(a.status))
+      // ADR-0019: the reviewer and the tester count as helpers.
+      helpersLive: state.agents.filter((a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status))
         .length,
       budgetTokensUsed: state.agents.reduce((sum, a) => sum + a.budgetTokensUsed, 0),
       leadCostUsd: lead?.reportedCostUsd ?? null,
@@ -198,7 +203,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       status: run.status,
       pendingApprovals: orch.approvals.listForRun(runId).filter((a) => a.status === 'pending')
         .length,
-      helpersLive: agents.filter((a) => a.kind === 'worker' && isLiveAgentStatus(a.status)).length,
+      helpersLive: agents.filter((a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status))
+        .length,
       budgetTokensUsed: agents.reduce((sum, a) => sum + a.budgetTokensUsed, 0),
       // Reported costs are kept in memory only; after a restart they are unavailable.
       leadCostUsd: null,
@@ -282,6 +288,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
 
   // ------------------------------------------------------------------ control hooks
 
+  /** The run's stage states and reviewer posts, compared to see a stage change (ADR-0019). */
+  function stageSignature(state: RunState): string {
+    const stages = deriveRunWorkflow(state)
+      .stages.map((st) => `${st.stage}:${st.state}:${st.agentRunIds.join('+')}`)
+      .join();
+    const posts = state.agents.map((a) => a.reviewPosts ?? 0).join();
+    return `${stages}|${posts}`;
+  }
+
+  /** An agent's change began waiting for review in this transition. */
+  function newlyPending(prev: RunState, next: RunState): boolean {
+    const before = new Set(prev.agents.filter((a) => a.review === 'pending').map((a) => a.id));
+    return next.agents.some((a) => a.review === 'pending' && !before.has(a.id));
+  }
+
   const hooks: ControlWorkspaceHooks = {
     inCommit(prev, next) {
       // README §6.2: a COMPLETED run makes its ticket DONE (same transaction as the run).
@@ -309,8 +330,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         (prev.plans ?? []).map((p) => `${p.id}:${p.status}`).join() !==
           (next.plans ?? []).map((p) => `${p.id}:${p.status}`).join();
       const pending = (s: RunState) => s.approvals.filter((a) => a.status === 'pending').length;
-      if (changed || plansChanged || (prev !== null && pending(prev) !== pending(next))) {
+      // ADR-0019: a stage's live state (the ticket page's graph) or a reviewer's post changed.
+      const stagesChanged = prev === null || stageSignature(prev) !== stageSignature(next);
+      if (
+        changed ||
+        plansChanged ||
+        stagesChanged ||
+        (prev !== null && pending(prev) !== pending(next))
+      ) {
         notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
+      }
+      // The tester's change waits for review while the run is already REVIEW: check it too.
+      if (!changed && status === 'REVIEW' && prev !== null && newlyPending(prev, next)) {
+        deps.checks.runOnReview(runId);
       }
     },
 
@@ -520,6 +552,10 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       }
       const setup = await setupFor(ticket.projectId);
       const { limits, budget } = runSettingsFromSetup(setup);
+      // ADR-0019: the project's workflow (the default until the owner saves one), snapshotted.
+      const workflow = redesign.workflow.get(ticket.projectId);
+      if (workflow === undefined) throw notFound(`Project ${ticket.projectId} not found`);
+      const prompts = ticketRunPrompts(ticket, limits, workflow);
       // Re-read: the ticket may have moved while the setup was read.
       const fresh = ticketOrThrow(ticketId);
       if (fresh.status !== ticket.status || fresh.currentRunId !== ticket.currentRunId) {
@@ -529,7 +565,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         projectId: ticket.projectId,
         ticketId,
         title: `${ticket.key} ${ticket.title}`,
-        leadPrompt: ticketLeadPrompt(ticket, limits),
+        leadPrompt: prompts.leadPrompt,
+        ...(prompts.plannerPrompt !== undefined && { plannerPrompt: prompts.plannerPrompt }),
+        workflow,
         limits,
         budget,
         inTransaction: (runId) => {

@@ -2,6 +2,7 @@ import type { CheckRun } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import type { Repositories, WorkspaceRepositories } from '@acp/db';
 import { isLiveAgentStatus } from '@acp/orchestrator';
+import { hasReviewableChange } from '../control/roles.js';
 import type { ControlService, ReviewGate } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
 import { HarnessError, type CheckRunner, type MainChecks } from '../harness/index.js';
@@ -91,7 +92,8 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     if (state === undefined || agent === undefined) {
       throw notFound(`Agent ${agentRunId} not found in run ${runId}`);
     }
-    if (agent.kind !== 'worker') {
+    // ADR-0019: the tester's change is reviewed and checked like a helper's.
+    if (!hasReviewableChange(agent.kind)) {
       throw new HttpError(409, 'not_a_helper', "Checks run on helper agents' changes only");
     }
     if (isLiveAgentStatus(agent.status)) {
@@ -150,7 +152,9 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     runOnReview(runId) {
       const state = deps.control.peek(runId);
       if (state === undefined || closed) return;
-      const workers = state.agents.filter((a) => a.kind === 'worker' && a.review === 'pending');
+      const workers = state.agents.filter(
+        (a) => hasReviewableChange(a.kind) && a.review === 'pending',
+      );
       const task = (async () => {
         for (const worker of workers) {
           if (closed || controllerFor(runId).signal.aborted) return;

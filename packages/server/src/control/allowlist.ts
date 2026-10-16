@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
-import type { HarnessCheck, ProjectAllowlist } from '@acp/core';
+import type { AgentRoleKind, HarnessCheck, ProjectAllowlist } from '@acp/core';
 import { evaluateAllowlist, type AllowlistTarget, type AllowlistVerdict } from '@acp/orchestrator';
 import type { Workspace } from '../workspace/index.js';
 
@@ -25,6 +25,8 @@ export interface AllowlistVerdictInput {
   context: AllowlistContext;
   /** The helper's own worktree; null when it has none (then edits ask). */
   workspace: Pick<Workspace, 'path' | 'cwd'> | null;
+  /** The asking agent's real role (ADR-0019: the tester is covered like a helper). Default worker. */
+  agentKind?: AgentRoleKind;
 }
 
 /**
@@ -57,7 +59,7 @@ async function realOrNull(path: string): Promise<string | null> {
   }
 }
 
-/** Resolves what the engine needs and asks it for a verdict; only ever called for helpers. */
+/** Resolves what the engine needs and asks it for a verdict (helpers and the tester). */
 export async function allowlistVerdict(input: AllowlistVerdictInput): Promise<AllowlistVerdict> {
   const { target, context, workspace } = input;
   const worktreeRoot = workspace === null ? null : await realOrNull(workspace.path);
@@ -67,7 +69,7 @@ export async function allowlistVerdict(input: AllowlistVerdictInput): Promise<Al
       : null;
   return evaluateAllowlist({
     allowlist: context.allowlist,
-    agentKind: 'worker',
+    agentKind: input.agentKind ?? 'worker',
     target,
     resolvedPath,
     worktreeRoot,

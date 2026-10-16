@@ -62,7 +62,7 @@ describe('approval decidedBy and run limits persistence (R-G)', () => {
     await setLimits(s, 2, false);
     const { runId, worker } = await withHelper(s);
     const audit = createRedesignRepositories(s.db).runAudit;
-    expect(audit.getRunLimits(runId)).toEqual({ maxConcurrentHelpers: 2, maxDepth: 2 });
+    expect(audit.getRunSnapshot(runId)).toMatchObject({ maxConcurrentHelpers: 2, maxDepth: 2 });
 
     const pending = worker.ask('Write', 'Write src/theme.ts');
     await s.settle();

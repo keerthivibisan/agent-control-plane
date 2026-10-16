@@ -1,12 +1,19 @@
-import { ProjectAgentSetupSchema, WorkflowStageIdSchema, type WorkflowStageId } from '@acp/core';
+import {
+  ProjectAgentSetupSchema,
+  ProjectWorkflowSchema,
+  WorkflowStageIdSchema,
+  type ProjectWorkflow,
+  type WorkflowStageId,
+} from '@acp/core';
 import { DbError } from '../../errors.js';
 import type { RepositoryContext } from '../../internal/context.js';
-import { parseInput, parseStored, parseStoredJson } from '../../internal/validate.js';
+import { parseInput, parseStored, parseStoredJson, type Parser } from '../../internal/validate.js';
 import { literalParser, nullable } from '../orchestration/shared.js';
 
 /**
  * The 0004 columns on Phase 3 tables (docs/redesign/README.md §7): who decided an approval, a
- * run's limits snapshot, and an agent run's workflow stage. They live here rather than in the
+ * run's snapshot (its limits, and for a ticket run its workflow), and an agent run's workflow
+ * stage. They live here rather than in the
  * orchestration repositories so the Phase 3 code stays as it shipped; the server's run store
  * writes them in the same transaction as the rows they belong to.
  */
@@ -25,6 +32,41 @@ export interface StoredRunLimits {
   maxConcurrentHelpers: number;
   maxDepth: number;
 }
+
+/**
+ * What `orchestration_runs.limits` holds (R-G Part 2): the limits at start, plus the workflow the
+ * run was created with (the engine's `RunState.workflow`, ADR-0019) and whether its next stage
+ * waits for the owner's Continue after a restart (`RunState.stagesHeld`). Kept in the 0004 column
+ * rather than a new one, as the coordinator decided; the JSON is checked as a whole.
+ */
+export interface StoredRunSnapshot extends StoredRunLimits {
+  workflow?: ProjectWorkflow;
+  stagesHeld?: true;
+}
+
+const fail = (message: string) => ({ success: false as const, error: new Error(message) });
+
+export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
+  safeParse(value: unknown) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return fail('expected an object');
+    }
+    const { workflow, stagesHeld, ...rest } = value as Record<string, unknown>;
+    const limits = StoredRunLimitsSchema.safeParse(rest);
+    if (!limits.success) return fail('invalid limits');
+    const snapshot: StoredRunSnapshot = { ...limits.data };
+    if (workflow !== undefined) {
+      const parsed = ProjectWorkflowSchema.safeParse(workflow);
+      if (!parsed.success) return fail('invalid workflow');
+      snapshot.workflow = parsed.data;
+    }
+    if (stagesHeld !== undefined) {
+      if (stagesHeld !== true) return fail('stagesHeld must be true when present');
+      snapshot.stagesHeld = true;
+    }
+    return { success: true as const, data: snapshot };
+  },
+};
 const StageParser = nullable(WorkflowStageIdSchema);
 
 export interface RunAuditRepository {
@@ -33,9 +75,9 @@ export interface RunAuditRepository {
   /** Approval id → decider, for every approval of the run (null when not stored). */
   approvalDecidersForRun(runId: string): Map<string, ApprovalDecider | null>;
   /** `not_found` for an unknown run. */
-  setRunLimits(runId: string, limits: StoredRunLimits | null): void;
+  setRunSnapshot(runId: string, snapshot: StoredRunSnapshot | null): void;
   /** Null when the run has no snapshot (Phase 3/4 rows: the engine's defaults apply). */
-  getRunLimits(runId: string): StoredRunLimits | null;
+  getRunSnapshot(runId: string): StoredRunSnapshot | null;
   /** `not_found` for an unknown agent run. */
   setAgentStage(agentRunId: string, stage: WorkflowStageId | null): void;
   /** Agent run id → stage, for every agent of the run (null for Phase 3/4 agents). */
@@ -69,17 +111,17 @@ export function createRunAuditRepository(ctx: RepositoryContext): RunAuditReposi
         ]),
       );
     },
-    setRunLimits(runId, limits) {
+    setRunSnapshot(runId, snapshot) {
       const value =
-        limits === null
+        snapshot === null
           ? null
-          : JSON.stringify(parseInput(StoredRunLimitsSchema, limits, 'run limits'));
+          : JSON.stringify(parseInput(StoredRunSnapshotParser, snapshot, 'run snapshot'));
       updated(setLimits.run(value, runId).changes, 'run');
     },
-    getRunLimits(runId) {
+    getRunSnapshot(runId) {
       const row = limitsOf.get(runId) as { limits: string | null } | undefined;
       if (row === undefined || row.limits === null) return null;
-      return parseStoredJson(StoredRunLimitsSchema, row.limits, 'orchestration_runs', 'limits');
+      return parseStoredJson(StoredRunSnapshotParser, row.limits, 'orchestration_runs', 'limits');
     },
     setAgentStage(agentRunId, stage) {
       const value = parseInput(StageParser, stage, 'agent run stage');

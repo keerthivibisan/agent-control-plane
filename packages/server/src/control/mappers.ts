@@ -7,6 +7,7 @@ import type {
 } from '@acp/core/api';
 import type { OrchestratorMessageRow, RunListItem, StoredAgentRun, WorkspaceRow } from '@acp/db';
 import type { EngineAgent, EngineApproval, RunState } from '@acp/orchestrator';
+import { hasReviewableChange } from './roles.js';
 
 /**
  * Engine state → control-panel DTOs. The engine state is the source of truth for statuses, budgets,
@@ -60,7 +61,7 @@ export function toAgentDto(
     budget: { used: agent.budgetTokensUsed, limit: agent.budgetLimit },
     latestActivity: agent.latestActivity,
     review:
-      agent.kind === 'worker' && agent.review !== null
+      hasReviewableChange(agent.kind) && agent.review !== null
         ? { state: agent.review, changedFiles: workspace?.changedFiles ?? null }
         : null,
     branch: workspace?.branch ?? null,
