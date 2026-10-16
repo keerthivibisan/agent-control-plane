@@ -16,6 +16,7 @@ import { createProjectHarness } from './board/harness.js';
 import { createBoardService } from './board/service.js';
 import { createWorkflowService } from './workflow/service.js';
 import { createTokensService } from './tokens/service.js';
+import { createSkillsService } from './skills/index.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
 import { ensureHookToken } from './hooks/token.js';
@@ -248,6 +249,13 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     now,
     publish: (n) => notifier.publish(n),
   });
+  // Project skills (ADR-0018): "used by" and the delete guard follow the saved workflow.
+  const skills = createSkillsService({
+    git,
+    now,
+    logger,
+    workflowOf: (projectId) => workflow.workflowFor(projectId),
+  });
 
   const app = createApp({
     config,
@@ -267,6 +275,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     board,
     workflow,
     tokens: createTokensService({ db }),
+    skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();

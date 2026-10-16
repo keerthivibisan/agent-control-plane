@@ -11,6 +11,7 @@ import { createControlRouter } from './routes/control.js';
 import { createStreamRouter, type StreamDeps } from './routes/stream.js';
 import { createTokensRouter } from './routes/tokens.js';
 import { createWorkflowRouter } from './routes/workflow.js';
+import { createSkillsRouter, type SkillsRouterDeps } from './routes/skills.js';
 import type { BoardService } from './board/service.js';
 import type { ControlService } from './control/service.js';
 import type { Services } from './services/index.js';
@@ -35,6 +36,8 @@ export interface AppDeps {
   workflow?: WorkflowService;
   /** The project Tokens page (redesign, R-F). Read-only, so it needs no control panel or CSRF. */
   tokens?: TokensService;
+  /** Project skills (redesign, R-D; ADR-0018); mounted with the board, under the same CSRF token. */
+  skills?: Omit<SkillsRouterDeps, 'csrfToken'>;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -60,6 +63,9 @@ export function createApp(deps: AppDeps): Express {
     app.use('/api', createBoardRouter(deps.board, deps.control.csrfToken));
     if (deps.workflow !== undefined) {
       app.use('/api', createWorkflowRouter(deps.workflow, deps.control.csrfToken));
+    }
+    if (deps.skills !== undefined) {
+      app.use('/api', createSkillsRouter({ ...deps.skills, csrfToken: deps.control.csrfToken }));
     }
   }
   app.use('/api', notFoundHandler);
