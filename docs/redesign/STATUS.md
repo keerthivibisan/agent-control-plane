@@ -8,17 +8,71 @@
 | R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                            | `main`            | 2026-10-16                     |
 | R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                            | `wp/r-a-shell`    | 2026-10-16 (`8b70fc4`)         |
 | R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | **done**                                                            | `wp/r-c-engine`   | 2026-10-16 (`6a11e67`)         |
-| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; **part 2 in progress** (stage wiring, skills plugin) | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
-| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (scope + agent files, owner request)                    | `wp/r-d-skills`   | —                              |
-| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | in-progress                                                         | `wp/r-f-tokens`   | —                              |
-| R-E | [Harness page](wp/R-E.md)                           | R-A      | in-progress                                                         | `wp/r-e-harness`  | —                              |
-| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | in-progress                                                         | `wp/r-b-workflow` | —                              |
+| R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | part 1 merged; part 2 **paused** (WIP `63d30f7`, not checked)       | `wp/r-g-server`   | part 1: 2026-10-16 (`39bd957`) |
+| R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | **paused** (server + Skills page checked; Agents tab WIP `86fb1f8`) | `wp/r-d-skills`   | —                              |
+| R-F | [Tokens: query, route, page](wp/R-F.md)             | R-0, R-A | **paused** (query + route checked; page WIP `c58f633`)              | `wp/r-f-tokens`   | —                              |
+| R-E | [Harness page](wp/R-E.md)                           | R-A      | **paused** (checked at `c293844`; re-run e2e + report left)         | `wp/r-e-harness`  | —                              |
+| R-B | [Workflow page](wp/R-B.md)                          | R-A, R-G | **paused** (WIP `053e74d`, typecheck only)                          | `wp/r-b-workflow` | —                              |
 | R-H | [Board, ticket, settings simplification](wp/R-H.md) | R-A, R-G | todo                                                                | —                 | —                              |
 | R-V | [Verification](wp/R-V.md)                           | all      | todo                                                                | —                 | —                              |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
-## Paused by the owner (2026-10-16); resumed the same day. The table below was the paused state
+## Second pause by the owner (2026-10-16): resume from here
+
+`main` is at `ecc58d0` + this commit, and green. R-0, R-A, R-C and R-G part 1 are merged. Each paused
+branch has a "Paused" or "Paused (2)" note in its progress file with the exact next steps, so read
+it first. Agents are resumed in the same branch and worktree.
+
+| WP  | Worktree                                    | Last commit | State and the first next step                                                                                                                                                                                                                                                                                    |
+| --- | ------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-G | `.claude/worktrees/agent-a64edec75e61b9de3` | `63d30f7`   | Part 2 is wired (roles in place, the review checkout, the skills plugin, stage persistence, `GET /runs/:id/workflow`, `POST /runs/:id/continue`) but unchecked. **Next:** rerun the server tests and `pnpm check`, pass a temp home into the plugin test helper, then write the Part 2 tests listed in its note. |
+| R-D | `.claude/worktrees/agent-a2bf7f960a015159c` | `4e484a0`   | The skills and agents APIs and the Skills page are done and checked (1,851 ✓ at `5b08511`). **Next:** fix the tests for the "Skills & Agents" label (or revert it), then the Agents tab, its tests, e2e with screenshots, and the report.                                                                        |
+| R-F | `.claude/worktrees/agent-adb76c3a8d5a55467` | `f437279`   | The query and the route are checked (1,732 ✓), and the router registration is `1237460`. **Next:** update `tests/features/project.test.tsx` and the Tokens test in `e2e/demo.spec.ts`, then the page tests, e2e with screenshots, and the report.                                                                |
+| R-E | `.claude/worktrees/agent-af38834dec4c1148d` | `d4c08bb`   | Checked at `c293844` (1,736 ✓). **Next:** rerun the e2e with screenshots, look at the ticket and none shots, then write the report and set `review`.                                                                                                                                                             |
+| R-B | `.claude/worktrees/agent-a9ee4bd598a92e996` | `0c031c8`   | The graph builder, the view, the stage panel and the agent-files list are written (web typecheck only). **Next:** unit and component tests, Playwright with screenshots, then `pnpm check` and the report. Its layout choice (three wrapped rows) needs a look at the screenshots.                               |
+
+**Coordinator decisions on resume:**
+
+1. **Migration 0005 (R-G `1d8331a`).** It re-keys 0002's single-root index to "one lead per run",
+   because the parentless planner, reviewer and tester otherwise fail to save (a probe test proves
+   it). Review it and approve it. It is a new migration, not an edit.
+2. **R-G stores `stagesHeld` in the run snapshot**, not in memory as R-C's notes said, because a
+   second restart would otherwise leave the agent stuck in STARTING. Accept it.
+3. **R-E's proposed route** `GET /api/projects/:id/harness/checks` (main-branch history through
+   `checkRuns.listForProjectMain`; reuses `CheckRunDto[]`). It is server-only, so give it to R-G or
+   make it a coordinator commit.
+4. **Cleanups once R-F lands:**
+   - remove `features/usage/**` (the interim Tokens page);
+   - switch `server/src/workflow/skill-names.ts` to R-D's `listSkillFolders`;
+   - mark Harness available in DESIGN.md's route table.
+5. **R-F palette finding:** the shared dark `--color-token-*` colours fail the palette validator's
+   lightness check (contrast and colour-blind separation pass). It is minor; leave it for R-H's
+   polish.
+6. **Shared-file commits to review at merge:**
+   - R-D: `app.ts`/`bootstrap.ts` wiring (`ea04ff8`, `5b08511`) and `ApiClient.delete` (`f7b2d40`);
+   - R-F: router registration (`1237460`);
+   - R-E and R-B: one `e2e/playwright.config.ts` project each, plus palette additions.
+
+**Paste to resume (coordinator, new chat in the repo root):**
+
+> You are the redesign coordinator for Agent Control Plane. Follow `CLAUDE.md`, `AGENTS.md` and
+> `docs/redesign/README.md`. Read `docs/redesign/STATUS.md` fully. Then:
+>
+> 1. Settle "Coordinator decisions on resume" 1–3.
+> 2. Resume R-G, R-D, R-F, R-E and R-B from their branches and worktrees. Each reads its "Paused"
+>    note first; never start a second branch.
+> 3. Review and merge each one as it reaches `review`. Merge order: R-E and R-F first (smallest),
+>    then R-D, R-G and R-B. Update this file after each merge.
+> 4. Then do R-H, then R-V.
+>
+> Never push, never use ports 7420/5173, and ask the owner before any real Claude run.
+> Agent toolchain: `export PATH=<pnpm-10 shim>:$HOME/.nvm/versions/node/v22.21.1/bin:$PATH`
+> (no `source`).
+
+## Earlier: first pause (resolved)
+
+### Paused by the owner (2026-10-16); resumed the same day. The table below was the paused state
 
 `main` is at `f1c7b62` + this commit, and green. Every paused branch has a "Paused (2026-10-16)" note
 in its progress file with the exact next steps. Read it first.
