@@ -62,6 +62,33 @@ describe('skills through startServer', () => {
       expect(((await refused.json()) as { error: { code: string } }).error.code).toBe(
         'skill_in_use',
       );
+
+      // Agent definitions are mounted the same way, under the same CSRF token.
+      const agents = `/api/projects/${project.id}/agents`;
+      expect(
+        (
+          await send(
+            'POST',
+            agents,
+            { name: 'x', description: 'd', tools: null, model: null, instructions: '' },
+            false,
+          )
+        ).status,
+      ).toBe(403);
+      const agent = await b.post(agents, {
+        name: 'reviewer',
+        description: 'Reviews diffs',
+        tools: ['Read'],
+        model: null,
+        instructions: 'Review.\n',
+      });
+      expect(agent.status).toBe(201);
+      expect(readFileSync(join(root, '.claude/agents/reviewer.md'), 'utf8')).toContain(
+        'tools: Read',
+      );
+      expect(((await b.get(agents)).body as { name: string }[]).map((a) => a.name)).toEqual([
+        'reviewer',
+      ]);
     } finally {
       await b.server.close();
     }

@@ -16,7 +16,7 @@ import { createProjectHarness } from './board/harness.js';
 import { createBoardService } from './board/service.js';
 import { createWorkflowService } from './workflow/service.js';
 import { createTokensService } from './tokens/service.js';
-import { createSkillsService } from './skills/index.js';
+import { createAgentsService, createSkillsService } from './skills/index.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
 import { ensureHookToken } from './hooks/token.js';
@@ -256,6 +256,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     logger,
     workflowOf: (projectId) => workflow.workflowFor(projectId),
   });
+  const agents = createAgentsService({ git, logger });
 
   const app = createApp({
     config,
@@ -276,6 +277,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     workflow,
     tokens: createTokensService({ db }),
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
+    agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();

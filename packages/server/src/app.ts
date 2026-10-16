@@ -12,6 +12,7 @@ import { createStreamRouter, type StreamDeps } from './routes/stream.js';
 import { createTokensRouter } from './routes/tokens.js';
 import { createWorkflowRouter } from './routes/workflow.js';
 import { createSkillsRouter, type SkillsRouterDeps } from './routes/skills.js';
+import { createAgentsRouter, type AgentsRouterDeps } from './routes/agents.js';
 import type { BoardService } from './board/service.js';
 import type { ControlService } from './control/service.js';
 import type { Services } from './services/index.js';
@@ -38,6 +39,8 @@ export interface AppDeps {
   tokens?: TokensService;
   /** Project skills (redesign, R-D; ADR-0018); mounted with the board, under the same CSRF token. */
   skills?: Omit<SkillsRouterDeps, 'csrfToken'>;
+  /** Project agent definitions (R-D; ADR-0018 amendment); mounted like the skills routes. */
+  agents?: Omit<AgentsRouterDeps, 'csrfToken'>;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -66,6 +69,9 @@ export function createApp(deps: AppDeps): Express {
     }
     if (deps.skills !== undefined) {
       app.use('/api', createSkillsRouter({ ...deps.skills, csrfToken: deps.control.csrfToken }));
+    }
+    if (deps.agents !== undefined) {
+      app.use('/api', createAgentsRouter({ ...deps.agents, csrfToken: deps.control.csrfToken }));
     }
   }
   app.use('/api', notFoundHandler);
