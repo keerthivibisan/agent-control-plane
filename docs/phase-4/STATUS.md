@@ -12,19 +12,18 @@
 | P4-C | [Harness: manifest, context files, check runner](wp/P4-C.md) | P4-0              | **done**                                     | `wp/p4-c-harness`       | 2026-10-16 (`c0a5ea0`) |
 | P4-E | [Board UI](wp/P4-E.md)                                       | P4-0              | **done**                                     | `wp/p4-e-board`         | 2026-10-16 (`5044b73`) |
 | P4-F | [Project wizard and settings UI](wp/P4-F.md)                 | P4-0              | **done**                                     | `wp/p4-f-project-setup` | 2026-10-16 (`7df96d5`) |
-| P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | **in-progress** (paused by the owner)        | `wp/p4-g-ticket`        | —                      |
+| P4-G | [Ticket page UI](wp/P4-G.md)                                 | P4-0 (DTOs); P4-D | **done**                                     | `wp/p4-g-ticket`        | 2026-10-16 (`da45a0c`) |
 | P4-D | [Server wiring](wp/P4-D.md)                                  | P4-A, B, C, I     | todo: **unblocked**, all dependencies merged | `wp/p4-d-server`        | —                      |
 | P4-H | [Verification](wp/P4-H.md)                                   | P4-D, E, F, G     | todo                                         | `wp/p4-h-verify`        | —                      |
 
 ## Live state (2026-10-16, the owner paused work; git is the source of truth)
 
-`main` is at `aacca2e` (+ this docs commit) and green (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
+`main` is at `da45a0c` (+ docs) and green (P4-G merged: check 1,601 ✓, e2e 14/14 ✓) (P4-I, B, A, C, E and F merged; `pnpm check` 1,558 tests ✓ on 2026-10-16). Nothing is pushed to a remote.
 
-| WP   | Branch           | Head      | State                                                                                                                                                                                                              | What is left                                                                                                                                                                                                       |
-| ---- | ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P4-G | `wp/p4-g-ticket` | `9697dea` | Paused cleanly on the owner's request (worktree clean). Route, canvas, side panel, plan card, checks, merge-anyway, history and fixture tests done; `pnpm check` ✓ and e2e `--project ticket` 3/3 ✓ on its branch. | Full web e2e (`ACP_E2E_PORT=7521`), a final screenshot look, §9 report, status `review`. Rebase on `main` (expect conflicts in `lib/api.ts` `put`/`patch`, `router.ts` `href.board`/`href.ticket`, `lib/copy.ts`). |
-| P4-D | `wp/p4-d-server` | —         | not started; all dependencies merged                                                                                                                                                                               | Start with the README §10.1 prompt **plus the notes below**                                                                                                                                                        |
-| P4-H | `wp/p4-h-verify` | —         | not started                                                                                                                                                                                                        | After D, F and G. The real smoke run needs the owner's consent at that time                                                                                                                                        |
+| WP   | Branch           | Head | State                                | What is left                                                                |
+| ---- | ---------------- | ---- | ------------------------------------ | --------------------------------------------------------------------------- |
+| P4-D | `wp/p4-d-server` | —    | not started; all dependencies merged | Start with the README §10.1 prompt **plus the notes below**                 |
+| P4-H | `wp/p4-h-verify` | —    | not started                          | After D, F and G. The real smoke run needs the owner's consent at that time |
 
 **Agent worktrees** (on this machine): P4-F `.claude/worktrees/agent-a9d7d236a63ab508e`, P4-G
 `…agent-a67043b516f28adae`. Merged WPs' worktrees can be removed. If a worktree is gone, create a
@@ -65,6 +64,12 @@ new one from its branch.
    filled by the control mapper. Commit `aacca2e`. P4-G must add `branch` to its own fixture DTOs
    when it rebases. P4-D must answer PATCH ticket, plan decision and start with `TicketDetailDto`.
 5. **Done:** the wizard and harness panel use `href.board`/`href.ticket`. Commit `aacca2e`.
+
+**P4-G review notes (2026-10-16):** the `ticket` Playwright project in `e2e/playwright.config.ts` is
+accepted. Follow-ups for later:
+
+- the header pill says "Plan review" while the run status says "Plan ready for you"; pick one word;
+- the sidebar still has the "Control panel" entry (`Shell.tsx`).
 
 **Decisions taken during review:**
 
