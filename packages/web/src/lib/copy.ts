@@ -2291,6 +2291,8 @@ export const TOKENS_COPY = {
     cacheRead: 'Cache read',
     total: 'Total processed',
     share: 'Cache share',
+    fromCache: 'from cache',
+    writePrefix: 'write',
     inOut: (input: string, output: string) => `${input} in · ${output} out`,
     cost: 'Estimated cost',
     costProvenance: 'estimated (provider-reported)',

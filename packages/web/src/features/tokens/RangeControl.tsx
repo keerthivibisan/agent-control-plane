@@ -65,9 +65,7 @@ export function RangeControl({
           </label>
         </div>
       ) : null}
-      {params.preset !== 'all' ? (
-        <p className="w-full text-right text-caption text-dim">{R.utcNote}</p>
-      ) : null}
+      {params.preset !== 'all' ? <p className="pb-2 text-caption text-dim">{R.utcNote}</p> : null}
     </form>
   );
 }

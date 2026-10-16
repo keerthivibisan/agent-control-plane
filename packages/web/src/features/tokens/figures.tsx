@@ -61,7 +61,7 @@ export function Figure({
   compact?: boolean;
 }) {
   return (
-    <span className="inline-flex flex-wrap items-center justify-end gap-1.5">
+    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
       <TokenValue value={value} compact={compact} showUnit={false} {...(type && { type })} />
       <PartialMark usage={usage} types={types} value={value} />
     </span>

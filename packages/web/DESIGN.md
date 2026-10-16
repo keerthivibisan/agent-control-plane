@@ -69,21 +69,21 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 
 ### Routes
 
-| Route                                      | Page                                                     |
-| ------------------------------------------ | -------------------------------------------------------- |
-| `#/p/:projectId/board`                     | Board                                                    |
-| `#/p/:projectId/workflow`                  | Workflow (R-B; not available yet)                        |
-| `#/p/:projectId/skills`, `…/skills/:name`  | Skills (R-D; not available yet)                          |
-| `#/p/:projectId/harness`                   | Harness (R-E)                                            |
-| `#/p/:projectId/tokens`                    | Tokens (today's usage page filtered to the project; R-F) |
-| `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)     |
-| `#/p/:projectId/settings`                  | Settings                                                 |
-| `#/p/:projectId/tickets/:ticketId`         | Ticket                                                   |
-| `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page       |
-| `#/projects`                               | All projects (project cards + "Across your projects")    |
-| `#/projects/new`                           | New project                                              |
-| `#/health`, `#/health/connection`          | Data health: Overview, Connection                        |
-| `#/sessions/:id`                           | One session                                              |
+| Route                                      | Page                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `#/p/:projectId/board`                     | Board                                                               |
+| `#/p/:projectId/workflow`                  | Workflow (R-B; not available yet)                                   |
+| `#/p/:projectId/skills`, `…/skills/:name`  | Skills (R-D; not available yet)                                     |
+| `#/p/:projectId/harness`                   | Harness (R-E)                                                       |
+| `#/p/:projectId/tokens`                    | Tokens (R-F: new work vs cache reuse, by session/ticket/role/model) |
+| `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                |
+| `#/p/:projectId/settings`                  | Settings                                                            |
+| `#/p/:projectId/tickets/:ticketId`         | Ticket                                                              |
+| `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page                  |
+| `#/projects`                               | All projects (project cards + "Across your projects")               |
+| `#/projects/new`                           | New project                                                         |
+| `#/health`, `#/health/connection`          | Data health: Overview, Connection                                   |
+| `#/sessions/:id`                           | One session                                                         |
 
 Every older address redirects without a history entry (`src/app/redirects.ts`): `#/` → the last
 project's board, else All projects; `#/board[/:id]`, `#/projects/:id` → board;

@@ -43,57 +43,77 @@ const USAGE_COLUMNS: readonly Column<Row>[] = [
     cell: (r) => (
       <span className="flex flex-col items-end" data-figure="newWork">
         <Figure value={r.headline.newWork} usage={r.usage} types={NEW_WORK_TYPES} />
-        <span className="text-caption text-dim tabular-nums">
-          {B.inOut(compactOrMissing(r.usage.tokens.input), compactOrMissing(r.usage.tokens.output))}
+        {/* Nothing to split when neither type was reported: the figure already says so. */}
+        {r.headline.newWork === null ? null : (
+          <span className="text-caption whitespace-nowrap text-dim tabular-nums">
+            {B.inOut(
+              compactOrMissing(r.usage.tokens.input),
+              compactOrMissing(r.usage.tokens.output),
+            )}
+          </span>
+        )}
+      </span>
+    ),
+  },
+  {
+    // Read and write share one column (read on top, it is the large one) so the session table
+    // keeps its cost column in view at 1024px. Each keeps its own "Partial" mark.
+    key: 'cache',
+    label: `${B.cacheRead} · ${B.cacheWrite}`,
+    header: (
+      <span className="inline-flex flex-col items-end">
+        {B.cacheRead}
+        <span className="font-normal normal-case">{B.cacheWrite}</span>
+      </span>
+    ),
+    align: 'right',
+    cell: (r) => (
+      <span className="flex flex-col items-end gap-0.5">
+        <span data-figure="cacheRead">
+          <Figure
+            value={r.usage.tokens.cacheRead}
+            usage={r.usage}
+            types={['cacheRead']}
+            type="cacheRead"
+          />
+        </span>
+        <span className="inline-flex items-center gap-1 text-caption text-dim">
+          {B.writePrefix}
+          <span data-figure="cacheCreation">
+            <Figure
+              value={r.usage.tokens.cacheCreation}
+              usage={r.usage}
+              types={['cacheCreation']}
+              type="cacheCreation"
+            />
+          </span>
         </span>
       </span>
     ),
   },
   {
-    key: 'cacheWrite',
-    label: B.cacheWrite,
-    align: 'right',
-    cell: (r) => (
-      <span data-figure="cacheCreation">
-        <Figure
-          value={r.usage.tokens.cacheCreation}
-          usage={r.usage}
-          types={['cacheCreation']}
-          type="cacheCreation"
-        />
-      </span>
-    ),
-  },
-  {
-    key: 'cacheRead',
-    label: B.cacheRead,
-    align: 'right',
-    cell: (r) => (
-      <span data-figure="cacheRead">
-        <Figure
-          value={r.usage.tokens.cacheRead}
-          usage={r.usage}
-          types={['cacheRead']}
-          type="cacheRead"
-        />
-      </span>
-    ),
-  },
-  {
     key: 'total',
-    label: B.total,
-    align: 'right',
-    cell: (r) => (
-      <span data-figure="total">
-        <Figure value={r.headline.totalProcessed} usage={r.usage} types={TOTAL_TYPES} />
+    label: `${B.total} · ${B.share}`,
+    header: (
+      <span className="inline-flex flex-col items-end">
+        {B.total}
+        <span className="font-normal normal-case">{B.share}</span>
       </span>
     ),
-  },
-  {
-    key: 'share',
-    label: B.share,
     align: 'right',
-    cell: (r) => <Share headline={r.headline} />,
+    // The share sits under the total (not in its own column) so the cost column fits at 1024px.
+    cell: (r) => (
+      <span className="flex flex-col items-end">
+        <span data-figure="total">
+          <Figure value={r.headline.totalProcessed} usage={r.usage} types={TOTAL_TYPES} />
+        </span>
+        {r.headline.totalProcessed === null ? null : (
+          <span className="text-caption whitespace-nowrap text-dim" data-figure="share">
+            <Share headline={r.headline} /> {B.fromCache}
+          </span>
+        )}
+      </span>
+    ),
   },
 ];
 
@@ -123,7 +143,7 @@ function NoCost() {
 }
 
 function nameColumn(word: TokensBreakdownWord): Column<Row> {
-  return { key: 'name', label: B.words[word], cell: (r) => r.name, className: 'max-w-80' };
+  return { key: 'name', label: B.words[word], cell: (r) => r.name, className: 'max-w-64' };
 }
 
 function sessionRows(data: ProjectTokensDto): Row[] {
@@ -233,7 +253,8 @@ export function TokensBreakdown({
         />
         {note ? <p className="mt-3 text-caption text-dim">{note}</p> : null}
       </div>
-      <div className="border-t border-line">
+      {/* Seven columns fit at 1440; between 1024 and ~1280 the table scrolls inside the card. */}
+      <div className="overflow-x-auto border-t border-line">
         <DataTable
           label={B.tableLabel(B.words[by])}
           columns={columns}

@@ -143,8 +143,12 @@ export function TokensPage({
         title={TOKENS_COPY.title}
         description={TOKENS_COPY.description}
         tip={TOKENS_COPY.tip}
-        actions={<RangeControl projectId={projectId} params={params} now={now} />}
       />
+      {/* Its own row, not the header's actions: a custom range adds two date fields, which
+          would squeeze the title at 1024px. */}
+      <div className="-mt-2 mb-6">
+        <RangeControl projectId={projectId} params={params} now={now} />
+      </div>
       <QueryView query={query}>{(data) => <Body data={data} params={params} />}</QueryView>
     </div>
   );

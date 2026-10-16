@@ -291,56 +291,60 @@ test('a token type no record reported reads "Not reported", never 0', async ({ p
   }).toPass();
 });
 
-test('usage page renders both charts, the chart table, and direct totals from the API', async ({
+interface ProjectTokens {
+  totals: Usage;
+  headline: { newWork: number | null; totalProcessed: number | null };
+  sessions: { total: number; withUsage: number };
+  runs: number;
+  byDay: { day: string }[];
+  byModel: { model: string }[];
+  bySession: { sessionId: string }[];
+}
+
+/** A headline tile shows the API's figure (exact, with separators) or "Not reported". */
+async function expectTile(tile: Locator, value: number | null) {
+  if (value === null) await expect(tile).toContainText('Not reported', { timeout: 1_000 });
+  else await expect(tile).toContainText(fmt(value), { timeout: 1_000 });
+}
+
+// Redesign (R-F): Tokens is the project's page over GET /api/projects/:id/tokens.
+test('Tokens page: tiles, both charts, the day table and the breakdowns match the API', async ({
   page,
   request,
 }) => {
-  /** Each token type's stat card shows the API value (exact, with separators) or "Not reported". */
-  async function expectStats(section: Locator, usage: Usage) {
-    for (const c of CATEGORIES) {
-      const v = usage.tokens[c];
-      const card = section.getByTestId(`stat-${c}`);
-      if (v === null) {
-        await expect(card.locator(`[data-category="${c}"]`)).toHaveText('Not reported', {
-          timeout: 1_000,
-        });
-      } else await expect(card).toContainText(fmt(v), { timeout: 1_000 });
-    }
-  }
-
-  // Redesign (R-A): Tokens is a project page; the API comparisons use the same project filter.
   const project = await demoProject(request, 'demo-api');
-  const scope = `projectId=${project.id}`;
-  await open(page, `/p/${project.id}/tokens?groupBy=model`);
-  await expect(page.getByRole('heading', { name: 'Tokens', exact: true, level: 1 })).toBeVisible();
-  await expect(page.getByTestId('token-explainer')).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Input and output tokens per day' })).toBeVisible();
-  await expect(page.getByRole('img', { name: 'Prompt cache tokens per day' })).toBeVisible();
+  await open(page, `/p/${project.id}/tokens?by=model`);
+  await expect(page.getByRole('heading', { name: /^Tokens\b/, level: 1 })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'New work per day' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Prompt cache per day' })).toBeVisible();
   await expect(page.locator('.recharts-surface').first()).toBeVisible();
-  // Groups and stats sum each session's own (direct) usage: helpers count under themselves.
-  await expect(page.getByTestId('direct-note')).toContainText(
-    "Each session's own tokens are counted once; helper agents count under themselves.",
+  await expect(page.getByTestId('share-why')).toContainText(
+    'Every turn re-reads the conversation from the cache',
   );
 
   await page.getByRole('button', { name: 'Show as table' }).click();
   await expect(async () => {
-    const byDay = await api<{ groups: { key: string }[] }>(
-      request,
-      `/usage/summary?groupBy=day&${scope}`,
+    const t = await api<ProjectTokens>(request, `/projects/${project.id}/tokens`);
+    await expectTile(page.getByTestId('tile-sessions'), t.sessions.total);
+    await expectTile(page.getByTestId('tile-runs'), t.runs);
+    await expectTile(page.getByTestId('tile-new-work'), t.headline.newWork);
+    await expectTile(page.getByTestId('tile-total'), t.headline.totalProcessed);
+    await expect(page.getByTestId('tokens-day-table').locator('tbody tr')).toHaveCount(
+      t.byDay.length,
+      { timeout: 1_000 },
     );
-    const days = byDay.groups.filter((g) => g.key !== 'unknown').length;
-    await expect(page.getByTestId('chart-table').locator('tbody tr')).toHaveCount(days, {
-      timeout: 1_000,
-    });
+    await expect(
+      page.getByRole('table', { name: 'Tokens by model' }).locator('tbody tr'),
+    ).toHaveCount(t.byModel.length, { timeout: 1_000 });
+  }).toPass();
 
-    const byModel = await api<{ groups: { key: string }[]; totals: Usage }>(
-      request,
-      `/usage/summary?groupBy=model&${scope}`,
-    );
-    await expect(page.locator('tr[data-group]')).toHaveCount(byModel.groups.length, {
-      timeout: 1_000,
-    });
-    await expectStats(page.getByTestId('usage-totals'), byModel.totals);
+  // The session table carries the provider-reported cost column; it has no total.
+  await page.getByRole('button', { name: 'Session', exact: true }).click();
+  const sessions = page.getByRole('table', { name: 'Tokens by session' });
+  await expect(sessions.getByText('estimated (provider-reported)')).toBeVisible();
+  await expect(async () => {
+    const t = await api<ProjectTokens>(request, `/projects/${project.id}/tokens`);
+    await expect(sessions.locator('tbody tr')).toHaveCount(t.bySession.length, { timeout: 1_000 });
   }).toPass();
 });
 
@@ -350,19 +354,6 @@ test('a project card opens the project; its Tokens and Sessions pages show its u
   page,
   request,
 }) => {
-  /** Each token type's stat card shows the API value (exact, with separators) or "Not reported". */
-  async function expectStats(section: Locator, usage: Usage) {
-    for (const c of CATEGORIES) {
-      const v = usage.tokens[c];
-      const card = section.getByTestId(`stat-${c}`);
-      if (v === null) {
-        await expect(card.locator(`[data-category="${c}"]`)).toHaveText('Not reported', {
-          timeout: 1_000,
-        });
-      } else await expect(card).toContainText(fmt(v), { timeout: 1_000 });
-    }
-  }
-
   const project = await demoProject(request, 'demo-api');
   await open(page, '/projects');
   const card = page.locator(`[data-project-id="${project.id}"]`);
@@ -375,13 +366,10 @@ test('a project card opens the project; its Tokens and Sessions pages show its u
 
   const nav = page.getByRole('navigation', { name: 'Main' });
   await nav.getByRole('link', { name: 'Tokens' }).click();
-  await expect(page.getByRole('heading', { name: 'Tokens', exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Tokens\b/, level: 1 })).toBeVisible();
   await expect(async () => {
-    const usage = await api<{ totals: Usage }>(
-      request,
-      `/usage/summary?groupBy=project&projectId=${project.id}`,
-    );
-    await expectStats(page.getByTestId('usage-totals'), usage.totals);
+    const t = await api<ProjectTokens>(request, `/projects/${project.id}/tokens`);
+    await expectTile(page.getByTestId('tile-new-work'), t.headline.newWork);
   }).toPass();
 
   await nav.getByRole('link', { name: 'Sessions' }).click();

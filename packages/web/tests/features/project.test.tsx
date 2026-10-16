@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
 import { ProjectPage } from '../../src/features/project/ProjectPage';
@@ -7,6 +7,7 @@ import { createApiClient } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
 import { page, partialUsage, project, session, usage, usageSummary } from '../fixtures/dto';
 import { fakeServer, renderWithApi } from '../helpers';
+import { projectTokens } from '../fixtures/tokens';
 
 beforeAll(() => {
   globalThis.ResizeObserver = class {
@@ -108,24 +109,19 @@ describe('Projects list', () => {
 });
 
 describe('App routing to the new screens', () => {
-  // Redesign (R-A): a project's Tokens page is today's Tokens page filtered to it.
-  it('routes #/p/:projectId/tokens to the Tokens page filtered to the project', async () => {
+  // Redesign (R-F): a project's Tokens page reads that project's tokens summary.
+  it('routes #/p/:projectId/tokens to the project Tokens page', async () => {
     const server = fakeServer({
       ...routes,
-      '/api/usage/summary?groupBy=project': usageSummary(),
-      '/api/usage/summary?groupBy=day': usageSummary({ groupBy: 'day', groups: [] }),
+      '/api/projects/p-1/tokens': projectTokens(),
     });
     const store = new QueryStore(createApiClient(server.fetch));
     window.location.hash = '#/p/p-1/tokens';
     const view = render(<App store={store} eventSource={null} />);
     expect(await screen.findByRole('heading', { level: 1, name: 'Tokens' })).toBeTruthy();
-    await waitFor(() =>
-      expect(
-        server.calls.some(
-          (c) => c.path.includes('/api/usage/summary') && c.path.includes('projectId=p-1'),
-        ),
-      ).toBe(true),
-    );
+    expect(await screen.findByTestId('token-tiles')).toBeTruthy();
+    expect(server.calls.some((c) => c.path === '/api/projects/p-1/tokens')).toBe(true);
+    expect(server.calls.some((c) => c.path.includes('/api/usage/summary'))).toBe(false);
     view.unmount();
   });
 });
