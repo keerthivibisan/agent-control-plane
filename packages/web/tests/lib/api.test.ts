@@ -95,3 +95,26 @@ describe('api client', () => {
     expect(paths.sessionEvents('a/b', 'c1')).toBe('/api/sessions/a%2Fb/events?cursor=c1');
   });
 });
+
+describe('api client: DELETE (redesign R-D)', () => {
+  it('resolves on 204 No Content and sends the method and headers', async () => {
+    const server = fakeServer({ 'DELETE /api/x': new Response(null, { status: 204 }) });
+    await createApiClient(server.fetch).delete('/api/x', undefined, { 'X-Test': '1' });
+    expect(server.calls).toEqual([{ method: 'DELETE', path: '/api/x', body: undefined }]);
+  });
+
+  it('rejects an ErrorDto refusal as a typed http error', async () => {
+    const server = fakeServer({
+      'DELETE /api/x': jsonResponse(409, {
+        error: { code: 'skill_in_use', message: 'used', requestId: 'r' },
+      }),
+    });
+    const err = await rejection(createApiClient(server.fetch).delete('/api/x'));
+    expect(err).toMatchObject({ kind: 'http', status: 409, code: 'skill_in_use' });
+  });
+
+  it('rejects a DELETE that answers with a body instead of 204', async () => {
+    const server = fakeServer({ 'DELETE /api/x': { unexpected: true } });
+    expect((await rejection(createApiClient(server.fetch).delete('/api/x'))).kind).toBe('parse');
+  });
+});

@@ -153,12 +153,22 @@ export interface ApiClient {
     signal?: AbortSignal,
     headers?: Record<string, string>,
   ): Promise<T>;
+  /** DELETE answered by 204 No Content (redesign R-D: `DELETE /api/projects/:id/skills/:name`). */
+  delete(path: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<void>;
 }
+
+/** The "schema" of a 204 response: no body at all. */
+const NoContentSchema: Schema<void> = {
+  safeParse: (data) =>
+    data === undefined
+      ? { success: true, data: undefined }
+      : { success: false, error: { issues: [{ path: [], message: 'expected no content' }] } },
+};
 
 /** Typed fetch client: every response body is parsed with its DTO schema before the UI sees it. */
 export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, init)): ApiClient {
   async function request<T>(
-    method: 'GET' | 'POST' | 'PUT' | 'PATCH',
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     path: string,
     schema: Schema<T>,
     body: unknown,
@@ -186,7 +196,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       });
     }
 
-    const json = await readJson(res);
+    // 204 No Content has no body to read; the schema decides whether that is acceptable.
+    const json = res.status === 204 ? { ok: true as const, value: undefined } : await readJson(res);
 
     if (!res.ok) {
       const parsedError = json.ok ? ErrorDtoSchema.safeParse(json.value) : null;
@@ -243,6 +254,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       request('PUT', path, schema, body, signal, headers),
     patch: (path, body, schema, signal, headers) =>
       request('PATCH', path, schema, body, signal, headers),
+    delete: (path, signal, headers) =>
+      request('DELETE', path, NoContentSchema, undefined, signal, headers),
   };
 }
 
