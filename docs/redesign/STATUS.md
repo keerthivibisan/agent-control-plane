@@ -3,19 +3,20 @@
 > Only the coordinator edits this file. Agents record progress in `docs/redesign/wp/<WP>.md`.
 > Plan and owned paths: [README.md](README.md) §7.
 
-| WP  | Title                                                                                                          | Depends  | Status      | Branch                             | Merged                 |
-| --- | -------------------------------------------------------------------------------------------------------------- | -------- | ----------- | ---------------------------------- | ---------------------- |
-| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)                                                                   | approval | **done**    | `main`                             | 2026-10-16             |
-| R-A | [Shell, navigation, visual system](wp/R-A.md)                                                                  | R-0      | **done**    | `wp/r-a-shell`                     | 2026-10-16 (`8b70fc4`) |
-| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)                                                                 | R-0      | **done**    | `wp/r-c-engine`                    | 2026-10-16 (`6a11e67`) |
-| R-G | [Server and db wiring, migration 0004](wp/R-G.md)                                                              | R-0, R-C | **done**    | `wp/r-g-server`                    | 2026-10-16 (`ad81df0`) |
-| R-D | [Skills: server module and page](wp/R-D.md)                                                                    | R-0, R-A | **done**    | `wp/r-d-skills`                    | 2026-10-16 (`e1039ad`) |
-| R-F | [Tokens: query, route, page](wp/R-F.md)                                                                        | R-0, R-A | **done**    | `wp/r-f-tokens`                    | 2026-10-16 (`9725a2c`) |
-| R-E | [Harness page](wp/R-E.md)                                                                                      | R-A      | **done**    | `wp/r-e-harness`                   | 2026-10-16 (`2e1c346`) |
-| R-B | [Workflow page](wp/R-B.md)                                                                                     | R-A, R-G | **done**    | `wp/r-b-workflow`                  | 2026-10-16 (`ffaa619`) |
-| R-H | [Board, ticket, settings simplification](wp/R-H.md)                                                            | R-A, R-G | **done**    | `wp/r-h-polish`                    | 2026-10-16 (`1f1a186`) |
-| R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | in-progress | `wp/r-i-agent-files`, `wp/r-i-web` | —                      |
-| R-V | [Verification](wp/R-V.md)                                                                                      | all      | todo        | —                                  | —                      |
+| WP  | Title                                                                                                          | Depends  | Status                              | Branch                             | Merged                 |
+| --- | -------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------- | ---------------------------------- | ---------------------- |
+| R-0 | [Contracts, ADRs, progress files](wp/R-0.md)                                                                   | approval | **done**                            | `main`                             | 2026-10-16             |
+| R-A | [Shell, navigation, visual system](wp/R-A.md)                                                                  | R-0      | **done**                            | `wp/r-a-shell`                     | 2026-10-16 (`8b70fc4`) |
+| R-C | [Engine: planner, reviewer, tester](wp/R-C.md)                                                                 | R-0      | **done**                            | `wp/r-c-engine`                    | 2026-10-16 (`6a11e67`) |
+| R-G | [Server and db wiring, migration 0004](wp/R-G.md)                                                              | R-0, R-C | **done**                            | `wp/r-g-server`                    | 2026-10-16 (`ad81df0`) |
+| R-D | [Skills: server module and page](wp/R-D.md)                                                                    | R-0, R-A | **done**                            | `wp/r-d-skills`                    | 2026-10-16 (`e1039ad`) |
+| R-F | [Tokens: query, route, page](wp/R-F.md)                                                                        | R-0, R-A | **done**                            | `wp/r-f-tokens`                    | 2026-10-16 (`9725a2c`) |
+| R-E | [Harness page](wp/R-E.md)                                                                                      | R-A      | **done**                            | `wp/r-e-harness`                   | 2026-10-16 (`2e1c346`) |
+| R-B | [Workflow page](wp/R-B.md)                                                                                     | R-A, R-G | **done**                            | `wp/r-b-workflow`                  | 2026-10-16 (`ffaa619`) |
+| R-H | [Board, ticket, settings simplification](wp/R-H.md)                                                            | R-A, R-G | **done**                            | `wp/r-h-polish`                    | 2026-10-16 (`1f1a186`) |
+| R-I | [Stage ↔ agent-file mapping](README.md#6a-mapping-agent-files-and-skills-to-stages-owner-decisions-2026-10-16) | R-H      | **done**                            | `wp/r-i-agent-files`, `wp/r-i-web` | 2026-10-16 (`30ab747`) |
+| R-J | [Resume the lead's chat](README.md#6b-the-leads-chat-after-the-lead-ends-owner-decisions-2026-10-16)           | R-I      | todo (planned 2026-10-16, ADR-0020) | —                                  | —                      |
+| R-V | [Verification](wp/R-V.md)                                                                                      | all      | todo                                | —                                  | —                      |
 
 **Phase 4:** complete except the browser e2e and the real smoke run, which are now part of R-V.
 
@@ -106,6 +107,19 @@ code:
 Rebase notes: add-only shared files (`copy.ts`, `api.ts`, the Playwright config) were rebuilt as
 main's version plus each WP's own section, to avoid blocks cut in half. One duplicate import and two
 shell tests (no page is unbuilt any more) were fixed in R-D's history (`5a9fbd0`, `e1039ad`).
+
+**R-I web review (2026-10-16):** merged `30ab747` (`wp/r-i-web`). Scope OK (web plus its progress
+file; no contract or `api.ts` change; no raw HTML). The coordinator re-ran pnpm check (2,012 tests)
+and the e2e (40/40), and looked at the picker, the missing-file and "Used by" screenshots. README §4.3
+was updated on merge. Follow-ups:
+
+- the ticket page's live graph doesn't flag a missing agent file;
+- lead mode shows two pickers for one lead (the panel says which applies);
+- chip names truncate at 1024.
+
+**Owner decision (2026-10-16), lead chat:** resume on message, answers only (ADR-0020, README §6b,
+WP R-J). Why: the lead is stopped when the final stages start or the run completes, and a restart
+ends it, so the chat closed for good.
 
 **R-I backend review (2026-10-16):** merged `d55ff27` (`wp/r-i-agent-files`). Scope OK
 (orchestrator, server, adapter, `provider-adapters.md` §11.1, its progress file). Read and

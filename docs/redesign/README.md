@@ -125,8 +125,8 @@ flowchart LR
 The owner also asked for agent definition files: `.claude/agents/<name>.md`, Claude Code subagents.
 The page has two tabs, **Skills** and **Agents**. Agents work like skills: a list, New and Edit (name,
 description, tools as a chip list or "all tools", model, instructions), Save, Commit, and Delete with
-confirmation. ADR-0018's amendment sets the rules. Mapping a stage to an agent definition is a later
-decision; for now the Workflow page lists agent files as "available, not mapped".
+confirmation. ADR-0018's amendment sets the rules. A workflow stage can use one agent file (§6a,
+ADR-0019 §6, built in R-I); each file shows which stages use it.
 
 #### Skills tab
 
@@ -311,6 +311,37 @@ description) stays possible later. It is less predictable, so it is not planned 
 | Adapter                | adapter      | Append `profile.instructions` to the system prompt. Narrow built-in tools with the SDK `tools` base set (the file's list, kept only where the role allows it, plus `Skill` with a skills plugin) and the gate. Keep a read-only role's `disallowedTools` and the role's `mcp__acp__*` tools. Never use `allowedTools`, which auto-approves. Research done: docs/research/sdk-tool-narrowing-2026-10-16.md. |
 | Web                    | workflow     | An "Agent file" picker in the stage panel, the agent chip on graph nodes, and a missing-file warning.                                                                                                                                                                                                                                                                                                      |
 | Tests                  | all          | Fake-adapter tests: the profile is applied; tools are narrowed and never widened; a missing file still starts the agent; model precedence.                                                                                                                                                                                                                                                                 |
+
+## 6b. The lead's chat after the lead ends (owner decisions, 2026-10-16)
+
+**Today:**
+
+- Each run has its own lead agent. A ticket can have several runs.
+- The engine stops the lead when the final code review or unit-tests stage starts, when the run
+  completes, on Stop all, budget or timeout. An app restart also ends it.
+- The chat box closes then. The conversation is still saved by Claude Code (`persistSession`
+  default), and the app links it to the agent.
+
+**Decisions (ADR-0020):**
+
+1. **Resume on message.** A chat box stays on runs whose lead ended. Each owner message restarts the
+   lead from its saved conversation (SDK `resume`) for one turn. Nothing idles between messages, and
+   it works after a restart.
+2. **Answers only.**
+   - The resumed lead reads and answers, with the read-only toolset and no tools that start work.
+   - New code work is a new run with a new plan the owner approves.
+
+**Work (WP R-J, after R-I):**
+
+| Part                   | Owner        | What                                                                                                                                                                                                                            |
+| ---------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Research               | coordinator  | SDK `resume` (same session id or a fork, `forkSession`, how usage lines are linked) and what fails when the saved session is gone.                                                                                              |
+| Contract (coordinator) | core         | `ManagedAgentSpec` gains `resumeSessionId?` and a follow-up flag. Chat DTOs say whether a run's chat can be continued and why not.                                                                                              |
+| Engine                 | orchestrator | A follow-up command accepted on ended runs, only when no lead is live. It starts a follow-up lead agent with read-only role tools and no control tools, and never changes the run's status. It refuses while a turn is running. |
+| Server                 | server       | The existing chat route starts a follow-up turn when the lead has ended. It looks up the lead's linked session id. It sets a budget from the project's limits. "Can't be continued" reasons. A restart never starts one.        |
+| Adapter                | adapter      | Pass `resume`. The read-only toolset for a follow-up lead. Close input after the turn.                                                                                                                                          |
+| Web                    | ticket       | The chat box on ended runs with a short line ("The lead finished. Your message brings it back to answer; new work needs a new run."). A "can't be continued" note. Bubbles for follow-up turns.                                 |
+| Tests                  | all          | Fake-adapter tests: resume id passed; read-only and no control tools; status unchanged; refused while a turn runs; no relaunch on restart; missing session id refused.                                                          |
 
 ## 7a. Later: editable workflows
 
