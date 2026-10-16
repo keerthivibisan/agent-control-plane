@@ -268,7 +268,10 @@ export function StageHeading({
       </span>
       <h3 className="text-title font-semibold tracking-tight">{C.stages[stage]}</h3>
       <p className="text-dim">{C.stageText[stage]}</p>
-      {role !== null ? <p className="text-caption text-dim">{C.roleTips[role]}</p> : null}
+      {/* The helpers' role tip says what the stage text already says; one sentence is enough. */}
+      {role !== null && role !== 'helper' ? (
+        <p className="text-caption text-dim">{C.roleTips[role]}</p>
+      ) : null}
     </div>
   );
 }

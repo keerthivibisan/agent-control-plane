@@ -5,6 +5,7 @@ import { HarnessPage } from '../../src/features/harness/HarnessPage';
 import { createApiClient } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
 import { board, card, CSRF, webProject } from '../fixtures/board';
+import type { CheckRunDto } from '@acp/core/api';
 import { checkRuns, harness, harnessTicket, PROJECT_ID } from '../fixtures/project-setup';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
@@ -17,11 +18,36 @@ const BASE = `/api/projects/${PROJECT_ID}`;
 const HARNESS = `${BASE}/harness`;
 const TICKETS = `${BASE}/tickets`;
 const CHECKS = `POST ${BASE}/harness/checks`;
+const HISTORY = `${BASE}/harness/checks`;
 const TICKET = `POST ${BASE}/harness/ticket`;
 const now = () => new Date('2026-10-13T09:05:00.000Z');
 
 function server(routes: RouteTable) {
-  return fakeServer({ '/api/control/token': { token: CSRF }, [TICKETS]: [], ...routes });
+  return fakeServer({
+    '/api/control/token': { token: CSRF },
+    [TICKETS]: [],
+    [HISTORY]: [],
+    ...routes,
+  });
+}
+
+/** Like the server: each "Run checks now" is stored, and the history lists it, newest first. */
+function storingChecks(): RouteTable {
+  let stored: CheckRunDto[] = [];
+  let n = 0;
+  return {
+    [CHECKS]: () => {
+      n += 1;
+      const rows = checkRuns().map((r) => ({
+        ...r,
+        id: `${r.id}-${n}`,
+        startedAt: `2026-10-13T09:0${n}:00.000Z`,
+      }));
+      stored = [...[...rows].reverse(), ...stored];
+      return jsonResponse(200, rows);
+    },
+    [HISTORY]: () => jsonResponse(200, stored),
+  };
 }
 
 function renderPage(routes: RouteTable) {
@@ -61,20 +87,18 @@ describe('Harness page', () => {
     expect(within(lint).getByText('packages/app')).toBeTruthy();
     expect(within(lint).getByText('2 min')).toBeTruthy();
 
-    // Primary action in the header; no runs yet in this session, and the card says where history starts.
+    // Primary action in the header; no stored runs yet.
     expect(screen.getByRole('button', { name: 'Run checks now' })).toBeTruthy();
     const runs = region('Runs on the main branch');
-    expect(within(runs).getByText('No runs yet')).toBeTruthy();
-    expect(tipOf(runs, 'Earlier in this session')).toContain('since you opened the app');
+    expect(await within(runs).findByText('No runs yet')).toBeTruthy();
+    expect(runs.textContent).toContain('Every run of the checks on the main branch, newest first.');
+    expect(runs.textContent).not.toContain('since you opened the app');
     // No "Build the harness" while a harness exists.
     expect(screen.queryByRole('button', { name: 'Build the harness' })).toBeNull();
   });
 
   it('runs the checks on main and shows each result, then keeps the earlier run', async () => {
-    const { s } = renderPage({
-      [HARNESS]: harness('ready'),
-      [CHECKS]: () => jsonResponse(200, checkRuns()),
-    });
+    const { s } = renderPage({ [HARNESS]: harness('ready'), ...storingChecks() });
     const run = await screen.findByRole('button', { name: 'Run checks now' });
     fireEvent.click(run);
     const latest = await screen.findByTestId('latest-run');
@@ -98,12 +122,43 @@ describe('Harness page', () => {
       expect(s.calls.filter((c) => c.method === 'GET' && c.path === HARNESS).length).toBe(2),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run checks now' }));
+    // The stored history is read again after the run.
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Earlier in this session' })).toBeTruthy(),
+      expect(s.calls.filter((c) => c.method === 'GET' && c.path === HISTORY).length).toBe(2),
     );
-    const earlier = screen.getByRole('region', { name: 'Earlier in this session' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run checks now' }));
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Earlier runs' })).toBeTruthy());
+    const earlier = screen.getByRole('region', { name: 'Earlier runs' });
     expect(earlier.textContent).toContain('1 of 2 checks passed');
+    expect(earlier.querySelectorAll(':scope > ul > li')).toHaveLength(1);
+  });
+
+  it('lists stored runs from the history route, grouped into runs, without running anything', async () => {
+    const older = checkRuns().map((r) => ({
+      ...r,
+      id: `${r.id}-old`,
+      startedAt: '2026-10-12T08:00:00.000Z',
+    }));
+    const newer = checkRuns().map((r) => ({
+      ...r,
+      id: `${r.id}-new`,
+      status: 'passed' as const,
+      exitCode: 0,
+      startedAt: '2026-10-13T09:00:00.000Z',
+    }));
+    const { s } = renderPage({
+      [HARNESS]: harness('ready'),
+      [HISTORY]: [...newer.reverse(), ...older.reverse()],
+    });
+    const latest = await screen.findByTestId('latest-run');
+    expect(latest.getAttribute('data-state')).toBe('finished');
+    expect(within(latest).getByTestId('run-summary').textContent).toBe('2 of 2 checks passed');
+    expect(within(latest).getAllByRole('listitem')).toHaveLength(2);
+    const earlier = screen.getByRole('region', { name: 'Earlier runs' });
+    expect(earlier.querySelectorAll(':scope > ul > li')).toHaveLength(1);
+    expect(earlier.textContent).toContain('1 of 2 checks passed');
+    expect(s.calls.some((c) => c.method === 'POST')).toBe(false);
   });
 
   it('says so while the checks run, and explains "checks are already running"', async () => {

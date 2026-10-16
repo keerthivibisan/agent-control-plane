@@ -2020,12 +2020,11 @@ export const HARNESS_PAGE_COPY = {
     running: 'Running checks…',
     runningText: 'The checks run one at a time. This can take as long as their time limits.',
     unavailable: 'Checks can run once the project has a valid harness.',
-    description: 'Runs you started since you opened the app.',
+    description: 'Every run of the checks on the main branch, newest first.',
+    loading: 'Loading earlier runs…',
     latest: 'Latest run',
     started: 'Started',
-    earlier: 'Earlier in this session',
-    historyTip:
-      'Only runs started since you opened the app are listed. The app keeps older runs, but can’t list them here yet.',
+    earlier: 'Earlier runs',
     summary: (passed: number, total: number) =>
       `${formatCount(passed)} of ${countOf(total, 'check')} passed`,
     requiredFailed: (n: number) => `${countOf(n, 'required check')} did not pass`,

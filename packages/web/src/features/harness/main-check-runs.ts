@@ -12,10 +12,10 @@ import type { QueryStore } from '../../lib/query-store';
 
 /**
  * "Run checks now" attempts on a project's main branch, kept in memory for as long as the app is
- * open. There is no API that lists past main-branch runs yet (docs/redesign/wp/R-E.md, blocked
- * part), so the Harness page shows the runs started in this app session, and says so. Keeping
- * them here rather than in the page lets the ⌘K "Run checks" action start a run that the page
- * then shows, and lets a run finish while the owner looks at another page.
+ * open. Stored runs come from `GET /projects/:id/harness/checks`; these attempts add what only
+ * this session knows: a run still going, and a refused one. Keeping them here rather than in the
+ * page lets the ⌘K "Run checks" action start a run that the page then shows, and lets a run
+ * finish while the owner looks at another page.
  */
 export interface MainCheckAttempt {
   /** Local id, for React keys only. */

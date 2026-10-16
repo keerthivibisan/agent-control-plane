@@ -71,6 +71,8 @@ import {
   AgentDefinitionDetailDtoSchema,
   AgentDefinitionWriteRequestSchema,
 } from '@acp/core/api';
+// Ticket page live workflow and the harness history (redesign, R-H).
+import { RunWorkflowDtoSchema } from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -991,3 +993,32 @@ export function deleteAgent(client: ApiClient, projectId: string, name: string) 
 export function commitAgent(client: ApiClient, projectId: string, name: string) {
   return controlPost(client, agentsPaths.commit(projectId, name), {}, agentsSchemas.commit);
 }
+
+// --- Ticket page workflow and harness history (redesign R-H, wp/r-h-polish) ----------------------
+//
+// Served by R-G (docs/redesign/wp/R-G.md): GET /api/runs/:id/workflow → RunWorkflowDto (404 for an
+// unknown run, and while managed agents are off); POST /api/runs/:id/continue (CSRF, no body) →
+// RunDetailDto; GET /api/projects/:id/harness/checks → CheckRunDto[], the last 50 main-branch
+// results, newest first (the same path as "Run checks now", which POSTs).
+
+export const runWorkflowPaths = {
+  workflow: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow`,
+  continue: (runId: string) => `${API_BASE}/runs/${enc(runId)}/continue`,
+} as const;
+
+export const runWorkflowSchemas = {
+  workflow: RunWorkflowDtoSchema,
+} as const;
+
+/** Continue: starts the post-merge stage a restart held (`code-review` or `unit-tests`). */
+export function continueRun(client: ApiClient, runId: string) {
+  return controlPost(client, runWorkflowPaths.continue(runId), {}, RunDetailDtoSchema);
+}
+
+export const harnessHistoryPaths = {
+  history: (projectId: string) => projectSetupPaths.harnessChecks(projectId),
+} as const;
+
+export const harnessHistorySchemas = {
+  history: CheckRunDtoSchema.array(),
+} as const;

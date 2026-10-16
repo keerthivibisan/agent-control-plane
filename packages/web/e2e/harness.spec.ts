@@ -133,13 +133,25 @@ async function serve(page: Page, fx: Fixture): Promise<{ checkPosts: () => numbe
   await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: CSRF } }));
   await page.route(`**${BASE}/harness`, (route) => route.fulfill({ json: fx.harness }));
   await page.route(`**${BASE}/tickets`, (route) => route.fulfill({ json: fx.tickets }));
+  // Like the server: each run is stored, and GET lists the stored results, newest first (R-H).
+  let stored: Json[] = [];
   await page.route(`**${BASE}/harness/checks`, async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: stored });
+      return;
+    }
     expect(route.request().method()).toBe('POST');
     expect(route.request().headers()['x-acp-csrf']).toBe(CSRF);
     posts += 1;
     // A short wait so the running state is on screen for a moment, like a real run.
     await new Promise((r) => setTimeout(r, 300));
-    await route.fulfill({ json: RESULTS });
+    const results = RESULTS.map((r) => ({
+      ...r,
+      id: `${String(r.id)}-${posts}`,
+      startedAt: T(posts),
+    }));
+    stored = [...[...results].reverse(), ...stored];
+    await route.fulfill({ json: results });
   });
   await page.route(`**${BASE}/harness/ticket`, async (route) => {
     const created = fx.created ?? harnessTicket('BACKLOG');
@@ -195,7 +207,7 @@ test('a ready harness: the checks, Run checks now with each result, and the hist
   expect(server.checkPosts()).toBe(1);
 
   await page.getByRole('button', { name: 'Run checks now' }).click();
-  await expect(page.getByRole('region', { name: 'Earlier in this session' })).toContainText(
+  await expect(page.getByRole('region', { name: 'Earlier runs' })).toContainText(
     '2 of 3 checks passed',
   );
   await shoot(page, 'ready');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canRunChecks,
+  groupMainRuns,
   offerBuild,
   pickHarnessTicket,
   runErrorText,
@@ -94,6 +95,45 @@ describe('harness page logic', () => {
     expect(formatSeconds(45)).toBe('45 s');
     expect(formatSeconds(600)).toBe('10 min');
     expect(formatSeconds(90)).toBe('1 min 30 s');
+  });
+});
+
+describe('main-branch history grouped into runs (GET …/harness/checks)', () => {
+  const at = (iso: string, checkId: string, durationMs = 1_000) =>
+    checkRun({ id: `${checkId}@${iso}`, checkId, name: checkId, startedAt: iso, durationMs });
+
+  it('puts checks that follow each other into one run, newest run first', () => {
+    // Newest first, as the route answers.
+    const rows = [
+      at('2026-10-16T10:00:05.000Z', 'lint'),
+      at('2026-10-16T10:00:00.000Z', 'test', 5_000),
+      at('2026-10-16T09:00:03.000Z', 'lint'),
+      at('2026-10-16T09:00:00.000Z', 'test', 3_000),
+    ];
+    const runs = groupMainRuns(rows);
+    expect(runs.map((r) => r.results.map((c) => c.checkId))).toEqual([
+      ['test', 'lint'],
+      ['test', 'lint'],
+    ]);
+    expect(runs[0]?.startedAt).toBe('2026-10-16T10:00:00.000Z');
+    expect(runs[0]?.id).toBe('test@2026-10-16T10:00:00.000Z');
+  });
+
+  it('starts a new run when a check repeats, even right after the last one', () => {
+    const runs = groupMainRuns([
+      at('2026-10-16T10:00:02.000Z', 'test'),
+      at('2026-10-16T10:00:00.000Z', 'test', 2_000),
+    ]);
+    expect(runs).toHaveLength(2);
+  });
+
+  it('starts a new run after a pause longer than a minute, and keeps an empty history empty', () => {
+    const runs = groupMainRuns([
+      at('2026-10-16T10:05:00.000Z', 'lint'),
+      at('2026-10-16T10:00:00.000Z', 'test'),
+    ]);
+    expect(runs.map((r) => r.results.length)).toEqual([1, 1]);
+    expect(groupMainRuns([])).toEqual([]);
   });
 });
 

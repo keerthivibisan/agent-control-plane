@@ -195,6 +195,13 @@ describe('Workflow page', () => {
     });
   });
 
+  it('the Helpers panel says what the stage does once, not twice (R-H)', async () => {
+    render();
+    await open('Helpers');
+    expect(within(panel()).getAllByText(/its own copy of the project\.$/)).toHaveLength(1);
+    expect(within(panel()).queryByText(/^Agents that each work on one part/)).toBeNull();
+  });
+
   it('a budget that is not a number is explained and nothing is sent', async () => {
     const { server: s } = render();
     await open('Helpers');

@@ -4,14 +4,15 @@ import { Details } from '../../components/Details';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { HarnessIcon } from '../../components/icons';
-import { InfoTip } from '../../components/InfoTip';
 import { Pill, type PillTone } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
+import type { ApiError } from '../../lib/api';
 import { CHECK_STATUS_COPY, HARNESS_PAGE_COPY } from '../../lib/copy';
 import { formatDuration, formatRelative } from '../../lib/format';
+import type { QueryState } from '../../lib/query-store';
 import { StatusWord } from '../control/bits';
 import { RequiredPill } from './ChecksCard';
-import { runErrorText, summarize, type RunSummary } from './logic';
+import { groupMainRuns, runErrorText, summarize, type MainRun, type RunSummary } from './logic';
 import type { MainCheckAttempt } from './main-check-runs';
 
 const C = HARNESS_PAGE_COPY.runs;
@@ -47,9 +48,39 @@ function CheckResult({ run }: { run: CheckRunDto }) {
   );
 }
 
-/** A finished, failed or running attempt's body. */
-function AttemptBody({ attempt }: { attempt: MainCheckAttempt }) {
-  if (attempt.state === 'running') {
+/**
+ * What the card lists: a run started from this page that is still going or was refused (only this
+ * app session knows those), and the runs the server stored, grouped from its history.
+ */
+type Entry =
+  | { kind: 'running'; id: string; startedAt: string }
+  | { kind: 'error'; id: string; startedAt: string; error: ApiError }
+  | { kind: 'results'; id: string; startedAt: string; results: CheckRunDto[] };
+
+function entries(attempts: readonly MainCheckAttempt[], stored: readonly MainRun[]): Entry[] {
+  const runs: Entry[] = stored.map((r) => ({ kind: 'results', ...r }));
+  const newest = attempts[0];
+  if (newest === undefined) return runs;
+  if (newest.state === 'running') {
+    return [{ kind: 'running', id: newest.id, startedAt: newest.startedAt }, ...runs];
+  }
+  if (newest.error !== null) {
+    return [
+      { kind: 'error', id: newest.id, startedAt: newest.startedAt, error: newest.error },
+      ...runs,
+    ];
+  }
+  // Just finished: shown from its own answer until the history is read again.
+  const results = newest.results ?? [];
+  const known = new Set(stored.flatMap((r) => r.results.map((c) => c.id)));
+  if (results.length === 0 || results.some((c) => !known.has(c.id))) {
+    return [{ kind: 'results', id: newest.id, startedAt: newest.startedAt, results }, ...runs];
+  }
+  return runs;
+}
+
+function EntryBody({ entry }: { entry: Entry }) {
+  if (entry.kind === 'running') {
     return (
       <p role="status" className="flex items-center gap-2 text-dim">
         <span
@@ -62,40 +93,37 @@ function AttemptBody({ attempt }: { attempt: MainCheckAttempt }) {
       </p>
     );
   }
-  if (attempt.error !== null) {
+  if (entry.kind === 'error') {
     return (
       <div className="flex flex-col gap-1.5">
         <p
           role="alert"
-          data-code={attempt.error.code ?? undefined}
+          data-code={entry.error.code ?? undefined}
           className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
         >
-          {runErrorText(attempt.error)}
+          {runErrorText(entry.error)}
         </p>
         <Details>
-          <ErrorNotice error={attempt.error} />
+          <ErrorNotice error={entry.error} />
         </Details>
       </div>
     );
   }
-  const results = attempt.results ?? [];
-  if (results.length === 0) {
+  if (entry.results.length === 0) {
     return <EmptyState compact title={C.noResults} text={C.noResultsText} />;
   }
   return (
     <ul aria-label={C.resultsLabel} className="flex flex-col divide-y divide-line">
-      {results.map((r) => (
+      {entry.results.map((r) => (
         <CheckResult key={r.id} run={r} />
       ))}
     </ul>
   );
 }
 
-function SummaryPill({ attempt }: { attempt: MainCheckAttempt }) {
-  if (attempt.state !== 'finished' || attempt.results === null || attempt.results.length === 0) {
-    return null;
-  }
-  const s = summarize(attempt.results);
+function SummaryPill({ entry }: { entry: Entry }) {
+  if (entry.kind !== 'results' || entry.results.length === 0) return null;
+  const s = summarize(entry.results);
   return (
     <span className="flex flex-wrap items-center gap-2">
       <Pill tone={summaryTone(s)} testId="run-summary">
@@ -110,74 +138,79 @@ function SummaryPill({ attempt }: { attempt: MainCheckAttempt }) {
   );
 }
 
-function earlierSummary(a: MainCheckAttempt, now: Date): string {
-  const when = formatRelative(a.startedAt, now);
-  if (a.error !== null) return `${when} · ${C.failed}`;
-  const results = a.results ?? [];
-  if (results.length === 0) return `${when} · ${C.noResults}`;
-  const s = summarize(results);
+function earlierSummary(e: Entry, now: Date): string {
+  const when = formatRelative(e.startedAt, now);
+  if (e.kind === 'running') return `${when} · ${C.running}`;
+  if (e.kind === 'error') return `${when} · ${C.failed}`;
+  if (e.results.length === 0) return `${when} · ${C.noResults}`;
+  const s = summarize(e.results);
   return `${when} · ${C.summary(s.passed, s.total)}`;
 }
 
+const entryState = (e: Entry) =>
+  e.kind === 'running' ? 'running' : e.kind === 'error' ? 'failed' : 'finished';
+
 /**
- * "Run checks now" results on the main branch: the latest attempt in full, then the earlier ones
- * of this app session, collapsed. Older runs are stored by the server but no route lists them yet
- * (R-E blocked part), so the card says where its history starts.
+ * Runs on the main branch, newest first (`GET /projects/:id/harness/checks`, grouped into runs):
+ * the latest in full, the earlier ones collapsed. A run started here shows while it is going.
  */
 export function RunsCard({
   attempts,
+  history,
   runnable,
   now = () => new Date(),
   className = '',
 }: {
   attempts: readonly MainCheckAttempt[];
+  history: QueryState<CheckRunDto[]>;
   runnable: boolean;
   now?: () => Date;
   className?: string;
 }) {
-  const [latest, ...earlier] = attempts;
+  const list = entries(attempts, groupMainRuns(history.data ?? []));
+  const [latest, ...earlier] = list;
+  const loading = history.data === undefined && history.error === null;
   return (
     <Card
       title={C.title}
       tip={C.tip}
-      description={
-        <span className="inline-flex items-center gap-1">
-          {C.description}
-          <InfoTip tip={C.historyTip} label={C.earlier} />
-        </span>
-      }
+      description={C.description}
       className={className}
       testId="harness-runs"
     >
       {latest === undefined ? (
-        <EmptyState
-          compact
-          icon={<HarnessIcon size={18} />}
-          title={C.empty}
-          text={runnable ? C.emptyText : C.unavailable}
-        />
+        loading ? (
+          <p className="text-dim">{C.loading}</p>
+        ) : (
+          <EmptyState
+            compact
+            icon={<HarnessIcon size={18} />}
+            title={C.empty}
+            text={runnable ? C.emptyText : C.unavailable}
+          />
+        )
       ) : (
         <div className="flex flex-col gap-8">
-          <section aria-label={C.latest} data-testid="latest-run" data-state={latest.state}>
+          <section aria-label={C.latest} data-testid="latest-run" data-state={entryState(latest)}>
             <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="font-semibold">{C.latest}</h3>
               <span className="text-caption text-dim">
                 {C.started} <RelativeTime iso={latest.startedAt} now={now} />
               </span>
               <span className="ml-auto">
-                <SummaryPill attempt={latest} />
+                <SummaryPill entry={latest} />
               </span>
             </div>
-            <AttemptBody attempt={latest} />
+            <EntryBody entry={latest} />
           </section>
           {earlier.length > 0 ? (
             <section aria-label={C.earlier} className="flex flex-col gap-2">
               <h3 className="font-semibold">{C.earlier}</h3>
               <ul className="flex flex-col gap-2">
-                {earlier.map((a) => (
-                  <li key={a.id} data-state={a.state}>
-                    <Details summary={earlierSummary(a, now())}>
-                      <AttemptBody attempt={a} />
+                {earlier.map((e) => (
+                  <li key={e.id} data-state={entryState(e)}>
+                    <Details summary={earlierSummary(e, now())}>
+                      <EntryBody entry={e} />
                     </Details>
                   </li>
                 ))}
@@ -186,6 +219,11 @@ export function RunsCard({
           ) : null}
         </div>
       )}
+      {history.error !== null ? (
+        <div className="mt-4">
+          <ErrorNotice error={history.error} />
+        </div>
+      ) : null}
     </Card>
   );
 }

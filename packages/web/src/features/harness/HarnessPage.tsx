@@ -6,6 +6,8 @@ import {
   boardPaths,
   boardSchemas,
   createHarnessTicket,
+  harnessHistoryPaths,
+  harnessHistorySchemas,
   isBoardPath,
   isProjectSetupPath,
   projectSetupPaths,
@@ -26,7 +28,7 @@ const C = HARNESS_PAGE_COPY;
 /**
  * `#/p/:projectId/harness` (docs/redesign/README.md §4.4): does the project have a harness, and
  * does it pass? The status from `GET /projects/:id/harness` (read fresh from the project folder),
- * the checks it lists, "Run checks now" on the main branch with this session's results, the
+ * the checks it lists, "Run checks now" on the main branch with every stored run, the
  * "Build the harness" ticket, and where the checks are used.
  */
 export function HarnessPage({ projectId, now }: { projectId: string; now?: () => Date }) {
@@ -34,6 +36,10 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
   const harnessPath = projectSetupPaths.harness(projectId);
   const harness = useApiQuery(harnessPath, projectSetupSchemas.harness);
   const tickets = useApiQuery(boardPaths.tickets(projectId), boardSchemas.tickets);
+  const history = useApiQuery(
+    harnessHistoryPaths.history(projectId),
+    harnessHistorySchemas.history,
+  );
   const runs = useMainCheckRuns(projectId);
 
   const invalidate = useMemo(() => {
@@ -83,10 +89,11 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
                 projectId={projectId}
                 className={hasChecks ? 'xl:col-span-1' : 'xl:col-span-3'}
               />
-              {canRun || runs.attempts.length > 0 ? (
+              {canRun || runs.attempts.length > 0 || (history.data?.length ?? 0) > 0 ? (
                 <RunsCard
                   className="xl:col-span-3"
                   attempts={runs.attempts}
+                  history={history}
                   runnable={canRun}
                   {...(now === undefined ? {} : { now })}
                 />
