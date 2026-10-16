@@ -3,13 +3,13 @@
 > Progress file for P4-D. Only the agent working on P4-D edits this file (coordinator: STATUS.md).
 > Protocol: `docs/phase-4/README.md` §9. Scope, owned paths and acceptance: README §8.
 
-| Field   | Value                                                   |
-| ------- | ------------------------------------------------------- |
-| Status  | todo                                                    |
-| Owner   | backend agent                                           |
-| Branch  | `wp/p4-d-server` (create from `main` when you claim it) |
-| Started | —                                                       |
-| Updated | —                                                       |
+| Field   | Value            |
+| ------- | ---------------- |
+| Status  | in-progress      |
+| Owner   | backend agent    |
+| Branch  | `wp/p4-d-server` |
+| Started | 2026-10-16       |
+| Updated | 2026-10-16       |
 
 ## Tasks
 
@@ -23,8 +23,9 @@
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
+| Date       | What was done                                                       | Commit        | Checks |
+| ---------- | ------------------------------------------------------------------- | ------------- | ------ |
+| 2026-10-16 | Claimed P4-D; branch `wp/p4-d-server` created from `main` (0d82cef) | (this commit) | —      |
 
 ## Handoff notes
 
