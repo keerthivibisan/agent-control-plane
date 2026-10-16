@@ -14,9 +14,10 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                   | Commit | Checks |
-| ---------- | ------------------------------- | ------ | ------ |
-| 2026-10-16 | Claimed R-F on `wp/r-f-tokens`. | claim  | —      |
+| Date       | What was done                                                                                                    | Commit   | Checks                                               |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------- |
+| 2026-10-16 | Claimed R-F on `wp/r-f-tokens`.                                                                                  | claim    | —                                                    |
+| 2026-10-16 | db: `createTokenQueries().projectTokens()` (`queries/tokens.ts`), exported from `@acp/db`; 9 temp-file DB tests. | db query | format ✓ lint ✓ typecheck ✓ test 1728/1728 ✓ build ✓ |
 
 ## Handoff notes
 
