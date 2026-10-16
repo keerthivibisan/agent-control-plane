@@ -41,7 +41,7 @@ describe('parseSkillFile', () => {
 
   it('reports what it cannot read as plain sentences, without quoting the file', () => {
     expect(parseSkillFile('# no front matter\n').problems).toEqual([
-      'The file has no front matter, so Claude Code cannot name or describe the skill.',
+      'The file has no front matter, so Claude Code cannot name or describe it.',
     ]);
     expect(parseSkillFile('---\nname: a\n').problems).toEqual([
       'The front matter is not closed with a line that says ---.',
@@ -52,7 +52,7 @@ describe('parseSkillFile', () => {
     expect(odd.problems).toEqual([
       'The front matter sets name more than once.',
       'The description on line 4 is not a plain one-line text value.',
-      'Line 5 continues a name or description over several lines.',
+      'Line 5 continues a value over several lines.',
       'Line 6 of the front matter is not a "key: value" pair.',
     ]);
     expect(odd.problems.join(' ')).not.toContain('secret');

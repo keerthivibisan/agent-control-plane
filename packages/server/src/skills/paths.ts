@@ -1,43 +1,102 @@
 import { randomUUID } from 'node:crypto';
 import { constants, type Dirent } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath, rename, rmdir, unlink } from 'node:fs/promises';
-import { join, sep } from 'node:path';
-import { MAX_SKILL_BYTES, SKILL_FILE, SKILLS_DIR, SkillNameSchema } from '@acp/core';
+import { basename, join, sep } from 'node:path';
+import { AGENTS_DIR, SKILL_FILE, SKILLS_DIR, SkillNameSchema } from '@acp/core';
 import { skillError } from './errors.js';
 
 /**
- * The only file-system access the Skills API has (ADR-0018 §1, §3). Every write lands in exactly
- * `<real project root>/.claude/skills/<slug>/SKILL.md`:
+ * The only file-system access the Skills & Agents API has (ADR-0018 §1, §3 and its amendment).
+ * Every write lands in exactly `<real root>/.claude/skills/<slug>/SKILL.md` or
+ * `<real root>/.claude/agents/<slug>.md`:
  *
- * - the root is realpath'd once, and every level below it (`.claude`, `.claude/skills`, `<slug>`,
- *   `SKILL.md`) is checked with `lstat`, so a symlink at any level is refused, never followed;
+ * - the root is realpath'd once, and every level below it (`.claude`, `.claude/skills` or
+ *   `.claude/agents`, a skill's `<slug>/`, and the file) is checked with `lstat`, so a symlink at any
+ *   level is refused, never followed;
  * - existing folders must also realpath to themselves inside the root (a hard guard against a link
  *   swapped in somewhere we did not look);
  * - missing folders are made one level at a time with a plain `mkdir` (which never follows a link at
  *   its own path) and checked again afterwards;
- * - SKILL.md is read with `O_NOFOLLOW` and written through an exclusive temp file plus `rename`, so
+ * - the file is read with `O_NOFOLLOW` and written through an exclusive temp file plus `rename`, so
  *   a reader never sees half a file and an existing link is replaced, not written through.
  */
 
-const SKILLS_SEGMENTS = SKILLS_DIR.split('/');
-
-export interface SkillPaths {
+/** One project file the app may write: a skill's SKILL.md or an agent definition. */
+export interface FileTarget {
   /** The project's real root. */
   root: string;
-  /** `<root>/.claude/skills`. */
-  skillsDir: string;
-  /** `<root>/.claude/skills/<slug>`. */
+  /** Absolute folders from `.claude` down to the one holding the file; each is checked or made. */
+  folders: readonly string[];
+  /** The folder holding the file (the last of `folders`). */
   dir: string;
-  /** `<root>/.claude/skills/<slug>/SKILL.md`. */
   file: string;
-  /** Repo-relative (to the project root) forms, for git pathspecs and DTOs. */
-  relDir: string;
+  /** Repo-relative (to the project root) path of the file, for DTOs. */
   relFile: string;
+  /** The git pathspec a commit covers: the skill's folder, or the agent file itself. */
+  relScope: string;
+  /**
+   * `dir`: the target exists when its own folder does (a skill is its folder);
+   * `file`: when the file does (an agent is one file in a shared folder).
+   */
+  identity: 'dir' | 'file';
 }
 
 function code(error: unknown): string | undefined {
   const c = (error as { code?: unknown } | null)?.code;
   return typeof c === 'string' ? c : undefined;
+}
+
+function inside(root: string, path: string): boolean {
+  return path === root || path.startsWith(root + sep);
+}
+
+function checkedSlug(slug: string): string {
+  // The slug is schema-checked by the caller; this keeps the path rule local and testable too.
+  if (!SkillNameSchema.safeParse(slug).success) {
+    throw skillError('invalid_request', 'The name is not a valid slug');
+  }
+  return slug;
+}
+
+/** `.claude`, then `.claude/<kind>`, as absolute folders. */
+function baseFolders(root: string, relDir: string): string[] {
+  const out: string[] = [];
+  let current = root;
+  for (const segment of relDir.split('/')) {
+    current = join(current, segment);
+    out.push(current);
+  }
+  return out;
+}
+
+export function skillTarget(root: string, slug: string): FileTarget {
+  const name = checkedSlug(slug);
+  const folders = [...baseFolders(root, SKILLS_DIR), join(root, ...SKILLS_DIR.split('/'), name)];
+  const dir = folders[folders.length - 1] ?? root;
+  return {
+    root,
+    folders,
+    dir,
+    file: join(dir, SKILL_FILE),
+    relFile: `${SKILLS_DIR}/${name}/${SKILL_FILE}`,
+    relScope: `${SKILLS_DIR}/${name}`,
+    identity: 'dir',
+  };
+}
+
+export function agentTarget(root: string, slug: string): FileTarget {
+  const name = checkedSlug(slug);
+  const folders = baseFolders(root, AGENTS_DIR);
+  const dir = folders[folders.length - 1] ?? root;
+  return {
+    root,
+    folders,
+    dir,
+    file: join(dir, `${name}.md`),
+    relFile: `${AGENTS_DIR}/${name}.md`,
+    relScope: `${AGENTS_DIR}/${name}.md`,
+    identity: 'file',
+  };
 }
 
 export async function realRoot(rootPath: string): Promise<string> {
@@ -59,14 +118,14 @@ async function realOrSelf(path: string): Promise<string> {
 }
 
 /**
- * The owner's personal skills (`~/.claude`) are never read or written (ADR-0018 §1, AGENTS.md
- * rule 4), not even for a project registered at the home folder or inside `~/.claude`, where
- * `<root>/.claude/skills` would be exactly those skills.
+ * The owner's personal `~/.claude` (skills and agents) is never read or written (ADR-0018 §1,
+ * AGENTS.md rule 4), not even for a project registered at the home folder or inside `~/.claude`,
+ * where `<root>/.claude/skills` would be exactly those skills.
  */
 export async function refusePersonalClaudeDir(root: string, homeDir: string): Promise<void> {
   const personal = [join(homeDir, '.claude'), join(await realOrSelf(homeDir), '.claude')];
   const real = await realOrSelf(personal[0] ?? '');
-  const projectClaude = join(root, SKILLS_SEGMENTS[0] ?? '.claude');
+  const projectClaude = join(root, '.claude');
   if ([...personal, real].some((p) => inside(p, projectClaude))) {
     throw skillError(
       'unsafe_path',
@@ -75,30 +134,9 @@ export async function refusePersonalClaudeDir(root: string, homeDir: string): Pr
   }
 }
 
-export function skillPaths(root: string, slug: string): SkillPaths {
-  // The slug is schema-checked by the caller; this keeps the path rule local and testable too.
-  if (!SkillNameSchema.safeParse(slug).success) {
-    throw skillError('invalid_request', 'The skill name is not a valid slug');
-  }
-  const skillsDir = join(root, ...SKILLS_SEGMENTS);
-  const dir = join(skillsDir, slug);
-  return {
-    root,
-    skillsDir,
-    dir,
-    file: join(dir, SKILL_FILE),
-    relDir: `${SKILLS_DIR}/${slug}`,
-    relFile: `${SKILLS_DIR}/${slug}/${SKILL_FILE}`,
-  };
-}
-
-function inside(root: string, path: string): boolean {
-  return path === root || path.startsWith(root + sep);
-}
-
 /**
- * Checks each existing level from the root down to `levels`' last entry. Returns how many levels
- * exist (they are all real folders inside the root); a missing level stops the walk.
+ * Checks each existing folder from the root down. Returns how many exist (they are all real
+ * folders inside the root); a missing level stops the walk.
  */
 async function checkFolders(root: string, levels: readonly string[]): Promise<number> {
   let existing = 0;
@@ -111,49 +149,50 @@ async function checkFolders(root: string, levels: readonly string[]): Promise<nu
       throw error;
     }
     if (stats.isSymbolicLink()) {
-      throw skillError('unsafe_path', 'A folder on the skill path is a symbolic link');
+      throw skillError('unsafe_path', 'A folder on the path is a symbolic link');
     }
     if (!stats.isDirectory()) {
-      throw skillError('unsafe_path', 'Something on the skill path is not a folder');
+      throw skillError('unsafe_path', 'Something on the path is not a folder');
     }
     const real = await realpath(level);
     if (real !== level || !inside(root, real)) {
-      throw skillError('unsafe_path', 'The skill path resolves outside the project folder');
+      throw skillError('unsafe_path', 'The path resolves outside the project folder');
     }
     existing++;
   }
   return existing;
 }
 
-/** `.claude`, `.claude/skills` and, when given, the skill folder: the levels checked for links. */
-function levelsFor(root: string, dir?: string): string[] {
-  const out: string[] = [];
-  let current = root;
-  for (const segment of SKILLS_SEGMENTS) {
-    current = join(current, segment);
-    out.push(current);
+async function foldersExist(target: FileTarget): Promise<boolean> {
+  return (await checkFolders(target.root, target.folders)) === target.folders.length;
+}
+
+/** Whether the file exists; refuses a link (never followed) or something that is not a file. */
+async function fileExists(target: FileTarget): Promise<boolean> {
+  let stats;
+  try {
+    stats = await lstat(target.file);
+  } catch (error) {
+    if (code(error) === 'ENOENT') return false;
+    throw error;
   }
-  if (dir !== undefined) out.push(dir);
-  return out;
+  if (stats.isSymbolicLink()) {
+    throw skillError('unsafe_path', `${basename(target.file)} is a symbolic link`);
+  }
+  if (!stats.isFile()) throw skillError('unsafe_path', `${basename(target.file)} is not a file`);
+  return true;
 }
 
-/** Whether `.claude/skills` exists (as a real folder inside the root); refuses links. */
-export async function skillsDirExists(root: string): Promise<boolean> {
-  const levels = levelsFor(root);
-  return (await checkFolders(root, levels)) === levels.length;
+/** Whether the skill (its folder) or the agent (its file) exists; refuses links at any level. */
+export async function targetExists(target: FileTarget): Promise<boolean> {
+  if (!(await foldersExist(target))) return false;
+  return target.identity === 'dir' ? true : fileExists(target);
 }
 
-/** Whether `<slug>/` exists as a real folder; refuses links at any level. */
-export async function skillDirExists(paths: SkillPaths): Promise<boolean> {
-  const levels = levelsFor(paths.root, paths.dir);
-  return (await checkFolders(paths.root, levels)) === levels.length;
-}
-
-/** Creates the missing folders down to `<slug>/`, one plain `mkdir` per level. */
-export async function ensureSkillDir(paths: SkillPaths): Promise<void> {
-  const levels = levelsFor(paths.root, paths.dir);
-  const existing = await checkFolders(paths.root, levels);
-  for (const level of levels.slice(existing)) {
+/** Creates the missing folders down to the file's folder, one plain `mkdir` per level. */
+export async function ensureFolders(target: FileTarget): Promise<void> {
+  const existing = await checkFolders(target.root, target.folders);
+  for (const level of target.folders.slice(existing)) {
     try {
       await mkdir(level, { mode: 0o755 });
     } catch (error) {
@@ -161,23 +200,32 @@ export async function ensureSkillDir(paths: SkillPaths): Promise<void> {
       if (code(error) !== 'EEXIST') throw error;
     }
   }
-  if ((await checkFolders(paths.root, levels)) !== levels.length) {
-    throw skillError('unsafe_path', 'The skill folder could not be created');
+  if (!(await foldersExist(target))) {
+    throw skillError('unsafe_path', 'The folder could not be created');
   }
 }
 
-/** The skill folder names under `.claude/skills`, real folders only (links are skipped). */
-export async function listSkillFolders(
-  root: string,
-): Promise<{ names: string[]; skipped: number }> {
-  if (!(await skillsDirExists(root))) return { names: [], skipped: 0 };
-  let entries: Dirent[];
+async function listing(root: string, relDir: string): Promise<Dirent[] | null> {
+  const levels = baseFolders(root, relDir);
+  if ((await checkFolders(root, levels)) !== levels.length) return null;
   try {
-    entries = await readdir(join(root, ...SKILLS_SEGMENTS), { withFileTypes: true });
+    return await readdir(levels[levels.length - 1] ?? root, { withFileTypes: true });
   } catch (error) {
-    if (code(error) === 'ENOENT') return { names: [], skipped: 0 };
+    if (code(error) === 'ENOENT') return null;
     throw error;
   }
+}
+
+export interface Listed {
+  names: string[];
+  /** Entries that are not a valid slug, or are links (never followed). */
+  skipped: number;
+}
+
+/** Skill folder names under `.claude/skills`, real folders only (links are skipped). */
+export async function listSkillFolders(root: string): Promise<Listed> {
+  const entries = await listing(root, SKILLS_DIR);
+  if (entries === null) return { names: [], skipped: 0 };
   const names: string[] = [];
   let skipped = 0;
   for (const entry of entries) {
@@ -186,8 +234,26 @@ export async function listSkillFolders(
       names.push(entry.name);
     else if (!entry.name.startsWith('.')) skipped++;
   }
-  names.sort();
-  return { names, skipped };
+  return { names: names.sort(), skipped };
+}
+
+/** Agent names from `.claude/agents/<name>.md`, regular files only (links are skipped). */
+export async function listAgentFiles(root: string): Promise<Listed> {
+  const entries = await listing(root, AGENTS_DIR);
+  if (entries === null) return { names: [], skipped: 0 };
+  const names: string[] = [];
+  let skipped = 0;
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const stem = entry.name.endsWith('.md') ? entry.name.slice(0, -3) : null;
+    // `isFile()` is false for a symlink, so a linked definition is never read.
+    if (entry.isFile() && stem !== null && SkillNameSchema.safeParse(stem).success) {
+      names.push(stem);
+    } else {
+      skipped++;
+    }
+  }
+  return { names: names.sort(), skipped };
 }
 
 export type ReadResult =
@@ -198,22 +264,26 @@ export type ReadResult =
 
 const UTF8 = new TextDecoder('utf-8', { fatal: true });
 
-/** Reads SKILL.md without following a link, refusing anything over the cap or not UTF-8 text. */
-export async function readSkillFile(paths: SkillPaths): Promise<ReadResult> {
-  if (!(await skillDirExists(paths))) return { kind: 'missing' };
+/** Reads the file without following a link, refusing anything over `maxBytes` or not UTF-8. */
+export async function readTargetFile(target: FileTarget, maxBytes: number): Promise<ReadResult> {
+  if (!(await foldersExist(target))) return { kind: 'missing' };
   let handle;
   try {
-    handle = await open(paths.file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    handle = await open(target.file, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch (error) {
     const c = code(error);
     if (c === 'ENOENT') return { kind: 'missing' };
-    if (c === 'ELOOP') throw skillError('unsafe_path', 'SKILL.md is a symbolic link');
+    if (c === 'ELOOP') {
+      throw skillError('unsafe_path', `${basename(target.file)} is a symbolic link`);
+    }
     throw error;
   }
   try {
     const stats = await handle.stat();
-    if (!stats.isFile()) throw skillError('unsafe_path', 'SKILL.md is not a regular file');
-    if (stats.size > MAX_SKILL_BYTES) return { kind: 'too-large', sizeBytes: stats.size };
+    if (!stats.isFile()) {
+      throw skillError('unsafe_path', `${basename(target.file)} is not a regular file`);
+    }
+    if (stats.size > maxBytes) return { kind: 'too-large', sizeBytes: stats.size };
     const buffer = Buffer.alloc(stats.size);
     let read = 0;
     while (read < stats.size) {
@@ -238,29 +308,24 @@ export async function readSkillFile(paths: SkillPaths): Promise<ReadResult> {
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /** Checks the text is writable UTF-8 within the cap; returns its bytes. */
-export function encodeSkillText(text: string): Buffer {
+export function encodeText(text: string, maxBytes: number, what: string): Buffer {
   if (LONE_SURROGATE.test(text) || text.includes('\u0000')) {
-    throw skillError('invalid_request', 'The skill text is not valid UTF-8 text');
+    throw skillError('invalid_request', 'The text is not valid UTF-8 text');
   }
   const bytes = Buffer.from(text, 'utf8');
-  if (bytes.length > MAX_SKILL_BYTES) {
-    throw skillError('too_large', `SKILL.md can be at most ${MAX_SKILL_BYTES / 1024} KiB`);
+  if (bytes.length > maxBytes) {
+    throw skillError('too_large', `${what} can be at most ${maxBytes / 1024} KiB`);
   }
   return bytes;
 }
 
-/** Writes SKILL.md atomically. The folder must already exist (`ensureSkillDir`). */
-export async function writeSkillFile(paths: SkillPaths, bytes: Buffer): Promise<void> {
-  // Refuse a linked SKILL.md even though rename would replace the link, not its target: a link
-  // there was put by someone else, and the owner should see it rather than have it vanish.
-  try {
-    if ((await lstat(paths.file)).isSymbolicLink()) {
-      throw skillError('unsafe_path', 'SKILL.md is a symbolic link');
-    }
-  } catch (error) {
-    if (code(error) !== 'ENOENT') throw error;
-  }
-  const temp = join(paths.dir, `.${SKILL_FILE}.${randomUUID()}.tmp`);
+/** Writes the file atomically, making its folders first. */
+export async function writeTargetFile(target: FileTarget, bytes: Buffer): Promise<void> {
+  await ensureFolders(target);
+  // Refuse a linked file even though rename would replace the link, not its target: a link there
+  // was put by someone else, and the owner should see it rather than have it vanish.
+  await fileExists(target);
+  const temp = join(target.dir, `.${basename(target.file)}.${randomUUID()}.tmp`);
   const handle = await open(temp, 'wx', 0o644);
   try {
     await handle.writeFile(bytes);
@@ -272,30 +337,28 @@ export async function writeSkillFile(paths: SkillPaths, bytes: Buffer): Promise<
   }
   await handle.close();
   try {
-    await rename(temp, paths.file);
+    await rename(temp, target.file);
   } catch (error) {
     await unlink(temp).catch(() => undefined);
     throw error;
   }
 }
 
-/** Removes SKILL.md, then the `<slug>/` folder if it is now empty. Returns whether a file went. */
-export async function removeSkillFile(paths: SkillPaths): Promise<boolean> {
-  if (!(await skillDirExists(paths))) return false;
-  try {
-    if ((await lstat(paths.file)).isSymbolicLink()) {
-      throw skillError('unsafe_path', 'SKILL.md is a symbolic link');
+/**
+ * Removes the file; for a skill, also its `<slug>/` folder when that is now empty (ADR-0018 §1).
+ * Returns whether a file went.
+ */
+export async function removeTargetFile(target: FileTarget): Promise<boolean> {
+  if (!(await foldersExist(target))) return false;
+  if (!(await fileExists(target))) return false;
+  await unlink(target.file);
+  if (target.identity === 'dir') {
+    try {
+      await rmdir(target.dir);
+    } catch (error) {
+      // Other files the owner keeps next to SKILL.md stay; the app only removes an empty folder.
+      if (code(error) !== 'ENOTEMPTY' && code(error) !== 'EEXIST') throw error;
     }
-  } catch (error) {
-    if (code(error) === 'ENOENT') return false;
-    throw error;
-  }
-  await unlink(paths.file);
-  try {
-    await rmdir(paths.dir);
-  } catch (error) {
-    // Other files the owner keeps next to SKILL.md stay; the app only ever removes an empty folder.
-    if (code(error) !== 'ENOTEMPTY' && code(error) !== 'EEXIST') throw error;
   }
   return true;
 }

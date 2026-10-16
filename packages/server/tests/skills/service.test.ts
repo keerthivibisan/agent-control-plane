@@ -391,10 +391,10 @@ describe('skills service: ADR-0018 path and commit safety', () => {
     expect(logged).not.toContain(secret);
     expect(logged).not.toContain('secret description');
     expect(logs.map((l) => l.message)).toEqual([
-      'skill written',
-      'skill written',
-      'skill committed',
-      'skill removed',
+      'skills file written',
+      'skills file written',
+      'skills file committed',
+      'skills file removed',
     ]);
   });
 });

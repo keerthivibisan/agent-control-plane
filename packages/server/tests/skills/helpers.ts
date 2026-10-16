@@ -2,7 +2,11 @@ import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { defaultProjectWorkflow, type ProjectWorkflow, type SkillName } from '@acp/core';
 import type { LogFields, Logger } from '../../src/logger.js';
-import { createSkillsService, type SkillProject } from '../../src/skills/index.js';
+import {
+  createAgentsService,
+  createSkillsService,
+  type SkillProject,
+} from '../../src/skills/index.js';
 import { execFile } from 'node:child_process';
 import { GIT_TEST_ENV, makeRepo, tempDir, type ExecCall } from '../workspace/helpers.js';
 import { createGitRunner, type ExecFileFn } from '../../src/workspace/index.js';
@@ -76,7 +80,8 @@ export function setupSkills(
     workflowOf: () => state.workflow,
     logger,
   });
-  return { root, project, skills, logs: lines, state, calls, homeDir };
+  const agents = createAgentsService({ homeDir, git, logger });
+  return { root, project, skills, agents, logs: lines, state, calls, homeDir };
 }
 
 /** Every file under `root` (except `.git`) with its content, for "nothing else touched" checks. */
