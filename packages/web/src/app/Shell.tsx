@@ -144,7 +144,9 @@ function NavLink({
       aria-current={active ? 'page' : undefined}
       title={label}
       className={`group relative flex h-9 items-center gap-3 rounded-control px-3 no-underline transition-colors focus-visible:-outline-offset-2 max-wide:justify-center max-wide:px-0 ${
-        active ? 'bg-accent-soft font-medium text-accent' : 'text-dim hover:bg-sunken hover:text-ink'
+        active
+          ? 'bg-accent-soft font-medium text-accent'
+          : 'text-dim hover:bg-sunken hover:text-ink'
       }`}
     >
       {active ? (
@@ -319,9 +321,7 @@ export function Shell({
       {paletteOpen ? (
         <CommandPalette
           projects={projects.data ?? []}
-          current={
-            contextProject ? { id: contextProject.id, name: contextProject.name } : null
-          }
+          current={contextProject ? { id: contextProject.id, name: contextProject.name } : null}
           onClose={() => setPaletteOpen(false)}
           onNewTicket={setNewTicketFor}
         />

@@ -35,7 +35,9 @@ export function Pill({
       title={title}
       className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption font-medium whitespace-nowrap ${t.frame}`}
     >
-      {dot ? <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${t.dot}`} /> : null}
+      {dot ? (
+        <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${t.dot}`} />
+      ) : null}
       {children}
     </span>
   );

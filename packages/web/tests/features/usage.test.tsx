@@ -105,8 +105,9 @@ describe('usage params', () => {
     expect(usageHref({ groupBy: 'day', preset: 'custom' })).toBe(
       '#/usage?groupBy=day&range=custom',
     );
+    // Redesign (R-A): with a project, the Tokens page is that project's (`#/p/:id/tokens`).
     expect(usageHref({ groupBy: 'session', projectId: 'p-1' })).toBe(
-      '#/usage?groupBy=session&projectId=p-1',
+      '#/p/p-1/tokens?groupBy=session',
     );
   });
 });

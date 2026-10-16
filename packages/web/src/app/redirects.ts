@@ -52,12 +52,11 @@ export function planRedirect(legacy: LegacyRoute, ctx: RedirectContext): Redirec
     case 'setup':
       return go(href.setup());
     case 'control':
-      if (legacy.runId === null) return go(fallback === null ? href.projects() : href.board(fallback));
+      if (legacy.runId === null)
+        return go(fallback === null ? href.projects() : href.board(fallback));
       if (legacy.runId === NEW_RUN) {
         return go(
-          fallback === null
-            ? href.projects()
-            : href.run({ projectId: fallback, id: NEW_RUN }),
+          fallback === null ? href.projects() : href.run({ projectId: fallback, id: NEW_RUN }),
         );
       }
       return { kind: 'run', runId: legacy.runId };

@@ -119,7 +119,7 @@ describe('board: layout and honest numbers', () => {
     const working = await findCard('WEB-9');
     expect(
       within(working).getByRole('link', { name: 'Rate limit the public API' }).getAttribute('href'),
-    ).toBe('#/tickets/t-9');
+    ).toBe(`#/p/${PROJECT_ID}/tickets/t-9`);
     expect(working.textContent).toContain('Urgent');
     expect(within(working).getByTestId('card-run').textContent).toBe(
       '3 helpers·42.2K budget tokens',
@@ -155,7 +155,7 @@ describe('board: project switcher and empty states', () => {
     const select = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Project' });
     expect(select.value).toBe(OTHER_PROJECT_ID);
     fireEvent.change(select, { target: { value: PROJECT_ID } });
-    expect(window.location.hash).toBe(`#/board/${PROJECT_ID}`);
+    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`);
   });
 
   it('asks for a project first when none is added', async () => {
@@ -429,16 +429,17 @@ describe('board: New ticket dialog', () => {
 });
 
 describe('board: app shell', () => {
-  it('lists Board first in the sidebar and renders #/board', async () => {
+  it('lists Board first in the sidebar; #/board opens the first project board', async () => {
     window.location.hash = '#/board';
     const s = server();
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`));
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    // links[0] is the app name; the first page is Board.
-    expect(links[1]?.textContent).toBe('Board');
-    expect(links[1]?.getAttribute('href')).toBe('#/board');
-    expect(links[1]?.getAttribute('aria-current')).toBe('page');
+    // The project section comes first, and its first page is Board.
+    expect(links[0]?.textContent).toBe('Board');
+    expect(links[0]?.getAttribute('href')).toBe(`#/p/${PROJECT_ID}/board`);
+    expect(links[0]?.getAttribute('aria-current')).toBe('page');
     expect(await screen.findByTestId('board-stats')).toBeTruthy();
   });
 });

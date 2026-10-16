@@ -109,8 +109,20 @@ describe('run rules and wording', () => {
 
 describe('control routes and client', () => {
   it('parses #/control and #/control/:runId', () => {
-    expect(parseRoute('#/control')).toEqual({ name: 'control', runId: null });
-    expect(parseRoute(href.control('a/b'))).toEqual({ name: 'control', runId: 'a/b' });
+    // Redesign (R-A): old control-panel addresses redirect (tests/app/redirects.test.ts).
+    expect(parseRoute('#/control')).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'control', runId: null },
+    });
+    expect(parseRoute(href.control('a/b'))).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'control', runId: 'a/b' },
+    });
+    expect(parseRoute(href.run({ id: 'a/b', projectId: 'p 1' }))).toEqual({
+      name: 'run',
+      projectId: 'p 1',
+      runId: 'a/b',
+    });
     expect(parseRoute('#/control/a/b').name).toBe('not-found');
     expect(controlPaths.stopAgent('r 1', 'a/1')).toBe('/api/runs/r%201/agents/a%2F1/stop');
   });

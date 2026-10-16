@@ -131,11 +131,16 @@ describe('project setup form logic', () => {
 describe('project setup routes and client', () => {
   it('parses the wizard and settings routes', () => {
     expect(parseRoute(href.newProject())).toEqual({ name: 'project-new' });
-    expect(parseRoute(href.projectSettings('a/b'))).toEqual({
-      name: 'project-settings',
-      id: 'a/b',
+    // Redesign (R-A): settings live at #/p/:projectId/settings; the old addresses redirect.
+    const settings = parseRoute(href.projectSettings('a/b'));
+    expect(settings.name === 'project' && [settings.projectId, settings.page]).toEqual([
+      'a/b',
+      'settings',
+    ]);
+    expect(parseRoute('#/projects/p-1')).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'project', projectId: 'p-1' },
     });
-    expect(parseRoute('#/projects/p-1')).toEqual({ name: 'project', id: 'p-1' });
     expect(parseRoute('#/projects/p-1/other').name).toBe('not-found');
   });
 

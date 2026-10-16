@@ -12,6 +12,7 @@ import {
   MIGRATION,
   PLAN_V1,
   PLAN_V2,
+  PROJECT_ID,
   RUN_ID,
   STORE,
   TICKET_ID,
@@ -29,9 +30,11 @@ import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { createApiClient, updateTicket, type FetchLike } from '../../src/lib/api';
 import { parseRoute } from '../../src/lib/router';
 import { QueryStore } from '../../src/lib/query-store';
+import { project } from '../fixtures/dto';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
 const TICKET = `/api/tickets/${TICKET_ID}`;
+const webApp = project({ id: PROJECT_ID, name: 'web-app' });
 const RUN = `/api/runs/${RUN_ID}`;
 
 /** A fake server for one scenario that also records each mutation's CSRF header. */
@@ -73,40 +76,49 @@ describe('ticket fixtures', () => {
 });
 
 describe('ticket page: routes', () => {
-  it('parses #/tickets/:id', () => {
-    expect(parseRoute('#/tickets/t-12')).toEqual({ name: 'ticket', id: 't-12' });
-    expect(parseRoute('#/tickets/a%2Fb')).toEqual({ name: 'ticket', id: 'a/b' });
+  // Redesign (R-A): tickets live at #/p/:projectId/tickets/:id; #/tickets/:id redirects there.
+  it('parses #/p/:projectId/tickets/:id and the old #/tickets/:id', () => {
+    expect(parseRoute('#/p/p-web/tickets/t-12')).toEqual({
+      name: 'ticket',
+      projectId: 'p-web',
+      id: 't-12',
+    });
+    expect(parseRoute('#/tickets/a%2Fb')).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'ticket', ticketId: 'a/b' },
+    });
     expect(parseRoute('#/tickets/a/b').name).toBe('not-found');
   });
 
   it('sends #/control to the board without a history entry', async () => {
-    const s = server(planReviewScenario());
+    const s = server(planReviewScenario(), { '/api/projects': [webApp] });
     window.location.hash = '#/control';
     const before = window.history.length;
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
-    await waitFor(() => expect(window.location.hash).toBe('#/board'));
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`));
     expect(window.history.length).toBe(before);
   });
 
-  it('keeps the Phase 3 start page at #/control/new', async () => {
-    const s = server(planReviewScenario(), { '/api/runs': [] });
+  it('keeps the Phase 3 start page, now under the project at runs/new', async () => {
+    const s = server(planReviewScenario(), { '/api/runs': [], '/api/projects': [webApp] });
     window.location.hash = '#/control/new';
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
     expect(await screen.findByRole('heading', { name: 'Control panel', level: 1 })).toBeTruthy();
-    expect(window.location.hash).toBe('#/control/new');
+    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/runs/new`);
   });
 
-  it('opens the ticket page at #/tickets/:id', async () => {
+  it('redirects #/tickets/:id to the ticket page under its project', async () => {
     const s = server(planReviewScenario());
     window.location.hash = `#/tickets/${TICKET_ID}`;
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
     expect(await screen.findByRole('heading', { name: /WEB-12\s*Dark mode toggle/ })).toBeTruthy();
+    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
   });
 
   it('says when a ticket does not exist', async () => {
     renderTicket(server({ routes: {} }));
     expect(await screen.findByText('Ticket not found')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Open board' }).getAttribute('href')).toBe('#/board');
+    expect(screen.getByRole('link', { name: 'Open board' }).getAttribute('href')).toBe('#/');
   });
 });
 

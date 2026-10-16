@@ -188,8 +188,7 @@ export const href = {
   ticket: (ticket: { id: string; projectId: string }) =>
     `#/p/${enc(ticket.projectId)}/tickets/${enc(ticket.id)}`,
   /** A Phase 3 run's page (runs without a ticket). */
-  run: (run: { id: string; projectId: string }) =>
-    `#/p/${enc(run.projectId)}/runs/${enc(run.id)}`,
+  run: (run: { id: string; projectId: string }) => `#/p/${enc(run.projectId)}/runs/${enc(run.id)}`,
   sessions: (params: Params = {}) => scoped('sessions', '/sessions', params),
   usage: (params: Params = {}) => scoped('tokens', '/usage', params),
   /**

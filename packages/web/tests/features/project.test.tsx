@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
 import { ProjectPage } from '../../src/features/project/ProjectPage';
@@ -56,10 +56,10 @@ describe('Project page', () => {
     expect(totals.querySelector('[data-category="output"]')?.textContent).toBe('200');
     expect(within(totals).queryByText(/total/i)).toBeNull();
     expect(screen.getByRole('link', { name: 'Open in Tokens' }).getAttribute('href')).toBe(
-      '#/usage?groupBy=session&projectId=p-1',
+      '#/p/p-1/tokens?groupBy=session',
     );
     expect(screen.getByRole('link', { name: 'See tokens by day' }).getAttribute('href')).toBe(
-      '#/usage?groupBy=day&projectId=p-1',
+      '#/p/p-1/tokens?groupBy=day',
     );
   });
 
@@ -105,41 +105,27 @@ describe('Projects list', () => {
     expect(runningByProject(page(items, 'more'))).toBeNull();
     expect(runningByProject(undefined)).toBeNull();
   });
-
-  it('shows running counts and the folder path', async () => {
-    window.location.hash = '#/projects';
-    const server = fakeServer({
-      '/api/projects': [
-        project({ id: 'p-1', name: 'alpha', sessionCount: 3 }),
-        project({ id: 'p-2', name: 'beta', sessionCount: 1, lastEventAt: null }),
-      ],
-      '/api/sessions?limit=200&status=active': page([session({ id: 's-1', projectId: 'p-1' })]),
-    });
-    render(<App store={new QueryStore(createApiClient(server.fetch))} eventSource={null} />);
-    const table = await screen.findByRole('table', { name: 'Projects' });
-    const alpha = table.querySelector('tr[data-project-id="p-1"]') as HTMLElement;
-    expect(within(alpha).getByText('3 sessions')).toBeTruthy();
-    expect(await within(alpha).findByText('1 running')).toBeTruthy();
-    const beta = table.querySelector('tr[data-project-id="p-2"]') as HTMLElement;
-    expect(within(beta).getByText('None')).toBeTruthy();
-    expect(within(beta).getByText('No activity yet')).toBeTruthy();
-    expect(within(beta).getByText('/work/p-2')).toBeTruthy();
-  });
 });
 
 describe('App routing to the new screens', () => {
-  it('routes #/projects/:id and #/usage', async () => {
+  // Redesign (R-A): a project's Tokens page is today's Tokens page filtered to it.
+  it('routes #/p/:projectId/tokens to the Tokens page filtered to the project', async () => {
     const server = fakeServer({
       ...routes,
       '/api/usage/summary?groupBy=project': usageSummary(),
       '/api/usage/summary?groupBy=day': usageSummary({ groupBy: 'day', groups: [] }),
     });
     const store = new QueryStore(createApiClient(server.fetch));
-    window.location.hash = '#/projects/p-1';
+    window.location.hash = '#/p/p-1/tokens';
     const view = render(<App store={store} eventSource={null} />);
-    expect(await screen.findByRole('heading', { level: 1, name: 'alpha' })).toBeTruthy();
-    window.location.hash = '#/usage';
     expect(await screen.findByRole('heading', { level: 1, name: 'Tokens' })).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        server.calls.some(
+          (c) => c.path.includes('/api/usage/summary') && c.path.includes('projectId=p-1'),
+        ),
+      ).toBe(true),
+    );
     view.unmount();
   });
 });

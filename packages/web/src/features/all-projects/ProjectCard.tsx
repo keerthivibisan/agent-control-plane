@@ -59,7 +59,11 @@ export function ProjectCard({
           <FolderPath path={project.rootPath} />
         </div>
         {harness && b ? (
-          <span className="relative z-10 shrink-0" data-testid="card-harness" data-state={b.harness.state}>
+          <span
+            className="relative z-10 shrink-0"
+            data-testid="card-harness"
+            data-state={b.harness.state}
+          >
             <Pill tone={HARNESS_TONE[harness.tone]} title={harness.tip}>
               {C.harness}: {harness.word}
             </Pill>

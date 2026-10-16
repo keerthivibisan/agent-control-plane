@@ -20,7 +20,7 @@ async function fillForm(name: string, path: string) {
 describe('Setup (#/setup)', () => {
   it('shows three numbered steps, the last one optional', async () => {
     renderWithApi(<SetupPage />, fakeServer(base));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Setup' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Connection' })).toBeTruthy();
     expect(screen.getByText(/Connect this app to your work/)).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Add a project folder' })).toBeTruthy();
     expect(
@@ -49,7 +49,7 @@ describe('Setup (#/setup)', () => {
     });
     const notice = status.closest('[role="status"]') as HTMLElement;
     expect(within(notice).getByRole('link', { name: 'Open project' }).getAttribute('href')).toBe(
-      '#/projects/p-new',
+      '#/p/p-new/board',
     );
   });
 

@@ -75,7 +75,9 @@ describe('control panel: starting a run', () => {
     const s = server({ '/api/projects': [], '/api/runs': [] });
     renderPanel(null, s);
     expect(await screen.findByText('Add a project first')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Go to Setup' }).getAttribute('href')).toBe('#/setup');
+    expect(screen.getByRole('link', { name: 'Go to Setup' }).getAttribute('href')).toBe(
+      '#/health/connection',
+    );
   });
 
   it('refuses to start without a project and sends nothing', async () => {
@@ -98,7 +100,7 @@ describe('control panel: starting a run', () => {
       target: { value: '  Build it  ' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Start run' }));
-    await waitFor(() => expect(window.location.hash).toBe(`#/control/${RUN_ID}`));
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/p-1/runs/${RUN_ID}`));
     expect(posts(s).map((c) => [c.path, c.body])).toEqual([
       ['/api/runs', { projectId: 'p-1' }],
       [`${RUN}/chat`, { text: 'Build it' }],
@@ -141,7 +143,7 @@ describe('control panel: starting a run', () => {
     await within(list).findByText('New run');
     const links = within(list).getAllByRole('link');
     expect(links.map((l) => l.textContent)).toEqual(['New run', 'Old run']);
-    expect(links[0]?.getAttribute('href')).toBe('#/control/r-new');
+    expect(links[0]?.getAttribute('href')).toBe('#/p/p-1/runs/r-new');
     expect(list.textContent).toContain('Finished — all changes reviewed');
     expect(list.textContent).toContain('2 requests wait for your approval');
     expect(list.textContent).toContain('3 agents');
@@ -475,15 +477,15 @@ describe('control panel: a run', () => {
 });
 
 describe('control panel: navigation', () => {
-  // Phase 4 (P4-G): `#/control` opens the board; the start page stays at `#/control/new`.
-  it('is in the sidebar and opens the start page at #/control/new', async () => {
+  // Redesign (R-A): no sidebar entry any more. `#/control/new` (the Phase 3 start page) redirects
+  // to `#/p/:projectId/runs/new`, and a run's page is `#/p/:projectId/runs/:runId`.
+  it('opens the start page from #/control/new under a project, with no sidebar entry', async () => {
     const s = server({ '/api/runs': [] });
     window.location.hash = '#/control/new';
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
-    const nav = screen.getByRole('navigation', { name: 'Main' });
-    const link = within(nav).getByRole('link', { name: 'Control panel' });
-    expect(link.getAttribute('href')).toBe('#/control');
-    expect(link.getAttribute('aria-current')).toBe('page');
     expect(await screen.findByRole('heading', { name: 'Control panel', level: 1 })).toBeTruthy();
+    expect(window.location.hash).toMatch(/^#\/p\/[^/]+\/runs\/new$/);
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).queryByRole('link', { name: 'Control panel' })).toBeNull();
   });
 });

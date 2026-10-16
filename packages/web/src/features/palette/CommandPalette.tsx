@@ -121,7 +121,6 @@ export function CommandPalette({
     }
   };
 
-  let lastGroup: CommandGroup | null = null;
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-[rgb(15_15_20/0.4)] px-4 pt-[12vh] backdrop-blur-[2px]"
@@ -170,8 +169,8 @@ export function CommandPalette({
           className="min-h-0 flex-1 overflow-y-auto p-2"
         >
           {results.map((c, i) => {
-            const heading = c.group !== lastGroup ? C.groups[c.group] : null;
-            lastGroup = c.group;
+            // Results come in group order: a heading starts each group.
+            const heading = results[i - 1]?.group !== c.group ? C.groups[c.group] : null;
             const Icon = pageIcon(c);
             const isActive = i === selected;
             return (
@@ -217,9 +216,7 @@ export function CommandPalette({
                       <span className="block truncate text-caption text-dim">{c.hint}</span>
                     ) : null}
                   </span>
-                  {isActive ? (
-                    <ArrowRightIcon size={16} className="shrink-0 text-accent" />
-                  ) : null}
+                  {isActive ? <ArrowRightIcon size={16} className="shrink-0 text-accent" /> : null}
                 </div>
               </li>
             );

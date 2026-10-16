@@ -1,15 +1,27 @@
-import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
+import { switchTarget } from '../../src/app/ProjectSwitcher';
 import { createApiClient, type FetchLike } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
-import { candidate, capabilities, diagnostics, health, project } from '../fixtures/dto';
+import { parseRoute } from '../../src/lib/router';
+import { board, PROJECT_ID, webProject } from '../fixtures/board';
+import { candidate, capabilities, diagnostics, health, overview, project } from '../fixtures/dto';
 import { fakeServer } from '../helpers';
 
 function renderApp(fetch: FetchLike) {
   const store = new QueryStore(createApiClient(fetch));
   return render(<App store={store} eventSource={null} />);
 }
+
+const alpha = project({ id: 'p-1', name: 'alpha' });
+const beta = project({ id: 'p-2', name: 'beta' });
+const nav = () => screen.getByRole('navigation', { name: 'Main' });
+const navLink = (name: string) => within(nav()).getByRole('link', { name });
+
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 describe('app shell', () => {
   it('shows the persistent sample-data banner when the server is in demo mode', async () => {
@@ -38,99 +50,181 @@ describe('app shell', () => {
     expect(main.textContent).not.toMatch(/\d{2,}/);
   });
 
-  it('has the DESIGN.md sidebar: pages, projects underneath, Setup and Data health', async () => {
-    const server = fakeServer({
-      '/api/projects': [
-        project({ id: 'p-1', name: 'alpha' }),
-        project({ id: 'p-2', name: 'beta' }),
-      ],
-    });
-    renderApp(server.fetch);
-    const nav = screen.getByRole('navigation', { name: 'Main' });
-    const link = (name: string) => within(nav).getByRole('link', { name }).getAttribute('href');
-    expect(link('Overview')).toBe('#/');
-    expect(link('Sessions')).toBe('#/sessions');
-    expect(link('Tokens')).toBe('#/usage');
-    expect(link('Projects')).toBe('#/projects');
-    expect(link('Setup')).toBe('#/setup');
-    expect(link('Data health')).toBe('#/health');
-    const list = await within(nav).findByRole('list', { name: 'Your projects' });
-    expect(within(list).getByRole('link', { name: 'alpha' }).getAttribute('href')).toBe(
-      '#/projects/p-1',
-    );
-    expect(within(nav).getByRole('button', { name: /^Theme: / })).toBeTruthy();
+  it('has the project sidebar: available project pages, then All projects and Data health', async () => {
+    window.location.hash = '#/p/p-1/board';
+    renderApp(fakeServer({ '/api/projects': [alpha, beta] }).fetch);
+    expect(navLink('Board').getAttribute('href')).toBe('#/p/p-1/board');
+    expect(navLink('Board').getAttribute('aria-current')).toBe('page');
+    expect(navLink('Tokens').getAttribute('href')).toBe('#/p/p-1/tokens');
+    expect(navLink('Sessions').getAttribute('href')).toBe('#/p/p-1/sessions');
+    expect(navLink('Settings').getAttribute('href')).toBe('#/p/p-1/settings');
+    expect(navLink('All projects').getAttribute('href')).toBe('#/projects');
+    expect(navLink('Data health').getAttribute('href')).toBe('#/health');
+    // Pages not built yet have no entry (AGENTS.md rule 10: no placeholder pages).
+    for (const name of ['Workflow', 'Skills', 'Harness']) {
+      expect(within(nav()).queryByRole('link', { name })).toBeNull();
+    }
+    // The old global entries are gone.
+    for (const name of ['Overview', 'Control panel', 'Setup', 'Projects']) {
+      expect(within(nav()).queryByRole('link', { name })).toBeNull();
+    }
     // renderApp passes no EventSource, so live updates are unavailable and the footer says so.
-    expect(within(nav).getByTestId('connection-status').textContent).toBe('Live updates off');
+    expect(within(nav()).getByTestId('connection-status').textContent).toBe('Live updates off');
+    // Theme and ⌘K live in the top bar.
+    const bar = screen.getByRole('banner', { name: 'App bar' });
+    expect(within(bar).getByRole('button', { name: /^Theme: / })).toBeTruthy();
+    expect(within(bar).getByTestId('open-palette')).toBeTruthy();
+    expect(
+      await within(bar).findByRole('button', { name: 'Project: alpha. Switch project' }),
+    ).toBeTruthy();
   });
 
-  it('marks the current page in the sidebar', async () => {
-    window.location.hash = '#/sessions/s-1';
+  it('hides the project section when there is no project to show', async () => {
+    window.location.hash = '#/projects';
     renderApp(fakeServer({}).fetch);
-    const nav = screen.getByRole('navigation', { name: 'Main' });
-    expect(within(nav).getByRole('link', { name: 'Sessions' }).getAttribute('aria-current')).toBe(
+    await screen.findByText('Add your first project');
+    expect(within(nav()).queryByRole('link', { name: 'Board' })).toBeNull();
+    expect(navLink('All projects').getAttribute('aria-current')).toBe('page');
+  });
+
+  it('marks Sessions on a session page, linking to the last project', async () => {
+    window.localStorage.setItem('acp.lastProject', 'p-1');
+    window.location.hash = '#/sessions/s-1';
+    renderApp(fakeServer({ '/api/projects': [alpha] }).fetch);
+    await waitFor(() => expect(navLink('Sessions').getAttribute('aria-current')).toBe('page'));
+    expect(navLink('Sessions').getAttribute('href')).toBe('#/p/p-1/sessions');
+  });
+
+  it('remembers the project in view, so #/ reopens its board', async () => {
+    window.location.hash = '#/p/p-2/settings';
+    const server = fakeServer({ '/api/projects': [alpha, beta] });
+    const { unmount } = renderApp(server.fetch);
+    await waitFor(() => expect(window.localStorage.getItem('acp.lastProject')).toBe('p-2'));
+    unmount();
+    window.location.hash = '#/';
+    renderApp(server.fetch);
+    await waitFor(() => expect(window.location.hash).toBe('#/p/p-2/board'));
+  });
+
+  it('#/ opens All projects when no project was used yet', async () => {
+    window.location.hash = '#/';
+    renderApp(fakeServer({ '/api/projects': [alpha] }).fetch);
+    await waitFor(() => expect(window.location.hash).toBe('#/projects'));
+    expect(await screen.findByRole('heading', { level: 1, name: 'All projects' })).toBeTruthy();
+  });
+
+  it('#/health has an Overview and a Connection (the old Setup) section', async () => {
+    window.location.hash = '#/health';
+    const server = fakeServer({
+      '/api/diagnostics/ingestion': diagnostics(),
+      '/api/discovery/candidates': [candidate({ cwd: '/work/new' })],
+    });
+    renderApp(server.fetch);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Data health' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'What this app can see' })).toBeTruthy();
+    expect(await screen.findByTestId('ingestion-counters')).toBeTruthy();
+    const tabs = screen.getByRole('navigation', { name: 'Data health sections' });
+    expect(within(tabs).getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
       'page',
     );
-    await screen.findByText('Server 0.0.0-test · live mode');
-  });
+    expect(navLink('Data health').getAttribute('aria-current')).toBe('page');
 
-  it('#/projects lists projects with their folder and session count', async () => {
-    window.location.hash = '#/projects';
-    const server = fakeServer({
-      '/api/projects': [project({ id: 'p-1', name: 'alpha', sessionCount: 1 })],
-    });
-    renderApp(server.fetch);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Projects' })).toBeTruthy();
-    const table = await screen.findByRole('table', { name: 'Projects' });
-    expect(within(table).getByRole('link', { name: 'alpha' })).toBeTruthy();
-    expect(within(table).getByText('/work/p-1')).toBeTruthy();
-    expect(within(table).getByText('1 session')).toBeTruthy();
-  });
-
-  it('#/projects says how to start when there are none', async () => {
-    window.location.hash = '#/projects';
-    renderApp(fakeServer({}).fetch);
-    expect(await screen.findByText('No projects yet')).toBeTruthy();
-    const main = screen.getByRole('main');
-    expect(
-      within(main)
-        .getAllByRole('link', { name: 'Add a project' })
-        .every((a) => a.getAttribute('href') === '#/setup'),
-    ).toBe(true);
-  });
-
-  it('#/setup shows the register form, unadded folders and hook status', async () => {
-    window.location.hash = '#/setup';
-    const server = fakeServer({ '/api/discovery/candidates': [candidate({ cwd: '/work/new' })] });
-    renderApp(server.fetch);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Setup' })).toBeTruthy();
+    window.location.hash = '#/health/connection';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Connection' })).toBeTruthy();
     expect(screen.getByRole('form', { name: 'Register a project' })).toBeTruthy();
     expect(await screen.findByText('/work/new')).toBeTruthy();
     expect(await screen.findByTestId('hooks-status')).toBeTruthy();
   });
 
-  it('#/health shows capabilities and diagnostics', async () => {
-    window.location.hash = '#/health';
-    const server = fakeServer({ '/api/diagnostics/ingestion': diagnostics() });
-    renderApp(server.fetch);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Data health' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'What this app can see' })).toBeTruthy();
-    expect(await screen.findByTestId('ingestion-counters')).toBeTruthy();
+  it('#/setup redirects to the Connection section without a history entry', async () => {
+    window.location.hash = '#/setup';
+    const length = window.history.length;
+    renderApp(fakeServer({}).fetch);
+    await waitFor(() => expect(window.location.hash).toBe('#/health/connection'));
+    expect(window.history.length).toBe(length);
   });
 
-  it('an unknown address says so and links back to the Overview', async () => {
-    window.location.hash = '#/nope';
-    renderApp(fakeServer({}).fetch);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Go to Overview' }).getAttribute('href')).toBe('#/');
+  it('an unknown address or an unbuilt page says so and links to All projects', async () => {
+    for (const hash of ['#/nope', '#/p/p-1/workflow']) {
+      window.location.hash = hash;
+      const { unmount } = renderApp(fakeServer({}).fetch);
+      expect(await screen.findByText('Page not found')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Go to All projects' }).getAttribute('href')).toBe(
+        '#/projects',
+      );
+      unmount();
+    }
   });
 
   it('shows a contract violation instead of rendering a malformed response', async () => {
-    const server = fakeServer({ '/api/capabilities': { mode: 'demo', providers: 'nope' } });
+    window.location.hash = '#/projects';
+    const server = fakeServer({
+      '/api/capabilities': { mode: 'demo', providers: 'nope' },
+      '/api/projects': [alpha],
+      '/api/overview': overview(),
+    });
     renderApp(server.fetch);
     const alerts = await screen.findAllByRole('alert');
     const alert = alerts.find((a) => a.textContent.includes('/api/capabilities'));
     expect(alert?.getAttribute('data-error-kind')).toBe('parse');
     expect(alert?.textContent).toContain('providers');
     expect(screen.queryByTestId('demo-banner')).toBeNull();
+  });
+});
+
+describe('project switcher', () => {
+  it('keeps the page when switching, and goes to the board from elsewhere', () => {
+    expect(switchTarget(parseRoute('#/p/p-1/tokens?groupBy=day'), 'p-2')).toBe('#/p/p-2/tokens');
+    expect(switchTarget(parseRoute('#/p/p-1/tickets/t-1'), 'p-2')).toBe('#/p/p-2/board');
+    expect(switchTarget(parseRoute('#/p/p-1/workflow'), 'p-2')).toBe('#/p/p-2/board');
+    expect(switchTarget(parseRoute('#/projects'), 'p-2')).toBe('#/p/p-2/board');
+  });
+
+  it('lists the projects, All projects and New project; Esc closes it', async () => {
+    window.location.hash = `#/p/${PROJECT_ID}/board`;
+    renderApp(
+      fakeServer({
+        '/api/projects': [webProject, alpha],
+        [`/api/board?projectId=${PROJECT_ID}`]: board(),
+      }).fetch,
+    );
+    const button = await screen.findByRole('button', { name: 'Project: web-app. Switch project' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(button);
+    const menu = screen.getByRole('navigation', { name: 'Switch project' });
+    const current = within(menu).getByRole('link', { name: /web-app/ });
+    expect(current.getAttribute('aria-current')).toBe('true');
+    expect(document.activeElement).toBe(current);
+    expect(within(menu).getByRole('link', { name: /alpha/ }).getAttribute('href')).toBe(
+      '#/p/p-1/board',
+    );
+    expect(within(menu).getByRole('link', { name: 'All projects' }).getAttribute('href')).toBe(
+      '#/projects',
+    );
+    expect(within(menu).getByRole('link', { name: 'New project' }).getAttribute('href')).toBe(
+      '#/projects/new',
+    );
+    fireEvent.keyDown(current, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(within(menu).getByRole('link', { name: /alpha/ }));
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('navigation', { name: 'Switch project' })).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('reads "All projects" on All projects and "Unknown project" for a missing id', async () => {
+    window.location.hash = '#/projects';
+    const { unmount } = renderApp(fakeServer({ '/api/projects': [alpha] }).fetch);
+    expect(
+      await screen.findByRole('button', { name: 'Project: All projects. Switch project' }),
+    ).toBeTruthy();
+    unmount();
+    window.location.hash = '#/p/gone/settings';
+    renderApp(fakeServer({ '/api/projects': [alpha] }).fetch);
+    expect(
+      await screen.findByRole('button', { name: 'Project: Unknown project. Switch project' }),
+    ).toBeTruthy();
+    // A missing project is never remembered.
+    expect(window.localStorage.getItem('acp.lastProject')).toBeNull();
   });
 });

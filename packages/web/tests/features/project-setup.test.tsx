@@ -127,14 +127,14 @@ describe('New project wizard (#/projects/new)', () => {
     const created = await within(h).findByText('Added WEB-1 “Build the harness” to the board.');
     const notice = created.closest('[role="status"]') as HTMLElement;
     expect(within(notice).getByRole('link', { name: 'Open ticket' }).getAttribute('href')).toBe(
-      '#/tickets/t-harness',
+      `#/p/${PROJECT_ID}/tickets/t-harness`,
     );
     // Every mutation sends the CSRF token, including adding an existing folder (P4-H finding).
     expect(s.csrf).toEqual([CSRF, CSRF, CSRF]);
 
     // Back keeps the project (no second POST); Finish opens the board.
     fireEvent.click(screen.getByRole('button', { name: 'Finish and open the board' }));
-    expect(window.location.hash).toBe(`#/board/${PROJECT_ID}`);
+    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`);
     expect(s.calls.filter((c) => c.path === '/api/projects' && c.method === 'POST')).toHaveLength(
       1,
     );
@@ -335,7 +335,7 @@ describe('Project settings (#/projects/:id/settings)', () => {
       }),
     );
     expect((await screen.findByRole('link', { name: 'Settings' })).getAttribute('href')).toBe(
-      `#/projects/${PROJECT_ID}/settings`,
+      `#/p/${PROJECT_ID}/settings`,
     );
   });
 });

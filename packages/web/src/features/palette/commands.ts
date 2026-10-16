@@ -8,7 +8,8 @@ import { href } from '../../lib/router';
  */
 export type CommandGroup = 'actions' | 'pages' | 'projects' | 'tickets';
 
-export type CommandAction = { kind: 'go'; hash: string } | { kind: 'new-ticket'; projectId: string };
+export type CommandAction =
+  { kind: 'go'; hash: string } | { kind: 'new-ticket'; projectId: string };
 
 export interface Command {
   id: string;
@@ -135,7 +136,9 @@ export function filterCommands(commands: readonly Command[], rawQuery: string): 
       .filter((x) => x.c.group === group)
       .sort((a, b) => b.s - a.s || a.i - b.i)
       .map((x) => x.c);
-    out.push(...(query === '' && group === 'tickets' ? inGroup.slice(0, TICKETS_WHEN_EMPTY) : inGroup));
+    out.push(
+      ...(query === '' && group === 'tickets' ? inGroup.slice(0, TICKETS_WHEN_EMPTY) : inGroup),
+    );
   }
   return out;
 }

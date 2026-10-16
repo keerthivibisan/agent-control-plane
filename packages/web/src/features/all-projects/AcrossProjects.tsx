@@ -150,7 +150,11 @@ function Summary({
         />
       </div>
       <StatusCounts counts={o.sessionsByStatus} />
-      <Card title={OVERVIEW_COPY.tokens.title} tip={OVERVIEW_COPY.tokens.description} testId="tokens-used">
+      <Card
+        title={OVERVIEW_COPY.tokens.title}
+        tip={OVERVIEW_COPY.tokens.description}
+        testId="tokens-used"
+      >
         <TokenBreakdown usage={o.totals} label={OVERVIEW_COPY.tokens.title} />
       </Card>
       <Lists o={o} projectNames={projectNames} hooksReceived={hooksReceived} />

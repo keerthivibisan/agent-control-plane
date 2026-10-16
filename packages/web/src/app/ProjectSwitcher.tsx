@@ -48,7 +48,11 @@ export function ProjectSwitcher({
   currentId: string | null;
   route: Route;
 }) {
-  const [open, setOpen] = useState(false);
+  // Open "for" the route it was opened on: any navigation (a click in the menu, Back) gives a new
+  // route object, which closes the menu without an effect.
+  const [openOn, setOpenOn] = useState<Route | null>(null);
+  const open = openOn === route;
+  const setOpen = (next: boolean) => setOpenOn(next ? route : null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -69,14 +73,11 @@ export function ProjectSwitcher({
     menuRef.current?.querySelector<HTMLElement>('[aria-current="true"], a')?.focus();
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !buttonRef.current?.contains(t)) setOpen(false);
+      if (!menuRef.current?.contains(t) && !buttonRef.current?.contains(t)) setOpenOn(null);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
-
-  // Any navigation (a click in the menu, Back) closes the menu.
-  useEffect(() => setOpen(false), [route]);
 
   const close = (refocus: boolean) => {
     setOpen(false);
@@ -116,7 +117,7 @@ export function ProjectSwitcher({
         aria-controls={open ? menuId : undefined}
         aria-label={C.button(label)}
         data-testid="project-switcher"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' && !open) {
             e.preventDefault();
@@ -125,7 +126,7 @@ export function ProjectSwitcher({
         }}
         className="flex h-9 max-w-80 min-w-0 items-center gap-2 rounded-control border border-line bg-panel pr-2 pl-2 text-ink shadow-card transition-colors hover:border-line-strong hover:bg-sunken"
       >
-        {onAllProjects || current == null ? (
+        {onAllProjects || !current ? (
           <span className="flex size-6 shrink-0 items-center justify-center text-dim">
             <GridIcon size={16} />
           </span>

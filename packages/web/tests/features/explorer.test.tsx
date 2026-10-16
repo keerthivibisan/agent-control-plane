@@ -162,7 +162,7 @@ describe('Sessions page', () => {
     );
     expect(await screen.findByText('No sessions yet')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Add a project' }).getAttribute('href')).toBe(
-      '#/setup',
+      '#/health/connection',
     );
     expect(screen.queryByRole('region', { name: 'How sessions relate' })).toBeNull();
     unmount();

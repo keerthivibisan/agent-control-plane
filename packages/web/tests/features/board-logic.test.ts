@@ -74,9 +74,17 @@ describe('board moves (README §5.2: only owner-settable moves)', () => {
 
 describe('board routes', () => {
   it('parses #/board and #/board/:projectId and round-trips ids', () => {
-    expect(parseRoute('#/board')).toEqual({ name: 'board', projectId: null });
-    expect(parseRoute('#/board/p-1')).toEqual({ name: 'board', projectId: 'p-1' });
-    expect(parseRoute(href.board('a b/c'))).toEqual({ name: 'board', projectId: 'a b/c' });
+    // Redesign (R-A): the board lives at #/p/:projectId/board; #/board/... redirects there.
+    expect(parseRoute('#/board')).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'board', projectId: null },
+    });
+    expect(parseRoute('#/board/p-1')).toEqual({
+      name: 'legacy',
+      legacy: { kind: 'board', projectId: 'p-1' },
+    });
+    const route = parseRoute(href.board('a b/c'));
+    expect(route.name === 'project' && route.page === 'board' && route.projectId).toBe('a b/c');
     expect(parseRoute('#/board/p-1/x').name).toBe('not-found');
     expect(href.ticket({ id: 't 1', projectId: 'p-1' })).toBe('#/p/p-1/tickets/t%201');
   });
