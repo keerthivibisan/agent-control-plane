@@ -6,7 +6,7 @@
 | WP  | Title                                               | Depends  | Status                                                                    | Branch          | Merged                         |
 | --- | --------------------------------------------------- | -------- | ------------------------------------------------------------------------- | --------------- | ------------------------------ |
 | R-0 | [Contracts, ADRs, progress files](wp/R-0.md)        | approval | **done**                                                                  | `main`          | 2026-10-16                     |
-| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | in-progress (resumed)                                                     | `wp/r-a-shell`  | —                              |
+| R-A | [Shell, navigation, visual system](wp/R-A.md)       | R-0      | **done**                                                                  | `wp/r-a-shell`  | 2026-10-16 (`8b70fc4`)         |
 | R-C | [Engine: planner, reviewer, tester](wp/R-C.md)      | R-0      | in-progress (resumed)                                                     | `wp/r-c-engine` | —                              |
 | R-G | [Server and db wiring, migration 0004](wp/R-G.md)   | R-0, R-C | **part 1 merged**; part 2 (R-C stage wiring, skills plugin) waits for R-C | `wp/r-g-server` | part 1: 2026-10-16 (`39bd957`) |
 | R-D | [Skills: server module and page](wp/R-D.md)         | R-0, R-A | in-progress (resumed)                                                     | `wp/r-d-skills` | —                              |
@@ -29,6 +29,17 @@ in its progress file with the exact next steps. Read it first.
 | R-C | `.claude/worktrees/agent-a2d3226375ace63e6` | **Done, in WIP `fb73268`:** workflow snapshot, agent stages, separate planner, reviewer and tester after merge, `post_review`, `continueStages`, Stop covers every role. **Left:** fix the typecheck (`exactOptionalPropertyTypes`, `plan.ts:182`); finish `policy.ts`; exports; `deriveRunWorkflow`; all new tests (including default-workflow equivalence); README. Adapter toolsets are blocked on contract decisions A and B below.           |
 | R-G | `.claude/worktrees/agent-a64edec75e61b9de3` | Claimed, with the design in its note. **Next:** migration `0004_redesign.sql` and an upgrade test, `repositories/redesign/{workflow,audit}.ts`, `decidedBy`/limits wiring, `GET/PUT /api/projects/:id/workflow`, tests. Part 2 waits for R-C.                                                                                                                                                                                                     |
 | R-D | `.claude/worktrees/agent-a2bf7f960a015159c` | Claimed, with the design in its note. **Next:** the `src/skills/` service and tests, the router with supertest security tests, the Skills page with tests and screenshots, and the app.ts/bootstrap lines for R-G.                                                                                                                                                                                                                                |
+
+**R-A review (2026-10-16):** scope OK. The edits outside R-A's paths are link-helper and import
+updates plus the removal of `ProjectsList` (All projects replaces it). No raw HTML. The coordinator
+re-ran pnpm check (1,719 ✓) and the e2e (20/20 ✓, ports 7551/7561) and looked at the screenshots. Page
+WPs plug in through `PROJECT_PAGES` (`src/app/project-pages.ts`) and `ProjectScreen` (DESIGN.md
+"Adding a project page"). Follow-ups:
+
+- R-H: remove the board header's own project select and delete `features/project/ProjectPage.tsx`
+  and `features/ticket/redirect.tsx`.
+- R-E: a ⌘K "Run checks" action.
+- R-F: replace the interim Tokens page.
 
 **R-G part 1 review (2026-10-16):** scope OK. Migration 0004 only adds a table and nullable columns,
 and 0001–0003 are unchanged. The skill-name listing uses lstat on every segment, contains the
