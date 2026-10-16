@@ -1,5 +1,5 @@
 import type { TokenCounts } from '../usage/usage.js';
-import type { LeadToolName } from '../orchestration/orchestration.js';
+import type { AgentRoleKind, LeadToolName } from '../orchestration/orchestration.js';
 
 /**
  * Managed execution contract (ADR-0004, ADR-0012). Separate from `ObservationAdapter`: observation
@@ -9,7 +9,12 @@ import type { LeadToolName } from '../orchestration/orchestration.js';
 
 export interface ManagedAgentSpec {
   agentRunId: string;
-  kind: 'lead' | 'worker';
+  /**
+   * The agent's role (ADR-0019). The adapter gives each role its toolset: `lead` and `planner` are
+   * read-only with lead tools; `reviewer` is read-only with `post_review` only; `worker` and
+   * `tester` edit in their own worktree.
+   */
+  kind: AgentRoleKind;
   /** Absolute path of the agent's working directory (a worktree for workers). */
   cwd: string;
   /** First user message. Further messages go through `send`. */
@@ -29,6 +34,14 @@ export interface ManagedAgentSpec {
    * `agent_status`); never `submit_plan` or `request_review`.
    */
   canStartHelpers?: boolean;
+  /**
+   * Project skills for this agent (ADR-0019 §4, amended 2026-10-16). With `settingSources: []`
+   * Claude Code loads no filesystem skills, so the server builds a skills-only plugin directory for
+   * the run (copies of the mapped skills from the project's checkout, front matter reduced to
+   * `name` and `description`; no hooks, MCP or settings) and the adapter passes it as a local
+   * plugin, allowing only the listed skills (namespaced `<plugin>:<skill>`).
+   */
+  skillPlugin?: { path: string; skills: readonly string[] };
 }
 
 /** Executes a lead tool call after the engine has validated it; returns text for the model. */

@@ -50,7 +50,28 @@ unit-tests`.
 4. **Skills.**
    - A stage with `skill` set has one line added to its agent's instructions: "Use the project skill
      `<name>`."
-   - Claude Code resolves the skill from `.claude/skills` (ADR-0018).
+   - **How the skill reaches the agent (amended 2026-10-16, decision E).** Managed agents run with
+     `settingSources: []`. That is deliberate: a project's checked-in `.claude/settings.json` could
+     auto-approve tools before our `canUseTool` gate, because allow rules are evaluated before the
+     callback. With `settingSources: []`, though, Claude Code loads **no** filesystem skills. Turning
+     on the `project` source to get skills is rejected, because it brings settings, hooks and
+     CLAUDE.md with it. The documented skills-only route is used instead (Agent SDK docs: Skills,
+     Plugins):
+     - At each agent start, the **server** builds a run-scoped plugin directory under the data dir:
+       `runs/<runId>/skills-plugin/` with `.claude-plugin/plugin.json` (`{"name": "acp-skills"}`) and
+       `skills/<name>/SKILL.md`.
+       - Each file is a copy of the mapped skill from the **project's checkout**, never an agent
+         worktree, so an agent's uncommitted skill edit can't change what runs. This matches the
+         harness rule in ADR-0017.
+       - The front matter is reduced to `name` and `description`, so a repo skill's `allowed-tools`
+         (or anything else) cannot grant tools that skip our gate.
+       - The directory has no `hooks/`, `.mcp.json`, `agents/` or settings.
+     - The **adapter** passes `plugins: [{ type: 'local', path }]` and `skills: ['acp-skills:<name>']`,
+       keeping `settingSources: []` and `permissionMode: 'default'`. The instruction line names
+       `acp-skills:<name>`.
+     - The server removes the directory with the run's other temporary files.
+     - It must be verified in the R-V real smoke run (with the owner's consent) that the init message
+       lists the skill and that the agent uses it.
    - A mapped skill that no longer exists is shown as a problem on the Workflow page. The agent starts
      without it, and the run is not blocked.
 5. **Live state.** `RunWorkflowDto` reports each stage's state for the ticket page graph. It is derived

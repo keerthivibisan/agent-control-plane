@@ -39,8 +39,11 @@ they change what agents do, so writing them needs an explicit, narrow exception.
    - It refuses when other files are staged, so a skill commit never sweeps in the owner's own work.
 5. **Content.** SKILL.md is the owner's own file, shown and edited in the UI. It is not conversation
    content (ADR-0009). It is never logged, and it is redacted only when displayed in error messages.
-6. **Use by agents.** A stage mapped to a skill tells its agent to use it (ADR-0019). Claude Code loads
-   it itself, and the app does not inject the file's text into prompts.
+6. **Use by agents.** A stage mapped to a skill tells its agent to use it (ADR-0019). Managed agents
+   don't load `.claude/skills` directly, because they run with `settingSources: []`. The server copies
+   the mapped skill, with its front matter reduced to name and description, into a run-scoped
+   skills-only plugin (ADR-0019 §4, amended 2026-10-16). The app never injects the file's text into
+   prompts.
 
 ## Alternatives considered
 
