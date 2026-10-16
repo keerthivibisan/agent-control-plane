@@ -68,12 +68,26 @@ async function findRoot(request: APIRequestContext) {
   return root;
 }
 
+interface Project {
+  id: string;
+  name: string;
+  rootPath: string;
+}
+
+async function demoProject(request: APIRequestContext, name: string): Promise<Project> {
+  const projects = await api<Project[]>(request, '/projects');
+  const project = projects.find((p) => p.name === name);
+  if (project === undefined) throw new Error(`${name} project missing`);
+  return project;
+}
+
 async function open(page: Page, hash: string) {
   await page.goto(`/#${hash}`);
   await expect(page.getByTestId('demo-banner')).toBeVisible();
 }
 
 test('sample-data banner and demo mode are always visible', async ({ page }) => {
+  // Old addresses redirect to their new home (redesign R-A); the banner is on every page.
   for (const hash of ['/', '/sessions', '/usage', '/projects', '/setup', '/health']) {
     await open(page, hash);
     await expect(page.getByTestId('demo-banner')).toContainText("You're looking at sample data");
@@ -81,15 +95,16 @@ test('sample-data banner and demo mode are always visible', async ({ page }) => 
   }
 });
 
-test('Overview shows the demo projects, status counts, tokens and estimated costs from the API', async ({
+// Redesign (R-A): the Overview is now the "Across your projects" part of All projects.
+test('All projects shows the demo projects, status counts, tokens and estimated costs from the API', async ({
   page,
   request,
 }) => {
-  await open(page, '/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByText('demo-api')).toBeVisible();
-  await expect(nav.getByText('demo-web')).toBeVisible();
+  await open(page, '/projects');
+  await expect(page.getByRole('heading', { level: 1, name: 'All projects' })).toBeVisible();
+  const cards = page.getByRole('list', { name: 'Your projects' });
+  await expect(cards.getByRole('link', { name: 'demo-api' })).toBeVisible();
+  await expect(cards.getByRole('link', { name: 'demo-web' })).toBeVisible();
 
   await expect(async () => {
     const overview = await api<{
@@ -153,11 +168,16 @@ test('Sessions page lists sessions, nests helpers and draws only the /tree edges
   request,
 }) => {
   const root = await findRoot(request);
-  await open(page, '/sessions');
+  if (root.projectId === null) throw new Error('demo root has no project');
+  // Redesign (R-A): Sessions is a project page.
+  await open(page, `/p/${root.projectId}/sessions`);
   await expect(page.getByRole('heading', { name: 'Sessions', level: 1 })).toBeVisible();
 
   await expect(async () => {
-    const list = await api<{ items: Session[] }>(request, '/sessions?limit=50');
+    const list = await api<{ items: Session[] }>(
+      request,
+      `/sessions?limit=50&projectId=${root.projectId}`,
+    );
     await expect(page.locator('tr[data-session-id]')).toHaveCount(list.items.length, {
       timeout: 1_000,
     });
@@ -288,7 +308,10 @@ test('usage page renders both charts, the chart table, and direct totals from th
     }
   }
 
-  await open(page, '/usage?groupBy=model');
+  // Redesign (R-A): Tokens is a project page; the API comparisons use the same project filter.
+  const project = await demoProject(request, 'demo-api');
+  const scope = `projectId=${project.id}`;
+  await open(page, `/p/${project.id}/tokens?groupBy=model`);
   await expect(page.getByRole('heading', { name: 'Tokens', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByTestId('token-explainer')).toBeVisible();
   await expect(page.getByRole('img', { name: 'Input and output tokens per day' })).toBeVisible();
@@ -301,7 +324,10 @@ test('usage page renders both charts, the chart table, and direct totals from th
 
   await page.getByRole('button', { name: 'Show as table' }).click();
   await expect(async () => {
-    const byDay = await api<{ groups: { key: string }[] }>(request, '/usage/summary?groupBy=day');
+    const byDay = await api<{ groups: { key: string }[] }>(
+      request,
+      `/usage/summary?groupBy=day&${scope}`,
+    );
     const days = byDay.groups.filter((g) => g.key !== 'unknown').length;
     await expect(page.getByTestId('chart-table').locator('tbody tr')).toHaveCount(days, {
       timeout: 1_000,
@@ -309,7 +335,7 @@ test('usage page renders both charts, the chart table, and direct totals from th
 
     const byModel = await api<{ groups: { key: string }[]; totals: Usage }>(
       request,
-      '/usage/summary?groupBy=model',
+      `/usage/summary?groupBy=model&${scope}`,
     );
     await expect(page.locator('tr[data-group]')).toHaveCount(byModel.groups.length, {
       timeout: 1_000,
@@ -318,7 +344,9 @@ test('usage page renders both charts, the chart table, and direct totals from th
   }).toPass();
 });
 
-test('project page shows the project, its direct usage totals and its sessions', async ({
+// Redesign (R-A): the old project page became the project's own pages. A project card on All
+// projects opens its board; Tokens and Sessions in the sidebar show its usage and sessions.
+test('a project card opens the project; its Tokens and Sessions pages show its usage and sessions', async ({
   page,
   request,
 }) => {
@@ -335,25 +363,34 @@ test('project page shows the project, its direct usage totals and its sessions',
     }
   }
 
-  await open(page, '/');
-  await page.getByRole('navigation', { name: 'Main' }).getByText('demo-api').click();
-  await expect(page.getByRole('heading', { name: 'demo-api', level: 1 })).toBeVisible();
+  const project = await demoProject(request, 'demo-api');
+  await open(page, '/projects');
+  const card = page.locator(`[data-project-id="${project.id}"]`);
+  await expect(card.getByText(project.rootPath)).toBeVisible();
+  await card.getByRole('link', { name: 'demo-api' }).click();
+  await expect(page).toHaveURL(new RegExp(`#/p/${project.id}/board$`));
+  await expect(
+    page.getByRole('button', { name: 'Project: demo-api. Switch project' }),
+  ).toBeVisible();
 
-  const projects = await api<{ id: string; name: string; rootPath: string }[]>(
-    request,
-    '/projects',
-  );
-  const project = projects.find((p) => p.name === 'demo-api');
-  if (project === undefined) throw new Error('demo-api project missing');
-  await expect(page.getByText(project.rootPath)).toBeVisible();
-
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('link', { name: 'Tokens' }).click();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true, level: 1 })).toBeVisible();
   await expect(async () => {
     const usage = await api<{ totals: Usage }>(
       request,
-      `/usage/summary?groupBy=session&projectId=${project.id}`,
+      `/usage/summary?groupBy=project&projectId=${project.id}`,
     );
-    await expectStats(page.getByTestId('project-usage'), usage.totals);
-    const sessions = await api<{ items: Session[] }>(request, `/projects/${project.id}/sessions`);
+    await expectStats(page.getByTestId('usage-totals'), usage.totals);
+  }).toPass();
+
+  await nav.getByRole('link', { name: 'Sessions' }).click();
+  await expect(page.getByRole('heading', { name: 'Sessions', level: 1 })).toBeVisible();
+  await expect(async () => {
+    const sessions = await api<{ items: Session[] }>(
+      request,
+      `/sessions?limit=50&projectId=${project.id}`,
+    );
     await expect(page.locator('tr[data-session-id]')).toHaveCount(sessions.items.length, {
       timeout: 1_000,
     });

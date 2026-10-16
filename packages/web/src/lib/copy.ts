@@ -2041,6 +2041,8 @@ export const ALL_PROJECTS_COPY = {
   newProject: 'New project',
   addFolder: 'Add an existing folder',
   cardsLabel: 'Your projects',
+  agents: 'Agents',
+  sessionsLabel: 'Claude Code sessions',
   sessions: (n: number) => countOf(n, 'session'),
   running: (n: number) => `${formatCount(n)} running`,
   needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'needs' : 'need'} you`,

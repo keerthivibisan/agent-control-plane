@@ -25,6 +25,19 @@ export const PLAN_V2 = 'plan-2';
 
 type Json = Record<string, unknown>;
 
+/** The fixtures' project as `GET /api/projects` lists it (the shell's switcher and sidebar). */
+export function fixtureProject(): Json {
+  return {
+    id: PROJECT_ID,
+    name: 'web-app',
+    rootPath: '/work/web-app',
+    createdAt: new Date(Date.UTC(2026, 9, 15, 9, 0)).toISOString(),
+    updatedAt: new Date(Date.UTC(2026, 9, 15, 9, 0)).toISOString(),
+    sessionCount: 0,
+    lastEventAt: null,
+  };
+}
+
 const T = (min: number) => new Date(Date.UTC(2026, 9, 15, 9, min)).toISOString();
 
 const ticketBase = {

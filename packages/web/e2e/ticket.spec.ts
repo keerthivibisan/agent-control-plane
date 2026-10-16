@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  PROJECT_ID,
+  fixtureProject,
   STORE,
   TICKET_ID,
   UI,
@@ -18,7 +20,16 @@ import {
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
 
+/** Lists the fixtures' project next to the server's own, so the shell knows its name. */
+async function withFixtureProject(page: Page): Promise<void> {
+  await page.route(/\/api\/projects$/, async (route) => {
+    const real = (await (await route.fetch()).json()) as unknown[];
+    await route.fulfill({ json: [...real, fixtureProject()] });
+  });
+}
+
 async function serve(page: Page, sc: TicketScenario): Promise<void> {
+  await withFixtureProject(page);
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') {
@@ -37,9 +48,12 @@ async function serve(page: Page, sc: TicketScenario): Promise<void> {
   });
 }
 
+/** Redesign (R-A): the ticket page lives under its project. */
+const TICKET_HASH = `#/p/${PROJECT_ID}/tickets/${TICKET_ID}`;
+
 async function open(page: Page, sc: TicketScenario): Promise<void> {
   await serve(page, sc);
-  await page.goto(`/#/tickets/${TICKET_ID}`);
+  await page.goto(`/${TICKET_HASH}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
 }
 
@@ -60,6 +74,13 @@ async function shoot(page: Page, name: string): Promise<void> {
     }
   }
 }
+
+test('an old #/tickets/:id link opens the ticket under its project', async ({ page }) => {
+  await serve(page, planReviewScenario());
+  await page.goto(`/#/tickets/${TICKET_ID}`);
+  await expect(page).toHaveURL(new RegExp(`${TICKET_HASH}$`));
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
+});
 
 test('plan review: the plan card replaces the tree', async ({ page }) => {
   await open(page, planReviewScenario());

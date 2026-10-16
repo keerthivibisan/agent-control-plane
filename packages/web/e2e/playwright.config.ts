@@ -55,6 +55,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // Redesign R-A: the project-first shell (and its screenshots) on the demo server.
+      name: 'shell',
+      testMatch: 'shell.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       name: 'control',
       testMatch: 'control.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${CONTROL_PORT}` },

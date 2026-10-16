@@ -74,6 +74,9 @@ export function ProjectCard({
       <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="card-runs">
         {b ? (
           <>
+            <span className="text-caption font-medium tracking-wide text-dim uppercase">
+              {C.agents}
+            </span>
             <span className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden="true"
@@ -99,12 +102,16 @@ export function ProjectCard({
 
       <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4 text-caption">
         <div className="min-w-0">
-          <dt className="text-dim">{C.sessions(project.sessionCount)}</dt>
-          <dd className="mt-0.5 font-medium" data-running={runningSessions ?? undefined}>
+          <dt className="text-dim">{C.sessionsLabel}</dt>
+          <dd className="mt-0.5 font-medium">
+            <span>{C.sessions(project.sessionCount)}</span>
+            <span className="text-dim"> · </span>
             {runningSessions === null ? (
               <span className="text-unavailable">{NOT_REPORTED}</span>
             ) : (
-              `${formatCount(runningSessions)} ${STATUS_COPY.active.word.toLowerCase()}`
+              <span data-running={runningSessions}>
+                {`${formatCount(runningSessions)} ${STATUS_COPY.active.word.toLowerCase()}`}
+              </span>
             )}
           </dd>
         </div>

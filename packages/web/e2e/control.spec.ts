@@ -87,9 +87,13 @@ async function showOnMain(request: APIRequestContext, path: string): Promise<str
   return ((await res.json()) as { content: string | null }).content;
 }
 
-/** Owner: start a run from #/control/new (P4-G: #/control opens the board) and return its id. */
+/**
+ * Owner: start a run from #/control/new and return its id. Redesign (R-A): that address redirects
+ * to the project's `runs/new`, and a run without a ticket opens at `#/p/:projectId/runs/:runId`.
+ */
 async function startRun(page: Page, text: string, budget?: string): Promise<string> {
   await page.goto('/#/control/new');
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/runs\/new$/);
   const form = page.getByTestId('start-run');
   await form.getByLabel('Project').selectOption({ label: 'e2e-app' });
   await form.getByLabel('What should the agents do?').fill(text);
@@ -98,8 +102,8 @@ async function startRun(page: Page, text: string, budget?: string): Promise<stri
     await form.getByLabel('Budget per agent').fill(budget);
   }
   await form.getByRole('button', { name: 'Start run' }).click();
-  await expect(page).toHaveURL(/#\/control\/(?!new$)[^/]+$/);
-  const runId = /#\/control\/([^/]+)$/.exec(page.url())?.[1];
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/runs\/(?!new$)[^/]+$/);
+  const runId = /#\/p\/[^/]+\/runs\/([^/]+)$/.exec(page.url())?.[1];
   if (runId === undefined) throw new Error('no run id in the URL');
   return runId;
 }
@@ -384,6 +388,10 @@ test('the open run page updates live when an agent changes something (no reload)
   request,
 }) => {
   const runId = await startRun(page, 'Live update check');
+  // An old control-panel link to a run without a ticket opens its run page (redesign R-A).
+  const runPage = page.url();
+  await page.goto(`/#/control/${runId}`);
+  await expect(page).toHaveURL(runPage);
   const leadDto = (await run(request, runId)).agents.find((a) => a.kind === 'lead');
   if (leadDto === undefined) throw new Error('no lead');
   await fakeAgent(request, leadDto.id);

@@ -12,6 +12,7 @@ import { PROJECT_PAGES } from '../../app/project-pages';
 import {
   ArrowRightIcon,
   GridIcon,
+  HealthIcon,
   PlusSmallIcon,
   ProjectsIcon,
   SearchIcon,
@@ -34,6 +35,7 @@ const GROUP_ICON: Record<CommandGroup, ComponentType<IconProps>> = {
 };
 
 function pageIcon(c: Command): ComponentType<IconProps> {
+  if (c.id === 'page:health' || c.id === 'page:connection') return HealthIcon;
   const id = c.id.startsWith('page:') ? c.id.slice(5) : null;
   return PROJECT_PAGES.find((p) => p.id === id)?.icon ?? GROUP_ICON[c.group];
 }
