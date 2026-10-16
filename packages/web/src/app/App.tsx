@@ -9,7 +9,7 @@ import { ProjectSettings } from '../features/project-setup/ProjectSettings';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { TicketPage } from '../features/ticket/TicketPage';
-import { UsageAnalytics } from '../features/usage/UsageAnalytics';
+import { TokensPage } from '../features/tokens/TokensPage';
 import { EMPTY, SHELL_COPY } from '../lib/copy';
 import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
@@ -52,8 +52,7 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
     case 'board':
       return <BoardPage key={projectId} projectId={projectId} />;
     case 'tokens':
-      // Today's Tokens page, filtered to the project, until R-F replaces it.
-      return <UsageAnalytics search={scopedParams(route.params, projectId)} />;
+      return <TokensPage key={projectId} projectId={projectId} search={route.params} />;
     case 'sessions':
       return <SessionExplorer search={scopedParams(route.params, projectId)} />;
     case 'settings':

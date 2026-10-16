@@ -2214,3 +2214,128 @@ export const HARNESS_PAGE_COPY = {
     keywords: 'harness checks tests lint build verify main branch',
   },
 } as const;
+
+// --- Project Tokens page (redesign R-F, wp/r-f-tokens) -------------------------------------------
+
+export type TokensBreakdownWord = 'session' | 'ticket' | 'role' | 'model';
+export type TokensRoleWord = 'planner' | 'lead' | 'worker' | 'reviewer' | 'tester' | 'external';
+
+/** "94%"; below 1% keeps one decimal so a small share never reads as 0%. */
+export function formatShare(share: number): string {
+  const pct = share * 100;
+  if (pct > 0 && pct < 1) return `${pct.toFixed(1)}%`;
+  return `${Math.round(pct)}%`;
+}
+
+export const TOKENS_COPY = {
+  title: 'Tokens',
+  description: "What this project's sessions used: new work, and what the prompt cache reused.",
+  tip: 'Every number comes from the usage Claude Code reported, with each reply counted once. Token types are priced differently, so new work and cache reuse are shown apart.',
+  derivedTip:
+    'Derived: summed from the usage Claude Code reported, each reply counted once. Helper agents count under themselves.',
+  tiles: {
+    label: 'Tokens at a glance',
+    sessions: 'Sessions',
+    sessionsTip: 'One Claude Code conversation, from when it starts until it exits.',
+    sessionsWithUsage: (n: number) => `${formatCount(n)} reported token usage`,
+    runs: 'Agent runs',
+    runsTip: "Runs this app started for the project's tickets: a lead agent and its helpers.",
+    runsTickets: (n: number) => (n === 1 ? 'for 1 ticket' : `for ${formatCount(n)} tickets`),
+    newWork: 'New work',
+    newWorkTip:
+      'Input and output tokens: what was newly sent to the model, and what it wrote back.',
+    newWorkSub: 'input + output tokens',
+    total: 'Total processed',
+    totalTip:
+      'Everything the model read and wrote: input, output, cache write and cache read tokens added up. Cache tokens are much cheaper, so this is not a cost.',
+    totalSub: 'including the prompt cache',
+    share: 'Cache reuse share',
+    shareTip: 'Cache read tokens as a share of the total processed.',
+    shareWhy:
+      'Every turn re-reads the conversation from the cache, so this share is usually large.',
+    tokens: (n: number) => `${formatCount(n)} ${n === 1 ? 'token' : 'tokens'}`,
+    partial: 'Partial',
+    partialNote: (missing: number, total: number) =>
+      `At least ${formatCount(missing)} of ${formatCount(total)} usage records didn't report every type counted here, so the real number may be higher.`,
+  },
+  charts: {
+    title: 'Over time',
+    tip: 'Cache tokens are often about 1,000 times more than new work, so they get their own chart and scale.',
+    newWork: 'New work per day',
+    cache: 'Prompt cache per day',
+    note: "Lines are not stacked. A gap means that day didn't report this type; it is not zero. Days with no usage are left out.",
+    showTable: 'Show as table',
+    showChart: 'Show as chart',
+    tableLabel: 'Tokens per day',
+    day: 'Day',
+    dayAxis: 'Day (UTC)',
+    tokensAxis: 'Tokens',
+    undated: (n: number) =>
+      n === 1
+        ? '1 usage record has no date, so it is not on the charts. It is in the numbers above and the tables below.'
+        : `${formatCount(n)} usage records have no date, so they are not on the charts. They are in the numbers above and the tables below.`,
+  },
+  breakdown: {
+    title: 'Where the tokens went',
+    description: "Each session's own tokens, counted once. Helper agents count under themselves.",
+    by: 'Break down by',
+    words: {
+      session: 'Session',
+      ticket: 'Ticket',
+      role: 'Agent role',
+      model: 'Model',
+    } satisfies Record<TokensBreakdownWord, string>,
+    tableLabel: (word: string) => `Tokens by ${word.toLowerCase()}`,
+    newWork: 'New work',
+    cacheWrite: 'Cache write',
+    cacheRead: 'Cache read',
+    total: 'Total processed',
+    share: 'Cache share',
+    inOut: (input: string, output: string) => `${input} in · ${output} out`,
+    cost: 'Estimated cost',
+    costProvenance: 'estimated (provider-reported)',
+    costTip:
+      "The latest running total Claude Code reported for this session. An estimate; this app doesn't calculate prices, and costs are never added up across sessions.",
+    unknownModel: 'Unknown model',
+    empty: {
+      session: 'No session used tokens in this range.',
+      ticket: 'No ticket has an agent run in this range.',
+      role: 'No usage in this range.',
+      model: 'No usage in this range.',
+    } satisfies Record<TokensBreakdownWord, string>,
+    ticketNote:
+      "A ticket's tokens are its agents' sessions. A ticket whose agents haven't reported usage yet reads \"Not reported\".",
+    roleNote: 'Sessions you started yourself in Claude Code count as "Outside the app".',
+  },
+  roles: {
+    planner: { word: 'Planner', tip: 'Writes the plan for a ticket.' },
+    lead: { word: 'Lead', tip: 'Runs the approved plan and starts the helpers.' },
+    worker: { word: 'Helpers', tip: 'Do parts of the work, each in its own copy of the project.' },
+    reviewer: { word: 'Reviewer', tip: 'Reviews the merged change.' },
+    tester: { word: 'Tester', tip: 'Writes unit tests for the change.' },
+    external: {
+      word: 'Outside the app',
+      tip: 'Sessions you started yourself in Claude Code, not by an agent run.',
+    },
+  } satisfies Record<TokensRoleWord, { word: string; tip: string }>,
+  range: {
+    label: 'Date range',
+    presets: {
+      '7d': 'Last 7 days',
+      '30d': 'Last 30 days',
+      all: 'All time',
+      custom: 'Custom',
+    } satisfies Record<DatePreset, string>,
+    from: 'From',
+    to: 'To',
+    utcNote: 'Days are counted in UTC.',
+  },
+  empty: {
+    title: 'No token usage yet',
+    text: "Tokens appear here once this project's Claude Code sessions report usage.",
+  },
+  emptyRange: {
+    title: 'No token usage in this range',
+    text: 'Try a longer date range.',
+  },
+} as const;

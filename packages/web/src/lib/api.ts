@@ -49,6 +49,8 @@ import {
   TicketCommentRequestSchema,
   UpdateTicketRequestSchema,
 } from '@acp/core/api';
+// Project Tokens page (redesign R-F).
+import { ProjectTokensDtoSchema } from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -750,3 +752,22 @@ export async function messageAgent(
   const path = ticketPaths.agentMessage(runId, agentId);
   return controlPost(client, path, checked(ChatRequestSchema, input, path), AgentRunDtoSchema);
 }
+
+// --- Project Tokens page (redesign R-F, wp/r-f-tokens) -------------------------------------------
+//
+// GET /api/projects/:id/tokens?from&to (ProjectTokensDto). `from` is inclusive and `to` exclusive,
+// both ISO-8601. Read-only, so no CSRF header.
+
+export interface TokensRangeQuery {
+  from?: string | undefined;
+  to?: string | undefined;
+}
+
+export const tokensPaths = {
+  project: (projectId: string, range: TokensRangeQuery = {}) =>
+    withQuery(`${API_BASE}/projects/${enc(projectId)}/tokens`, { ...range }),
+} as const;
+
+export const tokensSchemas = {
+  project: ProjectTokensDtoSchema,
+} as const;
