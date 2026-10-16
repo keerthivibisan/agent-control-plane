@@ -32,6 +32,8 @@ The engine (`@acp/orchestrator`) and server enforce, and tests prove:
    (`X-ACP-CSRF`, from `GET /api/control/token`) on every mutating control-panel route.
 7. **Restart.** Live work interrupted by a restart becomes `NEEDS_REVIEW`; it is never relaunched
    automatically.
+   (ADR-0020: an owner chat message may resume an ended lead for one read-only follow-up turn. That
+   is an owner action, never an automatic relaunch.)
 
 ## Consequences
 

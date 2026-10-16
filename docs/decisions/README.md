@@ -25,3 +25,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0017](0017-project-creation-harness-and-checks.md) | Project creation, the harness manifest, and running checks | accepted |
 | [0018](0018-project-skills-written-by-the-app.md)   | Project skills written by the app                          | accepted |
 | [0019](0019-workflow-stages-and-roles.md)           | Workflow stages and the planner, reviewer and tester roles | accepted |
+| [0020](0020-resume-the-lead-chat.md)                | Resume the lead's chat on an owner message                 | accepted |
