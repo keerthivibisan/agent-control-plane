@@ -80,7 +80,7 @@ export const TicketSchema = z.object({
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 
-export const TicketCommentAuthorSchema = z.enum(['owner', 'lead']);
+export const TicketCommentAuthorSchema = z.enum(['owner', 'lead', 'reviewer']);
 export const TicketCommentSchema = z.object({
   id: z.string().min(1),
   ticketId: z.string().min(1),

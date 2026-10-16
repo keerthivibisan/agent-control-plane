@@ -43,7 +43,7 @@ export const AgentRunStatusSchema = z.enum([
 export type AgentRunStatus = z.infer<typeof AgentRunStatusSchema>;
 
 /** `lead` talks with the owner and starts workers; `worker` does one task in its own worktree. */
-export const AgentRoleKindSchema = z.enum(['lead', 'worker']);
+export const AgentRoleKindSchema = z.enum(['lead', 'worker', 'planner', 'reviewer', 'tester']);
 export type AgentRoleKind = z.infer<typeof AgentRoleKindSchema>;
 
 export const ReviewStateSchema = z.enum(['pending', 'merged', 'discarded', 'no-changes']);
