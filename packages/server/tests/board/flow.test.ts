@@ -47,9 +47,20 @@ describe('start and plan decisions', () => {
     // Plan first: helpers are refused until a plan is approved.
     await expect(lead.callLead('start_agent', { role: 'Builder', task: 'x' })).rejects.toThrow();
 
+    s.notices.length = 0;
     await s.submitPlan('First idea');
     let d = await s.detail(ticket.id);
     expect(d.ticket.stage).toBe('PLAN_REVIEW');
+    // SSE: the board and the ticket page hear about the new plan.
+    expect(
+      s.notices.some(
+        (n) =>
+          n.kind === 'tickets-changed' &&
+          n.ticketIds?.includes(ticket.id) === true &&
+          n.runIds?.includes(d.currentRun?.id ?? '') === true &&
+          n.projectIds.includes(s.project.id),
+      ),
+    ).toBe(true);
     expect(d.plans).toMatchObject([{ version: 1, status: 'proposed', summary: 'First idea' }]);
     const board = BoardDtoSchema.parse((await s.get(`/api/board?projectId=${s.project.id}`)).body);
     const card = board.columns.find((c) => c.stage === 'PLAN_REVIEW')?.tickets[0];
