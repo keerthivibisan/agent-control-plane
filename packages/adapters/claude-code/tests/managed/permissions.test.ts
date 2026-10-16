@@ -184,7 +184,7 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     expect(requests).toEqual([]);
   });
 
-  it("denies the lead post_review without asking: only a reviewer gets it (decision B)", async () => {
+  it('denies the lead post_review without asking: only a reviewer gets it (decision B)', async () => {
     expect(LEAD_ROLE_TOOL_NAMES).toEqual(LEAD_TOOL_NAMES.filter((n) => n !== 'post_review'));
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('post_review');
     const { canUseTool, requests } = setup('lead');

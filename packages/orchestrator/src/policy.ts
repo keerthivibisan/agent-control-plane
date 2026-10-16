@@ -3,6 +3,7 @@ import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
+import { countsAsHelper, hasReviewableChange } from './stages.js';
 import { agentDepth } from './tree.js';
 import { isLiveAgentStatus } from './transitions.js';
 import type { EngineAgent, RunState } from './state.js';
@@ -53,8 +54,12 @@ export function checkPlanApproved(status: RunStatus): Refusal | null {
   return null;
 }
 
-/** Whether an agent may start helpers of its own: the new helper must fit `RunLimits.maxDepth`. */
+/**
+ * Whether an agent may start helpers of its own: only the lead and helpers (ADR-0019: the planner,
+ * reviewer and tester never do), and the new helper must fit `RunLimits.maxDepth`.
+ */
 export function mayStartHelpers(state: RunState, agent: EngineAgent): boolean {
+  if (agent.kind !== 'lead' && agent.kind !== 'worker') return false;
   return agentDepth(state, agent) + 1 <= runLimits(state).maxDepth;
 }
 
@@ -97,8 +102,9 @@ export function checkStartAgent(
   }
 
   const { maxConcurrentHelpers } = runLimits(state);
+  // The reviewer and the tester count as one helper each (ADR-0019 §3).
   const liveWorkers = state.agents.filter(
-    (a) => a.kind === 'worker' && isLiveAgentStatus(a.status),
+    (a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status),
   ).length;
   if (liveWorkers >= maxConcurrentHelpers) {
     return refusal(
@@ -109,14 +115,21 @@ export function checkStartAgent(
   return null;
 }
 
-/** Owner review actions apply to an ended worker whose review is pending (ADR-0013 §5). */
+/**
+ * Owner review actions apply to an ended worker, or the tester (ADR-0019), whose review is pending
+ * (ADR-0013 §5).
+ */
 export function checkReviewAction(state: RunState, agentRunId: string): Refusal | null {
   if (state.run.status !== 'REVIEW' && state.run.status !== 'NEEDS_REVIEW') {
     return refusal('review-not-allowed', 'Changes can be reviewed once every agent has stopped.');
   }
   const agent = state.agents.find((a) => a.id === agentRunId);
   if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
-  if (agent.kind !== 'worker' || isLiveAgentStatus(agent.status) || agent.review !== 'pending') {
+  if (
+    !hasReviewableChange(agent.kind) ||
+    isLiveAgentStatus(agent.status) ||
+    agent.review !== 'pending'
+  ) {
     return refusal('review-not-allowed', 'This agent has no changes waiting for review.');
   }
   return null;

@@ -21,11 +21,10 @@ import {
   isPostMergeRole,
   isSeparatePlanner,
   nextStage,
+  launchFields,
   reviewerBrief,
-  stageModelFor,
   testerBrief,
   TESTER_TASK,
-  withSkills,
 } from './stages.js';
 import type { PostMergeStage } from './stages.js';
 import type {
@@ -407,14 +406,12 @@ export class Draft {
       this.effects.push({ type: 'create-review-checkout', agentRunId: agent.id });
     }
     const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
-    const model = stageModelFor(this.workflow, kind);
     this.effects.push({
       type: 'start-agent',
       agentRunId: agent.id,
       kind,
       role: agent.role,
-      prompt: withSkills(brief, this.workflow, kind),
-      ...(model !== null ? { model } : {}),
+      ...launchFields(brief, this.workflow, kind),
     });
   }
 

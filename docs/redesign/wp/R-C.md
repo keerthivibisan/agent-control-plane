@@ -4,20 +4,21 @@
 > Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope, owned paths and dependencies:
 > `docs/redesign/README.md` §7.
 
-| Field   | Value                                             |
-| ------- | ------------------------------------------------- |
-| Status  | in-progress                                       |
-| Owner   | engine agent                                      |
-| Branch  | `wp/r-c-engine`                                   |
-| Started | 2026-10-16                                        |
-| Updated | 2026-10-16 (paused)                               |
+| Field   | Value               |
+| ------- | ------------------- |
+| Status  | in-progress         |
+| Owner   | engine agent        |
+| Branch  | `wp/r-c-engine`     |
+| Started | 2026-10-16          |
+| Updated | 2026-10-16 (paused) |
 
 ## Work log (append-only; newest last)
 
-| Date | What was done | Commit | Checks |
-| ---- | ------------- | ------ | ------ |
-| 2026-10-16 | Claimed R-C on `wp/r-c-engine` from `main` (eb458d6). | claim | — |
-| 2026-10-16 | WIP engine: workflow snapshot, agent stages, separate planner, reviewer/tester stages, post_review, continueStages, controlToolsFor, prompts. Paused by owner. | fb73268 | typecheck ✗; orchestrator tests 366/366 ✓ (existing) |
+| Date       | What was done                                                                                                                                                                                                                                                                                 | Commit  | Checks                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ |
+| 2026-10-16 | Claimed R-C on `wp/r-c-engine` from `main` (eb458d6).                                                                                                                                                                                                                                         | claim   | —                                                                                          |
+| 2026-10-16 | WIP engine: workflow snapshot, agent stages, separate planner, reviewer/tester stages, post_review, continueStages, controlToolsFor, prompts. Paused by owner.                                                                                                                                | fb73268 | typecheck ✗; orchestrator tests 366/366 ✓ (existing)                                       |
+| 2026-10-16 | Resumed; rebased on main (a532ef2). Decision B: `post_review` in `LeadToolInputs`, adapter lead set excludes it (297900b). Engine compiles: post_review via core schema, skills plugin names (`acp-skills:<name>`, `start-agent.skills`), policy for new roles, `deriveRunWorkflow`, exports. | next    | format ✓ lint ✓ typecheck ✓ test ✓ (server smoke/restart timeouts passed on rerun) build ✓ |
 
 ## Handoff notes
 
@@ -34,7 +35,7 @@ Owner paused all agents. Branch `wp/r-c-engine`, WIP commit `fb73268` (not check
   `start-agent`.
 - `stages.ts` (new): role→stage map, `planningAgent`, `nextStage` (code-review then unit-tests,
   only when a helper's change was merged), skill lines (`Use the project skill \`<name>\`.`),
-  stage models, reviewer and tester briefs. `plan-read.ts` (new): `pendingPlan`/`approvedPlan`
+stage models, reviewer and tester briefs. `plan-read.ts`(new):`pendingPlan`/`approvedPlan`
   moved here to avoid an import cycle.
 - `draft.ts`: `planner()`, `planningAgent()`, `liveNonLeadDeepestFirst()` (Stop all covers every
   role), tester gets `review: pending`, reconcile: separate-mode PLANNING fails if planner or the

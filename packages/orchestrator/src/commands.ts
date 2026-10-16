@@ -22,9 +22,8 @@ import {
   hasReviewableChange,
   isPostMergeRole,
   isReadOnlyRole,
+  launchFields,
   nextStage,
-  stageModelFor,
-  withSkills,
 } from './stages.js';
 import type {
   EngineAgent,
@@ -218,26 +217,22 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
       d.agents.push(planner);
       d.setAgentStatus(planner, 'STARTING');
       d.leadBrief = ticket.leadPrompt;
-      const model = stageModelFor(workflow, 'planner');
       d.effects.push({
         type: 'start-agent',
         agentRunId: planner.id,
         kind: 'planner',
         role: planner.role,
-        prompt: withSkills(ticket.plannerPrompt ?? '', workflow, 'planner'),
-        ...(model !== null ? { model } : {}),
+        ...launchFields(ticket.plannerPrompt ?? '', workflow, 'planner'),
       });
       return done;
     }
     d.setAgentStatus(draftLead, 'STARTING');
-    const model = stageModelFor(workflow, 'lead');
     d.effects.push({
       type: 'start-agent',
       agentRunId: draftLead.id,
       kind: 'lead',
       role: draftLead.role,
-      prompt: withSkills(ticket.leadPrompt, workflow, 'lead'),
-      ...(model !== null ? { model } : {}),
+      ...launchFields(ticket.leadPrompt, workflow, 'lead'),
     });
     return done;
   });

@@ -6,8 +6,8 @@ import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { submitPlan } from './plan.js';
 import { checkRunActive, checkStartAgent, isAgentOverBudget, mayStartHelpers } from './policy.js';
-import { POST_REVIEW_TOOL, PostReviewInputSchema, postReview } from './review-tool.js';
-import { isSeparatePlanner } from './stages.js';
+import { postReview } from './review-tool.js';
+import { isSeparatePlanner, launchFields } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
@@ -62,13 +62,13 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
   const kind: AgentRoleKind = agent.kind;
   switch (kind) {
     case 'lead':
-      return isSeparatePlanner(state)
-        ? LEAD_TOOL_NAMES.filter((n) => n !== 'submit_plan')
-        : LEAD_TOOL_NAMES;
+      return LEAD_TOOL_NAMES.filter(
+        (n) => n !== 'post_review' && !(n === 'submit_plan' && isSeparatePlanner(state)),
+      );
     case 'planner':
       return ['submit_plan'];
     case 'reviewer':
-      return [POST_REVIEW_TOOL];
+      return ['post_review'];
     case 'worker':
       return mayStartHelpers(state, agent) ? CHILD_MANAGEMENT_TOOLS : [];
     case 'tester':
@@ -93,7 +93,6 @@ export function leadToolCall(
   call: LeadToolCall,
   ctx: EngineContext,
 ): EngineResult<string> {
-  if (call.name === POST_REVIEW_TOOL) return postReviewCall(state, call, ctx);
   if (!isLeadToolName(call.name)) {
     return { ok: false, refusal: refusal('unknown-tool', 'That is not one of the lead tools.') };
   }
@@ -103,9 +102,12 @@ export function leadToolCall(
   }
   if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review.
-    if (caller.kind !== 'planner' || call.name !== 'submit_plan') {
-      return { ok: false, refusal: refusal('not-lead', NOT_YOUR_TOOL[caller.kind]) };
-    }
+    const own =
+      (caller.kind === 'planner' && call.name === 'submit_plan') ||
+      (caller.kind === 'reviewer' && call.name === 'post_review');
+    if (!own) return { ok: false, refusal: refusal('not-lead', NOT_YOUR_TOOL[caller.kind]) };
+  } else if (call.name === 'post_review') {
+    return { ok: false, refusal: refusal('not-lead', 'Only the reviewer can post a review.') };
   } else if (caller.kind !== 'lead') {
     // A helper may manage its own children only when the run allows depth 2 (ADR-0013 amendment).
     const childTool = CHILD_MANAGEMENT_TOOLS.includes(call.name);
@@ -157,6 +159,8 @@ export function leadToolCall(
           latestActivity: null,
           review: null,
           reportedCostUsd: null,
+          // Ticket runs record each agent's stage (ADR-0019); helpers of helpers are helpers too.
+          ...(d.run.ticketId !== null ? { stage: 'helpers' as const } : {}),
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
@@ -165,7 +169,7 @@ export function leadToolCall(
           agentRunId: id,
           kind: 'worker',
           role,
-          prompt: task,
+          ...launchFields(task, d.workflow, 'worker'),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
         });
         return { value: `Started agent ${id} (${role}).` };
@@ -255,24 +259,13 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       return submitPlan(state, caller.id, parsed.data, ctx);
     }
-  }
-}
 
-function postReviewCall(
-  state: RunState,
-  call: LeadToolCall,
-  ctx: EngineContext,
-): EngineResult<string> {
-  const caller = state.agents.find((a) => a.id === call.callerAgentRunId);
-  if (caller === undefined) {
-    return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
+    case 'post_review': {
+      const parsed = LeadToolInputs.post_review.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      return postReview(state, caller.id, parsed.data.text, ctx);
+    }
   }
-  if (caller.kind !== 'reviewer') {
-    return { ok: false, refusal: refusal('not-lead', 'Only the reviewer can post a review.') };
-  }
-  const parsed = PostReviewInputSchema.safeParse(call.input);
-  if (!parsed.success) return invalid(parsed.error);
-  return postReview(state, caller.id, parsed.data.findings, ctx);
 }
 
 function describeAgent(a: EngineAgent): string {

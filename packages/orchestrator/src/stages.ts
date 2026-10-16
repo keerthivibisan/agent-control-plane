@@ -1,6 +1,12 @@
-import type { AgentRoleKind, ProjectWorkflow, TicketPlan, WorkflowStageId } from '@acp/core';
+import type {
+  AgentRoleKind,
+  OrchestrationRun,
+  ProjectWorkflow,
+  TicketPlan,
+  WorkflowStageId,
+} from '@acp/core';
 import { approvedPlan } from './plan-read.js';
-import type { EngineAgent, RunState } from './state.js';
+import type { EngineAgent } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
@@ -9,6 +15,21 @@ import { isLiveAgentStatus } from './transitions.js';
  * in Phase 4; the two post-merge stages run when the project switched them on and at least one
  * helper's change was merged.
  */
+
+/**
+ * What these reads need. `Draft` and `RunState` both satisfy it (optional fields may be explicitly
+ * undefined in a draft).
+ */
+interface AgentsView {
+  readonly agents: readonly EngineAgent[];
+}
+interface WorkflowView {
+  readonly workflow?: ProjectWorkflow | undefined;
+}
+interface BriefView extends AgentsView {
+  readonly run: Pick<OrchestrationRun, 'title'>;
+  readonly plans?: readonly TicketPlan[] | undefined;
+}
 
 /** The stages that start an agent after the owner merged the helpers' work. */
 export type PostMergeStage = 'code-review' | 'unit-tests';
@@ -28,12 +49,12 @@ export function stageOf(agent: Pick<EngineAgent, 'kind' | 'stage'>): WorkflowSta
 }
 
 /** `separate` planner mode: a planner writes the plan and the lead only orchestrates. */
-export function isSeparatePlanner(state: Pick<RunState, 'workflow'>): boolean {
+export function isSeparatePlanner(state: WorkflowView): boolean {
   return state.workflow?.plannerMode === 'separate';
 }
 
 /** The agent that writes and revises the plan: the planner in separate mode, else the lead. */
-export function planningAgent(state: Pick<RunState, 'agents' | 'workflow'>): EngineAgent | undefined {
+export function planningAgent(state: AgentsView & WorkflowView): EngineAgent | undefined {
   const kind: AgentRoleKind = isSeparatePlanner(state) ? 'planner' : 'lead';
   return state.agents.find((a) => a.kind === kind);
 }
@@ -62,11 +83,11 @@ export function isReadOnlyRole(kind: AgentRoleKind): boolean {
 }
 
 /** At least one helper's change was merged; the post-merge stages have something to work on. */
-export function anyHelperMerged(state: Pick<RunState, 'agents'>): boolean {
+export function anyHelperMerged(state: AgentsView): boolean {
   return state.agents.some((a) => a.kind === 'worker' && a.review === 'merged');
 }
 
-function lastOfKind(state: Pick<RunState, 'agents'>, kind: AgentRoleKind): EngineAgent | undefined {
+function lastOfKind(state: AgentsView, kind: AgentRoleKind): EngineAgent | undefined {
   const all = state.agents.filter((a) => a.kind === kind);
   return all[all.length - 1];
 }
@@ -81,7 +102,7 @@ function lastOfKind(state: Pick<RunState, 'agents'>, kind: AgentRoleKind): Engin
  *   reviewed like a helper's, and an interrupted tester's change too, so it is never re-run.
  * Nothing runs when no helper's change was merged: there is nothing to review or test.
  */
-export function nextStage(state: Pick<RunState, 'agents' | 'workflow'>): PostMergeStage | null {
+export function nextStage(state: AgentsView & WorkflowView): PostMergeStage | null {
   const workflow = state.workflow;
   if (workflow === undefined || !anyHelperMerged(state)) return null;
   if (workflow.stages['code-review'].enabled) {
@@ -105,9 +126,21 @@ export function hasPostMergeStages(workflow: ProjectWorkflow | undefined): boole
 
 // ------------------------------------------------------------------ skills and models
 
+/**
+ * The run-scoped skills plugin (ADR-0019 §4, amended: decision E). With `settingSources: []`
+ * Claude Code loads no filesystem skills, so the server copies the mapped skills into a plugin
+ * named `acp-skills` and the agent sees them as `acp-skills:<name>`.
+ */
+export const SKILLS_PLUGIN_NAME = 'acp-skills';
+
+/** A skill's name inside the plugin, as the SDK `skills` allowlist and the agent see it. */
+export function pluginSkillName(name: string): string {
+  return `${SKILLS_PLUGIN_NAME}:${name}`;
+}
+
 /** The single instruction line a stage's skill adds to its agent's prompt (ADR-0019 §4). */
 export function skillLine(name: string): string {
-  return `Use the project skill \`${name}\`.`;
+  return `Use the project skill \`${pluginSkillName(name)}\`.`;
 }
 
 /** The stages an agent of this role works in: in `lead` mode the lead plans and orchestrates. */
@@ -143,18 +176,28 @@ function agentStage(
 }
 
 /**
- * The skill lines for an agent of this role, one per distinct skill of its stages. No file
- * content is injected: Claude Code resolves the skill from `.claude/skills` (ADR-0018), and a
- * missing skill does not block the run.
+ * The project skills mapped to this role's stages, distinct, in stage order (bare names, as in
+ * `.claude/skills/<name>`). The server builds the skills plugin from them.
  */
-export function skillLinesFor(workflow: ProjectWorkflow | undefined, kind: AgentRoleKind): string[] {
+export function skillsFor(workflow: ProjectWorkflow | undefined, kind: AgentRoleKind): string[] {
   if (workflow === undefined) return [];
   const names: string[] = [];
   for (const stage of stagesForRole(kind, workflow)) {
     const skill = agentStage(workflow, stage)?.skill ?? null;
     if (skill !== null && !names.includes(skill)) names.push(skill);
   }
-  return names.map(skillLine);
+  return names;
+}
+
+/**
+ * The skill lines for an agent of this role, one per distinct skill of its stages. No file
+ * content is injected, and a missing skill does not block the run.
+ */
+export function skillLinesFor(
+  workflow: ProjectWorkflow | undefined,
+  kind: AgentRoleKind,
+): string[] {
+  return skillsFor(workflow, kind).map(skillLine);
 }
 
 /** The prompt with the role's skill lines appended; unchanged when no stage maps a skill. */
@@ -183,6 +226,25 @@ export function stageModelFor(
   return null;
 }
 
+/**
+ * The launch fields of a `start-agent` effect for this role under the workflow: the prompt with
+ * its skill lines, plus `model` and `skills` only when the workflow sets them, so a run without
+ * a workflow (or with the default one) gets exactly the Phase 4 effect.
+ */
+export function launchFields(
+  prompt: string,
+  workflow: ProjectWorkflow | undefined,
+  kind: AgentRoleKind,
+): { prompt: string; model?: string; skills?: string[] } {
+  const model = stageModelFor(workflow, kind);
+  const skills = skillsFor(workflow, kind);
+  return {
+    prompt: withSkills(prompt, workflow, kind),
+    ...(model !== null ? { model } : {}),
+    ...(skills.length > 0 ? { skills } : {}),
+  };
+}
+
 // ------------------------------------------------------------------ post-merge briefs
 
 /** The longest reviewer finding stored: the ticket comment limit (`TicketCommentSchema.body`). */
@@ -200,20 +262,19 @@ function planLines(plan: TicketPlan | undefined): string[] {
   ];
 }
 
-function mergedWork(state: Pick<RunState, 'agents'>): string {
+function mergedWork(state: AgentsView): string {
   const merged = state.agents.filter((a) => a.kind === 'worker' && a.review === 'merged');
-  return [
-    'Merged work:',
-    ...merged.map((a) => `- ${a.role}: ${a.task ?? '(no task text)'}`),
-  ].join('\n');
+  return ['Merged work:', ...merged.map((a) => `- ${a.role}: ${a.task ?? '(no task text)'}`)].join(
+    '\n',
+  );
 }
 
 /** The reviewer's fixed brief: what was merged, and how to report (ADR-0019 §2). */
-export function reviewerBrief(state: Pick<RunState, 'run' | 'agents' | 'plans'>): string {
+export function reviewerBrief(state: BriefView): string {
   return [
     `Final code review for "${state.run.title}".`,
     'The owner merged the helpers’ changes into the main branch. Your working folder is a temporary read-only checkout of the merged result.',
-    ...planLines(approvedPlan(state)),
+    ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
     'Read the changed code. Look for bugs, risky changes, missing tests and unclear code. You cannot edit files or run commands.',
     `Post your findings with post_review as plain text (up to ${REVIEW_POST_MAX_CHARS} characters each, at most ${MAX_REVIEW_POSTS} posts). They become comments on the ticket; they do not block or merge anything. When you have posted, you are done.`,
@@ -221,10 +282,10 @@ export function reviewerBrief(state: Pick<RunState, 'run' | 'agents' | 'plans'>)
 }
 
 /** The tester's fixed brief (ADR-0019 §2): unit tests for the merged change, in its own copy. */
-export function testerBrief(state: Pick<RunState, 'run' | 'agents' | 'plans'>): string {
+export function testerBrief(state: BriefView): string {
   return [
     `${TESTER_TASK} Ticket: "${state.run.title}".`,
-    ...planLines(approvedPlan(state)),
+    ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
     'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.',
     'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.',

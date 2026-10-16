@@ -1,5 +1,4 @@
 import { redact, TicketCommentSchema } from '@acp/core';
-import { z } from 'zod';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS } from './stages.js';
@@ -7,21 +6,15 @@ import type { EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
- * The reviewer's one control-plane tool (ADR-0019 §2): `post_review` turns its plain-text findings
- * into a ticket comment by author `reviewer`. It never blocks or merges anything.
- *
- * Proposed contract change (docs/redesign/wp/R-C.md): this input belongs in `LeadToolInputs` in
- * `@acp/core`, so the adapter can describe the tool with the same schema. Until then the engine
- * owns it here.
+ * The reviewer's one control-plane tool (ADR-0019 §2, decision B): `post_review` turns its
+ * plain-text findings into a ticket comment by author `reviewer`. It never blocks or merges
+ * anything. The input is validated with `LeadToolInputs.post_review` in `leadToolCall`.
  */
-export const POST_REVIEW_TOOL = 'post_review';
 
-/** Generous on input; the stored comment is redacted and capped to `REVIEW_POST_MAX_CHARS`. */
-export const PostReviewInputSchema = z.object({
-  findings: z.string().trim().min(1).max(4 * REVIEW_POST_MAX_CHARS),
-});
-
-/** Redacts, then caps to the comment limit; whitespace inside the text is kept (it is prose). */
+/**
+ * Redacts, then caps to the comment limit. Redaction can lengthen the text (replacement markers),
+ * so the cap comes after it and the stored comment always fits `TicketCommentSchema.body`.
+ */
 export function cleanReviewBody(text: string): string {
   const body = redact(text).trim();
   return body.length <= REVIEW_POST_MAX_CHARS
@@ -30,13 +23,13 @@ export function cleanReviewBody(text: string): string {
 }
 
 /**
- * A reviewer's `post_review` (input already validated). Allowed for a live reviewer of a run in
- * REVIEW, at most `MAX_REVIEW_POSTS` times. Emits `review-comment`; the server stores it.
+ * A reviewer's `post_review`. Allowed for a live reviewer of a run in REVIEW, at most
+ * `MAX_REVIEW_POSTS` times. Emits `review-comment`; the server stores it.
  */
 export function postReview(
   state: RunState,
   callerAgentRunId: string,
-  findings: string,
+  text: string,
   ctx: EngineContext,
 ): EngineResult<string> {
   return applyCommand(state, ctx, (d) => {
@@ -57,7 +50,7 @@ export function postReview(
         `You already posted ${MAX_REVIEW_POSTS} times, the most allowed; finish now.`,
       );
     }
-    const body = cleanReviewBody(findings);
+    const body = cleanReviewBody(text);
     if (!TicketCommentSchema.shape.body.safeParse(body).success) {
       return refusal('invalid-input', 'The findings are empty.');
     }

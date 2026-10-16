@@ -153,6 +153,13 @@ export type EngineEffect =
        * one. Absent: the project's default model, as in Phase 4.
        */
       model?: string;
+      /**
+       * The project skills mapped to this agent's stages (bare names, ADR-0019 §4 as amended),
+       * present only when a stage maps one. The server copies them into the run's skills plugin
+       * and sets `ManagedAgentSpec.skillPlugin = { path, skills: skills.map(pluginSkillName) }`.
+       * The prompt already names each as `acp-skills:<name>`.
+       */
+      skills?: string[];
     }
   /**
    * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout of the

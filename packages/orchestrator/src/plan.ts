@@ -3,7 +3,7 @@ import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { runLimits } from './limits.js';
 import { isAgentOverBudget } from './policy.js';
-import { isSeparatePlanner, stageModelFor, withSkills } from './stages.js';
+import { isSeparatePlanner, launchFields } from './stages.js';
 import type { EngineContext, EngineResult, RunLimits, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
@@ -128,7 +128,10 @@ export function decidePlan(
     const author = d.planningAgent();
     const who = separate ? 'planner' : 'lead';
     if (author === undefined || !isLiveAgentStatus(author.status)) {
-      return refusal('agent-not-live', separate ? 'The planner has ended.' : 'The lead agent has ended.');
+      return refusal(
+        'agent-not-live',
+        separate ? 'The planner has ended.' : 'The lead agent has ended.',
+      );
     }
     if (isAgentOverBudget(author)) {
       return refusal('over-budget', `The ${who} reached its budget; raise it before deciding.`);
@@ -166,20 +169,18 @@ export function decidePlan(
       d.setAgentStatus(lead, 'STARTING');
       const brief = d.leadBrief ?? `Ticket run: ${d.run.title}`;
       d.leadBrief = undefined;
-      const model = stageModelFor(d.workflow, 'lead');
       d.effects.push({
         type: 'start-agent',
         agentRunId: lead.id,
         kind: 'lead',
         role: lead.role,
-        prompt: withSkills(approvedPlanBrief(brief, plan, note, limits), d.workflow, 'lead'),
-        ...(model !== null ? { model } : {}),
+        ...launchFields(approvedPlanBrief(brief, plan, note, limits), d.workflow, 'lead'),
       });
       return { value: { ...plan } };
     }
     d.effects.push({
       type: 'send-to-agent',
-      agentRunId: lead.id,
+      agentRunId: author.id,
       text: [
         `The owner approved plan v${plan.version}.`,
         note.length > 0 ? `Owner's note: ${note}` : null,
