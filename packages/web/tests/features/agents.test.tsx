@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import type { WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionDetailDto, AgentDefinitionSummaryDto } from '@acp/core/api';
 import { App } from '../../src/app/App';
 import { AGENT_TEMPLATES } from '../../src/features/skills/agent-templates';
@@ -114,6 +115,46 @@ describe('Skills & Agents tabs', () => {
     render(<App store={new QueryStore(createApiClient(s.fetch))} eventSource={null} />);
     expect(await screen.findByTestId('agent-card-planner')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Agents' }).getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+describe('agent templates fit the stages they suit (ADR-0019 §7)', () => {
+  // The role base sets (ADR-0019 §7; the adapter's `roleBaseTools`). A stage's agent file only
+  // narrows its role's set, so a template tool outside it would silently never be given.
+  const READ_ONLY = ['Read', 'Grep', 'Glob'];
+  const BASE: Record<WorkflowStageId, readonly string[]> = {
+    plan: READ_ONLY, // planner, or the lead in lead mode
+    orchestrate: READ_ONLY, // lead
+    helpers: [...READ_ONLY, 'Edit', 'Write', 'Bash'], // worker
+    review: [], // no agent: the owner merges
+    'code-review': READ_ONLY, // reviewer
+    'unit-tests': [...READ_ONLY, 'Edit', 'Write', 'Bash'], // tester
+  };
+  const LABEL: Partial<Record<WorkflowStageId, string>> = {
+    plan: 'Plan',
+    helpers: 'Helpers',
+    'code-review': 'Final code review',
+    'unit-tests': 'Unit tests',
+  };
+
+  it.each(AGENT_TEMPLATES.map((t) => [t.label, t] as const))(
+    '%s lists only tools its stages get, and says which stages it suits',
+    (_label, t) => {
+      expect(t.stages.length).toBeGreaterThan(0);
+      for (const stage of t.stages) {
+        expect(t.tools.filter((tool) => !BASE[stage].includes(tool))).toEqual([]);
+        expect(t.description).toContain(LABEL[stage]);
+      }
+    },
+  );
+
+  it('the code reviewer only reads: no shell tool and no shell commands in its instructions', () => {
+    const reviewer = AGENT_TEMPLATES.find((t) => t.id === 'reviewer');
+    expect(reviewer?.tools).toEqual(['Read', 'Grep', 'Glob']);
+    expect(reviewer?.stages).toEqual(['code-review']);
+    const text = reviewer?.instructions ?? '';
+    expect(text).not.toMatch(/`|\bgit\b|\bnpm\b|\bpnpm\b|run the/i);
+    expect(text).toContain('do not run commands');
   });
 });
 

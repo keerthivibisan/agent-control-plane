@@ -134,8 +134,9 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
     .getByRole('button', { name: 'Code reviewer' })
     .click();
   await expect(page.getByLabel('Name')).toHaveValue('reviewer');
-  // The template lists Bash: the reviewer stage must stay read-only anyway (ADR-0019 §6).
-  await expect(page.getByRole('button', { name: 'Remove Bash' })).toBeVisible();
+  // The template only reads, like the Final code review stage (ADR-0019 §7): no Bash.
+  await expect(page.getByRole('button', { name: 'Remove Read' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Remove Bash' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save' }).click();
   await page.getByTestId('skill-commit').getByRole('button', { name: 'Commit' }).click();
   await expect(page.getByTestId('skill-commit')).toContainText(/Committed [0-9a-f]{7} on main\./);
