@@ -2121,18 +2121,21 @@ export const HARNESS_PAGE_COPY = {
       `${countOf(total, 'check')} · ${formatCount(required)} required`,
   },
   build: {
-    title: 'Let an agent build the harness',
-    text: 'A ready-written ticket asks an agent to add fast checks and write .acp/harness.json. You approve its plan and review its changes.',
+    text: 'Nothing is checked before a merge yet. A ready-written ticket lets an agent add the checks.',
+    buildTip:
+      'The ticket asks an agent to add fast checks and write .acp/harness.json. You approve its plan and review its changes like any other ticket. Expect one question while it works: writing into a folder that doesn’t exist yet (.acp) always asks you, even when edits are pre-approved.',
     create: 'Build the harness',
     creating: 'Creating the ticket…',
     failed: "The ticket couldn't be created.",
     ticket: 'Harness ticket',
     open: 'Open ticket',
     created: (key: string) => `Added ${key} to the board. Start it from there.`,
+    noChecks: 'Its review runs no checks',
     noChecksTip:
-      'This ticket’s own review runs no checks. Checks come from the project’s main branch, which has no harness until you merge this ticket’s changes.',
+      'Checks are read from your project folder, never from the agent’s copy. The new checks run once you merge this ticket’s changes; then use Run checks now.',
+    newFolder: 'It asks you before creating .acp/harness.json',
     newFolderTip:
-      'Expect a question while it works: the agent creates .acp/harness.json in a new .acp folder, and writing into a folder that doesn’t exist yet always asks you, even when edits are pre-approved.',
+      'Writing into a folder that doesn’t exist yet (.acp) always asks you first, even when edits are pre-approved.',
   },
   checks: {
     title: 'Checks',

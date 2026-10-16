@@ -54,8 +54,31 @@ function ReadAt({
   );
 }
 
-/** The project's "Build the harness" ticket with its board stage, and why it runs no checks. */
-function HarnessTicket({ ticket, created }: { ticket: HarnessTicketView; created: boolean }) {
+/** A short note with its explanation behind an ⓘ. */
+function Note({ text, tip }: { text: string; tip: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {text}
+      <InfoTip tip={tip} label={text} />
+    </span>
+  );
+}
+
+/**
+ * The project's "Build the harness" ticket with its board stage, and two things that surprise
+ * people (P4-H review notes): its review runs no checks while the project has none, and the agent
+ * asks before writing into the new `.acp` folder.
+ */
+function HarnessTicket({
+  ticket,
+  created,
+  checksRun,
+}: {
+  ticket: HarnessTicketView;
+  created: boolean;
+  /** The project folder has runnable checks, so this ticket's review runs them too. */
+  checksRun: boolean;
+}) {
   const stage = TICKET_STAGE_COPY[ticket.stage];
   const working = ticket.stage !== 'DONE';
   return (
@@ -70,13 +93,15 @@ function HarnessTicket({ ticket, created }: { ticket: HarnessTicketView; created
         {ticket.title}
       </a>
       <StatusWord status={stage} value={ticket.stage} />
-      <span className="inline-flex items-center gap-1 text-caption text-dim">
-        <InfoTip tip={B.noChecksTip} label={`${B.ticket} checks`} />
-        {working ? <InfoTip tip={B.newFolderTip} label={`${B.ticket} questions`} /> : null}
-      </span>
       <ButtonLink href={href.ticket(ticket)} size="sm" className="ml-auto">
         {B.open}
       </ButtonLink>
+      {working ? (
+        <p className="flex basis-full flex-wrap gap-x-6 gap-y-1 text-caption text-dim">
+          {checksRun ? null : <Note text={B.noChecks} tip={B.noChecksTip} />}
+          <Note text={B.newFolder} tip={B.newFolderTip} />
+        </p>
+      ) : null}
       {created ? (
         <p role="status" className="basis-full text-caption text-success">
           {B.created(ticket.key)}
@@ -137,12 +162,12 @@ export function StatusCard({
           <EmptyState
             icon={<HarnessIcon size={22} />}
             title={C.headline.none}
-            text={`${C.text.none} ${showBuild ? B.text : ''}`.trim()}
+            text={showBuild ? B.text : C.text.none}
             action={
               showBuild ? (
                 <div className="flex items-center gap-1.5">
                   <BuildButton build={build} />
-                  <InfoTip tip={B.newFolderTip} label={B.create} />
+                  <InfoTip tip={B.buildTip} label={B.create} />
                 </div>
               ) : undefined
             }
@@ -179,7 +204,13 @@ export function StatusCard({
           </div>
         ) : null}
         <ActionError error={build.error} message={B.failed} />
-        {ticket !== null ? <HarnessTicket ticket={ticket} created={created} /> : null}
+        {ticket !== null ? (
+          <HarnessTicket
+            ticket={ticket}
+            created={created}
+            checksRun={state === 'ready' || state === 'partial'}
+          />
+        ) : null}
       </div>
     </Card>
   );

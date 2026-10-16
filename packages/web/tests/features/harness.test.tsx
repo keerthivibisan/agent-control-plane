@@ -166,8 +166,12 @@ describe('Harness page', () => {
     expect(within(ticket).getByRole('status').textContent).toBe(
       'Added WEB-1 to the board. Start it from there.',
     );
-    // Its own review runs no checks (they come from main, which has no harness yet).
-    expect(tipOf(ticket, 'Harness ticket checks')).toContain('runs no checks');
+    // Its own review runs no checks (they are read from the project folder, which has none yet),
+    // and writing into the new .acp folder asks the owner.
+    expect(tipOf(ticket, 'Its review runs no checks')).toContain('never from the agent’s copy');
+    expect(tipOf(ticket, 'It asks you before creating .acp/harness.json')).toContain(
+      'even when edits are pre-approved',
+    );
     expect(screen.queryByRole('button', { name: 'Build the harness' })).toBeNull();
   });
 
@@ -188,6 +192,16 @@ describe('Harness page', () => {
     expect(within(ticket).getByText('Planning')).toBeTruthy();
     expect(within(ticket).getByText('WEB-3')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Build the harness' })).toBeNull();
+  });
+
+  it('says "its review runs no checks" only while the project has no runnable checks', async () => {
+    renderPage({
+      [HARNESS]: harness('ready'),
+      [TICKETS]: [card({ id: 't-4', key: 'WEB-4', stage: 'WORKING', type: 'harness' })],
+    });
+    const ticket = await screen.findByTestId('harness-ticket');
+    expect(within(ticket).queryByText('Its review runs no checks')).toBeNull();
+    expect(within(ticket).getByText('It asks you before creating .acp/harness.json')).toBeTruthy();
   });
 
   it('lists the problems of an invalid harness in plain sentences, with nothing to run', async () => {

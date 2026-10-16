@@ -33,7 +33,8 @@ function CheckResult({ run }: { run: CheckRunDto }) {
           {C.duration(formatDuration(run.durationMs))} · {C.exitCode(run.exitCode)}
         </span>
       </div>
-      <Details summary={C.output}>
+      {/* A failed check's output is what the owner came for: open it. */}
+      <Details summary={C.output} defaultOpen={run.status !== 'passed' && run.status !== 'skipped'}>
         {run.outputTail.length > 0 ? (
           <pre className="max-h-72 overflow-auto rounded-control bg-sunken p-3 font-mono text-caption whitespace-pre-wrap">
             {run.outputTail}
