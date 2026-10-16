@@ -268,6 +268,50 @@ Use Phase 4's protocol (`docs/phase-4/README.md` §9) with these paths:
 
 The prompt is Phase 4's §10.1 with "Phase 4" replaced by "the redesign" and this file as the spec.
 
+## 6a. Mapping agent files and skills to stages (owner decisions, 2026-10-16)
+
+**How Claude knows the flow.** It doesn't, and it doesn't need a README. The engine runs the
+workflow: it starts each stage's agent at the right moment, with a brief for that stage only (see
+`ticketPlannerPrompt` and `ticketOrchestratorPrompt` in `packages/orchestrator/src/plan.ts`, and
+`TESTER_TASK` in `stages.ts`) and only that role's tools. Project knowledge comes from the context
+files chosen in Settings, for example `CLAUDE.md`.
+
+**Decisions:**
+
+1. **A stage _uses_ one agent file (option A).** The agent stages are Plan, Orchestrate, Helpers,
+   Final code review and Unit tests. Each can name one project agent file,
+   `.claude/agents/<name>.md`. When that stage's agent starts:
+   - **Instructions:** the file's body is appended to the agent's system prompt, after the
+     project context files and before the stage brief. It is the owner's own file, read from the
+     project checkout under ADR-0018's path rules (never an agent worktree), and capped at 64 KiB.
+   - **Model:** the file's `model` is the stage's default. An explicit stage model still wins.
+   - **Tools:** the file's `tools` list can only **narrow** the role's tools, never widen them. A
+     reviewer or planner stays read-only even if the file lists `Bash` or `Edit`. "All tools"
+     (`tools` absent) means the role's normal set.
+   - **Other front-matter keys** (`permissionMode`, `hooks`, `mcpServers`, …) are ignored, exactly as
+     on the Skills & Agents page.
+   - **A missing or unsafe file** is shown as a problem on the Workflow page. The stage starts without
+     it, and the run is not blocked.
+2. **Skills stay on the stage.** A stage lists its skills whatever agent file it uses, so the graph
+   has one place to look. Stage nodes show both chips, e.g. "Unit tests: 🤖 test-writer + ✦
+   unit-tests".
+3. **Verification:** one consented real run in R-V covers skills loading through the plugin, agent
+   files applied per stage, and the read-only roles' tool limits.
+
+**Option B** (agent files offered to stage agents as subagents that Claude delegates to by
+description) stays possible later. It is less predictable, so it is not planned now.
+
+**Work (WP R-I, after R-H):**
+
+| Part                   | Owner        | What                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract (coordinator) | core         | Agent stages in `ProjectWorkflow` gain `agent: SkillNameSchema.nullable()`. `ManagedAgentSpec` gains `profile?: { name; instructions; tools: string[] \| null }`. ADR-0019 and the ADR-0018 amendment are updated.                                                                                                      |
+| Engine                 | orchestrator | Put the stage's agent-file name on the `start-agent` effect; keep model precedence (stage > file > project).                                                                                                                                                                                                            |
+| Server                 | server       | Read and parse the agent file with R-D's module, then build `profile`.                                                                                                                                                                                                                                                  |
+| Adapter                | adapter      | Append `profile.instructions` to the system prompt. Narrow tools by removing role tools that are not in `profile.tools`, through `disallowedTools`. Never use `allowedTools`, which auto-approves. **Research first:** confirm in the SDK docs that `disallowedTools` narrowing works for built-in tools and MCP tools. |
+| Web                    | workflow     | An "Agent file" picker in the stage panel, the agent chip on graph nodes, and a missing-file warning.                                                                                                                                                                                                                   |
+| Tests                  | all          | Fake-adapter tests: the profile is applied; tools are narrowed and never widened; a missing file still starts the agent; model precedence.                                                                                                                                                                              |
+
 ## 7a. Later: editable workflows
 
 The owner wants users eventually to edit the flow: add their own agents and stages, and connect them
