@@ -1,11 +1,14 @@
 # @acp/orchestrator
 
 **Owner:** work package P3-A (see [docs/implementation-plan.md](/docs/implementation-plan.md), Phase 3);
-Phase 4 extensions by P4-A ([docs/phase-4/README.md](/docs/phase-4/README.md)).
+Phase 4 extensions by P4-A ([docs/phase-4/README.md](/docs/phase-4/README.md)); workflow stages
+by R-C ([docs/redesign/README.md](/docs/redesign/README.md), ADR-0019).
 
 **Status:** [implemented] the M1 engine (P3-A), wired into the server by P3-D. [implemented] the
 Phase 4 engine (P4-A): plan-first ticket runs, per-run limits, depth 2 and allowlist evaluation. The
-server wiring for Phase 4 is P4-D.
+server wiring for Phase 4 is P4-D. [implemented] the workflow stages (R-C, ADR-0019): the separate
+planner, the post-merge reviewer and tester, skills and models per stage. Their server wiring is
+R-G; until then no server code creates these roles.
 
 ## Responsibility
 
@@ -33,8 +36,9 @@ Every command is a pure function: `(state, input, ctx) → EngineResult`.
   as the tool result.
 - The server **persists `state` first**, then performs `effects` in order (orchestration-lifecycle
   §1). The effects are `start-agent`, `send-to-agent`, `interrupt-agent`, `abort-agent`,
-  `approval-requested`, `resolve-permission`, `chat-message`, `link-session`, `budget-overshoot` and
-  `diagnostic`.
+  `approval-requested`, `resolve-permission`, `chat-message`, `link-session`, `plan-submitted`,
+  `plan-decided`, `create-review-checkout`, `remove-review-checkout`, `review-comment`,
+  `budget-overshoot` and `diagnostic`.
 
 | Command                                                         | When                                                             |
 | --------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -51,6 +55,7 @@ Every command is a pure function: `(state, input, ctx) → EngineResult`.
 | `checkReviewAction`, then `recordReview(state, id, outcome, …)` | before and after the server's git merge or discard               |
 | `recoverAfterRestart(state, ctx)`                               | on start, for every run that has not ended                       |
 | `decidePlan(state, planId, decision, ctx, comment?)`            | `POST /api/tickets/:id/plans/:planId/decision` (Phase 4)         |
+| `continueStages(state, ctx)`                                    | the owner's Continue after a restart held a stage (ADR-0019)     |
 
 Phase 4 helpers (pure): `ticketLeadPrompt(ticket, limits)` builds the lead's first message for a
 ticket run; `runSettingsFromSetup(setup)` gives `{ limits, budget }` for `createRun`;
@@ -122,6 +127,75 @@ ticket run; `runSettingsFromSetup(setup)` gives `{ limits, budget }` for `create
   every token is shell-inert. An allowed request is recorded as an approval with
   `status: approved`, `decidedBy: 'allowlist'` and resolved at once. Owner decisions record
   `decidedBy: 'owner'`, expiries `'timeout'`.
+
+## Workflow stage rules (R-C, ADR-0019; each one tested)
+
+- **Workflow snapshot.** `createRun({ ..., workflow })` validates the project's `ProjectWorkflow`
+  (schema, same project, ticket runs only) and keeps a copy in `RunState.workflow`. No workflow, or
+  `defaultProjectWorkflow()`, gives exactly the Phase 4 run: a test replays the whole ticket flow
+  both ways and compares every effect, value and state.
+- **Stages per agent.** Every agent of a ticket run records `stage`: planner `plan`, lead
+  `orchestrate`, helpers `helpers`, reviewer `code-review`, tester `unit-tests`. Phase 3 runs have
+  none. `deriveRunWorkflow(state, workflow?)` gives the `RunWorkflowDto` stage states (`off`,
+  `waiting`, `active`, `needs-you`, `done`, `failed`, `skipped`); in `lead` mode the lead also
+  counts for `plan`.
+- **Separate planner.** `plannerMode: 'separate'` needs `ticket.plannerPrompt`
+  (`ticketRunPrompts`). The planner starts at once (`start-agent`, kind `planner`); the lead waits
+  QUEUED with `ticket.leadPrompt` kept in `RunState.leadBrief`. Owner chat goes to the planner
+  while it plans, and its text is chat under the run's agent voice (`lead`; a planner role is
+  deferred, decision C). Only the planner submits and revises the plan; the lead is refused. On
+  approval the planner ends (SUCCEEDED, `abort-agent`) and the lead starts with its brief plus the
+  approved plan and the owner's note. If the planner or the waiting lead ends before approval, the
+  run fails. The planner has only `submit_plan` and every tool use it asks for is refused.
+- **Post-merge stages.** When every helper's change is reviewed and at least one was merged, the
+  engine starts `code-review` (when on), then `unit-tests` (when on), one at a time; nothing runs
+  when nothing was merged. The lead is stopped first (its conversation is over), as at completion.
+  The run stays REVIEW meanwhile (the transition table is unchanged); it completes once every
+  enabled stage finished.
+  - Reviewer: kind `reviewer`, no parent, read-only, `create-review-checkout` before its
+    `start-agent` and `remove-review-checkout` when it ends (after any abort). `post_review`
+    (`LeadToolInputs.post_review`, `{ text }`) emits `review-comment` with the text redacted and
+    capped at 8,000 characters, at most `MAX_REVIEW_POSTS` (5) times. Anyone else is refused
+    (`not-lead`). A reviewer that fails or is stopped never blocks the run.
+  - Tester: kind `tester`, task `TESTER_TASK`, a fixed brief, its own worktree. Its tool uses are
+    asked like a helper's (also in REVIEW), the allowlist covers it, and its change is reviewed with
+    `checkReviewAction`/`recordReview` like a helper's. Merged or discarded finishes the stage.
+  - The reviewer and the tester count against the helper limit, and never start helpers.
+- **Stop and restart.** Stop all aborts every live agent, deepest first, the lead last; stopping
+  the reviewer skips its stage. After a restart nothing relaunches: if the restart interrupted the
+  run or a post-merge agent and the workflow has a post-merge stage, `RunState.stagesHeld` is set
+  and no stage starts until the owner's `continueStages` (refused while an agent is live, a change
+  is unreviewed, or nothing waits). An interrupted reviewer never posted, so Continue runs the code
+  review again; an interrupted tester's change is reviewed, never re-run.
+- **Skills and models (ADR-0019 §4, decision E).** For each stage with a skill, the agent's prompt
+  gets one line, ``Use the project skill `acp-skills:<name>`.``, and its `start-agent` effect gets
+  `skills: [<name>, …]` (bare names). A stage's model is `start-agent.model`. Both are absent when
+  the workflow sets none. No skill file content reaches the engine.
+- **Control tools.** `controlToolsFor(state, agentRunId)`: lead every lead tool except
+  `post_review` (and `submit_plan` in separate mode); planner `submit_plan`; reviewer
+  `post_review`; a depth-1 helper of a depth-2 run the child tools; tester none.
+
+## Notes for R-G
+
+- **Create:** `createRun({ ...runSettingsFromSetup(setup), workflow, ticket: { ticketId,
+...ticketRunPrompts(ticket, limits, workflow) } })`. Persist `state.workflow` with the run (it is
+  the snapshot; 0004 has no column for it, so put it in the `orchestration_runs.limits` JSON or add
+  one) and `EngineAgent.stage` as `agent_runs.stage`. Keep `leadBrief`, `stagesHeld` and
+  `reviewPosts` with the live run (in memory, like the ledger).
+- **`start-agent` by kind:** `lead` and `planner` run read-only in the owner's tree (deny their
+  tool uses as for the lead); `worker` and `tester` get a worktree from the current main branch;
+  `reviewer` uses the checkout from the `create-review-checkout` effect just before it. Set
+  `spec.kind = effect.kind`, `spec.model = effect.model ?? setup.model`, and give `leadTools` to
+  the lead, the planner, the reviewer and depth-2 parent helpers. When `effect.skills` is present,
+  build the run's skills plugin from the project checkout and set `spec.skillPlugin = { path,
+skills: effect.skills.map(pluginSkillName) }`.
+- **Effects:** `create-review-checkout` (temporary detached worktree of main, the "Run checks now"
+  mechanism), `remove-review-checkout` (remove it; also after a restart), `review-comment` (store
+  a `TicketComment` with author `reviewer`, the run id and `planId: null`).
+- **Routes:** expose `continueStages` (a "Continue" action) and `deriveRunWorkflow` for
+  `RunWorkflowDto`. Review routes must accept the tester (`board/checks.ts`,
+  `control/service.ts` still check `kind === 'worker'`), and `evaluateAllowlist` takes the
+  agent's kind as is. The ticket is DONE when the run is COMPLETED, as before.
 
 ## Notes for P4-D
 
