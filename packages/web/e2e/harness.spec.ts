@@ -189,8 +189,9 @@ test('a ready harness: the checks, Run checks now with each result, and the hist
   await expect(latest).toContainText('1 required check did not pass');
   const typecheck = latest.locator('[data-check="typecheck"]');
   await expect(typecheck).toContainText('Failed');
-  await typecheck.getByText('Output (last part)').click();
-  await expect(typecheck).toContainText('error TS2322');
+  // A failed check's output is open without a click; a passed one's stays collapsed.
+  await expect(typecheck.getByText(/error TS2322/)).toBeVisible();
+  await expect(latest.locator('[data-check="test"]').getByText(/212 passed/)).toBeHidden();
   expect(server.checkPosts()).toBe(1);
 
   await page.getByRole('button', { name: 'Run checks now' }).click();
