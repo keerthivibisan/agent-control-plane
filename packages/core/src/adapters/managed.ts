@@ -42,6 +42,14 @@ export interface ManagedAgentSpec {
    * plugin, allowing only the listed skills (namespaced `<plugin>:<skill>`).
    */
   skillPlugin?: { path: string; skills: readonly string[] };
+  /**
+   * The stage's project agent file, read by the server from the project checkout (redesign §6a,
+   * ADR-0019 amendment). `instructions` (the file body, at most 64 KiB) is appended to the system
+   * prompt after the project context. `tools`, when set, can only NARROW the role's tools: the
+   * adapter removes role tools that are not listed and never adds or auto-approves any. Null means
+   * the role's normal set. The file's `model` is resolved by the engine, not here.
+   */
+  profile?: { name: string; instructions: string; tools: readonly string[] | null };
 }
 
 /** Executes a lead tool call after the engine has validated it; returns text for the model. */

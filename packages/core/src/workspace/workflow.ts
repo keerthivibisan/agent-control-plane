@@ -52,6 +52,12 @@ const AgentStageSchema = z.object({
   model: ModelSchema,
   /** Null: no skill. The agent is told to use this project skill when set. */
   skill: SkillNameSchema.nullable(),
+  /**
+   * A project agent file (`.claude/agents/<name>.md`) this stage's agent uses (redesign §6a,
+   * ADR-0019 amendment): its instructions are added, its model is the stage default, and its tools
+   * can only narrow the role's tools. Absent or null: no agent file.
+   */
+  agent: SkillNameSchema.nullable().optional(),
 });
 
 /** An agent stage the project can switch off. */
@@ -113,4 +119,17 @@ export function stagesUsingSkill(workflow: ProjectWorkflow, skill: SkillName): W
     ['unit-tests', s['unit-tests'].skill],
   ];
   return mapped.filter(([, name]) => name === skill).map(([stage]) => stage);
+}
+
+/** The stages an agent file is mapped to, in workflow order (for "Used by" chips). */
+export function stagesUsingAgent(workflow: ProjectWorkflow, agent: SkillName): WorkflowStageId[] {
+  const s = workflow.stages;
+  const mapped: [WorkflowStageId, SkillName | null | undefined][] = [
+    ['plan', s.plan.agent],
+    ['orchestrate', s.orchestrate.agent],
+    ['helpers', s.helpers.agent],
+    ['code-review', s['code-review'].agent],
+    ['unit-tests', s['unit-tests'].agent],
+  ];
+  return mapped.filter(([, name]) => name === agent).map(([stage]) => stage);
 }

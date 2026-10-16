@@ -5,6 +5,7 @@ import {
   SkillNameSchema,
   WORKFLOW_STAGES,
   defaultProjectWorkflow,
+  stagesUsingAgent,
   stagesUsingSkill,
   tokenHeadline,
 } from '../src/index.js';
@@ -171,6 +172,24 @@ describe('agent definition contracts (ADR-0018 amendment)', () => {
       AgentDefinitionWriteRequestSchema.safeParse({
         ...base,
         instructions: 'x'.repeat(64 * 1024 + 1),
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('stage agent files (redesign §6a)', () => {
+  it('keeps workflows without agent files valid, and maps agent files per stage', () => {
+    const wf = ProjectWorkflowSchema.parse(defaultProjectWorkflow('p1', T));
+    expect(wf.stages.plan.agent).toBeUndefined();
+    wf.stages['code-review'] = { enabled: true, model: null, skill: null, agent: 'reviewer' };
+    wf.stages.helpers.agent = 'builder';
+    expect(ProjectWorkflowSchema.safeParse(wf).success).toBe(true);
+    expect(stagesUsingAgent(wf, 'reviewer')).toEqual(['code-review']);
+    expect(stagesUsingAgent(wf, 'builder')).toEqual(['helpers']);
+    expect(
+      UpdateWorkflowRequestSchema.safeParse({
+        plannerMode: 'lead',
+        stages: { ...wf.stages, plan: { model: null, skill: null, agent: '../x' } },
       }).success,
     ).toBe(false);
   });
