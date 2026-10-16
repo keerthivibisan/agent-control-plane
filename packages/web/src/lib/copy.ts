@@ -1821,7 +1821,7 @@ export const TICKET_COPY = {
     needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'request' : 'requests'} for you`,
     withHelpers: (n: string) => `With its helpers: ${n} budget tokens`,
     messagePlaceholderLead: 'Message the lead…',
-    messagePlaceholder: 'Message this agent…',
+    messagePlaceholder: 'Send a message…',
     messageLabel: (role: string) => `Message to the ${role}`,
     send: 'Send',
     sending: 'Sending…',

@@ -79,7 +79,7 @@ function PromptBox({ agent, runId }: { agent: AgentRunDto; runId: string }) {
           onKeyDown={onKeyDown}
           placeholder={lead ? C.messagePlaceholderLead : C.messagePlaceholder}
           aria-invalid={tooLong ? true : undefined}
-          className={`min-w-0 flex-1 rounded-control border bg-canvas px-2.5 py-1.5 text-caption text-ink placeholder:text-dim/70 ${
+          className={`min-w-0 flex-1 rounded-control border bg-canvas px-2 py-1.5 text-caption text-ink placeholder:text-dim/70 ${
             tooLong ? 'border-danger' : 'border-line'
           }`}
         />
@@ -135,7 +135,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       data-selected={selected ? 'true' : undefined}
       // A click anywhere on the card selects it; the header button is the keyboard way.
       onClick={() => ctx.onSelect(agent.id)}
-      className={`relative flex w-52 flex-col gap-2 rounded-card border bg-panel px-3 py-3 text-left shadow-card transition-shadow ${
+      className={`relative flex w-48 flex-col gap-2 rounded-card border bg-panel px-3 py-3 text-left shadow-card transition-shadow ${
         selected ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong'
       } ${waiting > 0 ? 'border-t-4 border-t-warning' : ''}`}
     >
@@ -238,11 +238,15 @@ export function AgentCanvas({
   const helpers = agents.filter((a) => a.kind === 'worker').length;
   return (
     <Card title={C.title} description={C.description} testId="agent-canvas" padded={false}>
-      <div className="overflow-x-auto px-5 pt-2 pb-6">
+      {/* The side padding sits on the tree itself, so a wide tree keeps it when it scrolls. */}
+      <div className="overflow-x-auto pt-2 pb-6">
         {tree.length === 0 ? (
-          <p className="text-dim">{C.noAgents}</p>
+          <p className="px-5 text-dim">{C.noAgents}</p>
         ) : (
-          <ul className="flex w-max min-w-full flex-col items-center gap-8" aria-label={C.title}>
+          <ul
+            className="flex w-max min-w-full flex-col items-center gap-8 px-5"
+            aria-label={C.title}
+          >
             {tree.map((n) => (
               <li key={n.agent.id} className="flex flex-col items-center">
                 <Branch node={n} ctx={ctx} />
@@ -251,11 +255,11 @@ export function AgentCanvas({
           </ul>
         )}
         {note ? (
-          <p className="mx-auto mt-5 max-w-lg rounded-control bg-sunken px-4 py-3 text-center text-dim">
+          <p className="mx-5 mt-5 max-w-lg rounded-control sm:mx-auto bg-sunken px-4 py-3 text-center text-dim">
             {note}
           </p>
         ) : tree.length > 0 && helpers === 0 ? (
-          <p className="mt-5 text-center text-caption text-dim">{C.noHelpers}</p>
+          <p className="mt-5 px-5 text-center text-caption text-dim">{C.noHelpers}</p>
         ) : null}
       </div>
     </Card>

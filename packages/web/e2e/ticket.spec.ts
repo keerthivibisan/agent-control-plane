@@ -51,6 +51,8 @@ async function shoot(page: Page, name: string): Promise<void> {
       await page.emulateMedia({ colorScheme: scheme });
       // Let the theme's color transitions finish before the picture.
       await page.waitForTimeout(400);
+      // From the top: a full-page picture of a scrolled page draws sticky parts mid-page.
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: `${SHOTS}/ticket-${name}-${width}-${scheme}.png`,
         fullPage: true,
@@ -73,6 +75,11 @@ test('working: depth-2 helpers nest under their parent; an approval waits', asyn
   const nested = page.getByRole('list', { name: 'Started by Theme store' });
   await expect(nested.getByRole('article', { name: 'Migration helper' })).toBeVisible();
   await expect(page.getByTestId('approvals')).toContainText('Edit src/theme/store.ts');
+  // Three helpers fit next to the side panel at 1440 without a sideways scroll.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const scroller = page.getByTestId('agent-canvas').locator('.overflow-x-auto');
+  const overflow = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
   await shoot(page, 'working');
   await page
     .getByTestId(`agent-${STORE}`)
@@ -94,6 +101,8 @@ test('in review: a failed required check blocks Merge', async ({ page }) => {
   await expect(panel.getByTestId('merge-blocked')).toContainText('Build');
   await expect(panel.getByRole('button', { name: 'Merge anyway…' })).toBeVisible();
   await expect(page.getByTestId(`agent-${UI}`)).toHaveAttribute('data-selected', 'true');
+  // The agent's own branch is on its card from the start (AgentRunDto.branch).
+  await expect(page.getByTestId(`agent-${UI}`).getByTestId('agent-branch')).toHaveText(`…/${UI}`);
   await shoot(page, 'in-review-changes');
   await panel.getByRole('tab', { name: 'Checks' }).click();
   await expect(panel.getByTestId('check-build')).toContainText('Failed');
