@@ -1,8 +1,7 @@
 # Project workspace redesign — plan (draft for owner approval)
 
-> Status: **plan only, nothing built yet** (2026-10-16). Owner decisions taken on 2026-10-16 are in §2.
-> Once approved, this file becomes the entry point for the redesign work packages (R-*), with the
-> same progress protocol as Phase 4 (`docs/phase-4/README.md` §9).
+> Status: **approved by the owner on 2026-10-16; R-0 done, wave 2 (R-A, R-C) started.** Owner
+> decisions are in §2. Progress: [STATUS.md](STATUS.md).
 
 ## 1. Why
 
@@ -212,22 +211,54 @@ unchanged.
   (read-only vs worktree), how the reviewer's findings are stored (ticket comments, ADR-0016
   scope), and budgets per stage.
 
-## 7. Work packages (proposed)
+## 7. Work packages
 
-| WP      | What                                                                                                                                        | Depends  | Notes                           |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------- |
-| **R-0** | Coordinator: ADR-0018/0019; contracts (workflow config, roles, skills DTOs, tokens summary DTO); migration 0004 spec; DESIGN.md update      | approval | Like P4-0                       |
-| **R-A** | Shell and navigation: top-bar project switcher, project sidebar, new routes and redirects, All projects page, ⌘K palette, visual tokens     | R-0      | Unblocks every page             |
-| **R-B** | Workflow page (graph, stage panel)                                                                                                          | R-0, R-A | UI                              |
-| **R-C** | Engine: planner/lead split, reviewer and tester stages, workflow-driven limits                                                              | R-0      | Orchestrator plus adapter       |
-| **R-D** | Skills: server API with file safety, plus the Skills page                                                                                   | R-0, R-A | Server and UI; one agent or two |
-| **R-E** | Harness page                                                                                                                                | R-A      | Mostly moves existing parts     |
-| **R-F** | Tokens: db queries, server route, and page                                                                                                  | R-0, R-A |                                 |
-| **R-G** | Server wiring: workflow config routes, migration 0004, stage sequencing in the run service, live stage state on the ticket                  | R-0, R-C |                                 |
-| **R-H** | Board, ticket and settings simplification; live workflow graph on the ticket page                                                           | R-A, R-G |                                 |
-| **R-V** | Verification: browser e2e for the new UI (including P4-H's deferred `workspace.spec.ts`), screenshots, then one real smoke run with consent | all      |                                 |
+Owned paths are exclusive. In shared web files (`lib/api.ts`, `lib/copy.ts`, `router.ts`, `App.tsx`)
+each WP adds its own section or route only. The coordinator resolves conflicts.
 
-**Waves:** R-0 → (R-A, R-C in parallel) → (R-B, R-D, R-E, R-F, R-G in parallel) → R-H → R-V.
+| WP      | What                                                                                                                                                                                                               | Owns                                                                                                                                                                                           | Depends  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **R-0** | Coordinator: ADR-0018/0019, contracts (`workspace/workflow.ts`, `api/redesign.ts`, `usage/headline.ts`, new roles, `reviewer` comment author), migration 0004 spec (below), progress files                         | `packages/core/**`, `docs/**`                                                                                                                                                                  | approval |
+| **R-A** | Shell and navigation: top-bar project switcher, project sidebar, `#/p/:projectId/...` routes and every old-route redirect, All projects page, ⌘K palette, refreshed visual tokens and shared components, DESIGN.md | `packages/web/src/app/**`, `src/components/**`, `src/lib/router.ts`, `src/index.css`, `packages/web/DESIGN.md`, `features/all-projects/**`, `features/palette/**`                              | R-0      |
+| **R-C** | Engine: planner/lead split, reviewer and tester stages, workflow-driven sequencing, each role's toolset in the adapter                                                                                             | `packages/orchestrator/**`, `packages/adapters/claude-code/src/managed/**`                                                                                                                     | R-0      |
+| **R-G** | Server and db: migration 0004 and its repositories, workflow GET/PUT, `RunWorkflowDto`, run-service wiring of R-C's stages, `decided_by` persistence                                                               | `packages/db/src/migrations/0004_*.sql`, `packages/db/src/repositories/redesign/**`, `packages/server/**` except `src/skills/**`, `src/harness/**`, `src/workspace/**`, `src/routes/tokens.ts` | R-0, R-C |
+| **R-D** | Skills: file-safe server module and routes (ADR-0018), and the Skills page                                                                                                                                         | `packages/server/src/skills/**`, `packages/server/src/routes/skills.ts`, `features/skills/**`                                                                                                  | R-0, R-A |
+| **R-F** | Tokens: db query, server route, and page                                                                                                                                                                           | `packages/db/src/queries/tokens.ts`, `packages/server/src/routes/tokens.ts`, `features/tokens/**`                                                                                              | R-0, R-A |
+| **R-B** | Workflow page: graph and stage panel                                                                                                                                                                               | `features/workflow/**`                                                                                                                                                                         | R-A, R-G |
+| **R-E** | Harness page                                                                                                                                                                                                       | `features/harness/**`                                                                                                                                                                          | R-A      |
+| **R-H** | Board, ticket and settings simplification; live workflow graph on the ticket page                                                                                                                                  | `features/board/**`, `features/ticket/**`, `features/project-setup/**`, `features/sessions/**`                                                                                                 | R-A, R-G |
+| **R-V** | Verification: browser e2e for the new UI (including P4-H's deferred `workspace.spec.ts`), screenshots, then one real smoke run with consent                                                                        | `packages/web/e2e/**`, `packages/server/tests/verification/redesign/**`                                                                                                                        | all      |
+
+The server route files for skills and tokens are registered with one line each in `packages/server/src/app.ts`.
+R-G owns that file, and the coordinator adds those lines at merge.
+
+**Waves:**
+
+1. R-0 (done).
+2. R-A and R-C, in parallel.
+3. R-G, R-D, R-F and R-E, in parallel.
+4. R-B and R-H.
+5. R-V.
+
+### Migration 0004 (spec for R-G)
+
+- `project_workflow(project_id PK → projects ON DELETE CASCADE, workflow TEXT JSON, updated_at)`, validated with
+  `ProjectWorkflowSchema`. A missing row means `defaultProjectWorkflow()`.
+- `agent_runs.stage TEXT NULL`, holding a `WorkflowStageId`. It is null for Phase 3 runs.
+- `approvals.decided_by TEXT NULL` (`owner | allowlist | timeout`).
+- `orchestration_runs.limits TEXT NULL`, the JSON limits snapshot at start.
+- Ticket comments accept the author `reviewer`.
+- An upgrade test runs from a 0003 database.
+
+### Progress protocol and prompts
+
+Use Phase 4's protocol (`docs/phase-4/README.md` §9) with these paths:
+
+- progress files: `docs/redesign/wp/<WP>.md`;
+- branch names: `wp/r-<id>-<slug>`;
+- the index: `docs/redesign/STATUS.md`, which only the coordinator edits.
+
+The prompt is Phase 4's §10.1 with "Phase 4" replaced by "the redesign" and this file as the spec.
 
 ## 8. Risks and open points
 
