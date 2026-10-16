@@ -106,14 +106,19 @@ import { workspaceFromRow } from './workspaces.js';
 /** Live work interrupted by a restart is never relaunched (ADR-0013 §7). */
 const NON_TERMINAL: readonly RunStatus[] = [
   'QUEUED',
+  'PLANNING',
+  'PLAN_REVIEW',
   'RUNNING',
   'BLOCKED',
   'REVIEW',
   'CANCELLING',
   'NEEDS_REVIEW',
 ];
-/** Run states the run timeout applies to; a run under review waits for the owner. */
-const WORKING: readonly RunStatus[] = ['QUEUED', 'RUNNING', 'BLOCKED'];
+/**
+ * Run states the run timeout applies to; a run under review, or a plan waiting for the owner
+ * (PLAN_REVIEW), waits for the owner.
+ */
+const WORKING: readonly RunStatus[] = ['QUEUED', 'PLANNING', 'RUNNING', 'BLOCKED'];
 
 export const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SWEEP_INTERVAL_MS = 15_000;
@@ -885,7 +890,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       result = apply(live, (s, c) =>
         requestPermission(
           s,
-          { ...request, agentRunId },
+          // Named fields only: nothing else from the adapter's request reaches the engine state.
+          {
+            agentRunId,
+            toolName: request.toolName,
+            toolUseId: request.toolUseId,
+            summary: request.summary,
+          },
           c,
           verdict === undefined ? {} : { allowlist: verdict },
         ),
