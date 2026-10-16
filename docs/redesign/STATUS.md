@@ -30,13 +30,20 @@ in its progress file with the exact next steps. Read it first.
 | R-G | `.claude/worktrees/agent-a64edec75e61b9de3` | Claimed, with the design in its note. **Next:** migration `0004_redesign.sql` and an upgrade test, `repositories/redesign/{workflow,audit}.ts`, `decidedBy`/limits wiring, `GET/PUT /api/projects/:id/workflow`, tests. Part 2 waits for R-C.                                                                                                                                                                                                     |
 | R-D | `.claude/worktrees/agent-a2bf7f960a015159c` | Claimed, with the design in its note. **Next:** the `src/skills/` service and tests, the router with supertest security tests, the Skills page with tests and screenshots, and the app.ts/bootstrap lines for R-G.                                                                                                                                                                                                                                |
 
-**Coordinator decisions to make on resume (before restarting R-C):**
+**Coordinator decisions (settled on resume, 2026-10-16):**
 
-- A. `ManagedAgentSpec.kind`: `'lead' | 'worker'` → `AgentRoleKind` (needed for per-role toolsets).
-- B. Add `post_review` (plain text, capped and redacted) to `LeadToolInputs`.
-- C. Optional: a `planner` chat role, so the UI doesn't show planner messages as the lead's.
-- D. Optional (R-A): add `RunSummaryDto.ticketId`, so `#/control/<run>` redirects go to the exact ticket.
-- E. **Verify before more skills work:** managed agents run with `settingSources: []`. Does Claude Code then load project skills from `.claude/skills` at all? If not, ADR-0019 §4 needs a different mechanism, such as an explicit setting source for project skills only. Check this with the SDK docs; a real run needs the owner's consent.
+- **A. Done on main** (`ManagedAgentSpec.kind: AgentRoleKind`).
+- **B. Approved, landing on R-C's branch:** add `post_review` to `LeadToolInputs`, together with the
+  adapter change that keeps it out of the lead's default set. On main alone it would reach today's
+  lead, because the adapter registers every lead tool.
+- **C. Deferred:** there is no `planner` chat role yet, so planner chat shows as the lead's until R-H
+  decides how the UI labels it.
+- **D. Done on main** (`RunSummaryDto.ticketId`, filled by the control mapper; `b435d14`).
+- **E. Settled.** With `settingSources: []` no filesystem skills load. Mapped skills reach agents
+  through a run-scoped skills-only plugin that the server builds from the project checkout, with
+  front matter reduced to name and description, passed by the adapter as
+  `plugins` + `skills: ['acp-skills:<name>']`. See ADR-0019 §4 and ADR-0018 §6. R-V verifies it in
+  the consented smoke run.
 
 **Paste to resume (coordinator, new chat in the repo root):**
 
