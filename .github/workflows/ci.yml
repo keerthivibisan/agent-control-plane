@@ -1,9 +1,12 @@
 name: CI
 
+# Manual only (owner decision 2026-10-17, to save Actions minutes on the private repo): run it from
+# the Actions tab with "Run workflow". To run on every push again, add back:
+#   push:
+#     branches: [main]
+#   pull_request:
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
