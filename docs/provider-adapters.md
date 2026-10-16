@@ -333,9 +333,25 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
   `list_agents`, `message_agent`, `stop_agent` and `agent_status` for a worker with
   `canStartHelpers` (a depth-2 parent helper; the engine scopes each call to its own children);
   nothing for other workers. One list (`managedToolNames`) drives both the server and `canUseTool`.
-- `systemPrompt` (P4-I, ADR-0012 amendment): when `spec.context` is present and not blank,
-  `{ type: 'preset', preset: 'claude_code', append: context }`, with the context cut to at most
-  `MAX_CONTEXT_BYTES` (32 KiB) of UTF-8 on a character boundary. Otherwise it is not set.
+- `systemPrompt` (P4-I, ADR-0012 amendment): always `{ type: 'preset', preset: 'claude_code' }`.
+  When `spec.context` is present and not blank, it is the `append`, cut to at most
+  `MAX_CONTEXT_BYTES` (32 KiB) of UTF-8 on a character boundary.
+- **Stage agent file** (`spec.profile`, R-I, ADR-0019 §6) **[implemented; fake-query tests only]**:
+  - The server reads `<project root>/.claude/agents/<name>.md` from the owner's checkout (never an
+    agent worktree) with the ADR-0018 path rules and uses only its body, `model` and `tools`.
+    The model follows stage > file > project > provider default. A missing, unsafe, oversize or
+    unparsable file starts the agent without a profile and counts `agent-file-unavailable`.
+  - The body is appended to the system prompt after the context, under the heading
+    `=== Stage agent file .claude/agents/<name>.md (…) ===`, capped at `MAX_AGENT_BYTES` (64 KiB).
+  - A non-null `profile.tools` sets the SDK `tools` base set (`profileToolNames`): the file's
+    built-in names only (MCP entries are dropped), without `READ_ONLY_DISALLOWED_TOOLS` for the
+    planner and reviewer, plus `Skill` exactly when a skills plugin is set. Read-only roles keep
+    their `disallowedTools`; the role's `mcp__acp__*` tools always stay (MCP, unaffected by
+    `tools`). `canUseTool` also denies any built-in not in the list ("This stage's agent file does
+    not list this tool."), accepting `Task` and `Agent` as one tool. `allowedTools` is never set.
+    Null `tools` changes nothing.
+  - Unverified until the R-V real smoke run (owner consent): that the init message's tool list
+    matches the base set, and that `Task` in `tools` enables `Agent` on current CLIs.
 - `canUseTool`:
   - Allows `Read`, `Glob`, `Grep` and `LS` when their target path is inside the agent's `cwd`
     (lexically) and Claude Code did not flag a `blockedPath`.

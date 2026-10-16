@@ -88,6 +88,44 @@ export const READ_ONLY_DISALLOWED_TOOLS: readonly string[] = [
   'NotebookEdit',
 ];
 
+const MCP_PREFIX = 'mcp__';
+
+/** A built-in tool name as an agent file lists it (`Read`, `Bash`), not an MCP one (`mcp__…`). */
+function isBuiltInToolName(name: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9_]*$/.test(name) && !name.startsWith(MCP_PREFIX);
+}
+
+/** `Task` is the older name of `Agent` (Claude Code 2.1.63); either name means the same tool. */
+const TOOL_ALIASES: Readonly<Record<string, string>> = { Task: 'Agent', Agent: 'Task' };
+
+/**
+ * The built-in tools a stage's agent file narrows this agent to (ADR-0019 §6,
+ * docs/research/sdk-tool-narrowing-2026-10-16.md), or null when it does not narrow (no profile,
+ * or a profile whose file lists no `tools`). The list is the SDK `tools` base set:
+ * - only the file's built-in names: MCP entries are dropped, because the role's own
+ *   `mcp__acp__*` control tools always stay (they are the stage's contract) and no other MCP
+ *   server runs (`strictMcpConfig`);
+ * - only where the role allows them: a read-only role (planner, reviewer) never gets
+ *   `READ_ONLY_DISALLOWED_TOOLS`, whatever the file lists;
+ * - `Skill` exactly when the run has a skills plugin (skills come only from the stage's skill
+ *   mapping, ADR-0019 §4).
+ * It only narrows: nothing is approved by it, and `allowedTools` is never used.
+ */
+export function profileToolNames(spec: ManagedAgentSpec): readonly string[] | null {
+  const listed = spec.profile?.tools ?? null;
+  if (listed === null) return null;
+  const roleDenied: ReadonlySet<string> = new Set(
+    isReadOnlyRole(spec.kind) ? READ_ONLY_DISALLOWED_TOOLS : [],
+  );
+  const names: string[] = [];
+  for (const name of listed) {
+    if (!isBuiltInToolName(name) || name === 'Skill' || roleDenied.has(name)) continue;
+    if (!names.includes(name)) names.push(name);
+  }
+  if (spec.skillPlugin !== undefined) names.push('Skill');
+  return names;
+}
+
 /**
  * Roles whose input stays open after a turn: the lead (owner chat) and the planner (it revises
  * the plan on the owner's comments). Every other role ends when its turn ends with nothing queued.
@@ -113,6 +151,7 @@ export const DENY_NOT_YOUR_TOOL = 'This control-plane tool is not available to t
 export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
+export const DENY_NOT_IN_AGENT_FILE = "This stage's agent file does not list this tool.";
 
 /** The lead tool name for `mcp__acp__<name>`, or null when the name is not one of ours. */
 export function leadToolName(toolName: string): string | null {
@@ -150,12 +189,25 @@ function readsOnlyInside(
  *   in-directory read-only tools, are allowed;
  * - a worker, tester, planner or reviewer calling any other `mcp__acp__*` tool is denied outright
  *   (depth 1, ADR-0012; a depth-2 parent helper never gets `submit_plan` or `request_review`);
+ * - with a stage agent file that lists tools (ADR-0019 §6), a built-in tool not in that list
+ *   (`profileToolNames`) is denied without asking, a second layer behind the SDK `tools` base set;
  * - a read-only role (planner, reviewer) is denied anything else without asking (ADR-0019);
  * - everything else asks the owner through `callbacks.requestPermission`, with a redacted summary.
  * A rejected or failed request, or an aborted agent, is a deny: the callback never throws.
  */
 export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallbacks): CanUseTool {
   const ownTools: ReadonlySet<string> = new Set(managedToolNames(spec));
+  const narrowed = profileToolNames(spec);
+  // The gate accepts a listed tool under either of its names (`Task`/`Agent`).
+  const fileTools: ReadonlySet<string> | null =
+    narrowed === null
+      ? null
+      : new Set(
+          narrowed.flatMap((name) => {
+            const alias = TOOL_ALIASES[name];
+            return alias === undefined ? [name] : [name, alias];
+          }),
+        );
   return async (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
     if (toolName.startsWith(LEAD_TOOL_PREFIX)) {
@@ -181,6 +233,9 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
         return { behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID };
       }
       // An unknown `mcp__acp__*` name, or one from another server, is not ours: ask like any tool.
+    }
+    if (fileTools !== null && !toolName.startsWith(MCP_PREFIX) && !fileTools.has(toolName)) {
+      return { behavior: 'deny', message: DENY_NOT_IN_AGENT_FILE, toolUseID };
     }
     if (readsOnlyInside(toolName, input, spec.cwd, options)) {
       return { behavior: 'allow', toolUseID };

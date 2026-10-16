@@ -23,7 +23,7 @@ their tests, this file.
 - [x] 2. Server: read and parse `<project root>/.claude/agents/<name>.md` from the owner's checkout
       with R-D's module; build `spec.profile`; missing/unsafe/oversize/unparsable → no profile,
       counted diagnostic, run not blocked; workflow PUT/GET round-trip `agent`
-- [ ] 3. Adapter: profile instructions appended to the system prompt; tools narrowed with the SDK
+- [x] 3. Adapter: profile instructions appended to the system prompt; tools narrowed with the SDK
       `tools` base set and the gate; never widened; `allowedTools` never set
 - [ ] 4. Docs: `docs/provider-adapters.md` managed execution; proposed README text here
 
@@ -33,7 +33,8 @@ their tests, this file.
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------- |
 | 2026-10-16 | Claimed R-I (backend) on the branch                                                                                             | `230d899` | docs only                                         |
 | 2026-10-16 | Engine: `agent` on `start-agent`, `stageAgentFor`, `resolveAgentModel`                                                          | `1820261` | pnpm check ✓: test 1,962/1,962 (orchestrator 430) |
-| 2026-10-16 | Server: agent file read from the checkout (R-D path rules) → `spec.profile`; model precedence; counted `agent-file-unavailable` | (this)    | pnpm check ✓: test 1,978/1,978 (server 399)       |
+| 2026-10-16 | Server: agent file read from the checkout (R-D path rules) → `spec.profile`; model precedence; counted `agent-file-unavailable` | `0df964c` | pnpm check ✓: test 1,978/1,978 (server 399)       |
+| 2026-10-16 | Adapter: profile instructions in the system prompt; `tools` base set + gate narrow only; provider-adapters §11.1                | (this)    | pnpm check ✓: test 1,995/1,995 (claude-code 300)  |
 
 ## Handoff notes
 

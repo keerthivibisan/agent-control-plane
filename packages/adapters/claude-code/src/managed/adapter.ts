@@ -5,7 +5,7 @@ import type {
   ManagedCallbacks,
   ManagedExecutionAdapter,
 } from '@acp/core';
-import { MAX_CONTEXT_BYTES } from '@acp/core';
+import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, SkillNameSchema } from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { createLeadToolServer } from './lead-tools.js';
@@ -17,6 +17,7 @@ import {
   keepsInputOpen,
   LEAD_MCP_SERVER_NAME,
   managedToolNames,
+  profileToolNames,
   READ_ONLY_DISALLOWED_TOOLS,
 } from './permissions.js';
 import { AsyncQueue } from './queue.js';
@@ -74,15 +75,35 @@ export function capUtf8(text: string, maxBytes: number): string {
 }
 
 /**
+ * The heading before a stage agent file's instructions in the system prompt, naming the file so
+ * the agent (and anyone reading the prompt) can tell the owner's file from the project context.
+ */
+export function agentFileHeading(name: string): string {
+  const file = SkillNameSchema.safeParse(name).success ? `.claude/agents/${name}.md` : 'agent file';
+  return `=== Stage agent file ${file} (the owner's instructions for this stage) ===`;
+}
+
+/**
  * The SDK system prompt for one agent: always Claude Code's own prompt (coordinator decision
  * 2026-10-13 — leaving it unset makes SDK 0.3.296 send an empty prompt, so agents would lack
- * Claude Code's tool and safety guidance), with project context appended when there is any
- * (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`.
+ * Claude Code's tool and safety guidance), with appended, in this order:
+ * - the project context when there is any (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`;
+ * - the stage agent file's instructions (ADR-0019 §6) under a heading naming the file, capped at
+ *   `MAX_AGENT_BYTES`.
+ * The stage brief is the first user message, so it follows both.
  */
 export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['systemPrompt']> {
+  const parts: string[] = [];
   const context = spec.context ?? '';
-  if (context.trim() === '') return { type: 'preset', preset: 'claude_code' };
-  return { type: 'preset', preset: 'claude_code', append: capUtf8(context, MAX_CONTEXT_BYTES) };
+  if (context.trim() !== '') parts.push(capUtf8(context, MAX_CONTEXT_BYTES));
+  const profile = spec.profile;
+  if (profile !== undefined && profile.instructions.trim() !== '') {
+    parts.push(
+      `${agentFileHeading(profile.name)}\n${capUtf8(profile.instructions, MAX_AGENT_BYTES)}`,
+    );
+  }
+  if (parts.length === 0) return { type: 'preset', preset: 'claude_code' };
+  return { type: 'preset', preset: 'claude_code', append: parts.join('\n\n') };
 }
 
 /**
@@ -118,6 +139,10 @@ export function buildOptions(
   }
   // The planner and the reviewer only read (ADR-0019): no edit or shell tools in their context.
   if (isReadOnlyRole(spec.kind)) options.disallowedTools = [...READ_ONLY_DISALLOWED_TOOLS];
+  // A stage agent file's `tools` only narrow the built-in base set (ADR-0019 §6). Never
+  // `allowedTools`, which would auto-approve calls before the gate.
+  const fileTools = profileToolNames(spec);
+  if (fileTools !== null) options.tools = [...fileTools];
   // Project skills arrive as a run-scoped, skills-only local plugin (ADR-0019 §4, decision E);
   // filesystem settings stay off, so nothing else from the repository loads.
   const plugin = spec.skillPlugin;
