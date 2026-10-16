@@ -14,7 +14,7 @@ import {
   ticketDto,
   webProject,
 } from '../fixtures/board';
-import { fakeServer, renderWithApi, type RouteTable } from '../helpers';
+import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
 const BOARD = `/api/board?projectId=${PROJECT_ID}`;
 
@@ -170,6 +170,15 @@ describe('board: project switcher and empty states', () => {
   it('says so when the project does not exist', async () => {
     renderBoard(server(), 'gone');
     expect(await screen.findByText('Project not found')).toBeTruthy();
+  });
+
+  it('does not blame the project when the server lacks the board route', async () => {
+    const missing = jsonResponse(404, {
+      error: { code: 'unknown_route', message: 'No route for GET /board', requestId: 'req-t' },
+    });
+    renderBoard(server({ [BOARD]: missing }));
+    expect(await screen.findByText(/No route for GET \/board/)).toBeTruthy();
+    expect(screen.queryByText('Project not found')).toBeNull();
   });
 
   it('offers a first ticket on an empty board', async () => {

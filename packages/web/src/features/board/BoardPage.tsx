@@ -101,7 +101,13 @@ function Board({ projectId, projects }: { projectId: string; projects: ProjectDt
     else void perform(ticket, target);
   };
 
-  if (board.data === undefined && board.error?.kind === 'http' && board.error.status === 404) {
+  // Only a real "no such project" answer; an unknown route (an older server) is a plain error.
+  if (
+    board.data === undefined &&
+    board.error?.kind === 'http' &&
+    board.error.status === 404 &&
+    board.error.code === 'not_found'
+  ) {
     return (
       <EmptyState
         title={C.empty.notFound.title}

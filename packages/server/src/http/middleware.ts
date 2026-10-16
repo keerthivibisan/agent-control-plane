@@ -28,8 +28,12 @@ function errorBody(
   return { error: { code, message, requestId: requestIdOf(res) } };
 }
 
+/**
+ * An unknown route gets its own code, not `not_found`, so a client can tell "this thing doesn't
+ * exist" from "this server doesn't have that endpoint" (an older or partly built server).
+ */
 export const notFoundHandler: RequestHandler = (req, res) => {
-  res.status(404).json(errorBody(res, 'not_found', `No route for ${req.method} ${req.path}`));
+  res.status(404).json(errorBody(res, 'unknown_route', `No route for ${req.method} ${req.path}`));
 };
 
 interface BodyParserError {

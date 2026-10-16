@@ -365,7 +365,7 @@ describe('API: errors', () => {
       ['/api/sessions/does-not-exist/events', 404, 'not_found'],
       ['/api/projects/nope', 404, 'not_found'],
       ['/api/projects/nope/sessions', 404, 'not_found'],
-      ['/api/unknown', 404, 'not_found'],
+      ['/api/unknown', 404, 'unknown_route'],
     ];
     for (const [url, status, code] of cases) {
       const res = await request(app).get(url);
