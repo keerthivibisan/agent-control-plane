@@ -2629,6 +2629,8 @@ export const STAGE_AGENT_COPY = {
   none: 'None',
   hint: 'Its instructions are added to this stage’s agent, and its model is used when the stage has none. Its tools can only narrow what this role may do.',
   readOnlyHint: 'This role stays read-only whatever the file lists.',
+  leadModeNote:
+    'One lead agent does Plan and Orchestrate. It uses Orchestrate’s agent file, or Plan’s when Orchestrate has none.',
   missingOption: (name: string) => `${name} (not found)`,
   missing: 'not found',
   missingTip: (name: string) =>

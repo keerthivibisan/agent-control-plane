@@ -244,6 +244,20 @@ describe('Workflow page: agent files (R-I)', () => {
     expect(within(panel()).queryByRole('combobox', { name: 'Agent file' })).toBeNull();
   });
 
+  it('in lead mode, Plan and Orchestrate say which file the one lead uses', async () => {
+    renderPage();
+    await screen.findByTestId('agent-files');
+    const note = /It uses Orchestrate’s agent file, or Plan’s when Orchestrate has none/;
+    await open('Plan');
+    expect(within(panel()).getByText(note)).toBeTruthy();
+    await open('Orchestrate');
+    expect(within(panel()).getByText(note)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Separate planner agent' }));
+    expect(within(panel()).queryByText(note)).toBeNull();
+    await open('Helpers');
+    expect(within(panel()).queryByText(note)).toBeNull();
+  });
+
   it('read-only roles say they stay read-only; helpers and the tester don’t', async () => {
     renderPage();
     await screen.findByTestId('agent-files');

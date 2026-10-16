@@ -105,6 +105,7 @@ function AgentFileSelect({
   value,
   files,
   readOnly,
+  leadMode,
   onChange,
 }: {
   projectId: string;
@@ -112,6 +113,8 @@ function AgentFileSelect({
   files: readonly AgentDefinitionSummaryDto[] | undefined;
   /** The role is read-only (planner, lead, reviewer): say the file can't change that. */
   readOnly: boolean;
+  /** Plan or Orchestrate while one lead agent does both (`plannerMode: 'lead'`). */
+  leadMode: boolean;
   onChange: (agent: string | null) => void;
 }) {
   const id = useId();
@@ -143,7 +146,9 @@ function AgentFileSelect({
       </Select>
       <span id={`${id}-hint`} className="text-caption text-dim">
         {AF.hint}
-        {readOnly ? ` ${AF.readOnlyHint}` : ''}{' '}
+        {readOnly ? ` ${AF.readOnlyHint}` : ''}
+        {/* Lead mode: one lead covers both stages; the engine picks Orchestrate's file first. */}
+        {leadMode ? ` ${AF.leadModeNote}` : ''}{' '}
         <a
           href={href.projectPage(projectId, 'skills', { tab: 'agents' })}
           className="text-accent hover:underline"
@@ -241,6 +246,7 @@ function AgentStageFields({
         value={draft.agent}
         files={agentFiles}
         readOnly={READ_ONLY_ROLES.includes(role)}
+        leadMode={workflow.plannerMode === 'lead' && (stage === 'plan' || stage === 'orchestrate')}
         onChange={(agent) => change({ agent })}
       />
       <TextField

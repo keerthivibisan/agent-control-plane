@@ -28,9 +28,10 @@
 
 | Date       | What was done                                                                                                                         | Commit    | Checks                                                |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------- |
-| 2026-10-16 | Claimed R-I web on `wp/r-i-web`                                                                                                       | `b320fda` | docs only                                             |
-| 2026-10-16 | Agent file picker, agent chip, missing-file warning, model from the file, Used by on both pages; 16 unit/component tests, 2 e2e tests | `64c14f1` | pnpm check ✓: test 1,972/1,972 (web 455); e2e 40/40 ✓ |
-| 2026-10-16 | Completion report; status `review`                                                                                                    | (this)    | docs only; full e2e re-run on `64c14f1`: 40/40 ✓      |
+| 2026-10-16 | Claimed R-I web on `wp/r-i-web`                                                                                                       | `f9acf32` | docs only                                             |
+| 2026-10-16 | Agent file picker, agent chip, missing-file warning, model from the file, Used by on both pages; 16 unit/component tests, 2 e2e tests | `a62f68d` | pnpm check ✓: test 1,972/1,972 (web 455); e2e 40/40 ✓ |
+| 2026-10-16 | Completion report; status `review`                                                                                                    | `d1d6539` | docs only; full e2e re-run: 40/40 ✓                   |
+| 2026-10-16 | Rebased on main `d35a3d6` (R-I backend merged). Lead-mode note in the Plan/Orchestrate panels (the engine's `stageAgentFor`); 1 test  | (this)    | pnpm check ✓: test 2,012/2,012 (web 456); e2e 40/40 ✓ |
 
 ## Handoff notes
 
@@ -57,17 +58,18 @@
 ### For the coordinator / backend
 
 - **Lead mode:** with `plannerMode: 'lead'`, Plan and Orchestrate are one lead agent, but each stage
-  has its own `agent` field. The UI lets each be set. Which one the engine applies to the single
-  lead (or whether the UI should tie them together) is not in the spec. Please decide with the
-  backend part.
+  has its own `agent` field. The merged engine (`stageAgentFor`, `packages/orchestrator/src/stages.ts`)
+  uses Orchestrate's file, else Plan's. The Plan and Orchestrate panels now say so in lead mode;
+  both pickers stay editable. If the owner would rather have one picker for the lead, that is a
+  small later change.
 - **Live graph:** `features/ticket/LiveWorkflow.tsx` was not changed. It shows the agent chip
   (it passes the project's stages through), but doesn't load the agent files, so it never flags a
   missing file and its model line says "Agent file or default" for a stage with a file and no model.
   Loading `GET …/agents` there would be a small follow-up in R-H's file.
 - **Docs to update on merge (not my paths):** `docs/redesign/README.md` §4.3 still says the Workflow
   page lists agent files as "available, not mapped".
-- The web build assumes the backend part applies `agent`; until it is merged, the UI saves the
-  mapping but runs ignore it.
+- The missing-file warning uses only the existing `GET …/agents` list (and each entry's
+  `problems`) with core's `stagesUsingAgent`, as the coordinator confirmed; no new DTO field.
 
 ## Completion report — R-I (web)
 
@@ -85,8 +87,9 @@
      `packages/web/e2e/{workflow-fixtures.ts,workflow.spec.ts,skills.spec.ts}`,
      `packages/web/tests/features/{workflow.test.tsx,agents.test.tsx}` (copy assertions).
 3. **Commands run and actual results** (Node 22.21.1, pnpm 10.26.1):
-   - `pnpm check`: format ✓, lint ✓, typecheck ✓, test 1,972/1,972 ✓ (core 247, demo 12,
-     orchestrator 424, claude-code 283, db 168, web 455, server 383), build ✓;
+   - `pnpm check` after the rebase on main `d35a3d6`: format ✓, lint ✓, typecheck ✓, test
+     2,012/2,012 ✓ (core 247, demo 12, orchestrator 430, claude-code 300, db 168, web 456,
+     server 399), build ✓;
    - `ACP_E2E_PORT=7651 ACP_E2E_CONTROL_PORT=7661 pnpm --filter @acp/web test:e2e`: 40/40 ✓;
    - screenshots (light/dark, 1440/1024) in the scratchpad, looked at; the first round showed
      truncated chips and model text, fixed (chip names in the body font, the "(not found)" word
@@ -94,7 +97,8 @@
 4. **Acceptance criteria:**
    - picker on the five agent stages, "None" + agent files, not on Review → met (test "the picker
      offers None…", e2e);
-   - helper text in plain words incl. read-only roles → met (test "read-only roles say…");
+   - helper text in plain words incl. read-only roles and lead mode → met (tests "read-only roles
+     say…", "in lead mode…");
    - save uses the existing flow; `agent` set, and absent for None → met (component test and e2e
      check the PUT bodies);
    - agent chip next to the skill chip; live graph shows it → met (tests, incl. the ticket page);
@@ -105,7 +109,7 @@
 5. **Assumptions:** listed under "Decisions made" above.
 6. **Contract or shared-file changes needed:** none. No `@acp/core` change; `lib/api.ts` unchanged
    (the existing `workflowPaths.agents` and `agentsPaths` are used).
-7. **Known gaps / follow-ups:** lead-mode agent file question; the live graph doesn't load agent
-   files; `docs/redesign/README.md` §4.3 wording (see "For the coordinator").
-8. **Next recommended task:** merge with the R-I backend branch, then R-V's consented real run
+7. **Known gaps / follow-ups:** lead mode has two pickers for one lead (explained in the panel);
+   the live graph doesn't load agent files; `docs/redesign/README.md` §4.3 wording (see "For the coordinator").
+8. **Next recommended task:** merge (the backend part is on main already), then R-V's consented real run
    (agent files applied per stage, read-only tool limits).
