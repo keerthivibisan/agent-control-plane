@@ -174,6 +174,10 @@ including an upgrade test from a 0003 database. `0001`–`0003` are unchanged.
 
 No new stored text: a workflow holds model and skill names only.
 
+**`0005_stage_agents.sql` (R-G Part 2):** the "one lead per run" unique index is keyed by
+`kind = 'lead'` instead of "no parent", because the planner, reviewer and tester (ADR-0019) also
+have no parent. The repository still requires a lead without a parent and a worker with one.
+
 `createRedesignRepositories(db, options?)` returns:
 
 - **workflow**: `get(projectId)` (the saved workflow; without a row, `defaultProjectWorkflow()`

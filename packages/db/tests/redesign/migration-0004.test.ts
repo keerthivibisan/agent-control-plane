@@ -24,7 +24,8 @@ function columns(db: ReturnType<typeof openDatabase>, table: string): string[] {
 
 describe('migration 0004_redesign (R-G)', () => {
   it('ships as version 4 after untouched 0001-0003', () => {
-    expect(SHIPPED.map((m) => [m.version, m.name])).toEqual([
+    // 0005 (R-G Part 2) follows; the first four stay as shipped.
+    expect(SHIPPED.slice(0, 4).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
       [3, 'workspace'],
@@ -72,7 +73,7 @@ describe('migration 0004_redesign (R-G)', () => {
       const recorded = v4.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2, 3, 4]);
+      expect(recorded.map((r) => r.version).slice(0, 4)).toEqual([1, 2, 3, 4]);
       // The 0001-0003 rows are unchanged, so their files were not edited.
       expect(recorded.slice(0, 3)).toEqual(v3Checksums);
       expect(v4.connection.pragma('foreign_key_check')).toEqual([]);
