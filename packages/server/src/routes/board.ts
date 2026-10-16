@@ -52,6 +52,9 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.get('/projects/:id/harness', async (req, res) => {
     res.json(out(HarnessStatusDtoSchema, await board.harnessStatus(param(req.params['id']))));
   });
+  router.get('/projects/:id/harness/checks', (req, res) => {
+    res.json(out(CheckRunListSchema, board.mainCheckHistory(param(req.params['id']))));
+  });
   router.post('/projects/:id/harness/checks', csrf, json, async (req, res) => {
     res.json(out(CheckRunListSchema, await board.runMainChecks(param(req.params['id']))));
   });

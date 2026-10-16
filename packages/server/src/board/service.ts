@@ -76,6 +76,8 @@ export interface BoardService {
   putSetup(projectId: string, body: unknown): ProjectAgentSetup;
   harnessStatus(projectId: string): Promise<HarnessStatusDto>;
   runMainChecks(projectId: string): Promise<CheckRun[]>;
+  /** Past "Run checks now" results on the main branch, newest first (R-E's history). */
+  mainCheckHistory(projectId: string, limit?: number): CheckRun[];
   createHarnessTicket(projectId: string): Promise<TicketDto>;
   contextCandidates(projectId: string): Promise<ContextCandidateDto[]>;
   board(projectId: string): Promise<BoardDto>;
@@ -413,6 +415,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       } catch (error) {
         throw dbConflict(error, 'Another project already uses this project key') ?? error;
       }
+    },
+
+    mainCheckHistory(projectId, limit = 50) {
+      project(projectId); // 404 for an unknown project
+      return ws.checkRuns.listForProjectMain(projectId, { limit });
     },
 
     async harnessStatus(projectId) {

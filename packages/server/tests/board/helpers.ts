@@ -8,6 +8,7 @@ import { createCheckService, type CheckService } from '../../src/board/checks.js
 import { createProjectHarness } from '../../src/board/harness.js';
 import { createBoardService } from '../../src/board/service.js';
 import { createWorkflowService } from '../../src/workflow/service.js';
+import { createSkillsPlugins } from '../../src/workflow/skills-plugin.js';
 import {
   createControlService,
   type ControlService,
@@ -73,6 +74,8 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const clock = { now: BOARD_NOW };
   const now = () => clock.now;
   const hooks: ControlWorkspaceHooks = {};
+  // The owner's home is a temp directory, so the real ~/.claude is never listed or copied.
+  const homeDir = tempDir('acp-board-home-');
   const control = createControlService({
     db,
     repos,
@@ -85,6 +88,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     now,
     publish: base.publish,
     sweepIntervalMs: null,
+    skillsPlugins: createSkillsPlugins({ dataDir, skills: { homeDir } }),
     workspace: hooks,
   });
   const workspace = createWorkspaceRepositories(db, { now });
@@ -116,8 +120,6 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     logger,
   });
   Object.assign(hooks, board.controlHooks());
-  // The owner's home is a temp directory, so the real ~/.claude is never listed.
-  const homeDir = tempDir('acp-board-home-');
   const workflow = createWorkflowService({
     db,
     repos,
