@@ -3,14 +3,18 @@ import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   APPROVAL_TIMEOUT_MS,
+  HARD_MAX_DEPTH,
   isPathInside,
   type ManagedAgentEvent,
+  type ManagedAgentSpec,
   type ManagedAgentHandle,
   type ManagedExecutionAdapter,
   type PermissionDecision,
   type PermissionRequest,
   type RegisteredRoot,
+  type RunBudget,
   type RunStatus,
+  type TicketPlan,
 } from '@acp/core';
 import {
   ApprovalDecisionRequestSchema,
@@ -25,15 +29,25 @@ import {
   type RunSummaryDto,
   type StreamNoticeDto,
 } from '@acp/core/api';
-import { MAX_PAGE_SIZE, type AcpDatabase, type Repositories, type WorkspaceRow } from '@acp/db';
 import {
+  MAX_PAGE_SIZE,
+  withTransaction,
+  type AcpDatabase,
+  type Repositories,
+  type WorkspaceRow,
+} from '@acp/db';
+import {
+  agentDepth,
   agentEvent,
+  allowlistTarget,
   cancelRun,
   checkReviewAction,
   completeCancellation,
   createRun,
   decideApproval,
+  decidePlan,
   expireApprovals,
+  isAgentOverBudget,
   isApprovalOverdue,
   isLiveAgentStatus,
   isRunPastDeadline,
@@ -42,12 +56,18 @@ import {
   recordReview,
   recoverAfterRestart,
   requestPermission,
+  runLimits,
   stopAgent,
   timeOutRun,
+  type AllowlistTarget,
+  type AllowlistVerdict,
+  type EngineAgent,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
+  type PlanDecision,
   type Refusal,
+  type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
 import { HttpError, notFound } from '../errors.js';
@@ -58,6 +78,7 @@ import {
   type Workspace,
   type WorkspaceManager,
 } from '../workspace/index.js';
+import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
 import { createCsrfToken } from './csrf.js';
 import { refusalError, workspaceError } from './errors.js';
 import {
@@ -102,6 +123,69 @@ const DEFAULT_CANCEL_GRACE_MS = 10_000;
 export const LEAD_READ_ONLY_MESSAGE =
   'The lead agent works read-only in the project. Start a worker agent to change files or run commands.';
 
+/**
+ * Added to the first message of a helper that may start helpers (depth 2). The adapter ends a
+ * helper's query when its turn ends, so a parent that wants to hear from its helpers has to stay
+ * in its turn; the server then tells it when each one ends (`notifyParent`).
+ */
+export const PARENT_HELPER_NOTE =
+  'You may start helpers of your own with start_agent. If you do, stay with them until they finish: ' +
+  'check on them with agent_status. You will also get a message when each of them ends.';
+
+/** What a run's agents get from the project's setup (ADR-0012 amendment). */
+export interface AgentSetup {
+  /** Project context for `ManagedAgentSpec.context`; empty for none. */
+  context: string;
+  /** The project's chosen model, or null for the provider default. */
+  model: string | null;
+}
+
+const NO_SETUP: AgentSetup = { context: '', model: null };
+
+/** Whether a worker's changes may be merged, from its harness checks (ADR-0017 §4). */
+export interface ReviewGate {
+  /** Names of required checks whose latest result on these changes is not a pass. */
+  failedRequired: readonly string[];
+  /** Checks are running on these changes right now. */
+  running: boolean;
+}
+
+/**
+ * Phase 4 wiring (P4-D): the board layer's view into the run service. Every hook is optional, so
+ * the Phase 3 control panel (and its tests) run unchanged without them.
+ */
+export interface ControlWorkspaceHooks {
+  /** Inside each transition's database transaction (a ticket's status follows its run). */
+  inCommit?: (prev: RunState | null, next: RunState) => void;
+  /** After a transition was committed and its effects started (notices, checks on review). */
+  afterCommit?: (prev: RunState | null, next: RunState) => void;
+  /** The project's context files and model for a run's agents; read once per run. */
+  agentSetup?: (projectId: string) => Promise<AgentSetup>;
+  /** The project's allowlist and harness checks; null when the project has no setup. */
+  allowlist?: (projectId: string) => Promise<AllowlistContext | null>;
+  reviewGate?: (runId: string, agentRunId: string) => ReviewGate;
+  /** The owner merged although a required check failed; `reason` is their own text. */
+  mergedAnyway?: (input: {
+    runId: string;
+    agentRunId: string;
+    role: string;
+    reason: string;
+    failedChecks: readonly string[];
+  }) => void;
+}
+
+export interface TicketRunInput {
+  projectId: string;
+  ticketId: string;
+  title: string;
+  /** The lead's brief (`ticketLeadPrompt`). */
+  leadPrompt: string;
+  limits: RunLimits;
+  budget: RunBudget;
+  /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
+  inTransaction?: (runId: string) => void;
+}
+
 export interface ControlServiceDeps {
   db: AcpDatabase;
   repos: Repositories;
@@ -125,6 +209,8 @@ export interface ControlServiceDeps {
   flushIngestion?: () => Promise<void>;
   newId?: () => string;
   csrfToken?: string;
+  /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
+  workspace?: ControlWorkspaceHooks;
 }
 
 export interface ControlCounters {
@@ -155,8 +241,19 @@ export interface ControlService {
   /** Stop all for one run. */
   stopRun(runId: string): RunSummaryDto;
   review(runId: string): Promise<ReviewDto>;
-  /** Merge or discard one worker's changes; returns the updated review. */
+  /**
+   * Merge, merge anyway (a required check failed; needs a reason) or discard one worker's changes;
+   * returns the updated review.
+   */
   reviewAction(runId: string, body: unknown): Promise<ReviewDto>;
+  /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
+  createTicketRun(input: TicketRunInput): RunDetailDto;
+  /** The owner's decision on the plan waiting in PLAN_REVIEW; returns the decided plan. */
+  decidePlan(runId: string, planId: string, decision: PlanDecision, comment?: string): TicketPlan;
+  /** The run's engine state if this process holds it (live or loaded); never loads it. */
+  peek(runId: string): RunState | undefined;
+  /** A worker's worktree, when it has one that still exists. */
+  agentWorkspace(runId: string, agentRunId: string): Promise<Workspace | undefined>;
   /** Active worktrees as extra roots of their run's project (scheduler and pipeline). */
   extraRoots(): RegisteredRoot[];
   /** True for paths under the managed worktrees directory (never offered as a new project). */
@@ -178,12 +275,25 @@ interface LiveRun {
   /** Workspaces created by this process. */
   workspaces: Map<string, Workspace>;
   cancellingSince: number | null;
+  /** The project's context and model, read once when the run's first agent starts. */
+  setup?: Promise<AgentSetup>;
 }
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
+/**
+ * The raw tool input of a permission request, for the project allowlist. The core v1 contract's
+ * `PermissionRequest` does not carry it yet, so no request can be pre-approved and every one asks
+ * the owner (fail closed). Blocked on a contract change: docs/phase-4/wp/P4-D.md, "Blockers".
+ */
+function toolInputOf(request: PermissionRequest): unknown {
+  void request;
+  return undefined;
+}
+
 export function createControlService(deps: ControlServiceDeps): ControlService {
   const { logger } = deps;
+  const hooks: ControlWorkspaceHooks = deps.workspace ?? {};
   const store: RunStore = createRunStore({ db: deps.db, now: deps.now });
   const newId = deps.newId ?? (() => randomUUID());
   const csrfToken = deps.csrfToken ?? createCsrfToken();
@@ -286,13 +396,42 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (result.state === prev && result.effects.length === 0) {
       return { ok: true, value: result.value };
     }
-    store.commit(prev, result.state, result.effects);
+    commit(prev, result.state, result.effects);
     live.state = result.state;
     notify('runs-changed', live);
     if (result.effects.some((e) => e.type === 'chat-message')) notify('chat-message', live);
     perform(live, result.effects);
     afterTransition(live, prev);
+    afterCommit(prev, live.state);
     return { ok: true, value: result.value };
+  }
+
+  /** Persists a transition, with the board's own writes (if any) in the same transaction. */
+  function commit(
+    prev: RunState | null,
+    next: RunState,
+    effects: readonly EngineEffect[],
+    extra?: () => void,
+  ): void {
+    if (hooks.inCommit === undefined && extra === undefined) {
+      store.commit(prev, next, effects);
+      return;
+    }
+    withTransaction(deps.db, () => {
+      store.commit(prev, next, effects);
+      extra?.();
+      hooks.inCommit?.(prev, next);
+    });
+  }
+
+  /** The board layer reacts after the fact; its failures never undo a committed transition. */
+  function afterCommit(prev: RunState | null, next: RunState): void {
+    if (hooks.afterCommit === undefined) return;
+    try {
+      hooks.afterCommit(prev, next);
+    } catch (error) {
+      logger.log('error', 'board update failed', { runId: next.run.id, ...errorFields(error) });
+    }
   }
 
   function applyOrThrow<T>(
@@ -339,6 +478,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'link-session':
           // Stored in the same transaction as the state (RunStore.commit).
           break;
+        case 'plan-submitted':
+        case 'plan-decided':
+          // The plan is in the state and stored with it; the board layer publishes the notice.
+          logger.log('info', effect.type === 'plan-submitted' ? 'plan submitted' : 'plan decided', {
+            runId,
+            planId: effect.planId,
+          });
+          break;
         case 'budget-overshoot':
           logger.log('warn', 'agent over budget', {
             runId,
@@ -372,6 +519,53 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (status !== prev.run.status) {
       logger.log('info', 'run status changed', { runId: live.state.run.id, status });
     }
+    const before = new Map(prev.agents.map((a) => [a.id, a]));
+    for (const agent of live.state.agents) {
+      const was = before.get(agent.id);
+      if (was === undefined || !isLiveAgentStatus(was.status) || isLiveAgentStatus(agent.status)) {
+        continue;
+      }
+      const parent = live.state.agents.find((a) => a.id === agent.parentAgentRunId);
+      if (parent?.kind === 'worker') notifyParent(live, parent, agent);
+    }
+  }
+
+  function countDiagnostic(code: string): void {
+    counters.diagnostics[code] = (counters.diagnostics[code] ?? 0) + 1;
+  }
+
+  /**
+   * Depth 2: tells a parent helper that one of its helpers ended. Server text (role and status
+   * only), sent to the agent and never stored. A parent whose own query already ended (held as
+   * `awaitingHelpers`) has no input left to receive it; that is counted, not hidden.
+   */
+  function notifyParent(live: LiveRun, parent: EngineAgent, child: EngineAgent): void {
+    const runId = live.state.run.id;
+    const reachable =
+      isLiveAgentStatus(parent.status) &&
+      parent.awaitingHelpers !== true &&
+      !isAgentOverBudget(parent) &&
+      (live.handles.has(parent.id) || live.starting.has(parent.id));
+    if (!reachable) {
+      countDiagnostic('parent-not-notified');
+      logger.log('info', 'parent helper not notified', {
+        runId,
+        agentRunId: parent.id,
+        childAgentRunId: child.id,
+      });
+      return;
+    }
+    const outcome =
+      child.status === 'SUCCEEDED'
+        ? 'finished'
+        : child.status === 'CANCELLED'
+          ? 'was stopped'
+          : 'ended without finishing';
+    sendTo(
+      live,
+      parent.id,
+      `Your helper "${child.role}" (${child.id}) ${outcome}. Use agent_status to see where it stands.`,
+    );
   }
 
   function maybeCompleteCancellation(live: LiveRun): void {
@@ -415,9 +609,34 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     if (effect.kind === 'lead') {
       // The lead reads the owner's project in place; every change goes through a worker.
-      launch(live, agentRunId, 'lead', project.rootPath, effect.prompt);
+      if (hooks.agentSetup === undefined) {
+        launch(live, agentRunId, 'lead', project.rootPath, effect.prompt, NO_SETUP);
+        return;
+      }
+      live.starting.add(agentRunId);
+      track(
+        (async () => {
+          const setup = await setupFor(live);
+          live.starting.delete(agentRunId);
+          const lead = live.state.agents.find((a) => a.id === agentRunId);
+          if (closed || lead?.status !== 'STARTING') {
+            live.pendingSends.delete(agentRunId);
+            defer(() => maybeCompleteCancellation(live));
+            return;
+          }
+          launch(live, agentRunId, 'lead', project.rootPath, effect.prompt, setup);
+        })(),
+      );
       return;
     }
+    const worker = live.state.agents.find((a) => a.id === agentRunId);
+    // Depth 2 (ADR-0013 amendment): the engine marks the helper; the server checks the rule again.
+    const canStartHelpers =
+      effect.canStartHelpers === true &&
+      worker !== undefined &&
+      runLimits(live.state).maxDepth === HARD_MAX_DEPTH &&
+      agentDepth(live.state, worker) === 1;
+    const prompt = canStartHelpers ? `${effect.prompt}\n\n${PARENT_HELPER_NOTE}` : effect.prompt;
 
     live.starting.add(agentRunId);
     track(
@@ -459,6 +678,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           return;
         }
         live.workspaces.set(agentRunId, ws);
+        const setup = await setupFor(live);
         live.starting.delete(agentRunId);
         const agent = live.state.agents.find((a) => a.id === agentRunId);
         if (closed || agent?.status !== 'STARTING') {
@@ -467,9 +687,25 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           defer(() => maybeCompleteCancellation(live));
           return;
         }
-        launch(live, agentRunId, 'worker', ws.cwd, effect.prompt);
+        launch(live, agentRunId, 'worker', ws.cwd, prompt, setup, canStartHelpers);
       })(),
     );
+  }
+
+  /** Read once per run, so every agent of the run gets the same context. Never rejects. */
+  function setupFor(live: LiveRun): Promise<AgentSetup> {
+    const read = hooks.agentSetup;
+    if (read === undefined) return Promise.resolve(NO_SETUP);
+    live.setup ??= read(live.state.run.projectId).catch((error: unknown) => {
+      // Context helps the agents but is not required: they start without it, and it is counted.
+      countDiagnostic('context-unavailable');
+      logger.log('warn', 'agent context unavailable', {
+        runId: live.state.run.id,
+        ...errorFields(error),
+      });
+      return NO_SETUP;
+    });
+    return live.setup;
   }
 
   function launch(
@@ -478,6 +714,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     kind: 'lead' | 'worker',
     cwd: string,
     prompt: string,
+    setup: AgentSetup,
+    canStartHelpers = false,
   ): void {
     const runId = live.state.run.id;
     const adapter = deps.adapter;
@@ -485,23 +723,20 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       endWithError(live, agentRunId);
       return;
     }
+    const spec: ManagedAgentSpec = { agentRunId, kind, cwd, prompt, model: setup.model };
+    if (setup.context.trim() !== '') spec.context = setup.context;
+    if (kind === 'lead' || canStartHelpers) {
+      // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
+      // engine scopes a parent helper's calls to its own children (`leadToolCall`).
+      spec.leadTools = (name, input) =>
+        new Promise<string>((resolve) => resolve(leadTool(live, agentRunId, name, input)));
+    }
+    if (kind === 'worker' && canStartHelpers) spec.canStartHelpers = true;
     let handle: ManagedAgentHandle;
     try {
-      handle = adapter.start(
-        {
-          agentRunId,
-          kind,
-          cwd,
-          prompt,
-          model: null,
-          ...(kind === 'lead' && {
-            // A refusal rejects the promise; the adapter returns it to the model as a tool error.
-            leadTools: (name, input) =>
-              new Promise<string>((resolve) => resolve(leadTool(live, agentRunId, name, input))),
-          }),
-        },
-        { requestPermission: (request) => askOwner(live, agentRunId, kind, request) },
-      );
+      handle = adapter.start(spec, {
+        requestPermission: (request) => askOwner(live, agentRunId, kind, request),
+      });
     } catch (error) {
       logger.log('warn', 'agent start failed', { runId, agentRunId, ...errorFields(error) });
       endWithError(live, agentRunId);
@@ -602,9 +837,59 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       logger.log('info', 'lead tool use denied', { runId, agentRunId, code: 'lead-read-only' });
       return Promise.resolve({ allow: false, message: LEAD_READ_ONLY_MESSAGE });
     }
-    let result: Applied<{ id: string }>;
+    const target = allowlistTarget(request.toolName, toolInputOf(request));
+    const readAllowlist = hooks.allowlist;
+    if (target === null || readAllowlist === undefined) {
+      return parkForOwner(live, agentRunId, request);
+    }
+    // The project allowlist may pre-approve it (ADR-0013 amendment): paths are resolved first.
+    return (async () => {
+      let verdict: AllowlistVerdict | undefined;
+      try {
+        verdict = await checkAllowlist(live, agentRunId, target, readAllowlist);
+      } catch (error) {
+        // Fail closed: the owner is asked.
+        logger.log('warn', 'allowlist check failed', { runId, agentRunId, ...errorFields(error) });
+      }
+      return parkForOwner(live, agentRunId, request, verdict);
+    })();
+  }
+
+  async function checkAllowlist(
+    live: LiveRun,
+    agentRunId: string,
+    target: AllowlistTarget,
+    readAllowlist: NonNullable<ControlWorkspaceHooks['allowlist']>,
+  ): Promise<AllowlistVerdict | undefined> {
+    const context = await readAllowlist(live.state.run.projectId);
+    if (context === null) return undefined;
+    const row = store.repos.workspaces.getByAgentRun(agentRunId);
+    const ws =
+      row === undefined || row.state !== 'active' ? undefined : await workspaceFor(live, row);
+    return allowlistVerdict({ target, context, workspace: ws ?? null });
+  }
+
+  /**
+   * Records the request with the engine: auto-approved when the allowlist allows it, otherwise an
+   * approval the agent waits on until the owner (or the timeout) decides.
+   */
+  function parkForOwner(
+    live: LiveRun,
+    agentRunId: string,
+    request: PermissionRequest,
+    verdict?: AllowlistVerdict,
+  ): Promise<PermissionDecision> {
+    const runId = live.state.run.id;
+    let result: Applied<{ id: string; status: string }>;
     try {
-      result = apply(live, (s, c) => requestPermission(s, { ...request, agentRunId }, c));
+      result = apply(live, (s, c) =>
+        requestPermission(
+          s,
+          { ...request, agentRunId },
+          c,
+          verdict === undefined ? {} : { allowlist: verdict },
+        ),
+      );
     } catch (error) {
       logger.log('error', 'approval request failed', { runId, agentRunId, ...errorFields(error) });
       return Promise.resolve({ allow: false, message: 'The control plane could not record this.' });
@@ -614,6 +899,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return Promise.resolve({ allow: false, message: result.refusal.message });
     }
     const approvalId = result.value.id;
+    if (result.value.status === 'approved') {
+      logger.log('info', 'approval allowed by the project allowlist', { runId, approvalId });
+      return Promise.resolve({ allow: true });
+    }
     return new Promise((resolve) => permissions.set(approvalId, resolve));
   }
 
@@ -705,7 +994,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     runId: string,
     agentRunId: string,
     action: 'merge' | 'discard',
-  ): Promise<void> {
+  ): Promise<'merged' | 'discarded' | 'no-changes'> {
     const live = get(runId);
     const check = checkReviewAction(live.state, agentRunId);
     if (check !== null) throw refusalError(check);
@@ -746,6 +1035,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }
       applyOrThrow(live, (s, c) => recordReview(s, agentRunId, outcome, c));
       logger.log('info', 'review recorded', { runId, agentRunId, outcome });
+      return outcome;
     } catch (error) {
       if (error instanceof WorkspaceError) {
         logger.log('info', 'review refused', { runId, agentRunId, code: error.code });
@@ -968,16 +1258,106 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     async reviewAction(runId, body) {
       const input = ReviewActionRequestSchema.parse(body);
-      if (input.action === 'merge-anyway') {
-        // Contract added in P4-0; harness checks (and so "merge anyway") arrive with P4-C/P4-D.
+      if (input.action === 'discard') {
+        await applyReview(runId, input.agentRunId, 'discard');
+        return review(runId);
+      }
+      // ADR-0017 §4: a failed required check blocks a plain merge; "merge anyway" needs a reason.
+      const gate = hooks.reviewGate?.(runId, input.agentRunId) ?? {
+        failedRequired: [],
+        running: false,
+      };
+      if (gate.running) {
+        throw new HttpError(
+          409,
+          'checks_running',
+          'The checks are still running on these changes; wait for them to finish',
+        );
+      }
+      const failed = gate.failedRequired;
+      if (input.action === 'merge') {
+        if (failed.length > 0) {
+          throw new HttpError(
+            409,
+            'checks_failed',
+            `A required check did not pass (${failed.join(', ')}); fix it, or merge anyway with a reason`,
+          );
+        }
+        await applyReview(runId, input.agentRunId, 'merge');
+        return review(runId);
+      }
+      if (failed.length === 0) {
         throw new HttpError(
           409,
           'merge_anyway_unavailable',
           'There are no failed checks to override; use merge instead',
         );
       }
-      await applyReview(runId, input.agentRunId, input.action);
+      const outcome = await applyReview(runId, input.agentRunId, 'merge');
+      const reason = input.reason ?? '';
+      if (outcome === 'merged' && hooks.mergedAnyway !== undefined) {
+        const role =
+          get(runId).state.agents.find((a) => a.id === input.agentRunId)?.role ?? 'Helper';
+        try {
+          hooks.mergedAnyway({
+            runId,
+            agentRunId: input.agentRunId,
+            role,
+            reason,
+            failedChecks: failed,
+          });
+        } catch (error) {
+          logger.log('error', 'merge-anyway record failed', { runId, ...errorFields(error) });
+        }
+      }
+      logger.log('info', 'merged anyway', { runId, agentRunId: input.agentRunId, outcome });
       return review(runId);
+    },
+
+    createTicketRun(input) {
+      if (closed)
+        throw refusalError({ code: 'run-not-active', message: 'The server is shutting down.' });
+      const runId = newId();
+      const result = createRun(
+        {
+          runId,
+          leadAgentRunId: newId(),
+          projectId: input.projectId,
+          title: input.title.slice(0, 200),
+          budget: input.budget,
+          limits: input.limits,
+          ticket: { ticketId: input.ticketId, leadPrompt: input.leadPrompt },
+          registeredProjectIds: projectIds(),
+        },
+        ctx(),
+      );
+      if (!result.ok) throw refusalError(result.refusal);
+      const inTransaction = input.inTransaction;
+      commit(null, result.state, result.effects, inTransaction && (() => inTransaction(runId)));
+      const live = newLive(result.state);
+      runs.set(runId, live);
+      notify('runs-changed', live);
+      perform(live, result.effects);
+      afterCommit(null, live.state);
+      logger.log('info', 'ticket run created', { runId, projectId: input.projectId });
+      return detail(live);
+    },
+
+    decidePlan(runId, planId, decision, comment) {
+      const live = get(runId);
+      const plan = applyOrThrow(live, (s, c) => decidePlan(s, planId, decision, c, comment));
+      logger.log('info', 'plan decided by owner', { runId, planId, decision });
+      return plan;
+    },
+
+    peek(runId) {
+      return runs.get(runId)?.state;
+    },
+
+    async agentWorkspace(runId, agentRunId) {
+      const row = store.repos.workspaces.getByAgentRun(agentRunId);
+      if (row === undefined || row.runId !== runId || row.state !== 'active') return undefined;
+      return workspaceFor(get(runId), row);
     },
 
     extraRoots() {

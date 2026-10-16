@@ -23,9 +23,10 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                       | Commit        | Checks |
-| ---------- | ------------------------------------------------------------------- | ------------- | ------ |
-| 2026-10-16 | Claimed P4-D; branch `wp/p4-d-server` created from `main` (0d82cef) | (this commit) | —      |
+| Date       | What was done                                                                                                                                                                                                                                                                                                                       | Commit        | Checks                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------- |
+| 2026-10-16 | Claimed P4-D; branch `wp/p4-d-server` created from `main` (0d82cef)                                                                                                                                                                                                                                                                 | (this commit) | —                                                                 |
+| 2026-10-16 | Control service: ticket runs (`createTicketRun`, `decidePlan`), plans and `ticketId` persisted with the run, board hooks (in-commit, after-commit), project context and model per run, depth-2 parent helpers (child tools, prompt note, notice when a child ends), allowlist path resolution, merge gated on checks + merge-anyway | (this commit) | format ✓ lint ✓ typecheck ✓ test 1564/1564 ✓ (server 267) build ✓ |
 
 ## Handoff notes
 

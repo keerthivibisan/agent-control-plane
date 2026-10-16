@@ -3,9 +3,11 @@ import {
   DbError,
   MAX_ORCHESTRATOR_MESSAGE_LENGTH,
   createOrchestrationRepositories,
+  createWorkspaceRepositories,
   withTransaction,
   type AcpDatabase,
   type OrchestrationRepositories,
+  type WorkspaceRepositories,
   type WorkspaceRow,
 } from '@acp/db';
 import {
@@ -16,7 +18,7 @@ import {
   type EngineEffect,
   type RunState,
 } from '@acp/orchestrator';
-import type { OrchestrationRun } from '@acp/core';
+import type { OrchestrationRun, TicketPlan } from '@acp/core';
 
 /**
  * Persists engine states (orchestration-lifecycle §1: every transition is persisted before its
@@ -25,13 +27,20 @@ import type { OrchestrationRun } from '@acp/core';
  */
 export interface RunStore {
   readonly repos: OrchestrationRepositories;
+  /** Ticket plans are written with the run state (ADR-0016: the lead's plans are stored). */
+  readonly workspaceRepos: WorkspaceRepositories;
   /**
    * Writes the difference between `prev` (null for a new run) and `next` in one transaction,
    * together with the chat lines and session links among `effects` (they are data, not actions).
    * Throws, and writes nothing, if any write fails.
    */
   commit(prev: RunState | null, next: RunState, effects: readonly EngineEffect[]): void;
-  /** Rebuilds an engine state from the database (restart, or a run not held in memory). */
+  /**
+   * Rebuilds an engine state from the database (restart, or a run not held in memory). Plans come
+   * back with the run; the limits, `awaitingHelpers` and an approval's `decidedBy` are not stored
+   * (no column for them yet), so a reloaded run has the Phase 3 limits and no decider. Live runs
+   * are never reloaded while the server runs, and after a restart nothing is relaunched.
+   */
   load(runId: string): RunState | undefined;
 }
 
@@ -42,10 +51,9 @@ export interface RunStoreDeps {
 
 export function createRunStore(deps: RunStoreDeps): RunStore {
   const ids: string[] = [];
-  const repos = createOrchestrationRepositories(deps.db, {
-    now: deps.now,
-    newId: () => ids.shift() ?? randomUUID(),
-  });
+  const repoOptions = { now: deps.now, newId: () => ids.shift() ?? randomUUID() };
+  const repos = createOrchestrationRepositories(deps.db, repoOptions);
+  const workspaceRepos = createWorkspaceRepositories(deps.db, repoOptions);
 
   /** Runs one insert with the engine's id; the slot is always empty again afterwards. */
   function withId<T>(id: string, insert: () => T): T {
@@ -63,6 +71,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       withId(next.id, () =>
         repos.runs.insert({
           projectId: next.projectId,
+          ticketId: next.ticketId,
           title: next.title,
           budget: next.budget,
           status: next.status,
@@ -138,6 +147,39 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
   }
 
+  /**
+   * Plan versions (ADR-0016). Decisions on existing plans are written before new versions, so the
+   * database never holds two proposed plans for a run. The engine numbers versions the same way
+   * the repository does; a mismatch means memory and database disagree, and the commit fails.
+   */
+  function syncPlans(prev: readonly TicketPlan[], next: readonly TicketPlan[]): void {
+    const before = new Map(prev.map((p) => [p.id, p]));
+    for (const plan of next) {
+      const old = before.get(plan.id);
+      if (old === undefined || old.status === plan.status) continue;
+      const at = plan.decidedAt ?? undefined;
+      if (plan.status === 'approved' || plan.status === 'changes-requested') {
+        workspaceRepos.plans.decide(plan.id, plan.status, at);
+      } else if (plan.status === 'superseded') {
+        workspaceRepos.plans.supersedeProposed(plan.runId, at);
+      }
+    }
+    for (const plan of next) {
+      if (before.has(plan.id)) continue;
+      const stored = withId(plan.id, () =>
+        workspaceRepos.plans.insert({
+          ticketId: plan.ticketId,
+          runId: plan.runId,
+          summary: plan.summary,
+          steps: [...plan.steps],
+        }),
+      );
+      if (stored.version !== plan.version) {
+        throw new DbError('conflict', 'stored plan version differs from the engine state');
+      }
+    }
+  }
+
   function applyDataEffects(runId: string, effects: readonly EngineEffect[]): void {
     for (const effect of effects) {
       if (effect.type === 'chat-message') {
@@ -166,6 +208,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
 
   return {
     repos,
+    workspaceRepos,
     commit(prev, next, effects) {
       withTransaction(deps.db, () => {
         syncRun(prev?.run ?? null, next.run);
@@ -175,6 +218,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         for (const approval of next.approvals) {
           syncApproval(prevApprovals.get(approval.id), approval);
         }
+        syncPlans(prev?.plans ?? [], next.plans ?? []);
         applyDataEffects(next.run.id, effects);
       });
     },
@@ -211,7 +255,9 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         toolUseId: null,
       }));
       // Usage is only accounted while agents are live; after a restart they never are again.
-      return { run, agents, approvals, ledger: EMPTY_LEDGER };
+      const state: RunState = { run, agents, approvals, ledger: EMPTY_LEDGER };
+      if (run.ticketId !== null) state.plans = workspaceRepos.plans.listForRun(runId);
+      return state;
     },
   };
 }
