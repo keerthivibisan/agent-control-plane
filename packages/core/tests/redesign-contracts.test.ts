@@ -11,6 +11,8 @@ import {
 } from '../src/index.js';
 import {
   AgentDefinitionWriteRequestSchema,
+  ChatMessageDtoSchema,
+  RunFollowUpDtoSchema,
   ProjectTokensDtoSchema,
   SkillWriteRequestSchema,
   UpdateWorkflowRequestSchema,
@@ -191,6 +193,25 @@ describe('stage agent files (redesign §6a)', () => {
         plannerMode: 'lead',
         stages: { ...wf.stages, plan: { model: null, skill: null, agent: '../x' } },
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe('lead follow-up chat (ADR-0020)', () => {
+  const msg = { id: 'm1', runId: 'r1', role: 'lead', text: 'Done.', createdAt: T };
+
+  it('keeps old chat messages valid and marks follow-up ones', () => {
+    expect(ChatMessageDtoSchema.parse(msg).followUp).toBeUndefined();
+    expect(ChatMessageDtoSchema.parse({ ...msg, followUp: true }).followUp).toBe(true);
+  });
+
+  it('says whether an ended lead can be resumed, and why not', () => {
+    expect(RunFollowUpDtoSchema.safeParse({ state: 'available', reason: null }).success).toBe(true);
+    expect(
+      RunFollowUpDtoSchema.safeParse({ state: 'unavailable', reason: 'session-gone' }).success,
+    ).toBe(true);
+    expect(
+      RunFollowUpDtoSchema.safeParse({ state: 'unavailable', reason: 'because' }).success,
     ).toBe(false);
   });
 });

@@ -50,6 +50,12 @@ export interface ManagedAgentSpec {
    * the role's normal set. The file's `model` is resolved by the engine, not here.
    */
   profile?: { name: string; instructions: string; tools: readonly string[] | null };
+  /**
+   * A follow-up turn of an ended lead (ADR-0020): the adapter resumes `resumeSessionId` (SDK
+   * `resume`, never forked, so usage keeps flowing to the original session) in the same `cwd`, with
+   * the read-only toolset and no control-plane tools, and closes the input after one turn.
+   */
+  followUp?: { resumeSessionId: string };
 }
 
 /** Executes a lead tool call after the engine has validated it; returns text for the model. */

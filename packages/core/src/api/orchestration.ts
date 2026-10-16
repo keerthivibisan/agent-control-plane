@@ -64,8 +64,32 @@ export const ChatMessageDtoSchema = z.object({
   role: z.enum(['owner', 'lead']),
   text: z.string().min(1),
   createdAt: IsoTimestampSchema,
+  /** True for messages of a follow-up turn after the lead ended (ADR-0020). Absent: false. */
+  followUp: z.boolean().optional(),
 });
 export type ChatMessageDto = z.infer<typeof ChatMessageDtoSchema>;
+
+/** Why the owner cannot continue the chat with an ended lead (ADR-0020 §5). */
+export const FollowUpUnavailableReasonSchema = z.enum([
+  /** No lead ever started, or it never reported a session id. */
+  'no-session',
+  /** Claude Code no longer has the saved conversation (aged out or removed), or resume failed. */
+  'session-gone',
+  /** Managed agents are off in this app. */
+  'managed-off',
+]);
+export type FollowUpUnavailableReason = z.infer<typeof FollowUpUnavailableReasonSchema>;
+
+/**
+ * The chat after the lead ended (ADR-0020). Absent while the lead is live (the chat goes to it as
+ * usual). `available`: a message resumes the lead for one answers-only turn; `running`: a turn is
+ * under way, so the box waits; `unavailable`: see `reason`.
+ */
+export const RunFollowUpDtoSchema = z.object({
+  state: z.enum(['available', 'running', 'unavailable']),
+  reason: FollowUpUnavailableReasonSchema.nullable(),
+});
+export type RunFollowUpDto = z.infer<typeof RunFollowUpDtoSchema>;
 
 export const RunSummaryDtoSchema = z.object({
   id: z.string().min(1),
@@ -87,6 +111,7 @@ export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   agents: z.array(AgentRunDtoSchema),
   approvals: z.array(ApprovalDtoSchema),
   messages: z.array(ChatMessageDtoSchema),
+  followUp: RunFollowUpDtoSchema.optional(),
 });
 export type RunDetailDto = z.infer<typeof RunDetailDtoSchema>;
 
