@@ -4,13 +4,13 @@
 > Protocol: `docs/phase-4/README.md` §9 with redesign paths. Scope, owned paths and dependencies:
 > `docs/redesign/README.md` §7.
 
-| Field   | Value                                                           |
-| ------- | --------------------------------------------------------------- |
-| Status  | review (Part 1, steps 1–5); Part 2 not started, waiting for R-C |
-| Owner   | backend agent                                                   |
-| Branch  | `wp/r-g-server`                                                 |
-| Started | 2026-10-16                                                      |
-| Updated | 2026-10-16                                                      |
+| Field   | Value                                         |
+| ------- | --------------------------------------------- |
+| Status  | in-progress (Part 2; Part 1 merged `39bd957`) |
+| Owner   | backend agent                                 |
+| Branch  | `wp/r-g-server`                               |
+| Started | 2026-10-16                                    |
+| Updated | 2026-10-16                                    |
 
 ## Tasks
 
@@ -22,7 +22,7 @@ Part 1 (no dependency on R-C):
 - [x] 4. `GET/PUT /api/projects/:id/workflow` answering `ProjectWorkflowDto`
 - [x] 5. Tests: supertest per route, CSRF refusals, temp git repo, upgrade test
 
-Part 2 (R-C wiring): **not started, waiting for R-C** (see below).
+Part 2 (R-C wiring): **in progress** since R-C merged (`6a11e67`).
 
 ## Work log (append-only; newest last)
 
@@ -31,7 +31,8 @@ Part 2 (R-C wiring): **not started, waiting for R-C** (see below).
 | 2026-10-16 | Claimed R-G; read the spec and the db/server code; paused by the owner before any code was written | `35229f9` | docs-only; `pnpm check` not run (paused)                                                                               |
 | 2026-10-16 | Resumed; rebased on main `a532ef2`. Migration 0004, redesign repositories, db tests, README        | `178094d` | format ✓ lint ✓ typecheck ✓ test (db 153; server 306/309, 3 environmental, pass on rerun) ✓ build ✓                    |
 | 2026-10-16 | Workflow routes and service, skill-name listing, run store writes/loads decidedBy and limits       | `e067f98` | format ✓ lint ✓ typecheck ✓ test core 243 / demo 12 / orch 366 / adapter 268 / db 153 / web 321 / server 323 ✓ build ✓ |
-| 2026-10-16 | Set `review` for Part 1; Part 2 waiting for R-C                                                    | this      | docs-only; checks as in `e067f98`                                                                                      |
+| 2026-10-16 | Set `review` for Part 1; Part 2 waiting for R-C                                                    | `39bd957` | docs-only; checks as in `e067f98`                                                                                      |
+| 2026-10-16 | Part 2 started: rebased on main `fcdc125` (R-C merged)                                             | this      | docs-only                                                                                                              |
 
 ## Handoff notes
 
