@@ -23,8 +23,8 @@ Owned paths: `packages/server/src/skills/**`, `packages/server/tests/**`,
 - [x] 1. Refuse deleting an agent file a workflow stage uses (409, like skills); web shows the
       server's message
 - [x] 2. Agent templates match the role base sets ("Code reviewer" read-only, no shell commands)
-- [ ] 3. `docs/provider-adapters.md` §11 header cites the real runs (P3-F, R-V)
-- [ ] 4. P3-F e2e driver: `fake.byId` takes the latest start of an agent run
+- [x] 3. `docs/provider-adapters.md` §11 header cites the real runs (P3-F, R-V)
+- [x] 4. P3-F e2e driver: `fake.byId` takes the latest start of an agent run
 
 ## Work log (append-only; newest last)
 
@@ -32,4 +32,6 @@ Owned paths: `packages/server/src/skills/**`, `packages/server/tests/**`,
 | ---------- | ----------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------- |
 | 2026-10-16 | Claimed R-R part 1 on main                                                                                              | `90d9d64` | docs only                                   |
 | 2026-10-16 | Task 1: agent-file delete refused while a stage uses it (409 `agent_in_use`); web disables Delete and shows the refusal | `2c90880` | pnpm check ✓: test 2,093/2,093              |
-| 2026-10-16 | Task 2: agent templates fit their stages (reviewer Read/Grep/Glob, no shell commands); stage notes; tests               | (this)    | pnpm check ✓: test 2,097/2,097; e2e 49/49 ✓ |
+| 2026-10-16 | Task 2: agent templates fit their stages (reviewer Read/Grep/Glob, no shell commands); stage notes; tests               | `32afa5d` | pnpm check ✓: test 2,097/2,097; e2e 49/49 ✓ |
+| 2026-10-16 | Task 4: fake adapter `byId` returns the latest start (follow-up turns reuse the lead id); redesign e2e driver uses it   | `c64d151` | pnpm check ✓: test 2,097/2,097; e2e 49/49 ✓ |
+| 2026-10-16 | Task 3: provider-adapters §11 header cites the P3-F and R-V/R-K real runs; verified bullets updated                     | (this)    | pnpm check ✓: test 2,097/2,097              |

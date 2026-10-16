@@ -314,12 +314,26 @@ owner, in a throwaway directory with project-level `.claude/settings.local.json`
   `last_assistant_message`. A repeated delivery that is identical in every field (same event, same
   prompt) still collapses; none was seen. **No discriminator was added**; the §3 key is unchanged.
 
-## 11. Managed mode: Claude Agent SDK **[implemented, P3-B and P4-I; fake-query tests only]**
+## 11. Managed mode: Claude Agent SDK **[implemented, P3-B and P4-I; fake-query tests, real runs]**
 
 `createManagedClaudeCode({ query? })` in `@acp/adapter-claude-code` (`src/managed/**`) implements
 core's `ManagedExecutionAdapter` (ADR-0012, ADR-0013). Everything below was read from the pinned
-SDK's type declarations (`@anthropic-ai/claude-agent-sdk` 0.3.296, `sdk.d.ts`) and is exercised
-only against a scripted fake `query`. **No real run has happened yet** (that is P3-F).
+SDK's type declarations (`@anthropic-ai/claude-agent-sdk` 0.3.296, `sdk.d.ts`), and the tests
+exercise it against a scripted fake `query`.
+
+**Real runs** (each with the owner's consent in chat, against SDK 0.3.296, in a throwaway git
+repository on a separate server with an empty temp `ACP_CLAUDE_DIR`; aggregates only):
+
+- **P3-F smoke, 2026-10-13** (`docs/research/p3-f-smoke-2026-10-13.md`), on the Phase 3 adapter:
+  a lead started one helper through `start_agent`; the helper's `Write` reached the owner as one
+  approval; the review held the one file; the merge completed the run.
+- **R-V real run and R-K re-check, 2026-10-16** (`docs/research/r-v-real-run-2026-10-16.md`): the
+  redesigned workflow (a separate planner with a stage skill, the lead, one helper, the final code
+  review with a stage agent file, unit tests) and one follow-up turn. Both runs completed. The
+  re-check confirmed each role's `system/init` tool list (below).
+
+Only statements that say "verified in a real run" were observed there; everything else is checked
+against the fake `query` only.
 
 ### 11.1 How the adapter uses the SDK
 
@@ -336,7 +350,7 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
 - `systemPrompt` (P4-I, ADR-0012 amendment): always `{ type: 'preset', preset: 'claude_code' }`.
   When `spec.context` is present and not blank, it is the `append`, cut to at most
   `MAX_CONTEXT_BYTES` (32 KiB) of UTF-8 on a character boundary.
-- **Stage agent file** (`spec.profile`, R-I, ADR-0019 §6) **[implemented; fake-query tests only]**:
+- **Stage agent file** (`spec.profile`, R-I, ADR-0019 §6) **[implemented; real run checked]**:
   - The server reads `<project root>/.claude/agents/<name>.md` from the owner's checkout (never an
     agent worktree) with the ADR-0018 path rules and uses only its body, `model` and `tools`.
     The model follows stage > file > project > provider default. A missing, unsafe, oversize or
@@ -349,9 +363,10 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     (MCP, unaffected by `tools`). `Skill` comes only with a skills plugin, whatever the file
     lists. `canUseTool` denies a role tool the file does not list ("This stage's agent file does
     not list this tool."). Null `tools` keeps the role's base set. `allowedTools` is never set.
-  - Verified in the R-V real run (docs/research/r-v-real-run-2026-10-16.md): the reviewer's
-    `system/init` tools were exactly its narrowed `tools` (`Read`) plus `mcp__acp__post_review`.
-- **Role tool base sets** (R-K, ADR-0019 §7) **[implemented; fake-query tests only]**: every
+  - Verified in a real run (R-V, docs/research/r-v-real-run-2026-10-16.md): the reviewer's
+    `system/init` tools were exactly its narrowed `tools` (`Read`) plus `mcp__acp__post_review`,
+    and the file's marker word reached its review comment (the instructions were applied).
+- **Role tool base sets** (R-K, ADR-0019 §7) **[implemented; real run checked]**: every
   managed agent gets an explicit SDK `tools` list (`agentToolNames`):
 
   | Role                      | `tools`                                                                |
@@ -373,8 +388,11 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     plan-mode tools).
   - The planner and reviewer keep `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`; the lead,
     worker and tester set none (the base set already excludes the lead's edit and shell tools).
-  - Unverified until a consented re-check: that `system/init` for each role then lists exactly
-    the base set (plus `Skill` and the role's `mcp__acp__*` tools).
+  - Verified in a real run (the R-K re-check, docs/research/r-v-real-run-2026-10-16.md): each
+    role's `system/init` tools were exactly its base set, plus `Skill` for the planner with the
+    plugin and the role's `mcp__acp__*` tools; the reviewer was narrowed to `Read` by its agent
+    file. None of the extra install tools (`SendMessage`, `CronCreate`, `RemoteTrigger`, web
+    tools, `Task`) came back.
 
 - `canUseTool`:
   - Denies, without asking, any built-in (non-`mcp__`) tool outside the agent's effective set
@@ -414,8 +432,8 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     `finished: cancelled`. Messages that are still in flight are dropped; the transcript still has
     them for observation.
   - `reportedCostUsd` is the latest result's `total_cost_usd`.
-- **Follow-up turn of an ended lead** (`spec.followUp`, R-J, ADR-0020) **[implemented; fake-query
-  tests only]**:
+- **Follow-up turn of an ended lead** (`spec.followUp`, R-J, ADR-0020) **[implemented; real run
+  checked]**:
   - `resume: spec.followUp.resumeSessionId` with `forkSession: false`, in `spec.cwd` (the server
     passes the lead's own folder, the project root, where the session is stored). The session keeps
     its id, so the transcript tailer keeps attributing usage to the lead through its existing
@@ -437,9 +455,13 @@ only against a scripted fake `query`. **No real run has happened yet** (that is 
     extractable summary", which would wrongly report a session as gone, and it reads the session
     store from the server process. The engine treats an error before the session answered (no
     usage, no reply) as `session-gone`.
-  - Unverified until the R-V real run (owner consent): that resume keeps the id and the
-    conversation, that the stream carries only new messages, and the exact failure shape for a
-    missing session.
+  - Verified in a real run (R-V, docs/research/r-v-real-run-2026-10-16.md): `resume` was the
+    lead's session id with `forkSession: false`, and the turn's `system/init` session id was the
+    same; its `init` tools were exactly `Read`, `Grep` and `Glob`; the reply was stored with
+    `followUp: true`; the run status and the lead's record did not change.
+  - Still unverified: that the model keeps the earlier conversation (not observable without
+    reading content), that the stream carries only new messages, and the exact failure shape for
+    a missing session.
 
 ### 11.2 SDK facts from the 0.3.296 declarations (unverified at runtime)
 
