@@ -20,12 +20,12 @@
 
 `main` is at `5044b73` and green (P4-I, B, A, C and E merged). Nothing is pushed to a remote.
 
-| WP   | Branch                  | Head       | State                                                                                                                                                         | What is left                                                                                                           |
-| ---- | ----------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| P4-F | `wp/p4-f-project-setup` | `d46845b`  | Rebased on `main` (5044b73); the coordinator fixed the rebase conflicts in `copy.ts`/`api.ts`. `pnpm check` ✓ (all 7 packages) and e2e 11/11 ✓ on 2026-10-16. | Coordinator: `git merge --ff-only wp/p4-f-project-setup` on `main`, then update this table. See "Open decisions".      |
-| P4-G | `wp/p4-g-ticket`        | see branch | Ticket page (`feat(web): add the ticket page`) committed; the agent was asked to checkpoint and stop. Read `git show wp/p4-g-ticket:docs/phase-4/wp/P4-G.md`. | Finish per its progress file, rebase on `main` (expect conflicts in `lib/copy.ts`, `lib/api.ts`, `router.ts`), review. |
-| P4-D | `wp/p4-d-server`        | —          | not started; all dependencies merged                                                                                                                          | Start with the README §10.1 prompt **plus the notes below**                                                            |
-| P4-H | `wp/p4-h-verify`        | —          | not started                                                                                                                                                   | After D, F and G. The real smoke run needs the owner's consent at that time                                            |
+| WP   | Branch                  | Head      | State                                                                                                                                                                                                              | What is left                                                                                                                                                                                                       |
+| ---- | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P4-F | `wp/p4-f-project-setup` | `d46845b` | Rebased on `main` (5044b73); the coordinator fixed the rebase conflicts in `copy.ts`/`api.ts`. `pnpm check` ✓ (all 7 packages) and e2e 11/11 ✓ on 2026-10-16.                                                      | Coordinator: `git merge --ff-only wp/p4-f-project-setup` on `main`, then update this table. See "Open decisions".                                                                                                  |
+| P4-G | `wp/p4-g-ticket`        | `9697dea` | Paused cleanly on the owner's request (worktree clean). Route, canvas, side panel, plan card, checks, merge-anyway, history and fixture tests done; `pnpm check` ✓ and e2e `--project ticket` 3/3 ✓ on its branch. | Full web e2e (`ACP_E2E_PORT=7521`), a final screenshot look, §9 report, status `review`. Rebase on `main` (expect conflicts in `lib/api.ts` `put`/`patch`, `router.ts` `href.board`/`href.ticket`, `lib/copy.ts`). |
+| P4-D | `wp/p4-d-server`        | —         | not started; all dependencies merged                                                                                                                                                                               | Start with the README §10.1 prompt **plus the notes below**                                                                                                                                                        |
+| P4-H | `wp/p4-h-verify`        | —         | not started                                                                                                                                                                                                        | After D, F and G. The real smoke run needs the owner's consent at that time                                                                                                                                        |
 
 **Agent worktrees** (on this machine): P4-F `.claude/worktrees/agent-a9d7d236a63ab508e`, P4-G
 `…agent-a67043b516f28adae`. Merged WPs' worktrees can be removed. If a worktree is gone, create a
@@ -63,7 +63,11 @@ new one from its branch.
    policy (argv only, no shell, timeouts, output caps) is unchanged.
 3. **P4-E behaviour to confirm with the owner:** Done tickets can't be cancelled; starting a ticket
    asks for no confirmation; a ticket with no activity shows "Updated" with its update time.
-4. **P4-F links:** `features/project-setup/setup-form.ts` builds `#/board/:id` and `#/tickets/:id`
+4. **P4-G contract proposal:** add `branch: string | null` to `AgentRunDto`, so an agent card shows its
+   worktree branch before the review. Today it shows only after `GET /runs/:id/review` reports it.
+   P4-G assumes PATCH ticket, plan decision and start all answer `TicketDetailDto`; P4-D should
+   match that.
+5. **P4-F links:** `features/project-setup/setup-form.ts` builds `#/board/:id` and `#/tickets/:id`
    by hand. Switch them to `href.board`/`href.ticket` (both on `main` now), in P4-F or as a small
    follow-up.
 
