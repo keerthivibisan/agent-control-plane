@@ -50,6 +50,31 @@ export async function realRoot(rootPath: string): Promise<string> {
   }
 }
 
+async function realOrSelf(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * The owner's personal skills (`~/.claude`) are never read or written (ADR-0018 §1, AGENTS.md
+ * rule 4), not even for a project registered at the home folder or inside `~/.claude`, where
+ * `<root>/.claude/skills` would be exactly those skills.
+ */
+export async function refusePersonalClaudeDir(root: string, homeDir: string): Promise<void> {
+  const personal = [join(homeDir, '.claude'), join(await realOrSelf(homeDir), '.claude')];
+  const real = await realOrSelf(personal[0] ?? '');
+  const projectClaude = join(root, SKILLS_SEGMENTS[0] ?? '.claude');
+  if ([...personal, real].some((p) => inside(p, projectClaude))) {
+    throw skillError(
+      'unsafe_path',
+      "This project's .claude folder is your personal Claude folder, which the app never opens",
+    );
+  }
+}
+
 export function skillPaths(root: string, slug: string): SkillPaths {
   // The slug is schema-checked by the caller; this keeps the path rule local and testable too.
   if (!SkillNameSchema.safeParse(slug).success) {

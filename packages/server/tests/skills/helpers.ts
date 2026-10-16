@@ -4,7 +4,7 @@ import { defaultProjectWorkflow, type ProjectWorkflow, type SkillName } from '@a
 import type { LogFields, Logger } from '../../src/logger.js';
 import { createSkillsService, type SkillProject } from '../../src/skills/index.js';
 import { execFile } from 'node:child_process';
-import { GIT_TEST_ENV, makeRepo, type ExecCall } from '../workspace/helpers.js';
+import { GIT_TEST_ENV, makeRepo, tempDir, type ExecCall } from '../workspace/helpers.js';
 import { createGitRunner, type ExecFileFn } from '../../src/workspace/index.js';
 
 /**
@@ -67,13 +67,16 @@ export function setupSkills(
   const state = {
     workflow: options.workflow ?? defaultProjectWorkflow('p1', SKILLS_NOW.toISOString()),
   };
+  // A stand-in home folder: the real one (and its ~/.claude) is never consulted.
+  const homeDir = tempDir('acp-skills-home-');
   const skills = createSkillsService({
+    homeDir,
     git,
     now: () => SKILLS_NOW,
     workflowOf: () => state.workflow,
     logger,
   });
-  return { root, project, skills, logs: lines, state, calls };
+  return { root, project, skills, logs: lines, state, calls, homeDir };
 }
 
 /** Every file under `root` (except `.git`) with its content, for "nothing else touched" checks. */

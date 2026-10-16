@@ -187,6 +187,26 @@ describe('skills service: create, list, get, update, delete, commit', () => {
 });
 
 describe('skills service: ADR-0018 path and commit safety', () => {
+  it("never opens the owner's personal ~/.claude, even for a project at the home folder", async () => {
+    const { skills, homeDir } = setupSkills();
+    git(homeDir, 'init', '--quiet', '-b', 'main');
+    const atHome = { id: 'home', rootPath: homeDir };
+    const unsafe = { status: 400, code: 'unsafe_path' };
+    // No ~/.claude yet: creating one there is refused too.
+    expect(await refusal(skills.create(atHome, body('plan')))).toEqual(unsafe);
+    expect(existsSync(join(homeDir, '.claude'))).toBe(false);
+    write(homeDir, '.claude/skills/personal/SKILL.md', '---\nname: personal\n---\nmine\n');
+    expect(await refusal(skills.list(atHome))).toEqual(unsafe);
+    expect(await refusal(skills.get(atHome, 'personal'))).toEqual(unsafe);
+    expect(await refusal(skills.delete(atHome, 'personal'))).toEqual(unsafe);
+    // A project registered inside ~/.claude is refused as well.
+    const inside = { id: 'in', rootPath: join(homeDir, '.claude/skills') };
+    expect(await refusal(skills.list(inside))).toEqual(unsafe);
+    expect(readFileSync(join(homeDir, '.claude/skills/personal/SKILL.md'), 'utf8')).toContain(
+      'mine',
+    );
+  });
+
   it('refuses a symlinked .claude and writes nothing through it', async () => {
     const { root, project, skills } = setupSkills();
     const outside = tempDir('acp-skills-outside-');

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import {
   MAX_SKILL_BYTES,
   MAX_SKILL_DESCRIPTION,
@@ -27,6 +28,7 @@ import {
   listSkillFolders,
   readSkillFile,
   realRoot,
+  refusePersonalClaudeDir,
   removeSkillFile,
   skillDirExists,
   skillPaths,
@@ -52,6 +54,8 @@ export interface SkillsServiceDeps {
   /** The project's workflow, for "used by" and the delete guard. Default: the default workflow. */
   workflowOf?: (projectId: string) => ProjectWorkflow | Promise<ProjectWorkflow>;
   logger?: Logger;
+  /** The owner's home folder, whose `.claude` is never opened. Injected so tests never use it. */
+  homeDir?: string;
 }
 
 export interface SkillsService {
@@ -101,6 +105,7 @@ function listStages(stages: readonly WorkflowStageId[]): string {
 export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
   const { git, now } = deps;
   const logger = deps.logger ?? { log() {} };
+  const homeDir = deps.homeDir ?? homedir();
   const workflowOf =
     deps.workflowOf ??
     ((projectId: string) => defaultProjectWorkflow(projectId, now().toISOString()));
@@ -134,6 +139,7 @@ export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
   /** The real root and its path prefix inside the repository (`''` at the top level). */
   async function repo(project: SkillProject): Promise<{ root: string; prefix: string }> {
     const root = await realRoot(project.rootPath);
+    await refusePersonalClaudeDir(root, homeDir);
     const prefix = await probe(root, ['rev-parse', '--show-prefix']);
     if (prefix === null) {
       throw skillError('not_a_git_repo', 'The project folder is not a git repository');
