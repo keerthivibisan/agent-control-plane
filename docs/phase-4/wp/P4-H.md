@@ -18,7 +18,7 @@ Scope (owner decision, 2026-10-16): API-level verification only, in
 (`packages/web/e2e/workspace.spec.ts`) is **deferred** (the web UI is about to be redesigned). The
 real smoke run is **deferred** (it needs the owner's consent at that time).
 
-- [ ] Fake-Claude API e2e of the full flow through `startServer` (README §4.2, §8 P4-H row)
+- [x] Fake-Claude API e2e of the full flow through `startServer` (README §4.2, §8 P4-H row)
 - [ ] Depth 2 and limit refusals (`maxDepth`, `maxConcurrentHelpers`, `plan_not_approved`)
 - [ ] Merge anyway: reason required and stored as a ticket comment
 - [ ] Restart mid-run: planning run → NEEDS_REVIEW, nothing relaunched, board and ticket load
@@ -30,9 +30,10 @@ real smoke run is **deferred** (it needs the owner's consent at that time).
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                               | Commit        | Checks |
-| ---------- | ----------------------------------------------------------- | ------------- | ------ |
-| 2026-10-16 | Claimed P4-H; branch `wp/p4-h-verify` from `main` (9898499) | (this commit) | —      |
+| Date       | What was done                                                                                                                                                                                                                                                                                                                                                                                 | Commit        | Checks                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------- |
+| 2026-10-16 | Claimed P4-H; branch `wp/p4-h-verify` from `main` (9898499)                                                                                                                                                                                                                                                                                                                                   | 262b828       | —                                                                 |
+| 2026-10-16 | Verification harness (`startServer`, fake adapter, capturing logger, SSE reader) and the full-flow test: new repo → setup → harness ticket → plan v1 → changes → v2 → approve → allowlisted edit / owner-asked write / denied outside edit → merge; feature ticket → allowlisted check command → failing check blocks merge → fix → merge → Done; no tool input in responses, logs, SSE or DB | (this commit) | format ✓ lint ✓ typecheck ✓ test 1642/1642 ✓ (server 300) build ✓ |
 
 ## Handoff notes
 
