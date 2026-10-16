@@ -10,6 +10,7 @@ import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { TicketPage } from '../features/ticket/TicketPage';
 import { TokensPage } from '../features/tokens/TokensPage';
+import { WorkflowPage } from '../features/workflow/WorkflowPage';
 import { EMPTY, SHELL_COPY } from '../lib/copy';
 import { ApiProvider, useQueryStore } from '../lib/query';
 import type { QueryStore } from '../lib/query-store';
@@ -59,7 +60,8 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
       return <ProjectSettings key={projectId} id={projectId} />;
     case 'harness':
       return <HarnessPage key={projectId} projectId={projectId} />;
-    case 'workflow': // R-B
+    case 'workflow':
+      return <WorkflowPage key={projectId} projectId={projectId} />;
     case 'skills': // R-D
       return <NotFound />;
   }

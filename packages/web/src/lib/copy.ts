@@ -2341,3 +2341,158 @@ export const TOKENS_COPY = {
     text: 'Try a longer date range.',
   },
 } as const;
+
+// --- Workflow page (redesign R-B, wp/r-b-workflow) ---------------------------------------------
+// Add-only. The process graph, the stage panel and the agent files list (docs/redesign §4.2).
+
+export const WORKFLOW_COPY = {
+  title: 'Workflow',
+  description: 'How agents work on a ticket, from plan to merge. Select a stage to change it.',
+  tip: 'The stages are fixed for now: you can turn the optional ones on or off and give each agent a model and a skill. Editable workflows, with your own agents and connections, come later.',
+  flowSentence:
+    'An agent plans the ticket and you approve the plan. The lead then hands parts to helpers, each in its own copy of the project. You merge their work once the required checks pass. A reviewer and a tester can follow.',
+  graphLabel: 'Workflow graph',
+  graphTitle: 'How a ticket flows',
+  loading: 'Loading the workflow…',
+  roles: {
+    planner: 'Planner',
+    lead: 'Lead',
+    helper: 'Helpers',
+    reviewer: 'Reviewer',
+    tester: 'Tester',
+  },
+  roleTips: {
+    planner: 'A read-only agent that writes the plan and revises it on your comments.',
+    lead: 'The main agent of a run. It reads your project but never edits it, and hands parts of the ticket to helpers.',
+    helper: 'Agents that each work on one part of the ticket, in their own copy of the project.',
+    reviewer:
+      'A read-only agent that reads the merged result and posts its findings as ticket comments. It never blocks a merge.',
+    tester:
+      'An agent that writes unit tests for the merged change in its own copy. Its change goes through review and merge too.',
+  },
+  workspace: {
+    'read-only': 'Read-only',
+    'own-worktree': 'Own copy',
+  },
+  workspaceTips: {
+    'read-only': 'Reads your project but cannot change any file.',
+    'own-worktree':
+      'Works in its own copy of the project (a git worktree). Nothing reaches your files until you merge it.',
+  },
+  stages: {
+    plan: 'Plan',
+    orchestrate: 'Orchestrate',
+    helpers: 'Helpers',
+    review: 'Review & merge',
+    'code-review': 'Final code review',
+    'unit-tests': 'Unit tests',
+  },
+  stageText: {
+    plan: 'Reads the ticket and the project, then proposes a plan for you to approve.',
+    orchestrate: 'Starts helpers for the parts of the approved plan and follows their progress.',
+    helpers: 'Each helper works on one part of the plan in its own copy of the project.',
+    review:
+      'You review each helper’s change and merge it. The harness checks run first, and required ones must pass.',
+    'code-review':
+      'After the merge, a read-only reviewer reads the result and posts findings as ticket comments.',
+    'unit-tests':
+      'After the merge, a tester writes unit tests in its own copy. You review and merge them like any change.',
+  },
+  ticket: 'Ticket',
+  done: 'Done',
+  approve: {
+    who: 'You',
+    title: 'Approve the plan',
+    text: 'Approve it, or ask for changes.',
+    tip: 'No helper starts until you approve the plan. This is always on for now.',
+  },
+  review: {
+    who: 'You + harness checks',
+    checks: 'Required checks must pass',
+    merge: 'You merge each change',
+  },
+  sameAgent: 'Same agent',
+  sameAgentTip: (other: string) =>
+    `One lead agent plans and then orchestrates. It also covers “${other}”. Turn on “Separate planner agent” to split them.`,
+  off: 'Off',
+  optionalOn: 'On',
+  optionalTip: 'An optional stage. Turn it on or off in its panel.',
+  model: 'Model',
+  projectDefault: 'Project default',
+  projectDefaultNamed: (model: string) => `${model} (project default)`,
+  noSkill: 'No skill',
+  skillChip: (name: string) => `✦ ${name}`,
+  skillMissing: 'Skill missing',
+  skillMissingTip: (name: string) =>
+    `The skill “${name}” is no longer in this project. The agent starts without it until you pick another one.`,
+  helperName: (i: number) => `Helper ${i}`,
+  nestedHint: '↳ may start helpers',
+  nestedTip: 'Helper depth 2: this helper may start its own helpers, within the same limit.',
+  helperFacts: (max: number, depth: number, budget: string) =>
+    `Up to ${max} at once · depth ${depth} · ${budget} each`,
+  select: (stage: string) => `Change ${stage}`,
+  edges: {
+    loop: 'Changes',
+    bypass: 'Off: skipped',
+  },
+  legend: {
+    label: 'Legend',
+    flow: 'The path a ticket takes',
+    loop: 'Asking for changes sends the plan back',
+    bypass: 'Skips a stage that is off',
+    agent: 'An agent',
+    you: 'You decide',
+    skill: 'The project skill the agent uses',
+  },
+  panel: {
+    label: 'Stage settings',
+    empty: 'Select a stage in the graph to change it.',
+    close: 'Close stage settings',
+    separatePlanner: 'Separate planner agent',
+    separatePlannerHint:
+      'Off: one lead agent plans and then runs the helpers (how it works today). On: a read-only planner writes the plan, and the lead starts after you approve it.',
+    modelHint: 'Leave empty to use the project default. Change the default in Settings.',
+    modelPlaceholderDefault: 'Claude Code’s default',
+    skill: 'Skill',
+    skillHint: 'The agent is told to use this project skill.',
+    skillMissingOption: (name: string) => `${name} (missing)`,
+    enabled: 'Run this stage',
+    enabledHint: 'Off by default. When on, it runs after everything is merged.',
+    limitsTitle: 'Limits',
+    limitsNote: 'Shared with Settings. They also apply to the reviewer and the tester.',
+    allowlistTitle: 'Pre-approved actions',
+    requireChecks: 'Required checks must pass',
+    requireChecksHint:
+      'Always on. A change can only be merged when every required harness check passes, so a failing check never reaches your main branch. The merge itself is always your click.',
+    harnessLink: 'Open the Harness page',
+    save: 'Save',
+    saving: 'Saving…',
+    discard: 'Discard changes',
+    unsaved: 'Unsaved changes',
+    saved: 'Saved',
+    errors: {
+      modelTooLong: 'Use a shorter model name (at most 100 characters).',
+    },
+  },
+  refusals: {
+    csrf: 'The app’s security check failed. Reload the page and try again.',
+    invalid: 'The server didn’t accept these settings.',
+    notFound: 'This project no longer exists in the app.',
+    conflict: 'Another project already uses this ticket prefix. Change it in Settings.',
+    unreachable: 'The server isn’t reachable. Your changes are still here; try again.',
+    generic: 'The changes couldn’t be saved.',
+    workflow: 'Stage settings weren’t saved.',
+    limits: 'Helper limits weren’t saved.',
+    workflowSavedFirst: 'The stage settings were saved; only the helper limits are left.',
+  },
+  agents: {
+    title: 'Agent files',
+    tip: 'Claude Code agent definitions in this project’s .claude/agents folder. They are available, but no stage uses them yet: mapping a stage to an agent file comes later.',
+    description: 'Available, not mapped to a stage yet.',
+    empty: 'No agent files in .claude/agents.',
+    notMapped: 'Not mapped',
+    allTools: 'All tools',
+    tools: (n: number) => countOf(n, 'tool'),
+    loading: 'Loading agent files…',
+  },
+} as const;

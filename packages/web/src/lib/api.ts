@@ -51,6 +51,12 @@ import {
 } from '@acp/core/api';
 // Project Tokens page (redesign R-F).
 import { ProjectTokensDtoSchema } from '@acp/core/api';
+// Workflow page (redesign R-B).
+import {
+  AgentDefinitionSummaryDtoSchema,
+  ProjectWorkflowDtoSchema,
+  UpdateWorkflowRequestSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -771,3 +777,44 @@ export const tokensPaths = {
 export const tokensSchemas = {
   project: ProjectTokensDtoSchema,
 } as const;
+
+// --- Workflow page (redesign R-B, wp/r-b-workflow) ----------------------------------------------
+//
+// Served by R-G (docs/redesign/wp/R-G.md): GET/PUT /api/projects/:id/workflow → ProjectWorkflowDto.
+// Limits and the allowlist are saved through PUT …/setup (`updateProjectSetup` above). The agent
+// files list, GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's; until it is
+// served the route answers 404 and the page hides the list.
+
+export type UpdateWorkflowRequest = ReturnType<typeof UpdateWorkflowRequestSchema.parse>;
+
+export const workflowPaths = {
+  workflow: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow`,
+  agents: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/agents`,
+} as const;
+
+export const workflowSchemas = {
+  workflow: ProjectWorkflowDtoSchema,
+  agents: AgentDefinitionSummaryDtoSchema.array(),
+} as const;
+
+/** The cached workflow and setup of one project: both carry the limits, so a save refetches both. */
+export function isWorkflowPath(projectId: string): (key: string) => boolean {
+  const workflow = workflowPaths.workflow(projectId);
+  const setup = projectSetupPaths.setup(projectId);
+  return (key) => key.startsWith(workflow) || key.startsWith(setup);
+}
+
+/** PUT /api/projects/:id/workflow: the whole stage configuration (the server sets the rest). */
+export async function updateWorkflow(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateWorkflowRequest,
+) {
+  const path = workflowPaths.workflow(projectId);
+  return controlPut(
+    client,
+    path,
+    checked(UpdateWorkflowRequestSchema, input, path),
+    workflowSchemas.workflow,
+  );
+}

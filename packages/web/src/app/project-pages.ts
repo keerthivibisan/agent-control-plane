@@ -30,7 +30,7 @@ const L = SHELL_COPY.nav.pages;
 export const PROJECT_PAGES: readonly ProjectPageDef[] = [
   { id: 'board', label: L.board, icon: BoardNavIcon, available: true },
   // R-B.
-  { id: 'workflow', label: L.workflow, icon: WorkflowIcon, available: false },
+  { id: 'workflow', label: L.workflow, icon: WorkflowIcon, available: true },
   // R-D.
   { id: 'skills', label: L.skills, icon: SkillsIcon, available: false },
   // R-E.
