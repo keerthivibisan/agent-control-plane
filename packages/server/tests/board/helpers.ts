@@ -2,7 +2,13 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { afterEach, expect } from 'vitest';
 import { CSRF_HEADER, type TicketDetailDto, type TicketDto } from '@acp/core/api';
-import { createWorkspaceRepositories } from '@acp/db';
+import {
+  createQueries,
+  createRepositories,
+  createWorkspaceRepositories,
+  openDatabase,
+  type AcpDatabase,
+} from '@acp/db';
 import { createApp } from '../../src/app.js';
 import { createCheckService, type CheckService } from '../../src/board/checks.js';
 import { createProjectHarness } from '../../src/board/harness.js';
@@ -49,26 +55,40 @@ export const PASSING_WHEN_FIXED = {
 };
 
 const open: { control: ControlService; checks: CheckService }[] = [];
+/** Databases opened again by restart tests; closed after their services. */
+const reopened: AcpDatabase[] = [];
 afterEach(async () => {
   for (const o of open.splice(0)) {
     await o.checks.close();
     await o.control.close();
   }
+  for (const db of reopened.splice(0)) db.close();
 });
 
 export interface BoardSetupOptions {
   files?: Record<string, string>;
   logger?: Logger;
   enabled?: boolean;
+  /** Restart tests: a second server over the first one's database, data dir and repository. */
+  reopen?: { dbPath: string; dataDir: string; repo: string };
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
   const logger = options.logger ?? { log() {} };
   const base = await setupApp({ ingestDemo: false, logger });
-  const { db, repos } = base;
-  const repo = makeRepo(options.files ?? { 'README.md': 'hello\n', 'src/app.ts': 'export {};\n' });
-  const project = repos.projects.insert({ name: 'web-app', rootPath: repo });
-  const dataDir = tempDir('acp-board-data-');
+  const reopen = options.reopen;
+  const db = reopen === undefined ? base.db : openDatabase(reopen.dbPath);
+  if (reopen !== undefined) reopened.push(db);
+  const dbPath = reopen?.dbPath ?? base.dbPath;
+  const repos = reopen === undefined ? base.repos : createRepositories(db);
+  const queries = reopen === undefined ? base.queries : createQueries(db);
+  const repo =
+    reopen?.repo ??
+    makeRepo(options.files ?? { 'README.md': 'hello\n', 'src/app.ts': 'export {};\n' });
+  const project =
+    repos.projects.getByRootPath(repo) ??
+    repos.projects.insert({ name: 'web-app', rootPath: repo });
+  const dataDir = reopen?.dataDir ?? tempDir('acp-board-data-');
   const git = createGitRunner({ env: GIT_TEST_ENV });
   const fake = createFakeManagedAdapter();
   const clock = { now: BOARD_NOW };
@@ -109,7 +129,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const board = createBoardService({
     db,
     repos,
-    queries: base.queries,
+    queries,
     projects: base.services.projects,
     control,
     harness,
@@ -201,6 +221,10 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
 
   return {
     ...base,
+    db,
+    dbPath,
+    repos,
+    queries,
     app,
     control,
     board,
