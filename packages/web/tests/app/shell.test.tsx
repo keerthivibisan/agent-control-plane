@@ -144,8 +144,8 @@ describe('app shell', () => {
     expect(window.history.length).toBe(length);
   });
 
-  it('an unknown address or an unbuilt page says so and links to All projects', async () => {
-    for (const hash of ['#/nope', '#/p/p-1/skills']) {
+  it('an unknown address or an unknown project page says so and links to All projects', async () => {
+    for (const hash of ['#/nope', '#/p/p-1/no-such-page']) {
       window.location.hash = hash;
       const { unmount } = renderApp(fakeServer({}).fetch);
       expect(await screen.findByText('Page not found')).toBeTruthy();
@@ -177,7 +177,7 @@ describe('project switcher', () => {
     expect(switchTarget(parseRoute('#/p/p-1/tokens?groupBy=day'), 'p-2')).toBe('#/p/p-2/tokens');
     expect(switchTarget(parseRoute('#/p/p-1/tickets/t-1'), 'p-2')).toBe('#/p/p-2/board');
     expect(switchTarget(parseRoute('#/p/p-1/workflow'), 'p-2')).toBe('#/p/p-2/workflow');
-    expect(switchTarget(parseRoute('#/p/p-1/skills'), 'p-2')).toBe('#/p/p-2/board');
+    expect(switchTarget(parseRoute('#/p/p-1/skills'), 'p-2')).toBe('#/p/p-2/skills');
     expect(switchTarget(parseRoute('#/projects'), 'p-2')).toBe('#/p/p-2/board');
   });
 
