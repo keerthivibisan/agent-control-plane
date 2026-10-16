@@ -241,11 +241,12 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     expect(servers.toolNames[0]).not.toContain('request_review');
   });
 
-  it('gives the lead every lead tool, including submit_plan', () => {
+  it('gives the lead every lead tool except post_review, including submit_plan', () => {
     servers.toolNames.length = 0;
     optionsFor(spec('lead'));
-    expect(servers.toolNames).toEqual([LEAD_TOOL_NAMES]);
+    expect(servers.toolNames).toEqual([LEAD_TOOL_NAMES.filter((n) => n !== 'post_review')]);
     expect(servers.toolNames[0]).toContain('submit_plan');
+    expect(servers.toolNames[0]).not.toContain('post_review');
   });
 
   it('gives no tools to a worker without canStartHelpers, or one with it but no handler', () => {

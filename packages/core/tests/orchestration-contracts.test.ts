@@ -46,6 +46,7 @@ describe('lead tools', () => {
         'agent_status',
         'list_agents',
         'message_agent',
+        'post_review',
         'request_review',
         'start_agent',
         'stop_agent',
@@ -59,6 +60,12 @@ describe('lead tools', () => {
     expect(
       LeadToolInputs.message_agent.safeParse({ agentId: 'a', text: 'x'.repeat(4001) }).success,
     ).toBe(false);
+  });
+
+  it('post_review takes plain text up to the ticket comment limit (decision B)', () => {
+    expect(LeadToolInputs.post_review.safeParse({ text: 'Looks fine.' }).success).toBe(true);
+    expect(LeadToolInputs.post_review.safeParse({ text: '   ' }).success).toBe(false);
+    expect(LeadToolInputs.post_review.safeParse({ text: 'x'.repeat(8001) }).success).toBe(false);
   });
 });
 

@@ -31,18 +31,27 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 ];
 
 /**
- * The control-plane tools one agent may use: every lead tool for the lead, the child-management
+ * The lead's tools: every lead tool except `post_review`, which only a reviewer gets (ADR-0019,
+ * decision B). The engine refuses `post_review` from anyone else as well.
+ */
+export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.filter(
+  (name) => name !== 'post_review',
+);
+
+/**
+ * The control-plane tools one agent may use: the lead's set for the lead, the child-management
  * subset for a worker with `canStartHelpers`, none for any other worker (depth 1). The adapter
  * builds the MCP server and `canUseTool` from this one list, so the two cannot disagree.
  */
 export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[] {
-  if (spec.kind === 'lead') return LEAD_TOOL_NAMES;
+  if (spec.kind === 'lead') return LEAD_ROLE_TOOL_NAMES;
   return spec.canStartHelpers === true ? HELPER_PARENT_TOOL_NAMES : [];
 }
 
 export const DENY_WORKER_LEAD_TOOL = 'Worker agents cannot use the control-plane tools.';
 export const DENY_HELPER_LEAD_TOOL =
   'Helper agents can only start, list, message, stop and check their own helpers.';
+export const DENY_NOT_YOUR_TOOL = 'This control-plane tool is not available to this agent.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
 
@@ -100,6 +109,10 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
       }
       if (name !== null && ownTools.has(name) && fromLeadServer(options)) {
         return { behavior: 'allow', toolUseID };
+      }
+      // One of our tools that is not in this agent's set (the lead's `post_review`): never asked.
+      if (name !== null && !ownTools.has(name) && fromLeadServer(options)) {
+        return { behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID };
       }
       // An unknown `mcp__acp__*` name, or one from another server, is not ours: ask like any tool.
     }

@@ -6,7 +6,7 @@ import type {
   SdkMcpToolDefinition,
 } from '@anthropic-ai/claude-agent-sdk';
 import { cleanFreeText } from '../redact.js';
-import { LEAD_MCP_SERVER_NAME } from './permissions.js';
+import { LEAD_MCP_SERVER_NAME, LEAD_ROLE_TOOL_NAMES } from './permissions.js';
 
 type CallToolResult = Awaited<ReturnType<SdkMcpToolDefinition['handler']>>;
 /** The server option's own element type (the SDK declares it with an `any` schema). */
@@ -27,6 +27,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   request_review: 'Tell the owner the workers are done and their changes are ready for review.',
   submit_plan:
     'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
+  post_review:
+    'Post your code review findings as plain text. They become a comment on the ticket for the owner; they do not block or merge anything.',
 };
 
 const REFUSED = 'The control plane could not run this tool';
@@ -99,6 +101,12 @@ export function leadToolDefinitions(
       i.submit_plan.shape,
       run(handler, 'submit_plan'),
     ),
+    post_review: tool(
+      'post_review',
+      d.post_review,
+      i.post_review.shape,
+      run(handler, 'post_review'),
+    ),
   };
   return LEAD_TOOL_NAMES.filter((name) => names.includes(name)).map((name) => all[name]);
 }
@@ -109,7 +117,7 @@ export function leadToolDefinitions(
  */
 export function createLeadToolServer(
   handler: LeadToolHandler,
-  names: readonly LeadToolName[] = LEAD_TOOL_NAMES,
+  names: readonly LeadToolName[] = LEAD_ROLE_TOOL_NAMES,
 ): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: LEAD_MCP_SERVER_NAME,

@@ -8,7 +8,9 @@ import {
   DENY_HELPER_LEAD_TOOL,
   DENY_NO_DECISION,
   DENY_WORKER_LEAD_TOOL,
+  DENY_NOT_YOUR_TOOL,
   HELPER_PARENT_TOOL_NAMES,
+  LEAD_ROLE_TOOL_NAMES,
   leadToolName,
   managedToolNames,
 } from '../../src/managed/permissions.js';
@@ -170,7 +172,7 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
 
   it("allows the lead's own tools from its in-process server", async () => {
     const { canUseTool, requests } = setup('lead');
-    for (const name of LEAD_TOOL_NAMES) {
+    for (const name of LEAD_ROLE_TOOL_NAMES) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toMatchObject({ behavior: 'allow' });
@@ -179,6 +181,16 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
         behavior: 'allow',
       });
     }
+    expect(requests).toEqual([]);
+  });
+
+  it("denies the lead post_review without asking: only a reviewer gets it (decision B)", async () => {
+    expect(LEAD_ROLE_TOOL_NAMES).toEqual(LEAD_TOOL_NAMES.filter((n) => n !== 'post_review'));
+    expect(LEAD_ROLE_TOOL_NAMES).not.toContain('post_review');
+    const { canUseTool, requests } = setup('lead');
+    await expect(
+      canUseTool('mcp__acp__post_review', {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
+    ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });
     expect(requests).toEqual([]);
   });
 
@@ -228,8 +240,8 @@ describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 
   const ours = opts({ mcpServer: { name: 'acp', source: 'sdk' } });
 
   it('managedToolNames: every tool for the lead, the subset for a parent helper, none otherwise', () => {
-    expect(managedToolNames(spec('lead'))).toEqual(LEAD_TOOL_NAMES);
-    expect(managedToolNames(spec('lead', false))).toEqual(LEAD_TOOL_NAMES);
+    expect(managedToolNames(spec('lead'))).toEqual(LEAD_ROLE_TOOL_NAMES);
+    expect(managedToolNames(spec('lead', false))).toEqual(LEAD_ROLE_TOOL_NAMES);
     expect(managedToolNames(spec('worker', true))).toEqual(HELPER_PARENT_TOOL_NAMES);
     expect(managedToolNames(spec('worker', false))).toEqual([]);
     expect(managedToolNames(spec('worker'))).toEqual([]);

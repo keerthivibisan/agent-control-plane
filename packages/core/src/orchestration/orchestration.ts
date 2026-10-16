@@ -123,6 +123,11 @@ export const LeadToolInputs = {
       .min(1)
       .max(12),
   }),
+  /**
+   * The reviewer's findings (ADR-0019 §2): plain text, stored as a ticket comment by author
+   * `reviewer`. Only a reviewer gets this tool; the engine refuses it from anyone else.
+   */
+  post_review: z.object({ text: z.string().trim().min(1).max(8000) }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
