@@ -113,9 +113,17 @@ describe('startServer (live mode over Claude Code fixtures)', () => {
       }
       expect(page.items.map((s) => s.provider)).toEqual(['claude-code', 'claude-code']);
       const child = page.items.find((s) => s.providerAgentId !== null)!;
-      const detail = SessionDetailDtoSchema.parse(
+      // The subagent's session can be ingested before its meta file's batch, so its parent is
+      // briefly unknown; wait for the edge instead of reading the detail once (it was flaky under load).
+      let detail = SessionDetailDtoSchema.parse(
         await (await fetch(`${base}/api/sessions/${child.id}`)).json(),
       );
+      for (let i = 0; i < 200 && detail.parent.state !== 'known'; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+        detail = SessionDetailDtoSchema.parse(
+          await (await fetch(`${base}/api/sessions/${child.id}`)).json(),
+        );
+      }
       expect(detail.parent).toMatchObject({ state: 'known', kind: 'subagent' });
 
       const caps = CapabilitiesDtoSchema.parse(
