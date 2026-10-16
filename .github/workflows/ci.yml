@@ -1,12 +1,11 @@
 name: CI
 
-# Runs on code changes to main and on pull requests; docs-only changes are skipped to save Actions
-# minutes (owner decision 2026-10-17). It can also be started from the Actions tab.
+# Runs by itself only on code pushes to main (docs-only changes are skipped). Anywhere else, such as
+# other branches or pull requests, it runs only when started from the Actions tab with "Run
+# workflow" (owner decision 2026-10-17).
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', '**/*.md']
-  pull_request:
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
 
