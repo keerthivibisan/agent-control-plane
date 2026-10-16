@@ -17,6 +17,7 @@ import {
   TICKET_ID,
   TOKENS,
   UI,
+  branchOf,
   doneScenario,
   inReviewScenario,
   planReviewScenario,
@@ -202,15 +203,25 @@ describe('ticket page: agents working', () => {
     expect(within(store).getByText('With its helpers: 11,300 budget tokens')).toBeTruthy();
   });
 
-  it('shows the branch only when the review reports it', async () => {
+  it("shows each helper's branch from the start, else the review's, else no branch yet", async () => {
     renderTicket(server(workingScenario()));
     const canvas = await screen.findByTestId('agent-canvas');
+    // The agent reports its own branch while it works, before any review exists for it.
+    const ui = within(canvas).getByTestId(`agent-${UI}`);
+    expect(within(ui).getByTestId('agent-branch').textContent).toBe(`…/${UI}`);
+    expect(within(ui).getByTitle(branchOf(UI))).toBeTruthy();
+    // No branch on the agent: the review's is used once it loads.
     await waitFor(() =>
       expect(within(canvas).getByTestId(`agent-${TOKENS}`).textContent).toContain(`…/${TOKENS}`),
     );
-    expect(within(canvas).getByTestId(`agent-${UI}`).textContent).toContain(
-      'Branch shown once it has changes',
-    );
+    expect(
+      within(within(canvas).getByTestId(`agent-${MIGRATION}`)).getByTestId('agent-branch')
+        .textContent,
+    ).toBe('No branch yet');
+    // The lead has no worktree, so its card has no branch line.
+    expect(
+      within(within(canvas).getByTestId(`agent-${LEAD}`)).queryByTestId('agent-branch'),
+    ).toBeNull();
   });
 
   it('lists what waits for the owner above the tree, and in the summary', async () => {
@@ -252,6 +263,15 @@ describe('ticket page: agents working', () => {
       'true',
     );
     expect(within(panel).getByTestId('details').textContent).toContain(LEAD);
+  });
+
+  it("shows a helper's own branch in the Details tab before any review exists", async () => {
+    renderTicket(server(workingScenario()));
+    await screen.findByTestId('side-panel');
+    fireEvent.click(screen.getByRole('button', { name: 'Show the Settings UI in the side panel' }));
+    const panel = screen.getByTestId('side-panel');
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Details' }));
+    expect(within(panel).getByTestId('details').textContent).toContain(branchOf(UI));
   });
 
   it("sends a helper's prompt box through message_agent, the lead's through the chat", async () => {

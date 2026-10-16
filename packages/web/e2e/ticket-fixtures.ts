@@ -46,6 +46,9 @@ function ticket(status: string, stage: string): Json {
   return { ...ticketBase, status, stage };
 }
 
+/** A helper's worktree branch, as the workspace names it (`acp/<run>/<agent>`). */
+export const branchOf = (agentId: string) => `acp/${RUN_ID}/${agentId}`;
+
 function agent(over: Json & { id: string }): Json {
   return {
     runId: RUN_ID,
@@ -58,6 +61,7 @@ function agent(over: Json & { id: string }): Json {
     budget: { used: 0, limit: 50_000 },
     latestActivity: null,
     review: null,
+    branch: branchOf(over.id),
     createdAt: T(10),
     endedAt: null,
     ...over,
@@ -71,6 +75,8 @@ function lead(status: string, used: number, latestActivity: string): Json {
     kind: 'lead',
     role: 'Lead',
     status,
+    // The lead works in the project's checkout and has no worktree branch.
+    branch: null,
     budget: { used, limit: 200_000 },
     latestActivity,
     createdAt: T(2),
@@ -230,7 +236,7 @@ function agentReview(id: string, role: string, state: string, files: Json[]): Js
   return {
     agentRunId: id,
     role,
-    branch: `acp/${RUN_ID}/${id}`,
+    branch: branchOf(id),
     baseBranch: 'main',
     state,
     files,
@@ -325,6 +331,8 @@ export function workingScenario(): TicketScenario {
       status: 'RUNNING',
       budget: { used: 3_100, limit: 25_000 },
       latestActivity: 'Used tool: Grep',
+      // Its workspace is not set up yet: the card says "No branch yet".
+      branch: null,
       createdAt: T(14),
     }),
     agent({
@@ -336,6 +344,8 @@ export function workingScenario(): TicketScenario {
       budget: { used: 4_800, limit: 25_000 },
       latestActivity: 'Finished its turn',
       review: { state: 'pending', changedFiles: 1 },
+      // Not reported on the agent (e.g. an older server): the card falls back to the review's.
+      branch: null,
       createdAt: T(15),
       endedAt: T(24),
     }),

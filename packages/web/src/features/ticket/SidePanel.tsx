@@ -19,6 +19,7 @@ import { Chat } from '../control/Chat';
 import { canChat } from '../control/run-state';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
+import { agentBranch } from './ticket-state';
 
 const C = TICKET_COPY;
 const D = TICKET_COPY.details;
@@ -104,6 +105,7 @@ function DetailsTab({
     agent.sessionId ? paths.session(agent.sessionId) : null,
     schemas.session,
   );
+  const branch = agentBranch(agent, review);
   const models = session.data?.models ?? [];
   const cost = session.data?.latestSnapshot?.reportedCostUsd ?? {
     provenance: 'unavailable' as const,
@@ -127,8 +129,8 @@ function DetailsTab({
       {agent.kind === 'worker' ? (
         <>
           <Row label={D.branch}>
-            {review ? (
-              <span className="font-mono text-caption">{review.branch}</span>
+            {branch ? (
+              <span className="font-mono text-caption">{branch}</span>
             ) : (
               <span className="text-dim">{D.branchUnknown}</span>
             )}

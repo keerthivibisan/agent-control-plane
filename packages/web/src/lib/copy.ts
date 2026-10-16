@@ -1754,7 +1754,11 @@ export const TICKET_STAGE_COPY: Readonly<Record<TicketStage, ControlStatusCopy>>
     tone: 'waiting',
   },
   DONE: { word: STAGE_COPY.DONE.word, tip: 'Every change was merged or discarded.', tone: 'done' },
-  CANCELLED: { word: STAGE_COPY.CANCELLED.word, tip: 'This ticket was cancelled.', tone: 'stopped' },
+  CANCELLED: {
+    word: STAGE_COPY.CANCELLED.word,
+    tip: 'This ticket was cancelled.',
+    tone: 'stopped',
+  },
 };
 
 export const PLAN_STATUS_COPY: Readonly<Record<TicketPlanStatus, string>> = {
@@ -1813,7 +1817,7 @@ export const TICKET_COPY = {
       'The lead agent is reading the code (without changing anything) and writing a plan. You approve the plan before any helper agent starts.',
     noHelpers: 'No helper agents yet. The lead agent starts them as the plan says.',
     select: (role: string) => `Show the ${role} in the side panel`,
-    branchUnknown: 'Branch shown once it has changes',
+    branchUnknown: 'No branch yet',
     needsYou: (n: number) => `${formatCount(n)} ${n === 1 ? 'request' : 'requests'} for you`,
     withHelpers: (n: string) => `With its helpers: ${n} budget tokens`,
     messagePlaceholderLead: 'Message the lead…',

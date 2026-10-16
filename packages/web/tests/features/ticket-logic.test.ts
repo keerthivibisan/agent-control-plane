@@ -19,6 +19,7 @@ import {
 import { buildAgentTree } from '../../src/features/control/run-state';
 import { tabsFor } from '../../src/features/ticket/SidePanel';
 import {
+  agentBranch,
   agentChecks,
   canStopRun,
   commentsOnPlan,
@@ -165,5 +166,17 @@ describe('agents', () => {
   it('gives the chat tab to the lead only', () => {
     expect(tabsFor({ kind: 'lead' })[0]).toBe('chat');
     expect(tabsFor({ kind: 'worker' })).not.toContain('chat');
+  });
+});
+
+describe('agentBranch', () => {
+  const review = { branch: 'acp/run-2/from-review' };
+  it("prefers the agent's own branch, then the review's, else null", () => {
+    expect(agentBranch({ kind: 'worker', branch: 'acp/run-2/own' }, review)).toBe('acp/run-2/own');
+    expect(agentBranch({ kind: 'worker', branch: null }, review)).toBe('acp/run-2/from-review');
+    expect(agentBranch({ kind: 'worker', branch: null }, undefined)).toBeNull();
+  });
+  it('never gives the lead a branch (it has no worktree)', () => {
+    expect(agentBranch({ kind: 'lead', branch: 'acp/run-2/lead' }, review)).toBeNull();
   });
 });

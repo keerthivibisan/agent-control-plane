@@ -2,6 +2,7 @@ import type { CheckRunStatus, RunStatus } from '@acp/core';
 import type {
   AgentRunDto,
   CheckRunDto,
+  ReviewDto,
   RunDetailDto,
   RunSummaryDto,
   TicketCommentDto,
@@ -154,4 +155,16 @@ export function lastRunNote(
   return current !== undefined && (current.status === 'FAILED' || current.status === 'CANCELLED')
     ? current.status
     : null;
+}
+
+/**
+ * A helper's worktree branch: the agent's own `branch` (set once its workspace exists), else the
+ * one its review reports, else null ("no branch yet"). The lead has no worktree.
+ */
+export function agentBranch(
+  agent: Pick<AgentRunDto, 'kind' | 'branch'>,
+  review: Pick<ReviewDto['agents'][number], 'branch'> | undefined,
+): string | null {
+  if (agent.kind === 'lead') return null;
+  return agent.branch ?? review?.branch ?? null;
 }

@@ -22,7 +22,7 @@ export interface CanvasContext {
   canMessage: boolean;
   /** Pending approvals per agent id. */
   pending: ReadonlyMap<string, number>;
-  /** Worktree branch per agent id, once the review reports it. */
+  /** Worktree branch per helper id, once its workspace exists (`agentBranch`). */
   branches: ReadonlyMap<string, string>;
 }
 

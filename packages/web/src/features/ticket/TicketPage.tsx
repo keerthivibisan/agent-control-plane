@@ -30,6 +30,7 @@ import { PlanCard } from './PlanReview';
 import { SidePanel, type PanelTab } from './SidePanel';
 import { TicketInfo } from './TicketInfo';
 import {
+  agentBranch,
   agentChecks,
   canStopRun,
   lastRunNote,
@@ -254,7 +255,12 @@ function RunView({
     ? detail.checks.filter((c) => c.runId === run.id)
     : (olderChecks.data ?? []);
   const reviews = reviewQuery.data?.agents ?? [];
-  const branches = new Map(reviews.map((r) => [r.agentRunId, r.branch]));
+  const reviewOf = new Map(reviews.map((r) => [r.agentRunId, r]));
+  const branches = new Map<string, string>();
+  for (const a of run.agents) {
+    const branch = agentBranch(a, reviewOf.get(a.id));
+    if (branch !== null) branches.set(a.id, branch);
+  }
   const plan = planUnderReview(run, detail.plans);
   const selected = run.agents.find((a) => a.id === selectedId) ?? defaultAgent(run);
   const pending = run.approvals.filter((a) => a.status === 'pending');
