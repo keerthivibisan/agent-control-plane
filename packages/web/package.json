@@ -1,6 +1,6 @@
 {
   "name": "@acp/web",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "React dashboard: Command Center, Session Explorer, usage views. Owned by P1-E.",
   "license": "MIT",

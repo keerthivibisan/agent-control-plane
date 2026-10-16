@@ -1,6 +1,6 @@
 {
   "name": "@acp/adapter-claude-code",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Claude Code observation adapter: transcript, subagent metadata, and hook normalization. Owned by P1-C.",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@acp/adapter-demo",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Deterministic demo/test adapter. Demo mode and tests only; never mixed with live data. Owned by P1-C.",
   "license": "MIT",
