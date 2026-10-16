@@ -14,10 +14,11 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                    | Commit   | Checks                                               |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------- |
-| 2026-10-16 | Claimed R-F on `wp/r-f-tokens`.                                                                                  | claim    | —                                                    |
-| 2026-10-16 | db: `createTokenQueries().projectTokens()` (`queries/tokens.ts`), exported from `@acp/db`; 9 temp-file DB tests. | db query | format ✓ lint ✓ typecheck ✓ test 1728/1728 ✓ build ✓ |
+| Date       | What was done                                                                                                                                                                                                                          | Commit       | Checks                                               |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------- |
+| 2026-10-16 | Claimed R-F on `wp/r-f-tokens`.                                                                                                                                                                                                        | claim        | —                                                    |
+| 2026-10-16 | db: `createTokenQueries().projectTokens()` (`queries/tokens.ts`), exported from `@acp/db`; 9 temp-file DB tests.                                                                                                                       | db query     | format ✓ lint ✓ typecheck ✓ test 1728/1728 ✓ build ✓ |
+| 2026-10-16 | server: `TokensService` (`src/tokens/service.ts`) and `GET /api/projects/:id/tokens` (`routes/tokens.ts`); 4 supertest tests over the real pipeline. Registration in `app.ts`/`bootstrap.ts` is a separate commit for the coordinator. | server route | format ✓ lint ✓ typecheck ✓ test 1732/1732 ✓ build ✓ |
 
 ## Handoff notes
 
