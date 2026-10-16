@@ -12,7 +12,11 @@ import {
 import { WorkflowGraphContext, workflowNodeTypes } from './WorkflowNodes';
 
 const C = WORKFLOW_COPY;
-const FIT = { padding: 0.06, maxZoom: 1 } as const;
+// fitView counts nodes only: the extra top padding keeps the "Changes" loop above Plan in view.
+const FIT = {
+  padding: { top: '56px', right: '24px', bottom: '24px', left: '24px' },
+  maxZoom: 1,
+} as const;
 
 /** Refits whenever the canvas is resized or the graph's shape changes (helpers, panel opening). */
 function FitOnChange({ shape }: { shape: string }) {
