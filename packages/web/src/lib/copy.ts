@@ -2638,6 +2638,7 @@ export const AGENTS_COPY = {
     staged_changes:
       'Other files are staged in git. Commit or unstage them first, so the commit holds only this agent file.',
     nothing_to_commit: 'There is nothing to commit for this agent.',
+    agent_in_use: 'A workflow stage still uses this agent file.',
   } as Record<string, string>,
 } as const;
 
