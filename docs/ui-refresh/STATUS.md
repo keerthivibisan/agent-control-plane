@@ -61,3 +61,7 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   - fix the `components/icons.tsx` comment;
   - update the DESIGN.md Layout section;
   - review the Motion bundle size (U-E used CSS keyframes instead).
+- 2026-10-17 live check started (`pnpm dev` on `feature/ui-refresh`, live mode, the owner's data).
+  Found at a 334 px viewport: the page header keeps the title and its actions in one row, so
+  "All projects" wraps letter by letter. **U-V:** stack PageHeader actions under the title below
+  `sm`, and add a narrow-width (e.g. 390 px) screenshot and e2e pass.
