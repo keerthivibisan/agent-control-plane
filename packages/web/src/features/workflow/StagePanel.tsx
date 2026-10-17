@@ -1,21 +1,33 @@
-import { HARD_MAX_HELPERS, type WorkflowStageId } from '@acp/core';
+import { HARD_MAX_HELPERS, MAX_REWORK_ROUNDS, type WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionSummaryDto, ProjectAgentSetupDto } from '@acp/core/api';
 import { useId, type ReactNode } from 'react';
 import { buttonClass } from '../../components/Button';
 import { AlertIcon, ArrowRightIcon } from '../../components/icons';
 import { Select } from '../../components/Input';
-import { PROJECT_SETUP_COPY, STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
+import {
+  PROJECT_SETUP_COPY,
+  REVIEW_LOOP_COPY,
+  STAGE_AGENT_COPY,
+  WORKFLOW_COPY,
+} from '../../lib/copy';
 import { href } from '../../lib/router';
-import { CheckboxField, NumberChoice, TextField } from '../project-setup/fields';
+import { CheckboxField, ChoiceCards, NumberChoice, TextField } from '../project-setup/fields';
 import { DEPTH_CHOICES, HELPER_CHOICES, parseTokens } from '../project-setup/setup-form';
-import type { DraftErrors, LimitsDraft, StageDraft, WorkflowDraft } from './draft';
+import {
+  ApprovalModeChoice,
+  AutoRunWarning,
+  CommandListEditor,
+} from '../review-loop/ApprovalsEditor';
+import type { DraftErrors, LimitsDraft, ReviewDraft, StageDraft, WorkflowDraft } from './draft';
 import { OPTIONAL_STAGES, type AgentStageId, type WorkflowRole } from './graph';
 import { MergeIcon, ROLE_ICON } from './icons';
 
 const C = WORKFLOW_COPY;
 const P = WORKFLOW_COPY.panel;
 const A = PROJECT_SETUP_COPY.agents;
-const L = PROJECT_SETUP_COPY.allowlist;
+const RL = REVIEW_LOOP_COPY;
+/** Rework rounds the owner can pick: 0 (none) to the hard limit. */
+const ROUND_CHOICES: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
 const AF = STAGE_AGENT_COPY;
 /** Roles that never edit files; an agent file's tools can't change that (ADR-0019 §6). */
 const READ_ONLY_ROLES: readonly WorkflowRole[] = ['planner', 'lead', 'reviewer'];
@@ -304,26 +316,106 @@ function HelperLimits({
           inputClassName="max-w-48"
         />
       </Section>
-      <Section title={P.allowlistTitle}>
-        <CheckboxField
-          label={L.edit}
-          hint={L.editHint}
-          checked={limits.editInOwnWorktree}
-          onChange={(v) => onLimits({ editInOwnWorktree: v })}
-        />
-        <CheckboxField
-          label={L.checks}
-          hint={L.checksHint}
-          checked={limits.runHarnessChecks}
-          onChange={(v) => onLimits({ runHarnessChecks: v })}
-        />
+      {/* ADR-0021: the approval mode replaces the two pre-approved actions. */}
+      <Section title={RL.approvals.title} note={RL.approvals.note}>
+        <div className="flex flex-col gap-4" data-testid="approvals-editor">
+          <ApprovalModeChoice
+            value={limits.approvalMode}
+            onChange={(approvalMode) => onLimits({ approvalMode })}
+          />
+          {limits.approvalMode !== 'manual' ? <AutoRunWarning /> : null}
+          {limits.approvalMode === 'auto' || limits.commands.length > 0 ? (
+            <CommandListEditor
+              commands={limits.commands}
+              active={limits.approvalMode === 'auto'}
+              onChange={(commands) => onLimits({ commands })}
+            />
+          ) : null}
+        </div>
       </Section>
     </>
   );
 }
 
-function ReviewFields({ projectId }: { projectId: string }) {
+/**
+ * The review stage (ADR-0021 §3): who reviews each change, how many rework rounds the lead may
+ * ask for, and the review agent's agent file, model and skill (the same fields as an agent stage).
+ */
+function ReviewFields({
+  projectId,
+  workflow,
+  setup,
+  skills,
+  agentFiles,
+  errors,
+  onWorkflow,
+}: Omit<StagePanelProps, 'stage' | 'limits' | 'onLimits'>) {
   const id = useId();
+  const name = useId();
+  const review = workflow.review;
+  const change = (patch: Partial<ReviewDraft>) =>
+    onWorkflow({ ...workflow, review: { ...review, ...patch } });
+  return (
+    <div className="flex flex-col gap-5" data-testid="review-fields">
+      <ChoiceCards
+        legend={RL.review.reviewerLegend}
+        name={`${name}-reviewer`}
+        value={review.reviewer}
+        columns={1}
+        options={(['agent', 'lead'] as const).map((r) => ({
+          value: r,
+          label: RL.review.reviewer[r],
+          hint: RL.review.reviewerHint[r],
+        }))}
+        onChange={(reviewer) => change({ reviewer })}
+      />
+      <NumberChoice
+        legend={RL.review.rounds}
+        hint={RL.review.roundsHint}
+        name={`${name}-rounds`}
+        value={review.maxReworkRounds}
+        choices={ROUND_CHOICES}
+        onChange={(maxReworkRounds) => change({ maxReworkRounds })}
+        valueText={RL.review.roundsValue}
+      />
+      <ChecksGate projectId={projectId} id={id} />
+      <Section
+        title={RL.review.agentTitle}
+        note={review.reviewer === 'agent' ? RL.review.agentNote : RL.review.leadNote}
+      >
+        {review.reviewer === 'agent' ? (
+          <div className="flex flex-col gap-5" data-testid="review-agent-fields">
+            <AgentFileSelect
+              projectId={projectId}
+              value={review.agent}
+              files={agentFiles}
+              readOnly
+              leadMode={false}
+              onChange={(agent) => change({ agent })}
+            />
+            <TextField
+              label={C.model}
+              hint={review.agent === null ? P.modelHint : AF.modelHint}
+              error={errors.review}
+              value={review.model}
+              onChange={(model) => change({ model })}
+              placeholder={modelPlaceholder(review.agent, agentFiles, setup.model)}
+              mono
+            />
+            <SkillSelect
+              value={review.skill}
+              skills={skills}
+              onChange={(skill) => change({ skill })}
+            />
+          </div>
+        ) : null}
+      </Section>
+    </div>
+  );
+}
+
+/** The required-checks gate: always on (ADR-0017), with a link to the Harness page. */
+function ChecksGate({ projectId, id }: { projectId: string; id: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start gap-3 rounded-control border border-line bg-sunken px-3.5 py-3">
@@ -359,7 +451,7 @@ function ReviewFields({ projectId }: { projectId: string }) {
 /** One stage's settings: the fields for its kind, from the page's drafts. */
 export function StageFields(props: StagePanelProps) {
   const { stage } = props;
-  if (stage === 'review') return <ReviewFields projectId={props.projectId} />;
+  if (stage === 'review') return <ReviewFields {...props} />;
   return (
     <div className="flex flex-col gap-5">
       <AgentStageFields {...props} stage={stage} />
@@ -380,6 +472,9 @@ export function StageHeading({
 }) {
   const role = stage === 'review' ? null : roleOf(stage, workflow);
   const Icon = role === null ? MergeIcon : ROLE_ICON[role];
+  // ADR-0021: the review stage is a reviewer and the lead now, not the owner.
+  const who = role === null ? RL.review.who[workflow.review.reviewer] : C.roles[role];
+  const text = stage === 'review' ? RL.review.stageText : C.stageText[stage];
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span
@@ -388,10 +483,10 @@ export function StageHeading({
         }`}
       >
         <Icon size={13} className="shrink-0" />
-        {role === null ? C.review.who : C.roles[role]}
+        {who}
       </span>
       <h3 className="text-section font-semibold">{C.stages[stage]}</h3>
-      <p className="text-dim">{C.stageText[stage]}</p>
+      <p className="text-dim">{text}</p>
       {/* The helpers' role tip says what the stage text already says; one sentence is enough. */}
       {role !== null && role !== 'helper' ? (
         <p className="text-caption text-dim">{C.roleTips[role]}</p>

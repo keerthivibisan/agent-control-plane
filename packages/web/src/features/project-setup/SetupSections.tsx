@@ -1,12 +1,12 @@
 import { HARD_MAX_HELPERS, MAX_CONTEXT_FILES } from '@acp/core';
-import type { ContextCandidateDto, HarnessStatusDto } from '@acp/core/api';
+import type { ContextCandidateDto } from '@acp/core/api';
 import { useId } from 'react';
 import { CONTROL_COPY, PROJECT_SETUP_COPY, formatKiB } from '../../lib/copy';
 import type { QueryState } from '../../lib/query-store';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { Badge } from '../../components/Pill';
 import { LoadingBlock } from '../../components/Skeleton';
-import { CheckboxField, ChoiceCards, FixedSetting, NumberChoice, TextField } from './fields';
+import { ChoiceCards, FixedSetting, NumberChoice, TextField } from './fields';
 import {
   DEPTH_CHOICES,
   HELPER_CHOICES,
@@ -87,36 +87,6 @@ export function AgentFields({ draft, errors, onChange }: SectionProps) {
           mono
         />
       </div>
-    </div>
-  );
-}
-
-const L = PROJECT_SETUP_COPY.allowlist;
-
-/** Wizard step 3: the two pre-approved actions (ADR-0013 amendment). */
-export function AllowlistFields({
-  draft,
-  onChange,
-  harness,
-}: Omit<SectionProps, 'errors'> & { harness: HarnessStatusDto | undefined }) {
-  const noHarness =
-    harness !== undefined && (harness.state === 'none' || harness.state === 'invalid');
-  return (
-    <div className="flex flex-col gap-3">
-      <CheckboxField
-        label={L.edit}
-        hint={L.editHint}
-        checked={draft.editInOwnWorktree}
-        onChange={(v) => onChange({ editInOwnWorktree: v })}
-      />
-      <CheckboxField
-        label={L.checks}
-        hint={L.checksHint}
-        checked={draft.runHarnessChecks}
-        onChange={(v) => onChange({ runHarnessChecks: v })}
-        note={noHarness && draft.runHarnessChecks ? L.checksNoHarness : undefined}
-      />
-      <p className="text-caption text-dim">{L.recorded}</p>
     </div>
   );
 }

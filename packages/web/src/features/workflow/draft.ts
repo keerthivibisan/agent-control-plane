@@ -1,4 +1,14 @@
-import { HARD_MAX_DEPTH, type PlannerMode, type SkillName } from '@acp/core';
+import {
+  DEFAULT_MAX_REWORK_ROUNDS,
+  HARD_MAX_DEPTH,
+  approvalsOf,
+  reviewStageOf,
+  type ApprovalMode,
+  type ChangeReviewerMode,
+  type CommandPattern,
+  type PlannerMode,
+  type SkillName,
+} from '@acp/core';
 import {
   UpdateProjectSetupRequestSchema,
   UpdateWorkflowRequestSchema,
@@ -8,6 +18,7 @@ import {
 import type { ApiError, UpdateProjectSetupRequest, UpdateWorkflowRequest } from '../../lib/api';
 import { PROJECT_SETUP_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { parseTokens } from '../project-setup/setup-form';
+import { allowlistFor, sameApprovals } from '../review-loop/logic';
 import { AGENT_STAGES, type AgentStageId, type SetupShape, type WorkflowShape } from './graph';
 
 /**
@@ -29,9 +40,20 @@ export interface StageDraft {
   enabled: boolean;
 }
 
+/** The review stage (ADR-0021 §3): who reviews each change, the rework limit, the review agent. */
+export interface ReviewDraft {
+  reviewer: ChangeReviewerMode;
+  maxReworkRounds: number;
+  /** As typed; empty means the project default. */
+  model: string;
+  skill: SkillName | null;
+  agent: SkillName | null;
+}
+
 export interface WorkflowDraft {
   plannerMode: PlannerMode;
   stages: Record<AgentStageId, StageDraft>;
+  review: ReviewDraft;
 }
 
 export interface LimitsDraft {
@@ -39,14 +61,16 @@ export interface LimitsDraft {
   maxDepth: 1 | 2;
   /** As typed, e.g. "500,000". */
   budget: string;
-  editInOwnWorktree: boolean;
-  runHarnessChecks: boolean;
+  /** The approval mode and Auto's command list (ADR-0021 §1–2). */
+  approvalMode: ApprovalMode;
+  commands: readonly CommandPattern[];
 }
 
-export type DraftErrors = Partial<Record<AgentStageId, string>> & { budget?: string };
+export type DraftErrors = Partial<Record<AgentStageId | 'review', string>> & { budget?: string };
 
 export function workflowDraft(workflow: ProjectWorkflowDto['workflow']): WorkflowDraft {
   const s = workflow.stages;
+  const review = reviewStageOf(workflow);
   const stage = (
     st: { model: string | null; skill: SkillName | null; agent?: SkillName | null | undefined },
     enabled = true,
@@ -65,6 +89,13 @@ export function workflowDraft(workflow: ProjectWorkflowDto['workflow']): Workflo
       'code-review': stage(s['code-review'], s['code-review'].enabled),
       'unit-tests': stage(s['unit-tests'], s['unit-tests'].enabled),
     },
+    review: {
+      reviewer: review.reviewer,
+      maxReworkRounds: review.maxReworkRounds,
+      model: review.model ?? '',
+      skill: review.skill,
+      agent: review.agent,
+    },
   };
 }
 
@@ -73,8 +104,8 @@ export function limitsDraft(setup: ProjectAgentSetupDto): LimitsDraft {
     maxConcurrentHelpers: setup.maxConcurrentHelpers,
     maxDepth: setup.maxDepth >= HARD_MAX_DEPTH ? 2 : 1,
     budget: setup.defaultBudgetTokensPerAgent.toLocaleString('en-US'),
-    editInOwnWorktree: setup.allowlist.editInOwnWorktree,
-    runHarnessChecks: setup.allowlist.runHarnessChecks,
+    approvalMode: approvalsOf(setup).mode,
+    commands: approvalsOf(setup).commands,
   };
 }
 
@@ -98,10 +129,28 @@ export function workflowView(draft: WorkflowDraft): WorkflowShape {
       plan: agent(s.plan),
       orchestrate: agent(s.orchestrate),
       helpers: agent(s.helpers),
-      review: { requireChecks: true },
+      review: reviewView(draft.review),
       'code-review': { ...agent(s['code-review']), enabled: s['code-review'].enabled },
       'unit-tests': { ...agent(s['unit-tests']), enabled: s['unit-tests'].enabled },
     },
+  };
+}
+
+/**
+ * The review stage as saved: only what differs from the ADR-0021 defaults (`reviewStageOf`), so a
+ * workflow the owner never changed here saves as `{ requireChecks: true }`, as before.
+ */
+function reviewView(r: ReviewDraft): WorkflowShape['stages']['review'] {
+  const model = modelOf(r.model);
+  return {
+    requireChecks: true,
+    ...(r.reviewer === 'agent' ? {} : { reviewer: r.reviewer }),
+    ...(r.maxReworkRounds === DEFAULT_MAX_REWORK_ROUNDS
+      ? {}
+      : { maxReworkRounds: r.maxReworkRounds }),
+    ...(model === null ? {} : { model }),
+    ...(r.skill === null ? {} : { skill: r.skill }),
+    ...(r.agent === null ? {} : { agent: r.agent }),
   };
 }
 
@@ -112,10 +161,7 @@ export function setupView(setup: ProjectAgentSetupDto, draft: LimitsDraft): Setu
     maxDepth: draft.maxDepth,
     defaultBudgetTokensPerAgent: parseTokens(draft.budget) ?? setup.defaultBudgetTokensPerAgent,
     model: setup.model,
-    allowlist: {
-      editInOwnWorktree: draft.editInOwnWorktree,
-      runHarnessChecks: draft.runHarnessChecks,
-    },
+    allowlist: allowlistFor(draft.approvalMode),
   };
 }
 
@@ -128,6 +174,9 @@ export function workflowRequest(draft: WorkflowDraft): Checked<UpdateWorkflowReq
       errors[id] = WORKFLOW_COPY.panel.errors.modelTooLong;
     }
   }
+  if (draft.review.model.trim().length > MAX_MODEL) {
+    errors.review = WORKFLOW_COPY.panel.errors.modelTooLong;
+  }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   const parsed = UpdateWorkflowRequestSchema.safeParse(workflowView(draft));
   // Every rule the schema checks is checked above in words (or can't be typed); a backstop.
@@ -135,7 +184,12 @@ export function workflowRequest(draft: WorkflowDraft): Checked<UpdateWorkflowReq
   return { ok: true, request: parsed.data };
 }
 
-/** The whole setup PUT body: the saved setup with the page's limits and allowlist in it. */
+/**
+ * The whole setup PUT body: the saved setup with the page's limits and approvals in it. The legacy
+ * `allowlist` is still required by the request: it follows the mode. A setup saved before ADR-0021
+ * whose approvals the owner did not touch is sent as it was (its allowlist, no `approvals`), so a
+ * limits-only save never changes how its runs ask.
+ */
 export function setupRequest(
   setup: ProjectAgentSetupDto,
   draft: LimitsDraft,
@@ -147,16 +201,17 @@ export function setupRequest(
       errors: { budget: PROJECT_SETUP_COPY.agents.errors.budget },
     };
   }
+  const approvals = { mode: draft.approvalMode, commands: [...draft.commands] };
+  const keepLegacy = setup.approvals === undefined && sameApprovals(approvals, approvalsOf(setup));
   const parsed = UpdateProjectSetupRequestSchema.safeParse({
     projectKey: setup.projectKey,
     maxConcurrentHelpers: draft.maxConcurrentHelpers,
     maxDepth: draft.maxDepth,
     defaultBudgetTokensPerAgent: budget,
     model: setup.model,
-    allowlist: {
-      editInOwnWorktree: draft.editInOwnWorktree,
-      runHarnessChecks: draft.runHarnessChecks,
-    },
+    ...(keepLegacy
+      ? { allowlist: setup.allowlist }
+      : { allowlist: allowlistFor(approvals.mode), approvals }),
     contextFiles: [...setup.contextFiles],
   });
   if (!parsed.success) return { ok: false, errors: { helpers: WORKFLOW_COPY.refusals.invalid } };
@@ -172,10 +227,21 @@ function sameStage(a: StageDraft, b: StageDraft): boolean {
   );
 }
 
+function sameReview(a: ReviewDraft, b: ReviewDraft): boolean {
+  return (
+    a.reviewer === b.reviewer &&
+    a.maxReworkRounds === b.maxReworkRounds &&
+    a.model.trim() === b.model.trim() &&
+    a.skill === b.skill &&
+    a.agent === b.agent
+  );
+}
+
 export function sameWorkflow(a: WorkflowDraft, b: WorkflowDraft): boolean {
   return (
     a.plannerMode === b.plannerMode &&
-    AGENT_STAGES.every((id) => sameStage(a.stages[id], b.stages[id]))
+    AGENT_STAGES.every((id) => sameStage(a.stages[id], b.stages[id])) &&
+    sameReview(a.review, b.review)
   );
 }
 
@@ -191,8 +257,10 @@ export function sameLimits(a: LimitsDraft, b: LimitsDraft): boolean {
     a.maxConcurrentHelpers === b.maxConcurrentHelpers &&
     a.maxDepth === b.maxDepth &&
     sameBudget(a.budget, b.budget) &&
-    a.editInOwnWorktree === b.editInOwnWorktree &&
-    a.runHarnessChecks === b.runHarnessChecks
+    sameApprovals(
+      { mode: a.approvalMode, commands: [...a.commands] },
+      { mode: b.approvalMode, commands: [...b.commands] },
+    )
   );
 }
 

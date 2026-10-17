@@ -1,8 +1,10 @@
+import { approvalsOf } from '@acp/core';
 import type { ContextCandidateDto, ProjectAgentSetupDto, ProjectDto } from '@acp/core/api';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { AlertIcon, CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
+import { ApprovalsIcon } from '../review-loop/icons';
 import { labelClass } from '../../components/Input';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
@@ -14,7 +16,7 @@ import {
   schemas,
   updateProjectSetup,
 } from '../../lib/api';
-import { PROJECT_SETUP_COPY } from '../../lib/copy';
+import { PROJECT_SETUP_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import type { QueryState } from '../../lib/query-store';
 import { href } from '../../lib/router';
@@ -199,6 +201,17 @@ function MovedRow({
   );
 }
 
+/**
+ * The project's approvals in one line (ADR-0021), read-only: they are edited on the Workflow page,
+ * with the helper limits.
+ */
+function approvalsSummary(setup: ProjectAgentSetupDto): string {
+  const A = REVIEW_LOOP_COPY.approvals;
+  const { mode, commands } = approvalsOf(setup);
+  const text = A.summary(REVIEW_LOOP_COPY.modes.word[mode]);
+  return mode === 'auto' ? `${text} ${A.summaryCommands(commands.length)}` : text;
+}
+
 function SettingsBody({ project }: { project: ProjectDto }) {
   const id = project.id;
   const setup = useApiQuery(projectSetupPaths.setup(id), projectSetupSchemas.setup);
@@ -222,6 +235,15 @@ function SettingsBody({ project }: { project: ProjectDto }) {
               to={href.projectPage(id, 'workflow')}
               testId="settings-workflow-link"
             />
+            {setup.data !== undefined ? (
+              <MovedRow
+                icon={<ApprovalsIcon size={16} />}
+                text={approvalsSummary(setup.data)}
+                link={REVIEW_LOOP_COPY.approvals.summaryLink}
+                to={href.projectPage(id, 'workflow')}
+                testId="settings-approvals"
+              />
+            ) : null}
             <MovedRow
               icon={<HarnessIcon size={16} />}
               text={S.elsewhere.harness}

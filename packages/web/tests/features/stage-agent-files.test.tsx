@@ -240,8 +240,14 @@ describe('Workflow page: agent files (R-I)', () => {
       expect(picker().value).toBe('');
       expect(within(panel()).getByText(/can only narrow what this role may do/)).toBeTruthy();
     }
+    // ADR-0021: the review stage's review agent takes an agent file too (read-only role).
     await open('Review & merge');
-    expect(within(panel()).queryByRole('combobox', { name: 'Agent file' })).toBeNull();
+    expect([...picker().options].map((o) => o.textContent)).toEqual([
+      'None',
+      'db-migrator',
+      'docs-writer',
+    ]);
+    expect(within(panel()).getByText(/can only narrow what this role may do/)).toBeTruthy();
   });
 
   it('in lead mode, Plan and Orchestrate say which file the one lead uses', async () => {

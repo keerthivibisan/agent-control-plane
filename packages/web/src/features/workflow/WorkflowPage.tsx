@@ -16,7 +16,7 @@ import {
   workflowSchemas,
   type ApiError,
 } from '../../lib/api';
-import { WORKFLOW_COPY } from '../../lib/copy';
+import { REVIEW_LOOP_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { useSetupAction } from '../project-setup/actions';
 import { AgentFiles } from './AgentFiles';
@@ -102,8 +102,13 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
   const view = useMemo(() => workflowView(workflow), [workflow]);
   const drafted = useMemo(() => ({ ...dto.workflow, ...view }), [dto.workflow, view]);
   const graph = useMemo(
-    () => buildWorkflowGraph(view, setupView(dto.setup, limits), dto.skills, C.edges, agentFiles),
-    [view, limits, dto.setup, dto.skills, agentFiles],
+    () =>
+      buildWorkflowGraph(view, setupView(dto.setup, limits), dto.skills, C.edges, agentFiles, {
+        reviewer: workflow.review.reviewer,
+        maxReworkRounds: workflow.review.maxReworkRounds,
+        reworkLabel: REVIEW_LOOP_COPY.graph.reworkUpTo(workflow.review.maxReworkRounds),
+      }),
+    [view, limits, dto.setup, dto.skills, agentFiles, workflow.review],
   );
 
   const select = useCallback((stage: WorkflowStageId) => setSelected(stage), []);
@@ -132,7 +137,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
     const found: DraftErrors = { ...(wf.ok ? {} : wf.errors), ...(lim.ok ? {} : lim.errors) };
     if (!wf.ok || !lim.ok) {
       setErrors(found);
-      const first = found.budget !== undefined ? 'helpers' : AGENT_STAGES.find((s) => found[s]);
+      const first =
+        found.budget !== undefined
+          ? 'helpers'
+          : (AGENT_STAGES.find((s) => found[s]) ??
+            (found.review !== undefined ? 'review' : undefined));
       if (first !== undefined) setSelected(first);
       return;
     }

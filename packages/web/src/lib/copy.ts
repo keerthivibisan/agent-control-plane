@@ -1,4 +1,17 @@
-import type { AgentRunStatus, RunStatus, SessionStatus } from '@acp/core';
+import type {
+  AgentRunStatus,
+  RunStatus,
+  SessionStatus,
+  AllowRule,
+  ApprovalMode,
+  ChangeDecider,
+  ChangeDecision,
+  ChangeReviewerKind,
+  ChangeReviewerMode,
+  ChangeState,
+  ChangeVerdict,
+  TicketBranchState,
+} from '@acp/core';
 import type { EventDto } from '@acp/core/api';
 import { formatCount } from './format';
 import type { TokenCategory } from './tokens';
@@ -926,10 +939,10 @@ export const AGENT_STATUS_COPY: Readonly<Record<AgentRunStatus, ControlStatusCop
     tip: 'It used up its budget and waits for you to let it continue or stop it.',
     tone: 'waiting',
   },
-  // ADR-0021 (RL-0 placeholder copy; RL-D owns the final wording). No agent reaches it yet.
+  // ADR-0021: a helper or tester whose change is in the review loop. No process runs.
   AWAITING_REVIEW: {
     word: 'Waiting for review',
-    tip: 'It finished its turn. Its change is being reviewed before the lead decides what happens to it.',
+    tip: 'It finished its part. Its change is reviewed, then the lead merges it into the ticket branch, sends it back for rework or discards it.',
     tone: 'waiting',
   },
   SUCCEEDED: { word: 'Finished its task', tip: 'It reported that it is done.', tone: 'done' },
@@ -2737,4 +2750,334 @@ export const SHELL_FRAME_COPY = {
   },
   /** The sidebar toggle's shortcut as the keyboard labels it (⌘ on Apple keyboards). */
   sidebarShortcut: (mac: boolean) => (mac ? '⌘B' : 'Ctrl+B'),
+} as const;
+
+// --- Review loop: approval modes, Start dialog, change cards, ticket branch (RL-D, wp/rl-d-web) --
+//
+// Add-only (ADR-0021, docs/review-loop/README.md §7). Words for the approval modes, the review
+// stage, the Start dialog, the change cards, the ticket branch and the live graph's additions.
+
+const MODE_WORDS: Readonly<Record<ApprovalMode, string>> = {
+  manual: 'Manual',
+  'auto-edits': 'Auto edits',
+  auto: 'Auto',
+};
+
+/** The state chip of one helper's change ("Rework round 1 of 2", "Merged into acp/WEB-12"). */
+export function changeStateWord(
+  state: ChangeState,
+  o: { round: number; max: number; branch: string | null },
+): string {
+  switch (state) {
+    case 'sealing':
+    case 'ready':
+      return 'Ready';
+    case 'reviewing':
+      return 'In review';
+    case 'decision':
+      return 'Needs lead decision';
+    case 'rework':
+      return `Rework round ${formatCount(o.round)} of ${formatCount(o.max)}`;
+    case 'needs-owner':
+      return 'Needs you';
+    case 'merged':
+      return o.branch === null ? 'Merged' : `Merged into ${o.branch}`;
+    case 'discarded':
+      return 'Discarded';
+    case 'no-changes':
+      return 'No changes';
+  }
+}
+
+export const REVIEW_LOOP_COPY = {
+  modes: {
+    word: MODE_WORDS,
+    /** The radio label; the recommended mode says so. */
+    label: {
+      manual: 'Manual',
+      'auto-edits': 'Auto edits (recommended)',
+      auto: 'Auto',
+    } satisfies Record<ApprovalMode, string>,
+    /** One plain sentence: what runs without asking. */
+    hint: {
+      manual:
+        'Nothing runs without asking: every edit and every command waits for you, harness checks too.',
+      'auto-edits':
+        'Edits inside the helper’s own copy and the project’s exact harness checks run without asking. Everything else asks.',
+      auto: 'Like Auto edits, plus the commands you allow below. Everything else asks.',
+    } satisfies Record<ApprovalMode, string>,
+  },
+  approvals: {
+    title: 'Approvals',
+    note: 'What helpers and the tester may do without asking you: the default for each new run. You can change it when you start a ticket.',
+    legend: 'Approval mode',
+    warningTitle: 'Agent-written code can run without asking',
+    warning:
+      'Under Auto edits and Auto, a harness check or an allowed command runs code the agents wrote (tests, build scripts) with your user’s permissions on this computer. Choose Manual to see every command first.',
+    commandsTitle: 'Allowed commands',
+    commandsNote: (max: number) =>
+      `Auto runs these without asking when a command matches one word for word. At most ${max}.`,
+    commandsKept: 'Kept for Auto mode; not used in this mode.',
+    commandsEmpty:
+      'No commands yet. Without any, Auto behaves like Auto edits: only edits and harness checks run without asking.',
+    commandLabel: 'Command',
+    commandHint: 'Words separated by spaces, for example npm test or mvn -q verify.',
+    commandPlaceholder: 'npm test',
+    matchLabel: 'How it matches',
+    match: {
+      exact: 'Exactly these words',
+      prefix: 'These words, then any arguments',
+    },
+    matchTag: {
+      exact: 'Exact',
+      prefix: '+ any arguments',
+    },
+    add: 'Add command',
+    remove: (command: string) => `Remove ${command}`,
+    listLabel: 'Allowed commands',
+    errors: {
+      empty: 'Type a command first.',
+      tooMany: (max: number) => `At most ${max} commands. Remove one first.`,
+      tooManyWords: (max: number) => `Use at most ${max} words.`,
+      duplicate: 'This command is already in the list.',
+      characters: (token: string) =>
+        `“${token}” can’t be used: only letters, digits and . _ / : = @ + % , - are allowed, so a command can never chain, redirect or expand anything.`,
+      path: (token: string) =>
+        `“${token}” can’t be used: no absolute paths and no “..”, so a command stays inside the project.`,
+    },
+    /** Settings: the read-only summary. */
+    summary: (mode: string) => `Approvals: ${mode}.`,
+    summaryCommands: (n: number) => `${countOf(n, 'allowed command', 'allowed commands')}.`,
+    summaryLink: 'Change on Workflow',
+  },
+  wizard: {
+    step: 'Approvals',
+    title: 'Approvals',
+    description:
+      'How much helpers may do without asking you. You can change it later on the Workflow page, and for each run when you start it.',
+    autoCommands: 'Add the commands Auto may run on the Workflow page after setup.',
+  },
+  review: {
+    reviewerLegend: 'Who reviews each change',
+    reviewer: {
+      agent: 'Review agent (recommended)',
+      lead: 'The lead',
+    } satisfies Record<ChangeReviewerMode, string>,
+    reviewerHint: {
+      agent:
+        'A read-only review agent reads each helper’s change and posts its findings; the lead then decides.',
+      lead: 'The lead reads each change itself and decides. No extra agent runs.',
+    } satisfies Record<ChangeReviewerMode, string>,
+    reviewerWord: {
+      agent: 'Review agent',
+      lead: 'Lead',
+    } satisfies Record<ChangeReviewerMode, string>,
+    rounds: 'Rework rounds',
+    roundsHint:
+      'How often the lead may send one change back to its helper. You can allow more on the ticket page.',
+    roundsValue: (n: number) =>
+      n === 0 ? 'No rework: merge or discard' : countOf(n, 'rework round', 'rework rounds'),
+    agentTitle: 'Review agent',
+    agentNote: 'The agent that reviews each change: its agent file, model and skill.',
+    leadNote: 'The lead reviews the changes itself, so no review agent runs.',
+    /** The Workflow graph's review node. */
+    who: {
+      agent: 'Review agent + lead',
+      lead: 'Lead + harness checks',
+    } satisfies Record<ChangeReviewerMode, string>,
+    leadMerges: 'Lead merges into the ticket branch',
+    roundsLine: (n: number) =>
+      n === 0 ? 'No rework rounds' : `Up to ${countOf(n, 'rework round', 'rework rounds')}`,
+    stageText:
+      'Each helper’s change is reviewed, then the lead merges it into the ticket branch, sends it back for rework or discards it. Required harness checks must pass first. You merge the ticket branch into main once, at the end.',
+    errorTitle: 'Review agent',
+  },
+  graph: {
+    rework: (n: number) => (n > 0 ? `Rework ×${formatCount(n)}` : 'Rework'),
+    /** The Workflow page's rework edge: the limit, not a count. */
+    reworkUpTo: (n: number) =>
+      n > 0 ? `Rework, up to ${formatCount(n)}×` : 'Rework, only if you allow it',
+    ownerMerge: {
+      who: 'You',
+      title: 'Merge into main',
+      text: 'Once, for the whole ticket.',
+      tip: 'Every merged change lands on the ticket branch. You merge that branch into main once, at the end, or ask for changes.',
+    },
+    counts: {
+      waiting: (n: number) => `${formatCount(n)} waiting`,
+      inReview: (n: number) => `${formatCount(n)} in review`,
+      rework: (n: number) => `${formatCount(n)} in rework`,
+      needsOwner: (n: number) => `${formatCount(n)} for you`,
+      merged: (n: number) => `${formatCount(n)} merged`,
+      discarded: (n: number) => `${formatCount(n)} discarded`,
+      noChanges: (n: number) => `${formatCount(n)} without changes`,
+      none: 'No changes yet',
+    },
+    helpersWaiting: (n: number) => `${formatCount(n)} waiting for review`,
+  },
+  start: {
+    options: 'Start with options…',
+    optionsFor: (key: string) => `Start ${key} with options`,
+    rerunOptionsFor: (key: string) => `Re-run ${key} with options`,
+    optionsShort: 'Options',
+    title: (key: string) => `Start ${key}`,
+    rerunTitle: (key: string) => `Re-run ${key}`,
+    description:
+      'Choose how this run works. Each choice starts at the project’s setting and applies to this run only.',
+    projectDefault: 'Project setting',
+    mode: 'Approvals for this run',
+    reviewer: 'Who reviews each change',
+    rounds: 'Rework rounds',
+    submit: 'Start',
+    rerunSubmit: 'Re-run',
+    cancel: 'Cancel',
+    loading: 'Loading the project’s settings…',
+    loadFailed:
+      'The project’s settings couldn’t be loaded, so this run would use them as they are.',
+    unchanged: 'Same as the project’s settings.',
+    changed: (n: number) =>
+      `${countOf(n, 'choice differs', 'choices differ')} from the project, for this run only.`,
+  },
+  changes: {
+    cardLabel: (role: string) => `Change by ${role}`,
+    stateTip: {
+      sealing: 'Its work is being saved as one commit for review.',
+      ready: 'Its change is saved and waits for a reviewer.',
+      reviewing: 'A reviewer is reading the change.',
+      decision: 'The review is in. The lead decides: merge, rework or discard.',
+      rework: 'Sent back to its helper with what should change.',
+      'needs-owner': 'The lead asked you, or ended before deciding. You decide below.',
+      merged: 'Merged into the ticket branch. You merge that branch into main at the end.',
+      discarded: 'Its change was dropped; none of it reaches the ticket branch.',
+      'no-changes': 'It finished without changing any file.',
+    } satisfies Record<ChangeState, string>,
+    files: (n: number | null) =>
+      n === null ? 'Files not reported' : countOf(n, 'changed file', 'changed files'),
+    checks: {
+      none: 'No checks on this commit yet',
+      passed: (passed: number, total: number) =>
+        `${formatCount(passed)} of ${formatCount(total)} checks passed`,
+      failed: (n: number) => `${countOf(n, 'required check', 'required checks')} failed`,
+    },
+    conflicts: (branch: string) => `Conflicts with ${branch} in:`,
+    conflictsNote: 'The helper must update its change before it can be merged.',
+    history: 'Decisions',
+    historyEmpty: 'No review yet.',
+    round: (n: number) => `Round ${formatCount(n + 1)}`,
+    reviewer: {
+      agent: 'Review agent',
+      lead: 'Lead',
+      owner: 'You',
+    } satisfies Record<ChangeReviewerKind, string>,
+    verdict: {
+      approve: 'approved it',
+      rework: 'asked for rework',
+    } satisfies Record<ChangeVerdict, string>,
+    reviewing: 'reviewing…',
+    decision: {
+      merge: 'merged it',
+      'merge-anyway': 'merged it anyway',
+      rework: 'sent it back for rework',
+      discard: 'discarded it',
+      'ask-owner': 'asked you to decide',
+    } satisfies Record<ChangeDecision, string>,
+    decider: {
+      lead: 'Lead',
+      owner: 'You',
+    } satisfies Record<ChangeDecider, string>,
+    commentGone: 'The comment is no longer on the ticket.',
+    owner: {
+      title: 'Your decision',
+      leadEnded: 'The lead has ended, so you decide what happens to this change.',
+      asked: 'The lead asked you to decide.',
+      merge: (branch: string) => `Merge into ${branch}`,
+      confirmMerge: (role: string, branch: string) =>
+        `Merge the ${role}’s change into ${branch}? The required checks must have passed on it.`,
+      confirmMergeButton: 'Merge',
+      rework: 'Send back for rework…',
+      reworkTitle: 'What should the helper change?',
+      reworkHint: 'Required. Your note goes to the helper and is kept as a ticket comment.',
+      reworkPlaceholder: 'For example: keep the old API working and add a test for the new option.',
+      reworkTooLong: (max: number) => `Keep it under ${formatCount(max)} characters.`,
+      reworkExtra: (used: number, max: number) =>
+        `It has used ${formatCount(used)} of ${countOf(max, 'rework round', 'rework rounds')}; yours can go past the limit.`,
+      sendRework: 'Send back',
+      discard: 'Discard',
+      confirmDiscard: (role: string) =>
+        `Discard the ${role}’s change? None of it reaches the ticket branch. This can’t be undone.`,
+      confirmDiscardButton: 'Discard change',
+      cancel: 'Cancel',
+      working: 'Working…',
+      failed: 'That didn’t work.',
+    },
+    needsYou: {
+      title: (n: number) => `${countOf(n, 'change needs', 'changes need')} your decision`,
+      description: 'The lead asked you, or ended before deciding. Open a change to decide.',
+      open: 'Open',
+    },
+    allTitle: 'Changes in this run',
+    none: 'No helper has finished a change yet.',
+    stillWorking: 'Its change shows here once it finishes its turn.',
+  },
+  branch: {
+    title: 'Ticket branch',
+    tip: 'Every change the lead merges lands on this branch, never on main. You merge the branch into main once, at the end; main changes only on your click, as a clean fast-forward.',
+    description: 'Every merged change lands here. You merge it into main once.',
+    state: {
+      open: 'Open',
+      merged: 'Merged',
+      discarded: 'Discarded',
+    } satisfies Record<TicketBranchState, string>,
+    mergedInto: (base: string) => `Merged into ${base}`,
+    base: 'Based on',
+    tipCommit: 'Tip',
+    changesMerged: (n: number) => countOf(n, 'change merged', 'changes merged'),
+    waiting:
+      'The agents are still working. You can merge once every change is decided and the last stage has run.',
+    loading: 'Loading the combined change…',
+    loadFailed: 'The combined change couldn’t be loaded.',
+    files: (n: number) => countOf(n, 'changed file', 'changed files'),
+    noFiles: 'No files changed on the ticket branch.',
+    diff: 'The combined change, line by line',
+    checksTitle: 'Checks on the tip',
+    checksNone: 'No checks have run on the tip yet.',
+    blocked: (names: string) =>
+      `A required check failed on the tip (${names}). Ask for changes, or merge anyway with a reason.`,
+    baseMoved: (base: string) =>
+      `${base} moved since this branch started, so it no longer merges as a fast-forward. Update it from ${base} first; the checks run again.`,
+    merge: (base: string) => `Merge into ${base}`,
+    confirmMerge: (branch: string, base: string) =>
+      `Merge ${branch} into ${base}? ${base} moves forward to the ticket branch and the ticket is done. Your project folder must be on ${base} with no uncommitted changes.`,
+    confirmMergeButton: 'Merge',
+    mergeAnyway: 'Merge anyway…',
+    mergeAnywayTitle: 'Merge although a required check failed',
+    reasonLabel: 'Why merge anyway?',
+    reasonHint: 'Required. It is kept with the run.',
+    reasonPlaceholder: 'For example: the flaky e2e check fails on main too.',
+    reasonTooLong: (max: number) => `Keep the reason under ${formatCount(max)} characters.`,
+    confirmMergeAnyway: 'Merge anyway',
+    requestChanges: 'Request changes…',
+    requestTitle: 'What should change?',
+    requestHint: 'Required. The lead gets your comment and the run continues.',
+    requestPlaceholder: 'For example: keep the old layout of the settings page on small screens.',
+    requestTooLong: (max: number) => `Keep it under ${formatCount(max)} characters.`,
+    sendRequest: 'Send to the lead',
+    discard: 'Discard branch',
+    confirmDiscard: (branch: string) =>
+      `Discard ${branch}? The branch and every change merged into it are deleted. This can’t be undone.`,
+    confirmDiscardButton: 'Discard branch',
+    discardOnly: 'This run has stopped. Its ticket branch can only be discarded.',
+    update: (base: string) => `Update from ${base}`,
+    cancel: 'Cancel',
+    working: 'Working…',
+    failed: 'That didn’t work.',
+  },
+  /** The run's approval mode, in the summary under the ticket header. */
+  runMode: (mode: string) => `Approvals: ${mode}`,
+  /** An approval an allow rule decided (ADR-0021), in the request history. */
+  autoApproved: {
+    'edit-in-own-worktree': 'Approved automatically: edit in its own copy',
+    'run-harness-check': 'Approved automatically: harness check',
+    'command-allowlist': 'Approved automatically: allowed command',
+  } satisfies Record<AllowRule, string>,
 } as const;

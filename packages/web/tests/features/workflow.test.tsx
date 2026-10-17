@@ -177,7 +177,8 @@ describe('Workflow page', () => {
     fireEvent.change(within(panel()).getByRole('textbox', { name: /Budget per agent/ }), {
       target: { value: '250,000' },
     });
-    fireEvent.click(within(panel()).getByRole('checkbox', { name: /run this project’s checks/ }));
+    // ADR-0021: the approval mode replaced the two pre-approved actions.
+    fireEvent.click(within(panel()).getByRole('radio', { name: /Auto edits \(recommended\)/ }));
     // The graph follows the draft.
     expect(screen.getAllByTestId(/^wf-helper-/)).toHaveLength(2);
     expect(screen.getAllByTestId('helper-nested')).toHaveLength(2);
@@ -191,6 +192,7 @@ describe('Workflow page', () => {
       defaultBudgetTokensPerAgent: 250_000,
       model: null,
       allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
+      approvals: { mode: 'auto-edits', commands: [] },
       contextFiles: ['CLAUDE.md'],
     });
   });

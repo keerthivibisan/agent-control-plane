@@ -138,13 +138,16 @@ export function ChoiceCards<V extends string | number>({
   value: V;
   options: readonly { value: V; label: string; hint: string }[];
   onChange: (v: V) => void;
-  columns?: 2 | 3;
+  /** 1 stacks them, for a narrow panel (the Workflow page's stage settings). */
+  columns?: 1 | 2 | 3;
 }) {
   const hintId = useId();
   return (
     <fieldset className="flex min-w-0 flex-col gap-2" aria-describedby={hint ? hintId : undefined}>
       <legend className={`mb-1.5 ${labelClass}`}>{legend}</legend>
-      <div className={`grid gap-2 ${columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+      <div
+        className={`grid gap-2 ${columns === 1 ? '' : columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
+      >
         {options.map((o) => {
           const checked = o.value === value;
           return (

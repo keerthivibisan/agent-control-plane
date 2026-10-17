@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
 import { AlertIcon, CheckIcon, TicketIcon } from '../../components/icons';
 import { Tooltip } from '../../components/Tooltip';
-import { STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
+import { REVIEW_LOOP_COPY, STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import type {
   AgentNode,
@@ -29,6 +29,7 @@ import {
 
 const C = WORKFLOW_COPY;
 const AF = STAGE_AGENT_COPY;
+const RL = REVIEW_LOOP_COPY;
 
 /**
  * The node views of the workflow graph (graph.ts builds their data). Every view renders the same
@@ -403,6 +404,8 @@ export function HelpersNodeView({ data }: NodeProps<HelpersNode>) {
       data-testid="wf-node-helpers"
       data-role="helper"
     >
+      {/* The review loop's "rework" edge comes back in at the top. */}
+      <Handles only={['in-top']} />
       <Eyebrow
         left={C.roles.helper}
         icon={<RoleIcon role="helper" />}
@@ -450,8 +453,27 @@ export function HelperNodeView({ data }: NodeProps<HelperNode>) {
   );
 }
 
+/** "You merge into main": the owner's one merge of the ticket branch (ADR-0021 §4). */
+function OwnerMergeGateView() {
+  const G = RL.graph.ownerMerge;
+  return (
+    <div
+      className="relative flex h-full w-full flex-col justify-center gap-1 rounded-[2px] border border-line-strong bg-sunken px-3 py-2.5 text-ink"
+      data-testid="wf-node-owner-merge"
+    >
+      <Handles />
+      <Eyebrow left={G.who} icon={<YouIcon size={13} className="shrink-0" />} accent />
+      <Tooltip content={G.tip} focusable={false} className="w-fit">
+        <span className="font-semibold tracking-[-0.006em]">{G.title}</span>
+      </Tooltip>
+      <p className="text-caption text-dim">{G.text}</p>
+    </div>
+  );
+}
+
 /** "You approve the plan": the owner's gate, part of the plan stage. */
-export function GateNodeView(_: NodeProps<GateNode>) {
+export function GateNodeView({ data }: NodeProps<GateNode>) {
+  if (data.gate === 'owner-merge') return <OwnerMergeGateView />;
   return (
     <div
       className="relative flex h-full w-full flex-col justify-center gap-1 rounded-[2px] border border-line-strong bg-sunken px-3 py-2.5 text-ink"
@@ -467,9 +489,91 @@ export function GateNodeView(_: NodeProps<GateNode>) {
   );
 }
 
+type ReviewCounts = NonNullable<NonNullable<ReviewNode['data']['loop']>['counts']>;
+
+/** "1 in review · 2 merged · 1 for you": the run's changes, only the parts that have any. */
+function ReviewCountsLine({ counts }: { counts: ReviewCounts }) {
+  const W = RL.graph.counts;
+  const parts = [
+    { key: 'needs-owner', text: W.needsOwner(counts.needsOwner), n: counts.needsOwner },
+    { key: 'waiting', text: W.waiting(counts.waiting), n: counts.waiting },
+    { key: 'in-review', text: W.inReview(counts.inReview), n: counts.inReview },
+    { key: 'rework', text: W.rework(counts.rework), n: counts.rework },
+    { key: 'merged', text: W.merged(counts.merged), n: counts.merged },
+    { key: 'discarded', text: W.discarded(counts.discarded), n: counts.discarded },
+    { key: 'no-changes', text: W.noChanges(counts.noChanges), n: counts.noChanges },
+  ].filter((p) => p.n > 0);
+  return (
+    <p
+      className="line-clamp-2 text-caption text-dim tabular-nums"
+      data-testid="review-counts"
+      title={parts.map((p) => p.text).join(' · ')}
+    >
+      {parts.length === 0
+        ? W.none
+        : parts.map((p, i) => (
+            <span key={p.key} className={p.key === 'needs-owner' ? 'font-medium text-warning' : ''}>
+              {i > 0 ? ' · ' : ''}
+              {p.text}
+            </span>
+          ))}
+    </p>
+  );
+}
+
+/**
+ * Review with the loop (ADR-0021 §3): a reviewer reads each change and the lead merges it into the
+ * ticket branch; on the ticket page the run's counts replace the rounds line.
+ */
+function ReviewLoopNodeView({
+  loop,
+  requireChecks,
+}: {
+  loop: NonNullable<ReviewNode['data']['loop']>;
+  requireChecks: boolean;
+}) {
+  const { selected } = useContext(WorkflowGraphContext);
+  const ReviewerIcon = ROLE_ICON[loop.reviewer === 'agent' ? 'reviewer' : 'lead'];
+  return (
+    <div
+      className={frame(selected === 'review', 'agent')}
+      data-testid="wf-node-review"
+      data-reviewer={loop.reviewer}
+    >
+      <Handles />
+      <Eyebrow
+        left={RL.review.who[loop.reviewer]}
+        icon={<ReviewerIcon size={13} className="shrink-0" />}
+        right={<MergeIcon size={13} className="shrink-0 text-dim" />}
+      />
+      <StageTitle stage="review" />
+      {requireChecks ? (
+        <p className="flex items-center gap-1.5 text-caption">
+          <CheckIcon size={13} className="shrink-0 text-success" />
+          {C.review.checks}
+        </p>
+      ) : null}
+      <p className="flex items-center gap-1.5 text-caption">
+        <CheckIcon size={13} className="shrink-0 text-success" />
+        {RL.review.leadMerges}
+      </p>
+      {loop.counts !== undefined ? (
+        <ReviewCountsLine counts={loop.counts} />
+      ) : (
+        <p className="text-caption text-dim" data-testid="review-rounds">
+          {RL.review.roundsLine(loop.maxReworkRounds)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Review & merge: you, plus the harness checks. No agent. */
 export function ReviewNodeView({ data }: NodeProps<ReviewNode>) {
   const { selected } = useContext(WorkflowGraphContext);
+  if (data.loop !== undefined) {
+    return <ReviewLoopNodeView loop={data.loop} requireChecks={data.requireChecks} />;
+  }
   return (
     <div className={frame(selected === 'review', 'you')} data-testid="wf-node-review">
       <Handles />

@@ -1,3 +1,4 @@
+import { DEFAULT_APPROVAL_MODE, type ApprovalMode } from '@acp/core';
 import type { ProjectDto } from '@acp/core/api';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
@@ -11,13 +12,15 @@ import {
   projectSetupSchemas,
   updateProjectSetup,
 } from '../../lib/api';
-import { PROJECT_SETUP_COPY, SETUP_COPY } from '../../lib/copy';
+import { PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SETUP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href, navigate } from '../../lib/router';
 import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { HarnessCheckList, HarnessStatusView, HarnessTicketAction } from './HarnessPanel';
-import { AgentFields, AllowlistFields, ContextPicker } from './SetupSections';
+import { ApprovalModeChoice, AutoRunWarning } from '../review-loop/ApprovalsEditor';
+import { allowlistFor } from '../review-loop/logic';
+import { AgentFields, ContextPicker } from './SetupSections';
 import {
   draftFromSetup,
   draftToRequest,
@@ -35,7 +38,8 @@ type StepKey = (typeof STEPS)[number];
 const STEP_TEXT: Record<StepKey, { title: string; description: string }> = {
   source: PROJECT_SETUP_COPY.source,
   agents: PROJECT_SETUP_COPY.agents,
-  allowlist: PROJECT_SETUP_COPY.allowlist,
+  // ADR-0021: the third step chooses the approval mode (the step keeps its key and test hook).
+  allowlist: REVIEW_LOOP_COPY.wizard,
   context: PROJECT_SETUP_COPY.context,
   harness: PROJECT_SETUP_COPY.harness,
 };
@@ -68,7 +72,7 @@ function Progress({ current }: { current: number }) {
                 {done ? <CheckIcon size={13} strokeWidth={2.5} /> : i + 1}
               </span>
               <span className={active ? 'font-medium text-ink' : done ? 'text-ink' : 'text-dim'}>
-                {W.steps[key]}
+                {key === 'allowlist' ? REVIEW_LOOP_COPY.wizard.step : W.steps[key]}
               </span>
               {i < STEPS.length - 1 ? (
                 <span
@@ -101,6 +105,8 @@ export function NewProjectWizard() {
   const [project, setProject] = useState<ProjectDto | null>(null);
   const [created, setCreated] = useState(false);
   const [edits, setEdits] = useState<Partial<SetupDraft>>({});
+  /** The owner's pick; until then a new project starts in Auto edits (ADR-0021 §1). */
+  const [mode, setMode] = useState<ApprovalMode | null>(null);
   const [errors, setErrors] = useState<SetupErrors>({});
 
   const source = useSourceStep((p) => {
@@ -136,6 +142,8 @@ export function NewProjectWizard() {
     setEdits((e) => ({ ...e, ...patch }));
   };
 
+  const approvalMode = mode ?? setup.data?.approvals?.mode ?? DEFAULT_APPROVAL_MODE;
+
   const key = STEPS[step] ?? 'source';
   const pending = source.pending || save.pending;
 
@@ -165,7 +173,12 @@ export function NewProjectWizard() {
         return;
       }
       setErrors({});
-      const saved = await save.run(id, r.request);
+      // The mode, with the legacy allowlist that matches it (the request still requires it).
+      const saved = await save.run(id, {
+        ...r.request,
+        allowlist: allowlistFor(approvalMode),
+        approvals: { mode: approvalMode, commands: [...(setup.data?.approvals?.commands ?? [])] },
+      });
       if (saved !== null) setStep(4);
       return;
     }
@@ -199,7 +212,15 @@ export function NewProjectWizard() {
   } else if (key === 'agents') {
     body = <AgentFields draft={draft} errors={errors} onChange={change} />;
   } else if (key === 'allowlist') {
-    body = <AllowlistFields draft={draft} onChange={change} harness={harness.data} />;
+    body = (
+      <div className="flex flex-col gap-4" data-testid="wizard-approvals">
+        <ApprovalModeChoice value={approvalMode} onChange={setMode} columns={3} />
+        {approvalMode !== 'manual' ? <AutoRunWarning /> : null}
+        {approvalMode === 'auto' ? (
+          <p className="text-caption text-dim">{REVIEW_LOOP_COPY.wizard.autoCommands}</p>
+        ) : null}
+      </div>
+    );
   } else {
     body = (
       <ContextPicker draft={draft} errors={errors} onChange={change} candidates={candidates} />

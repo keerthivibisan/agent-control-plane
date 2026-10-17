@@ -78,14 +78,17 @@ describe('New project wizard (#/projects/new)', () => {
     expect(within(agents).getByText(/250,000 budget tokens/)).toBeTruthy();
     next();
 
-    // Step 3: the allowlist; no harness yet, so the checks toggle says when it applies.
+    // Step 3 (ADR-0021): the approval mode. A new project starts in Auto edits, with the plain
+    // warning that agent-written code can then run without asking; Manual has no warning.
     const allow = await step('allowlist');
+    expect(within(allow).getByText('Step 3 of 5')).toBeTruthy();
     expect(
-      within(allow).getByText('This takes effect once the project has a harness.'),
-    ).toBeTruthy();
-    fireEvent.click(
-      within(allow).getByLabelText('Let helpers edit files in their own copy without asking'),
-    );
+      within(allow).getByLabelText<HTMLInputElement>(/Auto edits \(recommended\)/).checked,
+    ).toBe(true);
+    expect(within(allow).getByTestId('approvals-warning')).toBeTruthy();
+    fireEvent.click(within(allow).getByLabelText(/^Manual/));
+    expect(within(allow).queryByTestId('approvals-warning')).toBeNull();
+    fireEvent.click(within(allow).getByLabelText(/^Auto edits/));
     next();
 
     // Step 4: suggested files are pre-selected, with the limits counted.
@@ -110,6 +113,7 @@ describe('New project wizard (#/projects/new)', () => {
       defaultBudgetTokensPerAgent: 250_000,
       model: null,
       allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
+      approvals: { mode: 'auto-edits', commands: [] },
       contextFiles: ['CLAUDE.md', 'AGENTS.md'],
     });
     expect(within(h).getByText('None')).toBeTruthy();

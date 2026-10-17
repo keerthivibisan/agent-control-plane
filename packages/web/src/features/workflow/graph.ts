@@ -1,4 +1,11 @@
-import type { ProjectAgentSetup, ProjectWorkflow, SkillName, WorkflowStageId } from '@acp/core';
+import type {
+  ChangeReviewerMode,
+  ProjectAgentSetup,
+  ProjectWorkflow,
+  SkillName,
+  WorkflowStageId,
+} from '@acp/core';
+import type { RunWorkflowDto } from '@acp/core/api';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
 /**
@@ -100,14 +107,33 @@ export interface HelperNodeData {
 
 export interface GateNodeData {
   [key: string]: unknown;
-  /** The owner's plan approval: part of the plan stage, with no settings of its own. */
-  gate: 'plan-approval';
+  /**
+   * `plan-approval`: the owner's plan approval, part of the plan stage, with no settings of its
+   * own. `owner-merge` (ADR-0021 §4): the owner's one merge of the ticket branch into main, just
+   * before Done.
+   */
+  gate: 'plan-approval' | 'owner-merge';
+}
+
+/**
+ * The review loop (ADR-0021 §3), when the graph shows it: who reviews each change and the rework
+ * limit; on the ticket page also the run's counts. Absent for a run from before the loop, whose
+ * graph stays as it always was.
+ */
+export interface ReviewLoopShape {
+  reviewer: ChangeReviewerMode;
+  maxReworkRounds: number;
+  /** The run's changes per part of the loop (`RunWorkflowDto.review`); absent on the Workflow page. */
+  counts?: NonNullable<RunWorkflowDto['review']> | undefined;
+  /** The label of the "rework" edge from Review back to Helpers. */
+  reworkLabel: string;
 }
 
 export interface ReviewNodeData {
   [key: string]: unknown;
   stage: 'review';
   requireChecks: true;
+  loop?: Omit<ReviewLoopShape, 'reworkLabel'>;
 }
 
 export interface TerminalNodeData {
@@ -146,6 +172,8 @@ export interface WorkflowGraph {
 export const NODE_IDS = {
   ticket: 'ticket',
   approve: 'approve',
+  /** The owner's merge of the ticket branch (review loop only). */
+  ownerMerge: 'owner-merge',
   done: 'done',
   helper: (i: number) => `helper-${i}`,
 } as const;
@@ -176,6 +204,8 @@ export const HELPER_GAP = 8;
 export const HELPERS_PAD = 12;
 /** Room above the first row for the "changes" loop and its label. */
 export const TOP_MARGIN = 48;
+/** With the review loop, Done sits under the owner's merge, this far below the last row. */
+export const DONE_GAP = 32;
 
 const colX = (col: number) => col * (NODE_W + COL_GAP);
 export const GRAPH_WIDTH = colX(2) + NODE_W;
@@ -217,7 +247,9 @@ export function buildWorkflowGraph(
   skills?: readonly string[],
   labels: EdgeLabels = DEFAULT_LABELS,
   agentFiles?: readonly AgentFileRef[],
+  loop?: ReviewLoopShape | null,
 ): WorkflowGraph {
+  const withLoop = loop !== undefined && loop !== null;
   const s = workflow.stages;
   const known = skills === undefined ? null : new Set(skills);
   const files =
@@ -346,7 +378,19 @@ export function buildWorkflowGraph(
       position: at(1, 2, AGENT_H),
       ...sized,
       ...fixed,
-      data: { stage: 'review', requireChecks: s.review.requireChecks },
+      data: {
+        stage: 'review',
+        requireChecks: s.review.requireChecks,
+        ...(withLoop
+          ? {
+              loop: {
+                reviewer: loop.reviewer,
+                maxReworkRounds: loop.maxReworkRounds,
+                ...(loop.counts === undefined ? {} : { counts: loop.counts }),
+              },
+            }
+          : {}),
+      },
     },
     {
       id: 'code-review',
@@ -376,17 +420,33 @@ export function buildWorkflowGraph(
         sameAgentAs: null,
       },
     },
-    {
-      id: NODE_IDS.done,
-      type: 'terminal',
-      position: at(2, 2, TERMINAL_H, TERMINAL_W),
-      width: TERMINAL_W,
-      height: TERMINAL_H,
+  );
+  // The review loop: the owner's merge takes Done's place, and Done moves under it.
+  const doneY = rowY[2] + rowH[2] + DONE_GAP;
+  if (withLoop) {
+    nodes.push({
+      id: NODE_IDS.ownerMerge,
+      type: 'gate',
+      position: at(2, 2, GATE_H),
+      width: NODE_W,
+      height: GATE_H,
       selectable: false,
       ...fixed,
-      data: { terminal: 'done' },
-    },
-  );
+      data: { gate: 'owner-merge' },
+    });
+  }
+  nodes.push({
+    id: NODE_IDS.done,
+    type: 'terminal',
+    position: withLoop
+      ? { x: colX(2) + (NODE_W - TERMINAL_W) / 2, y: doneY }
+      : at(2, 2, TERMINAL_H, TERMINAL_W),
+    width: TERMINAL_W,
+    height: TERMINAL_H,
+    selectable: false,
+    ...fixed,
+    data: { terminal: 'done' },
+  });
 
   // Grid cells of the spine nodes, to pick handles: neighbours in a row join side to side; a step
   // down a row joins bottom to top; a jump along a row (a bypass) runs underneath.
@@ -399,12 +459,19 @@ export function buildWorkflowGraph(
     review: [1, 2],
     'code-review': [2, 0],
     'unit-tests': [2, 1],
-    [NODE_IDS.done]: [2, 2],
+    ...(withLoop
+      ? { [NODE_IDS.ownerMerge]: [2, 2], [NODE_IDS.done]: [3, 2] }
+      : { [NODE_IDS.done]: [2, 2] }),
   };
   const handles = (a: string, b: string): { sourceHandle: HandleId; targetHandle: HandleId } => {
     const [ra, ca] = cell[a] ?? [0, 0];
     const [rb, cb] = cell[b] ?? [0, 0];
     if (ra === rb && cb === ca + 1) return { sourceHandle: 'out-right', targetHandle: 'in-left' };
+    // A bypass along the last row into the owner's merge: underneath, then in from the left,
+    // since Done hangs under the merge.
+    if (ra === rb && b === NODE_IDS.ownerMerge) {
+      return { sourceHandle: 'out-bottom', targetHandle: 'in-left' };
+    }
     if (ra === rb) return { sourceHandle: 'out-bottom', targetHandle: 'in-bottom' };
     return { sourceHandle: 'out-bottom', targetHandle: 'in-top' };
   };
@@ -463,6 +530,18 @@ export function buildWorkflowGraph(
     edges.push(edge('flow', 'orchestrate', NODE_IDS.helper(i), side));
     edges.push(edge('flow', NODE_IDS.helper(i), 'review', side));
   }
+  // The review loop: a change sent back for rework returns to its helper.
+  if (withLoop) {
+    edges.push(
+      edge(
+        'loop',
+        'review',
+        'helpers',
+        { sourceHandle: 'out-top', targetHandle: 'in-top' },
+        loop.reworkLabel,
+      ),
+    );
+  }
 
   // After the merge: a chain where any stage may be off. Generic over the chain, so more optional
   // stages (or a user-defined order, README §7a) need no new edge rules.
@@ -470,6 +549,7 @@ export function buildWorkflowGraph(
     { id: 'review', on: true },
     { id: 'code-review', on: s['code-review'].enabled },
     { id: 'unit-tests', on: s['unit-tests'].enabled },
+    ...(withLoop ? [{ id: NODE_IDS.ownerMerge, on: true }] : []),
     { id: NODE_IDS.done, on: true },
   ];
   let lastOn = chain[0]?.id ?? 'review';
@@ -486,5 +566,10 @@ export function buildWorkflowGraph(
     }
   }
 
-  return { nodes, edges, width: GRAPH_WIDTH, height: rowY[2] + rowH[2] };
+  return {
+    nodes,
+    edges,
+    width: GRAPH_WIDTH,
+    height: withLoop ? doneY + TERMINAL_H : rowY[2] + rowH[2],
+  };
 }
