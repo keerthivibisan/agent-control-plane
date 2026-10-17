@@ -90,3 +90,14 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 - 2026-10-17 the owner's app was restarted on the new code: backed up first, then migration 0006
   was applied to the live database (the backup is in `~/.agent-control-plane/backups/`). The
   owner's review-stage skill mapping works now.
+- 2026-10-17 **real run 1 (owner consent) failed after 30 minutes and found two bugs**
+  (`docs/research/rl-v-real-run-2026-10-17.md`):
+  - A: a new file in a new folder always asked under Auto edits;
+  - B: the lead never handed over.
+- **RL-F merged** (`3f529a4`).
+  - `resolveEditTarget` resolves the nearest existing ancestor and appends plain segments only.
+    The coordinator read it.
+  - One engine message tells the lead to hand over when every change is decided and nothing is
+    working, and the lead's brief states the duty.
+  - The coordinator ran pnpm check (2,529 tests) and the e2e (60/60).
+  - The second consented real run is next.
