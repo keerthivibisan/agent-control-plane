@@ -1,4 +1,5 @@
 export {
+  COMMIT_CONFIG,
   DEFAULT_MAX_DIFF_BYTES,
   SAFE_GIT_CONFIG,
   WorkspaceSchema,
@@ -6,6 +7,14 @@ export {
 } from './manager.js';
 export type {
   CleanupResult,
+  CommitCheckout,
+  CreateOptions,
+  CreatedTicketBranch,
+  IntegrateResult,
+  SealResult,
+  TicketBranchRef,
+  TicketBranchReview,
+  TicketMergeResult,
   MergeOptions,
   MergeResult,
   Workspace,

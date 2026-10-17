@@ -24,6 +24,20 @@ export type WorkspaceErrorCode =
   | 'merge-conflict'
   /** Git refused the fast-forward in the project (e.g. an untracked file would be overwritten). */
   | 'merge-failed'
+  /** ADR-0021: not a valid `acp/<KEY>` ticket branch name, or a commit id that is not one. */
+  | 'invalid-ticket-branch'
+  /** ADR-0021: the ticket branch no longer exists in the repository. */
+  | 'ticket-branch-missing'
+  /** ADR-0021: the ticket branch tip is not the commit the server recorded (compare-and-swap). */
+  | 'ticket-branch-moved'
+  /** ADR-0021: the ticket branch is checked out in a worktree, so its ref is not moved. */
+  | 'ticket-branch-checked-out'
+  /** ADR-0021: the new tip does not contain the old one, so the move would drop commits. */
+  | 'not-fast-forward'
+  /** ADR-0021: the helper's copy has edits that were not sealed (committed) before integrating. */
+  | 'workspace-unsealed'
+  /** ADR-0021: no free `acp/<KEY>` or `acp/<KEY>-r<n>` name was found. */
+  | 'ticket-branch-exists'
   | 'git-failed';
 
 export class WorkspaceError extends Error {
@@ -31,6 +45,11 @@ export class WorkspaceError extends Error {
   constructor(
     readonly code: WorkspaceErrorCode,
     message: string,
+    /**
+     * `merge-conflict` (ADR-0021): the repository-relative names of the files that conflicted
+     * (at most 100). Names only, never contents.
+     */
+    readonly conflictFiles: readonly string[] = [],
   ) {
     super(message);
   }

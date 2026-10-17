@@ -33,7 +33,16 @@ export interface ReviewCheckout {
 }
 
 export interface ReviewCheckouts {
-  create(projectRoot: string, runId: string, agentRunId: string): Promise<ReviewCheckout>;
+  /**
+   * `commit` (ADR-0021): a change reviewer's checkout of one sealed change, or the final reviewer's
+   * of the ticket branch tip; absent, the project's HEAD (ADR-0019, before the review loop).
+   */
+  create(
+    projectRoot: string,
+    runId: string,
+    agentRunId: string,
+    commit?: string,
+  ): Promise<ReviewCheckout>;
   remove(checkout: ReviewCheckout): Promise<void>;
   /** On start: removes every checkout under the folder (no reviewer survives a restart). */
   cleanupOrphans(): Promise<number>;
@@ -98,7 +107,10 @@ export function createReviewCheckouts(deps: ReviewCheckoutsDeps): ReviewCheckout
   return {
     dir,
 
-    async create(projectRoot, runId, agentRunId) {
+    async create(projectRoot, runId, agentRunId, wanted) {
+      if (wanted !== undefined && !COMMIT.test(wanted)) {
+        throw new WorkspaceError('invalid-workspace', 'Not a full commit id for a review checkout');
+      }
       if (!isSafeId(runId) || !isSafeId(agentRunId)) {
         throw new WorkspaceError('invalid-id', 'Unsafe run or agent id for a review checkout');
       }
@@ -113,9 +125,15 @@ export function createReviewCheckouts(deps: ReviewCheckoutsDeps): ReviewCheckout
         throw new WorkspaceError('not-a-git-repo', 'The project is not inside a git repository');
       }
       const repoRoot = await realpath(top);
-      const commit = await probe(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], repoRoot);
-      if (commit === null || !COMMIT.test(commit)) {
-        throw new WorkspaceError('no-commits', 'The project has no commits yet');
+      const commit = await probe(
+        ['rev-parse', '--verify', '--quiet', `${wanted ?? 'HEAD'}^{commit}`],
+        repoRoot,
+      );
+      if (commit === null || !COMMIT.test(commit) || (wanted !== undefined && commit !== wanted)) {
+        throw new WorkspaceError(
+          'no-commits',
+          wanted === undefined ? 'The project has no commits yet' : 'The commit to review is gone',
+        );
       }
       const runDir = join(await root(), runId);
       await mkdir(runDir, { recursive: true });
