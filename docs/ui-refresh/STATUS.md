@@ -4,16 +4,16 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 `release/0.1.0`, from `main` at `ba280d9`). Work-package branches `wp/u-<id>-<slug>` come off
 `feature/ui-refresh` and are merged back with `--ff-only` after review.
 
-| WP  | Title                                                     | After   | Status      | Branch                 | Merged    |
-| --- | --------------------------------------------------------- | ------- | ----------- | ---------------------- | --------- |
-| U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done**    | feature/ui-refresh     | —         |
-| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | todo        | —                      | —         |
-| U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | in-progress | wp/u-b-shell           | —         |
-| U-C | Board                                                     | U-A     | in-progress | wp/u-c-board           | —         |
-| U-D | Ticket page                                               | U-A     | **done**    | wp/u-d-ticket          | `c1a0a98` |
-| U-E | Workflow, Skills & Agents                                 | U-A     | in-progress | wp/u-e-workflow-skills | —         |
-| U-F | Tokens, Harness, Sessions, projects, settings, health     | U-A     | in-progress | wp/u-f-pages           | —         |
-| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG | U-B…U-F | todo        | —                      | —         |
+| WP  | Title                                                     | After   | Status   | Branch                 | Merged    |
+| --- | --------------------------------------------------------- | ------- | -------- | ---------------------- | --------- |
+| U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done** | feature/ui-refresh     | —         |
+| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | todo     | —                      | —         |
+| U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | **done** | wp/u-b-shell           | `7a253f1` |
+| U-C | Board                                                     | U-A     | **done** | wp/u-c-board           | `4dd57b9` |
+| U-D | Ticket page                                               | U-A     | **done** | wp/u-d-ticket          | `c1a0a98` |
+| U-E | Workflow, Skills & Agents                                 | U-A     | **done** | wp/u-e-workflow-skills | `405ea57` |
+| U-F | Tokens, Harness, Sessions, projects, settings, health     | U-A     | **done** | wp/u-f-pages           | `c7e80a7` |
+| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG | U-B…U-F | todo     | —                      | —         |
 
 ## Decisions (owner, 2026-10-17)
 
@@ -44,3 +44,20 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   - Coordinator check: 2 server tests and the control e2e timed out under load (load average ~23,
     with four agents building); all passed when re-run alone. Web 499/499.
   - Handed to U-F: `Approvals`, `BudgetBar` and `ConfirmAction` (control) still need the v2 pass.
+- 2026-10-17 U-F, U-B, U-C and U-E merged.
+  - U-B, U-C and U-E were cherry-picked onto the latest `feature/ui-refresh`. The only conflict
+    was the add-only `copy.ts` sections, and both were kept.
+  - Final combined check: 2,130 tests and e2e 51/51.
+  - Load-related timeouts during the parallel builds all passed when re-run alone.
+- 2026-10-17 **accent changed to a Jira/YouTrack-like blue** (owner: "I don't like this violet")
+  in `1067b89`; AA contrast checked.
+- Follow-ups for U-V:
+  - harden the `shell.spec` sidebar test's mocked-route race ("Response has been disposed");
+  - delete the now-unused `features/board/Dialog.tsx`;
+  - add a `loop` prop to the shared Menu;
+  - add a link variant to the shared Tabs (Data health);
+  - make the shared Dialog give focus back only when focus is still inside it;
+  - move `agent_in_use` into `copy.ts`;
+  - fix the `components/icons.tsx` comment;
+  - update the DESIGN.md Layout section;
+  - review the Motion bundle size (U-E used CSS keyframes instead).
