@@ -11,7 +11,7 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 | RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                            | wp/rl-d-web            | `b31d1ec` |
 | RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed)        | wp/rl-v-verify         | `e689a79` |
 | RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | **done** (real run pending consent) | wp/rl-g-full-auto      | `25554ce` |
-| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | in-progress                         | wp/rl-h-ticket-options | —         |
+| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | **done**                            | wp/rl-h-ticket-options | `40e985d` |
 
 ## Owner decisions (2026-10-17)
 
@@ -145,3 +145,14 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
   - To verify in the real run: `system/init` reports auto; sandboxed commands work with `~/.claude`
     unreadable; the absolute deny rules hold.
 - RL-H started.
+- 2026-10-17 **RL-H merged** (`40e985d`).
+  - Ticket run options default to "Project default". Precedence: one-run override > ticket >
+    project.
+  - Set in New ticket ("More options") and on the ticket page; board badge; the Start dialog
+    pre-fills.
+  - Migration 0007 adds a nullable JSON-object column `tickets.run_options`.
+  - The coordinator ran pnpm check (2,623 tests) and the e2e (62/62).
+  - Next:
+    1. back up the owner's database, then restart the owner's app (applies 0007), with consent;
+    2. one combined consented real run (Full auto);
+    3. redo the 0.1.0 release commit and tag.
