@@ -6,7 +6,7 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 | WP   | Title                                                    | After      | Status      | Branch           | Merged    |
 | ---- | -------------------------------------------------------- | ---------- | ----------- | ---------------- | --------- |
 | RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**    | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | in-progress | wp/rl-a-engine   | —         |
+| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**    | wp/rl-a-engine   | `0a50962` |
 | RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | in-progress | wp/rl-b-server   | —         |
 | RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | in-progress | wp/rl-d-web      | —         |
 | RL-V | Verification and one consented real run                  | all        | todo        | —                | —         |
@@ -42,3 +42,14 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 - 2026-10-17 U-V merged (the UI refresh is complete). RL-D (web) started against the contract with
   fixtures. RL-B also gets U-V's server finding: serialize git operations per worktree in
   `WorkspaceManager`.
+- 2026-10-17 **RL-A merged** (`0a50962`).
+  - The pure engine implements README §5.
+  - A legacy snapshot recorded before the change still passes unchanged.
+  - The coordinator ran pnpm check (2,377 tests) and read `matchCommandAllowlist` and
+    `ruleAllowedByMode`: the whole command is safe tokens only, the first word is bare and not
+    forbidden, `git` is read-only with no forbidden options, and a pattern must match word for
+    word; anything else asks.
+  - Proposed contract follow-up: promote `Refusal.reason` to `RefusalCode`s once RL-B maps them in
+    `REFUSAL_STATUS`.
+  - Gaps: no engine command for a failed ticket-branch creation (the server should `cancelRun`);
+    `docs/orchestration-lifecycle.md` needs an update.
