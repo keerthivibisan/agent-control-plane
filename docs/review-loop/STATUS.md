@@ -3,13 +3,13 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                    | After      | Status      | Branch           | Merged    |
-| ---- | -------------------------------------------------------- | ---------- | ----------- | ---------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**    | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**    | wp/rl-a-engine   | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | in-progress | wp/rl-b-server   | —         |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | in-progress | wp/rl-d-web      | —         |
-| RL-V | Verification and one consented real run                  | all        | todo        | —                | —         |
+| WP   | Title                                                    | After      | Status                                 | Branch           | Merged    |
+| ---- | -------------------------------------------------------- | ---------- | -------------------------------------- | ---------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                               | wp/rl-0-contract | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                               | wp/rl-a-engine   | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | review → fixing the plan-approval race | wp/rl-b-server   | —         |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                               | wp/rl-d-web      | `b31d1ec` |
+| RL-V | Verification and one consented real run                  | all        | todo                                   | —                | —         |
 
 ## Owner decisions (2026-10-17)
 
@@ -53,3 +53,19 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
     `REFUSAL_STATUS`.
   - Gaps: no engine command for a failed ticket-branch creation (the server should `cancelRun`);
     `docs/orchestration-lifecycle.md` needs an update.
+- 2026-10-17 **RL-D merged** (`b31d1ec`).
+  - Built against fixtures. The coordinator ran pnpm check (2,451 tests) and the e2e (59/59).
+  - The approvals editor refuses `make lint; rm -rf .` inline.
+  - Start stays one click; "Start with options…" is opt-in.
+  - Contract proposals for later: fix the `POST /runs/:id/ticket-branch` response body; add the
+    snapshotted reviewer and max rounds to `RunDetailDto`; make `allowlist` optional in
+    `UpdateProjectSetupRequest`.
+- 2026-10-17 **RL-B review:** pnpm check passes (2,430 tests), and the git and route safety were
+  read and confirmed: argv only, CSRF on POST, the final merge needs a clean tree, the base
+  branch, the reviewed tip, an unmoved base and `--ff-only`, and the ref advance is a CAS
+  `update-ref`.
+  - **The e2e found a real race:** `create-ticket-branch` runs in the background while the plan
+    approval reaches the lead at once, so the lead's first `start_agent` gets
+    `ticket-branch-pending`.
+  - Sent back to RL-B: the lead learns of the approval only after the branch exists. Then rebase
+    on RL-D and run the full e2e against the real server.
