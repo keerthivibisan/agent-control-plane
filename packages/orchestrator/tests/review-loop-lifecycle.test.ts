@@ -69,7 +69,7 @@ describe('the handover (request_review)', () => {
     expect(refused(leadTool(working, 'request_review', {}))).toBe('workers-still-running');
     const reviewerDone = ok(agentEvent(inDecision(), RA, finished, makeCtx(5500))).state;
     const undecided = refusalOf(leadTool(reviewerDone, 'request_review', {}));
-    expect(undecided).toMatchObject({ code: 'workers-still-running', reason: 'changes-undecided' });
+    expect(undecided).toMatchObject({ code: 'changes-undecided' });
     expect(undecided.message).toContain('API builder (agentId wa-1): waits for a decision');
   });
 
@@ -105,9 +105,9 @@ describe('the handover (request_review)', () => {
     expect(controlToolsFor(s, 'h-1')).toEqual(['post_review']);
     // No new helper after the handover.
     expect(refusalOf(leadTool(s, 'start_agent', { role: 'X', task: 'x' }))).toMatchObject({
-      reason: 'handed-over',
+      code: 'handed-over',
     });
-    expect(refusalOf(leadTool(s, 'request_review', {}))).toMatchObject({ reason: 'handed-over' });
+    expect(refusalOf(leadTool(s, 'request_review', {}))).toMatchObject({ code: 'handed-over' });
 
     // The final reviewer's findings go to the ticket and to the lead.
     const post = ok(leadTool(s, 'post_review', { text: 'Rename the flag.' }, 'pr', 'h-1'));
@@ -217,7 +217,7 @@ describe('the owner’s final decision on the ticket branch', () => {
     s = ok(agentEvent(s, LEAD, finished, makeCtx(6000))).state;
     expect(s.run.status).toBe('REVIEW');
     expect(changeOf(s, A).state).toBe('needs-owner');
-    expect(checkTicketBranchAction(s, 'merge')).toMatchObject({ reason: 'changes-undecided' });
+    expect(checkTicketBranchAction(s, 'merge')).toMatchObject({ code: 'changes-undecided' });
     expect(checkTicketBranchAction(s, 'request-changes')).toMatchObject({ code: 'agent-not-live' });
     const r = ok(recordTicketBranchDecision(s, 'discarded', makeCtx(7000)));
     expect(r.state.run.status).toBe('COMPLETED');
@@ -292,11 +292,11 @@ describe('a helper stopped mid-turn', () => {
     expect(
       refusalOf(leadTool(r.state, 'request_rework', { agentId: A, comments: 'x' })),
     ).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     expect(ok(leadTool(r.state, 'view_change', { agentId: A })).value).toContain('Not saved yet');
     expect(refusalOf(leadTool(r.state, 'request_review', {}))).toMatchObject({
-      reason: 'changes-undecided',
+      code: 'changes-undecided',
     });
     expect(leadTool(r.state, 'merge_change', { agentId: A }).ok).toBe(true);
   });
@@ -362,7 +362,7 @@ describe('Stop all and restart', () => {
         ),
       ),
     ).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     const d = ok(
       recordChangeDecision(
@@ -487,7 +487,7 @@ describe('budgets and BLOCKED', () => {
       'not-lead',
     );
     expect(refusalOf(beginChangeMerge(s, A, { by: 'owner' }, makeCtx()))).toMatchObject({
-      reason: 'checks-failed',
+      code: 'checks-failed',
     });
     const r = ok(beginChangeMerge(s, A, { by: 'owner', anyway: true }, makeCtx(8000)));
     expect(r.effects).toEqual([{ type: 'merge-change', agentRunId: A, by: 'owner', anyway: true }]);

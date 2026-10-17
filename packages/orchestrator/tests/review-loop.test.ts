@@ -157,8 +157,7 @@ describe('plan approval and the ticket branch', () => {
     const approved = ok(approve()).state;
     const early = leadTool(approved, 'start_agent', { role: 'API builder', task: 'x' });
     expect(refusalOf(early)).toMatchObject({
-      code: 'run-not-active',
-      reason: 'ticket-branch-pending',
+      code: 'ticket-branch-pending',
     });
     const s = ok(ticketBranchCreated(approved, BRANCH, makeCtx(1700))).state;
     expect(s.integration?.ticketBranch).toBe(BRANCH);
@@ -228,7 +227,7 @@ describe('sealing a finished helper', () => {
 
   it('refuses a seal report that does not fit', () => {
     const s = helper(loopRunning(), 'API builder', 'wa');
-    expect(refusalOf(sealed(s, A))).toMatchObject({ reason: 'change-not-found' });
+    expect(refusalOf(sealed(s, A))).toMatchObject({ code: 'change-not-found' });
     const f = ok(finishTurn(s, A)).state;
     expect(refused(sealed(f, A, 'rv', true, 'not-a-commit'))).toBe('invalid-input');
     expect(
@@ -237,7 +236,7 @@ describe('sealing a finished helper', () => {
       ),
     ).toBe('invalid-input');
     const ready = ok(sealed(f, A)).state;
-    expect(refusalOf(sealed(ready, A))).toMatchObject({ reason: 'change-not-decidable' });
+    expect(refusalOf(sealed(ready, A))).toMatchObject({ code: 'change-not-decidable' });
   });
 });
 
@@ -446,7 +445,7 @@ describe('the lead’s decisions', () => {
     expect(r.effects).toEqual([]);
     expect(agentOf(r.state, LEAD).latestActivity).toBe("Looked at API builder's change");
     expect(refusalOf(leadTool(s, 'view_change', { agentId: 'nope' }))).toMatchObject({
-      reason: 'change-not-found',
+      code: 'change-not-found',
     });
   });
 
@@ -469,7 +468,7 @@ describe('the lead’s decisions', () => {
     expect(changeOf(begun.state, A).merging).toBe(true);
     expect(agentOf(begun.state, LEAD).latestActivity).toBe(`Merging API builder into ${BRANCH}`);
     expect(refusalOf(leadTool(begun.state, 'merge_change', { agentId: A }))).toMatchObject({
-      reason: 'change-busy',
+      code: 'change-busy',
     });
     const r = ok(
       recordChangeDecision(
@@ -513,16 +512,15 @@ describe('the lead’s decisions', () => {
   it('refuses a merge while the change is sealed or reviewed', () => {
     const s = ok(finishTurn(helper(loopRunning(), 'API builder', 'wa'), A)).state;
     expect(refusalOf(leadTool(s, 'merge_change', { agentId: A }))).toMatchObject({
-      code: 'review-not-allowed',
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     const reviewing = ok(sealed(s, A)).state;
     const refusal = refusalOf(leadTool(reviewing, 'merge_change', { agentId: A }));
-    expect(refusal).toMatchObject({ reason: 'change-not-decidable' });
+    expect(refusal).toMatchObject({ code: 'change-not-decidable' });
     expect(refusal.message).toContain('being reviewed');
     // The owner cannot either while a review agent reviews it.
     expect(checkChangeAction(reviewing, A, 'merge', 'owner')).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
   });
 
@@ -545,7 +543,7 @@ describe('the lead’s decisions', () => {
     const pending = ok(changeMergeBlocked(begun, A, { reason: 'checks-pending' }, makeCtx(7000)));
     expect(changeOf(pending.state, A).checks).toBe('pending');
     expect(refusalOf(leadTool(pending.state, 'merge_change', { agentId: A }))).toMatchObject({
-      reason: 'checks-pending',
+      code: 'checks-pending',
     });
     const passed = ok(
       checksFinished(
@@ -568,7 +566,7 @@ describe('the lead’s decisions', () => {
     );
     expect(leadMessages(failed.effects)[0]).toContain('lint');
     expect(refusalOf(leadTool(failed.state, 'merge_change', { agentId: A }))).toMatchObject({
-      reason: 'checks-failed',
+      code: 'checks-failed',
     });
     // The owner may merge anyway; the lead may not.
     expect(checkChangeAction(failed.state, A, 'merge-anyway', 'owner')).toBeNull();
@@ -588,7 +586,7 @@ describe('the lead’s decisions', () => {
     expect(
       refusalOf(changeMergeBlocked(broken.state, A, { reason: 'failed' }, makeCtx())),
     ).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     expect(
       refused(
@@ -684,8 +682,7 @@ describe('the lead’s decisions', () => {
     expect(
       refusalOf(leadTool(s, 'request_rework', { agentId: A, comments: 'Again.' })),
     ).toMatchObject({
-      code: 'review-not-allowed',
-      reason: 'rework-limit',
+      code: 'rework-limit',
     });
     expect(checkChangeAction(s, A, 'rework', 'owner')).toBeNull();
     const granted = ok(
@@ -776,12 +773,12 @@ describe('the lead’s decisions', () => {
       'needs-you',
     );
     expect(refusalOf(leadTool(r.state, 'merge_change', { agentId: A }))).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     expect(
       refusalOf(leadTool(r.state, 'ask_owner', { agentId: A, question: 'Again?' })),
     ).toMatchObject({
-      reason: 'change-not-decidable',
+      code: 'change-not-decidable',
     });
     // The owner merges it (the server merged; begin-less path is checked here).
     const owner = ok(
@@ -801,7 +798,7 @@ describe('the lead’s decisions', () => {
 
   it('the legacy per-change owner review is refused in loop runs', () => {
     expect(refusalOf(recordReview(inDecision(), A, 'merged', makeCtx()))).toMatchObject({
-      reason: 'legacy-review',
+      code: 'legacy-review',
     });
   });
 

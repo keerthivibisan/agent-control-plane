@@ -108,16 +108,14 @@ export function checkStartAgent(
   if (loop !== undefined) {
     if (loop.handedOver) {
       return refusal(
-        'run-not-active',
-        'You handed the run over (request_review); no new helper can start.',
         'handed-over',
+        'You handed the run over (request_review); no new helper can start.',
       );
     }
     if (loop.ticketBranch === null) {
       return refusal(
-        'run-not-active',
-        'The ticket branch is still being created; try again in a moment.',
         'ticket-branch-pending',
+        'The ticket branch is still being created; try again in a moment.',
       );
     }
   }
@@ -144,9 +142,8 @@ export function checkStartAgent(
 export function checkReviewAction(state: RunState, agentRunId: string): Refusal | null {
   if (state.integration !== undefined) {
     return refusal(
-      'review-not-allowed',
-      'This run uses the review loop: decide each change with the change actions, and the ticket branch at the end.',
       'legacy-review',
+      'This run uses the review loop: decide each change with the change actions, and the ticket branch at the end.',
     );
   }
   if (state.run.status !== 'REVIEW' && state.run.status !== 'NEEDS_REVIEW') {

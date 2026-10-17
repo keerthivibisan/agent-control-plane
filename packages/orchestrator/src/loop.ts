@@ -349,29 +349,17 @@ export function checkChange(
 ): Refusal | null {
   const integration = d.integration;
   if (integration === undefined) {
-    return refusal(
-      'review-not-allowed',
-      'This run has no review loop; the owner reviews each change.',
-      'legacy-review',
-    );
+    return refusal('legacy-review', 'This run has no review loop; the owner reviews each change.');
   }
   const statusRefusal = decisionRunStatus(d, by);
   if (statusRefusal !== null) return statusRefusal;
   const agent = d.agents.find((a) => a.id === agentRunId);
   const change = agent?.change;
   if (agent === undefined || !hasReviewableChange(agent.kind) || change === undefined) {
-    return refusal(
-      'unknown-agent',
-      'No change in this run belongs to that agent.',
-      'change-not-found',
-    );
+    return refusal('change-not-found', 'No change in this run belongs to that agent.');
   }
   if (change.merging) {
-    return refusal(
-      'review-not-allowed',
-      'A merge of this change is already under way.',
-      'change-busy',
-    );
+    return refusal('change-busy', 'A merge of this change is already under way.');
   }
   const leadReviews = change.state === 'reviewing' && change.reviewer === 'lead';
   const decidable =
@@ -379,11 +367,7 @@ export function checkChange(
     leadReviews ||
     (by === 'owner' && (change.state === 'needs-owner' || change.state === 'ready'));
   if (!decidable) {
-    return refusal(
-      'review-not-allowed',
-      `${agent.role}'s change ${STATE_WORDS[change.state]}.`,
-      'change-not-decidable',
-    );
+    return refusal('change-not-decidable', `${agent.role}'s change ${STATE_WORDS[change.state]}.`);
   }
   switch (action) {
     case 'merge-anyway':
@@ -393,34 +377,30 @@ export function checkChange(
       }
       if (change.checks === 'pending') {
         return refusal(
-          'review-not-allowed',
-          'The required checks are still running on this change; wait for their result.',
           'checks-pending',
+          'The required checks are still running on this change; wait for their result.',
         );
       }
       if (change.checks === 'failed' && action === 'merge') {
         return refusal(
-          'review-not-allowed',
+          'checks-failed',
           by === 'lead'
             ? 'A required check failed on this change. Ask for rework, discard it, or ask the owner.'
             : 'A required check failed on this change; merge anyway with a reason, or send it back.',
-          'checks-failed',
         );
       }
       return null;
     case 'rework': {
       if (agent.status !== 'AWAITING_REVIEW') {
         return refusal(
-          'review-not-allowed',
-          `${agent.role} has stopped, so it cannot rework; merge or discard its work.`,
           'change-not-decidable',
+          `${agent.role} has stopped, so it cannot rework; merge or discard its work.`,
         );
       }
       if (by === 'lead' && change.round >= integration.maxReworkRounds) {
         return refusal(
-          'review-not-allowed',
-          `${agent.role}'s change already had ${change.round} of ${integration.maxReworkRounds} rework rounds. Merge it, discard it, or ask the owner (who can allow another round).`,
           'rework-limit',
+          `${agent.role}'s change already had ${change.round} of ${integration.maxReworkRounds} rework rounds. Merge it, discard it, or ask the owner (who can allow another round).`,
         );
       }
       if (by === 'lead' && isOverBudget(agent.budgetTokensUsed, agent.budgetLimit)) {
@@ -443,11 +423,7 @@ export function checkChange(
     case 'ask-owner':
       if (by !== 'lead') return refusal('not-lead', 'Only the lead asks the owner.');
       return change.state === 'needs-owner'
-        ? refusal(
-            'review-not-allowed',
-            'The owner already has this change.',
-            'change-not-decidable',
-          )
+        ? refusal('change-not-decidable', 'The owner already has this change.')
         : null;
   }
 }

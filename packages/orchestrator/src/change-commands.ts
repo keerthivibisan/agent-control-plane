@@ -30,11 +30,7 @@ type Body<T> = Refusal | { value: T };
 const done = { value: undefined } as const;
 
 function noLoop(): Refusal {
-  return refusal(
-    'review-not-allowed',
-    'This run has no review loop; the owner reviews each change.',
-    'legacy-review',
-  );
+  return refusal('legacy-review', 'This run has no review loop; the owner reviews each change.');
 }
 
 /** Runs `body` on a loop run's change, refusing unknown agents and agents with no change. */
@@ -48,11 +44,7 @@ function onChange<T>(
     if (d.integration === undefined) return noLoop();
     const agent = d.agent(agentRunId);
     if (agent?.change === undefined) {
-      return refusal(
-        'unknown-agent',
-        'No change in this run belongs to that agent.',
-        'change-not-found',
-      );
+      return refusal('change-not-found', 'No change in this run belongs to that agent.');
     }
     return body(d, agent);
   });
@@ -100,11 +92,7 @@ export function changeSealed(
   return onChange(state, agentRunId, ctx, (d, agent) => {
     const change = agent.change;
     if (change?.state !== 'sealing' || agent.status !== 'AWAITING_REVIEW') {
-      return refusal(
-        'review-not-allowed',
-        'This change is not being sealed.',
-        'change-not-decidable',
-      );
+      return refusal('change-not-decidable', 'This change is not being sealed.');
     }
     if (result.headCommit !== null && !GitCommitSchema.safeParse(result.headCommit).success) {
       return refusal('invalid-input', 'The sealed commit id is not valid.');
@@ -166,7 +154,7 @@ export function beginChangeMerge(
     const check = checkChange(d, agent.id, anyway ? 'merge-anyway' : 'merge', options.by);
     if (check !== null) return check;
     const change = agent.change;
-    if (change === undefined) return refusal('unknown-agent', 'No change.', 'change-not-found');
+    if (change === undefined) return refusal('change-not-found', 'No change.');
     change.merging = true;
     d.effects.push({ type: 'merge-change', agentRunId: agent.id, by: options.by, anyway });
     if (options.by === 'lead') leadActivity(d, `Merging ${agent.role} into ${branchLabel(d)}`);
@@ -191,7 +179,7 @@ export function recordChangeDecision(
 ): EngineResult<string> {
   return onChange(state, agentRunId, ctx, (d, agent) => {
     const change = agent.change;
-    if (change === undefined) return refusal('unknown-agent', 'No change.', 'change-not-found');
+    if (change === undefined) return refusal('change-not-found', 'No change.');
     const merge = input.decision === 'merge' || input.decision === 'merge-anyway';
     if (merge) {
       if (input.outcome !== 'merged' && input.outcome !== 'no-changes') {
@@ -250,13 +238,9 @@ export function changeMergeBlocked(
 ): EngineResult<string> {
   return onChange(state, agentRunId, ctx, (d, agent) => {
     const change = agent.change;
-    if (change === undefined) return refusal('unknown-agent', 'No change.', 'change-not-found');
+    if (change === undefined) return refusal('change-not-found', 'No change.');
     if (!change.merging) {
-      return refusal(
-        'review-not-allowed',
-        'No merge of this change is under way.',
-        'change-not-decidable',
-      );
+      return refusal('change-not-decidable', 'No merge of this change is under way.');
     }
     change.merging = false;
     const role = agent.role;
@@ -307,7 +291,7 @@ export function checksFinished(
   }
   return onChange(state, agentRunId, ctx, (d, agent) => {
     const change = agent.change;
-    if (change === undefined) return refusal('unknown-agent', 'No change.', 'change-not-found');
+    if (change === undefined) return refusal('change-not-found', 'No change.');
     // A late result for a change already decided changes nothing.
     if (isFinalChangeState(change.state)) return done;
     change.checks = result.requiredPassed ? 'passed' : 'failed';
@@ -371,14 +355,10 @@ export function checkTicketBranchAction(
     return null;
   }
   if (loop.ticketBranch === null) {
-    return refusal('review-not-allowed', 'This run has no ticket branch.', 'no-ticket-branch');
+    return refusal('no-ticket-branch', 'This run has no ticket branch.');
   }
   if (undecidedChanges(state).length > 0) {
-    return refusal(
-      'workers-still-running',
-      'Some changes are not decided yet.',
-      'changes-undecided',
-    );
+    return refusal('changes-undecided', 'Some changes are not decided yet.');
   }
   return null;
 }

@@ -776,7 +776,7 @@ export function requestReview(state: RunState, ctx: EngineContext): EngineResult
       // ADR-0021 §3: the handover. Every change must be decided; then the final stages run on
       // the ticket branch and the owner merges it once. No new helper starts after this.
       if (loop.handedOver) {
-        return refusal('run-not-active', 'You already handed the run over.', 'handed-over');
+        return refusal('handed-over', 'You already handed the run over.');
       }
       if (d.agents.some((a) => a.kind !== 'lead' && isActiveAgentStatus(a.status))) {
         return refusal(
@@ -786,11 +786,7 @@ export function requestReview(state: RunState, ctx: EngineContext): EngineResult
       }
       const waiting = waitingLines(d);
       if (waiting.length > 0) {
-        return refusal(
-          'workers-still-running',
-          `Decide every change first:\n${waiting.join('\n')}`,
-          'changes-undecided',
-        );
+        return refusal('changes-undecided', `Decide every change first:\n${waiting.join('\n')}`);
       }
       loop.handedOver = true;
       // `reconcile` starts the next stage, or moves the run to REVIEW for the owner's merge.

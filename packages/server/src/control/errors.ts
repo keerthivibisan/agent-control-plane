@@ -31,20 +31,26 @@ const REFUSAL_STATUS: Readonly<Record<RefusalCode, number>> = {
   'plan-not-pending': 409,
   'follow-up-unavailable': 409,
   'follow-up-running': 409,
+  // ADR-0021 review loop (promoted from the engine's `reason` shim by RL-V; statuses unchanged).
+  'change-not-found': 404,
+  'change-not-decidable': 409,
+  'change-busy': 409,
+  'rework-limit': 409,
+  'merge-conflict': 409,
+  'checks-pending': 409,
+  'checks-failed': 409,
+  'legacy-review': 409,
+  'no-ticket-branch': 409,
+  'changes-undecided': 409,
+  'handed-over': 409,
+  'ticket-branch-pending': 409,
 };
 
 const snake = (code: string): string => code.replaceAll('-', '_');
 
-/**
- * The HTTP status follows the refusal's code; the error code is the specific review-loop reason
- * when there is one (ADR-0021: `rework_limit`, `checks_failed`, `change_not_decidable`, …).
- */
+/** The HTTP status and the snake_case error code follow the refusal's code. */
 export function refusalError(refusal: Refusal): HttpError {
-  return new HttpError(
-    REFUSAL_STATUS[refusal.code],
-    snake(refusal.reason ?? refusal.code),
-    refusal.message,
-  );
+  return new HttpError(REFUSAL_STATUS[refusal.code], snake(refusal.code), refusal.message);
 }
 
 /** Every workspace error is a refusal the owner can act on (clean the tree, switch back, ...). */

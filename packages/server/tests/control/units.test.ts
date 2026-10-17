@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
 import { createCsrfToken, csrfTokenMatches } from '../../src/control/csrf.js';
 import { managedAgentEnv } from '../../src/control/env.js';
+import { refusalError } from '../../src/control/errors.js';
 import { createScheduler } from '../../src/scheduler.js';
 import type { IngestionBatch, ObservationAdapter, RegisteredRoot } from '@acp/core';
+import { refusal } from '@acp/orchestrator';
 import { observed, setupPipeline } from '../helpers.js';
 import { setupControl } from './helpers.js';
 
@@ -16,6 +18,29 @@ describe('CSRF token', () => {
     expect(csrfTokenMatches(a, a.slice(0, 63))).toBe(false);
     expect(csrfTokenMatches(a, '')).toBe(false);
     expect(csrfTokenMatches(a, `${a}0`)).toBe(false);
+  });
+});
+
+describe('engine refusals as HTTP errors', () => {
+  it('review-loop codes (RL-V) keep the statuses and error codes they had as reasons', () => {
+    const cases = [
+      ['change-not-found', 404, 'change_not_found'],
+      ['change-not-decidable', 409, 'change_not_decidable'],
+      ['rework-limit', 409, 'rework_limit'],
+      ['changes-undecided', 409, 'changes_undecided'],
+      ['handed-over', 409, 'handed_over'],
+      ['ticket-branch-pending', 409, 'ticket_branch_pending'],
+      ['legacy-review', 409, 'legacy_review'],
+      ['not-lead', 403, 'not_lead'],
+    ] as const;
+    for (const [code, status, errorCode] of cases) {
+      const e = refusalError(refusal(code, 'Synthetic refusal.'));
+      expect({ status: e.status, code: e.code, message: e.message }).toEqual({
+        status,
+        code: errorCode,
+        message: 'Synthetic refusal.',
+      });
+    }
   });
 });
 

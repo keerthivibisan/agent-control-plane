@@ -427,11 +427,7 @@ function noLoopTool(): EngineResult<string> {
 function unknownChange(): EngineResult<string> {
   return {
     ok: false,
-    refusal: refusal(
-      'unknown-agent',
-      'No helper with a change in this run has that id.',
-      'change-not-found',
-    ),
+    refusal: refusal('change-not-found', 'No helper with a change in this run has that id.'),
   };
 }
 
