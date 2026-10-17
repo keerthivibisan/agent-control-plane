@@ -231,26 +231,15 @@ describe('P4-H full flow (fake Claude, real server, real check runner)', () => {
     writeFileSync(join(wt1, 'README.md'), '# shop\n\nRun `node check.mjs`.\n');
     expect(logLines(b.logs, 'approval allowed by the project allowlist')).toHaveLength(1);
 
-    // A new file in a folder that does not exist yet cannot be resolved: the owner is asked
-    // (fail closed). The owner approves.
-    const writeManifest = builder.ask('Write', 'Write .acp/harness.json', {
-      file_path: join(wt1, '.acp', 'harness.json'),
-      content: SECRET.write,
-    });
-    let run = await waitForRun(
-      b,
-      run1,
-      (r) => r.approvals.some((a) => a.status === 'pending'),
-      'the manifest write to wait for the owner',
-    );
-    expect((await ticketDetail(b, t1)).ticket.stage).toBe('NEEDS_YOU');
-    expect(columnOf(await boardOf(b, project.id), t1)).toBe('NEEDS_YOU');
-    const manifestApproval = run.approvals.find((a) => a.status === 'pending');
-    expectStatus(
-      await b.post(`/api/approvals/${manifestApproval?.id ?? ''}`, { decision: 'approve' }),
-      200,
-    );
-    await expect(writeManifest).resolves.toEqual({ allow: true });
+    // A new file in a folder that does not exist yet resolves through its nearest existing
+    // folder (RL-F): still inside its own worktree, so allowlisted too.
+    await expect(
+      builder.ask('Write', 'Write .acp/harness.json', {
+        file_path: join(wt1, '.acp', 'harness.json'),
+        content: SECRET.write,
+      }),
+    ).resolves.toEqual({ allow: true });
+    expect(logLines(b.logs, 'approval allowed by the project allowlist')).toHaveLength(2);
     writeIn(wt1, HARNESS_FILES);
 
     // Outside its worktree (the owner's checkout): the owner is asked, and denies.
@@ -259,12 +248,14 @@ describe('P4-H full flow (fake Claude, real server, real check runner)', () => {
       old_string: SECRET.outside,
       new_string: 'y',
     });
-    run = await waitForRun(
+    let run = await waitForRun(
       b,
       run1,
       (r) => r.approvals.filter((a) => a.status === 'pending').length === 1,
       'the outside edit to wait for the owner',
     );
+    expect((await ticketDetail(b, t1)).ticket.stage).toBe('NEEDS_YOU');
+    expect(columnOf(await boardOf(b, project.id), t1)).toBe('NEEDS_YOU');
     const outsideApproval = run.approvals.find((a) => a.status === 'pending');
     expectStatus(
       await b.post(`/api/approvals/${outsideApproval?.id ?? ''}`, { decision: 'deny' }),
@@ -370,7 +361,7 @@ describe('P4-H full flow (fake Claude, real server, real check runner)', () => {
       200,
     );
     await expect(other).resolves.toMatchObject({ allow: false });
-    expect(logLines(b.logs, 'approval allowed by the project allowlist')).toHaveLength(3);
+    expect(logLines(b.logs, 'approval allowed by the project allowlist')).toHaveLength(4);
 
     greeter.finish('success');
     await waitForRun(

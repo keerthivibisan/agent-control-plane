@@ -1,5 +1,5 @@
-import { realpath } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { lstat, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, join, sep } from 'node:path';
 import type { AgentRoleKind, HarnessCheck, ProjectAllowlist, ProjectApprovals } from '@acp/core';
 import { evaluateAllowlist, type AllowlistTarget, type AllowlistVerdict } from '@acp/orchestrator';
 import type { Workspace } from '../workspace/index.js';
@@ -36,25 +36,64 @@ export interface AllowlistVerdictInput {
 }
 
 /**
- * The real path of an edit target: the file itself when it exists, else the real path of its
- * existing parent folder plus the new file's name. A relative path is taken from the agent's cwd.
- * Null when neither exists or the name is not a plain file name.
+ * The real path of an edit target. A relative path is taken from the agent's cwd.
+ *
+ * - An existing file resolves to its own real path.
+ * - A new file resolves through its **nearest existing ancestor**: that folder's real path plus
+ *   the segments still to be created (RL-F: a helper writing `src/slug.mjs` into a worktree with
+ *   no `src/` yet must not be asked). Each segment still to be created must be a plain name: an
+ *   empty, `.` or `..` segment is refused, since its meaning depends on folders that do not exist.
+ * - Something that exists but cannot be resolved (a dangling symlink, a loop, no permission) is
+ *   refused: writing through a dangling symlink creates its target, wherever that is.
+ *
+ * The path is not normalized lexically first: `link/..` must mean what the OS makes of it (the
+ * parent of the link's target), not the folder that holds the link.
+ * Null when it cannot be resolved; the caller then asks the owner.
  */
 export async function resolveEditTarget(path: string, cwd: string): Promise<string | null> {
-  if (path.includes('\0')) return null;
-  const absolute = isAbsolute(path) ? path : resolve(cwd, path);
-  try {
-    return await realpath(absolute);
-  } catch {
-    // A new file: resolve the folder it would be created in.
+  if (path === '' || path.includes('\0') || cwd.includes('\0')) return null;
+  const absolute = isAbsolute(path) ? path : `${cwd.endsWith(sep) ? cwd : cwd + sep}${path}`;
+  const missing: string[] = [];
+  let current = absolute;
+  for (;;) {
+    const found = await resolveExisting(current);
+    if (found === null) return null;
+    if (found !== 'missing') return join(found.real, ...missing);
+    const parent = dirname(current);
+    if (parent === current) return null;
+    // The raw text below the parent, not `basename`: that drops trailing separators, and a
+    // trailing or doubled separator must be refused like an empty segment.
+    const segment = current.slice(parent.length).replace(/^\//, '');
+    if (!isPlainSegment(segment)) return null;
+    missing.unshift(segment);
+    current = parent;
   }
-  const name = basename(absolute);
-  if (name === '' || name === '.' || name === '..') return null;
+}
+
+function isPlainSegment(segment: string): boolean {
+  return segment !== '' && segment !== '.' && segment !== '..' && !segment.includes('/');
+}
+
+/**
+ * The real path; `missing` only when nothing at all is there (not even a dangling link); null
+ * when something is there that cannot be resolved.
+ */
+async function resolveExisting(path: string): Promise<{ real: string } | 'missing' | null> {
   try {
-    return join(await realpath(dirname(absolute)), name);
-  } catch {
+    return { real: await realpath(path) };
+  } catch (error) {
+    if (errorCode(error) !== 'ENOENT') return null;
+  }
+  try {
+    await lstat(path);
     return null;
+  } catch (error) {
+    return errorCode(error) === 'ENOENT' ? 'missing' : null;
   }
+}
+
+function errorCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
 }
 
 async function realOrNull(path: string): Promise<string | null> {

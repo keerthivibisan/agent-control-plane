@@ -183,8 +183,9 @@ export interface AllowlistInput {
   /** From `allowlistTarget`; null asks. */
   target: AllowlistTarget | null;
   /**
-   * For an edit: the realpath of the target (for a new file, the realpath of its existing parent
-   * plus the file name). Null when it could not be resolved, which asks.
+   * For an edit: the realpath of the target (for a new file, the realpath of its nearest existing
+   * ancestor plus the plain segments still to be created). Null when it could not be resolved,
+   * which asks.
    */
   resolvedPath: string | null;
   /** Realpath of the agent's own worktree; null when it has none, which asks. */

@@ -251,8 +251,9 @@ missing), `ticket_not_ready` (start from Backlog), `run_in_progress`, `ticket_do
   depth 1) gets the child-management tools and a note to stay with its helpers; when one of them
   ends, the parent is sent a content-free message. A parent whose own query already ended cannot
   receive it; that is counted (`parent-not-notified`).
-- **Allowlist.** Edit targets are resolved with `realpath` (a new file: its real parent plus the
-  name) before `evaluateAllowlist`; the checks it may pre-approve come from the project's checkout;
+- **Allowlist.** Edit targets are resolved with `realpath` (a new file: the real path of its
+  nearest existing folder plus the plain names still to be created; `.`, `..`, empty names and
+  dangling links ask) before `evaluateAllowlist`; the checks it may pre-approve come from the project's checkout;
   an allowed request is recorded as an approval decided by `allowlist`. **Not active yet:** the
   managed adapter's `PermissionRequest` carries no tool input, so every request still asks the
   owner (blocked contract change, `docs/phase-4/wp/P4-D.md`).
