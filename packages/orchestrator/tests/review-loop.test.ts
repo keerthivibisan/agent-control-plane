@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   VIEW_CHANGE_MAX_BYTES,
   agentEvent,
+  beginChangeMerge,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -837,5 +838,18 @@ describe('humanized activity lines (ADR-0021 fix)', () => {
     const s = helper(loopRunning(), 'API builder', 'wa');
     const r = ok(agentEvent(s, A, { type: 'activity', summary: 'Edit src/api.ts' }, makeCtx(3500)));
     expect(agentOf(r.state, A).latestActivity).toBe('Edit src/api.ts');
+  });
+});
+
+describe('a change reviewer as decider (ADR-0023 §4)', () => {
+  it('never merges, discards or asks the owner through the change commands', () => {
+    const s = inDecision();
+    for (const action of ['merge', 'rework', 'discard', 'ask-owner'] as const) {
+      expect(checkChangeAction(s, A, action, 'reviewer')?.code).toBe('not-lead');
+    }
+    expect(
+      refused(recordChangeDecision(s, A, { decision: 'discard', by: 'reviewer' }, makeCtx(6000))),
+    ).toBe('not-lead');
+    expect(refused(beginChangeMerge(s, A, { by: 'reviewer' }, makeCtx(6000)))).toBe('not-lead');
   });
 });

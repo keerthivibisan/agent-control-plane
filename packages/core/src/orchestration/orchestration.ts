@@ -103,8 +103,12 @@ export const ChangeDecisionSchema = z.enum([
   'ask-owner',
 ]);
 export type ChangeDecision = z.infer<typeof ChangeDecisionSchema>;
-/** Who decided (`change_reviews.decided_by`): the lead, or the owner instead of it. */
-export const ChangeDeciderSchema = z.enum(['lead', 'owner']);
+/**
+ * Who decided (`change_reviews.decided_by`): the lead, or the owner instead of it, or (ADR-0023
+ * §4, review route "direct") a change reviewer that sent the change back to its helper itself.
+ * A reviewer only ever decides `rework`; merging stays the lead's or the owner's.
+ */
+export const ChangeDeciderSchema = z.enum(['lead', 'owner', 'reviewer']);
 export type ChangeDecider = z.infer<typeof ChangeDeciderSchema>;
 
 /** A full or abbreviated commit id. */

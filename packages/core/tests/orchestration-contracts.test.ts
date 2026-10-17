@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AgentRunSchema,
+  ChangeDeciderSchema,
   DEFAULT_AGENT_BUDGET_TOKENS,
   LEAD_TOOL_NAMES,
   LeadToolInputs,
@@ -83,6 +84,10 @@ describe('lead tools', () => {
     expect(plan.safeParse({ summary: 's', steps: [{ ...step, helper: '1x' }] }).success).toBe(
       false,
     );
+  });
+
+  it('a change reviewer can be the decider of a round (ADR-0023 §4, route direct)', () => {
+    expect(ChangeDeciderSchema.options).toEqual(['lead', 'owner', 'reviewer']);
   });
 
   it('post_review takes plain text up to the ticket comment limit (decision B)', () => {

@@ -121,7 +121,9 @@ export function emitRound(
 ): void {
   const change = agent.change;
   if (change === undefined) return;
-  const reviewer: ChangeReviewerKind = change.reviewer ?? decided?.by ?? 'owner';
+  // A change reviewer that decides (route "direct", ADR-0023 §4) reviewed the round as an agent.
+  const decider = decided?.by === 'reviewer' ? 'agent' : decided?.by;
+  const reviewer: ChangeReviewerKind = change.reviewer ?? decider ?? 'owner';
   d.effects.push({
     type: 'change-round',
     agentRunId: agent.id,
@@ -387,6 +389,11 @@ export function checkChange(
   if (integration === undefined) {
     return refusal('legacy-review', 'This run has no review loop; the owner reviews each change.');
   }
+  // ADR-0023 §4: a change reviewer decides only through its own `submit_review` (route
+  // "direct"); it never merges, discards or asks the owner through these commands.
+  if (by === 'reviewer') {
+    return refusal('not-lead', 'A change reviewer can only submit its review (submit_review).');
+  }
   const statusRefusal = decisionRunStatus(d, by);
   if (statusRefusal !== null) return statusRefusal;
   const agent = d.agents.find((a) => a.id === agentRunId);
@@ -541,7 +548,7 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       change.state = 'discarded';
       agent.review = 'discarded';
       emitRound(d, agent, { decision: 'discard', by: input.by });
-      if (reason.length > 0) {
+      if (reason.length > 0 && input.by !== 'reviewer') {
         d.effects.push({
           type: 'change-comment',
           agentRunId: agent.id,
@@ -562,7 +569,7 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       const question = note(input.comments);
       change.state = 'needs-owner';
       emitRound(d, agent, { decision: 'ask-owner', by: input.by });
-      if (question.length > 0) {
+      if (question.length > 0 && input.by !== 'reviewer') {
         d.effects.push({
           type: 'change-comment',
           agentRunId: agent.id,
@@ -578,14 +585,18 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
     case 'rework': {
       const comments = note(input.comments);
       emitRound(d, agent, { decision: 'rework', by: input.by });
-      d.effects.push({
-        type: 'change-comment',
-        agentRunId: agent.id,
-        round: change.round,
-        author: input.by,
-        kind: 'rework',
-        body: comments,
-      });
+      // A change reviewer's rework comments are its findings, already stored as its
+      // `review-comment` on this round (ADR-0023 §4, route "direct").
+      if (input.by !== 'reviewer') {
+        d.effects.push({
+          type: 'change-comment',
+          agentRunId: agent.id,
+          round: change.round,
+          author: input.by,
+          kind: 'rework',
+          body: comments,
+        });
+      }
       // The owner's rework is the owner's authorization to spend more: like a budget raise.
       if (byOwner && isOverBudget(agent.budgetTokensUsed, agent.budgetLimit)) {
         agent.budgetLimit = agent.budgetTokensUsed + d.run.budget.maxTokensPerAgent;

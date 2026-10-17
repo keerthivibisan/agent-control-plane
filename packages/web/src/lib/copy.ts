@@ -2993,6 +2993,7 @@ export const REVIEW_LOOP_COPY = {
     decider: {
       lead: 'Lead',
       owner: 'You',
+      reviewer: 'Review agent',
     } satisfies Record<ChangeDecider, string>,
     commentGone: 'The comment is no longer on the ticket.',
     owner: {
