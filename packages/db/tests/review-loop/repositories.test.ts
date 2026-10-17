@@ -383,6 +383,25 @@ describe('approvals allow rule and run snapshot (ADR-0021 §1)', () => {
       expect(StoredRunSnapshotParser.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }
   });
+
+  it('round-trips Full auto and the automatically approved plan (ADR-0022)', () => {
+    const { run, redesign } = setup();
+    const snapshot = {
+      maxConcurrentHelpers: 2,
+      maxDepth: 1,
+      approvals: { mode: 'full-auto' as const, commands: [] },
+      autoApprovedPlanId: 'plan-1',
+    };
+    redesign.runAudit.setRunSnapshot(run.id, snapshot);
+    expect(redesign.runAudit.getRunSnapshot(run.id)).toEqual(snapshot);
+    for (const bad of [
+      { ...snapshot, autoApprovedPlanId: '' },
+      { ...snapshot, autoApprovedPlanId: 7 },
+      { ...snapshot, autoApprovedPlanId: 'x'.repeat(101) },
+    ]) {
+      expect(StoredRunSnapshotParser.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
 });
 
 describe('project setup approvals (ADR-0021 §1)', () => {

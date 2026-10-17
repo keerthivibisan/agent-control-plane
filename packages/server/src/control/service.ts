@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   APPROVAL_TIMEOUT_MS,
@@ -7,6 +8,7 @@ import {
   isPathInside,
   LeadToolInputs,
   type AgentRoleKind,
+  type FullAutoSpec,
   type ManagedAgentEvent,
   type ManagedAgentSpec,
   type ManagedAgentHandle,
@@ -46,6 +48,7 @@ import {
   agentDepth,
   agentEvent,
   allowlistTarget,
+  isFullAuto,
   cancelRun,
   checkReviewAction,
   completeCancellation,
@@ -104,6 +107,7 @@ import {
   type AgentProfiles,
 } from '../workflow/agent-profile.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
+import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
 import { refusalError, workspaceError } from './errors.js';
 import {
@@ -284,6 +288,15 @@ export interface ControlServiceDeps {
   skillsPlugins?: SkillsPlugins;
   /** Reads a stage's project agent file (ADR-0019 §6); injected so tests use a temp home. */
   agentProfiles?: AgentProfiles;
+  /**
+   * The user's home folder, for Full auto's deny-read list (ADR-0022). Defaults to
+   * `os.homedir()`; tests pass a temp folder.
+   */
+  homeDir?: string;
+  /** Claude Code's config folder, also denied to Full auto's sandboxed commands. */
+  claudeDir?: string;
+  /** Full auto's per-run temp folders and deny-read list; defaults to `<dataDir>/sandbox-tmp`. */
+  fullAutoPaths?: FullAutoPaths;
 }
 
 export interface ControlCounters {
@@ -396,6 +409,8 @@ interface LaunchInput {
   rework?: { resumeSessionId: string | null } | undefined;
   /** ADR-0021: what a reviewer reviews. */
   reviewScope?: 'change' | 'final' | undefined;
+  /** ADR-0022: a Full auto helper's or tester's sandbox paths. */
+  fullAuto?: FullAutoSpec | undefined;
 }
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
@@ -417,6 +432,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     deps.reviewCheckouts ?? createReviewCheckouts({ dataDir: deps.dataDir, git: deps.git, logger });
   const skillsPlugins = deps.skillsPlugins ?? createSkillsPlugins({ dataDir: deps.dataDir });
   const agentProfiles = deps.agentProfiles ?? createAgentProfiles();
+  const fullAutoPaths =
+    deps.fullAutoPaths ??
+    createFullAutoPaths({
+      homeDir: deps.homeDir ?? homedir(),
+      dataDir: deps.dataDir,
+      ...(deps.claudeDir !== undefined && { claudeDir: deps.claudeDir }),
+    });
   /** Reviewer checkouts in use, for the observation pipeline's roots (by agent run id). */
   const activeCheckouts = new Map<string, { projectId: string; checkout: ReviewCheckout }>();
   const newId = deps.newId ?? (() => randomUUID());
@@ -733,6 +755,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     if (TERMINAL.includes(status) && !TERMINAL.includes(prev.run.status)) {
       removeSkillsPlugin(live.state.run.id);
+      removeSandboxTemp(live.state.run.id);
     }
     if (status !== prev.run.status) {
       logger.log('info', 'run status changed', { runId: live.state.run.id, status });
@@ -971,9 +994,15 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const plugin = await pluginFor(live, project.rootPath, effect);
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
+        const fullAuto = await fullAutoFor(live, agentRunId);
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
+        if (fullAuto === null) {
+          live.pendingSends.delete(agentRunId);
+          endWithError(live, agentRunId);
+          return;
+        }
         launch(live, {
           ...base,
           prompt,
@@ -982,6 +1011,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           plugin,
           agentFile,
           canStartHelpers,
+          fullAuto,
         });
       })(),
     );
@@ -1040,8 +1070,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
+        const fullAuto = await fullAutoFor(live, agentRunId);
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
+        if (fullAuto === null) {
+          live.pendingSends.delete(agentRunId);
+          endWithError(live, agentRunId);
+          return;
+        }
         launch(live, {
           agentRunId,
           kind: effect.kind,
@@ -1052,6 +1088,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           plugin,
           agentFile,
           rework: effect.rework,
+          fullAuto,
         });
       })(),
     );
@@ -1281,6 +1318,37 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     });
   }
 
+  /** ADR-0022: the run's sandbox temp folder goes when the run ends. */
+  function removeSandboxTemp(runId: string): void {
+    track(
+      fullAutoPaths.remove(runId).catch((error: unknown) => {
+        logger.log('warn', 'sandbox temp folder removal failed', { runId, ...errorFields(error) });
+      }),
+    );
+  }
+
+  /**
+   * ADR-0022: the sandbox paths of a Full auto helper or tester, or undefined when the run is not
+   * Full auto. Null when they could not be prepared: the agent then fails, never unprotected.
+   */
+  async function fullAutoFor(
+    live: LiveRun,
+    agentRunId: string,
+  ): Promise<FullAutoSpec | null | undefined> {
+    if (!isFullAuto(live.state)) return undefined;
+    try {
+      return await fullAutoPaths.specFor(live.state.run.id);
+    } catch (error) {
+      countDiagnostic('full-auto-unavailable');
+      logger.log('warn', 'full auto sandbox folder failed', {
+        runId: live.state.run.id,
+        agentRunId,
+        ...errorFields(error),
+      });
+      return null;
+    }
+  }
+
   function removeSkillsPlugin(runId: string): void {
     track(
       skillsPlugins.remove(runId).catch((error: unknown) => {
@@ -1408,6 +1476,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
+    // ADR-0022: only helpers and the tester run in Full auto; the adapter ignores it for others.
+    if (input.fullAuto !== undefined && hasReviewableChange(kind)) {
+      spec.fullAuto = { tempDir: input.fullAuto.tempDir, denyRead: [...input.fullAuto.denyRead] };
+    }
     let handle: ManagedAgentHandle;
     try {
       handle = adapter.start(spec, {
@@ -1526,6 +1598,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     const target = allowlistTarget(request.toolName, toolInputOf(request));
     const readAllowlist = hooks.allowlist;
+    // ADR-0022: in Full auto nothing waits for the owner. What still reaches the gate (an auto-mode
+    // escalation) runs only when the auto rules allow it, and is otherwise denied.
+    if (isFullAuto(live.state) && hasReviewableChange(kind)) {
+      return fullAutoGate(live, agentRunId, kind, request, target, readAllowlist);
+    }
     if (target === null || readAllowlist === undefined) {
       return parkForOwner(live, agentRunId, request);
     }
@@ -1540,6 +1617,35 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }
       return parkForOwner(live, agentRunId, request, verdict);
     })();
+  }
+
+  async function fullAutoGate(
+    live: LiveRun,
+    agentRunId: string,
+    kind: AgentRoleKind,
+    request: PermissionRequest,
+    target: AllowlistTarget | null,
+    readAllowlist: ControlWorkspaceHooks['allowlist'],
+  ): Promise<PermissionDecision> {
+    const runId = live.state.run.id;
+    let verdict: AllowlistVerdict | undefined;
+    if (target !== null && readAllowlist !== undefined) {
+      try {
+        verdict = await checkAllowlist(live, agentRunId, kind, target, readAllowlist);
+      } catch (error) {
+        logger.log('warn', 'allowlist check failed', { runId, agentRunId, ...errorFields(error) });
+      }
+    }
+    // The run's policy is Full auto, so the engine pre-approves an allowed verdict: never parked.
+    if (verdict?.allowed === true) return parkForOwner(live, agentRunId, request, verdict);
+    countDiagnostic('full-auto-denied');
+    logger.log('info', 'full auto tool use denied', {
+      runId,
+      agentRunId,
+      // A tool name, never its input.
+      tool: request.toolName,
+    });
+    return { allow: false, message: FULL_AUTO_DENIED_MESSAGE };
   }
 
   async function checkAllowlist(
@@ -1855,9 +1961,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       try {
         const checkouts = await reviewCheckouts.cleanupOrphans();
         const plugins = await skillsPlugins.cleanupAll();
+        // ADR-0022: Full auto's per-run sandbox temp folders.
+        const sandboxTemp = await fullAutoPaths.cleanupAll();
         // ADR-0021: temporary checkouts of ticket branch tips (checks, update from base).
         const tipCheckouts = await deps.workspaces.cleanupCheckouts();
-        logger.log('info', 'temporary agent folders cleaned', { checkouts, plugins, tipCheckouts });
+        logger.log('info', 'temporary agent folders cleaned', {
+          checkouts,
+          plugins,
+          tipCheckouts,
+          sandboxTemp,
+        });
       } catch (error) {
         logger.log('warn', 'temporary agent folder cleanup failed', errorFields(error));
       }

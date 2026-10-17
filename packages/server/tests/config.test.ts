@@ -10,6 +10,7 @@ describe('loadConfig', () => {
       host: '127.0.0.1',
       port: 7420,
       dataDir: '/home/tester/.agent-control-plane',
+      homeDir: '/home/tester',
       claudeDir: '/home/tester/.claude',
       mode: 'live',
       databasePath: '/home/tester/.agent-control-plane/acp.sqlite',

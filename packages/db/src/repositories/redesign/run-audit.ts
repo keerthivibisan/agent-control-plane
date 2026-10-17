@@ -58,6 +58,11 @@ export interface StoredRunSnapshot extends StoredRunLimits {
    * before it, which keep the legacy flow.
    */
   integration?: StoredRunIntegration;
+  /**
+   * ADR-0022: the run's plan that Full auto approved automatically (`TicketPlan.decidedBy`
+   * `auto`). Absent when the owner decided the plan, and for runs before it.
+   */
+  autoApprovedPlanId?: string;
 }
 
 /** The review loop settings the run snapshotted, plus whether the lead has handed over. */
@@ -104,10 +109,8 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return fail('expected an object');
     }
-    const { workflow, stagesHeld, approvals, integration, ...rest } = value as Record<
-      string,
-      unknown
-    >;
+    const { workflow, stagesHeld, approvals, integration, autoApprovedPlanId, ...rest } =
+      value as Record<string, unknown>;
     const limits = StoredRunLimitsSchema.safeParse(rest);
     if (!limits.success) return fail('invalid limits');
     const snapshot: StoredRunSnapshot = { ...limits.data };
@@ -129,6 +132,16 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
       const parsed = parseIntegration(integration);
       if (parsed === null) return fail('invalid integration');
       snapshot.integration = parsed;
+    }
+    if (autoApprovedPlanId !== undefined) {
+      if (
+        typeof autoApprovedPlanId !== 'string' ||
+        autoApprovedPlanId.length === 0 ||
+        autoApprovedPlanId.length > 100
+      ) {
+        return fail('invalid autoApprovedPlanId');
+      }
+      snapshot.autoApprovedPlanId = autoApprovedPlanId;
     }
     return { success: true as const, data: snapshot };
   },

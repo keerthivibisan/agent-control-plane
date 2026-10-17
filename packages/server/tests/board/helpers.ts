@@ -118,6 +118,9 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     sweepIntervalMs: null,
     skillsPlugins: createSkillsPlugins({ dataDir, skills: { homeDir } }),
     agentProfiles: createAgentProfiles({ homeDir }),
+    // Full auto's deny-read list (ADR-0022) is built from this temp home, never the real one.
+    homeDir,
+    claudeDir: join(homeDir, '.claude'),
     workspace: hooks,
   });
   const workspace = createWorkspaceRepositories(db, { now });

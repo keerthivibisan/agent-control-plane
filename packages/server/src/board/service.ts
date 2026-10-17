@@ -40,6 +40,7 @@ import {
   type OrchestrationRepositories,
   type Queries,
   type Repositories,
+  type StoredRunSnapshot,
   type WorkspaceRepositories,
 } from '@acp/db';
 import {
@@ -51,6 +52,7 @@ import {
 } from '@acp/orchestrator';
 import { managedDisabled } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
+import { withPlanDeciders } from '../control/store.js';
 import { countsAsHelper } from '../control/roles.js';
 import type { ControlService, ControlWorkspaceHooks } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
@@ -263,6 +265,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     };
   }
 
+  /**
+   * The ticket's plans, with `decidedBy: 'auto'` on each one a Full auto run approved
+   * automatically (ADR-0022, from that run's snapshot).
+   */
+  function plansWithDeciders(ticketId: string): TicketDetailDto['plans'] {
+    const plans = ws.plans.listForTicket(ticketId);
+    const snapshots = new Map<string, Pick<StoredRunSnapshot, 'autoApprovedPlanId'> | null>();
+    for (const runId of new Set(plans.map((p) => p.runId))) {
+      snapshots.set(runId, redesign.runAudit.getRunSnapshot(runId));
+    }
+    return plans.flatMap((p) => withPlanDeciders([p], snapshots.get(p.runId) ?? null));
+  }
+
   function detail(ticketId: string): TicketDetailDto {
     const ticket = ticketOrThrow(ticketId);
     const runs = orch.runs.list({ ticketId, limit: MAX_PAGE_SIZE }).map(toRunSummary);
@@ -278,7 +293,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       ticket: toTicketDto(ticket),
       runs,
       currentRun,
-      plans: ws.plans.listForTicket(ticketId),
+      plans: plansWithDeciders(ticketId),
       comments: ws.comments.listForTicket(ticketId),
       // With each result's commit (ADR-0021), so a change card shows only its own commit's.
       checks: ticket.currentRunId === null ? [] : loop.checkCommits.listForRun(ticket.currentRunId),
@@ -612,20 +627,24 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       // ADR-0019: the project's workflow (the default until the owner saves one), snapshotted.
       const workflow = redesign.workflow.get(ticket.projectId);
       if (workflow === undefined) throw notFound(`Project ${ticket.projectId} not found`);
-      const prompts = ticketRunPrompts(ticket, limits, workflow);
       // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
       const projectApprovals = approvalsOf(setup);
       const approvals = {
         mode: options.approvalMode ?? projectApprovals.mode,
         commands: projectApprovals.commands,
       };
+      const legacyRun = deps.legacyTicketRuns === true;
+      // ADR-0022: a Full auto run's briefs say the plan is approved automatically.
+      const prompts = ticketRunPrompts(ticket, limits, workflow, {
+        fullAuto: !legacyRun && approvals.mode === 'full-auto',
+      });
       const reviewStage = reviewStageOf(workflow);
       const reviewLoop = {
         ticketKey: ticket.key,
         reviewer: options.reviewer ?? reviewStage.reviewer,
         maxReworkRounds: options.maxReworkRounds ?? reviewStage.maxReworkRounds,
       };
-      const legacy = deps.legacyTicketRuns === true;
+      const legacy = legacyRun;
       // Re-read: the ticket may have moved while the setup was read.
       const fresh = ticketOrThrow(ticketId);
       if (fresh.status !== ticket.status || fresh.currentRunId !== ticket.currentRunId) {

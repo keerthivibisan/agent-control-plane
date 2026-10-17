@@ -28,6 +28,8 @@ export interface ServerConfig {
   readonly host: '127.0.0.1';
   readonly port: number;
   readonly dataDir: string;
+  /** The user's home folder (Full auto's deny-read list, ADR-0022). */
+  readonly homeDir: string;
   readonly claudeDir: string;
   readonly mode: 'live' | 'demo';
   /** Demo data lives in its own file and is never mixed with live data (ADR-0007). */
@@ -74,6 +76,7 @@ export function loadConfig(
     host: '127.0.0.1',
     port: e.ACP_PORT,
     dataDir,
+    homeDir: home,
     claudeDir: resolve(e.ACP_CLAUDE_DIR ?? e.CLAUDE_CONFIG_DIR ?? join(home, '.claude')),
     mode: e.ACP_MODE,
     databasePath: join(dataDir, e.ACP_MODE === 'demo' ? 'demo.sqlite' : 'acp.sqlite'),

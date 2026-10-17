@@ -177,6 +177,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     workspaces: workspaceManager,
     git,
     dataDir: config.dataDir,
+    homeDir: config.homeDir,
+    claudeDir: config.claudeDir,
     enabled: managedAdapter !== undefined,
     logger,
     now,

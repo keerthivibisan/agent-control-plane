@@ -132,7 +132,8 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       state.workflow === undefined &&
       state.stagesHeld !== true &&
       state.integration === undefined &&
-      state.approvalPolicy === undefined
+      state.approvalPolicy === undefined &&
+      autoApprovedPlanOf(state) === undefined
     ) {
       return null;
     }
@@ -147,6 +148,9 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     // ADR-0021: the approval policy and the review loop are snapshotted with the run.
     if (state.approvalPolicy !== undefined) snapshot.approvals = state.approvalPolicy;
     if (state.integration !== undefined) snapshot.integration = { ...state.integration };
+    // ADR-0022: which plan Full auto approved (the plans table has no decider column).
+    const autoPlan = autoApprovedPlanOf(state);
+    if (autoPlan !== undefined) snapshot.autoApprovedPlanId = autoPlan;
     return snapshot;
   }
 
@@ -337,6 +341,10 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       );
       if (stored.version !== plan.version) {
         throw new DbError('conflict', 'stored plan version differs from the engine state');
+      }
+      // ADR-0022: Full auto submits and approves a plan in one command.
+      if (plan.status === 'approved' || plan.status === 'changes-requested') {
+        workspaceRepos.plans.decide(plan.id, plan.status, plan.decidedAt ?? undefined);
       }
     }
   }
@@ -546,8 +554,27 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         if (snapshot.approvals !== undefined) state.approvalPolicy = snapshot.approvals;
         if (snapshot.integration !== undefined) state.integration = { ...snapshot.integration };
       }
-      if (run.ticketId !== null) state.plans = workspaceRepos.plans.listForRun(runId);
+      if (run.ticketId !== null) {
+        state.plans = withPlanDeciders(workspaceRepos.plans.listForRun(runId), snapshot);
+      }
       return state;
     },
   };
+}
+
+/** The id of the run's plan that Full auto approved automatically (ADR-0022), if any. */
+function autoApprovedPlanOf(state: RunState): string | undefined {
+  return state.plans?.find((p) => p.decidedBy === 'auto')?.id;
+}
+
+/**
+ * Plans as stored, with `decidedBy: 'auto'` on the one Full auto approved (from the run snapshot,
+ * ADR-0022). Every other plan keeps no decider: the owner decided it, or nobody yet.
+ */
+export function withPlanDeciders(
+  plans: readonly TicketPlan[],
+  snapshot: Pick<StoredRunSnapshot, 'autoApprovedPlanId'> | null,
+): TicketPlan[] {
+  const auto = snapshot?.autoApprovedPlanId;
+  return plans.map((p) => (auto !== undefined && p.id === auto ? { ...p, decidedBy: 'auto' } : p));
 }
