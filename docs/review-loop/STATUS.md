@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 | RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**    | wp/rl-0-contract | `3a46106` |
 | RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | in-progress | wp/rl-a-engine   | —         |
 | RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | in-progress | wp/rl-b-server   | —         |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | todo        | —                | —         |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | in-progress | wp/rl-d-web      | —         |
 | RL-V | Verification and one consented real run                  | all        | todo        | —                | —         |
 
 ## Owner decisions (2026-10-17)
@@ -39,3 +39,6 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
   after RL-A.
 - Note: the owner's running dev server has not restarted, so migration 0006 has not been applied
   to the live database yet. It applies on the next start from this branch.
+- 2026-10-17 U-V merged (the UI refresh is complete). RL-D (web) started against the contract with
+  fixtures. RL-B also gets U-V's server finding: serialize git operations per worktree in
+  `WorkspaceManager`.
