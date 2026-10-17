@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { PROJECT_ID, TICKET_ID, fixtureProject, workingScenario } from './ticket-fixtures.js';
 
 /*
  * R-V: every page of the new UI on the demo server's built UI and real demo data — the sidebar
@@ -153,3 +154,147 @@ test('an unknown address says so, with a way back', async ({ page }) => {
   await expect(page.getByRole('link', { name: /All projects/ }).first()).toBeVisible();
   await shoot(page, 'not-found', false);
 });
+
+// --- U-V (UI refresh verification), add-only: every page at a phone width, and reduced motion.
+
+/** The routes the ticket page reads, answered from the synthetic fixtures (as shell.spec does). */
+async function withTicketFixtures(page: Page): Promise<void> {
+  const sc = workingScenario();
+  await page.route(/\/api\/projects$/, async (route) => {
+    const real = (await (await route.fetch()).json()) as unknown[];
+    await route.fulfill({ json: [...real, fixtureProject()] });
+  });
+  await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
+    const body = sc.routes[new URL(route.request().url()).pathname];
+    await (body === undefined
+      ? route.fulfill({
+          status: 404,
+          json: { error: { code: 'not_found', message: 'no fixture', requestId: 'e2e' } },
+        })
+      : route.fulfill({ status: 200, json: body }));
+  });
+}
+
+test.describe('U-V', () => {
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
+  test('every page fits a 390px phone: no sideways scroll, titles wrap by words, actions below', async ({
+    page,
+    request,
+  }) => {
+    const project = await demoApi(request);
+    const res = await request.get(`/api/projects/${project.id}/sessions`);
+    const listed = (await res.json()) as { items?: { id: string }[] } | { id: string }[];
+    const session = (Array.isArray(listed) ? listed : (listed.items ?? []))[0]?.id ?? '';
+    await withTicketFixtures(page);
+    const pages: [string, string][] = [
+      ['all-projects', '#/projects'],
+      ['board', `#/p/${project.id}/board`],
+      ['workflow', `#/p/${project.id}/workflow`],
+      ['skills', `#/p/${project.id}/skills`],
+      ['harness', `#/p/${project.id}/harness`],
+      ['tokens', `#/p/${project.id}/tokens`],
+      ['sessions', `#/p/${project.id}/sessions`],
+      ['session', `#/sessions/${encodeURIComponent(session)}`],
+      ['settings', `#/p/${project.id}/settings`],
+      ['ticket', `#/p/${PROJECT_ID}/tickets/${TICKET_ID}`],
+      ['new-project', '#/projects/new'],
+      ['health', '#/health'],
+      ['health-connection', '#/health/connection'],
+    ];
+    // Every page is checked, so one run lists every page that doesn't fit.
+    const soft = expect.configure({ soft: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [name, to] of pages) {
+      await page.goto(`/${to}`);
+      const title = h1(page);
+      await expect(title, name).toBeVisible();
+      // Let the page's cards load (their content is what grows), then measure.
+      await page.waitForTimeout(800);
+      // The page never scrolls sideways (wide content scrolls inside its own frame).
+      soft(
+        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+        `${name} scrolls sideways`,
+      ).toBeLessThanOrEqual(0);
+      // The title keeps its width: words wrap, letters don't (the owner saw one letter per line).
+      soft((await title.boundingBox())?.width ?? 0, name).toBeGreaterThan(200);
+      // The header's actions, if any, sit under the title.
+      const actions = page.locator('main header').first().locator(':scope > div').nth(1);
+      if ((await actions.count()) > 0 && (await actions.isVisible())) {
+        const t = await title.boundingBox();
+        const a = await actions.boundingBox();
+        soft(t !== null && a !== null && a.y >= t.y + t.height - 1, name).toBe(true);
+      }
+      if (SHOTS !== undefined) {
+        for (const scheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme: scheme });
+          await page.waitForTimeout(400);
+          await page.screenshot({
+            path: `${SHOTS}/narrow-${name}-390-${scheme}.png`,
+            fullPage: true,
+          });
+        }
+        await page.emulateMedia({ colorScheme: 'light' });
+      }
+    }
+  });
+
+  test('with reduced motion nothing moves: pages, the side panel, menus and dialogs', async ({
+    page,
+    request,
+  }) => {
+    const project = await demoApi(request);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await withTicketFixtures(page);
+    await page.goto(`/#/p/${project.id}/board`);
+    await expect(h1(page)).toContainText('demo-api');
+
+    // An element's transform and opacity on every frame for 400ms.
+    const watch = (selector: string) =>
+      page.evaluate(async (sel) => {
+        const seen = new Set<string>();
+        const start = performance.now();
+        await new Promise<void>((done) => {
+          const tick = () => {
+            const el = document.querySelector(sel);
+            if (el !== null) {
+              const s = getComputedStyle(el);
+              seen.add(`${s.transform}|${s.opacity}`);
+            }
+            if (performance.now() - start < 400) requestAnimationFrame(tick);
+            else done();
+          };
+          tick();
+        });
+        return [...seen];
+      }, selector);
+
+    // A page change: the page wrapper never fades or rises.
+    const moving = watch('main > div');
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Tokens' })
+      .click();
+    expect(await moving).toEqual(['none|1']);
+    await expect(h1(page)).toContainText('Tokens');
+
+    // The ticket page's side panel doesn't slide in.
+    await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
+    const slide = watch('[data-testid="side-panel"]');
+    await expect(page.getByTestId('side-panel')).toBeVisible();
+    expect((await slide).every((v) => v.startsWith('none|'))).toBe(true);
+
+    // CSS animations (dialogs, menus, popovers) are cut to nothing.
+    await page.goto(`/#/p/${project.id}/board`);
+    await page.getByRole('button', { name: 'New ticket' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'New ticket' });
+    await expect(dialog).toBeVisible();
+    const durations = await dialog.evaluate((el) =>
+      [el, el.parentElement].map((e) => (e ? getComputedStyle(e).animationDuration : '0s')),
+    );
+    for (const d of durations) expect(parseFloat(d)).toBeLessThan(0.001);
+  });
+});
+// --- end U-V

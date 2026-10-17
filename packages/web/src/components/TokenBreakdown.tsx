@@ -35,7 +35,8 @@ export function TokenBreakdown({
     <dl
       aria-label={label}
       data-testid={testId}
-      className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4"
+      // As many columns as fit the card (four at most): a narrow card stacks, so labels stay whole.
+      className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-6 gap-y-4"
     >
       {TOKEN_TYPES.map((t) => {
         const value = tokens[t.key];

@@ -68,10 +68,10 @@ function RootPicker({
   const options = sessions.filter((s) => !isHelperAgent(s) || s.id === root);
   const listed = options.some((s) => s.id === root);
   return (
-    <label className="flex flex-wrap items-center gap-2">
+    <label className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       <span className="text-caption font-medium text-dim">{COPY.pick}</span>
       <select
-        className={`${fieldClass} max-w-full min-w-0 pr-8 sm:w-80`}
+        className={`${fieldClass} w-full max-w-full min-w-0 pr-8 sm:w-80`}
         value={root}
         onChange={(e) =>
           navigate(explorerHref({ ...params, root: e.target.value, view: 'relationships' }))

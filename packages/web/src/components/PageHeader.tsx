@@ -22,8 +22,10 @@ export function PageHeader({
   tip?: string;
 }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end gap-x-6 gap-y-3">
-      <div className="min-w-0 flex-1">
+    // Below `sm` the actions sit under the title; wider, they share its row and wrap under it
+    // before the title gets narrower than 18rem (a 1fr title alone shrank to a letter per line).
+    <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-6">
+      <div className="min-w-0 sm:flex-[1_1_18rem]">
         {eyebrow ? <div className="mb-1.5 text-caption text-dim">{eyebrow}</div> : null}
         <h1 className="flex items-center gap-2 text-page font-semibold break-words">
           <span className="min-w-0">{title}</span>

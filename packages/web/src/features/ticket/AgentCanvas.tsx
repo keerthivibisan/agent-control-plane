@@ -1,5 +1,5 @@
 import type { AgentRunDto } from '@acp/core/api';
-import { useId, useState, type KeyboardEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { buttonClass } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { ArrowRightIcon } from '../../components/icons';
@@ -284,10 +284,19 @@ export function AgentCanvas({
     (a, b) => ROOT_ORDER[a.agent.kind] - ROOT_ORDER[b.agent.kind],
   );
   const helpers = agents.filter((a) => a.kind === 'worker').length;
+  // A tree wider than the card (a phone, many helpers) opens scrolled to its middle, where the
+  // lead is, instead of at its left edge. Once, so a later update never moves the owner's scroll.
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el !== null && el.scrollWidth > el.clientWidth) {
+      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    }
+  }, []);
   return (
     <Card title={C.title} description={C.description} testId="agent-canvas" padded={false}>
       {/* The side padding sits on the tree itself, so a wide tree keeps it when it scrolls. */}
-      <div className="overflow-x-auto pt-3 pb-6">
+      <div ref={scroller} className="overflow-x-auto pt-3 pb-6">
         {tree.length === 0 ? (
           <p className="px-5 text-dim">{C.noAgents}</p>
         ) : (
