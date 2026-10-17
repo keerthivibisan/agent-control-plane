@@ -20,6 +20,11 @@ agent sessions. The first provider is Claude Code.
   and tester roles. **Start at [docs/redesign/README.md](docs/redesign/README.md)**; status is in
   `docs/redesign/STATUS.md`. It uses the same progress protocol as Phase 4 (§9 there), with progress
   files in `docs/redesign/wp/`.
+- **UI refresh for v0.1.0: in progress since 2026-10-17** by owner decision. It is a visual refresh
+  only: a modern dashboard with no change to behaviour, data or text. **Start at
+  [docs/ui-refresh/README.md](docs/ui-refresh/README.md)**; status is in
+  `docs/ui-refresh/STATUS.md`, with progress files in `docs/ui-refresh/wp/`. Branches come from
+  `feature/ui-refresh`, not `main`.
 - **Out of scope until their phase starts:**
   - Phase 2 items (pricing table, OTel, purge) unless a WP explicitly includes them;
   - Phase 3 items not taken into Phase 4 (P3-G's validation runner is superseded by the Phase 4

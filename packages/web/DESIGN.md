@@ -8,6 +8,18 @@ On 2026-10-16 the owner asked for a simpler, **project-first** app: pick a proje
 is about that project (docs/redesign/README.md §3, §5). The Layout and Visual system sections
 below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 
+> **v2 direction (UI refresh for v0.1.0, owner decision 2026-10-17; see
+> [docs/ui-refresh/README.md](../../docs/ui-refresh/README.md)):**
+>
+> - Linear/Vercel style: neutral zinc greys and one indigo-violet accent;
+> - near-black dark surfaces, hairline borders, radius 8/6 px, almost no shadows;
+> - Geist Sans and Geist Mono (bundled), lucide icons;
+> - Radix for dialogs, menus, tabs, popovers and tooltips;
+> - subtle motion that respects reduced motion.
+>
+> The principles below still hold. WP U-A replaces the "Visual system" section with the final
+> tokens; until then the current section describes the shipped v0.0.1 look.
+
 ## Principles
 
 1. **Say what it is, in words.** Every number has a unit ("1,540 output tokens", not "1,540"). Every
