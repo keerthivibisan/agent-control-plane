@@ -133,9 +133,24 @@ function History({
         <p className="text-caption text-dim">{C.historyEmpty}</p>
       ) : (
         <ol className="relative flex flex-col gap-3 before:absolute before:top-2 before:bottom-2 before:left-[3px] before:border-l before:border-line">
-          {change.reviews.map((r) => {
+          {change.reviews.map((r, i) => {
             const comment =
               r.commentId === null ? null : (comments.find((c) => c.id === r.commentId) ?? null);
+            // A decider's note on a round the review agent commented on is its own row with the
+            // same decision (RL-V); the reviewer's row then says only what the reviewer said.
+            const notedLater = change.reviews
+              .slice(i + 1)
+              .some(
+                (o) =>
+                  o.round === r.round &&
+                  o.decision !== null &&
+                  o.decision === r.decision &&
+                  o.decidedBy === r.decidedBy &&
+                  o.reviewer === o.decidedBy,
+              );
+            const sentence = roundSentence(
+              notedLater ? { ...r, decision: null, decidedBy: null } : r,
+            );
             return (
               <li key={r.id} className="relative flex flex-col gap-1.5 pl-4" data-round={r.round}>
                 <span
@@ -150,7 +165,7 @@ function History({
                 />
                 <p className="flex flex-wrap items-baseline gap-x-2 text-caption">
                   <span className="font-medium">{C.round(r.round)}</span>
-                  <span className="text-ink">{roundSentence(r)}</span>
+                  <span className="text-ink">{sentence}</span>
                   <span className="ml-auto text-dim tabular-nums">
                     <RelativeTime iso={r.decidedAt ?? r.createdAt} />
                   </span>

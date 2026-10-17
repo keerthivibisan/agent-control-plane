@@ -308,6 +308,53 @@ describe('ticket page: a review-loop run at work', () => {
     expect(within(card).getAllByText('src/search/api.ts').length).toBeGreaterThan(0);
   });
 
+  it('shows the reviewer’s findings and the lead’s note of one round, each once (RL-V)', async () => {
+    // The real server links the lead's note from its own row of the round, with the decision.
+    const sc = loopWorkingScenario();
+    const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
+    const run = detail['currentRun'] as Record<string, unknown>;
+    const changes = run['changes'] as Record<string, unknown>[];
+    const api = changes[0] as Record<string, unknown>;
+    const first = (api['reviews'] as Record<string, unknown>[])[0] as Record<string, unknown>;
+    const note = {
+      ...first,
+      id: 'cr-api-0-note',
+      reviewer: 'lead',
+      reviewerAgentRunId: null,
+      verdict: null,
+      commentId: 'c-note-1',
+    };
+    const edited = { ...run, changes: [{ ...api, reviews: [first, note] }, ...changes.slice(1)] };
+    const comments = [
+      ...(detail['comments'] as unknown[]),
+      {
+        id: 'c-note-1',
+        ticketId: LOOP_TICKET_ID,
+        runId: LOOP_RUN_ID,
+        planId: null,
+        author: 'lead',
+        body: 'Cap it and add the test. Synthetic note.',
+        createdAt: '2026-10-17T09:22:00.000Z',
+      },
+    ];
+    render({
+      routes: {
+        ...sc.routes,
+        [LOOP_TICKET_PATH]: { ...detail, currentRun: edited, comments },
+        [LOOP_RUN_PATH]: edited,
+      },
+    });
+    const card = await openChange('API builder');
+    const rows = within(within(card).getByTestId('change-history')).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Review agent asked for rework'),
+      expect.stringContaining('Lead sent it back for rework'),
+    ]);
+    expect(rows[0]?.textContent).not.toContain('Lead sent it back');
+    expect(rows[0]?.textContent).toContain('Cap pageSize at 100');
+    expect(rows[1]?.textContent).toContain('Synthetic note.');
+  });
+
   it('a helper waiting for review says so, and "Latest" words control tools', async () => {
     render(loopWorkingScenario());
     const canvas = await screen.findByTestId('agent-canvas');

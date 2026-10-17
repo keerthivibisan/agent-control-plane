@@ -377,7 +377,12 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           kind: effect.reviewer,
           agentRunId: effect.reviewerAgentRunId,
         });
-        if (effect.verdict !== null && row.verdict !== effect.verdict) {
+        // The verdict belongs to the reviewer's own row, never to a decider's note row (RL-V).
+        if (
+          effect.verdict !== null &&
+          row.verdict !== effect.verdict &&
+          row.reviewer === effect.reviewer
+        ) {
           row = loopRepos.changeReviews.setVerdict(row.id, effect.verdict, null) ?? row;
         }
         if (effect.decision !== null && effect.decidedBy !== null) {
@@ -411,10 +416,28 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           author: effect.author,
           body: effect.body,
         });
-        const row = roundRow(runId, effect.agentRunId, effect.round, {
+        let row = roundRow(runId, effect.agentRunId, effect.round, {
           kind: effect.author,
           agentRunId: null,
         });
+        if (row.commentId !== null) {
+          // RL-V: the round already links the review agent's findings. The decider's note gets
+          // its own row of the round, carrying the decision it explains, so the change card
+          // shows both texts instead of the note replacing the findings.
+          const noted = loopRepos.changeReviews.insert({
+            runId,
+            agentRunId: effect.agentRunId,
+            round: effect.round,
+            reviewer: effect.author,
+          });
+          row =
+            row.decision !== null && row.decidedBy === effect.author
+              ? (loopRepos.changeReviews.decide(noted.id, {
+                  decision: row.decision,
+                  decidedBy: row.decidedBy,
+                }) ?? noted)
+              : noted;
+        }
         loopRepos.changeReviews.setComment(row.id, comment.id);
         continue;
       }

@@ -345,3 +345,68 @@ describe('final stages on the ticket branch (ADR-0021 §5)', () => {
     );
   }, 60_000);
 });
+
+describe('findings and notes on one round (RL-V)', () => {
+  it('a review agent’s findings and the lead’s rework note are both linked from the round', async () => {
+    const s = await setupBoard({ files: FILES });
+    const { ticket, runId, lead } = await approved(s);
+    const worker = await helperDone(s, lead, runId, {
+      'src/x.ts': 'export {};\n',
+      'fixed.txt': 'ok\n',
+    });
+    const reviewer = reviewers(s)[0];
+    if (reviewer === undefined) throw new Error('no change reviewer');
+    reviewer.started();
+    await s.settle();
+    await reviewer.callLead('submit_review', {
+      verdict: 'rework',
+      findings: 'Name the export. Synthetic finding.',
+    });
+    reviewer.finish('success');
+    await s.settle();
+    await lead.callLead('request_rework', {
+      agentId: worker.id,
+      comments: 'Rename x to y. Synthetic note.',
+    });
+    const reviews = (await run(s, runId)).changes?.[0]?.reviews ?? [];
+    const comments = (await s.detail(ticket.id)).comments;
+    const body = (id: string | null) => comments.find((c) => c.id === id)?.body;
+    expect(reviews.map((r) => [r.round, r.reviewer, r.verdict, r.decision, r.decidedBy])).toEqual([
+      [0, 'agent', 'rework', 'rework', 'lead'],
+      [0, 'lead', null, 'rework', 'lead'],
+    ]);
+    expect(body(reviews[0]?.commentId ?? null)).toContain('Synthetic finding.');
+    expect(body(reviews[1]?.commentId ?? null)).toContain('Synthetic note.');
+  }, 60_000);
+
+  it('the lead’s question keeps its own row; the owner’s decision gets the next one', async () => {
+    const s = await setupBoard({ files: FILES });
+    const { ticket, runId, lead } = await approved(s);
+    const worker = await helperDone(s, lead, runId, {
+      'src/x.ts': 'export {};\n',
+      'fixed.txt': 'ok\n',
+    });
+    const reviewer = reviewers(s)[0];
+    if (reviewer === undefined) throw new Error('no change reviewer');
+    reviewer.started();
+    await s.settle();
+    await reviewer.callLead('submit_review', { verdict: 'approve', findings: 'Fine. Synthetic.' });
+    reviewer.finish('success');
+    await s.settle();
+    await lead.callLead('ask_owner', { agentId: worker.id, question: 'Ship it? Synthetic.' });
+    await s.settle();
+    const decided = await s.post(`/api/runs/${runId}/review`, {
+      agentRunId: worker.id,
+      action: 'discard',
+    });
+    expect(decided.status).toBe(200);
+    const reviews = (await run(s, runId)).changes?.[0]?.reviews ?? [];
+    const comments = (await s.detail(ticket.id)).comments;
+    expect(reviews.map((r) => [r.reviewer, r.verdict, r.decision, r.decidedBy])).toEqual([
+      ['agent', 'approve', 'ask-owner', 'lead'],
+      ['lead', null, 'ask-owner', 'lead'],
+      ['owner', null, 'discard', 'owner'],
+    ]);
+    expect(comments.find((c) => c.id === reviews[1]?.commentId)?.body).toContain('Ship it?');
+  }, 60_000);
+});
