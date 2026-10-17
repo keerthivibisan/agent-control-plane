@@ -3,13 +3,14 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                    | After      | Status                       | Branch           | Merged    |
-| ---- | -------------------------------------------------------- | ---------- | ---------------------------- | ---------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                     | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                     | wp/rl-a-engine   | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**                     | wp/rl-b-server   | `a33fac5` |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                     | wp/rl-d-web      | `b31d1ec` |
-| RL-V | Verification and one consented real run                  | all        | **done** (real run 2 passed) | wp/rl-v-verify   | `e689a79` |
+| WP   | Title                                                             | After      | Status                       | Branch            | Merged    |
+| ---- | ----------------------------------------------------------------- | ---------- | ---------------------------- | ----------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006                | —          | **done**                     | wp/rl-0-contract  | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix              | RL-0       | **done**                     | wp/rl-a-engine    | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes            | RL-0, RL-A | **done**                     | wp/rl-b-server    | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                     | wp/rl-d-web       | `b31d1ec` |
+| RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed) | wp/rl-v-verify    | `e689a79` |
+| RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | in-progress                  | wp/rl-g-full-auto | —         |
 
 ## Owner decisions (2026-10-17)
 
@@ -106,3 +107,22 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
   review ran, the owner's final merge landed on main and the branch was deleted. Auto edits
   approved 5 edits (new folders included) and 1 harness check; about 54k budget tokens; no content
   in the logs or database. The review-loop series is complete; next is the 0.1.0 release.
+- 2026-10-17 **owner testing before the release:** "even now everything is asking me; I need a
+  complete auto mode where I only see the final MR". **Decisions:**
+  - a new **Full auto** mode: helpers and the tester run in Claude Code's own **auto mode** (SDK
+    `permissionMode: 'auto'`, where a classifier reviews risky actions), plus the **OS sandbox**
+    for commands (writes only in the helper's worktree and temp; secrets unreadable;
+    `failIfUnavailable`);
+  - network for sandboxed commands: **the classifier decides** (no hard allowlist);
+  - **the plan is approved automatically** in Full auto;
+  - the owner sees only the final ticket-branch merge, and `main` still changes only on the
+    owner's click;
+  - **hold 0.1.0** until Full auto is in and verified by a consented real run.
+
+  Research summary: docs `permission-modes`, `sandboxing` and `sandbox-environments`, SDK
+  `permissions`, and the Anthropic engineering post on auto mode.
+  - The classifier is a per-action control, not a boundary (about 17% false negatives on a small
+    test).
+  - The docs recommend an isolation boundary for unattended runs.
+  - Auto-approved calls skip `canUseTool`.
+  - Auto mode needs a supported model.
