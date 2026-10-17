@@ -1,6 +1,6 @@
 # ADR-0022: Full auto mode
 
-- **Status:** proposed (RL-G draft; the owner's decisions are in docs/review-loop/STATUS.md,
+- **Status:** accepted — owner decisions in chat 2026-10-17 (docs/review-loop/STATUS.md); accepted by the coordinator on those decisions
   2026-10-17)
 - **Date:** 2026-10-17
 - **Deciders:** project owner (decisions); coordinator (review); RL-G agent (draft)

@@ -3,15 +3,15 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                             | After      | Status                       | Branch            | Merged    |
-| ---- | ----------------------------------------------------------------- | ---------- | ---------------------------- | ----------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006                | —          | **done**                     | wp/rl-0-contract  | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix              | RL-0       | **done**                     | wp/rl-a-engine    | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes            | RL-0, RL-A | **done**                     | wp/rl-b-server    | `a33fac5` |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                     | wp/rl-d-web       | `b31d1ec` |
-| RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed) | wp/rl-v-verify    | `e689a79` |
-| RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | in-progress                  | wp/rl-g-full-auto | —         |
-| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | todo (owner, 2026-10-17)     | —                 | —         |
+| WP   | Title                                                             | After      | Status                              | Branch                 | Merged    |
+| ---- | ----------------------------------------------------------------- | ---------- | ----------------------------------- | ---------------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006                | —          | **done**                            | wp/rl-0-contract       | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix              | RL-0       | **done**                            | wp/rl-a-engine         | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes            | RL-0, RL-A | **done**                            | wp/rl-b-server         | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                            | wp/rl-d-web            | `b31d1ec` |
+| RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed)        | wp/rl-v-verify         | `e689a79` |
+| RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | **done** (real run pending consent) | wp/rl-g-full-auto      | `25554ce` |
+| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | in-progress                         | wp/rl-h-ticket-options | —         |
 
 ## Owner decisions (2026-10-17)
 
@@ -135,3 +135,13 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
     New ticket and on the ticket page, with a board badge when it differs.
   - It needs migration 0007 (a ticket column) and contract fields.
   - It starts after RL-G, which touches the same approval-mode code. Both go into 0.1.0.
+- 2026-10-17 **RL-G (Full auto) merged** (`25554ce`); ADR-0022 accepted.
+  - Helpers and the tester run with `permissionMode: 'auto'` and the OS sandbox:
+    `failIfUnavailable`, no unsandboxed commands, `autoAllowBashIfSandboxed: false`; writes only in
+    the worktree and the run temp folder; secrets and the data and Claude dirs unreadable.
+  - Fail closed when `system/init` does not report auto.
+  - The gate denies escalations without asking. The plan is auto-approved (`decidedBy: 'auto'`).
+  - The coordinator read the adapter options and ran pnpm check (2,580 tests) and the e2e (61/61).
+  - To verify in the real run: `system/init` reports auto; sandboxed commands work with `~/.claude`
+    unreadable; the absolute deny rules hold.
+- RL-H started.
