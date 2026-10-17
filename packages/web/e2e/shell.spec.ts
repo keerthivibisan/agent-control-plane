@@ -379,3 +379,44 @@ test('settings: the project, its board key, context files, and links to Workflow
   await expect(page.getByText('Helpers at once')).toHaveCount(0);
   await shoot(page, 'settings', undefined, true);
 });
+
+// ---- U-C (UI refresh, Board): the shared Menu and Dialog on the board. Owned by U-C; add-only.
+
+test('board: the Move menu and the New ticket dialog with the keyboard (U-C)', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  await withTickets(page, project.id);
+  await page.goto(`/#/p/${project.id}/board`);
+  const card = page.getByTestId('ticket-card').filter({ hasText: 'API-2' });
+  await expect(card).toHaveAttribute('draggable', 'true');
+
+  // ArrowDown opens the menu on its first item; arrows wrap; Escape puts focus back.
+  const move = card.getByRole('button', { name: 'Move API-2' });
+  await move.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = page.getByRole('menu', { name: 'Move API-2' });
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Move to Backlog',
+    'Start (the lead agent plans it)',
+    'Cancel ticket…',
+  ]);
+  await expect(menu.getByRole('menuitem', { name: 'Move to Backlog' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(menu.getByRole('menuitem', { name: 'Cancel ticket…' })).toBeFocused();
+  await shoot(page, 'board-move-menu');
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(move).toBeFocused();
+
+  // New ticket: the title field takes focus; Escape closes and focus returns to the button.
+  const open = page.getByRole('button', { name: 'New ticket' });
+  await open.click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await expect(dialog.getByLabel('Title')).toBeFocused();
+  await shoot(page, 'board-new-ticket');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(open).toBeFocused();
+});
