@@ -10,9 +10,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                    | wp/wg-0-contracts | `5f6c1e8` |
 | WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                    | wp/wg-a-core      | `1da44e6` |
 | WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **in progress**             | wp/wg-b-engine    |           |
-| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | not started                 | wp/wg-c-server    |           |
+| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **in progress**             | wp/wg-c-server    |           |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | not started                 | wp/wg-e-live      |           |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **in progress**             | wp/wg-e-live      |           |
 | WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                 | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
@@ -60,3 +60,19 @@ plan-approval` without a planner;
     - a 422 shows the issues from `…/validate`;
     - the template choice is in wizard step 2;
     - the default choice saves nothing.
+- 2026-10-18 WG-B merged (`eb8276a`): the program-driven engine.
+  - It adds named helpers, review routes a, b and c (`decidedBy: reviewer`), a mode per agent
+    with `autoMode` and `sandbox`, plan auto-approval from the gate, and
+    `deriveRunWorkflowGraph`.
+  - **Golden traces:** 267 version 1 traces were recorded on the unchanged engine and stay
+    identical.
+  - **Correctness:** the simulator checks 9 invariant families on every step. Exploration covered
+    the templates, the 32 migrated loop workflows and 200 generated graphs. Of the small graphs,
+    1,172 accepted ones explored clean and 2,344 rejected ones were refused. No validator gap was
+    found.
+  - **Edits outside its paths (approved):** the `copy.ts` decider label, and the db stage parser,
+    which now accepts node ids.
+  - Coordinator check: 3,908 tests.
+- 2026-10-18 Coordinator contract (`PlanStepSchema.helper?`, WG-B proposal a): a stored plan keeps
+  each step's helper node. 3,909 tests.
+- 2026-10-18 WG-C started.
