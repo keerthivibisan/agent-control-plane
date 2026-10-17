@@ -51,3 +51,50 @@ The run **did not complete**: it hit the driver's 30-minute limit and was stoppe
    always hand over.
 
 A second consented run follows after RL-F.
+
+## Second run after RL-F (2026-10-17, owner consent): passed
+
+Same driver and setup, on `feature/ui-refresh` `57387c1`.
+
+- **Run:** `COMPLETED`, ticket `DONE`. Stages: plan, orchestrate, helpers, review and code-review
+  all `done` (unit tests were off). No nudge.
+- **Plan:** 2 steps, both for helper roles ("Module builder", "CLI builder"); no step for the lead.
+- **Changes:** each change was reviewed by a review agent; the verdict was `approve`, and the lead
+  merged it into `acp/RLV-1`.
+  - "Module builder": 2 files, checks passed, 0 rework rounds.
+  - "CLI builder": 2 files, checks passed, 0 rework rounds.
+
+  No rework was needed this time, so the rework path was verified by the e2e tests, not live.
+
+- **Handover:** the lead called `request_review` itself. The final code review ran on the ticket
+  branch.
+- **Final merge:** the owner's merge through the API succeeded. `main` is at the merged commit, the
+  ticket branch was deleted, there were 2 tip moves, and the tip held 3 files.
+- **Approvals (Auto edits):**
+  - 5 edits auto-approved by `edit-in-own-worktree`, including new files in new folders, which
+    confirms Bug A is fixed;
+  - 1 harness check auto-approved by `run-harness-check`;
+  - 2 other Bash commands asked and were denied, as designed.
+- **Tools (`system/init`):**
+
+  | Agent            | Tools                                              |
+  | ---------------- | -------------------------------------------------- |
+  | lead             | `Glob, Grep, Read` plus its control tools          |
+  | helpers          | `Bash, Edit, Glob, Grep, Read, Write`              |
+  | change reviewers | `Glob, Grep, Read, Skill, mcp__acp__submit_review` |
+  | final reviewer   | `Glob, Grep, Read, mcp__acp__post_review`          |
+
+  The change reviewers' review skill loaded.
+
+- **Budget tokens:**
+
+  | Agent     | Budget tokens (of 80k) |
+  | --------- | ---------------------- |
+  | lead      | 18.8k                  |
+  | helpers   | 5.0k and 5.7k          |
+  | reviewers | 9.1k, 4.6k and 11.2k   |
+
+  About 54k in total.
+
+- **Content:** 71 log lines with no plan summary, comment text or diff line; no diff line in the
+  database (21 diff lines checked).

@@ -3,13 +3,13 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                    | After      | Status                                           | Branch           | Merged    |
-| ---- | -------------------------------------------------------- | ---------- | ------------------------------------------------ | ---------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                                         | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                                         | wp/rl-a-engine   | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**                                         | wp/rl-b-server   | `a33fac5` |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                                         | wp/rl-d-web      | `b31d1ec` |
-| RL-V | Verification and one consented real run                  | all        | automatic part **done**; real run awaits consent | wp/rl-v-verify   | `e689a79` |
+| WP   | Title                                                    | After      | Status                       | Branch           | Merged    |
+| ---- | -------------------------------------------------------- | ---------- | ---------------------------- | ---------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                     | wp/rl-0-contract | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                     | wp/rl-a-engine   | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**                     | wp/rl-b-server   | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                     | wp/rl-d-web      | `b31d1ec` |
+| RL-V | Verification and one consented real run                  | all        | **done** (real run 2 passed) | wp/rl-v-verify   | `e689a79` |
 
 ## Owner decisions (2026-10-17)
 
@@ -101,3 +101,8 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
     working, and the lead's brief states the duty.
   - The coordinator ran pnpm check (2,529 tests) and the e2e (60/60).
   - The second consented real run is next.
+- 2026-10-17 **real run 2 (owner consent) passed**: COMPLETED, both changes reviewed by a review
+  agent and merged by the lead into `acp/RLV-1`, the lead handed over itself, the final code
+  review ran, the owner's final merge landed on main and the branch was deleted. Auto edits
+  approved 5 edits (new folders included) and 1 harness check; about 54k budget tokens; no content
+  in the logs or database. The review-loop series is complete; next is the 0.1.0 release.
