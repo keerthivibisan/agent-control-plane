@@ -17,8 +17,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > - Radix for dialogs, menus, tabs, popovers and tooltips;
 > - subtle motion that respects reduced motion.
 >
-> The principles below still hold. WP U-A replaces the "Visual system" section with the final
-> tokens; until then the current section describes the shipped v0.0.1 look.
+> The principles below still hold. WP U-A replaced the "Visual system" section with the v2
+> tokens and components; pages adopt the new shared components in U-B…U-F.
 
 ## Principles
 
@@ -130,47 +130,110 @@ Enter opens, Esc closes, Tab stays in the field, and focus returns to the opener
 
 ## Visual system (src/index.css, src/components)
 
-**Tokens.** All colors are CSS variables in `@theme`; `.dark` only redefines values.
+v2 (UI refresh, WP U-A): Linear/Vercel style. Neutral zinc greys, one indigo-violet accent,
+hairline borders, near-black dark surfaces, almost no shadows.
 
-| Token                                                              | Light                         | Dark                          | Use                                   |
-| ------------------------------------------------------------------ | ----------------------------- | ----------------------------- | ------------------------------------- |
-| `canvas` / `panel` / `sunken`                                      | `#f7f7f8` `#ffffff` `#f2f2f4` | `#0d0d10` `#16161a` `#1e1e23` | page, cards, wells and hovers         |
-| `ink` / `dim`                                                      | `#18181b` / `#5d5d68`         | `#ededf0` / `#a1a1ad`         | text, secondary text                  |
-| `line` / `line-strong`                                             | `#e8e8ec` / `#d4d4da`         | `#27272d` / `#3b3b43`         | borders (soft), hover borders         |
-| `accent` / `accent-soft`                                           | `#4f46e5` / `#eef0ff`         | `#8b93ff` / `#23244a`         | the one accent: links, focus, primary |
-| `status-*`, `success`, `warning`, `danger`, `token-*`, `estimated` | unchanged                     | unchanged                     | **meaning only**, never decoration    |
+**Tokens.** All colors are CSS variables in `@theme` (`src/index.css`); `.dark` only redefines
+values, and every name is also a Tailwind utility (`bg-panel`, `text-dim`). Charts, graphs and
+React Flow read the same names, so never rename one; add a new one instead. Every text pair below
+meets WCAG AA (4.5:1) in both themes.
 
-- **Type:** body 14px; `text-caption` 12px; `text-title` 17px (card titles); `text-section` 20px
-  (a heading that groups cards); `text-page` 28px (page title); `text-stat` 28px (big numbers).
-  Tabular numbers for counts.
-- **Spacing:** an 8-pt rhythm. 8/16/24/32/48px (`gap-2/4/6/8/12`). Cards pad 24px. Grid gaps are 24px
-  between cards and 48px between page sections.
-- **Radius:** cards 12px (`rounded-card`), controls 8px (`rounded-control`), pills fully round.
-- **Elevation:** `shadow-card` at rest (barely there), `shadow-raised` on hover of clickable cards,
-  `shadow-pop` for menus, dialogs and the palette. Borders stay `line`; hover moves to `line-strong`.
+| Token                                                                                                | Light                         | Dark                          | Use                                                  |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------- | ---------------------------------------------------- |
+| `canvas` / `panel` / `sunken`                                                                        | `#fafafa` `#ffffff` `#f4f4f5` | `#0a0a0b` `#131315` `#0f0f11` | page; cards; wells, tracks, segmented controls       |
+| `panel-raised`                                                                                       | `#ffffff`                     | `#18181b`                     | menus, popovers, dialogs (above a panel)             |
+| `hover`                                                                                              | `#f4f4f5`                     | `#1b1b1e`                     | row, item and quiet-button hover                     |
+| `sidebar`                                                                                            | `#f7f7f8`                     | `#0c0c0e`                     | the sidebar and top bar surface (U-B)                |
+| `ink` / `dim`                                                                                        | `#09090b` / `#5f5f69`         | `#ededef` / `#9f9fa9`         | text; secondary text                                 |
+| `line` / `line-strong`                                                                               | `#e8e8eb` / `#d6d6db`         | `#232327` / `#333339`         | hairline borders; field borders and hover borders    |
+| `overlay`                                                                                            | zinc-950 at 40%               | black at 60%                  | modal backdrop                                       |
+| `accent` / `accent-soft`                                                                             | `#5b57e8` / `#efeffe`         | `#9496fb` / `#1b1a36`         | links, focus ring, selection, active nav; soft fills |
+| `accent-ink`                                                                                         | `#ffffff`                     | `#0a0a0b`                     | text on an `accent` fill                             |
+| `accent-fill` (`-hover/-ink`)                                                                        | `#5b57e8` / white text        | `#5e5ce6` / white text        | the primary button and the brand mark                |
+| `observed` / `derived`                                                                               | `#047857` / `#0369a1`         | `#6ee7b7` / `#7dd3fc`         | `ProvenanceBadge`                                    |
+| `status-*`, `success`, `warning(-soft)`, `danger(-soft)`, `token-*`, `estimated(-bg)`, `unavailable` | see `index.css`               | see `index.css`               | **meaning only**, never decoration                   |
 
-**Components.** Use these; don't restyle per page.
+In the dark theme elevation goes lighter (canvas < `sunken` < `panel` < `panel-raised`), so board
+columns and wells sit below the cards on them, as `sunken` does in the light theme.
+
+`accent` is light in the dark theme so it reads as text on near-black; that is why the primary
+button uses `accent-fill`, which stays dark enough for white text in both themes.
+
+- **Type:** Geist Sans for the UI, Geist Mono for ids, keys, numbers in code and paths (both
+  bundled, latin `woff2` only: `src/components/fonts.css`). Body 14/20px; `text-micro` 11px (tiny
+  badges and technical lines only); `text-caption` 12px; `text-title` 15px (card titles);
+  `text-section` 18px; `text-page` 24px; `text-stat` 26px. Headings carry their own tighter
+  tracking in the token (don't add `tracking-tight`). Tables and `<time>` use tabular numbers;
+  add `tabular-nums` wherever numbers line up.
+- **Spacing:** a 4/8-pt rhythm, denser than v1. Cards pad 20px; page header to content 24px; grid
+  gaps 16–24px between cards.
+- **Shape:** cards 8px (`rounded-card`), controls 6px (`rounded-control`), status pills fully
+  round, tags (`Badge`) 5px. Borders are 1px `line`; hover moves to `line-strong`.
+- **Elevation:** flat. `shadow-card` is almost nothing (none in dark), `shadow-raised` a hint on
+  hover of clickable cards, `shadow-pop` only for menus, popovers, dialogs and tooltips.
+- **Focus:** a 2px `accent` outline with a 2px offset on every interactive element (base layer);
+  fields instead turn their border `accent` with a soft 3px accent ring.
+- **Motion** (`src/components/motion.tsx`, keyframes in `index.css`): 150–200ms, ease-out
+  (`--ease-out-soft`). Menus and popovers `animate-pop-in`, dialogs `animate-dialog-in`, tooltips
+  and backdrops `animate-fade-in`; Motion presets `fade`, `fadeUp`, `slideInRight`, `list` /
+  `listItem` with `enter(variants)`. The app root is `MotionProvider`
+  (`MotionConfig reducedMotion="user"`), and `prefers-reduced-motion` stops CSS animations and
+  transitions. Tests skip animations (`MotionGlobalConfig.skipAnimations`).
+
+**Components.** Use these; don't restyle per page. New shared parts are Radix-based where Radix
+adds real behaviour. Radix writes `data-state` on its parts, so **never put the app's own
+`data-state`/`data-status`/`data-role` on a Radix part** (a trigger, tab, panel or content);
+put it on an inner element.
 
 - **Page header** (`PageHeader`): title, optional ⓘ `tip`, one-line `description`, primary
   action on the right, optional `eyebrow` (a back link). `SectionHeader` for a heading that groups
   cards inside a page.
 - **Card** (`Card`): title (+ `tip`), optional one-line description, actions on the right; `padded`
   false for edge-to-edge tables and graphs. A clickable card is a list item whose title link
-  covers the card (`after:absolute after:inset-0`), with `shadow-raised` on hover.
-- **Table** (`DataTable`): uppercase caption headers, light row dividers, 24px outer cell padding,
-  roomy rows, no zebra stripes; card list below 1024px.
-- **Empty state** (`EmptyState`): an illustration (the icon on soft accent rings), a short title,
-  one sentence, **at most one action**. `compact` inside a card.
-- **Buttons** (`Button`, `ButtonLink`): 36px (`sm`: 32px). `primary` (accent fill, one per page
-  area), `secondary` (bordered panel), `quiet` (text), `danger` (soft red, for confirmations).
-- **Inputs** (`Input.tsx`: `inputClass`, `TextInput`, `Select`, `TextArea`): 36px, soft border,
-  accent focus ring; labels above, hints in caption text below.
-- **Pills** (`Pill`): a word with a dot; tones `neutral`, `accent`, `success`, `warning`,
+  covers the card (`after:absolute after:inset-0`), with `line-strong` and `shadow-raised` on
+  hover. `StatCard`: one headline number, 16px padding.
+- **Table** (`DataTable`): caption-size headers on a faint `sunken` band (sentence case), hairline
+  row dividers, 20px outer cell padding, dense rows, `hover` on rows, no zebra stripes; a card list
+  below 1024px.
+- **Empty state** (`EmptyState`): the icon on a small bordered tile, a short title, one sentence,
+  **at most one action**. `compact` inside a card.
+- **Loading** (`Skeleton`, `SkeletonText`, `SkeletonCard`, `LoadingBlock`): soft `sunken` blocks
+  instead of spinners; the loading words stay in the page, visually hidden. `QueryView` uses
+  `LoadingBlock`.
+- **Buttons** (`Button`, `ButtonLink`, `buttonClass`): 32px (`sm`: 28px). `primary`
+  (`accent-fill`, one per page area), `secondary` (bordered panel), `quiet` (text, `hover` fill),
+  `danger` (soft red, for confirmations).
+- **Inputs** (`Input.tsx`): **native** `<input>`, `<select>`, `<textarea>`, checkboxes and radios,
+  restyled. One field style, `fieldClass` (34px, `line-strong` border, accent focus, danger border
+  with `aria-invalid`, no width), `inputClass(extra)` (full width), wrappers `TextInput`, `Select`,
+  `TextArea`, and `labelClass`/`hintClass` (labels above, hints below in caption text).
+- **Pills and tags** (`Pill`, `Badge`): `Pill` is a state word with a dot; `Badge` a quiet tag or
+  count without a dot (`mono` for keys). Tones `neutral`, `accent`, `success`, `warning`,
   `danger`, mapped from meaning (for example harness Ready → success).
-- **Tooltips** (`Tooltip`, `InfoTip`): dark bubble (`ink` on `canvas`), 12px text, opens on
-  hover and focus; InfoTip also on tap.
-- **Icons** (`components/icons.tsx`): 24×24 strokes, 1.75px, `currentColor`, decorative. Every
-  nav entry has one.
+- **Status** (`StatusBadge`): dot (color plus shape) + word + ⓘ. `ProvenanceBadge`: tiny
+  uppercase tag, `observed`/`derived` tokens; estimated is dashed and italic.
+- **Tabs** (`Tabs`, `TabList`, `Tab`, `TabPanel`; Radix Tabs): an underline tab bar; arrow keys
+  move and select, a click selects; controlled by the owner.
+- **Dialog** (`Dialog`; Radix Dialog): open while mounted, `onClose` on Escape, backdrop click or
+  the optional × (`closeLabel`); `aria-modal`, focus to `[data-autofocus]` or the first control,
+  Tab trapped, focus back to the opener just after it closes.
+- **Menu** (`Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator`; Radix DropdownMenu): a menu button;
+  ArrowDown/Enter/Space open it on the first item, arrows move, Escape closes to the trigger;
+  `tone="danger"` for destructive items. Not modal by default.
+- **Popover** (`Popover`; Radix Popover): a small floating panel (`role="dialog"`, named by
+  `label`) toggled by its trigger.
+- **Segmented** (`Segmented`): a labelled group of `aria-pressed` buttons on a `sunken` track.
+- **Tooltips** (`Tooltip`, `InfoTip`): kept hand-built (they open at once on hover and focus,
+  InfoTip also on tap, and the text exists only while open). Light theme: an `ink` bubble with
+  `canvas` text; dark theme: `panel-raised` with a `line-strong` border. 12px text.
+- **Errors** (`ErrorNotice`): an alert on `warning-soft` (server unreachable) or `danger-soft`,
+  with an icon; tokens only.
+- **Brand** (`BrandMark`): "AC" on an `accent-fill` tile, tokens only; the app name or a label
+  next to it names it.
+- **Icons** (`components/icons.tsx`): lucide icons under the app's names (`BoardNavIcon`,
+  `TokensIcon`, …), `IconProps` (`size`, SVG props), 1.75px strokes, `currentColor`,
+  `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
+  `FeatureIcon`, `BugIcon`, `ChoreIcon` and `CloseIcon` are there for the board and dialogs.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 

@@ -98,7 +98,7 @@
   --color-accent-fill-ink: #ffffff;
 
   /* Feedback. */
-  --color-success: #15803d;
+  --color-success: #15723a;
   --color-warning: #b45309;
   --color-warning-soft: #fff7e6;
   --color-danger: #b42318;
@@ -128,23 +128,24 @@
 }
 
 .dark {
+  /* Dark elevation goes lighter: canvas < sunken (wells, board columns) < panel < raised. */
   --color-canvas: #0a0a0b;
-  --color-panel: #111113;
-  --color-panel-raised: #161618;
-  --color-sunken: #18181b;
-  --color-hover: #1a1a1d;
+  --color-sunken: #0f0f11;
+  --color-panel: #131315;
+  --color-panel-raised: #18181b;
+  --color-hover: #1b1b1e;
   --color-sidebar: #0c0c0e;
   --color-ink: #ededef;
   --color-dim: #9f9fa9;
-  --color-line: #222226;
-  --color-line-strong: #323238;
+  --color-line: #232327;
+  --color-line-strong: #333339;
   --color-overlay: rgb(0 0 0 / 0.6);
 
   --color-accent: #9496fb;
   --color-accent-ink: #0a0a0b;
   --color-accent-soft: #1b1a36;
   --color-accent-fill: #5e5ce6;
-  --color-accent-fill-hover: #6b69ee;
+  --color-accent-fill-hover: #5553de;
   --color-accent-fill-ink: #ffffff;
 
   --color-success: #4ade80;
