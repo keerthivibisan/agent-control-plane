@@ -212,7 +212,7 @@ are off as before. Every response is parsed by its `@acp/core/api` DTO.
 | `GET /api/projects/:id/tickets` · `POST`       | `CreateTicketRequest` (POST)           | `TicketCardDto[]` / `TicketDto` 201 |
 | `GET /api/tickets/:id` · `PATCH`               | `UpdateTicketRequest` (PATCH)          | `TicketDetailDto`                   |
 | `POST /api/tickets/:id/move`                   | `MoveTicketRequest`                    | `TicketDto`                         |
-| `POST /api/tickets/:id/start`                  | `{}`                                   | `TicketDetailDto`                   |
+| `POST /api/tickets/:id/start`                  | `StartTicketRequest` (or `{}`)         | `TicketDetailDto`                   |
 | `POST /api/tickets/:id/comments`               | `TicketCommentRequest`                 | `TicketCommentDto` (201)            |
 | `POST /api/tickets/:id/plans/:planId/decision` | `PlanDecisionRequest`                  | `TicketDetailDto`                   |
 | `GET /api/runs/:id/checks`                     |                                        | `CheckRunDto[]`                     |
@@ -237,7 +237,10 @@ missing), `ticket_not_ready` (start from Backlog), `run_in_progress`, `ticket_do
   context files.
 - **Ticket ↔ run.** Start (Ready, or a re-run of Done, Cancelled or a failed run) creates a
   plan-first run and sets the ticket `ACTIVE` with it as the current run, in one transaction. The
-  lead gets `ticketLeadPrompt` and the setup's limits and budget. A COMPLETED run sets the ticket
+  lead gets `ticketLeadPrompt` and the setup's limits and budget. The run snapshots its approval
+  mode, reviewer and rework rounds: the Start body's override, else the ticket's own run options
+  (RL-H, `tickets.run_options`, set on create or with PATCH; `null` puts one back to the project
+  default), else the project's settings. A COMPLETED run sets the ticket
   `DONE` in the transition's own transaction. Cancelling a ticket with a live run stops the run.
   Columns come from `ticketStage()` over the stored status and the current run; they are never
   stored.

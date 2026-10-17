@@ -2,12 +2,15 @@ import {
   HARNESS_TICKET_TEMPLATE,
   TICKET_STAGES,
   approvalsOf,
+  compactRunOptions,
+  resolveRunOptions,
   reviewStageOf,
   ticketStage,
   type CheckRun,
   type ProjectAgentSetup,
   type RunStatus,
   type Ticket,
+  type TicketRunOptions,
   type TicketStage,
   type TokenCounts,
 } from '@acp/core';
@@ -29,6 +32,7 @@ import {
   type TicketCommentDto,
   type TicketDetailDto,
   type TicketDto,
+  type TicketRunOptionsPatch,
 } from '@acp/core/api';
 import {
   MAX_PAGE_SIZE,
@@ -42,6 +46,7 @@ import {
   type Repositories,
   type StoredRunSnapshot,
   type WorkspaceRepositories,
+  withTransaction,
 } from '@acp/db';
 import {
   deriveRunWorkflow,
@@ -145,6 +150,26 @@ interface RunView {
   updatedAt: string;
 }
 
+/**
+ * A ticket's run options after an update (RL-H): a value sets the option, `null` puts it back to
+ * the project default, an absent field is kept; `null` for the whole patch clears every option.
+ */
+export function patchRunOptions(
+  current: TicketRunOptions | undefined,
+  patch: TicketRunOptionsPatch | null,
+): TicketRunOptions {
+  if (patch === null) return {};
+  return compactRunOptions({
+    approvalMode:
+      patch.approvalMode === null ? undefined : (patch.approvalMode ?? current?.approvalMode),
+    reviewer: patch.reviewer === null ? undefined : (patch.reviewer ?? current?.reviewer),
+    maxReworkRounds:
+      patch.maxReworkRounds === null
+        ? undefined
+        : (patch.maxReworkRounds ?? current?.maxReworkRounds),
+  });
+}
+
 export function createBoardService(deps: BoardServiceDeps): BoardService {
   const { logger } = deps;
   const ws: WorkspaceRepositories = createWorkspaceRepositories(deps.db, { now: deps.now });
@@ -162,10 +187,24 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     return p;
   }
 
+  /** The ticket with its own run options (RL-H, migration 0007). */
   function ticketOrThrow(ticketId: string): Ticket {
     const t = ws.tickets.getById(ticketId);
     if (t === undefined) throw notFound(`Ticket ${ticketId} not found`);
-    return t;
+    return withRunOptions(t);
+  }
+
+  function withRunOptions(
+    ticket: Ticket,
+    options: TicketRunOptions | undefined = loop.ticketRunOptions.get(ticket.id),
+  ): Ticket {
+    return loop.ticketRunOptions.withOptions(ticket, options);
+  }
+
+  /** The project's tickets, each with its own run options, in number order. */
+  function ticketsOf(projectId: string): Ticket[] {
+    const options = loop.ticketRunOptions.listForProject(projectId);
+    return ws.tickets.listForProject(projectId).map((t) => withRunOptions(t, options.get(t.id)));
   }
 
   async function setupFor(projectId: string): Promise<ProjectAgentSetup> {
@@ -237,7 +276,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   }
 
   function toTicketDto(ticket: Ticket, run = runView(ticket.currentRunId)): TicketDto {
-    return { ...ticket, stage: stageOf(ticket, run) };
+    // A ticket read here carries its run options already; one from a status write gets them now.
+    const full = ticket.runOptions === undefined ? withRunOptions(ticket) : ticket;
+    return { ...full, stage: stageOf(ticket, run) };
   }
 
   function toCard(ticket: Ticket): TicketCardDto {
@@ -520,7 +561,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const dto = deps.projects.get(projectId);
       const setup = await setupFor(projectId);
       const harness = await deps.harness.status(project(projectId));
-      const cards = ws.tickets.listForProject(projectId).map(toCard);
+      const cards = ticketsOf(projectId).map(toCard);
       const columns = TICKET_STAGES.map((stage) => ({
         stage,
         tickets: cards.filter((c) => c.stage === stage),
@@ -544,14 +585,15 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
 
     listTickets(projectId) {
       project(projectId);
-      return ws.tickets.listForProject(projectId).map(toCard);
+      return ticketsOf(projectId).map(toCard);
     },
 
     async createTicket(projectId, body) {
       project(projectId);
       const input = CreateTicketRequestSchema.parse(body);
       await setupFor(projectId);
-      const ticket = ws.tickets.insert({ projectId, ...input });
+      // RL-H: the ticket and its own run options are stored together.
+      const ticket = loop.ticketRunOptions.insert({ projectId, ...input });
       notice('tickets-changed', { projectId, ticketId: ticket.id });
       return toTicketDto(ticket);
     },
@@ -561,12 +603,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     updateTicket(ticketId, body) {
       const current = ticketOrThrow(ticketId);
       const input = UpdateTicketRequestSchema.parse(body);
-      ws.tickets.update(ticketId, {
-        ...(input.title !== undefined && { title: input.title }),
-        ...(input.description !== undefined && { description: input.description }),
-        ...(input.type !== undefined && { type: input.type }),
-        ...(input.priority !== undefined && { priority: input.priority }),
-        ...(input.labels !== undefined && { labels: input.labels }),
+      withTransaction(deps.db, () => {
+        ws.tickets.update(ticketId, {
+          ...(input.title !== undefined && { title: input.title }),
+          ...(input.description !== undefined && { description: input.description }),
+          ...(input.type !== undefined && { type: input.type }),
+          ...(input.priority !== undefined && { priority: input.priority }),
+          ...(input.labels !== undefined && { labels: input.labels }),
+        });
+        // RL-H: only future runs see the change; a started run keeps its snapshot.
+        if (input.runOptions !== undefined) {
+          loop.ticketRunOptions.set(
+            ticketId,
+            patchRunOptions(current.runOptions, input.runOptions),
+          );
+        }
       });
       notice('tickets-changed', { projectId: current.projectId, ticketId });
       return detail(ticketId);
@@ -628,9 +679,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const workflow = redesign.workflow.get(ticket.projectId);
       if (workflow === undefined) throw notFound(`Project ${ticket.projectId} not found`);
       // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
+      // RL-H: the one-run override wins over the ticket's own options, which win over the
+      // project's settings. The command allowlist is always the project's.
       const projectApprovals = approvalsOf(setup);
+      const reviewStage = reviewStageOf(workflow);
+      const effective = resolveRunOptions(
+        {
+          approvalMode: projectApprovals.mode,
+          reviewer: reviewStage.reviewer,
+          maxReworkRounds: reviewStage.maxReworkRounds,
+        },
+        ticket.runOptions,
+        compactRunOptions(options),
+      );
       const approvals = {
-        mode: options.approvalMode ?? projectApprovals.mode,
+        mode: effective.options.approvalMode,
         commands: projectApprovals.commands,
       };
       const legacyRun = deps.legacyTicketRuns === true;
@@ -638,11 +701,10 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const prompts = ticketRunPrompts(ticket, limits, workflow, {
         fullAuto: !legacyRun && approvals.mode === 'full-auto',
       });
-      const reviewStage = reviewStageOf(workflow);
       const reviewLoop = {
         ticketKey: ticket.key,
-        reviewer: options.reviewer ?? reviewStage.reviewer,
-        maxReworkRounds: options.maxReworkRounds ?? reviewStage.maxReworkRounds,
+        reviewer: effective.options.reviewer,
+        maxReworkRounds: effective.options.maxReworkRounds,
       };
       const legacy = legacyRun;
       // Re-read: the ticket may have moved while the setup was read.
@@ -670,6 +732,10 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         runId: run.id,
         approvalMode: legacy ? null : approvals.mode,
         reviewer: legacy ? null : reviewLoop.reviewer,
+        // Where each came from (run, ticket or project, RL-H): enum words only, no free text.
+        approvalModeFrom: legacy ? null : effective.source.approvalMode,
+        reviewerFrom: legacy ? null : effective.source.reviewer,
+        maxReworkRoundsFrom: legacy ? null : effective.source.maxReworkRounds,
       });
       return detail(ticketId);
     },
