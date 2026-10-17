@@ -317,6 +317,7 @@ the run.
 | RL-B | server, db and adapter | `packages/server/src/**`, `packages/db/src/repositories/**`, `packages/adapters/claude-code/src/managed/**` and tests             | RL-0, RL-A |
 | RL-D | web                    | `packages/web/src/**` and tests and e2e                                                                                           | RL-0, U-V  |
 | RL-V | verification           | one consented real run: two helpers, one rework, review agent, auto-edits mode, one final merge                                   | all        |
+| RL-G | full auto              | core `ApprovalMode` (additive), `packages/{orchestrator,adapters/claude-code,server,web,db}/src/**` and tests, ADR-0022, docs     | RL-V       |
 
 **Order:**
 
@@ -328,3 +329,29 @@ the run.
 
 **Tests:** fake adapters everywhere, plus real temporary git repos for the git flows. Listed per
 WP in the design notes (§5–§7).
+
+## 10. Full auto (RL-G, ADR-0022 proposed)
+
+Owner decision (2026-10-17, STATUS.md): a mode where the owner sees only the final ticket-branch
+merge.
+
+- **Mode:** `full-auto` ("Full auto"), a fourth `ApprovalMode`: the project default (Workflow
+  page, wizard) or a per-run choice (Start dialog), snapshotted with the run.
+- **Plan:** `submit_plan` approves it in the same command (lead or planner). The plan records
+  `decidedBy: 'auto'` (kept in the run snapshot as `autoApprovedPlanId`); the ticket page shows
+  "Approved automatically (Full auto)". An author over budget leaves it for the owner.
+- **Helpers and the tester** (adapter): `permissionMode: 'auto'` plus `sandbox` (`enabled`,
+  `failIfUnavailable`, `allowUnsandboxedCommands: false`, `autoAllowBashIfSandboxed: false`,
+  writes only in the worktree and `<dataDir>/sandbox-tmp/<runId>`, `.git`/`.claude` in the
+  worktree not writable, the credentials folders, the data folder and Claude's config unreadable;
+  no network block, the classifier decides), file-tool deny rules, and `TMPDIR` in the temp folder.
+- **Fail closed:** a session whose `system/init` is not in `auto`, or a sandbox that cannot start,
+  ends the agent with `failure: 'auto-mode-unavailable' | 'sandbox-unavailable'`, a readable Latest
+  line, a `full-auto-unavailable` diagnostic and a note to the lead.
+- **Gate:** what still reaches it for a helper or tester runs only by the Auto edits rules and is
+  otherwise denied at once (`full-auto-denied`); the command allowlist never overrides the
+  classifier; nothing is parked for the owner.
+- **Unchanged:** the lead, planner and reviewers (default mode, read-only); no subagents; the
+  review loop; `main` changes only on the owner's merge.
+- **Real run:** `ACP_REAL_RUN=1 ACP_REAL_RUN_MODE=full-auto` with the RL-V driver, only after the
+  owner's consent in chat.

@@ -27,3 +27,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0019](0019-workflow-stages-and-roles.md)                | Workflow stages and the planner, reviewer and tester roles | accepted |
 | [0020](0020-resume-the-lead-chat.md)                     | Resume the lead's chat on an owner message                 | accepted |
 | [0021](0021-approval-modes-review-loop-ticket-branch.md) | Approval modes, the review loop and the ticket branch      | accepted |
+| [0022](0022-full-auto-mode.md)                           | Full auto mode                                             | proposed |

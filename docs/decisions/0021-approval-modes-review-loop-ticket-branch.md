@@ -6,6 +6,9 @@
 - **Amends:** ADR-0013 §4–§5 and its 2026-10-13 amendment, ADR-0016 (stored text), ADR-0017 §4,
   ADR-0019 §2–§3, the ADR-0020 context
 - **Plan:** [docs/review-loop/README.md](../review-loop/README.md) (RL series, v0.1.0)
+- **Amended by:** [ADR-0022](0022-full-auto-mode.md) (proposed): a fourth mode, `full-auto`, where
+  helpers and the tester run in Claude Code's auto mode inside the OS sandbox and the plan is
+  approved automatically (decision 1 below gains it)
 
 ## Context
 

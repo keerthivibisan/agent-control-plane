@@ -24,8 +24,8 @@ once. Before 1.0.0, features and data formats may still change between releases.
   - The app remembers your choice in this browser. Until you choose, narrow windows show the icons.
   - In the slim view, each icon shows its name when you point at it.
 - Approval modes
-  - Choose how much helpers may do without asking you: Manual (everything asks), Auto edits or
-    Auto. Set it for the project on the Workflow page and in the new-project setup, and change it
+  - Choose how much helpers may do without asking you: Manual (everything asks), Auto edits,
+    Auto or Full auto (below). Set it for the project on the Workflow page and in the new-project setup, and change it
     for one run when you start a ticket ("Start with options…").
   - Auto edits lets a helper edit files in its own copy of the project and run the project's
     exact harness checks. It is the default for new projects; existing projects keep how they
@@ -33,6 +33,16 @@ once. Before 1.0.0, features and data formats may still change between releases.
   - Auto also runs the commands you list, matched word for word or with any arguments. Commands
     that could chain, redirect or leave the project are refused when you add them.
   - Requests approved this way show which rule allowed them.
+- Full auto
+  - A fourth approval mode for when you only want to see the final merge. The plan is approved
+    automatically, and nothing asks you while the ticket runs.
+  - Helpers work in Claude Code's own auto mode, where a second model reviews risky actions, and
+    their commands run in your operating system's sandbox: they can write only in their own copy
+    of the project and a temporary folder, and cannot read your SSH, cloud or GitHub credentials,
+    the app's data or Claude Code's settings.
+  - If auto mode or the sandbox is not available, the helper stops and says why; it never runs
+    unprotected. Anything that would still need a decision is refused instead of waiting for you.
+  - It can still make mistakes: you review everything once, when you merge the ticket branch.
 - Review before merge, with rework
   - Each helper's finished change is reviewed before it goes anywhere: by a read-only review
     agent (the default) or by the lead.
