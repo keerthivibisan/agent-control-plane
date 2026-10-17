@@ -12,6 +12,7 @@ import type {
   AllowRule,
   ChangeReviewerMode,
   ManagedAgentEvent,
+  ManagedFailureCode,
   PermissionRequest,
   ProjectApprovals,
   ProjectWorkflow,
@@ -31,7 +32,13 @@ import {
 } from './policy.js';
 import { ruleAllowedByMode } from './allowlist.js';
 import type { AllowlistVerdict } from './allowlist.js';
-import { enterReview, isFinalChangeState, undecidedChanges, waitingLines } from './loop.js';
+import {
+  enterReview,
+  isFinalChangeState,
+  notifyLead,
+  undecidedChanges,
+  waitingLines,
+} from './loop.js';
 import {
   hasPostMergeStages,
   hasReviewableChange,
@@ -426,6 +433,13 @@ export function agentEvent(
           d.effects.push({ type: 'diagnostic', code: 'event-after-end', agentRunId });
           return done;
         }
+        // ADR-0022: a Full auto agent whose protections were unavailable did no work. Say why in
+        // its Latest line and tell the lead; it then ends like any failed turn.
+        if (event.failure !== undefined && event.outcome === 'error') {
+          agent.latestActivity = FULL_AUTO_FAILURE_ACTIVITY[event.failure];
+          d.effects.push({ type: 'diagnostic', code: 'full-auto-unavailable', agentRunId });
+          notifyLead(d, fullAutoFailureNote(agent.role, agent.id, event.failure));
+        }
         const to =
           event.outcome === 'success'
             ? 'SUCCEEDED'
@@ -465,6 +479,23 @@ export function agentEvent(
       }
     }
   });
+}
+
+/** The Latest line of a Full auto agent that could not run protected (ADR-0022). */
+export const FULL_AUTO_FAILURE_ACTIVITY: Readonly<Record<ManagedFailureCode, string>> = {
+  'auto-mode-unavailable':
+    "Could not start: Claude Code's auto mode is not available for this model or account (Full auto needs it)",
+  'sandbox-unavailable':
+    'Could not start: the operating-system sandbox is not available on this computer (Full auto needs it)',
+};
+
+/** The engine's message to the lead about it: every later helper would fail the same way. */
+export function fullAutoFailureNote(role: string, id: string, code: ManagedFailureCode): string {
+  const why =
+    code === 'auto-mode-unavailable'
+      ? "Claude Code's auto mode is not available for this model or account"
+      : 'the operating-system sandbox is not available on this computer';
+  return `${role} (agentId ${id}) could not start in Full auto: ${why}, so it did no work and never ran unprotected. Every helper would fail the same way: do not start more helpers. Once every change is decided, call request_review so the owner sees why.`;
 }
 
 export interface RequestPermissionOptions {

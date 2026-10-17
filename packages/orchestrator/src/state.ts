@@ -416,7 +416,9 @@ export type EngineEffect =
         | 'invalid-usage'
         | 'event-after-end'
         | 'follow-up-session-changed'
-        | 'follow-up-over-budget';
+        | 'follow-up-over-budget'
+        /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
+        | 'full-auto-unavailable';
       agentRunId: string;
     };
 

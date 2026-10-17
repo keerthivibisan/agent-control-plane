@@ -15,9 +15,12 @@ export * from './limits.js';
 export * from './tree.js';
 export * from './allowlist.js';
 export {
+  FULL_AUTO_LEAD_LINE,
+  FULL_AUTO_PLAN_LINE,
   LEAD_ROLE,
   approvedPlan,
   decidePlan,
+  isFullAuto,
   pendingPlan,
   plannedHelpers,
   ticketLeadPrompt,
@@ -25,16 +28,18 @@ export {
   ticketPlannerPrompt,
   ticketRunPrompts,
 } from './plan.js';
-export type { PlanDecision } from './plan.js';
+export type { PlanDecision, PromptOptions } from './plan.js';
 export type * from './state.js';
 export { SUMMARY_MAX_CHARS, cleanSummary, formatTokens } from './draft.js';
 export {
+  FULL_AUTO_FAILURE_ACTIVITY,
   agentEvent,
   cancelRun,
   completeCancellation,
   createRun,
   decideApproval,
   expireApprovals,
+  fullAutoFailureNote,
   isApprovalOverdue,
   isRunPastDeadline,
   ownerChat,
