@@ -25,11 +25,15 @@ const SCRIPTS: Record<string, string> = {
   'fail.mjs': "console.error('2 tests failed'); process.exit(3);",
   'cwd.mjs': 'console.log(process.cwd());',
   'env.mjs': 'console.log(JSON.stringify(Object.keys(process.env)));',
+  // Everything on stdout: stdout and stderr are separate pipes, so a last line on stderr can arrive
+  // before the end of stdout and fall outside the kept tail (a flake seen under load).
   'noisy.mjs': [
     "const line = 'x'.repeat(99) + '\\n';",
     'for (let i = 0; i < 1000; i++) process.stdout.write(line);',
-    "process.stderr.write('\\u001b[31mred\\u001b[0m deploy with api_key=sk_live_abcdef123456\\n');",
+    "process.stdout.write('\\u001b[31mred\\u001b[0m deploy with api_key=sk_live_abcdef123456\\n');",
   ].join('\n'),
+  'stderr.mjs':
+    "process.stderr.write('\\u001b[33mwarn\\u001b[0m token=sk_live_abcdef123456 on stderr\\n');",
   // Starts a grandchild that would run forever, records its pid, then hangs itself.
   'hang.mjs': [
     "import { spawn } from 'node:child_process';",
@@ -273,6 +277,20 @@ describe('createCheckRunner', { timeout: 30_000 }, () => {
     expect(tail).toContain('api_key=');
     expect(tail).not.toContain('\u001b');
     expect(tail).toContain('red deploy');
+  });
+
+  it('keeps stderr output too, redacted and without terminal codes', async () => {
+    const [result] = await createCheckRunner().run({
+      ...base,
+      root: checkout(),
+      checks: [check('stderr', ['node', 'scripts/stderr.mjs'])],
+    });
+    expect(result?.status).toBe('passed');
+    const tail = result?.outputTail ?? '';
+    expect(tail).toContain('warn token=');
+    expect(tail).toContain('on stderr');
+    expect(tail).not.toContain('sk_live_abcdef123456');
+    expect(tail).not.toContain('\u001b');
   });
 
   it('stops a check at its timeout, including its child processes', async () => {
