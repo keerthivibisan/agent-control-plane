@@ -4,16 +4,17 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 `release/0.1.0`, from `main` at `ba280d9`). Work-package branches `wp/u-<id>-<slug>` come off
 `feature/ui-refresh` and are merged back with `--ff-only` after review.
 
-| WP  | Title                                                     | After   | Status   | Branch                 | Merged    |
-| --- | --------------------------------------------------------- | ------- | -------- | ---------------------- | --------- |
-| U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done** | feature/ui-refresh     | —         |
-| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | **done** | wp/u-a-foundation      | `a4a554f` |
-| U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | **done** | wp/u-b-shell           | `7a253f1` |
-| U-C | Board                                                     | U-A     | **done** | wp/u-c-board           | `4dd57b9` |
-| U-D | Ticket page                                               | U-A     | **done** | wp/u-d-ticket          | `c1a0a98` |
-| U-E | Workflow, Skills & Agents                                 | U-A     | **done** | wp/u-e-workflow-skills | `405ea57` |
-| U-F | Tokens, Harness, Sessions, projects, settings, health     | U-A     | **done** | wp/u-f-pages           | `c7e80a7` |
-| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG | U-B…U-F | todo     | —                      | —         |
+| WP  | Title                                                                     | After   | Status      | Branch                 | Merged    |
+| --- | ------------------------------------------------------------------------- | ------- | ----------- | ---------------------- | --------- |
+| U-0 | Docs, dependencies, DESIGN.md v2 direction                                | —       | **done**    | feature/ui-refresh     | —         |
+| U-A | Foundation: tokens, fonts, icons, primitives, motion                      | U-0     | **done**    | wp/u-a-foundation      | `a4a554f` |
+| U-B | Shell: top bar, sidebar, switcher, palette                                | U-A     | **done**    | wp/u-b-shell           | `7a253f1` |
+| U-C | Board                                                                     | U-A     | **done**    | wp/u-c-board           | `4dd57b9` |
+| U-D | Ticket page                                                               | U-A     | **done**    | wp/u-d-ticket          | `c1a0a98` |
+| U-E | Workflow, Skills & Agents                                                 | U-A     | **done**    | wp/u-e-workflow-skills | `405ea57` |
+| U-F | Tokens, Harness, Sessions, projects, settings, health                     | U-A     | **done**    | wp/u-f-pages           | `c7e80a7` |
+| U-G | Brand: Control Core logo, ivory/graphite/lime palette, square agent nodes | U-B…U-F | in-progress | wp/u-g-brand           | —         |
+| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG                 | U-B…U-F | todo        | —                      | —         |
 
 ## Decisions (owner, 2026-10-17)
 
@@ -65,3 +66,8 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   Found at a 334 px viewport: the page header keeps the title and its actions in one row, so
   "All projects" wraps letter by letter. **U-V:** stack PageHeader actions under the title below
   `sm`, and add a narrow-width (e.g. 390 px) screenshot and e2e pass.
+- 2026-10-17 the owner checked the live app and said "everything is okay".
+- 2026-10-17 the owner asked for a real logo, and gave a brand brief (`brand-brief.md`).
+  - Decisions: full ivory/graphite/lime palette (replaces the blue), the name stays "Agent Control
+    Plane", Inter + JetBrains Mono (swapped in `1f2065f`), square agent nodes.
+  - New WP **U-G (brand)** runs before U-V.
