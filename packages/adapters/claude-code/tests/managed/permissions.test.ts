@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES } from '@acp/core';
+import { LEAD_TOOL_NAMES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
 import type { ManagedAgentSpec, PermissionDecision, PermissionRequest } from '@acp/core';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
@@ -198,7 +198,10 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
   });
 
   it('denies the lead post_review without asking: only a reviewer gets it (decision B)', async () => {
-    expect(LEAD_ROLE_TOOL_NAMES).toEqual(LEAD_TOOL_NAMES.filter((n) => n !== 'post_review'));
+    // RL-0: the review-loop tools are not offered yet (RL-B wires them).
+    expect(LEAD_ROLE_TOOL_NAMES).toEqual(
+      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(n)),
+    );
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('post_review');
     const { canUseTool, requests } = setup('lead');
     await expect(

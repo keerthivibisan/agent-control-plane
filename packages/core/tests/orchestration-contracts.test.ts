@@ -51,6 +51,13 @@ describe('lead tools', () => {
         'start_agent',
         'stop_agent',
         'submit_plan',
+        // ADR-0021 review loop
+        'view_change',
+        'merge_change',
+        'request_rework',
+        'discard_change',
+        'ask_owner',
+        'submit_review',
       ].sort(),
     );
     expect(

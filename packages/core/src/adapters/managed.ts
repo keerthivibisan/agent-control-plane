@@ -56,7 +56,24 @@ export interface ManagedAgentSpec {
    * the read-only toolset and no control-plane tools, and closes the input after one turn.
    */
   followUp?: { resumeSessionId: string };
+  /**
+   * A rework turn of a helper or tester (ADR-0021 §3): the agent works again in its own worktree on
+   * the lead's or owner's comments. `resumeSessionId` resumes its earlier session (SDK `resume`,
+   * never forked); null starts a fresh session with the comments in the prompt. A rework turn
+   * never gets `canStartHelpers`.
+   */
+  rework?: { resumeSessionId: string | null };
+  /**
+   * What a `reviewer` reviews (ADR-0021 §3, §5): `change` is one helper's sealed change on a
+   * detached checkout of that commit, with `submit_review` as its only control tool; `final` is the
+   * ticket branch tip after every change is decided, with `post_review` (ADR-0019's code review).
+   * Absent: `final`, as before ADR-0021.
+   */
+  reviewScope?: ReviewScope;
 }
+
+/** What a reviewer agent reviews (`ManagedAgentSpec.reviewScope`). */
+export type ReviewScope = 'change' | 'final';
 
 /** Executes a lead tool call after the engine has validated it; returns text for the model. */
 export type LeadToolHandler = (name: LeadToolName, input: unknown) => Promise<string>;

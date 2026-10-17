@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { GitCommitSchema } from '../orchestration/orchestration.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
 
 /**
@@ -94,7 +95,11 @@ export type TicketComment = z.infer<typeof TicketCommentSchema>;
 
 export const PlanStepSchema = z.object({
   title: z.string().trim().min(1).max(120),
-  /** Helper role that will do this step, e.g. "Backend"; "Lead" for steps the lead does itself. */
+  /**
+   * The helper role that does this step, e.g. "Backend". Every step goes to a helper: the lead is
+   * read-only and never does a step itself (ADR-0021; the engine refuses lead, planner and
+   * orchestrator as roles).
+   */
   role: z.string().trim().min(1).max(60),
   detail: z.string().max(2000),
 });
@@ -133,6 +138,222 @@ export const ProjectAllowlistSchema = z.object({
 });
 export type ProjectAllowlist = z.infer<typeof ProjectAllowlistSchema>;
 
+// ---------------------------------------------------------------- approval modes (ADR-0021)
+
+/**
+ * How much a ticket run's helpers and tester may do without asking (ADR-0021 §1). The project
+ * holds the default; a run snapshots it at start and may override it. The lead, planner and
+ * reviewers are never covered: they always ask, and the lead never approves anything itself.
+ * - `manual`: every edit, write and command asks, harness checks included;
+ * - `auto-edits`: edits inside the agent's own worktree (never under `.git` or `.claude`) and
+ *   commands that exactly match a harness check run without asking;
+ * - `auto`: `auto-edits` plus the project's command allowlist (`ProjectApprovals.commands`).
+ */
+export const ApprovalModeSchema = z.enum(['manual', 'auto-edits', 'auto']);
+export type ApprovalMode = z.infer<typeof ApprovalModeSchema>;
+export const APPROVAL_MODES = ApprovalModeSchema.options;
+/** The mode a newly created project starts with. Existing projects keep their mapped setting. */
+export const DEFAULT_APPROVAL_MODE: ApprovalMode = 'auto-edits';
+
+/** Why an action ran without asking (`ApprovalDto.allowRule`, `approvals.allow_rule`). */
+export const AllowRuleSchema = z.enum([
+  'edit-in-own-worktree',
+  'run-harness-check',
+  'command-allowlist',
+]);
+export type AllowRule = z.infer<typeof AllowRuleSchema>;
+
+/** Most patterns one project's command allowlist holds. */
+export const MAX_COMMAND_PATTERNS = 30;
+/** Most tokens one command pattern holds. */
+export const MAX_COMMAND_PATTERN_TOKENS = 8;
+
+/**
+ * Characters a command token may hold. Joining such tokens with single spaces gives a command line
+ * that is exact and shell-inert (the same set the harness-check rule uses, ADR-0013 amendment):
+ * no quotes, spaces, `$`, `;`, `|`, `&`, `<`, `>`, `*`, `?`, `~`, backslashes or brackets.
+ */
+export const COMMAND_TOKEN_PATTERN = /^[A-Za-z0-9._/:=@+%,-]{1,200}$/;
+/** A bare command name resolved through PATH, as for harness checks (ADR-0017). */
+export const BARE_COMMAND_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+
+/**
+ * True when `token` may appear in an allowlisted command: only `COMMAND_TOKEN_PATTERN`
+ * characters, not an absolute path (also not after `=`, `:`, `,` or `@`, as in `--out=/etc`), and
+ * no `..` anywhere. The gate applies the same rule to the command an agent actually runs.
+ */
+export function isSafeCommandToken(token: string): boolean {
+  if (!COMMAND_TOKEN_PATTERN.test(token) || token.includes('..')) return false;
+  return token.split(/[=:,@]/).every((part) => !part.startsWith('/'));
+}
+
+/**
+ * Commands that can never be allowlisted: they run other commands, change the shell, raise
+ * privileges or reach the network (ADR-0021 §2). Compared with argv[0] exactly.
+ */
+export const FORBIDDEN_ALLOWLIST_COMMANDS: readonly string[] = Object.freeze([
+  // shells
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'ksh',
+  'mksh',
+  'fish',
+  'csh',
+  'tcsh',
+  'ash',
+  'busybox',
+  'pwsh',
+  // command runners and wrappers
+  'env',
+  'sudo',
+  'su',
+  'doas',
+  'xargs',
+  'eval',
+  'exec',
+  'command',
+  'builtin',
+  'nohup',
+  'timeout',
+  'nice',
+  'time',
+  'watch',
+  'setsid',
+  'stdbuf',
+  'chroot',
+  // shell state
+  'cd',
+  'export',
+  'alias',
+  'source',
+  'set',
+  'unset',
+  // remote access and network
+  'ssh',
+  'scp',
+  'sftp',
+  'rsync',
+  'curl',
+  'wget',
+  'nc',
+  'ncat',
+  'netcat',
+  'socat',
+  'telnet',
+]);
+
+/** The only `git` subcommands an allowlist pattern may name (owner default, ADR-0021 §2). */
+export const GIT_READ_ONLY_SUBCOMMANDS: readonly string[] = Object.freeze([
+  'status',
+  'diff',
+  'log',
+  'show',
+  'rev-parse',
+  'ls-files',
+  'blame',
+  'grep',
+]);
+
+/**
+ * `git` options that are never allowlisted, anywhere in the command: they change the repository,
+ * config or working directory git acts on (`-c`, `-C`, `--git-dir`, `--work-tree`, `--exec-path`,
+ * `--config-env`), run another program (`-O`/`--open-files-in-pager` of `git grep`,
+ * `--ext-diff`), or write a file (`--output`).
+ */
+export function isForbiddenGitOption(token: string): boolean {
+  if (token === '-c' || token === '-C' || token.startsWith('-O')) return true;
+  return [
+    '--git-dir',
+    '--work-tree',
+    '--exec-path',
+    '--config-env',
+    '--open-files-in-pager',
+    '--ext-diff',
+    '--output',
+  ].some((option) => token === option || token.startsWith(`${option}=`));
+}
+
+export const CommandTokenSchema = z
+  .string()
+  .regex(COMMAND_TOKEN_PATTERN, 'letters, digits and . _ / : = @ + % , - only (up to 200)')
+  .refine(isSafeCommandToken, 'must not be an absolute path or contain ..');
+
+/**
+ * One command allowlist entry (ADR-0021 §2): `exact` allows exactly these words; `prefix` allows
+ * these words followed by any further safe tokens (for example `npm` or `mvn` with any arguments).
+ */
+export const CommandPatternSchema = z
+  .object({
+    argv: z.array(CommandTokenSchema).min(1).max(MAX_COMMAND_PATTERN_TOKENS),
+    match: z.enum(['exact', 'prefix']),
+  })
+  .superRefine((pattern, ctx) => {
+    const [command, sub] = pattern.argv;
+    if (command === undefined) return;
+    if (!BARE_COMMAND_PATTERN.test(command)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['argv', 0],
+        message: 'the first word must be a plain command name such as npm, mvn or make',
+      });
+    } else if (FORBIDDEN_ALLOWLIST_COMMANDS.includes(command)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['argv', 0],
+        message: `"${command}" runs other commands or reaches the network, so it cannot be allowed`,
+      });
+    }
+    if (command !== 'git') return;
+    if (sub === undefined || !GIT_READ_ONLY_SUBCOMMANDS.includes(sub)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['argv', 1],
+        message: `git needs a read-only subcommand: ${GIT_READ_ONLY_SUBCOMMANDS.join(', ')}`,
+      });
+    }
+    pattern.argv.forEach((token, i) => {
+      if (isForbiddenGitOption(token)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['argv', i],
+          message: `the git option ${token} cannot be allowed`,
+        });
+      }
+    });
+  });
+export type CommandPattern = z.infer<typeof CommandPatternSchema>;
+
+/** A project's approval settings (ADR-0021 §1–2), stored in `project_setup.setup`. */
+export const ProjectApprovalsSchema = z.object({
+  mode: ApprovalModeSchema,
+  /** Used only in `auto` mode, but kept when the owner switches modes. */
+  commands: z
+    .array(CommandPatternSchema)
+    .max(MAX_COMMAND_PATTERNS)
+    .refine(
+      (list) => new Set(list.map((p) => `${p.match} ${p.argv.join(' ')}`)).size === list.length,
+      { message: 'each command is listed once' },
+    ),
+});
+export type ProjectApprovals = z.infer<typeof ProjectApprovalsSchema>;
+
+/**
+ * The mode a project set up before ADR-0021 behaves as: edits pre-approved means `auto-edits`,
+ * anything else `manual`. No command allowlist existed, so `commands` is empty.
+ */
+export function approvalsFromLegacy(allowlist: ProjectAllowlist): ProjectApprovals {
+  return { mode: allowlist.editInOwnWorktree ? 'auto-edits' : 'manual', commands: [] };
+}
+
+/** A project's effective approvals: its own, or the legacy allowlist's mapping when it has none. */
+export function approvalsOf(
+  setup: Pick<ProjectAgentSetup, 'allowlist' | 'approvals'>,
+): ProjectApprovals {
+  return setup.approvals ?? approvalsFromLegacy(setup.allowlist);
+}
+
 export const ProjectAgentSetupSchema = z.object({
   projectId: z.string().min(1),
   projectKey: ProjectKeySchema,
@@ -142,7 +363,13 @@ export const ProjectAgentSetupSchema = z.object({
   maxDepth: z.number().int().min(1).max(HARD_MAX_DEPTH),
   defaultBudgetTokensPerAgent: z.number().int().positive(),
   model: z.string().min(1).max(100).nullable(),
+  /**
+   * The pre-ADR-0021 allowlist. Kept until RL-B and RL-D read and write `approvals` instead; read
+   * a project's effective settings with `approvalsOf(setup)`.
+   */
   allowlist: ProjectAllowlistSchema,
+  /** Approval mode and command allowlist (ADR-0021). Absent on setups saved before it. */
+  approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
   updatedAt: IsoTimestampSchema,
 });
@@ -214,6 +441,11 @@ export const CheckRunSchema = z.object({
   /** Last ≤ 16 KiB of combined output, redacted (ADR-0017). */
   outputTail: z.string().max(MAX_CHECK_OUTPUT_BYTES),
   startedAt: IsoTimestampSchema,
+  /**
+   * The commit the check ran on (ADR-0021: checks gate a merge only for the commit they ran on;
+   * `check_runs.commit_sha`). Null or absent for check runs recorded before it.
+   */
+  commit: GitCommitSchema.nullable().optional(),
 });
 export type CheckRun = z.infer<typeof CheckRunSchema>;
 

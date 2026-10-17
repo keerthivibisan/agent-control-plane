@@ -61,6 +61,25 @@ export const RunWorkflowDtoSchema = z.object({
       agentRunIds: z.array(z.string().min(1)),
     }),
   ),
+  /**
+   * ADR-0021: how many changes are in each part of the review loop, for the graph's review stage.
+   * Absent for runs without the loop.
+   */
+  review: z
+    .object({
+      /** `sealing` or `ready`. */
+      waiting: count,
+      /** `reviewing` or `decision`. */
+      inReview: count,
+      rework: count,
+      needsOwner: count,
+      merged: count,
+      discarded: count,
+      noChanges: count,
+      /** Rework rounds used across all changes (the "rework ×n" edge). */
+      reworkRounds: count,
+    })
+    .optional(),
 });
 export type RunWorkflowDto = z.infer<typeof RunWorkflowDtoSchema>;
 

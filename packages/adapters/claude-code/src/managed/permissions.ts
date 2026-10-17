@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { LEAD_TOOL_NAMES } from '@acp/core';
+import { LEAD_TOOL_NAMES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -34,9 +34,11 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 /**
  * The lead's tools: every lead tool except `post_review`, which only a reviewer gets (ADR-0019,
  * decision B). The engine refuses `post_review` from anyone else as well.
+ * RL-0 placeholder: the review-loop tools (ADR-0021) are left out until RL-B gives the lead its
+ * change tools and the change reviewer `submit_review`.
  */
 export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.filter(
-  (name) => name !== 'post_review',
+  (name) => name !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(name),
 );
 
 /** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */

@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES, LeadToolInputs } from '@acp/core';
+import { LEAD_TOOL_NAMES, LeadToolInputs, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName } from '@acp/core';
 import type { z } from 'zod';
 import { applyCommand, requestReview, stopAgent } from './commands.js';
@@ -62,8 +62,12 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
   const kind: AgentRoleKind = agent.kind;
   switch (kind) {
     case 'lead':
+      // RL-0 placeholder: the review-loop tools (ADR-0021) are offered once RL-A handles them.
       return LEAD_TOOL_NAMES.filter(
-        (n) => n !== 'post_review' && !(n === 'submit_plan' && isSeparatePlanner(state)),
+        (n) =>
+          n !== 'post_review' &&
+          !REVIEW_LOOP_TOOL_NAMES.includes(n) &&
+          !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
     case 'planner':
       return ['submit_plan'];
@@ -265,6 +269,22 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       return postReview(state, caller.id, parsed.data.text, ctx);
     }
+
+    // RL-0 placeholder (ADR-0021): the review-loop tools exist in the contract, but no agent is
+    // offered them and no run has the loop yet. RL-A replaces this with the real handlers.
+    case 'view_change':
+    case 'merge_change':
+    case 'request_rework':
+    case 'discard_change':
+    case 'ask_owner':
+    case 'submit_review':
+      return {
+        ok: false,
+        refusal: refusal(
+          'run-not-active',
+          'This run has no review loop, so this tool is unavailable.',
+        ),
+      };
   }
 }
 

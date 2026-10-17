@@ -43,6 +43,11 @@ export const AGENT_TRANSITIONS: Readonly<Record<AgentRunStatus, readonly AgentRu
     WAITING_APPROVAL: ['RUNNING', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
     // Budget soft cap (ADR-0014): the owner raises the cap (→ RUNNING) or stops the agent.
     BLOCKED: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
+    // ADR-0021 review loop. RL-0 placeholder: the outgoing edges only (rework → STARTING, decided
+    // → SUCCEEDED, Stop all → CANCELLED, restart → NEEDS_REVIEW), so the status is not terminal.
+    // No edge leads INTO it yet, so no agent can reach it; RL-A adds RUNNING/STARTING/BLOCKED →
+    // AWAITING_REVIEW with the loop.
+    AWAITING_REVIEW: ['STARTING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
     SUCCEEDED: [],
     FAILED: [],
     CANCELLED: [],

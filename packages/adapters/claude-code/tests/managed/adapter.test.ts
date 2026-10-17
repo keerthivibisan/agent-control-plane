@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES } from '@acp/core';
+import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
 import type {
   ManagedAgentEvent,
   ManagedAgentSpec,
@@ -244,7 +244,10 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
   it('gives the lead every lead tool except post_review, including submit_plan', () => {
     servers.toolNames.length = 0;
     optionsFor(spec('lead'));
-    expect(servers.toolNames).toEqual([LEAD_TOOL_NAMES.filter((n) => n !== 'post_review')]);
+    // RL-0: the review-loop tools are not offered yet (RL-B wires them).
+    expect(servers.toolNames).toEqual([
+      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(n)),
+    ]);
     expect(servers.toolNames[0]).toContain('submit_plan');
     expect(servers.toolNames[0]).not.toContain('post_review');
   });

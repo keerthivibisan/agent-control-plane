@@ -5,10 +5,24 @@ import {
   AgentRunStatusSchema,
   ApprovalKindSchema,
   ApprovalStatusSchema,
+  ChangeDeciderSchema,
+  ChangeDecisionSchema,
+  ChangeReviewerKindSchema,
+  ChangeStateSchema,
+  ChangeVerdictSchema,
+  GitCommitSchema,
   ReviewStateSchema,
   RunBudgetSchema,
   RunStatusSchema,
+  TicketBranchNameSchema,
+  TicketBranchStateSchema,
 } from '../orchestration/orchestration.js';
+import {
+  AllowRuleSchema,
+  ApprovalModeSchema,
+  CheckRunSchema,
+  RepoRelativePathSchema,
+} from '../workspace/workspace.js';
 
 /**
  * HTTP contracts for the control panel (Phase 3, milestone M1). Mutating requests also need the
@@ -53,6 +67,11 @@ export const ApprovalDtoSchema = z.object({
   status: ApprovalStatusSchema,
   /** Who decided (Phase 4): the owner, the project allowlist (ADR-0013 amendment) or the timeout. */
   decidedBy: z.enum(['owner', 'allowlist', 'timeout']).nullable().optional(),
+  /**
+   * ADR-0021: which rule let an action run without asking, when `decidedBy` is `allowlist`. Null
+   * or absent otherwise, and for approvals decided before it.
+   */
+  allowRule: AllowRuleSchema.nullable().optional(),
   requestedAt: IsoTimestampSchema,
   decidedAt: IsoTimestampSchema.nullable(),
 });
@@ -106,12 +125,77 @@ export const RunSummaryDtoSchema = z.object({
 });
 export type RunSummaryDto = z.infer<typeof RunSummaryDtoSchema>;
 
+// ---------------------------------------------------------------- review loop (ADR-0021)
+
+/** One review round of a helper's change and what was decided about it (`change_reviews`). */
+export const ChangeReviewRoundDtoSchema = z.object({
+  id: z.string().min(1),
+  /** 0 for the first review; 1, 2, … after each rework. */
+  round: count,
+  reviewer: ChangeReviewerKindSchema,
+  /** The review agent's run, when `reviewer` is `agent`. */
+  reviewerAgentRunId: z.string().min(1).nullable(),
+  /** The review agent's verdict; null for the lead or owner, or while the review runs. */
+  verdict: ChangeVerdictSchema.nullable(),
+  /** Null until decided. */
+  decision: ChangeDecisionSchema.nullable(),
+  decidedBy: ChangeDeciderSchema.nullable(),
+  /** The ticket comment holding the findings or the lead's note (ADR-0021 §6); null when none. */
+  commentId: z.string().min(1).nullable(),
+  createdAt: IsoTimestampSchema,
+  decidedAt: IsoTimestampSchema.nullable(),
+});
+export type ChangeReviewRoundDto = z.infer<typeof ChangeReviewRoundDtoSchema>;
+
+/** One helper's or tester's change in the review loop (the ticket page's change card). */
+export const ChangeReviewDtoSchema = z.object({
+  agentRunId: z.string().min(1),
+  role: z.string().min(1),
+  state: ChangeStateSchema,
+  /** Rework rounds used so far, and the run's limit (the owner can grant more). */
+  reworkRounds: count,
+  maxReworkRounds: count,
+  /** The sealed (or integrated) commit; null before the change is sealed. */
+  headCommit: GitCommitSchema.nullable(),
+  changedFiles: count.nullable(),
+  /** Names of the files that conflicted with the ticket branch on the last merge attempt. */
+  conflictFiles: z.array(RepoRelativePathSchema).max(100),
+  /** Check runs on `headCommit` only (ADR-0021: checks are stored with their commit). */
+  checks: z.array(CheckRunSchema),
+  /** Oldest first. */
+  reviews: z.array(ChangeReviewRoundDtoSchema),
+});
+export type ChangeReviewDto = z.infer<typeof ChangeReviewDtoSchema>;
+
+/** The run's ticket branch (ADR-0021 §4, `ticket_branches`). */
+export const TicketBranchDtoSchema = z.object({
+  runId: z.string().min(1),
+  branch: TicketBranchNameSchema,
+  baseBranch: z.string().min(1),
+  /** The base branch's commit when the ticket branch was created. */
+  baseCommit: GitCommitSchema,
+  /** The branch tip; it moves only by a server-side compare-and-swap after a merged change. */
+  headCommit: GitCommitSchema,
+  state: TicketBranchStateSchema,
+  /** The base branch's commit after the owner's merge; null until merged. */
+  mergedCommit: GitCommitSchema.nullable(),
+  createdAt: IsoTimestampSchema,
+  updatedAt: IsoTimestampSchema,
+});
+export type TicketBranchDto = z.infer<typeof TicketBranchDtoSchema>;
+
 export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   budget: RunBudgetSchema,
   agents: z.array(AgentRunDtoSchema),
   approvals: z.array(ApprovalDtoSchema),
   messages: z.array(ChatMessageDtoSchema),
   followUp: RunFollowUpDtoSchema.optional(),
+  /** ADR-0021: the approval mode this run snapshotted at start. Absent for runs before it. */
+  approvalMode: ApprovalModeSchema.optional(),
+  /** ADR-0021: the run's ticket branch; null before plan approval, absent for legacy runs. */
+  ticketBranch: TicketBranchDtoSchema.nullable().optional(),
+  /** ADR-0021: each helper's change in the review loop, oldest first. Absent for legacy runs. */
+  changes: z.array(ChangeReviewDtoSchema).optional(),
 });
 export type RunDetailDto = z.infer<typeof RunDetailDtoSchema>;
 
@@ -141,6 +225,27 @@ export const ReviewDtoSchema = z.object({
 });
 export type ReviewDto = z.infer<typeof ReviewDtoSchema>;
 
+/**
+ * GET `/api/runs/:id/ticket-branch` (ADR-0021 §4): the combined change `base..tip` for the owner's
+ * single merge into the base branch.
+ */
+export const TicketBranchReviewDtoSchema = z.object({
+  runId: z.string().min(1),
+  ticketBranch: TicketBranchDtoSchema,
+  files: z.array(ChangedFileDtoSchema),
+  /** Unified diff `base..tip`, cut at a size limit (`diffTruncated`). */
+  diff: z.string(),
+  diffTruncated: z.boolean(),
+  /** Check runs on the tip commit (a detached temporary checkout). */
+  checks: z.array(CheckRunSchema),
+  /**
+   * The base branch moved since the ticket branch was created, so the tip no longer
+   * fast-forwards: the owner can update it from the base first.
+   */
+  baseMoved: z.boolean(),
+});
+export type TicketBranchReviewDto = z.infer<typeof TicketBranchReviewDtoSchema>;
+
 // Requests (validated by the server).
 export const StartRunRequestSchema = z.object({
   projectId: z.string().min(1),
@@ -155,11 +260,43 @@ export const ApprovalDecisionRequestSchema = z.object({
 export const ReviewActionRequestSchema = z
   .object({
     agentRunId: z.string().min(1),
-    /** `merge-anyway` (Phase 4): merge although a required harness check failed; needs a reason. */
-    action: z.enum(['merge', 'discard', 'merge-anyway']),
+    /**
+     * `merge-anyway` (Phase 4): merge although a required harness check failed; needs a reason.
+     * `rework` (ADR-0021 §3): the owner sends the change back to its helper; needs a comment.
+     */
+    action: z.enum(['merge', 'discard', 'merge-anyway', 'rework']),
     reason: z.string().trim().min(1).max(500).optional(),
+    /** What the helper should change (`rework`); stored as a ticket comment by the owner. */
+    comment: z.string().trim().min(1).max(4000).optional(),
   })
   .refine((r) => r.action !== 'merge-anyway' || r.reason !== undefined, {
     message: 'merge-anyway needs a reason',
     path: ['reason'],
+  })
+  .refine((r) => r.action !== 'rework' || r.comment !== undefined, {
+    message: 'say what should change',
+    path: ['comment'],
   });
+
+/**
+ * POST `/api/runs/:id/ticket-branch` (ADR-0021 §4, CSRF). `merge`: fast-forward the base branch to
+ * the tip (the owner's tree must be clean and on the base branch); `merge-anyway`: the same with a
+ * failed required check, with a reason; `request-changes`: the comment goes to the lead and the run
+ * returns to RUNNING; `discard`: delete the ticket branch; `update-from-base`: when `baseMoved`,
+ * merge the base into the tip in a temporary worktree and run the checks again.
+ */
+export const TicketBranchActionRequestSchema = z
+  .object({
+    action: z.enum(['merge', 'merge-anyway', 'discard', 'request-changes', 'update-from-base']),
+    reason: z.string().trim().min(1).max(500).optional(),
+    comment: z.string().trim().min(1).max(8000).optional(),
+  })
+  .refine((r) => r.action !== 'merge-anyway' || r.reason !== undefined, {
+    message: 'merge-anyway needs a reason',
+    path: ['reason'],
+  })
+  .refine((r) => r.action !== 'request-changes' || r.comment !== undefined, {
+    message: 'say what should change',
+    path: ['comment'],
+  });
+export type TicketBranchActionRequest = z.infer<typeof TicketBranchActionRequestSchema>;

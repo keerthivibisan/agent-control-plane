@@ -925,6 +925,12 @@ export const AGENT_STATUS_COPY: Readonly<Record<AgentRunStatus, ControlStatusCop
     tip: 'It used up its budget and waits for you to let it continue or stop it.',
     tone: 'waiting',
   },
+  // ADR-0021 (RL-0 placeholder copy; RL-D owns the final wording). No agent reaches it yet.
+  AWAITING_REVIEW: {
+    word: 'Waiting for review',
+    tip: 'It finished its turn. Its change is being reviewed before the lead decides what happens to it.',
+    tone: 'waiting',
+  },
   SUCCEEDED: { word: 'Finished its task', tip: 'It reported that it is done.', tone: 'done' },
   FAILED: { word: 'Failed', tip: 'It stopped because of an error.', tone: 'problem' },
   CANCELLED: { word: 'Stopped', tip: 'It was stopped.', tone: 'stopped' },

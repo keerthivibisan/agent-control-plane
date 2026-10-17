@@ -44,6 +44,8 @@ const EXPECTED_AGENT: Record<AgentRunStatus, AgentRunStatus[]> = {
   ],
   WAITING_APPROVAL: ['RUNNING', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
   BLOCKED: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
+  // ADR-0021 (RL-0 placeholder): outgoing edges only; RL-A adds the edges into it.
+  AWAITING_REVIEW: ['STARTING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
   SUCCEEDED: [],
   FAILED: [],
   CANCELLED: [],

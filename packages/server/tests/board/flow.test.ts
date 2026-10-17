@@ -207,6 +207,18 @@ describe('review, checks and merge (ADR-0017 §3–§4)', () => {
       400,
       'invalid_request',
     );
+    // RL-0 (ADR-0021): `rework` is in the contract but refused until RL-B builds the loop; it must
+    // never fall through to a merge, even with a failed check that "merge anyway" would override.
+    expectError(
+      await s.post(`/api/runs/${runId}/review`, {
+        agentRunId: worker.id,
+        action: 'rework',
+        comment: 'Fix the failing test.',
+      }),
+      409,
+      'rework_unavailable',
+    );
+    expect((await s.detail(ticket.id)).currentRun?.status).toBe('REVIEW');
 
     // Fixing it in the worktree and running the checks again on demand turns it green.
     writeFileSync(join(s.worktree(runId, worker.id), 'fixed.txt'), 'ok\n');

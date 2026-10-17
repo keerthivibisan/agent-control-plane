@@ -1746,6 +1746,15 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     async reviewAction(runId, body) {
       const input = ReviewActionRequestSchema.parse(body);
+      // RL-0 placeholder (ADR-0021): the contract accepts `rework`, but no run has the review loop
+      // yet. Refuse it here so it can never fall through to a merge; RL-B implements it.
+      if (input.action === 'rework') {
+        throw new HttpError(
+          409,
+          'rework_unavailable',
+          'This run has no review loop, so its changes cannot be sent back for rework',
+        );
+      }
       if (input.action === 'discard') {
         await applyReview(runId, input.agentRunId, 'discard');
         return review(runId);

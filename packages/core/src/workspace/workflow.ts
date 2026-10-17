@@ -5,8 +5,9 @@ import { IsoTimestampSchema } from '../domain/time.js';
  * Project workflow and skills (docs/redesign/README.md §4.2–4.3, ADR-0018, ADR-0019).
  *
  * A workflow is a fixed sequence of stages; a project turns optional stages on or off and gives each
- * agent stage a model and a skill. Agent limits (helpers, depth, budget) and the allowlist stay in
- * `ProjectAgentSetup`, so there is one source for each value.
+ * agent stage a model and a skill. Agent limits (helpers, depth, budget) and the approval settings
+ * (allowlist, ADR-0021 approvals) stay in `ProjectAgentSetup`, so there is one source for each
+ * value. The review stage's reviewer and rework rounds live here (ADR-0021).
  */
 
 /** Claude Code skill names: lowercase letters, digits and hyphens (ADR-0018). */
@@ -32,7 +33,11 @@ export const MAX_AGENT_BYTES = 64 * 1024;
 /** A Claude Code tool name in an agent's `tools` list, e.g. `Read`, `Bash`, `mcp__server__tool`. */
 export const AgentToolNameSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_:*.-]{0,99}$/);
 
-/** The stages, in order. `review` is the owner plus harness checks; it has no agent. */
+/**
+ * The stages, in order. `review` is each helper's change being reviewed (a review agent or the
+ * lead), decided by the lead and gated by the harness checks; the owner merges the ticket branch
+ * once at the end (ADR-0021 §3–4). Before ADR-0021 it was the owner plus the checks.
+ */
 export const WorkflowStageIdSchema = z.enum([
   'plan',
   'orchestrate',
@@ -63,6 +68,14 @@ const AgentStageSchema = z.object({
 /** An agent stage the project can switch off. */
 const OptionalAgentStageSchema = AgentStageSchema.extend({ enabled: z.boolean() });
 
+/** Who reviews each helper's change before the lead decides (ADR-0021 §3). */
+export const ChangeReviewerModeSchema = z.enum(['agent', 'lead']);
+export type ChangeReviewerMode = z.infer<typeof ChangeReviewerModeSchema>;
+/** Rework rounds the lead may ask for per change, unless the owner grants more (ADR-0021 §3). */
+export const DEFAULT_MAX_REWORK_ROUNDS = 2;
+export const MAX_REWORK_ROUNDS = 5;
+export const ReworkRoundsSchema = z.number().int().min(0).max(MAX_REWORK_ROUNDS);
+
 export const PlannerModeSchema = z.enum(['lead', 'separate']);
 export type PlannerMode = z.infer<typeof PlannerModeSchema>;
 
@@ -81,6 +94,16 @@ export const ProjectWorkflowSchema = z.object({
     review: z.object({
       /** Required harness checks must pass before a plain merge (ADR-0017). Always on for now. */
       requireChecks: z.literal(true),
+      /**
+       * ADR-0021 §3. The fields below are optional so workflows stored before it still parse;
+       * read them with `reviewStageOf()`, which applies the defaults (`agent`, 2 rounds, no model,
+       * skill or agent file). `model`, `skill` and `agent` configure the review agent.
+       */
+      reviewer: ChangeReviewerModeSchema.optional(),
+      maxReworkRounds: ReworkRoundsSchema.optional(),
+      model: ModelSchema.optional(),
+      skill: SkillNameSchema.nullable().optional(),
+      agent: SkillNameSchema.nullable().optional(),
     }),
     /** A read-only reviewer reads the merged result and posts findings as ticket comments. */
     'code-review': OptionalAgentStageSchema,
@@ -108,6 +131,27 @@ export function defaultProjectWorkflow(projectId: string, now: string): ProjectW
   };
 }
 
+/** The review stage's settings with the ADR-0021 defaults applied. */
+export interface ReviewStageSettings {
+  reviewer: ChangeReviewerMode;
+  maxReworkRounds: number;
+  model: string | null;
+  skill: SkillName | null;
+  agent: SkillName | null;
+}
+
+/** The review stage of `workflow`, defaults applied for a workflow stored before ADR-0021. */
+export function reviewStageOf(workflow: Pick<ProjectWorkflow, 'stages'>): ReviewStageSettings {
+  const r = workflow.stages.review;
+  return {
+    reviewer: r.reviewer ?? 'agent',
+    maxReworkRounds: r.maxReworkRounds ?? DEFAULT_MAX_REWORK_ROUNDS,
+    model: r.model ?? null,
+    skill: r.skill ?? null,
+    agent: r.agent ?? null,
+  };
+}
+
 /** The stages a skill is mapped to, in workflow order. */
 export function stagesUsingSkill(workflow: ProjectWorkflow, skill: SkillName): WorkflowStageId[] {
   const s = workflow.stages;
@@ -115,6 +159,7 @@ export function stagesUsingSkill(workflow: ProjectWorkflow, skill: SkillName): W
     ['plan', s.plan.skill],
     ['orchestrate', s.orchestrate.skill],
     ['helpers', s.helpers.skill],
+    ['review', s.review.skill ?? null],
     ['code-review', s['code-review'].skill],
     ['unit-tests', s['unit-tests'].skill],
   ];
@@ -128,6 +173,7 @@ export function stagesUsingAgent(workflow: ProjectWorkflow, agent: SkillName): W
     ['plan', s.plan.agent],
     ['orchestrate', s.orchestrate.agent],
     ['helpers', s.helpers.agent],
+    ['review', s.review.agent],
     ['code-review', s['code-review'].agent],
     ['unit-tests', s['unit-tests'].agent],
   ];

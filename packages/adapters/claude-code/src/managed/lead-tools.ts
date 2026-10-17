@@ -29,6 +29,18 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
   post_review:
     'Post your code review findings as plain text. They become a comment on the ticket for the owner; they do not block or merge anything.',
+  // ADR-0021 review loop. RL-0: defined so the contract compiles; no agent is offered these
+  // tools until RL-B wires them (`LEAD_ROLE_TOOL_NAMES` leaves them out). RL-B may reword them.
+  view_change:
+    "Look at one helper's finished change: its files, diff, checks and the reviewer's findings.",
+  merge_change:
+    "Merge one helper's reviewed change into the ticket branch. The required checks must pass on it first.",
+  request_rework:
+    'Send one helper its change back with what to fix. Refused once the rework round limit is reached.',
+  discard_change: "Drop one helper's change, with a short reason for the owner.",
+  ask_owner: "Leave the decision about one helper's change to the owner, with your question.",
+  submit_review:
+    'Submit your review of this change: a verdict (approve or rework) and your findings as plain text. The lead decides what happens next.',
 };
 
 const REFUSED = 'The control plane could not run this tool';
@@ -106,6 +118,37 @@ export function leadToolDefinitions(
       d.post_review,
       i.post_review.shape,
       run(handler, 'post_review'),
+    ),
+    view_change: tool(
+      'view_change',
+      d.view_change,
+      i.view_change.shape,
+      run(handler, 'view_change'),
+    ),
+    merge_change: tool(
+      'merge_change',
+      d.merge_change,
+      i.merge_change.shape,
+      run(handler, 'merge_change'),
+    ),
+    request_rework: tool(
+      'request_rework',
+      d.request_rework,
+      i.request_rework.shape,
+      run(handler, 'request_rework'),
+    ),
+    discard_change: tool(
+      'discard_change',
+      d.discard_change,
+      i.discard_change.shape,
+      run(handler, 'discard_change'),
+    ),
+    ask_owner: tool('ask_owner', d.ask_owner, i.ask_owner.shape, run(handler, 'ask_owner')),
+    submit_review: tool(
+      'submit_review',
+      d.submit_review,
+      i.submit_review.shape,
+      run(handler, 'submit_review'),
     ),
   };
   return LEAD_TOOL_NAMES.filter((name) => names.includes(name)).map((name) => all[name]);

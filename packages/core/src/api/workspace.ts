@@ -2,11 +2,14 @@ import { z } from 'zod';
 import { AbsolutePathSchema } from '../domain/project.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { TokenCountsSchema } from '../usage/usage.js';
+import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import {
+  ApprovalModeSchema,
   CheckRunSchema,
   HarnessStatusSchema,
   ProjectAgentSetupSchema,
   ProjectAllowlistSchema,
+  ProjectApprovalsSchema,
   ProjectKeySchema,
   RepoRelativePathSchema,
   TicketCommentSchema,
@@ -107,8 +110,20 @@ export const UpdateProjectSetupRequestSchema = z.object({
   defaultBudgetTokensPerAgent: z.number().int().positive(),
   model: z.string().min(1).max(100).nullable(),
   allowlist: ProjectAllowlistSchema,
+  /** ADR-0021. Absent: the stored approvals are kept (or, for an older setup, still none). */
+  approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
 });
+/**
+ * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the project's setting
+ * for this run only; the run snapshots the result. An empty or missing body uses the project's.
+ */
+export const StartTicketRequestSchema = z.object({
+  approvalMode: ApprovalModeSchema.optional(),
+  reviewer: ChangeReviewerModeSchema.optional(),
+  maxReworkRounds: ReworkRoundsSchema.optional(),
+});
+export type StartTicketRequest = z.infer<typeof StartTicketRequestSchema>;
 export const CreateTicketRequestSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().max(20_000).default(''),
