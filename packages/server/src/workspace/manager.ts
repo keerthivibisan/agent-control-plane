@@ -186,6 +186,11 @@ export interface WorkspaceManager {
   ): Promise<CreatedTicketBranch>;
   /** The ticket branch's current tip, or null when the branch does not exist. */
   ticketBranchTip(ref: TicketBranchRef): Promise<string | null>;
+  /**
+   * The helper branch's tip when its worktree has nothing unsealed (tracked or untracked), else
+   * null: checks recorded for a commit must have run on exactly that commit.
+   */
+  sealedHead(ws: Workspace): Promise<string | null>;
   /** Commits the helper's pending edits (one commit, attributed to the app) and reports the change. */
   seal(ws: Workspace, options?: { role?: string }): Promise<SealResult>;
   /**
@@ -664,6 +669,20 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       assertBranchName(ref.branch);
       const { repoRoot } = await repoOf(ref.projectRoot);
       return refTip(repoRoot, ref.branch);
+    },
+
+    async sealedHead(ws) {
+      const w = await validate(ws);
+      return serial(worktreeKey(w.path), async () => {
+        await requireWorktree(w);
+        // Untracked files too (`--untracked-files=all`): they would be part of a later seal.
+        const pending = await out(
+          ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+          w.path,
+        );
+        if (pending !== '') return null;
+        return (await out(['rev-parse', '--verify', 'HEAD^{commit}'], w.path)).trim();
+      });
     },
 
     async seal(ws, options = {}) {

@@ -31,6 +31,7 @@ import {
   MAX_PAGE_SIZE,
   createOrchestrationRepositories,
   createRedesignRepositories,
+  createReviewLoopRepositories,
   createWorkspaceRepositories,
   type AcpDatabase,
   type OrchestrationRepositories,
@@ -140,6 +141,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     now: deps.now,
   });
   const redesign = createRedesignRepositories(deps.db, { now: deps.now });
+  const loop = createReviewLoopRepositories(deps.db, { now: deps.now });
 
   // ------------------------------------------------------------------ helpers
 
@@ -267,7 +269,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       currentRun,
       plans: ws.plans.listForTicket(ticketId),
       comments: ws.comments.listForTicket(ticketId),
-      checks: ticket.currentRunId === null ? [] : ws.checkRuns.listForRun(ticket.currentRunId),
+      // With each result's commit (ADR-0021), so a change card shows only its own commit's.
+      checks: ticket.currentRunId === null ? [] : loop.checkCommits.listForRun(ticket.currentRunId),
     };
   }
 
@@ -408,8 +411,16 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     putSetup(projectId, body) {
       project(projectId);
       const input = UpdateProjectSetupRequestSchema.parse(body);
+      // ADR-0021: a request without `approvals` keeps the stored ones (an older client, or the
+      // settings form that does not edit them); a setup that never had any keeps none.
+      const approvals = input.approvals ?? ws.projectSetup.get(projectId)?.approvals;
       try {
-        const saved = ws.projectSetup.upsert({ projectId, planFirst: true, ...input });
+        const saved = ws.projectSetup.upsert({
+          projectId,
+          planFirst: true,
+          ...input,
+          ...(approvals !== undefined && { approvals }),
+        });
         notice('projects-changed', { projectId });
         return saved;
       } catch (error) {
@@ -613,7 +624,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
 
     runChecks(runId) {
       if (orch.runs.getById(runId) === undefined) throw notFound(`Run ${runId} not found`);
-      return ws.checkRuns.listForRun(runId);
+      return loop.checkCommits.listForRun(runId);
     },
 
     runAgentChecks: (runId, agentRunId) => deps.checks.runForAgent(runId, agentRunId),

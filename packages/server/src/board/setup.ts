@@ -1,5 +1,6 @@
 import {
   DEFAULT_AGENT_BUDGET_TOKENS,
+  DEFAULT_APPROVAL_MODE,
   MAX_CONCURRENT_CHILD_AGENTS,
   MAX_DELEGATION_DEPTH,
   type ProjectAgentSetup,
@@ -49,6 +50,9 @@ export function defaultSetup(
     defaultBudgetTokensPerAgent: DEFAULT_AGENT_BUDGET_TOKENS,
     model: null,
     allowlist: { editInOwnWorktree: false, runHarnessChecks: options.harnessExists },
+    // ADR-0021 §1: a setup made now starts on Auto edits; setups saved before keep their mapped
+    // legacy behaviour (`approvalsOf`), since only a new row gets this.
+    approvals: { mode: DEFAULT_APPROVAL_MODE, commands: [] },
     contextFiles: [],
   };
 }

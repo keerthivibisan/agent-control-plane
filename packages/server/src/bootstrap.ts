@@ -7,6 +7,7 @@ import type { ManagedExecutionAdapter, ObservationAdapter } from '@acp/core';
 import {
   createQueries,
   createRepositories,
+  createReviewLoopRepositories,
   createWorkspaceRepositories,
   openDatabase,
 } from '@acp/db';
@@ -163,11 +164,12 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const git = options.git ?? createGitRunner();
   // Filled in by the board service below; the control service reads it at call time.
   const workspaceHooks: ControlWorkspaceHooks = {};
+  const workspaceManager = createWorkspaceManager({ dataDir: config.dataDir, git, logger });
   const controlService = createControlService({
     db,
     repos,
     adapter: managedAdapter,
-    workspaces: createWorkspaceManager({ dataDir: config.dataDir, git, logger }),
+    workspaces: workspaceManager,
     git,
     dataDir: config.dataDir,
     enabled: managedAdapter !== undefined,
@@ -221,6 +223,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const checks = createCheckService({
     repos,
     workspace: workspaceRepos,
+    reviewLoop: createReviewLoopRepositories(db, { now }),
+    checkouts: workspaceManager,
     control: controlService,
     runner: checkRunner,
     mainChecks,

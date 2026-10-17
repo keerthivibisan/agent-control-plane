@@ -5,6 +5,7 @@ import { CSRF_HEADER, type TicketDetailDto, type TicketDto } from '@acp/core/api
 import {
   createQueries,
   createRepositories,
+  createReviewLoopRepositories,
   createWorkspaceRepositories,
   openDatabase,
   type AcpDatabase,
@@ -97,11 +98,12 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const hooks: ControlWorkspaceHooks = {};
   // The owner's home is a temp directory, so the real ~/.claude is never listed or copied.
   const homeDir = tempDir('acp-board-home-');
+  const workspaces = createWorkspaceManager({ dataDir, git });
   const control = createControlService({
     db,
     repos,
     adapter: fake.adapter,
-    workspaces: createWorkspaceManager({ dataDir, git }),
+    workspaces,
     git,
     dataDir,
     enabled: options.enabled ?? true,
@@ -120,6 +122,8 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const checks = createCheckService({
     repos,
     workspace,
+    reviewLoop: createReviewLoopRepositories(db, { now }),
+    checkouts: workspaces,
     control,
     runner,
     mainChecks,
