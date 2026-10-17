@@ -554,7 +554,7 @@ describe('the live graph’s review-loop additions', () => {
     render(loopNeedsYouScenario());
     const counts = await screen.findByTestId('review-counts');
     expect(counts.textContent).toBe('1 for you · 1 merged');
-    expect(screen.getByTestId('helpers-waiting-review').textContent).toBe('1 waiting for review');
+    expect(screen.getByTestId('helpers-waiting-review').textContent).toBe('1 in review');
     expect(screen.getByTestId('live-owner-merge').dataset.state).toBe('waiting');
   });
 

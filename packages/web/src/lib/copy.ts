@@ -2826,7 +2826,7 @@ export const REVIEW_LOOP_COPY = {
     matchLabel: 'How it matches',
     match: {
       exact: 'Exactly these words',
-      prefix: 'These words, then any arguments',
+      prefix: 'Plus any arguments',
     },
     matchTag: {
       exact: 'Exact',
@@ -2885,7 +2885,7 @@ export const REVIEW_LOOP_COPY = {
       agent: 'Review agent + lead',
       lead: 'Lead + harness checks',
     } satisfies Record<ChangeReviewerMode, string>,
-    leadMerges: 'Lead merges into the ticket branch',
+    leadMerges: 'The lead merges each change',
     roundsLine: (n: number) =>
       n === 0 ? 'No rework rounds' : `Up to ${countOf(n, 'rework round', 'rework rounds')}`,
     stageText:
@@ -2913,7 +2913,7 @@ export const REVIEW_LOOP_COPY = {
       noChanges: (n: number) => `${formatCount(n)} without changes`,
       none: 'No changes yet',
     },
-    helpersWaiting: (n: number) => `${formatCount(n)} waiting for review`,
+    helpersWaiting: (n: number) => `${formatCount(n)} in review`,
   },
   start: {
     options: 'Start with options…',

@@ -233,7 +233,7 @@ function LiveHelperRow(_: NodeProps<HelperNode>) {
           <span className="font-medium">{TICKET_COPY.summary.agents(helpers.length)}</span>
           {working > 0 ? <span className="text-dim">{C.helpersWorking(working)}</span> : null}
           {waitingReview > 0 ? (
-            <span className="text-dim" data-testid="helpers-waiting-review">
+            <span className="whitespace-nowrap text-dim" data-testid="helpers-waiting-review">
               {REVIEW_LOOP_COPY.graph.helpersWaiting(waitingReview)}
             </span>
           ) : null}

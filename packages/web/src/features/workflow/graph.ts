@@ -227,7 +227,8 @@ export const EDGE_STYLE: Record<
 };
 
 /** Handle ids rendered by every node view (WorkflowNodes.tsx). */
-export type HandleId = 'in-left' | 'out-right' | 'in-top' | 'out-bottom' | 'out-top' | 'in-bottom';
+export type HandleId =
+  'in-left' | 'out-right' | 'in-top' | 'out-bottom' | 'out-top' | 'in-bottom' | 'out-top-loop';
 
 export interface EdgeLabels {
   loop: string;
@@ -537,7 +538,7 @@ export function buildWorkflowGraph(
         'loop',
         'review',
         'helpers',
-        { sourceHandle: 'out-top', targetHandle: 'in-top' },
+        { sourceHandle: 'out-top-loop', targetHandle: 'in-top' },
         loop.reworkLabel,
       ),
     );

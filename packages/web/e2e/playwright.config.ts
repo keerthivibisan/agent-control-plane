@@ -98,6 +98,12 @@ export default defineConfig({
       testMatch: 'control.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${CONTROL_PORT}` },
     },
+    {
+      // RL-D (ADR-0021): the review loop on the demo server's built UI, routes from fixtures.
+      name: 'review-loop',
+      testMatch: 'review-loop.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
     // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).
     {
       name: 'pages',

@@ -314,6 +314,28 @@ U-G; the family tree in U-V):
 - Diagrams show only real relationships and states (AGENTS.md rule 1): no decorative nodes or
   lines.
 
+### Review loop (ADR-0021, WP RL-D)
+
+Only a run with the loop (`RunDetailDto.changes` or `.ticketBranch` present) gets these; a run
+from before it renders as it always did (`features/review-loop/logic.ts` `isReviewLoopRun`).
+
+- **Workflow page:** Helpers → **Approvals** (Manual / Auto edits (recommended) / Auto as native
+  radios with one sentence each, a `warning-soft` note for the two auto modes, Auto's command list
+  checked with core's `CommandPatternSchema` as it is typed); Review & merge → reviewer, rework
+  rounds 0–5 and the review agent's agent file, model and skill. The graph adds a "Rework" loop
+  from Review back to Helpers (it leaves Review off-centre, `out-top-loop`, clear of the plan
+  approval's line) and an **owner-merge gate** ("You · Merge into main") with Done under it.
+- **Start dialog** (`StartDialog`, shared `Dialog`): from the board's "Start with options…" and
+  the ticket page's "Options" button; each choice starts at the project's setting (marked
+  "Project setting") and only the changes are sent. Plain Start/Re-run stay one click.
+- **Ticket page:** "N changes need your decision" (warning band) above the agents; the
+  **ticket-branch card** (branch, base, tip; at REVIEW the actions first, then the tip's checks,
+  files and the collapsed diff); "Changes in this run" under the agents; the side panel's Changes
+  tab holds the **change card** (state pill, checks on its commit, conflict files, decisions with
+  the reviewer's findings, files and diff, and the owner's buttons only when it is their turn).
+  The live graph's review node shows the run's counts, the gate is ringed `needs-you` at REVIEW
+  and `success` once merged, and the helpers row says how many are in review.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |

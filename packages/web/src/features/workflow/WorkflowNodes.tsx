@@ -1,6 +1,6 @@
 import type { WorkflowStageId } from '@acp/core';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type ReactNode } from 'react';
 import { AlertIcon, CheckIcon, TicketIcon } from '../../components/icons';
 import { Tooltip } from '../../components/Tooltip';
 import { REVIEW_LOOP_COPY, STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
@@ -49,13 +49,21 @@ export const WorkflowGraphContext = createContext<WorkflowGraphActions>({
 });
 
 const HANDLE = 'opacity-0! border-0! size-1.5! min-w-0! min-h-0! pointer-events-none!';
-const HANDLES: { id: HandleId; type: 'source' | 'target'; position: Position }[] = [
+const HANDLES: {
+  id: HandleId;
+  type: 'source' | 'target';
+  position: Position;
+  style?: CSSProperties;
+}[] = [
   { id: 'in-left', type: 'target', position: Position.Left },
   { id: 'out-right', type: 'source', position: Position.Right },
   { id: 'in-top', type: 'target', position: Position.Top },
   { id: 'out-top', type: 'source', position: Position.Top },
   { id: 'out-bottom', type: 'source', position: Position.Bottom },
   { id: 'in-bottom', type: 'target', position: Position.Bottom },
+  // The review loop's rework edge leaves Review off-centre, clear of the line coming down from the
+  // plan approval above it.
+  { id: 'out-top-loop', type: 'source', position: Position.Top, style: { left: '78%' } },
 ];
 
 function Handles({ only }: { only?: readonly HandleId[] }) {
@@ -67,6 +75,7 @@ function Handles({ only }: { only?: readonly HandleId[] }) {
           id={h.id}
           type={h.type}
           position={h.position}
+          {...(h.style === undefined ? {} : { style: h.style })}
           isConnectable={false}
           className={HANDLE}
         />
@@ -553,16 +562,19 @@ function ReviewLoopNodeView({
           {C.review.checks}
         </p>
       ) : null}
-      <p className="flex items-center gap-1.5 text-caption">
-        <CheckIcon size={13} className="shrink-0 text-success" />
-        {RL.review.leadMerges}
-      </p>
+      {/* On the ticket page the run's counts take the place of the settings lines. */}
       {loop.counts !== undefined ? (
         <ReviewCountsLine counts={loop.counts} />
       ) : (
-        <p className="text-caption text-dim" data-testid="review-rounds">
-          {RL.review.roundsLine(loop.maxReworkRounds)}
-        </p>
+        <>
+          <p className="flex items-center gap-1.5 text-caption">
+            <CheckIcon size={13} className="shrink-0 text-success" />
+            {RL.review.leadMerges}
+          </p>
+          <p className="text-caption text-dim" data-testid="review-rounds">
+            {RL.review.roundsLine(loop.maxReworkRounds)}
+          </p>
+        </>
       )}
     </div>
   );

@@ -253,6 +253,9 @@ export function TicketBranchCard({
           </div>
         </dl>
         {mode === 'waiting' ? <p className="text-dim">{B.waiting}</p> : null}
+        {/* The decision first, the evidence (checks, files, diff) under it. */}
+        {mode === 'merge' ? <Actions run={run} branch={branch} review={q.data} /> : null}
+        {mode === 'discard-only' ? <DiscardOnly run={run} branch={branch} /> : null}
         {live ? (
           q.data !== undefined ? (
             <Combined review={q.data} />
@@ -267,8 +270,6 @@ export function TicketBranchCard({
             <LoadingBlock label={B.loading} />
           )
         ) : null}
-        {mode === 'merge' ? <Actions run={run} branch={branch} review={q.data} /> : null}
-        {mode === 'discard-only' ? <DiscardOnly run={run} branch={branch} /> : null}
         {branch.state === 'merged' && branch.mergedCommit !== null ? (
           <p className="text-caption text-dim">
             {B.mergedAt(branch.baseBranch)}{' '}

@@ -445,7 +445,7 @@ describe('the graph’s review-loop additions', () => {
     expect((done?.position.y ?? 0) > (gate?.position.y ?? 0)).toBe(true);
     expect(g.height).toBeGreaterThan(plain.height);
     expect(g.edges.find((e) => e.id === 'loop:review->helpers')).toMatchObject({
-      sourceHandle: 'out-top',
+      sourceHandle: 'out-top-loop',
       targetHandle: 'in-top',
       label: 'Rework ×1',
     });
