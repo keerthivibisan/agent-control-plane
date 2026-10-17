@@ -7,7 +7,7 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 | WP  | Title                                                     | After   | Status   | Branch                 | Merged    |
 | --- | --------------------------------------------------------- | ------- | -------- | ---------------------- | --------- |
 | U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done** | feature/ui-refresh     | —         |
-| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | todo     | —                      | —         |
+| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | **done** | wp/u-a-foundation      | `a4a554f` |
 | U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | **done** | wp/u-b-shell           | `7a253f1` |
 | U-C | Board                                                     | U-A     | **done** | wp/u-c-board           | `4dd57b9` |
 | U-D | Ticket page                                               | U-A     | **done** | wp/u-d-ticket          | `c1a0a98` |
