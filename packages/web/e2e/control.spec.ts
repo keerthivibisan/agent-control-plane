@@ -15,6 +15,26 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 
 const DRIVER = process.env.ACP_E2E_DRIVER_URL ?? 'http://127.0.0.1:7442';
 
+// --- U-F (UI refresh): with ACP_SCREENSHOT_DIR set, light and dark screenshots of the control
+// panel at 1440 and 1024 pixels wide. Nothing is asserted by them.
+const SHOTS = process.env.ACP_SCREENSHOT_DIR;
+
+async function shoot(page: Page, name: string, fullPage = false): Promise<void> {
+  if (SHOTS === undefined) return;
+  for (const width of [1440, 1024]) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: `${SHOTS}/control-${name}-${width}-${scheme}.png`, fullPage });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+// --- end U-F
+
 interface FakeView {
   id: string;
   kind: 'lead' | 'worker';
@@ -274,6 +294,7 @@ test('two helper agents: approve, deny, stop, review, merge one and discard the 
   await expect(builderReview.getByTestId('diff')).toContainText('+hello from the builder');
   await expect(writerReview).toContainText('notes.txt');
   await expect(writerReview.getByTestId('diff')).toContainText('+draft notes');
+  await shoot(page, 'review', true); // U-F
 
   // Merge the builder, discard the writer.
   await builderReview.getByRole('button', { name: 'Merge', exact: true }).click();
