@@ -164,6 +164,14 @@ export function buildOptions(
     options.skills = [...plugin.skills];
   }
   if (spec.followUp !== undefined) applyFollowUp(options, spec, spec.followUp.resumeSessionId);
+  // A rework turn (ADR-0021 §3) resumes the helper's own session in its own worktree, never
+  // forked, with the same role tools; its input closes after the turn like any helper's. Without a
+  // session to resume it starts fresh, with the comments in the prompt.
+  const resume = spec.followUp === undefined ? (spec.rework?.resumeSessionId ?? null) : null;
+  if (resume !== null) {
+    options.resume = resume;
+    options.forkSession = false;
+  }
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { LEAD_TOOL_NAMES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
+import { CHANGE_REVIEWER_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -32,24 +32,35 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 ];
 
 /**
- * The lead's tools: every lead tool except `post_review`, which only a reviewer gets (ADR-0019,
- * decision B). The engine refuses `post_review` from anyone else as well.
- * RL-0 placeholder: the review-loop tools (ADR-0021) are left out until RL-B gives the lead its
- * change tools and the change reviewer `submit_review`.
+ * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
+ * B) and `submit_review` (ADR-0021 §3). That includes the five change tools of the review loop
+ * (`view_change`, `merge_change`, `request_rework`, `discard_change`, `ask_owner`); the engine
+ * refuses them in a run without the loop, and refuses the reviewers' tools from anyone else.
  */
 export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.filter(
-  (name) => name !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(name),
+  (name) => name !== 'post_review' && !CHANGE_REVIEWER_TOOL_NAMES.includes(name),
 );
 
 /** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */
 export const PLANNER_TOOL_NAMES: readonly LeadToolName[] = ['submit_plan'];
-/** The reviewer's one tool (ADR-0019, decision B): its findings become ticket comments. */
+/** The final reviewer's one tool (ADR-0019, decision B): its findings become ticket comments. */
 export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = ['post_review'];
+/**
+ * A change reviewer's one tool (ADR-0021 §3, `reviewScope: 'change'`): its verdict and findings go
+ * to the lead, and the findings become a ticket comment.
+ */
+export const CHANGE_REVIEWER_ROLE_TOOL_NAMES: readonly LeadToolName[] = CHANGE_REVIEWER_TOOL_NAMES;
+
+/** True for a reviewer of one helper's change rather than of the final result (ADR-0021). */
+export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewScope'>): boolean {
+  return spec.kind === 'reviewer' && spec.reviewScope === 'change';
+}
 
 /**
  * The control-plane tools one agent may use (ADR-0019):
  * - lead: the lead's set (every lead tool except `post_review`);
- * - planner: `submit_plan`; reviewer: `post_review`;
+ * - planner: `submit_plan`; reviewer: `post_review`, or `submit_review` for a change reviewer
+ *   (`reviewScope: 'change'`, ADR-0021);
  * - worker: the child-management subset with `canStartHelpers`, else none (depth 1);
  * - tester: none (it is a worker that never starts helpers).
  * The adapter builds the MCP server and `canUseTool` from this one list, so the two cannot
@@ -64,7 +75,7 @@ export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[
     case 'planner':
       return PLANNER_TOOL_NAMES;
     case 'reviewer':
-      return REVIEWER_TOOL_NAMES;
+      return isChangeReviewer(spec) ? CHANGE_REVIEWER_ROLE_TOOL_NAMES : REVIEWER_TOOL_NAMES;
     case 'worker':
       return spec.canStartHelpers === true ? HELPER_PARENT_TOOL_NAMES : [];
     case 'tester':
@@ -224,6 +235,7 @@ const DENY_ROLE_TOOL: Readonly<Record<'planner' | 'reviewer', string>> = {
   planner: 'The planner can only submit the plan.',
   reviewer: 'The reviewer can only post its findings.',
 };
+export const DENY_CHANGE_REVIEWER_TOOL = 'The change reviewer can only submit its review.';
 
 export const DENY_WORKER_LEAD_TOOL = 'Worker agents cannot use the control-plane tools.';
 export const DENY_HELPER_LEAD_TOOL =
@@ -317,8 +329,9 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
         if (name !== null && ownTools.has(name) && fromLeadServer(options)) {
           return { behavior: 'allow', toolUseID };
         }
-        const message =
-          kind === 'planner' || kind === 'reviewer'
+        const message = isChangeReviewer(spec)
+          ? DENY_CHANGE_REVIEWER_TOOL
+          : kind === 'planner' || kind === 'reviewer'
             ? DENY_ROLE_TOOL[kind]
             : ownTools.size > 0
               ? DENY_HELPER_LEAD_TOOL

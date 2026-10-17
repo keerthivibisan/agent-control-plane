@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
+import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES } from '@acp/core';
 import type {
   ManagedAgentEvent,
   ManagedAgentSpec,
@@ -241,14 +241,15 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     expect(servers.toolNames[0]).not.toContain('request_review');
   });
 
-  it('gives the lead every lead tool except post_review, including submit_plan', () => {
+  it("gives the lead every lead tool except the reviewers', including submit_plan", () => {
     servers.toolNames.length = 0;
     optionsFor(spec('lead'));
-    // RL-0: the review-loop tools are not offered yet (RL-B wires them).
+    // ADR-0021: the change tools are the lead's; post_review and submit_review are reviewers'.
     expect(servers.toolNames).toEqual([
-      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(n)),
+      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && n !== 'submit_review'),
     ]);
     expect(servers.toolNames[0]).toContain('submit_plan');
+    expect(servers.toolNames[0]).toContain('merge_change');
     expect(servers.toolNames[0]).not.toContain('post_review');
   });
 

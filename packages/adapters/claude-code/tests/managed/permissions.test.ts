@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
+import { CHANGE_DECISION_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
 import type { ManagedAgentSpec, PermissionDecision, PermissionRequest } from '@acp/core';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
@@ -197,16 +197,18 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     expect(requests).toEqual([]);
   });
 
-  it('denies the lead post_review without asking: only a reviewer gets it (decision B)', async () => {
-    // RL-0: the review-loop tools are not offered yet (RL-B wires them).
+  it("denies the lead the reviewers' tools without asking (decision B, ADR-0021)", async () => {
+    // ADR-0021: the lead has its five change tools, never post_review or submit_review.
     expect(LEAD_ROLE_TOOL_NAMES).toEqual(
-      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && !REVIEW_LOOP_TOOL_NAMES.includes(n)),
+      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && n !== 'submit_review'),
     );
-    expect(LEAD_ROLE_TOOL_NAMES).not.toContain('post_review');
+    for (const name of CHANGE_DECISION_TOOL_NAMES) expect(LEAD_ROLE_TOOL_NAMES).toContain(name);
     const { canUseTool, requests } = setup('lead');
-    await expect(
-      canUseTool('mcp__acp__post_review', {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
-    ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });
+    for (const name of ['post_review', 'submit_review']) {
+      await expect(
+        canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
+      ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });
+    }
     expect(requests).toEqual([]);
   });
 

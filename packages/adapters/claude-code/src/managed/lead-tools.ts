@@ -24,20 +24,20 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   message_agent: 'Send a follow-up message to one of your worker agents.',
   stop_agent: 'Stop one of your worker agents.',
   agent_status: "Get one of your worker agents' status, latest activity and budget use.",
-  request_review: 'Tell the owner the workers are done and their changes are ready for review.',
+  request_review:
+    "Hand the work over when you are done: no helper is working and, with change review, every helper's change is decided. The final review and the owner come next.",
   submit_plan:
     'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
   post_review:
     'Post your code review findings as plain text. They become a comment on the ticket for the owner; they do not block or merge anything.',
-  // ADR-0021 review loop. RL-0: defined so the contract compiles; no agent is offered these
-  // tools until RL-B wires them (`LEAD_ROLE_TOOL_NAMES` leaves them out). RL-B may reword them.
+  // ADR-0021 review loop: the lead's change tools and the change reviewer's one tool.
   view_change:
-    "Look at one helper's finished change: its files, diff, checks and the reviewer's findings.",
+    "See one helper's finished change: the files it changed, the diff (cut at 32 KiB), its checks and the review so far.",
   merge_change:
-    "Merge one helper's reviewed change into the ticket branch. The required checks must pass on it first.",
+    "Merge one helper's change into the ticket branch. Its required checks must pass on it first; if they have not run yet, they start and you get a message when they finish.",
   request_rework:
-    'Send one helper its change back with what to fix. Refused once the rework round limit is reached.',
-  discard_change: "Drop one helper's change, with a short reason for the owner.",
+    'Send one helper its change back with what to fix. It works on it again in its own copy. Refused once its rework rounds are used up.',
+  discard_change: "Drop one helper's change, with a short reason the owner can read.",
   ask_owner: "Leave the decision about one helper's change to the owner, with your question.",
   submit_review:
     'Submit your review of this change: a verdict (approve or rework) and your findings as plain text. The lead decides what happens next.',

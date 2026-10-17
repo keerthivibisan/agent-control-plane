@@ -6,6 +6,8 @@ export {
 export type { ManagedClaudeCodeOptions, ManagedQuery, ManagedQueryFn } from './adapter.js';
 export {
   agentToolNames,
+  CHANGE_REVIEWER_ROLE_TOOL_NAMES,
+  DENY_CHANGE_REVIEWER_TOOL,
   DENY_FOLLOW_UP,
   DENY_NOT_IN_AGENT_FILE,
   DENY_NOT_IN_ROLE,
@@ -15,6 +17,7 @@ export {
   FOLLOW_UP_TOOLS,
   followUpToolNames,
   HELPER_PARENT_TOOL_NAMES,
+  isChangeReviewer,
   LEAD_MCP_SERVER_NAME,
   LEAD_ROLE_TOOL_NAMES,
   PLANNER_TOOL_NAMES,
@@ -24,4 +27,4 @@ export {
   REVIEWER_TOOL_NAMES,
   roleBaseTools,
 } from './permissions.js';
-export { MAX_SUMMARY_LENGTH, summarizeToolUse } from './summary.js';
+export { activitySummary, MAX_SUMMARY_LENGTH, summarizeToolUse } from './summary.js';

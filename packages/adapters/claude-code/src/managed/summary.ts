@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { controlToolLabel } from '@acp/core';
 import { cleanFreeText } from '../redact.js';
 
 /** Approval and activity summaries are capped here (ADR-0013, `PermissionRequest.summary`). */
@@ -66,6 +67,22 @@ export function summarizeToolUse(toolName: string, input: unknown, cwd: string):
   }
   const text = target === null ? name : `${name} ${target}`;
   return cleanFreeText(text, MAX_SUMMARY_LENGTH) ?? name;
+}
+
+/** The prefix of the control plane's own MCP tools (`mcp__acp__<name>`, `LEAD_TOOL_PREFIX`). */
+const CONTROL_TOOL_PREFIX = 'mcp__acp__';
+
+/**
+ * An agent's "Latest" line for one tool call (ADR-0021): a control-plane tool shows its plain label
+ * from core's `CONTROL_TOOL_LABELS` ("Merged a helper's change"), never the raw `mcp__acp__*` name
+ * and never its input; every other tool shows `summarizeToolUse`.
+ */
+export function activitySummary(toolName: string, input: unknown, cwd: string): string {
+  if (toolName.startsWith(CONTROL_TOOL_PREFIX)) {
+    const label = controlToolLabel(toolName.slice(CONTROL_TOOL_PREFIX.length));
+    if (label !== null) return label;
+  }
+  return summarizeToolUse(toolName, input, cwd);
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

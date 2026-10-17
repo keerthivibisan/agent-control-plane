@@ -1,7 +1,7 @@
 import type { ManagedAgentEvent, ManagedAgentSpec } from '@acp/core';
 import { z } from 'zod';
 import { emitsChatText } from './permissions.js';
-import { summarizeToolUse } from './summary.js';
+import { activitySummary } from './summary.js';
 
 /**
  * Maps Agent SDK output messages (sdk.d.ts `SDKMessage`, 0.3.296) to `ManagedAgentEvent`s. Each
@@ -128,7 +128,7 @@ function assistantEvents(
     if (toolUse.success) {
       events.push({
         type: 'activity',
-        summary: summarizeToolUse(toolUse.data.name, toolUse.data.input, spec.cwd),
+        summary: activitySummary(toolUse.data.name, toolUse.data.input, spec.cwd),
       });
       continue;
     }
