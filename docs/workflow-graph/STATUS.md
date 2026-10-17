@@ -76,3 +76,4 @@ plan-approval` without a planner;
 - 2026-10-18 Coordinator contract (`PlanStepSchema.helper?`, WG-B proposal a): a stored plan keeps
   each step's helper node. 3,909 tests.
 - 2026-10-18 WG-C started.
+- 2026-10-18 WG-E started in parallel with WG-C, against the DTOs with mocked routes.
