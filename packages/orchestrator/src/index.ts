@@ -93,7 +93,7 @@ export {
   viewChangeReply,
 } from './loop.js';
 export type { ChangeAction, DecisionInput } from './loop.js';
-export { deriveRunWorkflow } from './run-workflow.js';
+export { deriveRunWorkflow, deriveRunWorkflowGraph } from './run-workflow.js';
 export {
   agentLaunchMode,
   agentNodeId,

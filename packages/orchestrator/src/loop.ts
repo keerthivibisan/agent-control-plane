@@ -95,8 +95,14 @@ export function branchLabel(view: LoopView): string {
   return view.integration?.ticketBranch ?? 'the ticket branch';
 }
 
-function freshChange(round: number, turnFailed: boolean): EngineChange {
+function freshChange(
+  round: number,
+  turnFailed: boolean,
+  reviewerRounds: number | undefined,
+): EngineChange {
   return {
+    // The rounds a change reviewer sent back stay counted for the whole change (ADR-0023 §4).
+    ...(reviewerRounds !== undefined ? { reviewerRounds } : {}),
     state: 'sealing',
     round,
     verdict: null,
@@ -179,7 +185,7 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
   );
   agent.awaitingHelpers = false;
   d.setAgentStatus(agent, 'AWAITING_REVIEW');
-  agent.change = freshChange(agent.change?.round ?? 0, turnFailed);
+  agent.change = freshChange(agent.change?.round ?? 0, turnFailed, agent.change?.reviewerRounds);
   d.effects.push({ type: 'seal-change', agentRunId: agent.id });
 }
 
@@ -191,7 +197,7 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
  */
 export function stoppedWithoutReview(agent: EngineAgent): void {
   agent.change = {
-    ...freshChange(agent.change?.round ?? 0, false),
+    ...freshChange(agent.change?.round ?? 0, false, agent.change?.reviewerRounds),
     state: 'decision',
   };
 }
