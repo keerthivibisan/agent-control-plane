@@ -1,11 +1,13 @@
 import type { WorkflowStageId } from '@acp/core';
 import type { ProjectWorkflowDto } from '@acp/core/api';
+import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { CheckIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon, CloseIcon } from '../../components/icons';
+import { enter, fadeUp } from '../../components/motion';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
@@ -35,6 +37,7 @@ import {
   type WorkflowDraft,
 } from './draft';
 import { AGENT_STAGES, buildWorkflowGraph } from './graph';
+import { PickStageIcon } from './icons';
 import { StageFields, StageHeading } from './StagePanel';
 import { WorkflowGraph, WorkflowLegend } from './WorkflowGraph';
 
@@ -54,10 +57,13 @@ function Refusal({
     <div className="flex flex-col gap-1.5" data-testid="save-refusal">
       <p
         role="alert"
-        className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
+        className="flex items-start gap-2 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
       >
-        {part} {refusalMessage(error)}
-        {note ? <span className="mt-1 block text-caption text-dim">{note}</span> : null}
+        <AlertIcon size={15} className="mt-0.5 shrink-0" />
+        <span className="min-w-0">
+          {part} {refusalMessage(error)}
+          {note ? <span className="mt-1 block text-caption text-dim">{note}</span> : null}
+        </span>
       </p>
       <Details>
         <ErrorNotice error={error} />
@@ -153,10 +159,10 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
     <div className="grid grid-cols-1 items-start gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_23rem]">
       {/* The flow sentence is the title's ⓘ, so the graph starts higher on the page. */}
       <Card title={C.graphTitle} tip={C.flowSentence} padded={false} testId="workflow-card">
-        <div className="px-3 pt-2">
+        <div className="mt-1 border-t border-line">
           <WorkflowGraph graph={graph} selected={selected} onSelect={select} />
         </div>
-        <div className="border-t border-line px-6 py-4">
+        <div className="border-t border-line px-5 py-3.5">
           <WorkflowLegend />
         </div>
       </Card>
@@ -168,25 +174,32 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
           data-stage={selected ?? undefined}
           className="scroll-mt-24 rounded-card border border-line bg-panel shadow-card"
         >
-          <div className="flex flex-col gap-5 px-6 pt-5 pb-6">
-            {selected === null ? (
-              <p className="text-dim">{P.empty}</p>
-            ) : (
-              <>
-                <div className="flex items-start gap-3">
-                  <StageHeading stage={selected} workflow={workflow} />
-                  <button
-                    type="button"
-                    onClick={() => setSelected(null)}
-                    aria-label={P.close}
-                    title={P.close}
-                    className="ml-auto inline-flex size-8 shrink-0 items-center justify-center rounded-control text-dim hover:bg-sunken hover:text-ink"
-                  >
-                    <span aria-hidden="true" className="text-lg leading-none">
-                      ×
-                    </span>
-                  </button>
-                </div>
+          {selected === null ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+              <span
+                aria-hidden="true"
+                className="flex size-9 items-center justify-center rounded-control border border-line bg-sunken text-dim"
+              >
+                <PickStageIcon size={17} />
+              </span>
+              <p className="max-w-60 text-dim">{P.empty}</p>
+            </div>
+          ) : (
+            // Each stage's settings arrive with a short fade, so switching stages reads as a change.
+            <motion.div key={selected} {...enter(fadeUp)}>
+              <div className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-4">
+                <StageHeading stage={selected} workflow={workflow} />
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  aria-label={P.close}
+                  title={P.close}
+                  className="-mt-1 -mr-1.5 ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
+                >
+                  <CloseIcon size={16} />
+                </button>
+              </div>
+              <div className="px-5 pt-5 pb-6">
                 <StageFields
                   projectId={projectId}
                   stage={selected}
@@ -199,11 +212,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                   onWorkflow={changeWorkflow}
                   onLimits={changeLimits}
                 />
-              </>
-            )}
-          </div>
+              </div>
+            </motion.div>
+          )}
           {dirty || justSaved || saveWorkflow.error || saveSetup.error ? (
-            <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-card border-t border-line bg-panel/95 px-6 py-4 backdrop-blur">
+            <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-card border-t border-line bg-panel/90 px-5 py-3.5 backdrop-blur-md">
               {saveWorkflow.error ? (
                 <Refusal error={saveWorkflow.error} part={C.refusals.workflow} />
               ) : null}
@@ -214,7 +227,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                   note={partial ? C.refusals.workflowSavedFirst : undefined}
                 />
               ) : null}
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="primary" onClick={() => void save()} disabled={!dirty || pending}>
                   {pending ? P.saving : P.save}
                 </Button>
@@ -223,7 +236,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                     <Button variant="quiet" onClick={discard} disabled={pending}>
                       {P.discard}
                     </Button>
-                    <span className="text-caption text-dim" data-testid="unsaved">
+                    <span
+                      className="ml-auto inline-flex items-center gap-1.5 text-caption text-dim"
+                      data-testid="unsaved"
+                    >
+                      <span aria-hidden="true" className="size-1.5 rounded-full bg-warning" />
                       {P.unsaved}
                     </span>
                   </>
@@ -231,9 +248,9 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                   <span
                     role="status"
                     data-testid="saved"
-                    className="inline-flex items-center gap-1.5 text-success"
+                    className="inline-flex items-center gap-1.5 text-caption font-medium text-success"
                   >
-                    <CheckIcon size={16} />
+                    <CheckIcon size={15} />
                     {P.saved}
                   </span>
                 ) : null}

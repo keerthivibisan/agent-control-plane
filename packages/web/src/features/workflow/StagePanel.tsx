@@ -2,6 +2,7 @@ import { HARD_MAX_HELPERS, type WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionSummaryDto, ProjectAgentSetupDto } from '@acp/core/api';
 import { useId, type ReactNode } from 'react';
 import { buttonClass } from '../../components/Button';
+import { AlertIcon, ArrowRightIcon } from '../../components/icons';
 import { Select } from '../../components/Input';
 import { PROJECT_SETUP_COPY, STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
@@ -9,6 +10,7 @@ import { CheckboxField, NumberChoice, TextField } from '../project-setup/fields'
 import { DEPTH_CHOICES, HELPER_CHOICES, parseTokens } from '../project-setup/setup-form';
 import type { DraftErrors, LimitsDraft, StageDraft, WorkflowDraft } from './draft';
 import { OPTIONAL_STAGES, type AgentStageId, type WorkflowRole } from './graph';
+import { MergeIcon, ROLE_ICON } from './icons';
 
 const C = WORKFLOW_COPY;
 const P = WORKFLOW_COPY.panel;
@@ -48,6 +50,26 @@ export function roleOf(stage: AgentStageId, workflow: WorkflowDraft): WorkflowRo
   }
 }
 
+/**
+ * A choice that is gone (a deleted skill or agent file): `aria-invalid`, in the warning tone of the
+ * note under it rather than the error red, because the stage still runs without it.
+ */
+const MISSING_FIELD = 'aria-invalid:border-warning! aria-invalid:focus:ring-warning/20!';
+
+/** A warning under a field: the alert icon, then what is wrong and what happens because of it. */
+function Callout({ testId, children }: { testId: string; children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="mt-1 flex items-start gap-2 rounded-control border border-warning/25 bg-warning-soft px-3 py-2 text-caption text-warning"
+      data-testid={testId}
+    >
+      <AlertIcon size={14} className="mt-px shrink-0" />
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
 function SkillSelect({
   value,
   skills,
@@ -70,7 +92,7 @@ function SkillSelect({
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
         aria-describedby={`${id}-hint`}
         aria-invalid={missing ? true : undefined}
-        className={missing ? 'border-warning' : ''}
+        className={missing ? MISSING_FIELD : ''}
       >
         <option value="">{C.noSkill}</option>
         {missing ? <option value={value}>{P.skillMissingOption(value)}</option> : null}
@@ -83,15 +105,7 @@ function SkillSelect({
       <span id={`${id}-hint`} className="text-caption text-dim">
         {P.skillHint}
       </span>
-      {missing ? (
-        <p
-          role="status"
-          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning"
-          data-testid="skill-missing"
-        >
-          ⚠ {C.skillMissingTip(value)}
-        </p>
-      ) : null}
+      {missing ? <Callout testId="skill-missing">{C.skillMissingTip(value)}</Callout> : null}
     </div>
   );
 }
@@ -133,7 +147,7 @@ function AgentFileSelect({
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
         aria-describedby={`${id}-hint`}
         aria-invalid={missing ? true : undefined}
-        className={missing ? 'border-warning' : ''}
+        className={missing ? MISSING_FIELD : ''}
       >
         <option value="">{AF.none}</option>
         {missing ? <option value={value}>{AF.missingOption(value)}</option> : null}
@@ -156,28 +170,16 @@ function AgentFileSelect({
           {AF.manage}
         </a>
       </span>
-      {missing ? (
-        <p
-          role="status"
-          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning"
-          data-testid="agent-missing"
-        >
-          ⚠ {AF.missingWarning}
-        </p>
-      ) : null}
+      {missing ? <Callout testId="agent-missing">{AF.missingWarning}</Callout> : null}
       {problems.length > 0 ? (
-        <div
-          role="status"
-          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption text-warning"
-          data-testid="agent-problems"
-        >
-          <p>⚠ {AF.problems}</p>
-          <ul className="list-disc pl-5">
+        <Callout testId="agent-problems">
+          <p>{AF.problems}</p>
+          <ul className="mt-0.5 list-disc pl-4">
             {problems.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
-        </div>
+        </Callout>
       ) : null}
     </div>
   );
@@ -185,9 +187,9 @@ function AgentFileSelect({
 
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-4 border-t border-line pt-5">
-      <div>
-        <h4 className="font-semibold">{title}</h4>
+    <section className="-mx-5 flex flex-col gap-4 border-t border-line px-5 pt-5">
+      <div className="flex flex-col gap-0.5">
+        <h4 className="text-title font-semibold">{title}</h4>
         {note ? <p className="text-caption text-dim">{note}</p> : null}
       </div>
       {children}
@@ -324,7 +326,7 @@ function ReviewFields({ projectId }: { projectId: string }) {
   const id = useId();
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-3 rounded-control border border-line bg-sunken px-3 py-3">
+      <div className="flex items-start gap-3 rounded-control border border-line bg-sunken px-3.5 py-3">
         <input
           id={id}
           type="checkbox"
@@ -332,7 +334,7 @@ function ReviewFields({ projectId }: { projectId: string }) {
           disabled
           readOnly
           aria-describedby={`${id}-hint`}
-          className="mt-1 size-4 shrink-0 accent-accent"
+          className="mt-0.5 size-4 shrink-0 accent-accent"
         />
         <div className="flex min-w-0 flex-col gap-0.5">
           <label htmlFor={id} className="font-medium">
@@ -348,6 +350,7 @@ function ReviewFields({ projectId }: { projectId: string }) {
         className={`${buttonClass('secondary', 'sm')} w-fit`}
       >
         {P.harnessLink}
+        <ArrowRightIcon size={14} />
       </a>
     </div>
   );
@@ -376,12 +379,18 @@ export function StageHeading({
   workflow: WorkflowDraft;
 }) {
   const role = stage === 'review' ? null : roleOf(stage, workflow);
+  const Icon = role === null ? MergeIcon : ROLE_ICON[role];
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-caption font-medium tracking-wide text-dim uppercase">
+    <div className="flex min-w-0 flex-col gap-1">
+      <span
+        className={`flex items-center gap-1.5 text-micro font-semibold tracking-[0.06em] uppercase ${
+          role === null ? 'text-accent' : 'text-dim'
+        }`}
+      >
+        <Icon size={13} className="shrink-0" />
         {role === null ? C.review.who : C.roles[role]}
       </span>
-      <h3 className="text-title font-semibold tracking-tight">{C.stages[stage]}</h3>
+      <h3 className="text-section font-semibold">{C.stages[stage]}</h3>
       <p className="text-dim">{C.stageText[stage]}</p>
       {/* The helpers' role tip says what the stage text already says; one sentence is enough. */}
       {role !== null && role !== 'helper' ? (

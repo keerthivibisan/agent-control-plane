@@ -1,7 +1,14 @@
 import type { WorkflowStageId } from '@acp/core';
-import { Controls, ReactFlow, useReactFlow, useStore, type NodeMouseHandler } from '@xyflow/react';
-import { useEffect, useMemo } from 'react';
-import { SessionsIcon } from '../../components/icons';
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  ReactFlow,
+  useReactFlow,
+  useStore,
+  type NodeMouseHandler,
+} from '@xyflow/react';
+import { useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import {
   EDGE_STYLE,
@@ -10,6 +17,7 @@ import {
   type WorkflowGraph as Graph,
   type WorkflowNode,
 } from './graph';
+import { AgentFileIcon } from './icons';
 import { WorkflowGraphContext, workflowNodeTypes } from './WorkflowNodes';
 
 const C = WORKFLOW_COPY;
@@ -18,6 +26,14 @@ const FIT = {
   padding: { top: '56px', right: '24px', bottom: '24px', left: '24px' },
   maxZoom: 1,
 } as const;
+
+/**
+ * The zoom controls as one small segmented toolbar: hairline border, no drop shadow, buttons that
+ * take the hover fill (the theme's variables are in index.css; this adds the shape).
+ */
+const CONTROLS_CLASS =
+  'overflow-hidden rounded-control border border-line bg-panel [&>button]:size-7! [&>button]:border-0! [&>button]:text-dim [&>button]:transition-colors [&>button:hover]:text-ink [&>button:not(:last-child)]:border-r! [&>button:not(:last-child)]:border-line! [&>button>svg]:max-h-[11px]! [&>button>svg]:max-w-[11px]!';
+const CONTROLS_STYLE = { '--xy-controls-box-shadow': 'var(--shadow-card)' } as CSSProperties;
 
 /** Refits whenever the canvas is resized or the graph's shape changes (helpers, panel opening). */
 function FitOnChange({ shape }: { shape: string }) {
@@ -84,9 +100,17 @@ export function WorkflowGraph({
           maxZoom={1.5}
           proOptions={{ hideAttribution: true }}
         >
+          {/* A quiet dot grid: the canvas reads as a canvas, the cards stay the loudest thing. */}
+          <Background variant={BackgroundVariant.Dots} gap={18} size={1.1} />
           <FitOnChange shape={shape} />
           {/* Top left, in a row: the corner the flow never uses (the Done edge runs bottom right). */}
-          <Controls showInteractive={false} position="top-left" orientation="horizontal" />
+          <Controls
+            showInteractive={false}
+            position="top-left"
+            orientation="horizontal"
+            className={CONTROLS_CLASS}
+            style={CONTROLS_STYLE}
+          />
         </ReactFlow>
       </WorkflowGraphContext.Provider>
     </div>
@@ -96,60 +120,70 @@ export function WorkflowGraph({
 function LineSample({ kind }: { kind: WorkflowEdgeKind }) {
   const { stroke, dash } = EDGE_STYLE[kind];
   return (
-    <svg width="32" height="8" aria-hidden="true" className="shrink-0">
-      <line x1="0" y1="4" x2="26" y2="4" stroke={stroke} strokeWidth="2" strokeDasharray={dash} />
-      <path d="M25 1 L31 4 L25 7 Z" fill={stroke} />
+    <svg width="28" height="8" aria-hidden="true" className="shrink-0">
+      <line
+        x1="0"
+        y1="4"
+        x2="22"
+        y2="4"
+        stroke={stroke}
+        strokeWidth="1.75"
+        strokeDasharray={dash}
+      />
+      <path d="M21 1 L27 4 L21 7 Z" fill={stroke} />
     </svg>
   );
 }
+
+function LegendItem({ sample, children }: { sample: ReactNode; children: ReactNode }) {
+  return (
+    <li className="flex items-center gap-2">
+      {sample}
+      {children}
+    </li>
+  );
+}
+
+const SWATCH = 'inline-block h-3.5 w-5 shrink-0 rounded-[4px] border';
+const CHIP =
+  'inline-flex h-4.5 shrink-0 items-center justify-center rounded-[0.3125rem] border px-1 text-micro font-medium';
 
 /** The graph's legend: line styles and node kinds, in words (color is never the only signal). */
 export function WorkflowLegend() {
   const L = C.legend;
   return (
     <ul
-      className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-dim"
+      className="flex flex-wrap items-center gap-x-6 gap-y-2 text-caption text-dim"
       aria-label={L.label}
       data-testid="workflow-legend"
     >
-      <li className="flex items-center gap-1.5">
-        <LineSample kind="flow" />
-        {L.flow}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <LineSample kind="loop" />
-        {L.loop}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <LineSample kind="bypass" />
-        {L.bypass}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span
-          aria-hidden="true"
-          className="inline-block h-3 w-5 rounded-[4px] border border-line-strong bg-panel"
-        />
+      <LegendItem sample={<LineSample kind="flow" />}>{L.flow}</LegendItem>
+      <LegendItem sample={<LineSample kind="loop" />}>{L.loop}</LegendItem>
+      <LegendItem sample={<LineSample kind="bypass" />}>{L.bypass}</LegendItem>
+      <LegendItem
+        sample={<span aria-hidden="true" className={`${SWATCH} border-line-strong bg-panel`} />}
+      >
         {L.agent}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span
-          aria-hidden="true"
-          className="inline-block h-3 w-5 rounded-[4px] border border-accent/40 bg-accent-soft"
-        />
+      </LegendItem>
+      <LegendItem
+        sample={<span aria-hidden="true" className={`${SWATCH} border-accent/40 bg-accent-soft`} />}
+      >
         {L.you}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span className="rounded-full border border-accent/25 bg-accent-soft px-1.5 font-medium text-accent">
-          ✦
-        </span>
+      </LegendItem>
+      <LegendItem
+        sample={<span className={`${CHIP} border-accent/20 bg-accent-soft text-accent`}>✦</span>}
+      >
         {L.skill}
-      </li>
-      <li className="flex items-center gap-1.5">
-        <span className="inline-flex items-center rounded-full border border-line-strong bg-sunken px-1.5 py-0.5">
-          <SessionsIcon size={12} className="text-accent" />
-        </span>
+      </LegendItem>
+      <LegendItem
+        sample={
+          <span className={`${CHIP} border-line-strong bg-sunken`}>
+            <AgentFileIcon size={11} className="text-accent" />
+          </span>
+        }
+      >
         {STAGE_AGENT_COPY.legend}
-      </li>
+      </LegendItem>
     </ul>
   );
 }

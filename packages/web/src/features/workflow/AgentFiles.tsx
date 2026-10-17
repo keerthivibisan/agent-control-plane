@@ -2,9 +2,11 @@ import { stagesUsingAgent, type ProjectWorkflow, type WorkflowStageId } from '@a
 import type { AgentDefinitionSummaryDto } from '@acp/core/api';
 import { Card } from '../../components/Card';
 import { ErrorNotice } from '../../components/ErrorNotice';
+import { AlertIcon } from '../../components/icons';
 import { workflowPaths, workflowSchemas } from '../../lib/api';
 import { STAGE_AGENT_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
+import { AgentFileIcon } from './icons';
 
 const C = WORKFLOW_COPY.agents;
 const AF = STAGE_AGENT_COPY;
@@ -26,7 +28,7 @@ function UsedBy({
   }
   return (
     <ul
-      className="flex flex-wrap gap-1.5"
+      className="flex flex-wrap gap-1"
       aria-label={AF.usedBy}
       data-testid="agent-used-by"
       data-used={stages.join(' ')}
@@ -37,7 +39,7 @@ function UsedBy({
             type="button"
             onClick={() => onSelect(s)}
             aria-label={AF.selectStage(WORKFLOW_COPY.stages[s])}
-            className="rounded-full border border-accent/30 bg-accent-soft px-2 py-px text-caption font-medium text-accent hover:border-accent/60"
+            className="inline-flex h-5 items-center rounded-[0.3125rem] border border-accent/20 bg-accent-soft px-1.5 text-caption font-medium text-accent transition-colors hover:border-accent/50"
           >
             {WORKFLOW_COPY.stages[s]}
           </button>
@@ -57,26 +59,37 @@ function AgentRow({
   onSelect: (stage: WorkflowStageId) => void;
 }) {
   return (
-    <li
-      className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0"
-      data-testid={`agent-file-${agent.name}`}
-    >
-      <span className="min-w-0 truncate font-mono font-medium" title={agent.path}>
-        {agent.name}
+    <li className="flex gap-3 py-3.5 first:pt-0 last:pb-0" data-testid={`agent-file-${agent.name}`}>
+      <span
+        aria-hidden="true"
+        className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-control border border-line bg-sunken text-accent"
+      >
+        <AgentFileIcon size={15} />
       </span>
-      {agent.description ? (
-        <p className="line-clamp-2 text-caption text-dim">{agent.description}</p>
-      ) : null}
-      <p className="text-caption text-dim">
-        {agent.model ?? WORKFLOW_COPY.projectDefault} ·{' '}
-        {agent.tools === null ? C.allTools : C.tools(agent.tools.length)}
-      </p>
-      <UsedBy stages={usedBy} onSelect={onSelect} />
-      {agent.problems.map((p) => (
-        <p key={p} className="text-caption text-warning">
-          ⚠ {p}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span
+          className="min-w-0 truncate font-mono text-[0.8125rem] font-medium"
+          title={agent.path}
+        >
+          {agent.name}
+        </span>
+        {agent.description ? (
+          <p className="line-clamp-2 text-caption text-dim">{agent.description}</p>
+        ) : null}
+        <p className="text-caption text-dim tabular-nums">
+          {agent.model ?? WORKFLOW_COPY.projectDefault} ·{' '}
+          {agent.tools === null ? C.allTools : C.tools(agent.tools.length)}
         </p>
-      ))}
+        <div className="mt-0.5">
+          <UsedBy stages={usedBy} onSelect={onSelect} />
+        </div>
+        {agent.problems.map((p) => (
+          <p key={p} className="flex items-start gap-1.5 text-caption text-warning">
+            <AlertIcon size={13} className="mt-0.5 shrink-0" />
+            <span className="min-w-0">{p}</span>
+          </p>
+        ))}
+      </div>
     </li>
   );
 }
