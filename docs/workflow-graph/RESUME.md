@@ -126,14 +126,51 @@ Then merge.
 
 ### Step 3: finish WG-E (live run graph, "at most" wording)
 
-Committed on `wp/wg-e-live`: `56b2619`, with the live run graph on the ticket page, run options
-read as a limit, the review agent's direct rework on change cards, and "Used by" blocks on Skills &
-Agents. When paused, it had uncommitted e2e and polish changes (see its progress file).
+**Committed** on `wp/wg-e-live`; the worktree is clean.
 
-**To resume:** continue in the same worktree; finish the e2e (scenario (c) fixture, screenshots),
-`pnpm check` and full e2e. It falls back to the version 1 view when the server answers 404/409, so
-it can merge before or after WG-D. It also edits `e2e/review-loop*.spec.ts`, as WG-D will, so merge
-one and rebase the other carefully.
+| Commit    | What                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `56b2619` | live run graph on the ticket page, run options read as a limit, direct rework on change cards, "Used by" naming blocks; vitest |
+| `1fa20b1` | e2e for the live graph and the limit wording, wider live blocks, a `DESIGN.md` section                                         |
+| `d539e7d` | progress file `paused`, with "Resume here"                                                                                     |
+
+Checks: `pnpm check` passed with 3,937 tests (packages run one at a time under load); the full e2e
+passed 65/65; the ticket e2e passed 14/14 after the last change. Screenshots are in
+`~/Desktop/acp-wg-e/.acp-data/screens/`.
+
+**Left:** task 9 only: status `review`, the completion report in `WG-E.md`, one more
+`pnpm check`. Then the coordinator reviews and merges it.
+
+**Behaviour to know:**
+
+- The ticket page asks `GET /api/runs/:id/workflow-graph`; a 404 or 409 shows the v1 view, so it
+  is safe before WG-C.
+- The Start dialog and the ticket's run options now offer **"No limit"** (nothing is sent, and
+  every block keeps its mode). Any mode picked is sent as a limit. A limit looser than every block
+  shows a note that it changes nothing.
+
+**Its two questions, answered by the plan (tell WG-E on resume):**
+
+1. The limits come only from the ticket's and the run's modes when they are set, never from the
+   project's mode. The project's mode is only the default for blocks without their own (README
+   refinement 5; the WG-C brief: "each only when set"). The "No limit" wording is right.
+2. Both apply: the block runs with the strictest of its mode, the ticket's limit and the run's
+   limit (`tightenMode`). So a run limit looser than the ticket's also changes nothing, and the
+   note should say so.
+
+**Merge notes:**
+
+- `lib/copy.ts` and `lib/api.ts` are additive. Its copy section sits above `TICKET_OPTIONS_COPY`,
+  apart from WG-D's section at the end of the file.
+- It changed the Start dialog and run-options assertions in `review-loop.spec.ts` and
+  `review-loop-live.spec.ts`. WG-D will edit Workflow-page steps in the same files, so rebase the
+  second one carefully.
+- After both merge, the live graph can share WG-D's block drawing instead of its copy.
+- Optional proposal: `AgentDefinitionSummaryDto.usedByNodes?`. Today agent files get "Used by"
+  from the project graph in the web.
+
+**Suggested merge order after WG-C:** WG-C, then WG-E (small and clean), then rebase WG-D on both
+and fix the three e2e specs.
 
 ### Step 4: WG-V verification
 

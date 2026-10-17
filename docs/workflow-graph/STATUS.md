@@ -99,3 +99,8 @@ plan-approval` without a planner;
   uncommitted) and WG-E (main slice committed; e2e in progress) were asked to stop and record
   "Resume here" in their progress files. WG-D is held for WG-C. Resume steps are in
   [RESUME.md](RESUME.md).
+- 2026-10-18 Paused states recorded in RESUME.md:
+  - WG-C: `dd05a0b`, with 2 test files uncommitted and the open `ManagedAgentSpec.sandbox?`
+    proposal;
+  - WG-E: `d539e7d`, clean, only the review hand-off left; its 2 questions are answered in
+    RESUME.md.
