@@ -25,6 +25,7 @@ export { APPROVAL_DECIDERS, StoredRunLimitsSchema, StoredRunSnapshotParser } fro
 export type {
   ApprovalDecider,
   RunAuditRepository,
+  StoredRunIntegration,
   StoredRunLimits,
   StoredRunSnapshot,
 } from './run-audit.js';

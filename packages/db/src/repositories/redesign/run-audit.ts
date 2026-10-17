@@ -1,7 +1,12 @@
 import {
+  ChangeReviewerModeSchema,
   ProjectAgentSetupSchema,
+  ProjectApprovalsSchema,
   ProjectWorkflowSchema,
+  ReworkRoundsSchema,
   WorkflowStageIdSchema,
+  type ChangeReviewerMode,
+  type ProjectApprovals,
   type ProjectWorkflow,
   type WorkflowStageId,
 } from '@acp/core';
@@ -42,6 +47,33 @@ export interface StoredRunLimits {
 export interface StoredRunSnapshot extends StoredRunLimits {
   workflow?: ProjectWorkflow;
   stagesHeld?: true;
+  /**
+   * ADR-0021 §1: the approval mode and command allowlist the run snapshotted at start (the
+   * engine's `RunState.approvalPolicy`). Absent for runs before it.
+   */
+  approvals?: ProjectApprovals;
+  /**
+   * ADR-0021 §3: the run's review loop (the engine's `RunState.integration`). Absent for runs
+   * before it, which keep the legacy flow.
+   */
+  integration?: StoredRunIntegration;
+}
+
+/** The review loop settings the run snapshotted, plus whether the lead has handed over. */
+export interface StoredRunIntegration {
+  reviewer: ChangeReviewerMode;
+  maxReworkRounds: number;
+  handedOver: boolean;
+}
+
+function parseIntegration(value: unknown): StoredRunIntegration | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const { reviewer, maxReworkRounds, handedOver, ...extra } = value as Record<string, unknown>;
+  if (Object.keys(extra).length > 0) return null;
+  const r = ChangeReviewerModeSchema.safeParse(reviewer);
+  const m = ReworkRoundsSchema.safeParse(maxReworkRounds);
+  if (!r.success || !m.success || typeof handedOver !== 'boolean') return null;
+  return { reviewer: r.data, maxReworkRounds: m.data, handedOver };
 }
 
 const fail = (message: string) => ({ success: false as const, error: new Error(message) });
@@ -51,7 +83,10 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return fail('expected an object');
     }
-    const { workflow, stagesHeld, ...rest } = value as Record<string, unknown>;
+    const { workflow, stagesHeld, approvals, integration, ...rest } = value as Record<
+      string,
+      unknown
+    >;
     const limits = StoredRunLimitsSchema.safeParse(rest);
     if (!limits.success) return fail('invalid limits');
     const snapshot: StoredRunSnapshot = { ...limits.data };
@@ -63,6 +98,16 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
     if (stagesHeld !== undefined) {
       if (stagesHeld !== true) return fail('stagesHeld must be true when present');
       snapshot.stagesHeld = true;
+    }
+    if (approvals !== undefined) {
+      const parsed = ProjectApprovalsSchema.safeParse(approvals);
+      if (!parsed.success) return fail('invalid approvals');
+      snapshot.approvals = parsed.data;
+    }
+    if (integration !== undefined) {
+      const parsed = parseIntegration(integration);
+      if (parsed === null) return fail('invalid integration');
+      snapshot.integration = parsed;
     }
     return { success: true as const, data: snapshot };
   },
