@@ -1,6 +1,7 @@
 # Workflow graph (WG series): status
 
-Coordinator-owned. Plan: [README.md](README.md). Decision:
+Coordinator-owned. **Paused 2026-10-18: resume from [RESUME.md](RESUME.md).** Plan:
+[README.md](README.md). Decision:
 [ADR-0023](../decisions/0023-editable-workflow-graphs.md). Branches `wp/wg-<id>-<slug>` come off
 `feature/workflow-graph` (from `main` `b6a1f27`) and are merged back with
 `--ff-only` after review.
@@ -10,9 +11,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                    | wp/wg-0-contracts | `5f6c1e8` |
 | WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                    | wp/wg-a-core      | `1da44e6` |
 | WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                    | wp/wg-b-engine    | `eb8276a` |
-| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **in progress**             | wp/wg-c-server    |           |
+| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **paused**                  | wp/wg-c-server    |           |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **in progress**             | wp/wg-e-live      |           |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **paused**                  | wp/wg-e-live      |           |
 | WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                 | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
@@ -94,3 +95,7 @@ plan-approval` without a planner;
   - **At release:** add the workflow-graph section at the README placeholder, re-run the screenshot
     spec so the Workflow shot shows the editor, bump the badges, and refresh the stale
     `docs/roadmap.md` and `docs/architecture.md` headers.
+- 2026-10-18 **Paused by the owner.** WG-C (tasks 1–5 committed; fuzz and scenario tests
+  uncommitted) and WG-E (main slice committed; e2e in progress) were asked to stop and record
+  "Resume here" in their progress files. WG-D is held for WG-C. Resume steps are in
+  [RESUME.md](RESUME.md).
