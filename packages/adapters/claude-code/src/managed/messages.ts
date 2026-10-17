@@ -1,5 +1,6 @@
-import type { ManagedAgentEvent, ManagedAgentSpec } from '@acp/core';
+import type { ManagedAgentEvent, ManagedAgentSpec, ManagedFailureCode } from '@acp/core';
 import { z } from 'zod';
+import { classifyStartupError } from './full-auto.js';
 import { emitsChatText } from './permissions.js';
 import { activitySummary } from './summary.js';
 
@@ -19,6 +20,8 @@ const InitSchema = z.looseObject({
   subtype: z.literal('init'),
   session_id: z.string().min(1),
   model: optString,
+  /** The mode the session really started in (Full auto checks it is `auto`, ADR-0022). */
+  permissionMode: optString,
 });
 
 const UsageSchema = z.looseObject({
@@ -51,6 +54,8 @@ const ResultSchema = z.looseObject({
   is_error: z.boolean().catch(true),
   total_cost_usd: z.number().nonnegative().finite().nullable().catch(null),
   queued_turn_count: z.number().int().nonnegative().optional().catch(undefined),
+  /** Error strings of an error result; only classified (`classifyStartupError`), never kept. */
+  errors: z.array(z.string()).catch([]).optional(),
 });
 
 /** The end of one turn, as reported by a `result` message. */
@@ -64,11 +69,18 @@ export interface TurnResult {
   costUsd: number | null;
   /** Sends still queued behind this turn; null when the CLI did not say. */
   queuedTurns: number | null;
+  /**
+   * Full auto (ADR-0022): what an error result's text says was unavailable (the sandbox or auto
+   * mode), or null. The text itself is never kept.
+   */
+  unavailable: ManagedFailureCode | null;
 }
 
 export interface MappedMessage {
   events: ManagedAgentEvent[];
   result: TurnResult | null;
+  /** The first `system/init`: the permission mode the session started in (null when absent). */
+  init?: { permissionMode: string | null };
 }
 
 export interface MapperState {
@@ -92,7 +104,7 @@ export function mapSdkMessage(
       providerSessionId: init.data.session_id,
       model: init.data.model,
     };
-    return { events: [started], result: null };
+    return { events: [started], result: null, init: { permissionMode: init.data.permissionMode } };
   }
 
   const assistant = AssistantSchema.safeParse(message);
@@ -109,6 +121,7 @@ export function mapSdkMessage(
         outcome,
         costUsd: zeroOnError ? null : r.total_cost_usd,
         queuedTurns: r.queued_turn_count ?? null,
+        unavailable: outcome === 'error' ? classifyStartupError(r.errors ?? []) : null,
       },
     };
   }

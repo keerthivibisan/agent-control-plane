@@ -4,10 +4,12 @@ import type {
   ManagedAgentSpec,
   ManagedCallbacks,
   ManagedExecutionAdapter,
+  ManagedFailureCode,
 } from '@acp/core';
 import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, SkillNameSchema } from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { applyFullAuto, classifyStartupError, fullAutoOf } from './full-auto.js';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
@@ -176,6 +178,10 @@ export function buildOptions(
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };
+  // ADR-0022: a Full auto helper or tester runs in auto mode inside the OS sandbox. Everyone else
+  // keeps `default` and the gate above.
+  const fullAuto = fullAutoOf(spec);
+  if (fullAuto !== null) applyFullAuto(options, spec, fullAuto, env);
   return options;
 }
 
@@ -239,11 +245,29 @@ function startAgent(
   input.push(userMessage(spec.prompt));
   const q = run({ prompt: input, options: buildOptions(spec, callbacks, abortController, env) });
 
+  const fullAuto = fullAutoOf(spec) !== null;
+  // Full auto (ADR-0022): why the agent could not run protected, once known.
+  let failure: ManagedFailureCode | null = null;
+
   const finish = (outcome: 'success' | 'error' | 'cancelled'): void => {
     if (events.isClosed) return;
     input.close();
-    events.push({ type: 'finished', outcome, reportedCostUsd: lastResult?.costUsd ?? null });
+    const end: ManagedAgentEvent = {
+      type: 'finished',
+      outcome,
+      reportedCostUsd: lastResult?.costUsd ?? null,
+    };
+    if (failure !== null && outcome === 'error') end.failure = failure;
+    events.push(end);
     events.close();
+  };
+
+  /** Ends a Full auto agent that is not protected: nothing it would do runs (fail closed). */
+  const failClosed = (code: ManagedFailureCode): void => {
+    failure = code;
+    finish('error');
+    abortController.abort();
+    q.close?.();
   };
 
   const pump = async (): Promise<void> => {
@@ -251,16 +275,27 @@ function startAgent(
       for await (const message of q) {
         if (events.isClosed) break;
         const mapped = mapSdkMessage(message, spec, state);
+        // The session must really be in auto mode; a CLI or model without it may start in
+        // another mode, which Full auto never accepts (the agent ends before any tool runs).
+        if (fullAuto && mapped.init !== undefined && mapped.init.permissionMode !== 'auto') {
+          failClosed('auto-mode-unavailable');
+          break;
+        }
         for (const event of mapped.events) events.push(event);
         if (mapped.result !== null) {
           lastResult = mapped.result;
+          if (fullAuto && mapped.result.unavailable !== null) failure = mapped.result.unavailable;
           if (!specKeepsInputOpen(spec) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
         }
       }
       finish(abortController.signal.aborted ? 'cancelled' : (lastResult?.outcome ?? 'error'));
-    } catch {
+    } catch (error) {
       // The SDK throws AbortError after abort(); any other failure ends the agent as an error.
-      // No message text is kept: it may quote model or tool output.
+      // No message text is kept: it may quote model or tool output. For Full auto it is only
+      // classified (the sandbox failing to start ends the process).
+      if (fullAuto && failure === null && error instanceof Error) {
+        failure = classifyStartupError([error.message]);
+      }
       finish(abortController.signal.aborted ? 'cancelled' : 'error');
     }
   };

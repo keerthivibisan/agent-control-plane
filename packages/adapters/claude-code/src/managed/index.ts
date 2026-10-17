@@ -28,3 +28,9 @@ export {
   roleBaseTools,
 } from './permissions.js';
 export { activitySummary, MAX_SUMMARY_LENGTH, summarizeToolUse } from './summary.js';
+export {
+  classifyStartupError,
+  fullAutoDenyRules,
+  fullAutoOf,
+  fullAutoSandbox,
+} from './full-auto.js';
