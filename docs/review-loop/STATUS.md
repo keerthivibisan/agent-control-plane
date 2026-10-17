@@ -3,13 +3,13 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                    | After      | Status                                 | Branch           | Merged    |
-| ---- | -------------------------------------------------------- | ---------- | -------------------------------------- | ---------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                               | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                               | wp/rl-a-engine   | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | review → fixing the plan-approval race | wp/rl-b-server   | —         |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                               | wp/rl-d-web      | `b31d1ec` |
-| RL-V | Verification and one consented real run                  | all        | todo                                   | —                | —         |
+| WP   | Title                                                    | After      | Status      | Branch           | Merged    |
+| ---- | -------------------------------------------------------- | ---------- | ----------- | ---------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**    | wp/rl-0-contract | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**    | wp/rl-a-engine   | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**    | wp/rl-b-server   | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**    | wp/rl-d-web      | `b31d1ec` |
+| RL-V | Verification and one consented real run                  | all        | in-progress | wp/rl-v-verify   | —         |
 
 ## Owner decisions (2026-10-17)
 
@@ -69,3 +69,11 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
     `ticket-branch-pending`.
   - Sent back to RL-B: the lead learns of the approval only after the branch exists. Then rebase
     on RL-D and run the full e2e against the real server.
+- 2026-10-17 **RL-B merged** (`a33fac5`).
+  - The race is fixed: effects after `create-ticket-branch` in the same batch wait for
+    `ticketBranchCreated`. A regression test on the real server composition fails without the
+    fix.
+  - Per-worktree and per-repository git locks.
+  - The coordinator ran pnpm check (2,506 tests) and the e2e (59/59).
+  - **Gap for RL-V:** the workspace e2e server runs legacy runs by default (`ACP_E2E_REVIEW_LOOP=1`
+    switches to the loop), so no browser e2e drives the loop against the real server yet.
