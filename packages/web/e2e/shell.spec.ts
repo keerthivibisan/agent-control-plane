@@ -201,7 +201,9 @@ test('the sidebar shows labels above 1280px and collapses to icons at 1280px and
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect.poll(async () => (await nav.boundingBox())?.width ?? 0).toBeLessThan(100);
   expect(await labelWidth()).toBeLessThanOrEqual(1);
-  await expect(board).toHaveAttribute('title', 'Board');
+  // U-B: in the rail, an entry's label shows as a tooltip (it was the `title`).
+  await board.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Board');
   if (SHOTS !== undefined) {
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
@@ -210,6 +212,81 @@ test('the sidebar shows labels above 1280px and collapses to icons at 1280px and
     }
   }
 });
+
+// --- U-B (UI refresh): the sidebar toggle (owner request 2026-10-17: "it occupies more space").
+test('the sidebar toggle and ⌘B/Ctrl+B switch to the icon rail; the choice is remembered', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  await withTickets(page, project.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/#/p/${project.id}/board`);
+  await expect(page.getByTestId('board-counts')).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const sidebar = page.getByTestId('sidebar');
+  const width = async () => (await nav.boundingBox())?.width ?? 0;
+  await expect.poll(width).toBeGreaterThan(200);
+  await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
+  if (SHOTS !== undefined) {
+    // The project switcher, open.
+    const switcher = page.getByRole('button', { name: 'Project: demo-api. Switch project' });
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await switcher.click();
+      await expect(page.getByRole('navigation', { name: 'Switch project' })).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${SHOTS}/shell-switcher-1440-${scheme}.png` });
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('navigation', { name: 'Switch project' })).toHaveCount(0);
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+
+  // The button: the rail, with a tooltip naming the button and its shortcut.
+  const collapse = page.getByRole('button', { name: 'Collapse sidebar' });
+  await collapse.hover();
+  await expect(page.getByRole('tooltip')).toContainText('Collapse sidebar');
+  await collapse.click();
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+  await expect.poll(width).toBeLessThan(64);
+  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page');
+  if (SHOTS !== undefined) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.mouse.move(700, 450);
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${SHOTS}/shell-rail-1440-${scheme}.png` });
+    }
+    await nav.getByRole('link', { name: 'Tokens' }).hover();
+    await expect(page.getByRole('tooltip')).toHaveText('Tokens');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${SHOTS}/shell-rail-tooltip-1440-dark.png` });
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+
+  // Remembered after a reload.
+  await page.reload();
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+  await expect.poll(width).toBeLessThan(64);
+
+  // The shortcut brings the full list back, and that choice wins on a narrow screen too.
+  await page.keyboard.press('ControlOrMeta+KeyB');
+  await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
+  await expect.poll(width).toBeGreaterThan(200);
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.reload();
+  await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
+  await expect.poll(width).toBeGreaterThan(200);
+  if (SHOTS !== undefined) {
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${SHOTS}/shell-expanded-1024-light.png` });
+  }
+  await page.keyboard.press('ControlOrMeta+KeyB');
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+});
+// --- end U-B
 
 test('the ⌘K palette jumps to a ticket by key and closes with Esc', async ({ page, request }) => {
   const project = await demoApi(request);

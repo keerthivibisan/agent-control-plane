@@ -2717,3 +2717,17 @@ export const PAGES_REFRESH_COPY = {
   /** The loading words under a page-shaped skeleton (screen readers only), as QueryView says. */
   loading: 'Loading…',
 } as const;
+
+// --- Shell frame (UI refresh U-B, wp/u-b-shell) ------------------------------------------------
+// Add-only. Strings for the new shell controls only; every other shell word stays in SHELL_COPY.
+
+export const SHELL_FRAME_COPY = {
+  /** The top bar's trail: the project switcher, then the page. */
+  breadcrumb: 'Breadcrumb',
+  sidebar: {
+    collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar',
+  },
+  /** The sidebar toggle's shortcut as the keyboard labels it (⌘ on Apple keyboards). */
+  sidebarShortcut: (mac: boolean) => (mac ? '⌘B' : 'Ctrl+B'),
+} as const;

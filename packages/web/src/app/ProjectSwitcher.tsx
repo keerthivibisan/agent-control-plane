@@ -1,6 +1,9 @@
 import type { ProjectDto } from '@acp/core/api';
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { CheckIcon, ChevronDownIcon, GridIcon, PlusSmallIcon } from '../components/icons';
+import * as RadixMenu from '@radix-ui/react-dropdown-menu';
+import { ChevronsUpDown } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { CheckIcon, GridIcon, PlusSmallIcon } from '../components/icons';
+import { floatingClass, MenuLabel, MenuSeparator } from '../components/Menu';
 import { SHELL_COPY } from '../lib/copy';
 import { href, type Route } from '../lib/router';
 import { isProjectPageAvailable } from './project-pages';
@@ -24,8 +27,8 @@ export function ProjectMark({ name, size = 'md' }: { name: string; size?: 'sm' |
   return (
     <span
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-md bg-accent-soft font-semibold text-accent ${
-        size === 'sm' ? 'size-5 text-[0.6875rem]' : 'size-6 text-caption'
+      className={`flex shrink-0 items-center justify-center rounded-[5px] bg-accent-soft font-semibold text-accent ${
+        size === 'sm' ? 'size-5 text-micro' : 'size-6 text-caption'
       }`}
     >
       {initial}
@@ -33,10 +36,41 @@ export function ProjectMark({ name, size = 'md' }: { name: string; size?: 'sm' |
   );
 }
 
+const itemClass = (selected: boolean) =>
+  `flex items-center gap-2.5 rounded-control px-2 py-1.5 text-ink no-underline outline-none select-none data-[highlighted]:bg-hover focus-visible:outline-none ${
+    selected ? 'bg-accent-soft/50' : ''
+  }`;
+
 /**
- * The top bar's project switcher: a button showing the current project, opening a menu of
- * projects plus All projects and New project. Arrow keys move through the menu, Esc closes it and
- * returns focus to the button.
+ * One entry of the switcher: a real link (Radix gives it the menu's arrow keys, typeahead and
+ * close-on-choose; `role` undefined keeps it a link, as the navigation it sits in expects).
+ */
+function SwitchLink({
+  to,
+  current = false,
+  children,
+}: {
+  to: string;
+  current?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <RadixMenu.Item asChild role={undefined}>
+      <a href={to} aria-current={current ? 'true' : undefined} className={itemClass(current)}>
+        {children}
+      </a>
+    </RadixMenu.Item>
+  );
+}
+
+/**
+ * The top bar's project switcher: a button showing the current project, opening a navigation of
+ * projects plus All projects and New project (Radix DropdownMenu, so it is positioned, dismissed
+ * and keyboard-driven like every menu). Focus starts on the current project; arrow keys, Home and
+ * End move, Esc closes it and returns focus to the button, Tab closes it.
+ *
+ * It composes Radix directly instead of the shared `Menu`: its entries are links in a
+ * `navigation` (they change the address), where the shared Menu's are `menuitem` actions.
  */
 export function ProjectSwitcher({
   projects,
@@ -53,9 +87,7 @@ export function ProjectSwitcher({
   const [openOn, setOpenOn] = useState<Route | null>(null);
   const open = openOn === route;
   const setOpen = (next: boolean) => setOpenOn(next ? route : null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
   const current = currentId === null ? null : projects?.find((p) => p.id === currentId);
   const onAllProjects = route.name === 'projects';
   const label = onAllProjects
@@ -70,126 +102,104 @@ export function ProjectSwitcher({
 
   useEffect(() => {
     if (!open) return;
-    menuRef.current?.querySelector<HTMLElement>('[aria-current="true"], a')?.focus();
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !buttonRef.current?.contains(t)) setOpenOn(null);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    // Radix focuses the menu (or its first entry) as it opens; start on the current project.
+    const t = window.setTimeout(() => {
+      contentRef.current?.querySelector<HTMLElement>('[aria-current="true"], a')?.focus();
+    }, 0);
+    return () => window.clearTimeout(t);
   }, [open]);
 
-  const close = (refocus: boolean) => {
-    setOpen(false);
-    if (refocus) buttonRef.current?.focus();
-  };
-
-  const onMenuKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('a') ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close(true);
-    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const step = e.key === 'ArrowDown' ? 1 : -1;
-      items[(at + step + items.length) % items.length]?.focus();
-    } else if (e.key === 'Home' || e.key === 'End') {
-      e.preventDefault();
-      items[e.key === 'Home' ? 0 : items.length - 1]?.focus();
-    } else if (e.key === 'Tab') {
-      close(false);
-    }
-  };
-
-  const itemClass = (selected: boolean) =>
-    `flex items-center gap-3 rounded-control px-2.5 py-2 text-ink no-underline outline-none hover:bg-sunken focus-visible:bg-sunken focus-visible:outline-none ${
-      selected ? 'bg-accent-soft/60' : ''
-    }`;
-
   return (
-    <div className="relative min-w-0">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        aria-label={C.button(label)}
-        data-testid="project-switcher"
-        onClick={() => setOpen(!open)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' && !open) {
-            e.preventDefault();
-            setOpen(true);
-          }
+    <RadixMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+      <RadixMenu.Trigger
+        asChild
+        // A disclosure of links, not a menu of actions.
+        aria-haspopup={undefined}
+        // Radix opens on pointerdown and on keys; a click with no pointer behind it (assistive
+        // tech, `element.click()`) toggles it too.
+        onClick={(e: MouseEvent) => {
+          if (e.detail === 0) setOpen(!open);
         }}
-        className="flex h-9 max-w-80 min-w-0 items-center gap-2 rounded-control border border-line bg-panel pr-2 pl-2 text-ink shadow-card transition-colors hover:border-line-strong hover:bg-sunken"
       >
-        {onAllProjects || !current ? (
-          <span className="flex size-6 shrink-0 items-center justify-center text-dim">
-            <GridIcon size={16} />
-          </span>
-        ) : (
-          <ProjectMark name={current.name} />
-        )}
-        <span className="min-w-0 truncate font-medium">{label}</span>
-        <ChevronDownIcon size={16} className="shrink-0 text-dim" />
-      </button>
-      {open ? (
-        <div
-          ref={menuRef}
-          id={menuId}
+        <button
+          type="button"
+          aria-label={C.button(label)}
+          data-testid="project-switcher"
+          className="flex h-8 max-w-72 min-w-0 items-center gap-2 rounded-control px-1.5 text-ink transition-colors hover:bg-hover aria-expanded:bg-hover"
+        >
+          {onAllProjects || !current ? (
+            <span className="flex size-5 shrink-0 items-center justify-center text-dim">
+              <GridIcon size={16} />
+            </span>
+          ) : (
+            <ProjectMark name={current.name} size="sm" />
+          )}
+          <span className="min-w-0 truncate font-medium">{label}</span>
+          <ChevronsUpDown
+            size={14}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            focusable="false"
+            className="shrink-0 text-dim"
+          />
+        </button>
+      </RadixMenu.Trigger>
+      <RadixMenu.Portal>
+        <RadixMenu.Content
+          ref={contentRef}
           role="navigation"
           aria-label={C.menu}
-          onKeyDown={onMenuKey}
-          className="absolute top-11 left-0 z-50 w-80 rounded-card border border-line bg-panel p-1.5 shadow-pop"
+          aria-labelledby={undefined}
+          aria-orientation={undefined}
+          align="start"
+          sideOffset={6}
+          collisionPadding={8}
+          loop
+          onKeyDown={(e) => {
+            // Radix keeps Tab inside a menu; this one closes, as it did before.
+            if (e.key === 'Tab') setOpen(false);
+          }}
+          className={`${floatingClass} flex w-80 max-w-[calc(100vw-1rem)] flex-col p-1 focus:outline-none`}
         >
-          <p className="px-2.5 pt-1.5 pb-1 text-caption font-medium tracking-wide text-dim uppercase">
-            {C.yourProjects}
-          </p>
+          <MenuLabel>{C.yourProjects}</MenuLabel>
           {projects === undefined || projects.length === 0 ? (
             <p className="px-2.5 py-2 text-dim">{projects === undefined ? '…' : C.empty}</p>
           ) : (
-            <ul className="flex max-h-80 flex-col gap-0.5 overflow-y-auto">
+            <ul className="flex max-h-80 flex-col gap-px overflow-y-auto">
               {projects.map((p) => {
                 const selected = p.id === currentId && !onAllProjects;
                 return (
                   <li key={p.id}>
-                    <a
-                      href={switchTarget(route, p.id)}
-                      aria-current={selected ? 'true' : undefined}
-                      className={itemClass(selected)}
-                    >
+                    <SwitchLink to={switchTarget(route, p.id)} current={selected}>
                       <ProjectMark name={p.name} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{p.name}</span>
-                        <span className="block truncate font-mono text-caption text-dim" dir="ltr">
+                        <span className="block truncate font-mono text-micro text-dim" dir="ltr">
                           {p.rootPath}
                         </span>
                       </span>
                       {selected ? <CheckIcon size={16} className="shrink-0 text-accent" /> : null}
-                    </a>
+                    </SwitchLink>
                   </li>
                 );
               })}
             </ul>
           )}
-          <div className="my-1.5 border-t border-line" />
-          <a href={href.projects()} className={itemClass(false)}>
+          <MenuSeparator />
+          <SwitchLink to={href.projects()}>
             <span className="flex size-6 items-center justify-center text-dim">
               <GridIcon size={16} />
             </span>
             {C.allProjects}
-          </a>
-          <a href={href.newProject()} className={itemClass(false)}>
+          </SwitchLink>
+          <SwitchLink to={href.newProject()}>
             <span className="flex size-6 items-center justify-center text-dim">
               <PlusSmallIcon size={16} />
             </span>
             {C.newProject}
-          </a>
-        </div>
-      ) : null}
-    </div>
+          </SwitchLink>
+        </RadixMenu.Content>
+      </RadixMenu.Portal>
+    </RadixMenu.Root>
   );
 }

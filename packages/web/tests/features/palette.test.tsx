@@ -159,7 +159,8 @@ describe('command palette', () => {
     fireEvent.change(combobox(), { target: { value: 'tokens' } });
     fireEvent.keyDown(combobox(), { key: 'Enter' });
     expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/tokens`);
-    expect(document.activeElement).toBe(opener);
+    // The shared Dialog (Radix) gives focus back on the next tick.
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it('New ticket opens the ticket dialog for the current project, then the new ticket', async () => {
@@ -172,6 +173,10 @@ describe('command palette', () => {
     fireEvent.change(combobox(), { target: { value: 'new ticket' } });
     fireEvent.keyDown(combobox(), { key: 'Enter' });
     const dialog = await screen.findByRole('dialog', { name: 'New ticket' });
+    // Focus ends in the new dialog, not on the palette's opener behind it.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(dialog).getByLabelText('Title')),
+    );
     fireEvent.change(within(dialog).getByLabelText('Title'), {
       target: { value: 'From the palette' },
     });

@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { PROJECT_PAGES } from '../../app/project-pages';
+import { Dialog } from '../../components/Dialog';
 import {
   ArrowRightIcon,
   GridIcon,
@@ -44,10 +45,11 @@ function pageIcon(c: Command): ComponentType<IconProps> {
 }
 
 /**
- * The ⌘K command palette (DESIGN.md, "Command palette"): a modal dialog with one search field
- * (`role="combobox"`) over a listbox of results. Keyboard first: ↑/↓ move, Enter opens, Esc
- * closes, Tab stays in the dialog, and focus returns to whatever opened it. Tickets come from the
- * current project's board (the existing `GET /api/board`).
+ * The ⌘K command palette (DESIGN.md, "Command palette"): the shared modal `Dialog` with one search
+ * field (`role="combobox"`) over a listbox of results. Keyboard first: ↑/↓ move, Enter opens, Esc
+ * closes, Tab stays in the field, and focus returns to whatever opened it (the Dialog does that
+ * just after it closes). Tickets come from the current project's board (the existing
+ * `GET /api/board`).
  */
 export function CommandPalette({
   projects,
@@ -66,19 +68,10 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
-  const titleId = useId();
   const board = useApiQuery(
     current === null ? null : boardPaths.board(current.id),
     boardSchemas.board,
   );
-
-  useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    inputRef.current?.focus();
-    return () => {
-      if (opener?.isConnected) opener.focus();
-    };
-  }, []);
 
   const commands = useMemo(() => {
     const tickets = (board.data?.columns ?? [])
@@ -107,12 +100,9 @@ export function CommandPalette({
     } else onNewTicket(c.action.projectId);
   };
 
+  // Escape is the Dialog's (Radix closes it and calls onClose).
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-    } else if (e.key === 'Tab') {
+    if (e.key === 'Tab') {
       // The search field is the dialog's only stop: keep focus inside.
       e.preventDefault();
       inputRef.current?.focus();
@@ -132,27 +122,14 @@ export function CommandPalette({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-[rgb(15_15_20/0.4)] px-4 pt-[12vh] backdrop-blur-[2px]"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        data-testid="command-palette"
-        onKeyDown={onKeyDown}
-        className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-card border border-line bg-panel shadow-pop"
-      >
-        <h2 id={titleId} className="sr-only">
-          {C.title}
-        </h2>
-        <div className="flex items-center gap-3 border-b border-line px-4">
-          <SearchIcon size={18} className="shrink-0 text-dim" />
+    <Dialog title={C.title} onClose={onClose} testId="command-palette" wide>
+      {/* Edge to edge under the title: the field, the results and the key hints. */}
+      <div onKeyDown={onKeyDown} className="-mx-5 -mt-2 -mb-5 flex flex-col">
+        <div className="flex items-center gap-2.5 border-y border-line px-5">
+          <SearchIcon size={16} className="shrink-0 text-dim" />
           <input
             ref={inputRef}
+            data-autofocus
             role="combobox"
             aria-label={C.input}
             aria-expanded="true"
@@ -165,9 +142,9 @@ export function CommandPalette({
               setQuery(e.target.value);
               setActive(0);
             }}
-            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-title text-ink outline-none focus-visible:outline-none"
+            className="h-12 min-w-0 flex-1 border-0 bg-transparent text-title text-ink outline-none placeholder:text-dim/80 focus-visible:outline-none"
           />
-          <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-sans text-caption text-dim">
+          <kbd className="rounded-[4px] border border-line bg-sunken px-1.5 font-sans text-micro leading-5 text-dim">
             Esc
           </kbd>
         </div>
@@ -176,7 +153,7 @@ export function CommandPalette({
           id={listId}
           role="listbox"
           aria-label={C.results}
-          className="min-h-0 flex-1 overflow-y-auto p-2"
+          className="max-h-[min(26rem,56vh)] min-h-0 overflow-y-auto p-1.5 empty:hidden"
         >
           {results.map((c, i) => {
             // Results come in group order: a heading starts each group.
@@ -188,7 +165,7 @@ export function CommandPalette({
                 {heading ? (
                   <div
                     role="presentation"
-                    className="px-3 pt-3 pb-1.5 text-caption font-medium tracking-wide text-dim uppercase first:pt-1"
+                    className="px-2.5 pt-3 pb-1 text-caption font-medium text-dim first:pt-1.5"
                   >
                     {heading}
                   </div>
@@ -203,18 +180,18 @@ export function CommandPalette({
                     if (!isActive) setActive(i);
                   }}
                   onClick={() => run(c)}
-                  className={`flex cursor-pointer items-center gap-3 rounded-control px-3 py-2 ${
-                    isActive ? 'bg-accent-soft text-ink' : 'text-ink'
+                  className={`flex cursor-pointer items-center gap-3 rounded-control px-2.5 py-1.5 text-ink ${
+                    isActive ? 'bg-hover' : ''
                   }`}
                 >
                   <span
-                    className={`flex size-8 shrink-0 items-center justify-center rounded-control border ${
+                    className={`flex size-7 shrink-0 items-center justify-center rounded-control border transition-colors ${
                       isActive
-                        ? 'border-accent/30 bg-panel text-accent'
-                        : 'border-line bg-sunken text-dim'
+                        ? 'border-accent/30 bg-accent-soft text-accent'
+                        : 'border-line bg-panel text-dim'
                     }`}
                   >
-                    <Icon size={16} />
+                    <Icon size={15} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span
@@ -226,24 +203,24 @@ export function CommandPalette({
                       <span className="block truncate text-caption text-dim">{c.hint}</span>
                     ) : null}
                   </span>
-                  {isActive ? <ArrowRightIcon size={16} className="shrink-0 text-accent" /> : null}
+                  {isActive ? <ArrowRightIcon size={15} className="shrink-0 text-accent" /> : null}
                 </div>
               </li>
             );
           })}
         </ul>
         {results.length === 0 ? (
-          <p role="status" className="px-6 pb-8 text-center text-dim">
+          <p role="status" className="px-6 py-10 text-center text-dim">
             {C.none}
           </p>
         ) : null}
-        <div className="flex items-center justify-between gap-3 border-t border-line bg-sunken/60 px-4 py-2 text-caption text-dim">
+        <div className="flex items-center justify-between gap-3 rounded-b-card border-t border-line bg-sunken/60 px-5 py-2 text-caption text-dim">
           <span>{C.hint}</span>
           {current !== null && board.data === undefined && board.error === null ? (
             <span>{C.loadingTickets}</span>
           ) : null}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

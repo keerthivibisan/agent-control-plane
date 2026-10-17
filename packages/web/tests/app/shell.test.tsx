@@ -212,7 +212,8 @@ describe('project switcher', () => {
     const menu = screen.getByRole('navigation', { name: 'Switch project' });
     const current = within(menu).getByRole('link', { name: /web-app/ });
     expect(current.getAttribute('aria-current')).toBe('true');
-    expect(document.activeElement).toBe(current);
+    // Radix moves focus into the menu on the next tick.
+    await waitFor(() => expect(document.activeElement).toBe(current));
     expect(within(menu).getByRole('link', { name: /alpha/ }).getAttribute('href')).toBe(
       '#/p/p-1/board',
     );
@@ -223,10 +224,12 @@ describe('project switcher', () => {
       '#/projects/new',
     );
     fireEvent.keyDown(current, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(within(menu).getByRole('link', { name: /alpha/ }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(menu).getByRole('link', { name: /alpha/ })),
+    );
     fireEvent.keyDown(menu, { key: 'Escape' });
     expect(screen.queryByRole('navigation', { name: 'Switch project' })).toBeNull();
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => expect(document.activeElement).toBe(button));
   });
 
   it('reads "All projects" on All projects and "Unknown project" for a missing id', async () => {
