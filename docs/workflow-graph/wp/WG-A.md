@@ -6,7 +6,7 @@
 
 | Field   | Value                                          |
 | ------- | ---------------------------------------------- |
-| Status  | in-progress                                    |
+| Status  | review                                         |
 | Owner   | WG-A agent (Claude Code)                       |
 | Branch  | `wp/wg-a-core` (from `feature/workflow-graph`) |
 | Started | 2026-10-17                                     |
@@ -21,9 +21,9 @@
 - [x] 4. `migrateWorkflowV1`: lossless, node ids = v1 stage ids; golden tests for every v1
       combination
 - [x] 5. Templates: `workflowTemplate`, `WORKFLOW_TEMPLATES`
-- [ ] 6. Test support: seeded PRNG, `generateValidGraph`, `GRAPH_MUTATIONS`,
+- [x] 6. Test support: seeded PRNG, `generateValidGraph`, `GRAPH_MUTATIONS`,
       `enumerateSmallGraphs`
-- [ ] 7. Property tests (layer 3), small-graph agreement and rule coverage (layer 4, core part)
+- [x] 7. Property tests (layer 3), small-graph agreement and rule coverage (layer 4, core part)
 
 ## Work log (append-only; newest last)
 
@@ -31,7 +31,8 @@
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------- |
 | 2026-10-17 | Claimed WG-A                                                                                                                        | b12dc82 | format ✓ lint ✓ typecheck ✓ test 2635/2635 ✓ build ✓ |
 | 2026-10-17 | `canConnect`, `validateWorkflowGraph`, templates (+ `migrateWorkflowV1`, which `todays-setup` uses; golden tests come with compile) | 06dbc83 | format ✓ lint ✓ typecheck ✓ test 2683/2683 ✓ build ✓ |
-| 2026-10-17 | `compileWorkflow`, `WorkflowGraphInvalidError`; compile tests; golden migration tests (2,304 v1 combinations)                       | (this)  | format ✓ lint ✓ typecheck ✓ test 2708/2708 ✓ build ✓ |
+| 2026-10-17 | `compileWorkflow`, `WorkflowGraphInvalidError`; compile tests; golden migration tests (2,304 v1 combinations)                       | 069153e | format ✓ lint ✓ typecheck ✓ test 2708/2708 ✓ build ✓ |
+| 2026-10-17 | Test support (PRNG, generator, mutations, small-graph enumeration); property and layer 4 tests; status `review`                     | (this)  | format ✓ lint ✓ typecheck ✓ test 2717/2717 ✓ build ✓ |
 
 ## Decisions and findings
 
@@ -64,3 +65,44 @@
   `tests/graph/migrate.test.ts` re-states `skillsFor`, `stageModelFor`, `stageAgentFor`,
   `changeReviewerLaunchFields` and `nextStage`'s order (code-review, then unit-tests). WG-B can
   cross-check the engine's own functions against the compiled program.
+- **Test support is exported from `@acp/core`** (`createGraphRng`, `generateValidGraph`,
+  `LEGAL_GRAPH_MOVES`, `GRAPH_MUTATIONS`, `enumerateSmallGraphs`) so WG-B's simulator tests can
+  reuse it. It is pure and tree-shaken out of the web bundle when unused.
+- **`enumerateSmallGraphs`** yields `{ name, graph }`: 3,516 graphs (1,172 valid). The full product
+  of per-node choices (16 per editing node, up to 5 editing nodes) is too large, so each structure
+  yields one legal baseline plus every other choice for one node at a time.
+- **Rule coverage:** every structural error code is reached by some mutant or enumerated graph; no
+  code is excluded. Shapes `WorkflowGraphSchema` already refuses (a mode on a read-only node, bad
+  ids, more than 40 nodes or 120 edges) are not validator rules and have no mutant.
+
+## Completion report — WG-A
+
+1. **Summary:** core graph logic in `packages/core/src/workspace/graph/`: `canConnect`,
+   `validateWorkflowGraph`, `compileWorkflow` (+ `WorkflowGraphInvalidError`), `migrateWorkflowV1`,
+   templates, and seeded test support (generator, mutations, small-graph enumeration), with
+   matrix, rule, compile, golden migration and property tests.
+2. **Files:** created the graph modules `index.ts`, `graph-index.ts`, `connect.ts`,
+   `validate.ts`, `compile.ts`, `build.ts`, `migrate.ts` and `templates.ts` in
+   `packages/core/src/workspace/graph/`; the test support `rng.ts`, `graph-ops.ts`, `generate.ts`,
+   `mutations.ts` and `enumerate.ts` in its `testing/` folder; and `helpers.ts` plus the
+   `connect`, `validate`, `compile`, `migrate`, `templates` and `properties` test files in
+   `packages/core/tests/graph/`. Modified `packages/core/src/index.ts` (one export line) and this
+   file.
+3. **Commands:** `pnpm check` from the worktree root: format ✓, lint ✓, typecheck ✓, test 2717
+   passed (core 399, adapters/demo 12, adapters/claude-code 348, orchestrator 574, db 195, web
+   708, server 481), build ✓. The graph tests add 82 tests and about 5.6 s to the core run.
+4. **Acceptance criteria:** `canConnect` matrix: met (every triple vs an explicit table, with and
+   without a planner). Every validation rule has a named valid and invalid test: met. Compile
+   routes a/b/c, overrides, modes and sandbox, `planAutoApprove`, pool limit, stage order, throws
+   exactly on validator errors: met. Golden migration for all 2,304 v1 combinations: met. Templates
+   valid with zero issues under Auto edits: met. Property layer 3 (2,000 seeds, every mutant,
+   agreement) and layer 4 core part (errors ⇔ compile throws, rule coverage): met.
+5. **Assumptions:** listed under "Decisions and findings" above (plan path, cycle scope, reserved
+   labels, edge order, override reading, used-only change reviewers).
+6. **Contract changes:** none needed.
+7. **Known gaps / follow-ups:** the golden tests mirror `stages.ts` (core cannot import the
+   orchestrator); WG-B should cross-check the engine's functions against the compiled program.
+   The simulator-backed soundness and completeness checks over `enumerateSmallGraphs()` and the
+   generator are WG-B's.
+8. **Next:** WG-B (engine) on top of `compileWorkflow`; WG-D can build the editor on `canConnect`,
+   `validateWorkflowGraph` and `workflowTemplate`.

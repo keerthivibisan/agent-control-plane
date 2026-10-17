@@ -16,3 +16,15 @@ export {
   type WorkflowTemplateInfo,
   type WorkflowTemplateOptions,
 } from './templates.js';
+
+// Test support (README "Graph correctness", layers 3 and 4): pure and seeded, shared with the
+// engine's simulator tests (WG-B). Never used to build a project's workflow.
+export { createGraphRng, type GraphRng } from './testing/rng.js';
+export {
+  GENERATED_HELPER_NAMES,
+  LEGAL_GRAPH_MOVES,
+  generateValidGraph,
+  type GenerateGraphOptions,
+} from './testing/generate.js';
+export { GRAPH_MUTATIONS, type GraphMutation } from './testing/mutations.js';
+export { enumerateSmallGraphs, type EnumeratedGraph } from './testing/enumerate.js';
