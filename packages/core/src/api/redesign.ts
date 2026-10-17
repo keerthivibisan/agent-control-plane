@@ -11,7 +11,12 @@ import {
   SkillNameSchema,
   WorkflowStageIdSchema,
 } from '../workspace/workflow.js';
-import { RepoRelativePathSchema } from '../workspace/workspace.js';
+import {
+  GraphIssueSchema,
+  WorkflowGraphSchema,
+  WorkflowNodeIdSchema,
+} from '../workspace/workflow-graph.js';
+import { ApprovalModeSchema, RepoRelativePathSchema } from '../workspace/workspace.js';
 import { ReportedCostUsdDtoSchema, UsageTotalsDtoSchema } from './dto.js';
 import { ProjectAgentSetupDtoSchema } from './workspace.js';
 
@@ -83,6 +88,67 @@ export const RunWorkflowDtoSchema = z.object({
 });
 export type RunWorkflowDto = z.infer<typeof RunWorkflowDtoSchema>;
 
+// ---------------------------------------------------------------- workflow graph (ADR-0023)
+
+/**
+ * GET and PUT `/api/projects/:id/workflow-graph`. A project without a stored graph answers its
+ * version 1 workflow migrated (`stored: 'v1'`) or the default (`stored: 'default'`); the first PUT
+ * stores version 2. `issues` is `validateWorkflowGraph`'s answer for `graph` with the project's
+ * skills and agent files. The editor also validates locally with the same function from core.
+ */
+export const WorkflowGraphDtoSchema = z.object({
+  graph: WorkflowGraphSchema,
+  stored: z.enum(['v2', 'v1', 'default']),
+  issues: z.array(GraphIssueSchema),
+  setup: ProjectAgentSetupDtoSchema,
+  /** Project skills and agent files, so nodes can offer them and flag one that is gone. */
+  skills: z.array(SkillNameSchema),
+  agents: z.array(SkillNameSchema),
+  updatedAt: IsoTimestampSchema.nullable(),
+});
+export type WorkflowGraphDto = z.infer<typeof WorkflowGraphDtoSchema>;
+
+/** PUT body. The server answers 422 `workflow_invalid` with the issues when it has an error. */
+export const UpdateWorkflowGraphRequestSchema = z.object({ graph: WorkflowGraphSchema });
+export type UpdateWorkflowGraphRequest = z.infer<typeof UpdateWorkflowGraphRequestSchema>;
+
+/** POST `/api/projects/:id/workflow-graph/validate`: checks a graph without saving it. */
+export const ValidateWorkflowGraphResultDtoSchema = z.object({
+  ok: z.boolean(),
+  issues: z.array(GraphIssueSchema),
+});
+export type ValidateWorkflowGraphResultDto = z.infer<typeof ValidateWorkflowGraphResultDtoSchema>;
+
+/**
+ * GET `/api/runs/:id/workflow-graph`: the graph the run snapshotted at start (read-only) and each
+ * node's live state. Version 1 runs answer their workflow migrated.
+ */
+export const RunWorkflowGraphDtoSchema = z.object({
+  runId: z.string().min(1),
+  graph: WorkflowGraphSchema,
+  nodes: z.array(
+    z.object({
+      nodeId: WorkflowNodeIdSchema,
+      state: WorkflowStageStateSchema,
+      /** Agent runs of this node (ids into `RunDetailDto.agents`). */
+      agentRunIds: z.array(z.string().min(1)),
+      /** Editing nodes: the mode the node runs with in this run, after tightening. */
+      approvalMode: ApprovalModeSchema.optional(),
+      /** Editing nodes configured as Full auto: commands run in the sandbox. */
+      sandbox: z.boolean().optional(),
+    }),
+  ),
+  review: RunWorkflowDtoSchema.shape.review,
+});
+export type RunWorkflowGraphDto = z.infer<typeof RunWorkflowGraphDtoSchema>;
+
+/** A node that uses a skill or an agent file (the "Used by" chips). */
+export const NodeUseDtoSchema = z.object({
+  nodeId: WorkflowNodeIdSchema,
+  label: z.string().min(1),
+});
+export type NodeUseDto = z.infer<typeof NodeUseDtoSchema>;
+
 // ---------------------------------------------------------------- skills
 
 export const SkillSummaryDtoSchema = z.object({
@@ -92,6 +158,8 @@ export const SkillSummaryDtoSchema = z.object({
   /** Repo-relative, e.g. `.claude/skills/code-review/SKILL.md`. */
   path: RepoRelativePathSchema,
   usedBy: z.array(WorkflowStageIdSchema),
+  /** ADR-0023: the graph nodes that use it. Absent from servers before it. */
+  usedByNodes: z.array(NodeUseDtoSchema).optional(),
   sizeBytes: count,
   /** Last commit that touched the file; null when it was never committed. */
   lastCommittedAt: IsoTimestampSchema.nullable(),

@@ -28,3 +28,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0020](0020-resume-the-lead-chat.md)                     | Resume the lead's chat on an owner message                 | accepted |
 | [0021](0021-approval-modes-review-loop-ticket-branch.md) | Approval modes, the review loop and the ticket branch      | accepted |
 | [0022](0022-full-auto-mode.md)                           | Full auto mode                                             | accepted |
+| [0023](0023-editable-workflow-graphs.md)                 | Editable workflow graphs                                   | accepted |
