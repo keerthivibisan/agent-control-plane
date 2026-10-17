@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
+import {
+  ChangeReviewerModeSchema,
+  ReworkRoundsSchema,
+  type ChangeReviewerMode,
+} from './workflow.js';
 
 /**
  * Phase 4 Agent Workspace domain (docs/phase-4/README.md §6, ADR-0016, ADR-0017).
@@ -78,6 +83,13 @@ export const TicketSchema = z.object({
   currentRunId: z.string().min(1).nullable(),
   createdAt: IsoTimestampSchema,
   updatedAt: IsoTimestampSchema,
+  /**
+   * The ticket's own run options (RL-H). Absent (or empty) means every option follows the
+   * project. A getter because `TicketRunOptionsSchema` is declared with the approval modes below.
+   */
+  get runOptions() {
+    return TicketRunOptionsSchema.optional();
+  },
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 
@@ -369,6 +381,80 @@ export function approvalsOf(
   setup: Pick<ProjectAgentSetup, 'allowlist' | 'approvals'>,
 ): ProjectApprovals {
   return setup.approvals ?? approvalsFromLegacy(setup.allowlist);
+}
+
+// ---------------------------------------------------------------- ticket run options (RL-H)
+
+/**
+ * A ticket's own run options (RL-H, owner decision 2026-10-17): the approval mode, who reviews
+ * each change and the rework rounds. An absent field is "Project default": it follows the project,
+ * so a later project change reaches it. Precedence when a run starts: the one-run override
+ * (`StartTicketRequest`) > the ticket's options > the project's settings; the run snapshots the
+ * result (`resolveRunOptions`), so nothing changes a run once it started. Stored as JSON in
+ * `tickets.run_options` (migration 0007); the project's command allowlist is never per ticket.
+ */
+export const TicketRunOptionsSchema = z.object({
+  approvalMode: ApprovalModeSchema.optional(),
+  reviewer: ChangeReviewerModeSchema.optional(),
+  maxReworkRounds: ReworkRoundsSchema.optional(),
+});
+export type TicketRunOptions = z.infer<typeof TicketRunOptionsSchema>;
+export const RUN_OPTION_KEYS = ['approvalMode', 'reviewer', 'maxReworkRounds'] as const;
+export type RunOptionKey = (typeof RUN_OPTION_KEYS)[number];
+
+/** The options a run starts with, every one decided. */
+export interface RunOptions {
+  approvalMode: ApprovalMode;
+  reviewer: ChangeReviewerMode;
+  maxReworkRounds: number;
+}
+
+/** Where a run's option came from: the one-run override, the ticket, or the project. */
+export type RunOptionSource = 'run' | 'ticket' | 'project';
+
+/** Only the fields that are set (no `undefined` keys): `{}` means "all project default". */
+export function compactRunOptions(options: TicketRunOptions | undefined): TicketRunOptions {
+  return {
+    ...(options?.approvalMode !== undefined && { approvalMode: options.approvalMode }),
+    ...(options?.reviewer !== undefined && { reviewer: options.reviewer }),
+    ...(options?.maxReworkRounds !== undefined && { maxReworkRounds: options.maxReworkRounds }),
+  };
+}
+
+/**
+ * The options a run of the ticket starts with, and where each came from: the one-run override,
+ * else the ticket's own option, else the project's setting.
+ */
+export function resolveRunOptions(
+  project: RunOptions,
+  ticket?: TicketRunOptions,
+  run?: TicketRunOptions,
+): { options: RunOptions; source: Record<RunOptionKey, RunOptionSource> } {
+  const pick = <K extends RunOptionKey>(key: K): [RunOptions[K], RunOptionSource] => {
+    const fromRun = run?.[key];
+    if (fromRun !== undefined) return [fromRun as RunOptions[K], 'run'];
+    const fromTicket = ticket?.[key];
+    if (fromTicket !== undefined) return [fromTicket as RunOptions[K], 'ticket'];
+    return [project[key], 'project'];
+  };
+  const [approvalMode, modeFrom] = pick('approvalMode');
+  const [reviewer, reviewerFrom] = pick('reviewer');
+  const [maxReworkRounds, roundsFrom] = pick('maxReworkRounds');
+  return {
+    options: { approvalMode, reviewer, maxReworkRounds },
+    source: { approvalMode: modeFrom, reviewer: reviewerFrom, maxReworkRounds: roundsFrom },
+  };
+}
+
+/**
+ * The ticket's options that differ from the project's settings now (the board's badge). An option
+ * set to the project's current value does not count, but it still holds if the project changes.
+ */
+export function ticketOptionsDiffer(
+  project: RunOptions,
+  ticket: TicketRunOptions | undefined,
+): RunOptionKey[] {
+  return RUN_OPTION_KEYS.filter((k) => ticket?.[k] !== undefined && ticket[k] !== project[k]);
 }
 
 export const ProjectAgentSetupSchema = z.object({

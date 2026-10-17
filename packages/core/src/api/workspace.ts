@@ -16,6 +16,7 @@ import {
   TicketLabelSchema,
   TicketPlanSchema,
   TicketPrioritySchema,
+  TicketRunOptionsSchema,
   TicketSchema,
   TicketStageSchema,
   TicketTypeSchema,
@@ -120,8 +121,9 @@ export const UpdateProjectSetupRequestSchema = z.object({
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
 });
 /**
- * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the project's setting
- * for this run only; the run snapshots the result. An empty or missing body uses the project's.
+ * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own
+ * option and the project's setting for this run only (RL-H: run > ticket > project); the run
+ * snapshots the result. An empty or missing body uses the ticket's options, else the project's.
  */
 export const StartTicketRequestSchema = z.object({
   approvalMode: ApprovalModeSchema.optional(),
@@ -135,7 +137,19 @@ export const CreateTicketRequestSchema = z.object({
   type: TicketTypeSchema.default('feature'),
   priority: TicketPrioritySchema.default('medium'),
   labels: z.array(TicketLabelSchema).max(10).default([]),
+  /** RL-H: the ticket's own run options; absent (or an absent field) follows the project. */
+  runOptions: TicketRunOptionsSchema.optional(),
 });
+/**
+ * A change to a ticket's run options (RL-H): a value sets that option for the ticket, `null` puts
+ * it back to "Project default", and an absent field is unchanged.
+ */
+export const TicketRunOptionsPatchSchema = z.object({
+  approvalMode: ApprovalModeSchema.nullable().optional(),
+  reviewer: ChangeReviewerModeSchema.nullable().optional(),
+  maxReworkRounds: ReworkRoundsSchema.nullable().optional(),
+});
+export type TicketRunOptionsPatch = z.infer<typeof TicketRunOptionsPatchSchema>;
 export const UpdateTicketRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -143,6 +157,8 @@ export const UpdateTicketRequestSchema = z
     type: TicketTypeSchema,
     priority: TicketPrioritySchema,
     labels: z.array(TicketLabelSchema).max(10),
+    /** RL-H: see `TicketRunOptionsPatchSchema`; `null` puts every option back to the project's. */
+    runOptions: TicketRunOptionsPatchSchema.nullable(),
   })
   .partial();
 export const MoveTicketRequestSchema = z.object({
