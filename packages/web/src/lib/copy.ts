@@ -3358,12 +3358,13 @@ export const WORKFLOW_GRAPH_COPY = {
   agentMissing: (name: string) => `${name} (not found)`,
   modeBadge: (mode: string) => `Mode: ${mode}`,
   modeDefaultBadge: (mode: string | null) =>
-    mode === null ? 'Mode: project default' : `Mode: project default (${mode})`,
+    mode === null ? 'Mode: project default' : `Mode: ${mode} (default)`,
   instances: (n: number) => `Up to ${formatCount(n)} at once`,
   poolInstances: (n: number) => `Up to ${formatCount(n)} at once (project limit)`,
   planAuto: 'Approved automatically',
   planAsks: 'You approve each plan',
   blockProblems: (n: number) => countOf(n, 'problem'),
+  blockWarnings: (n: number) => countOf(n, 'warning'),
   selectBlock: (label: string) => `Select ${label}`,
   palette: {
     label: 'Add a block',

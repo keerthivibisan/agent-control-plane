@@ -2,6 +2,7 @@ import { NODE_CAPABILITIES, type ApprovalMode, type WorkflowNode } from '@acp/co
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import type { ReactNode } from 'react';
 import { AlertIcon, CheckIcon, TicketIcon } from '../../../components/icons';
+import { Tooltip } from '../../../components/Tooltip';
 import { REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import {
   AgentFileIcon,
@@ -151,7 +152,7 @@ function ProblemsTag({ problems, warnings }: { problems: number; warnings: numbe
       data-severity={error ? 'error' : 'warning'}
     >
       <AlertIcon size={12} className="shrink-0" />
-      {G.blockProblems(error ? problems : warnings)}
+      {error ? G.blockProblems(problems) : G.blockWarnings(warnings)}
     </span>
   );
 }
@@ -227,16 +228,22 @@ export function AgentBlockView({ data, selected }: NodeProps<BlockNode>) {
         icon={<RoleIcon node={node} />}
         left={kindWord(node)}
         right={
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 text-caption whitespace-nowrap normal-case tracking-normal ${edits ? 'text-accent' : 'text-dim'}`}
-          >
-            {edits ? (
-              <OwnCopyIcon size={12} className="shrink-0" />
-            ) : (
-              <ReadOnlyIcon size={12} className="shrink-0" />
-            )}
-            {edits ? G.ownCopy : G.readOnly}
-          </span>
+          // The icon only, so the kind's word keeps its room; the word is its tooltip and its
+          // spoken name (the icons differ in shape, so colour is not the only signal).
+          <Tooltip content={edits ? G.ownCopy : G.readOnly} focusable={false} className="shrink-0">
+            <span
+              className={`inline-flex items-center ${edits ? 'text-accent' : 'text-dim'}`}
+              data-testid="block-workspace"
+              data-workspace={edits ? 'own-copy' : 'read-only'}
+            >
+              {edits ? (
+                <OwnCopyIcon size={12} className="shrink-0" />
+              ) : (
+                <ReadOnlyIcon size={12} className="shrink-0" />
+              )}
+              <span className="sr-only">{edits ? G.ownCopy : G.readOnly}</span>
+            </span>
+          </Tooltip>
         }
       />
       <div className="flex min-w-0 items-center gap-1.5">

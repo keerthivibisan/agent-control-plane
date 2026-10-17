@@ -1,30 +1,32 @@
-import type {
-  NodePosition,
-  WorkflowEdge,
-  WorkflowGraph,
-  WorkflowNode,
-  WorkflowNodeId,
-} from '@acp/core';
+import type { NodePosition, WorkflowGraph, WorkflowNode, WorkflowNodeId } from '@acp/core';
 
 /**
  * Where the editor draws each block. A block the owner moved keeps its saved `position`; the
- * others are laid out automatically, left to right like the version 1 graph reads: each block's
- * column is the longest chain of forward links (flow, assigns, merge, and a review sent to a
- * reviewer) from the ticket, and blocks in one column stack top to bottom in a fixed kind order.
- * The links that go back (findings, rework, a review sent to the lead) don't count, so they never
- * push a block further right. Deterministic: the same graph is
- * always drawn the same way, and adding a block never moves the blocks before it in its column.
+ * others are laid out automatically in three rows that read like lines of text, as the version 1
+ * graph did, so the canvas stays readable at 1024px without zooming far out:
+ *
+ *   Ticket → (Planner →) Plan approval
+ *   Lead → helpers (stacked) → change reviewers (stacked)
+ *   Checks → Ticket branch → final reviewers and testers (chain order) → Your merge
+ *                                                                          ↓ Done
+ *
+ * Each cell's first block sits on the row's line; more blocks in a cell (helpers, reviewers, Done
+ * under your merge) stack below it. Deterministic: the same graph is always drawn the same way, and a block added from the palette
+ * lands in its kind's place without moving the blocks before it.
  */
 
-export const AGENT_W = 216;
-export const AGENT_H = 120;
-export const GATE_W = 168;
+export const AGENT_W = 208;
+export const AGENT_H = 132;
+/** A named helper has one more line (how many may run at once). */
+export const HELPER_H = 148;
+export const GATE_W = 156;
 export const GATE_H = 72;
 /** Ticket and Done are pills, like the version 1 graph's ends. */
-export const END_W = 132;
+export const END_W = 120;
 export const END_H = 44;
-const COL_GAP = 72;
-const ROW_GAP = 32;
+const COL_GAP = 44;
+const ROW_GAP = 72;
+const STACK_GAP = 24;
 const COL_W = AGENT_W;
 
 export function isGateType(type: WorkflowNode['type']): boolean {
@@ -41,104 +43,103 @@ export function isGateType(type: WorkflowNode['type']): boolean {
 export function sizeOf(node: WorkflowNode): { width: number; height: number } {
   if (node.type === 'ticket' || node.type === 'done') return { width: END_W, height: END_H };
   if (isGateType(node.type)) return { width: GATE_W, height: GATE_H };
-  return { width: AGENT_W, height: AGENT_H };
+  return { width: AGENT_W, height: node.type === 'helper' ? HELPER_H : AGENT_H };
 }
 
-/**
- * Links that move a ticket forward. A review sent to the lead goes back to it, like findings and
- * rework, so it doesn't count (it would make a loop through the lead).
- */
-function isForward(e: WorkflowEdge, byId: ReadonlyMap<WorkflowNodeId, WorkflowNode>): boolean {
-  if (e.type === 'flow' || e.type === 'assigns' || e.type === 'merge') return true;
-  return e.type === 'review' && byId.get(e.to)?.type !== 'lead';
+function isFinalStage(node: WorkflowNode): boolean {
+  return (node.type === 'reviewer' && node.scope === 'final') || node.type === 'tester';
 }
 
-/** The order blocks stack in within a column. */
-const KIND_ORDER: Readonly<Record<WorkflowNode['type'], number>> = {
-  ticket: 0,
-  planner: 1,
-  lead: 2,
-  'plan-approval': 3,
-  helper: 4,
-  'helper-pool': 5,
-  reviewer: 6,
-  tester: 7,
-  checks: 8,
-  'ticket-merge': 9,
-  'owner-merge': 10,
-  done: 11,
-};
-
-/** Columns by longest forward chain from the ticket; a cycle (an invalid graph) stops growing. */
-function columns(graph: WorkflowGraph): Map<WorkflowNodeId, number> {
+/** The final stages in chain order (following flow links from the ticket merge), then the rest. */
+function finalOrder(graph: WorkflowGraph): WorkflowNode[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const forward = graph.edges.filter(
-    (e) => isForward(e, byId) && byId.has(e.from) && byId.has(e.to) && e.from !== e.to,
+  const out: WorkflowNode[] = [];
+  const seen = new Set<WorkflowNodeId>();
+  let current: WorkflowNode | undefined = graph.nodes.find((n) => n.type === 'ticket-merge');
+  while (current !== undefined) {
+    const from: WorkflowNode = current;
+    const next = graph.edges
+      .filter((e) => e.type === 'flow' && e.from === from.id)
+      .map((e) => byId.get(e.to))
+      .find((n): n is WorkflowNode => n !== undefined && isFinalStage(n) && !seen.has(n.id));
+    if (next === undefined) break;
+    seen.add(next.id);
+    out.push(next);
+    current = next;
+  }
+  return [...out, ...graph.nodes.filter((n) => isFinalStage(n) && !seen.has(n.id))];
+}
+
+/** Rows of columns of blocks: each cell stacks its blocks top to bottom. */
+function rows(graph: WorkflowGraph): WorkflowNode[][][] {
+  const of = (type: WorkflowNode['type']) => graph.nodes.filter((n) => n.type === type);
+  const planRow: WorkflowNode[][] = [of('ticket'), of('planner'), of('plan-approval')].filter(
+    (c) => c.length > 0,
   );
-  const col = new Map<WorkflowNodeId, number>();
-  const ticket = graph.nodes.find((n) => n.type === 'ticket');
-  if (ticket !== undefined) col.set(ticket.id, 0);
-  // Bellman-Ford style relaxation, at most one pass per node: longest paths in a DAG, and a cycle
-  // simply stops after the passes run out.
-  for (let pass = 0; pass < graph.nodes.length; pass += 1) {
-    let changed = false;
-    for (const e of forward) {
-      const from = col.get(e.from);
-      if (from === undefined) continue;
-      if ((col.get(e.to) ?? -1) < from + 1) {
-        col.set(e.to, Math.min(from + 1, graph.nodes.length));
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  // Blocks no link reaches yet (just added from the palette) go where their kind usually sits.
-  const leadCol = col.get(graph.nodes.find((n) => n.type === 'lead')?.id ?? '') ?? 1;
-  const last = Math.max(0, ...col.values());
-  for (const node of graph.nodes) {
-    if (col.has(node.id)) continue;
-    switch (node.type) {
-      case 'planner':
-        col.set(node.id, 1);
-        break;
-      case 'helper':
-      case 'helper-pool':
-        col.set(node.id, leadCol + 1);
-        break;
-      case 'reviewer':
-        col.set(node.id, node.scope === 'change' ? leadCol + 2 : last);
-        break;
-      default:
-        col.set(node.id, last);
-    }
-  }
-  return col;
+  const workRow: WorkflowNode[][] = [
+    of('lead'),
+    [...of('helper'), ...of('helper-pool')],
+    graph.nodes.filter((n) => n.type === 'reviewer' && n.scope === 'change'),
+  ].filter((c) => c.length > 0);
+  const mergeRow: WorkflowNode[][] = [
+    ...[of('checks'), of('ticket-merge')].filter((c) => c.length > 0),
+    ...finalOrder(graph).map((n) => [n]),
+    // Done hangs under your merge, as in the version 1 graph: one column less to fit.
+    [...of('owner-merge'), ...of('done')],
+  ].filter((c) => c.length > 0);
+  return [planRow, workRow, mergeRow];
 }
 
 /** Every block's position: its own when it has one, else the automatic one. */
 export function layoutGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodePosition> {
-  const col = columns(graph);
-  const byCol = new Map<number, WorkflowNode[]>();
-  graph.nodes.forEach((node) => {
-    const c = col.get(node.id) ?? 0;
-    byCol.set(c, [...(byCol.get(c) ?? []), node]);
-  });
   const positions = new Map<WorkflowNodeId, NodePosition>();
-  const order = new Map(graph.nodes.map((n, i) => [n.id, i]));
-  for (const [c, nodes] of byCol) {
-    nodes.sort(
-      (a, b) =>
-        KIND_ORDER[a.type] - KIND_ORDER[b.type] || (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
-    );
-    let y = 0;
-    for (const node of nodes) {
-      const { width, height } = sizeOf(node);
-      positions.set(
-        node.id,
-        node.position ?? { x: c * (COL_W + COL_GAP) + (COL_W - width) / 2, y },
-      );
-      y += height + ROW_GAP;
-    }
+  let top = 0;
+  for (const row of rows(graph)) {
+    // The first block of every cell sits on one line, centred on the tallest first block; a
+    // stack continues below its first block.
+    const lineH = Math.max(0, ...row.map((cell) => (cell[0] ? sizeOf(cell[0]).height : 0)));
+    let rowH = 0;
+    row.forEach((cell, c) => {
+      const first = cell[0];
+      let y = top + (first === undefined ? 0 : (lineH - sizeOf(first).height) / 2);
+      for (const node of cell) {
+        const { width, height } = sizeOf(node);
+        positions.set(
+          node.id,
+          node.position ?? { x: c * (COL_W + COL_GAP) + (COL_W - width) / 2, y },
+        );
+        rowH = Math.max(rowH, y + height - top);
+        y += height + STACK_GAP;
+      }
+    });
+    if (row.length > 0) top += rowH + ROW_GAP;
   }
+  // Anything the rows don't place (none in a graph of known kinds) goes below them.
+  graph.nodes.forEach((node, i) => {
+    if (!positions.has(node.id)) {
+      positions.set(node.id, node.position ?? { x: i * (COL_W + COL_GAP), y: top });
+    }
+  });
   return positions;
+}
+
+/** The laid-out size of the whole graph, so the canvas can take its shape. */
+export function graphBounds(
+  graph: WorkflowGraph,
+  positions: ReadonlyMap<WorkflowNodeId, NodePosition> = layoutGraph(graph),
+): { width: number; height: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const node of graph.nodes) {
+    const p = positions.get(node.id);
+    if (p === undefined) continue;
+    const { width, height } = sizeOf(node);
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + width);
+    maxY = Math.max(maxY, p.y + height);
+  }
+  return minX === Infinity ? { width: 0, height: 0 } : { width: maxX - minX, height: maxY - minY };
 }

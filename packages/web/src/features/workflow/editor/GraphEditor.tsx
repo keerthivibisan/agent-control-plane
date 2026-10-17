@@ -1,4 +1,4 @@
-import type { WorkflowEdgeType, WorkflowGraph, WorkflowNodeId } from '@acp/core';
+import type { WorkflowEdgeType, WorkflowGraph, WorkflowNode, WorkflowNodeId } from '@acp/core';
 import {
   Background,
   BackgroundVariant,
@@ -28,6 +28,7 @@ import { AlertIcon, CloseIcon } from '../../../components/icons';
 import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { EDGE_LOOK, toFlowEdges, toFlowNodes, type BlockContext, type LinkEdge } from './flow';
 import type { EditorIssue } from './IssuesList';
+import { graphBounds, layoutGraph } from './layout';
 import { blockNodeTypes, type BlockNode } from './nodes';
 import { allowedEdgeTypes, refusalFor, type EditorAction, type Selection } from './state';
 
@@ -36,6 +37,14 @@ const FIT = { padding: 0.12, maxZoom: 1 } as const;
 const CONTROLS_CLASS =
   'overflow-hidden rounded-control border border-line bg-panel [&>button]:size-7! [&>button]:border-0! [&>button]:text-dim [&>button]:transition-colors [&>button:hover]:text-ink [&>button:not(:last-child)]:border-r! [&>button:not(:last-child)]:border-line! [&>button>svg]:max-h-[11px]! [&>button>svg]:max-w-[11px]!';
 const CONTROLS_STYLE = { '--xy-controls-box-shadow': 'var(--shadow-card)' } as CSSProperties;
+
+/** The block as the automatic layout places it (the canvas's shape ignores moved blocks). */
+function withoutPosition(node: WorkflowNode): WorkflowNode {
+  if (node.position === undefined) return node;
+  const copy = { ...node };
+  delete copy.position;
+  return copy;
+}
 
 /** Asks the canvas to show a block or link (a click in the problems list). */
 export interface FocusRequest {
@@ -176,11 +185,15 @@ export function GraphEditor({
     to: WorkflowNodeId;
     types: WorkflowEdgeType[];
   } | null>(null);
+  const positions = useMemo(() => layoutGraph(graph), [graph]);
   const nodes = useMemo(
-    () => toFlowNodes(graph, issues, selection, context),
-    [graph, issues, selection, context],
+    () => toFlowNodes(graph, issues, selection, context, positions),
+    [graph, issues, selection, context, positions],
   );
-  const edges = useMemo(() => toFlowEdges(graph, issues, selection), [graph, issues, selection]);
+  const edges = useMemo(
+    () => toFlowEdges(graph, issues, selection, positions),
+    [graph, issues, selection, positions],
+  );
   const label = useCallback(
     (id: string) => graph.nodes.find((n) => n.id === id)?.label ?? id,
     [graph],
@@ -267,10 +280,21 @@ export function GraphEditor({
   );
 
   const shape = graph.nodes.map((n) => n.id).join(',');
+  // The canvas takes the automatic layout's shape (moving a block doesn't resize it, so the view
+  // never jumps mid-drag): it fills the width without empty bands, within the viewport.
+  const bounds = useMemo(
+    () => graphBounds({ ...graph, nodes: graph.nodes.map(withoutPosition) }),
+    [graph],
+  );
   return (
     <div className="relative">
       <div
-        className="h-[min(640px,calc(100vh-16rem))] min-h-[420px] w-full overflow-hidden"
+        className="w-full overflow-hidden"
+        style={{
+          aspectRatio: `${bounds.width + 120} / ${bounds.height + 160}`,
+          maxHeight: 'min(760px, calc(100vh - 14rem))',
+          minHeight: 420,
+        }}
         data-testid="graph-editor"
         role="group"
         aria-label={G.canvasLabel}

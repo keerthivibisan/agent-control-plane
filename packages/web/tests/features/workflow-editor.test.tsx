@@ -107,7 +107,7 @@ describe('Workflow page: the graph editor', () => {
     }
     expect(block('orchestrate').dataset.kind).toBe('lead');
     expect(within(block('helpers')).getByTestId('block-mode').textContent).toBe(
-      'Mode: project default (Auto edits)',
+      'Mode: Auto edits (default)',
     );
     expect(within(issues()).getByTestId('issues-none')).toBeTruthy();
     // Nothing changed yet: Save is off and nothing says "unsaved".

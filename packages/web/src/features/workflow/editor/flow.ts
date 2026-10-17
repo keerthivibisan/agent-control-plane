@@ -1,4 +1,11 @@
-import type { ApprovalMode, WorkflowEdgeType, WorkflowGraph, WorkflowNode } from '@acp/core';
+import type {
+  ApprovalMode,
+  NodePosition,
+  WorkflowEdge,
+  WorkflowEdgeType,
+  WorkflowGraph,
+  WorkflowNode,
+} from '@acp/core';
 import { MarkerType, type Edge } from '@xyflow/react';
 import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { isGateType, layoutGraph, sizeOf } from './layout';
@@ -93,8 +100,8 @@ export function toFlowNodes(
   issues: readonly EditorIssue[],
   selection: Selection,
   ctx: BlockContext,
+  positions: ReadonlyMap<string, NodePosition> = layoutGraph(graph),
 ): BlockNode[] {
-  const positions = layoutGraph(graph);
   return graph.nodes.map((node) => {
     const mine = issues.filter((i) => i.nodeId === node.id);
     const { width, height } = sizeOf(node);
@@ -129,10 +136,39 @@ export function toFlowNodes(
   });
 }
 
+/**
+ * Which side a link leaves and enters by. The links that go back to a reviewer of the change
+ * (findings, a review sent to the lead) loop over the top and rework loops underneath, so they never
+ * sit on the forward links. A forward link to a block on the right joins side to side; one to a
+ * block below (the next row) leaves at the bottom and comes in at the top; one going up comes in
+ * from below.
+ */
+function handlesFor(
+  e: WorkflowEdge,
+  byId: ReadonlyMap<string, WorkflowNode>,
+  positions: ReadonlyMap<string, NodePosition>,
+): { sourceHandle: string; targetHandle: string } {
+  const to = byId.get(e.to);
+  if (e.type === 'findings' || (e.type === 'review' && to?.type === 'lead')) {
+    return { sourceHandle: 'out-top', targetHandle: 'in-top' };
+  }
+  if (e.type === 'rework') return { sourceHandle: 'out-bottom', targetHandle: 'in-bottom' };
+  const from = byId.get(e.from);
+  const a = positions.get(e.from);
+  const b = positions.get(e.to);
+  if (from === undefined || a === undefined || b === undefined) {
+    return { sourceHandle: 'out', targetHandle: 'in' };
+  }
+  if (b.x >= a.x + sizeOf(from).width) return { sourceHandle: 'out', targetHandle: 'in' };
+  if (b.y > a.y) return { sourceHandle: 'out-bottom', targetHandle: 'in-top' };
+  return { sourceHandle: 'out-top', targetHandle: 'in-bottom' };
+}
+
 export function toFlowEdges(
   graph: WorkflowGraph,
   issues: readonly EditorIssue[],
   selection: Selection,
+  positions: ReadonlyMap<string, NodePosition> = layoutGraph(graph),
 ): LinkEdge[] {
   const labels = new Map(graph.nodes.map((n) => [n.id, n.label]));
   const refusedIds = new Set(
@@ -147,13 +183,9 @@ export function toFlowEdges(
       )
       .map((i) => i.edgeId),
   );
-  const types = new Map(graph.nodes.map((n) => [n.id, n.type]));
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   return graph.edges.map((e) => {
-    // A review sent to the lead goes back to it, over the top like the findings.
-    const look =
-      e.type === 'review' && types.get(e.to) === 'lead'
-        ? { ...EDGE_LOOK.review, sourceHandle: 'out-top', targetHandle: 'in-top' }
-        : EDGE_LOOK[e.type];
+    const look = { ...EDGE_LOOK[e.type], ...handlesFor(e, byId, positions) };
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);
     const stroke = selected ? 'var(--color-accent)' : refused ? 'var(--color-danger)' : look.stroke;

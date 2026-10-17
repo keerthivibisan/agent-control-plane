@@ -283,8 +283,16 @@ describe('issues, layout and the canvas mapping', () => {
     };
     const pos = layoutGraph(moved);
     expect(pos.get('done')).toEqual({ x: 5, y: 6 });
-    expect((pos.get('ticket')?.x ?? 1) < (pos.get('orchestrate')?.x ?? 0)).toBe(true);
-    expect((pos.get('orchestrate')?.x ?? 1) < (pos.get('helper-1')?.x ?? 0)).toBe(true);
+    // Three rows: the plan path, then the lead and its helpers, then the merge and final steps.
+    const at = (id: string) => pos.get(id) ?? { x: NaN, y: NaN };
+    expect(at('ticket').y).toBeLessThan(at('orchestrate').y);
+    expect(at('plan').x).toBeLessThan(at('plan-approval').x);
+    expect(at('orchestrate').x).toBeLessThan(at('helper-1').x);
+    expect(at('helper-1').x).toBeLessThan(at('review').x);
+    expect(at('helper-1').y).toBeLessThan(at('helpers').y);
+    expect(at('helpers').y).toBeLessThan(at('checks').y);
+    expect(at('ticket-merge').x).toBeLessThan(at('unit-tests').x);
+    expect(at('unit-tests').x).toBeLessThan(at('owner-merge').x);
     // Same layout every time.
     expect([...layoutGraph(moved)]).toEqual([...pos]);
     const boxes = moved.nodes
@@ -331,6 +339,15 @@ describe('issues, layout and the canvas mapping', () => {
     const edges = toFlowEdges(g, issues, null);
     const rework = edges.find((e) => e.id === 'rework-review-helpers');
     expect(rework).toMatchObject({ sourceHandle: 'out-bottom', targetHandle: 'in-bottom' });
+    // Forward links: side to side to the right, bottom to top into the next row.
+    expect(edges.find((e) => e.id === 'assigns-orchestrate-helper-1')).toMatchObject({
+      sourceHandle: 'out',
+      targetHandle: 'in',
+    });
+    expect(edges.find((e) => e.id === 'merge-orchestrate-checks')).toMatchObject({
+      sourceHandle: 'out-bottom',
+      targetHandle: 'in-top',
+    });
     expect(rework?.label).toBe('Rework ×2');
     expect(edges.find((e) => e.id === 'findings-review-orchestrate')).toMatchObject({
       sourceHandle: 'out-top',
