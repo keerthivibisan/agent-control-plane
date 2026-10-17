@@ -336,6 +336,22 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   The live graph's review node shows the run's counts, the gate is ringed `needs-you` at REVIEW
   and `success` once merged, and the helpers row says how many are in review.
 
+### Live run graph and run options as a limit (ADR-0023, WP WG-E)
+
+- **Ticket page:** the live workflow draws the run's own graph (`GET /api/runs/:id/workflow-graph`,
+  `features/ticket/LiveRunGraph.tsx`), read-only, in the editor's block look: square agent blocks
+  (the lead framed in `ink`), steps on the `sunken` well, Ticket and Done as pills; the owner's
+  positions or the editor's three rows. Each block has the state ring and word of the version 1
+  stages, its agents as small square chips (a click shows that agent; a click on the block its
+  working agent), and on editing blocks the mode it runs with in this run ("Mode: Auto edits")
+  plus "Sandboxed" for a block set to Full auto. Rework links carry their counts; the review
+  agent's own link reads "Direct rework ×n". A server without run graphs (404 or 409) keeps the
+  version 1 stages above.
+- **Run options:** "Approval mode: at most …" in the Start dialog, the ticket's Run options and
+  the New ticket dialog. "No limit" (nothing sent) leaves every block as set; a limit looser than
+  every editing block shows a neutral note that it changes nothing. The old widening warnings
+  stay only for a server without graphs.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |

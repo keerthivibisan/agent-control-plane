@@ -203,7 +203,8 @@ test('the Start dialog: Re-run with this run’s own settings', async ({ page })
   await page.goto(`/${TICKET_HASH}`);
   await page.getByRole('button', { name: `Re-run ${LOOP_KEY} with options` }).click();
   const dialog = page.getByTestId('start-dialog');
-  await expect(dialog.getByRole('radio', { name: /Auto edits.*Project setting/ })).toBeChecked();
+  // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+  await expect(dialog.getByRole('radio', { name: /^No limit/ })).toBeChecked();
   await dialog.getByText('Manual', { exact: true }).click();
   await dialog.getByText('The lead', { exact: true }).click();
   await expect(dialog.getByTestId('start-dialog-summary')).toHaveText(

@@ -32,7 +32,7 @@ const G = WORKFLOW_LIVE_COPY.graph;
 
 // ---------------------------------------------------------------- layout
 
-export const AGENT_W = 208;
+export const AGENT_W = 240;
 /** Room for the kind, the name, the model, the skills, the mode and the agents. */
 export const AGENT_H = 156;
 export const GATE_W = 156;
@@ -42,7 +42,8 @@ export const END_W = 120;
 export const END_H = 44;
 const COL_GAP = 44;
 const ROW_GAP = 76;
-const STACK_GAP = 28;
+/** Room between stacked blocks for a rework link's label. */
+const STACK_GAP = 40;
 
 export function isGateNode(node: WorkflowNode): boolean {
   return (

@@ -158,6 +158,9 @@ function Agents({ node, agents }: { node: WorkflowNode; agents: readonly AgentRu
   ];
   const shown = ordered.slice(0, SHOWN_AGENTS);
   const more = agents.length - shown.length;
+  // Agents named like their block, or like each other (review agents), are told apart by state.
+  const byState = (a: AgentRunDto) =>
+    a.role === node.label || agents.filter((o) => o.role === a.role).length > 1;
   return (
     <ul
       className="mt-auto flex min-w-0 items-center gap-1"
@@ -180,7 +183,9 @@ function Agents({ node, agents }: { node: WorkflowNode; agents: readonly AgentRu
             }}
           >
             <span aria-hidden="true" className={`size-1.5 shrink-0 ${agentDot(a)}`} />
-            <span className="truncate">{a.role}</span>
+            <span className="truncate">
+              {byState(a) ? AGENT_STATUS_COPY[a.status].word : a.role}
+            </span>
           </button>
         </li>
       ))}
@@ -267,7 +272,7 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
         {data.mode !== null || data.sandbox ? (
           <div className="flex min-w-0 items-center gap-1">
             {data.mode !== null ? (
-              <Tooltip content={G.modeTip} focusable={false} className="min-w-0">
+              <Tooltip content={G.modeTip} focusable={false} className="shrink-0">
                 <span
                   className={`${TAG} border-line-strong bg-panel text-ink`}
                   data-testid="live-mode"
@@ -278,13 +283,13 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
               </Tooltip>
             ) : null}
             {data.sandbox ? (
-              <Tooltip content={G.sandboxTip} focusable={false} className="shrink-0">
+              <Tooltip content={G.sandboxTip} focusable={false} className="min-w-0">
                 <span
                   className={`${TAG} border-line-strong bg-sunken text-dim`}
                   data-testid="live-sandbox"
                 >
                   <ReadOnlyIcon size={11} className="shrink-0" />
-                  {G.sandboxed}
+                  <span className="truncate">{G.sandboxed}</span>
                 </span>
               </Tooltip>
             ) : null}

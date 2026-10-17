@@ -760,8 +760,9 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   await page.getByRole('button', { name: 'New ticket' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'New ticket' });
   await dialog.getByLabel('Title').fill('Rename the notes folder');
-  const mode = dialog.getByLabel('Approvals');
-  await expect(mode.locator('option').first()).toHaveText('Project default (Full auto)');
+  // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+  const mode = dialog.getByLabel('Approval mode: at most');
+  await expect(mode.locator('option').first()).toHaveText('No limit: each block’s own mode');
   await mode.selectOption('manual');
   await dialog.getByRole('button', { name: 'Create ticket' }).click();
   await expect(
@@ -805,9 +806,13 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   const options = page.getByTestId('ticket-run-options');
   await expect(options.getByTestId('run-option-mode')).toHaveText('Manual · This ticket');
   await options.getByRole('button', { name: 'Change run options' }).click();
-  await options.getByLabel('Approvals').selectOption({ label: 'Project default (Full auto)' });
+  await options
+    .getByLabel('Approval mode: at most')
+    .selectOption({ label: 'No limit: each block’s own mode' });
   await options.getByRole('button', { name: 'Save' }).click();
-  await expect(options.getByTestId('run-option-mode')).toHaveText('Project default (Full auto)');
+  await expect(options.getByTestId('run-option-mode')).toHaveText(
+    'No limit: each block’s own mode',
+  );
   expect((await ticketOf()).ticket.runOptions).toBeUndefined();
   // The started run keeps its own snapshot.
   expect((await ticketOf()).currentRun?.approvalMode).toBe('manual');
