@@ -29,8 +29,11 @@ export {
 } from './permissions.js';
 export { activitySummary, MAX_SUMMARY_LENGTH, summarizeToolUse } from './summary.js';
 export {
+  applyProtection,
   classifyStartupError,
   fullAutoDenyRules,
   fullAutoOf,
   fullAutoSandbox,
+  launchProtectionOf,
 } from './full-auto.js';
+export type { LaunchProtection } from './full-auto.js';

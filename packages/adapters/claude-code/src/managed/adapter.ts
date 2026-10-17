@@ -9,7 +9,8 @@ import type {
 import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, SkillNameSchema } from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { applyFullAuto, classifyStartupError, fullAutoOf } from './full-auto.js';
+import { applyProtection, classifyStartupError, launchProtectionOf } from './full-auto.js';
+import type { LaunchProtection } from './full-auto.js';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
@@ -132,6 +133,7 @@ export function buildOptions(
   callbacks: ManagedCallbacks,
   abortController: AbortController,
   env?: Readonly<Record<string, string>>,
+  protection: LaunchProtection | null = launchProtectionOf(spec),
 ): Options {
   const options: Options = {
     cwd: spec.cwd,
@@ -178,10 +180,12 @@ export function buildOptions(
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };
-  // ADR-0022: a Full auto helper or tester runs in auto mode inside the OS sandbox. Everyone else
-  // keeps `default` and the gate above.
-  const fullAuto = fullAutoOf(spec);
-  if (fullAuto !== null) applyFullAuto(options, spec, fullAuto, env);
+  // ADR-0022, ADR-0023 §5: a helper or tester whose node runs Full auto gets auto mode inside the
+  // OS sandbox; one whose Full auto node was tightened keeps the sandbox in `default`. Everyone
+  // else keeps `default` and the gate above. Never for the lead, planner, reviewers or follow-ups.
+  if (protection !== null && (spec.kind === 'worker' || spec.kind === 'tester')) {
+    if (spec.followUp === undefined) applyProtection(options, spec, protection, env);
+  }
   return options;
 }
 
@@ -243,10 +247,16 @@ function startAgent(
   let lastResult: TurnResult | null = null;
 
   input.push(userMessage(spec.prompt));
-  const q = run({ prompt: input, options: buildOptions(spec, callbacks, abortController, env) });
+  const protection = launchProtectionOf(spec);
+  const q = run({
+    prompt: input,
+    options: buildOptions(spec, callbacks, abortController, env, protection),
+  });
 
-  const fullAuto = fullAutoOf(spec) !== null;
-  // Full auto (ADR-0022): why the agent could not run protected, once known.
+  // ADR-0022: a protected agent (the sandbox, with or without auto mode) never runs unprotected.
+  const sandboxed = protection !== null;
+  const fullAuto = protection?.autoMode === true;
+  // Why the agent could not run protected, once known.
   let failure: ManagedFailureCode | null = null;
 
   const finish = (outcome: 'success' | 'error' | 'cancelled'): void => {
@@ -284,7 +294,7 @@ function startAgent(
         for (const event of mapped.events) events.push(event);
         if (mapped.result !== null) {
           lastResult = mapped.result;
-          if (fullAuto && mapped.result.unavailable !== null) failure = mapped.result.unavailable;
+          if (sandboxed && mapped.result.unavailable !== null) failure = mapped.result.unavailable;
           if (!specKeepsInputOpen(spec) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
         }
       }
@@ -293,7 +303,7 @@ function startAgent(
       // The SDK throws AbortError after abort(); any other failure ends the agent as an error.
       // No message text is kept: it may quote model or tool output. For Full auto it is only
       // classified (the sandbox failing to start ends the process).
-      if (fullAuto && failure === null && error instanceof Error) {
+      if (sandboxed && failure === null && error instanceof Error) {
         failure = classifyStartupError([error.message]);
       }
       finish(abortController.signal.aborted ? 'cancelled' : 'error');
