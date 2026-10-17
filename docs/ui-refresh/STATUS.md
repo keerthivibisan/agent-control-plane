@@ -14,7 +14,7 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 | U-E | Workflow, Skills & Agents                                                 | U-A     | **done** | wp/u-e-workflow-skills | `405ea57` |
 | U-F | Tokens, Harness, Sessions, projects, settings, health                     | U-A     | **done** | wp/u-f-pages           | `c7e80a7` |
 | U-G | Brand: Control Core logo, ivory/graphite/lime palette, square agent nodes | U-B…U-F | **done** | wp/u-g-brand           | `b4a38a9` |
-| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG                 | U-B…U-F | todo     | —                      | —         |
+| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG                 | U-B…U-F | **done** | wp/u-v-verify          | `57f1ed1` |
 
 ## Decisions (owner, 2026-10-17)
 
@@ -106,3 +106,18 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 
   A read-only design pass is running. Then ADR-0021, a coordinator contract commit, and engine,
   server/adapter and web WPs; then a consented real run.
+
+- 2026-10-17 **U-V merged** (`57f1ed1`). The coordinator ran pnpm check (2,298 tests) and the e2e
+  (56/56).
+  - The `workspace.spec` flake was a real app bug: the query store started overlapping
+    `/runs/:id/review` requests, their `git add` calls collided and one returned 500. Fixed: one
+    request per key in flight.
+  - The `shell.spec` flake was a test race, fixed with `unrouteAll`.
+  - Every page now fits 390 px, with an e2e test.
+  - Keyboard focus is fixed on menu items and on column Show/Hide.
+  - Reduced motion is checked by an e2e test.
+  - CHANGELOG `[Unreleased]` is written for users.
+  - Bundle against v0.0.1: JS +98.6 kB gz (Motion about 52 kB gz, Radix about 36 kB gz), CSS +3 kB gz,
+    fonts 88.7 kB.
+  - Server-side per-worktree git lock handed to RL-B.
+  - The UI refresh is complete; the 0.1.0 release waits for the review-loop series.
