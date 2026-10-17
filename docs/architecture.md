@@ -137,6 +137,15 @@ See [security.md](security.md).
   [orchestration-lifecycle.md](orchestration-lifecycle.md) §0.
 - **Workspace manager (Phase 3, in progress):** `packages/server/src/workspace/` (git worktrees,
   diff, merge on owner approval; ADR-0013). Validation runner: later (P3-G).
+- **Review loop (ADR-0021) [implemented]:** the engine (`@acp/orchestrator`: `AWAITING_REVIEW`,
+  change states, the lead's change tools, handover) decides; the server carries out its git effects
+  (`control/review-loop.ts` with `WorkspaceManager`: ticket branch `acp/<KEY>` at plan approval,
+  seal, integrate, compare-and-swap advance, the owner's single `--ff-only` merge; git argument
+  arrays only, serialized per worktree and per repository) and runs the harness checks per commit
+  (`board/checks.ts`). The approval gate applies the run's snapshotted mode (Manual, Auto edits,
+  Auto) to helpers and the tester; the lead never approves. Routes: `GET`/`POST
+/api/runs/:id/ticket-branch` (CSRF on POST), `POST /api/runs/:id/review` for the owner's change
+  decisions. Flow: [orchestration-lifecycle.md](orchestration-lifecycle.md) §0.1.
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by

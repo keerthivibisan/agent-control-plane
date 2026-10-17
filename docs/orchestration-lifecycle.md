@@ -22,6 +22,58 @@
 - **Budget:** ADR-0014 budget tokens per agent; reaching the soft cap → `BLOCKED` + an approval of
   kind `budget-raise`.
 
+> **Since ADR-0021 (2026-10-17), ticket runs use the review loop in §0.1.** §0's per-worker owner
+> merge still describes control-panel runs and ticket runs started before it.
+
+## 0.1 Approval modes, review loop and ticket branch (ADR-0021) [implemented]
+
+Verified with fake agents against the real server, real git and real harness checks (server tests in
+`packages/server/tests/{board,verification/review-loop}` and the browser flow
+`packages/web/e2e/review-loop-live.spec.ts`). A consented real run is planned
+(`docs/review-loop/wp/RL-V.md`).
+
+- **Approval modes, snapshotted per run.** The project's mode (Workflow → Helpers → Approvals) is
+  the default; the Start dialog can override it, the reviewer and the rework limit for one run.
+  Only helpers and the tester are covered; the lead never approves tool requests.
+  - _Manual:_ every edit and command asks the owner, harness checks too.
+  - _Auto edits_ (default for new projects): an Edit/Write whose real path is inside the helper's
+    own worktree (not under `.git` or `.claude`) and a Bash command that exactly matches a harness
+    check run unasked.
+  - _Auto:_ Auto edits plus the project's command allowlist (safe tokens only, a bare first word,
+    `git` read-only). Each auto-approved request is recorded with its rule (`allowRule`).
+- **Plan approval** creates the ticket branch `acp/<KEY>` (or `acp/<KEY>-r<n>`) from the base
+  branch. The lead hears of the approval only once the branch exists. Helpers and the tester start
+  from the ticket branch tip, each in its own worktree. Plan steps name helper roles only.
+- **A helper's turn ends:** the agent goes to `AWAITING_REVIEW` (no process, no helper slot), its
+  worktree is committed (sealed) and the required checks run on that commit.
+- **Review:** a read-only review agent (default; it gets a detached checkout of the sealed commit
+  and a diff of at most 64 KiB in its brief, sent, never stored) or the lead reviews the oldest
+  ready change first. The review agent's findings become a ticket comment.
+- **The lead decides** with `merge_change`, `request_rework` (comments), `discard_change`
+  (reason) or `ask_owner` (question):
+  - merge: integrate the tip into the helper's worktree (a conflict is refused with the file
+    names), require the required checks to have passed on that commit (or start them; the lead
+    hears back), then advance the ticket branch by compare-and-swap and release the worktree;
+  - rework: refused past the run's limit (2 by default), over budget or with no free slot; the
+    helper resumes its session in the same worktree and its change is reviewed again;
+  - ask the owner: the change is `needs-owner`, and only the owner decides it (merge, merge anyway
+    with a reason, rework with a comment, discard), also past the rework limit.
+- **Stored text:** the review agent's findings and the lead's and owner's notes are ticket
+  comments. Each round and decision is a `change_reviews` row with no text (a note on a round the
+  review agent commented on has its own row).
+- **Handover:** `request_review` is refused while a helper works or a change is undecided. After
+  it, no helper starts; the final code review and the unit tests (if on) run on the ticket branch
+  while the lead stays live.
+- **The owner merges once:** at `REVIEW` the checks run on the tip (a detached temporary
+  checkout). The ticket-branch card shows the combined diff `base..tip` and those checks. Merge
+  needs a clean owner tree on the base branch, an unmoved base and passed required checks, then
+  `merge --ff-only` and the branch is deleted; the run is `COMPLETED` and the ticket Done. Merge
+  anyway (with a reason), Request changes (back to the lead, the run returns to `RUNNING`), Discard
+  and Update from the base (when the base moved) are the other actions.
+- **Stops and restarts:** Stop all cancels waiting helpers and keeps the ticket branch (it can only
+  be discarded). After a restart nothing relaunches: waiting helpers and reviewers become
+  `NEEDS_REVIEW`, undecided changes `needs-owner`.
+
 ## 1. Principles
 
 - The LLM plans and recommends. **The engine enforces** concurrency, budgets, permissions, workspace

@@ -17,6 +17,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     sidebar, or with ⌘B (Ctrl+B on Windows and Linux).
   - The app remembers your choice in this browser. Until you choose, narrow windows show the icons.
   - In the slim view, each icon shows its name when you point at it.
+- Approval modes
+  - Choose how much helpers may do without asking you: Manual (everything asks), Auto edits or
+    Auto. Set it for the project on the Workflow page and in the new-project setup, and change it
+    for one run when you start a ticket ("Start with options…").
+  - Auto edits lets a helper edit files in its own copy of the project and run the project's
+    exact harness checks. It is the default for new projects; existing projects keep how they
+    worked.
+  - Auto also runs the commands you list, matched word for word or with any arguments. Commands
+    that could chain, redirect or leave the project are refused when you add them.
+  - Requests approved this way show which rule allowed them.
+- Review before merge, with rework
+  - Each helper's finished change is reviewed before it goes anywhere: by a read-only review
+    agent (the default) or by the lead.
+  - The lead then merges it, sends it back to the helper with what to change, discards it, or
+    asks you. A change can go back twice by default; you can choose up to five rounds, and allow
+    more yourself.
+  - Each change has a card on the ticket page with its state, its checks, the reviewer's findings
+    and every decision. When the lead asks you, the card offers your choices.
+- One final merge of a ticket branch
+  - Approving a plan creates a branch for the ticket. Every change the lead merges lands there,
+    never on main, and only after its required checks pass.
+  - At the end you see the combined change and its checks, and merge it into main once. You can
+    also merge anyway with a reason, request changes from the lead, or discard the branch.
 
 ### Changed
 
@@ -43,6 +66,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Menus, tabs and dialogs work with the keyboard, and the item in focus always shows a clear
     outline in both themes.
   - Showing or hiding a board column keeps the keyboard focus on that column's button.
+- Ticket runs
+  - Helpers' changes go to the ticket's branch instead of being merged into main one by one, and
+    you no longer review each change yourself unless the lead asks you (see Added).
+  - Every step of a plan goes to a helper. The lead only reads and coordinates, so a plan step
+    for the lead is refused, and the planner gives it to a helper instead.
+  - An agent's "Latest" line says what it did in plain words, such as "Checked a helper's status",
+    instead of internal tool names.
 
 ### Fixed
 

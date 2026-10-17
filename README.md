@@ -16,7 +16,7 @@ provider is Claude Code. Codex support will follow through a separate adapter.
 > verified. Two real runs against
 > Claude Code passed on 2026-10-16 ([docs/research/r-v-real-run-2026-10-16.md](docs/research/r-v-real-run-2026-10-16.md)).
 >
-> **Implemented and tested** (about 2,100 unit and integration tests, plus 49 browser end-to-end
+> **Implemented and tested** (about 2,500 unit and integration tests, plus 60 browser end-to-end
 > tests):
 >
 > - **Observing Claude Code sessions:**
@@ -32,16 +32,24 @@ provider is Claude Code. Codex support will follow through a separate adapter.
 >   - **Tokens:** new work vs cache reuse;
 >   - **Sessions**, **Settings** and **Data health**.
 > - **Managed runs per ticket:**
->   1. A planner proposes a plan, and you approve it or ask for changes.
->   2. A lead starts up to 3 helper agents, each in its own git worktree.
->   3. You approve edits and commands, then review and merge each change once the required checks
->      pass.
->   4. An optional read-only code reviewer and a unit-test writer follow.
->   5. After a run ends, you can still ask its lead questions (answers only).
+>   1. A planner proposes a plan, and you approve it or ask for changes. Approving it creates the
+>      ticket's own branch (`acp/<KEY>`).
+>   2. A lead starts helper agents for the plan's steps, each in its own git worktree.
+>   3. Approval modes per project, changeable per run: **Manual** (everything asks), **Auto edits**
+>      (edits in the helper's own worktree and exact harness checks run unasked; the default for
+>      new projects) or **Auto** (plus a command allowlist). Auto-approved requests show the rule.
+>   4. Each finished change is reviewed (by a read-only review agent, or the lead). The lead merges
+>      it into the ticket branch once the required checks pass, sends it back for rework (2 rounds
+>      by default), discards it, or asks you.
+>   5. An optional read-only code reviewer and a unit-test writer run on the ticket branch. Then you
+>      merge the ticket branch into main once (or merge anyway with a reason, request changes, or
+>      discard it).
+>   6. After a run ends, you can still ask its lead questions (answers only).
 > - **Guardrails:** every role has a fixed tool set; budgets, Stop and Stop all, and safe restarts
 >   apply throughout.
 > - **Local only:** the server binds 127.0.0.1, and no conversation content is stored except the
->   owner's chat with the lead (ADR-0015).
+>   owner's chat with the lead (ADR-0015) and the plans, reviewer findings and lead notes kept as
+>   ticket comments (ADR-0016, ADR-0021). Diffs and tool output are never stored.
 >
 > See [CHANGELOG.md](CHANGELOG.md), [docs/redesign/README.md](docs/redesign/README.md) and
 > [docs/implementation-plan.md](docs/implementation-plan.md).
