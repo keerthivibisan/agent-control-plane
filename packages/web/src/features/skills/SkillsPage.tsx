@@ -3,8 +3,10 @@ import { useMemo, useState, type ReactNode } from 'react';
 import type { SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { InfoTip } from '../../components/InfoTip';
+import { PlusSmallIcon, SparkIcon } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
+import { LoadingBlock } from '../../components/Skeleton';
+import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import {
   agentsPaths,
   agentsSchemas,
@@ -22,6 +24,7 @@ import {
 import { AGENTS_COPY, SKILLS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href, navigate } from '../../lib/router';
+import { AgentFileIcon, BackIcon, CommitIcon } from '../workflow/icons';
 import { useSkillAction } from './actions';
 import { AgentEditor } from './AgentEditor';
 import { AgentList, type AgentUsage } from './AgentList';
@@ -60,12 +63,14 @@ function RemovalNotice({
     <div
       role="status"
       data-testid="removal-notice"
-      className="mb-4 flex flex-col gap-2 rounded-card border border-line bg-panel px-4 py-3 shadow-card"
+      className="mb-4 flex animate-dialog-in flex-col gap-2 rounded-card border border-warning/25 bg-warning-soft px-4 py-3"
     >
       <div className="flex flex-wrap items-center gap-3">
-        <p className="flex-1">{C.commit.removal(name)}</p>
+        <CommitIcon size={16} className="shrink-0 text-warning" />
+        <p className="min-w-0 flex-1">{C.commit.removal(name)}</p>
         <Button
           variant="primary"
+          size="sm"
           disabled={commit.pending}
           onClick={() =>
             void commit.run(name).then((r) => {
@@ -92,7 +97,7 @@ function Failure({ error, refusals }: { error: ApiError; refusals?: Record<strin
 /** The row above a tab's content: a back link in the editor, else the intro and "New". */
 function TabBar({ back, intro, action }: { back?: ReactNode; intro?: string; action?: ReactNode }) {
   return (
-    <div className="mb-4 flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="mb-4 flex min-h-8 flex-wrap items-center gap-x-4 gap-y-2">
       {back}
       <div className="min-w-0 flex-1">
         {intro ? <p className="max-w-3xl text-dim">{intro}</p> : null}
@@ -107,10 +112,21 @@ function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-caption text-dim hover:text-ink hover:underline"
+      className="-ml-2 inline-flex h-7 items-center gap-1.5 rounded-control px-2 text-caption font-medium text-dim transition-colors hover:bg-hover hover:text-ink"
     >
-      ← {label}
+      <BackIcon size={14} />
+      {label}
     </button>
+  );
+}
+
+/** "New skill" / "New agent": the tab's primary action. */
+function NewButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button variant="primary" onClick={onClick}>
+      <PlusSmallIcon size={15} />
+      {label}
+    </Button>
   );
 }
 
@@ -129,7 +145,7 @@ function SkillDetailView({
 }) {
   const { data, error } = useApiQuery(skillsPaths.skill(projectId, name), skillsSchemas.detail);
   if (error !== null && data === undefined) return <Failure error={error} />;
-  if (data === undefined) return <p className="text-dim">{C.page.loading}</p>;
+  if (data === undefined) return <LoadingBlock label={C.page.loading} />;
   return (
     <SkillEditor
       key={name}
@@ -192,15 +208,16 @@ function SkillsTab({ projectId, item }: { projectId: string; item: string | null
     );
   }
   if (list.error !== null && list.data === undefined) return <Failure error={list.error} />;
-  if (list.data === undefined) return <p className="text-dim">{C.page.loading}</p>;
+  if (list.data === undefined) return <LoadingBlock label={C.page.loading} />;
   return (
     <>
       {list.data.length > 0 ? (
         <TabBar
           action={
-            <Button variant="primary" onClick={() => setView({ kind: 'new', template: null })}>
-              {C.page.newSkill}
-            </Button>
+            <NewButton
+              label={C.page.newSkill}
+              onClick={() => setView({ kind: 'new', template: null })}
+            />
           }
         />
       ) : null}
@@ -239,7 +256,7 @@ function AgentDetailView({
 }) {
   const { data, error } = useApiQuery(agentsPaths.agent(projectId, name), agentsSchemas.detail);
   if (error !== null && data === undefined) return <Failure error={error} refusals={A.refusals} />;
-  if (data === undefined) return <p className="text-dim">{A.page.loading}</p>;
+  if (data === undefined) return <LoadingBlock label={A.page.loading} />;
   return (
     <AgentEditor
       key={name}
@@ -306,16 +323,17 @@ function AgentsTab({ projectId }: { projectId: string }) {
   if (list.error !== null && list.data === undefined) {
     return <Failure error={list.error} refusals={A.refusals} />;
   }
-  if (list.data === undefined) return <p className="text-dim">{A.page.loading}</p>;
+  if (list.data === undefined) return <LoadingBlock label={A.page.loading} />;
   return (
     <>
       <TabBar
         intro={A.page.intro}
         action={
           list.data.length > 0 ? (
-            <Button variant="primary" onClick={() => setView({ kind: 'new', template: null })}>
-              {A.page.newAgent}
-            </Button>
+            <NewButton
+              label={A.page.newAgent}
+              onClick={() => setView({ kind: 'new', template: null })}
+            />
           ) : undefined
         }
       />
@@ -339,9 +357,9 @@ function AgentsTab({ projectId }: { projectId: string }) {
   );
 }
 
-const TABS: readonly { id: SkillsTabId; label: string }[] = [
-  { id: 'skills', label: C.page.skillsTab },
-  { id: 'agents', label: C.page.agentsTab },
+const TABS: readonly { id: SkillsTabId; label: string; icon: typeof SparkIcon }[] = [
+  { id: 'skills', label: C.page.skillsTab, icon: SparkIcon },
+  { id: 'agents', label: C.page.agentsTab, icon: AgentFileIcon },
 ];
 
 /**
@@ -376,38 +394,23 @@ export function SkillsPage({
 
   return (
     <div data-testid="skills-page">
-      <PageHeader
-        title={
-          <span className="inline-flex items-center gap-1.5">
-            {C.page.title}
-            <InfoTip tip={C.page.tip} label={C.page.title} />
-          </span>
-        }
-        description={C.page.description}
-      />
-      <div role="tablist" aria-label={C.page.tabs} className="mb-5 flex gap-1 border-b border-line">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`skills-tab-${t.id}`}
-            aria-selected={current === t.id}
-            aria-controls={`skills-panel-${t.id}`}
-            onClick={() => choose(t.id)}
-            className={`-mb-px border-b-2 px-3 py-2 font-medium transition-colors ${current === t.id ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id={`skills-panel-${current}`} aria-labelledby={`skills-tab-${current}`}>
-        {current === 'skills' ? (
+      <PageHeader title={C.page.title} tip={C.page.tip} description={C.page.description} />
+      <Tabs value={current} onValueChange={choose}>
+        <TabList label={C.page.tabs} className="mb-5">
+          {TABS.map((t) => (
+            <Tab key={t.id} value={t.id}>
+              <t.icon size={15} />
+              {t.label}
+            </Tab>
+          ))}
+        </TabList>
+        <TabPanel value="skills">
           <SkillsTab projectId={projectId} item={item} />
-        ) : (
+        </TabPanel>
+        <TabPanel value="agents">
           <AgentsTab projectId={projectId} />
-        )}
-      </div>
+        </TabPanel>
+      </Tabs>
     </div>
   );
 }

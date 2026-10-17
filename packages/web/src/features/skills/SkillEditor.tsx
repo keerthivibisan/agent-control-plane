@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react';
 import type { SkillDetailDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { inputClass } from '../../components/Input';
 import { commitSkill, createSkill, deleteSkill, updateSkill } from '../../lib/api';
 import { SKILLS_COPY } from '../../lib/copy';
 import {
@@ -11,7 +12,7 @@ import {
   type SkillForm,
   type SkillFormErrors,
 } from './actions';
-import { describedBy, Field, fieldClass, RefusalNotice } from './bits';
+import { describedBy, Field, FORM_ACTIONS, RefusalNotice, SavedNote, UnsavedNote } from './bits';
 import { FileSide, InstructionsField, TemplatePicker } from './editor-parts';
 import { SKILL_TEMPLATES, type SkillTemplate } from './templates';
 
@@ -99,17 +100,13 @@ export function SkillEditor({
 
   return (
     <div
-      className={isNew ? 'max-w-4xl' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
+      className={isNew ? 'max-w-4xl' : 'grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]'}
       data-testid="skill-editor"
     >
       <Card
         title={isNew ? C.editor.newTitle : C.editor.editTitle(form.name)}
         description={isNew ? C.editor.newDescription : undefined}
-        actions={
-          dirty && !isNew ? (
-            <span className="text-caption text-dim">{C.editor.unsaved}</span>
-          ) : undefined
-        }
+        actions={dirty && !isNew ? <UnsavedNote>{C.editor.unsaved}</UnsavedNote> : undefined}
       >
         <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)} noValidate>
           <TemplatePicker templates={SKILL_TEMPLATES} onPick={pickTemplate} collapsed={!isNew} />
@@ -124,7 +121,7 @@ export function SkillEditor({
               onChange={(e) => set({ name: e.target.value })}
               aria-invalid={errors.name ? true : undefined}
               aria-describedby={describedBy(ids.name, true, errors.name)}
-              className={`${fieldClass} font-mono ${errors.name ? 'border-danger' : ''}`}
+              className={inputClass('font-mono disabled:bg-sunken')}
             />
           </Field>
           <Field
@@ -141,7 +138,7 @@ export function SkillEditor({
               onChange={(e) => set({ description: e.target.value })}
               aria-invalid={errors.description ? true : undefined}
               aria-describedby={describedBy(ids.description, true, errors.description)}
-              className={`${fieldClass} resize-y ${errors.description ? 'border-danger' : ''}`}
+              className={inputClass('resize-y')}
             />
           </Field>
           <InstructionsField
@@ -151,12 +148,8 @@ export function SkillEditor({
             sizeError={sizeError}
           />
           <RefusalNotice error={save.error} />
-          {saved && !isNew ? (
-            <p role="status" className="text-success">
-              {C.editor.saved}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap justify-end gap-2">
+          {saved && !isNew ? <SavedNote>{C.editor.saved}</SavedNote> : null}
+          <div className={FORM_ACTIONS}>
             <Button onClick={onCancel} disabled={save.pending}>
               {C.editor.cancel}
             </Button>

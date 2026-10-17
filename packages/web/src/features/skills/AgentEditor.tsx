@@ -3,6 +3,7 @@ import type { WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionDetailDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { inputClass } from '../../components/Input';
 import { commitAgent, createAgent, deleteAgent, isAgentsPath, updateAgent } from '../../lib/api';
 import { AGENTS_COPY, SKILLS_COPY } from '../../lib/copy';
 import {
@@ -16,8 +17,17 @@ import {
   type AgentFormErrors,
 } from './actions';
 import { AGENT_TEMPLATES, COMMON_TOOLS, type AgentTemplate } from './agent-templates';
-import { describedBy, Field, fieldClass, RefusalNotice } from './bits';
+import {
+  CardRow,
+  describedBy,
+  Field,
+  FORM_ACTIONS,
+  RefusalNotice,
+  SavedNote,
+  UnsavedNote,
+} from './bits';
 import { FileSide, InstructionsField, TemplatePicker } from './editor-parts';
+import { RemoveIcon } from '../workflow/icons';
 
 const A = AGENTS_COPY;
 const S = SKILLS_COPY;
@@ -86,7 +96,7 @@ function ToolsField({
   return (
     <fieldset className="flex min-w-0 flex-col gap-2" data-testid="tools-field">
       <legend className="mb-1 font-medium">{A.editor.tools}</legend>
-      <label className="flex items-start gap-2">
+      <label className="flex w-fit cursor-pointer items-start gap-2.5">
         <input
           type="checkbox"
           checked={all}
@@ -98,7 +108,7 @@ function ToolsField({
               onChange(lastList);
             }
           }}
-          className="mt-1"
+          className="mt-0.5 size-4 shrink-0 accent-accent"
         />
         <span>
           <span className="font-medium">{A.editor.allTools}</span>
@@ -107,22 +117,25 @@ function ToolsField({
       </label>
       {all ? null : (
         <>
+          {/* Looks like one field (the shared field style): chips, then the text box. */}
           <div
-            className={`flex flex-wrap items-center gap-1.5 rounded-control border bg-panel px-2 py-1.5 ${shownError ? 'border-danger' : 'border-line-strong'}`}
+            className={`flex min-h-[2.125rem] flex-wrap items-center gap-1 rounded-control border bg-panel px-1.5 py-1 shadow-card transition-[border-color,box-shadow] duration-150 focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20 ${
+              shownError ? 'border-danger focus-within:ring-danger/20' : 'border-line-strong'
+            }`}
           >
             {list.map((t) => (
               <span
                 key={t}
-                className="inline-flex items-center gap-1 rounded-full border border-line bg-sunken py-px pr-1 pl-2 font-mono text-caption"
+                className="inline-flex h-6 items-center gap-0.5 rounded-[0.3125rem] border border-line bg-sunken pr-0.5 pl-2 font-mono text-caption"
               >
                 {t}
                 <button
                   type="button"
                   aria-label={A.editor.removeTool(t)}
                   onClick={() => onChange(list.filter((x) => x !== t))}
-                  className="rounded-full px-1 text-dim hover:bg-panel hover:text-ink"
+                  className="inline-flex size-4.5 items-center justify-center rounded-[0.25rem] text-dim transition-colors hover:bg-hover hover:text-ink"
                 >
-                  ×
+                  <RemoveIcon size={12} />
                 </button>
               </span>
             ))}
@@ -160,7 +173,7 @@ function ToolsField({
                 key={t}
                 type="button"
                 onClick={() => add(t)}
-                className="rounded-full border border-dashed border-line-strong px-2 py-px font-mono text-caption text-dim hover:border-accent hover:text-accent"
+                className="inline-flex h-6 items-center rounded-[0.3125rem] border border-dashed border-line-strong px-2 font-mono text-caption text-dim transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent"
               >
                 + {t}
               </button>
@@ -254,20 +267,21 @@ export function AgentEditor({
 
   return (
     <div
-      className={isNew ? 'max-w-4xl' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]'}
+      className={isNew ? 'max-w-4xl' : 'grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]'}
       data-testid="agent-editor"
     >
       <Card
         title={isNew ? A.editor.newTitle : S.editor.editTitle(form.name)}
         description={isNew ? A.editor.newDescription : undefined}
-        actions={
-          dirty && !isNew ? (
-            <span className="text-caption text-dim">{S.editor.unsaved}</span>
-          ) : undefined
-        }
+        actions={dirty && !isNew ? <UnsavedNote>{S.editor.unsaved}</UnsavedNote> : undefined}
       >
         <form className="flex flex-col gap-5" onSubmit={(e) => void submit(e)} noValidate>
-          <TemplatePicker templates={AGENT_TEMPLATES} onPick={pickTemplate} collapsed={!isNew} />
+          <TemplatePicker
+            templates={AGENT_TEMPLATES}
+            onPick={pickTemplate}
+            collapsed={!isNew}
+            agent
+          />
           <Field id={ids.name} label={S.editor.name} hint={A.editor.nameHint} error={errors.name}>
             <input
               id={ids.name}
@@ -279,7 +293,7 @@ export function AgentEditor({
               onChange={(e) => set({ name: e.target.value })}
               aria-invalid={errors.name ? true : undefined}
               aria-describedby={describedBy(ids.name, true, errors.name)}
-              className={`${fieldClass} font-mono ${errors.name ? 'border-danger' : ''}`}
+              className={inputClass('font-mono disabled:bg-sunken')}
             />
           </Field>
           <Field
@@ -296,7 +310,7 @@ export function AgentEditor({
               onChange={(e) => set({ description: e.target.value })}
               aria-invalid={errors.description ? true : undefined}
               aria-describedby={describedBy(ids.description, true, errors.description)}
-              className={`${fieldClass} resize-y ${errors.description ? 'border-danger' : ''}`}
+              className={inputClass('resize-y')}
             />
           </Field>
           <ToolsField
@@ -320,7 +334,7 @@ export function AgentEditor({
               onChange={(e) => set({ model: e.target.value })}
               aria-invalid={errors.model ? true : undefined}
               aria-describedby={describedBy(ids.model, true, errors.model)}
-              className={`${fieldClass} max-w-xs font-mono ${errors.model ? 'border-danger' : ''}`}
+              className={inputClass('max-w-xs font-mono')}
             />
             <datalist id={ids.models}>
               {MODEL_SUGGESTIONS.map((m) => (
@@ -335,12 +349,8 @@ export function AgentEditor({
             sizeError={sizeError}
           />
           <RefusalNotice error={save.error} refusals={REFUSALS} />
-          {saved && !isNew ? (
-            <p role="status" className="text-success">
-              {S.editor.saved}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap justify-end gap-2">
+          {saved && !isNew ? <SavedNote>{S.editor.saved}</SavedNote> : null}
+          <div className={FORM_ACTIONS}>
             <Button onClick={onCancel} disabled={save.pending}>
               {S.editor.cancel}
             </Button>
@@ -371,12 +381,11 @@ export function AgentEditor({
             refusals: REFUSALS,
           }}
           details={
-            <div className="flex flex-col gap-1">
-              <dt className="text-caption text-dim">{A.card.model}</dt>
-              <dd className={detail.model === null ? 'text-dim' : 'font-mono text-caption'}>
+            <CardRow label={A.card.model}>
+              <span className={detail.model === null ? 'text-dim' : 'font-mono text-caption'}>
                 {detail.model ?? A.card.defaultModel}
-              </dd>
-            </div>
+              </span>
+            </CardRow>
           }
           onDeleted={onDeleted}
         />

@@ -108,7 +108,10 @@ export function renderInline(text: string): ReactNode[] {
     const token = m[0];
     if (m[1]) {
       out.push(
-        <code key={key++} className="rounded bg-sunken px-1 font-mono text-[0.9em]">
+        <code
+          key={key++}
+          className="rounded-[0.25rem] border border-line bg-sunken px-1 py-px font-mono text-[0.85em]"
+        >
           {token.slice(1, -1)}
         </code>,
       );
@@ -130,8 +133,8 @@ export function renderInline(text: string): ReactNode[] {
 }
 
 const HEADING_CLASS: Record<number, string> = {
-  1: 'text-title font-semibold',
-  2: 'text-base font-semibold',
+  1: 'text-section font-semibold',
+  2: 'text-title font-semibold',
   3: 'font-semibold',
   4: 'font-medium',
   5: 'font-medium',
@@ -157,7 +160,7 @@ export function MarkdownPreview({ source, empty }: { source: string; empty: stri
             return <p key={n}>{renderInline(b.text)}</p>;
           case 'quote':
             return (
-              <blockquote key={n} className="border-l-2 border-line pl-3 text-dim">
+              <blockquote key={n} className="border-l-2 border-line-strong pl-3 text-dim">
                 {renderInline(b.text)}
               </blockquote>
             );
@@ -165,7 +168,7 @@ export function MarkdownPreview({ source, empty }: { source: string; empty: stri
             return (
               <pre
                 key={n}
-                className="overflow-x-auto rounded-control bg-sunken p-3 font-mono text-caption"
+                className="overflow-x-auto rounded-control border border-line bg-sunken p-3 font-mono text-caption"
               >
                 <code>{b.text}</code>
               </pre>
