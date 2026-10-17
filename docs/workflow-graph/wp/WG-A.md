@@ -16,9 +16,9 @@
 
 - [x] 1. `canConnect`: the edge-type matrix, self and duplicate edges, unknown nodes
 - [x] 2. `validateWorkflowGraph`: every README §2 rule plus the refinements, deterministic order
-- [ ] 3. `compileWorkflow` and `WorkflowGraphInvalidError`: routes a, b, c, overrides, modes,
+- [x] 3. `compileWorkflow` and `WorkflowGraphInvalidError`: routes a, b, c, overrides, modes,
       plan auto-approval, pool limit, final stage order
-- [ ] 4. `migrateWorkflowV1`: lossless, node ids = v1 stage ids; golden tests for every v1
+- [x] 4. `migrateWorkflowV1`: lossless, node ids = v1 stage ids; golden tests for every v1
       combination
 - [x] 5. Templates: `workflowTemplate`, `WORKFLOW_TEMPLATES`
 - [ ] 6. Test support: seeded PRNG, `generateValidGraph`, `GRAPH_MUTATIONS`,
@@ -30,7 +30,8 @@
 | Date       | What was done                                                                                                                       | Commit  | Checks                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------- |
 | 2026-10-17 | Claimed WG-A                                                                                                                        | b12dc82 | format ✓ lint ✓ typecheck ✓ test 2635/2635 ✓ build ✓ |
-| 2026-10-17 | `canConnect`, `validateWorkflowGraph`, templates (+ `migrateWorkflowV1`, which `todays-setup` uses; golden tests come with compile) | (this)  | format ✓ lint ✓ typecheck ✓ test 2683/2683 ✓ build ✓ |
+| 2026-10-17 | `canConnect`, `validateWorkflowGraph`, templates (+ `migrateWorkflowV1`, which `todays-setup` uses; golden tests come with compile) | 06dbc83 | format ✓ lint ✓ typecheck ✓ test 2683/2683 ✓ build ✓ |
+| 2026-10-17 | `compileWorkflow`, `WorkflowGraphInvalidError`; compile tests; golden migration tests (2,304 v1 combinations)                       | (this)  | format ✓ lint ✓ typecheck ✓ test 2708/2708 ✓ build ✓ |
 
 ## Decisions and findings
 
@@ -53,3 +54,13 @@
   `helper pool`, `pool`). Only an exact match is refused: "Lead designer" is fine.
 - **Mode warnings with an unknown project mode:** a node without its own mode is not guessed, so
   `plan-auto-without-full-auto` is raised only when every editing node's mode is known.
+- **Compile overrides, read literally (refinement 7):** `maxReworkRounds` replaces the rounds of
+  the rework edges that exist and adds none, so route (c) without a lead rework edge keeps
+  `leadRounds: 0`. With `reviewer: 'lead'`, `leadRounds` is the lead rework edge's rounds (0 without
+  one), or `maxReworkRounds` when set.
+- **`changeReviewers`** in the program lists only the change reviewers some route uses (graph
+  order), so it is empty under `reviewer: 'lead'`.
+- **Golden tests mirror `stages.ts`:** core cannot import the orchestrator, so
+  `tests/graph/migrate.test.ts` re-states `skillsFor`, `stageModelFor`, `stageAgentFor`,
+  `changeReviewerLaunchFields` and `nextStage`'s order (code-review, then unit-tests). WG-B can
+  cross-check the engine's own functions against the compiled program.

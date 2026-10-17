@@ -8,6 +8,7 @@ export {
   validateWorkflowGraph,
   type ValidateGraphContext,
 } from './validate.js';
+export { WorkflowGraphInvalidError, compileWorkflow } from './compile.js';
 export { migrateWorkflowV1 } from './migrate.js';
 export {
   WORKFLOW_TEMPLATES,
