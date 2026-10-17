@@ -525,6 +525,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "current_run_id TEXT NULL",
       "created_at TEXT NOT NULL",
       "updated_at TEXT NOT NULL",
+      "run_options TEXT NULL",
     ],
     "foreignKeys": [
       "current_run_id -> orchestration_runs(id) ON DELETE SET NULL",

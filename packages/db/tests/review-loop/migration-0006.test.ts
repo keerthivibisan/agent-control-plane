@@ -112,7 +112,8 @@ const count = (db: AcpDatabase, table: string) =>
 
 describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
   it('ships as version 6 after untouched 0001-0005', () => {
-    expect(SHIPPED.map((m) => [m.version, m.name])).toEqual([
+    // 0007 (RL-H) follows; the first six stay as shipped.
+    expect(SHIPPED.slice(0, 6).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
       [3, 'workspace'],
@@ -372,7 +373,7 @@ describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
       const recorded = v6.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(recorded.map((r) => r.version).slice(0, 6)).toEqual([1, 2, 3, 4, 5, 6]);
       // The 0001-0005 rows are unchanged, so their files were not edited.
       expect(recorded.slice(0, 5)).toEqual(before);
       expect(v6.connection.pragma('foreign_key_check')).toEqual([]);
