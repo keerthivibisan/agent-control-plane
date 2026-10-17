@@ -5,35 +5,39 @@
 > Scope and owned paths: `docs/review-loop/README.md` §5 and §9 (`packages/orchestrator/src/**` and
 > its tests).
 
-| Field   | Value                                                  |
-| ------- | ------------------------------------------------------ |
-| Status  | in-progress                                            |
-| Owner   | RL-A agent                                             |
-| Branch  | `wp/rl-a-engine` (from `feature/ui-refresh` `06f540d`) |
-| Started | 2026-10-17                                             |
-| Updated | 2026-10-17                                             |
+| Field   | Value                                                        |
+| ------- | ------------------------------------------------------------ |
+| Status  | review                                                       |
+| Owner   | RL-A agent                                                   |
+| Branch  | `wp/rl-a-engine` (rebased on `feature/ui-refresh` `6876ef5`) |
+| Started | 2026-10-17                                                   |
+| Updated | 2026-10-17                                                   |
 
 ## Tasks
 
 - [x] Legacy snapshot test, recorded on the code before any RL-A change
 - [x] Publish the exported signatures (below) for RL-B
-- [ ] Approval policy: `evaluateAllowlist(policy)`, `matchCommandAllowlist`, `ruleAllowedByMode`,
+- [x] Approval policy: `evaluateAllowlist(policy)`, `matchCommandAllowlist`, `ruleAllowedByMode`,
       `allowRule` on auto-approvals
-- [ ] State: `RunState.integration` / `approvalPolicy`, `createRun` inputs, `EngineChange`
-- [ ] Transitions: AWAITING_REVIEW edges, REVIEW → RUNNING, `isActiveAgent`
-- [ ] Loop: seal, reviewer assignment, `submit_review`, lead change tools, owner overrides,
+- [x] State: `RunState.integration` / `approvalPolicy`, `createRun` inputs, `EngineChange`
+- [x] Transitions: AWAITING_REVIEW edges, REVIEW → RUNNING, `isActiveAgentStatus`
+- [x] Loop: seal, reviewer assignment, `submit_review`, lead change tools, owner overrides,
       checks, handover, final stages on the ticket branch, owner's final decision
-- [ ] Stop all, restart, depth 2, budgets, separate planner
-- [ ] Humanized activity lines
-- [ ] Tests for every transition and refusal; `pnpm check`; completion report
+- [x] Stop all, restart, depth 2, budgets, separate planner
+- [x] Humanized activity lines
+- [x] Tests for every transition and refusal; `pnpm check`; completion report
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                        | Commit    | Checks                                                   |
-| ---------- | ---------------------------------------------------- | --------- | -------------------------------------------------------- |
-| 2026-10-17 | Claimed RL-A                                         | `ea41e09` | —                                                        |
-| 2026-10-17 | Legacy snapshot test recorded on the pre-RL-A engine | `1ae4307` | orchestrator: format ✓ lint ✓ typecheck ✓ test 477/477 ✓ |
-| 2026-10-17 | Published the signatures for RL-B (below)            | (this)    | docs only                                                |
+| Date       | What was done                                                      | Commit    | Checks                                                   |
+| ---------- | ------------------------------------------------------------------ | --------- | -------------------------------------------------------- |
+| 2026-10-17 | Claimed RL-A                                                       | `a2a0524` | —                                                        |
+| 2026-10-17 | Legacy snapshot test recorded on the pre-RL-A engine               | `abb4740` | orchestrator: format ✓ lint ✓ typecheck ✓ test 477/477 ✓ |
+| 2026-10-17 | Published the signatures for RL-B (below)                          | `a672151` | docs only                                                |
+| 2026-10-17 | Engine: approval policy, loop, handover, ticket branch, tests (30) | `9cd80d6` | format ✓ lint ✓ typecheck ✓ test 2326/2326 ✓ build ✓     |
+| 2026-10-17 | Tests: lifecycle (22) and approval policy (23)                     | `cf3f9f1` | format ✓ lint ✓ typecheck ✓ test 2371/2371 ✓ build ✓     |
+| 2026-10-17 | Shared test fixtures; rebased on `feature/ui-refresh` `6876ef5`    | `8a95fd6` | orchestrator: test 552/552 ✓                             |
+| 2026-10-17 | Status `review`, completion report                                 | (this)    | format ✓ lint ✓ typecheck ✓ test 2377/2377 ✓ build ✓     |
 
 ## Handoff notes
 
@@ -171,3 +175,124 @@ verdict is `{ allowed: true; rule; checkId?; pattern? }`. `matchCommandAllowlist
 patterns): CommandPattern | null` and `ruleAllowedByMode(mode, rule): boolean`.
 `requestPermission` re-checks the verdict's rule against `state.approvalPolicy.mode` and records
 `allowRule`.
+
+### Final signatures: changes from the early list
+
+- `beginChangeMerge` returns `EngineResult<string>` (the published list said `EngineResult`).
+  Nothing else changed.
+- Also exported: `viewChangeReply`, `changeSummary`, `VIEW_CHANGE_MAX_BYTES`, `MergeBlocked`,
+  `ChangeAction`, `DecisionInput`, `undecidedChanges`, `isFinalChangeState`, `activeHelperCount`,
+  `isActiveAgentStatus`, `isChangeReviewer`, `isStageAgent`, `changeReviewerBrief`,
+  `changeReviewerLaunchFields`, `REFUSAL_REASONS`, `RefusalReason`, and the types
+  `RunIntegration` and `EngineChange`.
+
+### Notes for RL-B (server, db, adapter)
+
+1. **Persist** `integration` and `approvalPolicy` with the run snapshot, and each change's `state`,
+   `round` and `headCommit` (`managed_workspaces`). After a reload, `recoverAfterRestart` moves
+   every undecided change to `needs-owner`, so the live-only fields can start empty
+   (`verdict: null`, `checks: null`, `merging: false`, and so on).
+2. **Session for rework.** The engine records a loop helper's first `started` session id in
+   `agent.sessionId`. When you load agents from the database, fill `sessionId` from
+   `agent_run_sessions` so that `start-agent.rework.resumeSessionId` can resume the session.
+3. **Ticket branch.** Carry out `create-ticket-branch` before any later effect, then call
+   `ticketBranchCreated(branch)`. `start_agent` is refused until then (`ticket-branch-pending`).
+   If creation fails, the engine has no failure command: stop the run (`cancelRun`) and log it.
+4. **`merge_change`.** `leadToolCall` → `merge-change` effect → seal, then integrate, then checks on
+   that commit, then compare-and-swap. Then call `recordChangeDecision({ decision: 'merge', by,
+outcome: 'merged' | 'no-changes', headCommit })` or `changeMergeBlocked(...)`, and answer the
+   lead with that result's `value`. A stopped helper's change has `headCommit: null`: the seal
+   is the first step of the merge anyway.
+5. **Owner per-change actions** (`ReviewActionRequest` on loop runs):
+   - first `checkChangeAction(…, by: 'owner')`;
+   - merge or merge-anyway: `beginChangeMerge(…, { by: 'owner', anyway })`, then the same as
+     step 4;
+   - rework or discard: `recordChangeDecision(…, { decision, by: 'owner', comments })`.
+
+   `recordReview` and `checkReviewAction` refuse loop runs (`legacy-review`).
+
+6. **Owner's final decision:** `checkTicketBranchAction(action)`, then the git work, then:
+   - `recordTicketBranchDecision('merged' | 'discarded')`;
+   - or `requestTicketChanges(comment)`; store the comment as the owner's ticket comment;
+   - `update-from-base` has no engine command beyond the check.
+7. **Comments and rows:**
+   - `review-comment` with `changeOf` is the change reviewer's findings (author `reviewer`); link
+     it to the `change_reviews` row (`changeOf`, `round`);
+   - `change-comment` is a ticket comment by `lead` or `owner`;
+   - `change-round` upserts the row for (`agentRunId`, `round`).
+8. **`review` field.** In loop runs `agent.review` stays null until the change is final
+   (`merged` / `discarded` / `no-changes`). The server's "a new pending review" triggers never fire
+   for loop runs (board/service.ts:304, control/service.ts:628). Checks run through
+   `merge-change` and `checksFinished`.
+9. **No process.** AWAITING_REVIEW agents have no process. Stop all emits no `abort-agent` for
+   them. Stop and `message_agent` are refused for them.
+10. **Gate.** Pass `policy: run.approvalPolicy` to `evaluateAllowlist` for runs that have one. The
+    engine checks the verdict again and records `allowRule` (approvals decided by `allowlist`
+    only).
+
+## Completion report — RL-A
+
+1. **Summary:** The engine half of ADR-0021, as pure functions:
+   - approval modes and the command matcher;
+   - the review loop (seal, review agent or lead, submit_review, the five change tools, owner
+     overrides, checks);
+   - the handover with the final stages on the ticket branch;
+   - the owner's single final decision;
+   - Stop all, restart, depth 2 and budgets.
+
+   Runs without `reviewLoop` are byte-identical to before (a legacy snapshot recorded on the
+   pre-RL-A engine).
+
+2. **Files changed:**
+   - created:
+     - `packages/orchestrator/src/{loop,change-commands,summary}.ts`;
+     - `packages/orchestrator/tests/{legacy-snapshot,review-loop,review-loop-lifecycle,approval-policy}.test.ts`;
+     - `tests/loop-helpers.ts`;
+     - `tests/__snapshots__/legacy-snapshot.test.ts.snap`;
+     - this progress file;
+   - modified:
+     - `packages/orchestrator/src/{allowlist,commands,draft,errors,index,lead-tools,plan,policy,review-tool,run-workflow,stages,state,transitions}.ts`;
+     - `tests/transitions.test.ts` (the RL-0 placeholder rows).
+3. **Commands run and actual results** (`pnpm check` from the root, Node 22.21.1, pnpm 10.26.1,
+   after rebasing on `6876ef5`):
+   - format:check ✓;
+   - lint ✓ (0 warnings);
+   - typecheck ✓;
+   - test ✓ 2377 passed (core 285, adapter-demo 12, orchestrator 552, adapter-claude-code 323,
+     db 175, web 611, server 419);
+   - build ✓.
+4. **Acceptance criteria:**
+   - integration and approval-policy snapshot; legacy runs unchanged → met
+     (`legacy-snapshot.test.ts`; existing tests unchanged except the RL-0 placeholder rows);
+   - AWAITING_REVIEW edges, `isActiveAgentStatus`, `liveWorkers`, BLOCKED → met;
+   - the loop (seal, reviewers oldest first, lead as reviewer, submit_review, view, merge, rework
+     with its three limits, discard, ask_owner, owner overrides with an extra round, checks) → met;
+   - handover and the final stages with the lead live; REVIEW → RUNNING on request changes; the
+     lead ending early → met;
+   - `create-ticket-branch` in both planner modes; `fromBranch` → met;
+   - Stop all, restart, depth 2, budgets (32 KiB `view_change`), separate planner → met;
+   - mode-rule table and matcher fuzz → met;
+   - humanized activity lines → met.
+5. **Assumptions** (documented in the code comments and here):
+   - an errored helper turn still enters the loop;
+   - a helper stopped mid-turn (lead or owner Stop, a budget deny, a crash while parked) leaves
+     its work at `decision` (lead live) or `needs-owner`: merge or discard, never rework;
+   - the owner's rework of an over-budget helper raises its cap by one agent budget (like a
+     budget raise);
+   - a seal that fails is reported as `changed: true, headCommit: null` → `needs-owner`;
+   - the final stages run once: they do not run again after the owner's "request changes";
+   - REVIEW never completes by itself in loop runs, even with nothing merged; the owner merges or
+     discards the (possibly empty) branch;
+   - agent messages are held while the lead is BLOCKED and listed when it resumes.
+6. **Contract or shared-file changes proposed (not made):**
+   - promote the `Refusal.reason` values to `RefusalCode`s, with `REFUSAL_STATUS` entries in
+     `server/src/control/errors.ts` (RL-B owns that file);
+   - optionally, an engine command for a failed ticket-branch creation.
+7. **Known gaps and follow-ups:**
+   - `docs/orchestration-lifecycle.md` and the README "Status" are not updated: outside RL-A's
+     owned paths;
+   - the server, db and adapter wiring is RL-B's;
+   - a change reviewer that has submitted but not yet ended still holds a slot and blocks
+     `request_review` until it ends.
+8. **Next recommended task:** RL-B rebases on this branch and wires the notes above; then RL-D
+   and RL-V.
