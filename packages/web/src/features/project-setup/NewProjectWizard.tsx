@@ -8,11 +8,18 @@ import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
   isProjectSetupPath,
+  isWorkflowGraphPath,
   projectSetupPaths,
   projectSetupSchemas,
   updateProjectSetup,
+  updateWorkflowGraph,
 } from '../../lib/api';
-import { PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SETUP_COPY } from '../../lib/copy';
+import {
+  PROJECT_SETUP_COPY,
+  REVIEW_LOOP_COPY,
+  SETUP_COPY,
+  WORKFLOW_GRAPH_COPY,
+} from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href, navigate } from '../../lib/router';
 import { ActionError } from '../control/bits';
@@ -29,6 +36,13 @@ import {
   type SetupErrors,
 } from './setup-form';
 import { SourceDone, SourceStep, useSourceStep, type SourceMode } from './SourceStep';
+import {
+  DEFAULT_WORKFLOW_CHOICE,
+  WorkflowTemplateChoice,
+  choiceGraph,
+  isDefaultChoice,
+  type WorkflowChoice,
+} from './WorkflowTemplateChoice';
 
 const W = PROJECT_SETUP_COPY.wizard;
 const STEPS = ['source', 'agents', 'allowlist', 'context', 'harness'] as const;
@@ -107,6 +121,8 @@ export function NewProjectWizard() {
   /** The owner's pick; until then a new project starts in Auto edits (ADR-0021 §1). */
   const [mode, setMode] = useState<ApprovalMode | null>(null);
   const [errors, setErrors] = useState<SetupErrors>({});
+  /** WG-D: how changes are reviewed; saved as the project's workflow graph on finish. */
+  const [workflow, setWorkflow] = useState<WorkflowChoice>(DEFAULT_WORKFLOW_CHOICE);
 
   const source = useSourceStep((p) => {
     setProject(p);
@@ -123,6 +139,8 @@ export function NewProjectWizard() {
   );
   const invalidate = useMemo(() => isProjectSetupPath(id ?? ''), [id]);
   const save = useSetupAction(updateProjectSetup, invalidate);
+  const graphInvalidate = useMemo(() => isWorkflowGraphPath(id ?? ''), [id]);
+  const saveGraph = useSetupAction(updateWorkflowGraph, graphInvalidate);
 
   // The draft is what the server holds (its defaults for a new project) plus the owner's edits.
   // Until the owner picks files, CLAUDE.md and other suggested files are pre-selected.
@@ -144,7 +162,7 @@ export function NewProjectWizard() {
   const approvalMode = mode ?? setup.data?.approvals?.mode ?? DEFAULT_APPROVAL_MODE;
 
   const key = STEPS[step] ?? 'source';
-  const pending = source.pending || save.pending;
+  const pending = source.pending || save.pending || saveGraph.pending;
 
   const next = async () => {
     if (key === 'source') {
@@ -181,6 +199,12 @@ export function NewProjectWizard() {
       if (saved !== null) setStep(4);
       return;
     }
+    // The chosen workflow (WG-D). The default needs no save: a project without a stored graph
+    // answers today's setup, the same workflow.
+    if (!isDefaultChoice(workflow)) {
+      const graph = choiceGraph(workflow, approvalMode);
+      if ((await saveGraph.run(id, { graph })) === null) return;
+    }
     navigate(href.board(id));
   };
 
@@ -209,7 +233,12 @@ export function NewProjectWizard() {
   } else if (draft === null) {
     body = <QueryView query={setup}>{() => null}</QueryView>;
   } else if (key === 'agents') {
-    body = <AgentFields draft={draft} errors={errors} onChange={change} />;
+    body = (
+      <div className="flex flex-col gap-8">
+        <AgentFields draft={draft} errors={errors} onChange={change} />
+        <WorkflowTemplateChoice value={workflow} onChange={setWorkflow} />
+      </div>
+    );
   } else if (key === 'allowlist') {
     body = (
       <div className="flex flex-col gap-4" data-testid="wizard-approvals">
@@ -256,6 +285,7 @@ export function NewProjectWizard() {
           <div className="flex flex-col gap-6">
             {body}
             <ActionError error={save.error} message={W.saveFailed} />
+            <ActionError error={saveGraph.error} message={WORKFLOW_GRAPH_COPY.wizard.failed} />
             <div className="-mx-5 -mb-5 flex items-center gap-2 rounded-b-card border-t border-line bg-sunken/40 px-5 py-3">
               {step > 0 ? (
                 <Button onClick={() => setStep(step - 1)} disabled={pending}>

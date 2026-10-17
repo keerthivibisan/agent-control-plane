@@ -84,6 +84,12 @@ import {
   TicketBranchActionRequestSchema,
   TicketBranchReviewDtoSchema,
 } from '@acp/core/api';
+// Workflow graph editor (WG-D, ADR-0023).
+import {
+  UpdateWorkflowGraphRequestSchema,
+  ValidateWorkflowGraphResultDtoSchema,
+  WorkflowGraphDtoSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -867,6 +873,63 @@ export async function updateWorkflow(
     path,
     checked(UpdateWorkflowRequestSchema, input, path),
     workflowSchemas.workflow,
+  );
+}
+
+// --- Workflow graph (WG-D, wp/wg-d-editor; ADR-0023) ---------------------------------------------
+//
+// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9): GET/PUT
+// /api/projects/:id/workflow-graph → WorkflowGraphDto, POST …/workflow-graph/validate →
+// ValidateWorkflowGraphResultDto. A PUT of a graph with an error answers 422 `workflow_invalid`.
+// The project's limits and approvals still save through PUT …/setup.
+
+export type UpdateWorkflowGraphRequest = ReturnType<typeof UpdateWorkflowGraphRequestSchema.parse>;
+
+export const workflowGraphPaths = {
+  graph: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph`,
+  validate: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph/validate`,
+} as const;
+
+export const workflowGraphSchemas = {
+  graph: WorkflowGraphDtoSchema,
+  validate: ValidateWorkflowGraphResultDtoSchema,
+} as const;
+
+/** The cached graph, workflow and setup of one project: the graph's DTO carries the setup too. */
+export function isWorkflowGraphPath(projectId: string): (key: string) => boolean {
+  const graph = workflowGraphPaths.graph(projectId);
+  const workflow = workflowPaths.workflow(projectId);
+  const setup = projectSetupPaths.setup(projectId);
+  return (key) => key.startsWith(graph) || key.startsWith(workflow) || key.startsWith(setup);
+}
+
+/** PUT /api/projects/:id/workflow-graph: the whole graph (422 `workflow_invalid` on an error). */
+export async function updateWorkflowGraph(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateWorkflowGraphRequest,
+) {
+  const path = workflowGraphPaths.graph(projectId);
+  return controlPut(
+    client,
+    path,
+    checked(UpdateWorkflowGraphRequestSchema, input, path),
+    workflowGraphSchemas.graph,
+  );
+}
+
+/** POST …/workflow-graph/validate: the server's issues for a graph, without saving it. */
+export async function validateWorkflowGraphOnServer(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateWorkflowGraphRequest,
+) {
+  const path = workflowGraphPaths.validate(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(UpdateWorkflowGraphRequestSchema, input, path),
+    workflowGraphSchemas.validate,
   );
 }
 

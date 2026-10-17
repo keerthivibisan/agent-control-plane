@@ -4,7 +4,7 @@ import {
   ProjectWorkflowDtoSchema,
   type ProjectWorkflowDto,
 } from '@acp/core/api';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   PROJECT_WORKFLOW_PATH,
@@ -13,7 +13,6 @@ import {
   stagesScenario,
 } from '../../e2e/ticket-fixtures';
 import {
-  WF_CSRF,
   WF_PROJECT_ID,
   agentFilesFixture,
   agentWorkflowDto,
@@ -22,21 +21,13 @@ import {
 import { SkillsPage } from '../../src/features/skills/SkillsPage';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import {
-  sameWorkflow,
-  workflowDraft,
-  workflowRequest,
-  workflowView,
-} from '../../src/features/workflow/draft';
-import {
   buildWorkflowGraph,
   type AgentNode,
   type HelpersNode,
   type SetupShape,
 } from '../../src/features/workflow/graph';
-import { modelPlaceholder } from '../../src/features/workflow/StagePanel';
 import { modelText } from '../../src/features/workflow/WorkflowNodes';
-import { WorkflowPage } from '../../src/features/workflow/WorkflowPage';
-import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
+import { fakeServer, renderWithApi } from '../helpers';
 
 /*
  * Redesign R-I (web): a workflow stage uses one project agent file (docs/redesign §6a, ADR-0019
@@ -156,218 +147,6 @@ describe('agent files in the graph model', () => {
       'Agent file or default',
     );
     expect(modelText({ ...base, projectModel: null }).text).toBe('Project default');
-  });
-
-  it('the model placeholder shows the agent file’s model only when it has one', () => {
-    expect(modelPlaceholder('docs-writer', files(), 'claude-sonnet-4')).toBe(
-      'From agent file: claude-haiku-4',
-    );
-    expect(modelPlaceholder('db-migrator', files(), 'claude-sonnet-4')).toBe('claude-sonnet-4');
-    expect(modelPlaceholder('docs-writer', undefined, null)).toBe('Claude Code’s default');
-    expect(modelPlaceholder(null, files(), null)).toBe('Claude Code’s default');
-  });
-});
-
-describe('agent files in the draft', () => {
-  it('round-trips a stage’s agent file and leaves it out for None', () => {
-    const saved = workflow((w) => {
-      w.stages['unit-tests'].agent = 'docs-writer';
-      w.stages.plan.agent = null;
-    });
-    const draft = workflowDraft(saved);
-    expect(draft.stages['unit-tests'].agent).toBe('docs-writer');
-    expect(draft.stages.plan.agent).toBeNull();
-    expect(draft.stages.helpers.agent).toBeNull(); // absent in the stored workflow
-    const view = workflowView(draft);
-    expect(view.stages['unit-tests']).toMatchObject({ agent: 'docs-writer' });
-    expect('agent' in view.stages.plan).toBe(false);
-    const checked = workflowRequest(draft);
-    expect(checked.ok && checked.request.stages['unit-tests'].agent).toBe('docs-writer');
-  });
-
-  it('a changed agent file is an unsaved change', () => {
-    const draft = workflowDraft(workflow());
-    const next = {
-      ...draft,
-      stages: { ...draft.stages, helpers: { ...draft.stages.helpers, agent: 'db-migrator' } },
-    };
-    expect(sameWorkflow(draft, draft)).toBe(true);
-    expect(sameWorkflow(draft, next)).toBe(false);
-  });
-});
-
-// --- Workflow page -----------------------------------------------------------------------------
-
-function server(initial: unknown, extra: RouteTable = {}) {
-  let current = parse(initial);
-  return fakeServer({
-    '/api/control/token': { token: WF_CSRF },
-    [AGENTS]: files(),
-    [WORKFLOW]: () => jsonResponse(200, current),
-    [`PUT ${WORKFLOW}`]: (body: unknown) => {
-      const b = body as Pick<ProjectWorkflowDto['workflow'], 'plannerMode' | 'stages'>;
-      current = { ...current, workflow: { ...current.workflow, ...b } };
-      return jsonResponse(200, current);
-    },
-    ...extra,
-  });
-}
-
-function renderPage(initial: unknown = defaultWorkflowDto(), extra: RouteTable = {}) {
-  const s = server(initial, extra);
-  return { server: s, ...renderWithApi(<WorkflowPage projectId={WF_PROJECT_ID} />, s) };
-}
-
-const node = (id: string) => screen.getByTestId(`wf-node-${id}`);
-const panel = () => screen.getByRole('complementary', { name: 'Stage settings' });
-const open = async (stage: string) => {
-  fireEvent.click(await screen.findByRole('button', { name: `Change ${stage}`, hidden: true }));
-};
-const picker = () =>
-  within(panel()).getByRole<HTMLSelectElement>('combobox', { name: 'Agent file' });
-const lastPut = (s: ReturnType<typeof server>) =>
-  s.calls.filter((c) => c.method === 'PUT' && c.path === WORKFLOW).at(-1)?.body as
-    ProjectWorkflowDto['workflow'] | undefined;
-
-describe('Workflow page: agent files (R-I)', () => {
-  it('the picker offers None and the project’s agent files, on every agent stage', async () => {
-    renderPage();
-    await screen.findByTestId('agent-files');
-    for (const stage of ['Plan', 'Orchestrate', 'Helpers', 'Final code review', 'Unit tests']) {
-      await open(stage);
-      const options = [...picker().options].map((o) => o.textContent);
-      expect(options).toEqual(['None', 'db-migrator', 'docs-writer']);
-      expect(picker().value).toBe('');
-      expect(within(panel()).getByText(/can only narrow what this role may do/)).toBeTruthy();
-    }
-    // ADR-0021: the review stage's review agent takes an agent file too (read-only role).
-    await open('Review & merge');
-    expect([...picker().options].map((o) => o.textContent)).toEqual([
-      'None',
-      'db-migrator',
-      'docs-writer',
-    ]);
-    expect(within(panel()).getByText(/can only narrow what this role may do/)).toBeTruthy();
-  });
-
-  it('in lead mode, Plan and Orchestrate say which file the one lead uses', async () => {
-    renderPage();
-    await screen.findByTestId('agent-files');
-    const note = /It uses Orchestrate’s agent file, or Plan’s when Orchestrate has none/;
-    await open('Plan');
-    expect(within(panel()).getByText(note)).toBeTruthy();
-    await open('Orchestrate');
-    expect(within(panel()).getByText(note)).toBeTruthy();
-    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Separate planner agent' }));
-    expect(within(panel()).queryByText(note)).toBeNull();
-    await open('Helpers');
-    expect(within(panel()).queryByText(note)).toBeNull();
-  });
-
-  it('read-only roles say they stay read-only; helpers and the tester don’t', async () => {
-    renderPage();
-    await screen.findByTestId('agent-files');
-    await open('Final code review');
-    expect(within(panel()).getByText(/stays read-only/)).toBeTruthy();
-    await open('Plan');
-    expect(within(panel()).getByText(/stays read-only/)).toBeTruthy();
-    await open('Unit tests');
-    expect(within(panel()).queryByText(/stays read-only/)).toBeNull();
-    await open('Helpers');
-    expect(within(panel()).queryByText(/stays read-only/)).toBeNull();
-    expect(
-      within(panel()).getByRole('link', { name: 'Open Skills & Agents' }).getAttribute('href'),
-    ).toBe(`#/p/${WF_PROJECT_ID}/skills?tab=agents`);
-  });
-
-  it('choosing a file shows the chip at once and saves it; None removes it', async () => {
-    const { server: s } = renderPage();
-    await screen.findByTestId('agent-files');
-    await open('Helpers');
-    expect(within(node('helpers')).queryByTestId('node-agent')).toBeNull();
-    fireEvent.change(picker(), { target: { value: 'docs-writer' } });
-    const chip = within(node('helpers')).getByTestId('node-agent');
-    expect(chip.dataset.agent).toBe('set');
-    expect(chip.textContent).toBe('docs-writer');
-    // The file's model applies while the stage has none of its own.
-    expect(within(node('helpers')).getByTestId('node-model').textContent).toContain(
-      'claude-haiku-4 (agent file)',
-    );
-    const model = within(panel()).getByRole<HTMLInputElement>('textbox', { name: 'Model' });
-    expect(model.placeholder).toBe('From agent file: claude-haiku-4');
-    expect(within(panel()).getByText(/agent file’s model, else the project default/)).toBeTruthy();
-    // "Used by" follows the draft.
-    expect(screen.getByTestId('agent-file-docs-writer').textContent).toContain('Helpers');
-
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    expect(await within(panel()).findByTestId('saved')).toBeTruthy();
-    expect(lastPut(s)?.stages.helpers).toEqual({ model: null, skill: null, agent: 'docs-writer' });
-
-    fireEvent.change(picker(), { target: { value: '' } });
-    expect(within(node('helpers')).queryByTestId('node-agent')).toBeNull();
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(lastPut(s)?.stages.helpers).toEqual({ model: null, skill: null }));
-  });
-
-  it('a stage whose file is gone says so on the node and in the panel', async () => {
-    renderPage(agentWorkflowDto());
-    await screen.findByTestId('agent-files');
-    const chip = within(node('code-review')).getByTestId('node-agent');
-    expect(chip.dataset.agent).toBe('missing');
-    expect(chip.textContent).toContain('test-writer');
-    expect(chip.textContent).toContain('(not found)');
-    // Both chips on one node: the agent file and the skill.
-    expect(within(node('code-review')).getByTestId('node-skill').textContent).toBe('✦ code-review');
-    expect(within(node('unit-tests')).getByTestId('node-agent').dataset.agent).toBe('set');
-    await open('Final code review');
-    expect(within(panel()).getByTestId('agent-missing').textContent).toContain(
-      'Agent file not found — the agent starts without it.',
-    );
-    expect(picker().value).toBe('test-writer');
-    expect([...picker().options].map((o) => o.textContent)).toContain('test-writer (not found)');
-    // Picking an existing file clears the warning.
-    fireEvent.change(picker(), { target: { value: 'db-migrator' } });
-    expect(within(panel()).queryByTestId('agent-missing')).toBeNull();
-    expect(within(node('code-review')).getByTestId('node-agent').dataset.agent).toBe('set');
-  });
-
-  it('shows a chosen file’s problems in the panel', async () => {
-    const withProblem = files().map((f) =>
-      f.name === 'db-migrator' ? { ...f, problems: ['The front matter has no name.'] } : f,
-    );
-    renderPage(agentWorkflowDto(), { [AGENTS]: withProblem });
-    await screen.findByTestId('agent-files');
-    await open('Helpers');
-    expect(within(panel()).getByTestId('agent-problems').textContent).toContain(
-      'The front matter has no name.',
-    );
-  });
-
-  it('the agent files card lists the stages using each file; a chip opens that stage', async () => {
-    renderPage(agentWorkflowDto());
-    const card = await screen.findByTestId('agent-files');
-    const used = (name: string) =>
-      within(within(card).getByTestId(`agent-file-${name}`)).getByTestId('agent-used-by');
-    expect(used('db-migrator').dataset.used).toBe('helpers');
-    expect(used('docs-writer').dataset.used).toBe('unit-tests');
-    fireEvent.click(
-      within(used('docs-writer')).getByRole('button', { name: 'Open the Unit tests settings' }),
-    );
-    expect(panel().getAttribute('data-stage')).toBe('unit-tests');
-  });
-
-  it('while the agent files route answers 404, a named file is kept and not flagged', async () => {
-    const { server: s } = renderPage(agentWorkflowDto(), {
-      [AGENTS]: jsonResponse(404, {
-        error: { code: 'not_found', message: 'no route', requestId: 'r' },
-      }),
-    });
-    await screen.findByTestId('wf-node-plan');
-    await waitFor(() => expect(s.calls.some((c) => c.path === AGENTS)).toBe(true));
-    expect(within(node('code-review')).getByTestId('node-agent').dataset.agent).toBe('set');
-    await open('Final code review');
-    expect(picker().value).toBe('test-writer');
-    expect(within(panel()).queryByTestId('agent-missing')).toBeNull();
   });
 });
 
