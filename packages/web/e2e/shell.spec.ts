@@ -11,6 +11,13 @@ import { PROJECT_ID, TICKET_ID, fixtureProject, workingScenario } from './ticket
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
 
+// U-V: a test can end while a route handler is still in `route.fetch()` (a refetch after the last
+// reload, say); closing the page then disposes the response, and the handler's `.json()` throws
+// "Response has been disposed". Drop the routes first, ignoring a handler caught mid-way.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 interface Project {
   id: string;
   name: string;

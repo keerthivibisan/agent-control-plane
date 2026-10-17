@@ -9,6 +9,11 @@ import { CSRF, PROJECT_ID, fixtureProject } from './ticket-fixtures.js';
  */
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
+
+// U-V: a test can end while a `route.fetch()` handler is mid-way ("Response has been disposed").
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
 const BASE = `/api/projects/${PROJECT_ID}`;
 const HASH = `#/p/${PROJECT_ID}/harness`;
 const T = (min: number) => new Date(Date.UTC(2026, 9, 16, 9, min)).toISOString();

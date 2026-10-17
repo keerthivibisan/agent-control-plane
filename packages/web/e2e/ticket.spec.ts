@@ -32,6 +32,11 @@ import {
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
 
+// U-V: a test can end while a `route.fetch()` handler is mid-way ("Response has been disposed").
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 /** Lists the fixtures' project next to the server's own, so the shell knows its name. */
 async function withFixtureProject(page: Page): Promise<void> {
   await page.route(/\/api\/projects$/, async (route) => {

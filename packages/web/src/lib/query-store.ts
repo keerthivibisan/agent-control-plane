@@ -4,6 +4,13 @@ import { ApiError, type ApiClient, type Schema } from './api';
  * A tiny query cache keyed by API path (no external dependency). Components subscribe with
  * `useApiQuery`; SSE notices call `invalidate`, which refetches the affected keys in place while the
  * previous data stays on screen.
+ *
+ * At most one request per key is in flight. Notices come in bursts, and aborting a request only
+ * stops the browser waiting: the server still runs it. Restarting on every notice sent the server
+ * several copies of the same request at once, and some routes can't run twice at the same time
+ * (a run's review stages the helper's worktree, and two `git add` calls collide on its index).
+ * So a notice during a request marks the key stale, and it is fetched once more when the request
+ * ends: the data is as fresh as before, with no overlap.
  */
 export interface QueryState<T> {
   data: T | undefined;
@@ -16,9 +23,10 @@ interface Entry {
   state: QueryState<unknown>;
   schema: Schema<unknown>;
   listeners: Set<() => void>;
-  controller: AbortController | null;
-  /** Incremented per request so a slow, superseded response can't overwrite a newer one. */
-  generation: number;
+  /** True while a request for this key is in flight. */
+  inFlight: boolean;
+  /** Invalidated while in flight: fetch again once the current request ends. */
+  stale: boolean;
 }
 
 const INITIAL: QueryState<never> = Object.freeze({ data: undefined, error: null, fetching: true });
@@ -48,8 +56,8 @@ export class QueryStore {
         state: INITIAL,
         schema,
         listeners: new Set(),
-        controller: null,
-        generation: 0,
+        inFlight: false,
+        stale: false,
       };
       this.entries.set(key, entry);
       entry.listeners.add(listener);
@@ -71,6 +79,8 @@ export class QueryStore {
     for (const [key, entry] of [...this.entries]) {
       if (!match(key)) continue;
       if (entry.listeners.size > 0) void this.fetch(key);
+      // In flight: the request's end refetches or forgets it, so two never overlap.
+      else if (entry.inFlight) entry.stale = true;
       else this.entries.delete(key);
     }
   }
@@ -87,22 +97,34 @@ export class QueryStore {
   private async fetch(key: string): Promise<void> {
     const entry = this.entries.get(key);
     if (!entry) return;
-    entry.controller?.abort();
-    const controller = new AbortController();
-    entry.controller = controller;
-    const generation = ++entry.generation;
-    if (!entry.state.fetching) this.set(entry, { ...entry.state, fetching: true });
-    try {
-      const data = await this.client.get(key, entry.schema, controller.signal);
-      if (entry.generation !== generation) return;
-      this.set(entry, { data, error: null, fetching: false });
-    } catch (e) {
-      if (entry.generation !== generation) return;
-      if (e instanceof DOMException && e.name === 'AbortError') return;
-      // Keep the last good data visible next to the error, so a failed refetch is shown, not hidden.
-      this.set(entry, { data: entry.state.data, error: toApiError(key, e), fetching: false });
-    } finally {
-      if (entry.controller === controller) entry.controller = null;
+    if (entry.inFlight) {
+      entry.stale = true;
+      return;
     }
+    entry.inFlight = true;
+    entry.stale = false;
+    if (!entry.state.fetching) this.set(entry, { ...entry.state, fetching: true });
+    let next: QueryState<unknown>;
+    try {
+      const data = await this.client.get(key, entry.schema);
+      next = { data, error: null, fetching: false };
+    } catch (e) {
+      // Keep the last good data visible next to the error, so a failed refetch is shown, not hidden.
+      next = { data: entry.state.data, error: toApiError(key, e), fetching: false };
+    }
+    entry.inFlight = false;
+    if (!entry.stale) {
+      this.set(entry, next);
+      return;
+    }
+    // Invalidated meanwhile: show this answer and fetch again while something watches the key;
+    // with nobody watching, forget it as `invalidate` would have.
+    entry.stale = false;
+    if (entry.listeners.size === 0) {
+      if (this.entries.get(key) === entry) this.entries.delete(key);
+      return;
+    }
+    this.set(entry, { ...next, fetching: true });
+    void this.fetch(key);
   }
 }
