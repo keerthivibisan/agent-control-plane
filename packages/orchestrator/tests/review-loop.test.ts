@@ -17,7 +17,6 @@ import {
   ticketBranchCreated,
   viewChangeReply,
 } from '../src/index.js';
-import type { RunState } from '../src/index.js';
 import {
   LEAD,
   PROJECT,
@@ -33,8 +32,11 @@ import {
   submitPlanFor,
 } from './helpers.js';
 import {
+  A,
   BRANCH,
   COMMIT,
+  RA,
+  inDecision,
   KEY,
   changeOf,
   createLoopRun,
@@ -52,21 +54,11 @@ import { workflow } from './workflow-helpers.js';
 
 /** The review loop (ADR-0021 §3, docs/review-loop/README.md §5). Synthetic data only. */
 
-const A = 'wa-1';
 const B = 'wb-1';
-const RA = 'rv-1';
 
 function refusalOf<T>(r: { ok: true } | { ok: false; refusal: T }): T {
   if (r.ok) throw new Error('expected a refusal');
   return r.refusal;
-}
-
-/** A loop run with helper A whose change waits for the lead's decision (verdict approve). */
-function inDecision(o: Parameters<typeof loopRunning>[0] = {}): RunState {
-  const s = readyForReview(helper(loopRunning(o), 'API builder', 'wa'), A);
-  return ok(
-    leadTool(s, 'submit_review', { verdict: 'approve', findings: 'Looks right.' }, 'sr', RA),
-  ).state;
 }
 
 describe('creating a loop run', () => {

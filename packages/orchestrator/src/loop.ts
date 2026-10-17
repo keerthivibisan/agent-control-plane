@@ -163,10 +163,6 @@ export function stoppedWithoutReview(agent: EngineAgent): void {
   };
 }
 
-function roleOf(agent: EngineAgent): string {
-  return agent.role;
-}
-
 /**
  * Runs after every command of a loop run (from `Draft.reconcile`), while the run is RUNNING,
  * BLOCKED or REVIEW:
@@ -181,7 +177,7 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
     if (agent?.change?.state !== 'decision') continue;
     notifyLead(
       d,
-      `${roleOf(agent)} (agentId ${agent.id}) stopped before finishing. Its work so far waits for your decision: merge_change or discard_change (a stopped helper cannot rework).`,
+      `${agent.role} (agentId ${agent.id}) stopped before finishing. Its work so far waits for your decision: merge_change or discard_change (a stopped helper cannot rework).`,
     );
   }
   for (const agent of changeAgents(d)) {
@@ -192,7 +188,7 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
     change.state = 'decision';
     notifyLead(
       d,
-      `The review agent for ${roleOf(agent)}'s change (agentId ${agent.id}) ended without a verdict. Decide yourself: view_change, then merge_change, request_rework, discard_change or ask_owner.`,
+      `The review agent for ${agent.role}'s change (agentId ${agent.id}) ended without a verdict. Decide yourself: view_change, then merge_change, request_rework, discard_change or ask_owner.`,
     );
   }
   if (!leadCanDecide(d)) {
@@ -236,7 +232,7 @@ function assignReviewers(d: Draft): void {
       emitRound(d, helper);
       notifyLead(
         d,
-        `${roleOf(helper)}'s change (agentId ${helper.id}) is ready for your review${change.round > 0 ? ` after rework round ${change.round}` : ''}. Use view_change to see it, then merge_change, request_rework, discard_change or ask_owner.`,
+        `${helper.role}'s change (agentId ${helper.id}) is ready for your review${change.round > 0 ? ` after rework round ${change.round}` : ''}. Use view_change to see it, then merge_change, request_rework, discard_change or ask_owner.`,
       );
       continue;
     }
