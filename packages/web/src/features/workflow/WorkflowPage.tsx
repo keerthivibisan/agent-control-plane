@@ -1,13 +1,11 @@
 import type { WorkflowStageId } from '@acp/core';
 import type { ProjectWorkflowDto } from '@acp/core/api';
-import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { AlertIcon, CheckIcon, CloseIcon } from '../../components/icons';
-import { enter, fadeUp } from '../../components/motion';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
@@ -185,8 +183,9 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
               <p className="max-w-60 text-dim">{P.empty}</p>
             </div>
           ) : (
-            // Each stage's settings arrive with a short fade, so switching stages reads as a change.
-            <motion.div key={selected} {...enter(fadeUp)}>
+            // Each stage's settings arrive with a short rise and fade, so switching stages reads as a
+            // change. A CSS animation (index.css), so reduced motion stops it and it costs no JS.
+            <div key={selected} className="animate-dialog-in">
               <div className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-4">
                 <StageHeading stage={selected} workflow={workflow} />
                 <button
@@ -213,7 +212,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
                   onLimits={changeLimits}
                 />
               </div>
-            </motion.div>
+            </div>
           )}
           {dirty || justSaved || saveWorkflow.error || saveSetup.error ? (
             <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-card border-t border-line bg-panel/90 px-5 py-3.5 backdrop-blur-md">
