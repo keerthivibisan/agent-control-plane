@@ -11,7 +11,7 @@ import {
 import { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
-import { stageAgentFor, stageModelFor } from './stages.js';
+import { programOf } from './program.js';
 import type { EngineAgent, EngineContext, EngineResult, FollowUpState, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
@@ -166,8 +166,8 @@ export function followUpChat(
         aborting: false,
       },
     };
-    const model = stageModelFor(d.workflow, 'lead');
-    const agent = stageAgentFor(d.workflow, 'lead');
+    // The lead node's model and agent file (no skills: answers only).
+    const { model, agent } = programOf(d).lead;
     d.effects.push({ type: 'chat-message', role: 'owner', text: message });
     d.effects.push({
       type: 'start-follow-up',

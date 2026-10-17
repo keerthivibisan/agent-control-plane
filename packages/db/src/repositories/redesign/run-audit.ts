@@ -5,11 +5,11 @@ import {
   ProjectWorkflowSchema,
   ReworkRoundsSchema,
   TicketBranchNameSchema,
-  WorkflowStageIdSchema,
+  WorkflowNodeIdSchema,
   type ChangeReviewerMode,
   type ProjectApprovals,
   type ProjectWorkflow,
-  type WorkflowStageId,
+  type WorkflowNodeId,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
 import type { RepositoryContext } from '../../internal/context.js';
@@ -146,7 +146,8 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
     return { success: true as const, data: snapshot };
   },
 };
-const StageParser = nullable(WorkflowStageIdSchema);
+// ADR-0023: a node id of the run's workflow graph (version 1 stage ids are node ids too).
+const StageParser = nullable(WorkflowNodeIdSchema);
 
 export interface RunAuditRepository {
   /** `not_found` for an unknown approval. Null clears it (pending, or closed by the engine). */
@@ -158,9 +159,9 @@ export interface RunAuditRepository {
   /** Null when the run has no snapshot (Phase 3/4 rows: the engine's defaults apply). */
   getRunSnapshot(runId: string): StoredRunSnapshot | null;
   /** `not_found` for an unknown agent run. */
-  setAgentStage(agentRunId: string, stage: WorkflowStageId | null): void;
+  setAgentStage(agentRunId: string, stage: WorkflowNodeId | null): void;
   /** Agent run id → stage, for every agent of the run (null for Phase 3/4 agents). */
-  agentStagesForRun(runId: string): Map<string, WorkflowStageId | null>;
+  agentStagesForRun(runId: string): Map<string, WorkflowNodeId | null>;
 }
 
 export function createRunAuditRepository(ctx: RepositoryContext): RunAuditRepository {

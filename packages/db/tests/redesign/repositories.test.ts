@@ -174,7 +174,7 @@ describe('run audit repository (R-G)', () => {
         [helper.id, 'helpers'],
       ]),
     );
-    const wrong = 'qa' as unknown as 'helpers';
+    const wrong = 'Not a node id';
     expect(thrown(() => audit.setAgentStage(helper.id, wrong))).toMatchObject({
       code: 'invalid_input',
     });

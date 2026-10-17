@@ -1,7 +1,9 @@
+import { defaultProjectWorkflow, migrateWorkflowV1 } from '@acp/core';
+import { effectiveMode } from '../../src/index.js';
 import type { EngineAgent, RunState } from '../../src/index.js';
 import type { GoldenCase } from './cases.js';
 import { SCRIPTS } from './scripts.js';
-import { SIM_LEAD, SIM_RUN, simulate } from './sim.js';
+import { SIM_LEAD, SIM_PROJECT, SIM_RUN, simulate } from './sim.js';
 import type { SimConfig, SimHooks, SimResult } from './sim.js';
 import { IdNames, effectLine, finalLines, shortText, stateDiff, traceDigest } from './trace.js';
 
@@ -45,4 +47,53 @@ export function goldenTrace(
 /** The mode the server used before WG-B: the run's snapshotted policy, for every agent. */
 export function runModeOf(state: RunState, _agent: EngineAgent) {
   return state.approvalPolicy?.mode;
+}
+
+/**
+ * The same case as a graph run: the run's version 1 workflow, with the run's review settings,
+ * migrated with `migrateWorkflowV1` and passed as `graph` with the context a v1 run compiles
+ * with. The run gets no v1 `workflow` snapshot, so only the graph decides.
+ */
+export function asGraphRun(config: SimConfig): SimConfig {
+  const base = config.workflow ?? defaultProjectWorkflow(SIM_PROJECT, '2026-10-11T09:00:00.000Z');
+  const loop = config.loop;
+  const workflow =
+    loop === undefined
+      ? base
+      : {
+          ...base,
+          stages: {
+            ...base.stages,
+            review: {
+              ...base.stages.review,
+              reviewer: loop.reviewer,
+              maxReworkRounds: loop.rounds,
+            },
+          },
+        };
+  const projectMode = config.approvals?.mode ?? 'manual';
+  const limits = config.limits ?? { maxConcurrentHelpers: 3, maxDepth: 1 };
+  return {
+    ...config,
+    omitWorkflow: true,
+    extra: {
+      ...config.extra,
+      graph: migrateWorkflowV1(workflow, { projectMode }),
+      graphContext: {
+        projectMode,
+        approvalCeilings: [],
+        maxConcurrentHelpers: limits.maxConcurrentHelpers,
+      },
+    },
+  };
+}
+
+/** A graph run's launch fields that version 1 runs never carry (ADR-0023 §5). */
+export function withoutGraphLaunchFields(trace: string): string {
+  return trace.replace(/ autoMode=true/g, '').replace(/ sandbox=true/g, '');
+}
+
+/** The mode the server uses since WG-B: the agent's own (`effectiveMode`). */
+export function agentModeOf(state: RunState, agent: EngineAgent) {
+  return effectiveMode(state, agent);
 }

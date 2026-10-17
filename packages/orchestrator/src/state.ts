@@ -16,8 +16,10 @@ import type {
   ProjectWorkflow,
   ReviewScope,
   ReviewState,
+  CompileContext,
   TicketPlan,
-  WorkflowStageId,
+  WorkflowGraph,
+  WorkflowNodeId,
 } from '@acp/core';
 import type { z } from 'zod';
 import type { Refusal } from './errors.js';
@@ -46,12 +48,14 @@ export interface EngineAgent extends AgentRun {
    */
   awaitingHelpers?: boolean;
   /**
-   * The workflow stage this agent works in (ADR-0019), set for every agent of a ticket run:
-   * `plan` (planner), `orchestrate` (lead), `helpers` (workers at any depth), `code-review`
-   * (reviewer), `unit-tests` (tester). Absent for Phase 3 control-panel runs (`agent_runs.stage`
-   * null). In `lead` planner mode the lead also covers `plan`; `deriveRunWorkflow` shows that.
+   * The workflow node this agent works for (ADR-0019, ADR-0023: a node id of the run's graph), set
+   * for every agent of a ticket run. A version 1 run's graph keeps the old stage ids: `plan`
+   * (planner), `orchestrate` (lead), `helpers` (workers), `review` (change reviewers),
+   * `code-review` (final reviewer), `unit-tests` (tester). A helper of a helper belongs to its
+   * parent's node. Absent for Phase 3 control-panel runs (`agent_runs.stage` null). When the lead
+   * also plans, `deriveRunWorkflow` shows it on `plan` too.
    */
-  stage?: WorkflowStageId;
+  stage?: WorkflowNodeId;
   /** Reviewer only: how many findings it posted with `post_review` (a count, never the text). */
   reviewPosts?: number;
   /**
@@ -96,6 +100,12 @@ export interface EngineChange {
   merging: boolean;
   /** The helper's last turn ended with an error; its change still goes through the loop. */
   turnFailed: boolean;
+  /**
+   * ADR-0023 §4, review route "direct": how many of `round` were sent back by the change reviewer
+   * itself (the rest by the lead or the owner). Absent means none. In memory with the live run,
+   * like `verdict`.
+   */
+  reviewerRounds?: number;
 }
 
 /**
@@ -215,6 +225,19 @@ export interface RunState {
    * engine re-checks each pre-approval against it. Absent: the legacy project allowlist.
    */
   approvalPolicy?: ProjectApprovals;
+  /**
+   * The workflow graph the run follows (ADR-0023), snapshotted at creation with the context it is
+   * compiled with. Absent: a version 1 run, which compiles its `workflow` migrated
+   * (`programOf`). The program itself is never stored.
+   */
+  graph?: WorkflowGraph;
+  /** The context `graph` compiles with (project mode, ticket and run ceilings, overrides). */
+  graphContext?: CompileContext;
+  /**
+   * ADR-0023 §7: the helper node each step of a submitted plan resolved to, by plan id, in step
+   * order. Used for the lead's brief of the approved plan. In memory with the live run.
+   */
+  planStepHelpers?: Readonly<Record<string, readonly WorkflowNodeId[]>>;
 }
 
 /** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
@@ -299,6 +322,18 @@ export type EngineEffect =
        * ticket branch instead of the project's base branch.
        */
       fromBranch?: string;
+      /**
+       * ADR-0023 §5, runs with a graph only (version 1 runs keep the run-level Full auto, which
+       * `agentLaunchMode` also answers): true when this helper or tester runs in Claude Code's
+       * auto mode, because its node's mode for this run is Full auto.
+       */
+      autoMode?: boolean;
+      /**
+       * ADR-0023 §5, runs with a graph only: true when this helper's or tester's commands run in
+       * the operating-system sandbox. Set for a node configured as Full auto even when the ticket
+       * or run tightened its mode: tightening never removes a protection.
+       */
+      sandbox?: boolean;
     }
   /**
    * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout and start

@@ -1,9 +1,10 @@
-import type { RunStatus } from '@acp/core';
+import type { ProgramHelperNode, RunStatus } from '@acp/core';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
-import { countsAsHelper, hasReviewableChange } from './stages.js';
+import { helperNodeOf, programOf } from './program.js';
+import { countsAsHelper, hasReviewableChange, stageOf } from './stages.js';
 import { agentDepth } from './tree.js';
 import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 import type { EngineAgent, RunState } from './state.js';
@@ -60,7 +61,25 @@ export function checkPlanApproved(status: RunStatus): Refusal | null {
  */
 export function mayStartHelpers(state: RunState, agent: EngineAgent): boolean {
   if (agent.kind !== 'lead' && agent.kind !== 'worker') return false;
-  return agentDepth(state, agent) + 1 <= runLimits(state).maxDepth;
+  if (agentDepth(state, agent) + 1 > runLimits(state).maxDepth) return false;
+  // ADR-0023 §3: a helper starts helpers of its own only when its node allows it.
+  return agent.kind === 'lead' || helperNodeOf(programOf(state), agent)?.canStartHelpers === true;
+}
+
+/**
+ * ADR-0023 §7: a helper node's own limit, on top of the run's helper limit. Live helpers of the
+ * node count, its helpers' helpers too (they belong to their parent's node); one waiting for its
+ * change to be decided has no process and no slot.
+ */
+export function checkNodeInstances(state: RunState, node: ProgramHelperNode): Refusal | null {
+  const live = state.agents.filter(
+    (a) => a.kind === 'worker' && isActiveAgentStatus(a.status) && stageOf(a) === node.id,
+  ).length;
+  if (live < node.maxInstances) return null;
+  return refusal(
+    'too-many-agents',
+    `At most ${node.maxInstances} of ${node.label} can work at once; wait for one to finish.`,
+  );
 }
 
 /**

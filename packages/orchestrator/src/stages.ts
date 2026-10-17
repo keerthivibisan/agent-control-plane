@@ -4,17 +4,21 @@ import type {
   OrchestrationRun,
   ProjectWorkflow,
   TicketPlan,
+  WorkflowNodeId,
+  WorkflowProgram,
   WorkflowStageId,
 } from '@acp/core';
 import { approvedPlan } from './plan-read.js';
+import { programNode, programOf } from './program.js';
+import type { ProgramView } from './program.js';
 import type { EngineAgent, RunIntegration } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
- * Workflow stages (ADR-0019): plan → orchestrate → helpers → review → code-review → unit-tests.
- * Pure reads over a run's state and its workflow snapshot. The first four stages always run, as
- * in Phase 4; the two post-merge stages run when the project switched them on and at least one
- * helper's change was merged.
+ * Workflow stages (ADR-0019), driven by the run's compiled program since ADR-0023: who plans, the
+ * final stages in their order, and each node's launch fields. Pure reads over a run's state and
+ * its snapshot. A version 1 run's program is its workflow migrated, so it runs plan → orchestrate
+ * → helpers → review → code-review → unit-tests exactly as before.
  */
 
 /**
@@ -24,7 +28,7 @@ import { isLiveAgentStatus } from './transitions.js';
 interface AgentsView {
   readonly agents: readonly EngineAgent[];
 }
-interface WorkflowView {
+interface WorkflowView extends ProgramView {
   readonly workflow?: ProjectWorkflow | undefined;
 }
 interface BriefView extends AgentsView {
@@ -33,8 +37,11 @@ interface BriefView extends AgentsView {
   readonly integration?: RunIntegration | undefined;
 }
 
-/** The stages that start an agent after the owner merged the helpers' work. */
-export type PostMergeStage = 'code-review' | 'unit-tests';
+/**
+ * The final stage that starts next (a node id). Version 1 runs: `code-review` or `unit-tests`.
+ * @deprecated Use `WorkflowNodeId`; kept so existing imports compile.
+ */
+export type PostMergeStage = WorkflowNodeId;
 
 /** The stage each role works in. Every agent of a ticket run records it (`EngineAgent.stage`). */
 export const ROLE_STAGE: Readonly<Record<AgentRoleKind, WorkflowStageId>> = Object.freeze({
@@ -45,17 +52,17 @@ export const ROLE_STAGE: Readonly<Record<AgentRoleKind, WorkflowStageId>> = Obje
   tester: 'unit-tests',
 });
 
-/** The agent's recorded stage, or the stage of its role (rows stored before stages existed). */
-export function stageOf(agent: Pick<EngineAgent, 'kind' | 'stage'>): WorkflowStageId {
+/** The agent's recorded node, or the stage of its role (rows stored before stages existed). */
+export function stageOf(agent: Pick<EngineAgent, 'kind' | 'stage'>): WorkflowNodeId {
   return agent.stage ?? ROLE_STAGE[agent.kind];
 }
 
-/** `separate` planner mode: a planner writes the plan and the lead only orchestrates. */
+/** A planner writes the plan and the lead only orchestrates (the program has a planner node). */
 export function isSeparatePlanner(state: WorkflowView): boolean {
-  return state.workflow?.plannerMode === 'separate';
+  return programOf(state).planner !== null;
 }
 
-/** The agent that writes and revises the plan: the planner in separate mode, else the lead. */
+/** The agent that writes and revises the plan: the planner when there is one, else the lead. */
 export function planningAgent(state: AgentsView & WorkflowView): EngineAgent | undefined {
   const kind: AgentRoleKind = isSeparatePlanner(state) ? 'planner' : 'lead';
   return state.agents.find((a) => a.kind === kind);
@@ -102,42 +109,52 @@ export function anyHelperMerged(state: AgentsView): boolean {
   return state.agents.some((a) => a.kind === 'worker' && a.review === 'merged');
 }
 
-/** The last stage agent of a kind; change reviewers (ADR-0021) are not the code-review stage. */
-function lastOfKind(state: AgentsView, kind: AgentRoleKind): EngineAgent | undefined {
-  const all = state.agents.filter((a) => a.kind === kind && !isChangeReviewer(a));
-  return all[all.length - 1];
-}
-
 /**
- * The post-merge stage that should start next, or null when none is left. Only meaningful once
- * no agent of the run is live and every change is reviewed.
- * - code-review (when on): until a reviewer has run. A reviewer interrupted by a restart
- *   (NEEDS_REVIEW) never posted its review, so the stage is offered again; it starts only with the
- *   owner's `continueStages`.
- * - unit-tests (when on), after code-review: until a tester has run. A tester's own change is then
- *   reviewed like a helper's, and an interrupted tester's change too, so it is never re-run.
+ * The final stage (a final reviewer or tester node) that should start next, or null when none is
+ * left, walking `program.finalStages` in order. Only meaningful once no agent of the run is live
+ * and every change is reviewed.
+ * - a final reviewer: until one has run for that node. One interrupted by a restart
+ *   (NEEDS_REVIEW) never posted its review, so the stage is offered again; it starts only with
+ *   the owner's `continueStages`.
+ * - a tester: until one has run for that node. Its change is then reviewed like a helper's, and
+ *   an interrupted tester's change too, so it is never re-run.
  * Nothing runs when no helper's change was merged: there is nothing to review or test.
  */
-export function nextStage(state: AgentsView & WorkflowView): PostMergeStage | null {
-  const workflow = state.workflow;
-  if (workflow === undefined || !anyHelperMerged(state)) return null;
-  if (workflow.stages['code-review'].enabled) {
-    const reviewer = lastOfKind(state, 'reviewer');
-    if (reviewer === undefined || reviewer.status === 'NEEDS_REVIEW') return 'code-review';
-    if (isLiveAgentStatus(reviewer.status)) return null;
-  }
-  if (workflow.stages['unit-tests'].enabled && lastOfKind(state, 'tester') === undefined) {
-    return 'unit-tests';
+export function nextStage(state: AgentsView & WorkflowView): WorkflowNodeId | null {
+  if (!anyHelperMerged(state)) return null;
+  for (const node of programOf(state).finalStages) {
+    const agents = state.agents.filter(
+      (a) => a.kind === node.kind && !isChangeReviewer(a) && stageOf(a) === node.id,
+    );
+    const last = agents[agents.length - 1];
+    if (last === undefined) return node.id;
+    if (node.type === 'reviewer' && last.status === 'NEEDS_REVIEW') return node.id;
+    if (isLiveAgentStatus(last.status)) return null;
   }
   return null;
 }
 
-/** Whether the workflow has an optional stage switched on. */
+/** Whether the workflow has an optional stage switched on (version 1 workflows). */
 export function hasPostMergeStages(workflow: ProjectWorkflow | undefined): boolean {
   return (
     workflow !== undefined &&
     (workflow.stages['code-review'].enabled || workflow.stages['unit-tests'].enabled)
   );
+}
+
+/** Whether the run's program has final stages (final reviewers or testers). */
+export function hasFinalStages(state: WorkflowView): boolean {
+  return programOf(state).finalStages.length > 0;
+}
+
+/**
+ * The role name of a final stage's agent: version 1's `Reviewer` and `Tester` for the version 1
+ * node ids, else the node's label.
+ */
+export function finalStageRole(node: { id: WorkflowNodeId; kind: AgentRoleKind; label: string }) {
+  if (node.id === 'code-review') return 'Reviewer';
+  if (node.id === 'unit-tests') return 'Tester';
+  return node.label.slice(0, 60);
 }
 
 // ------------------------------------------------------------------ skills and models
@@ -298,6 +315,28 @@ export function launchFields(
 }
 
 /**
+ * The launch fields of a `start-agent` effect for an agent of `nodeId` (ADR-0023 §3): the prompt
+ * with one line per node skill, plus `model`, `skills` and `agent` only when the node sets them.
+ * The model's precedence is unchanged: the node's model, else its agent file's (the server reads
+ * the file, `resolveAgentModel`), else the project's.
+ */
+export function launchFieldsFor(
+  program: WorkflowProgram,
+  nodeId: WorkflowNodeId,
+  prompt: string,
+): { prompt: string; model?: string; skills?: string[]; agent?: string } {
+  const node = programNode(program, nodeId);
+  if (node === undefined) return { prompt };
+  const skills = [...node.skills];
+  return {
+    prompt: skills.length === 0 ? prompt : `${prompt}\n\n${skills.map(skillLine).join('\n')}`,
+    ...(node.model !== null ? { model: node.model } : {}),
+    ...(skills.length > 0 ? { skills } : {}),
+    ...(node.agent !== null ? { agent: node.agent } : {}),
+  };
+}
+
+/**
  * The launch fields of a change reviewer (ADR-0021 §3): the review stage's model, skill and agent
  * file (`reviewStageOf`), present only when set, like `launchFields`.
  */
@@ -380,6 +419,7 @@ export function changeReviewerBrief(
   state: BriefView,
   helper: Pick<EngineAgent, 'role' | 'task'>,
   round: number,
+  direct = false,
 ): string {
   const task = helper.task ?? '(no task text)';
   return [
@@ -387,6 +427,8 @@ export function changeReviewerBrief(
     `The helper "${helper.role}" was asked to: ${task.length <= BRIEF_TASK_MAX_CHARS ? task : `${task.slice(0, BRIEF_TASK_MAX_CHARS - 1)}…`}`,
     ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     'Your working folder is a temporary read-only checkout of the change. Read the changed code and judge whether it does the task correctly and safely: bugs, risky changes, missing tests, unclear code. You cannot edit files or run commands.',
-    'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They go to the lead, who decides, and become a comment on the ticket. Your verdict is advice; it does not merge or block anything. Then you are done.',
+    direct
+      ? 'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They become a comment on the ticket. "rework" sends the change straight back to the helper with your findings (while rework rounds are left); "approve" passes it to the lead, who merges or decides. You never merge anything. Then you are done.'
+      : 'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They go to the lead, who decides, and become a comment on the ticket. Your verdict is advice; it does not merge or block anything. Then you are done.',
   ].join('\n\n');
 }

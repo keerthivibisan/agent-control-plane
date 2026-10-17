@@ -7,14 +7,21 @@ import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
 import { submitPlan } from './plan.js';
-import { checkRunActive, checkStartAgent, isAgentOverBudget, mayStartHelpers } from './policy.js';
+import {
+  checkNodeInstances,
+  checkRunActive,
+  checkStartAgent,
+  isAgentOverBudget,
+  mayStartHelpers,
+} from './policy.js';
+import { helperNodeOf, programOf, resolveHelper } from './program.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
 import {
   hasReviewableChange,
   isChangeReviewer,
   isSeparatePlanner,
-  launchFields,
+  launchFieldsFor,
 } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
@@ -181,13 +188,31 @@ export function leadToolCall(
     case 'start_agent': {
       const parsed = LeadToolInputs.start_agent.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const { role, task } = parsed.data;
+      const { role, task, helper } = parsed.data;
       const policyRefusal = checkStartAgent(state, caller.id, call.registeredProjectIds);
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
+      // ADR-0023 §7: the helper node to start. A helper's own helpers belong to its node.
+      const program = programOf(state);
+      const resolved =
+        caller.kind === 'worker'
+          ? (() => {
+              const node = helperNodeOf(program, caller);
+              return node === undefined
+                ? ({ ok: false, message: 'This workflow has no helper node.' } as const)
+                : ({ ok: true, node } as const);
+            })()
+          : resolveHelper(program, { helper, role });
+      if (!resolved.ok) {
+        return { ok: false, refusal: refusal('invalid-input', resolved.message) };
+      }
+      const node = resolved.node;
+      const instanceRefusal = checkNodeInstances(state, node);
+      if (instanceRefusal !== null) return { ok: false, refusal: instanceRefusal };
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
-        // Depth of the new helper: one below its caller.
-        const canStartHelpers = agentDepth(d, caller) + 2 <= runLimits(d).maxDepth;
+        // Depth of the new helper: one below its caller; its node must allow helpers of its own.
+        const canStartHelpers =
+          node.canStartHelpers && agentDepth(d, caller) + 2 <= runLimits(d).maxDepth;
         const worker: EngineAgent = {
           id,
           runId: d.run.id,
@@ -204,8 +229,8 @@ export function leadToolCall(
           latestActivity: null,
           review: null,
           reportedCostUsd: null,
-          // Ticket runs record each agent's stage (ADR-0019); helpers of helpers are helpers too.
-          ...(d.run.ticketId !== null ? { stage: 'helpers' as const } : {}),
+          // Ticket runs record each agent's node (ADR-0019, ADR-0023).
+          ...(d.run.ticketId !== null ? { stage: node.id } : {}),
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
@@ -216,9 +241,10 @@ export function leadToolCall(
           agentRunId: id,
           kind: 'worker',
           role,
-          ...launchFields(task, d.workflow, 'worker'),
+          ...launchFieldsFor(program, node.id, task),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
+          ...d.launchModeFields(worker),
         });
         if (d.integration !== undefined) humanized(`Started ${role}`)(d);
         return { value: `Started agent ${id} (${role}).` };

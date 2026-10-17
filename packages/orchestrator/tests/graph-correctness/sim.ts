@@ -90,6 +90,8 @@ export interface SimConfig {
   permissions?: readonly PermissionStep[];
   /** Interrupt the run once: a server restart or the owner's Stop all. */
   interrupt?: { when: 'first-ready' | 'first-helper'; kind: 'restart' | 'stop-all' };
+  /** `workflow` only words the ticket prompts; the run gets none (graph runs). */
+  omitWorkflow?: boolean;
   /** Extra `createRun` fields (the graph and its context). */
   extra?: Partial<CreateRunInput>;
   /** `start_agent.helper` per plan role (named helpers). */
@@ -311,7 +313,9 @@ export function simulate(
     budget: { maxTokensPerAgent: 100_000, softCostUsdPerRun: null },
     limits,
     ...ticketFields,
-    ...(config.workflow !== undefined ? { workflow: config.workflow } : {}),
+    ...(config.workflow !== undefined && config.omitWorkflow !== true
+      ? { workflow: config.workflow }
+      : {}),
     ...(config.loop !== undefined
       ? {
           reviewLoop: {

@@ -7,16 +7,21 @@ import {
   ReworkRoundsSchema,
   TicketBranchNameSchema,
   TokenCountsSchema,
+  WorkflowGraphInvalidError,
+  WorkflowGraphSchema,
 } from '@acp/core';
 import type {
   AllowRule,
   ChangeReviewerMode,
+  CompileContext,
   ManagedAgentEvent,
   ManagedFailureCode,
   PermissionRequest,
   ProjectApprovals,
   ProjectWorkflow,
   RunBudget,
+  WorkflowGraph,
+  WorkflowProgram,
 } from '@acp/core';
 import { recordUsage, EMPTY_LEDGER } from './budget.js';
 import { cleanSummary, Draft, DuplicateIdError, formatTokens } from './draft.js';
@@ -40,13 +45,15 @@ import {
   waitingLines,
 } from './loop.js';
 import {
-  hasPostMergeStages,
+  hasFinalStages,
   hasReviewableChange,
   isReadOnlyRole,
   isStageAgent,
-  launchFields,
+  launchFieldsFor,
   nextStage,
 } from './stages.js';
+import { effectiveMode, programOf } from './program.js';
+import { helperBriefLines } from './briefs.js';
 import type {
   EngineAgent,
   EngineApproval,
@@ -133,6 +140,18 @@ export interface CreateRunInput {
    * `StartTicketRequest.approvalMode` applied. Snapshotted; later project changes never apply.
    */
   approvals?: ProjectApprovals;
+  /**
+   * The project's workflow graph (ADR-0023), validated, snapshotted with the run and compiled with
+   * `graphContext` into the program the engine follows. Ticket runs only. Absent: the version 1
+   * `workflow` (or the default) is migrated and compiled, so the run behaves as before.
+   */
+  graph?: WorkflowGraph;
+  /**
+   * What `graph` compiles with: the project's mode, the ticket's and run's mode ceilings, the
+   * reviewer and rounds overrides, and the helper limit (which must equal `limits`). Required
+   * with `graph`.
+   */
+  graphContext?: CompileContext;
   registeredProjectIds: Iterable<string>;
 }
 
@@ -172,31 +191,69 @@ function checkLoopInputs(
 }
 
 /** Validates the workflow against its schema and the run (the engine never trusts its caller). */
-function checkWorkflow(input: CreateRunInput): Refusal | { workflow: ProjectWorkflow | undefined } {
+function checkWorkflow(
+  input: CreateRunInput,
+  limits: RunLimits,
+): Refusal | { workflow: ProjectWorkflow | undefined; graph: WorkflowGraph | undefined } {
   const ticket = input.ticket;
-  if (input.workflow === undefined) {
-    if (ticket?.plannerPrompt !== undefined) {
-      return refusal('invalid-input', 'A planner prompt needs the separate planner mode.');
+  let workflow: ProjectWorkflow | undefined;
+  if (input.workflow !== undefined) {
+    const parsed = ProjectWorkflowSchema.safeParse(input.workflow);
+    if (!parsed.success) return refusal('invalid-input', 'The project workflow is not valid.');
+    workflow = parsed.data;
+    if (workflow.projectId !== input.projectId) {
+      return refusal('invalid-input', 'The workflow belongs to another project.');
     }
-    return { workflow: undefined };
-  }
-  const parsed = ProjectWorkflowSchema.safeParse(input.workflow);
-  if (!parsed.success) return refusal('invalid-input', 'The project workflow is not valid.');
-  const workflow = parsed.data;
-  if (workflow.projectId !== input.projectId) {
-    return refusal('invalid-input', 'The workflow belongs to another project.');
-  }
-  if (ticket === undefined) {
-    return refusal('invalid-input', 'A workflow applies to ticket runs only.');
-  }
-  if (workflow.plannerMode === 'separate') {
-    if (ticket.plannerPrompt === undefined || ticket.plannerPrompt.trim().length === 0) {
-      return refusal('invalid-input', 'The planner prompt is empty.');
+    if (ticket === undefined) {
+      return refusal('invalid-input', 'A workflow applies to ticket runs only.');
     }
-  } else if (ticket.plannerPrompt !== undefined) {
-    return refusal('invalid-input', 'A planner prompt needs the separate planner mode.');
   }
-  return { workflow };
+  let graph: WorkflowGraph | undefined;
+  if (input.graph !== undefined || input.graphContext !== undefined) {
+    if (ticket === undefined) {
+      return refusal('invalid-input', 'A workflow graph applies to ticket runs only.');
+    }
+    const parsed = WorkflowGraphSchema.safeParse(input.graph);
+    if (!parsed.success || input.graphContext === undefined) {
+      return refusal('invalid-input', 'The workflow graph is not valid.');
+    }
+    if (input.graphContext.maxConcurrentHelpers !== limits.maxConcurrentHelpers) {
+      return refusal('invalid-input', "The workflow graph's helper limit is not the run's.");
+    }
+    graph = parsed.data;
+    try {
+      programOf({ graph, graphContext: input.graphContext });
+    } catch (error) {
+      if (error instanceof WorkflowGraphInvalidError) {
+        return refusal('invalid-input', error.message);
+      }
+      throw error;
+    }
+  }
+  return { workflow, graph };
+}
+
+/** The planner prompt must be there exactly when the program has a planner. */
+function checkPlannerPrompt(input: CreateRunInput, program: WorkflowProgram): Refusal | null {
+  const prompt = input.ticket?.plannerPrompt;
+  if (program.planner === null || input.ticket === undefined) {
+    return prompt === undefined
+      ? null
+      : refusal('invalid-input', 'A planner prompt needs the separate planner mode.');
+  }
+  return prompt === undefined || prompt.trim().length === 0
+    ? refusal('invalid-input', 'The planner prompt is empty.')
+    : null;
+}
+
+/** A brief with the workflow's helper nodes added (only when it has named helpers). */
+function withHelperNodes(
+  prompt: string,
+  program: WorkflowProgram,
+  who: 'lead' | 'planner' | 'lead-plans',
+): string {
+  const lines = helperBriefLines(program, who);
+  return lines.length === 0 ? prompt : `${prompt}\n\n${lines.join('\n')}`;
 }
 
 /**
@@ -223,11 +280,22 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
       return { ok: false, refusal: refusal('invalid-input', 'The lead prompt is empty.') };
     }
   }
-  const checked = checkWorkflow(input);
+  const checked = checkWorkflow(input, limits);
   if ('code' in checked) return { ok: false, refusal: checked };
-  const workflow = checked.workflow;
+  const { workflow, graph } = checked;
   const loopInputs = checkLoopInputs(input);
   if ('code' in loopInputs) return { ok: false, refusal: loopInputs };
+  const graphContext = graph === undefined ? undefined : input.graphContext;
+  const program = programOf({
+    workflow,
+    graph,
+    graphContext,
+    integration: loopInputs.integration,
+    approvalPolicy: loopInputs.approvals,
+    limits,
+  });
+  const plannerRefusal = checkPlannerPrompt(input, program);
+  if (plannerRefusal !== null) return { ok: false, refusal: plannerRefusal };
   const budget: RunBudget = input.budget ?? {
     maxTokensPerAgent: DEFAULT_AGENT_BUDGET_TOKENS,
     softCostUsdPerRun: null,
@@ -250,8 +318,8 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     review: null,
     reportedCostUsd: null,
   };
-  // Ticket runs record each agent's workflow stage (ADR-0019); Phase 3 runs have none.
-  if (ticket !== undefined) lead.stage = 'orchestrate';
+  // Ticket runs record each agent's workflow node (ADR-0019, ADR-0023); Phase 3 runs have none.
+  if (ticket !== undefined) lead.stage = program.lead.id;
   const state: RunState = {
     run: {
       id: input.runId,
@@ -275,18 +343,23 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
   const initial: RunState = { ...state, plans: [] };
   if (workflow !== undefined) initial.workflow = workflow;
   if (loopInputs.integration !== undefined) initial.integration = loopInputs.integration;
+  if (graph !== undefined && graphContext !== undefined) {
+    initial.graph = graph;
+    initial.graphContext = graphContext;
+  }
   const started = applyCommand(initial, ctx, (d) => {
     d.setRunStatus('PLANNING');
     const draftLead = d.lead();
     if (draftLead === undefined) return refusal('unknown-agent', 'The run has no lead agent.');
-    if (workflow?.plannerMode === 'separate') {
+    const plannerNode = program.planner;
+    if (plannerNode !== null) {
       // ADR-0019: the planner plans; the lead waits (QUEUED) for the approved plan.
       const planner: EngineAgent = {
         ...draftLead,
         id: d.freshId(),
         kind: 'planner',
         role: 'Planner',
-        stage: 'plan',
+        stage: plannerNode.id,
       };
       d.agents.push(planner);
       d.setAgentStatus(planner, 'STARTING');
@@ -296,7 +369,11 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
         agentRunId: planner.id,
         kind: 'planner',
         role: planner.role,
-        ...launchFields(ticket.plannerPrompt ?? '', workflow, 'planner'),
+        ...launchFieldsFor(
+          program,
+          plannerNode.id,
+          withHelperNodes(ticket.plannerPrompt ?? '', program, 'planner'),
+        ),
       });
       return done;
     }
@@ -306,7 +383,11 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
       agentRunId: draftLead.id,
       kind: 'lead',
       role: draftLead.role,
-      ...launchFields(ticket.leadPrompt, workflow, 'lead'),
+      ...launchFieldsFor(
+        program,
+        program.lead.id,
+        withHelperNodes(ticket.leadPrompt, program, 'lead-plans'),
+      ),
     });
     return done;
   });
@@ -547,14 +628,16 @@ export function requestPermission(
     }
     if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
     const toolName = cleanSummary(request.toolName, 'Tool');
-    // ADR-0021: a run with an approval policy re-checks the verdict's rule against its mode and
-    // records the rule. Runs without one keep the legacy allowlist behaviour.
+    // ADR-0021: a run with an approval policy re-checks the verdict's rule against the agent's
+    // mode (ADR-0023 §5: its node's mode for this run) and records the rule. Runs without one
+    // keep the legacy allowlist behaviour.
     const verdict = options.allowlist;
     const policy = d.approvalPolicy;
+    const mode = effectiveMode(d, agent);
     let allowRule: AllowRule | null = null;
     const preApproved =
       verdict?.allowed === true &&
-      (policy === undefined || ruleAllowedByMode(policy.mode, verdict.rule));
+      (policy === undefined || (mode !== undefined && ruleAllowedByMode(mode, verdict.rule)));
     if (verdict?.allowed === true && policy !== undefined) allowRule = verdict.rule;
     // The tester's allowlist is the helpers' (ADR-0019). The lead, planner and reviewers are never
     // pre-approved, whatever the verdict says.
@@ -866,7 +949,7 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     );
     const stageInterrupted = d.agents.some((a) => isStageAgent(a) && isLiveAgentStatus(a.status));
     // ADR-0019: after a restart no stage starts by itself; the owner continues (`continueStages`).
-    if (!cancelling && (runInterrupted || stageInterrupted) && hasPostMergeStages(d.workflow)) {
+    if (!cancelling && (runInterrupted || stageInterrupted) && hasFinalStages(d)) {
       d.stagesHeld = true;
     }
     d.settlePendingApprovals(null, 'expired', Draft.messages.deniedNoAnswer);
