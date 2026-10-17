@@ -4,16 +4,16 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 `release/0.1.0`, from `main` at `ba280d9`). Work-package branches `wp/u-<id>-<slug>` come off
 `feature/ui-refresh` and are merged back with `--ff-only` after review.
 
-| WP  | Title                                                     | After   | Status                         | Branch             | Merged |
-| --- | --------------------------------------------------------- | ------- | ------------------------------ | ------------------ | ------ |
-| U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done**                       | feature/ui-refresh | —      |
-| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | todo                           | —                  | —      |
-| U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | todo (after design checkpoint) | —                  | —      |
-| U-C | Board                                                     | U-A     | todo (after design checkpoint) | —                  | —      |
-| U-D | Ticket page                                               | U-A     | todo (after design checkpoint) | —                  | —      |
-| U-E | Workflow, Skills & Agents                                 | U-A     | todo (after design checkpoint) | —                  | —      |
-| U-F | Tokens, Harness, Sessions, projects, settings, health     | U-A     | todo (after design checkpoint) | —                  | —      |
-| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG | U-B…U-F | todo                           | —                  | —      |
+| WP  | Title                                                     | After   | Status      | Branch                 | Merged |
+| --- | --------------------------------------------------------- | ------- | ----------- | ---------------------- | ------ |
+| U-0 | Docs, dependencies, DESIGN.md v2 direction                | —       | **done**    | feature/ui-refresh     | —      |
+| U-A | Foundation: tokens, fonts, icons, primitives, motion      | U-0     | todo        | —                      | —      |
+| U-B | Shell: top bar, sidebar, switcher, palette                | U-A     | in-progress | wp/u-b-shell           | —      |
+| U-C | Board                                                     | U-A     | in-progress | wp/u-c-board           | —      |
+| U-D | Ticket page                                               | U-A     | in-progress | wp/u-d-ticket          | —      |
+| U-E | Workflow, Skills & Agents                                 | U-A     | in-progress | wp/u-e-workflow-skills | —      |
+| U-F | Tokens, Harness, Sessions, projects, settings, health     | U-A     | in-progress | wp/u-f-pages           | —      |
+| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG | U-B…U-F | todo        | —                      | —      |
 
 ## Decisions (owner, 2026-10-17)
 
@@ -37,3 +37,6 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   - Bundle: JS +10 kB, CSS +6.5 kB, fonts +52 kB.
   - Tooltip/InfoTip stay hand-built (Radix Tooltip would change tap behaviour).
   - Waiting for the owner's design checkpoint before U-B…U-F.
+- 2026-10-17 design checkpoint: the owner accepted the direction and asked for a **toggleable
+  sidebar** ("it occupies more space"). It is in U-B: an icon rail toggled by a button or ⌘B/Ctrl+B,
+  remembered per browser, auto-collapsed on narrow screens. U-B…U-F started in parallel.
