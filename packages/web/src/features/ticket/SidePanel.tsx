@@ -31,7 +31,7 @@ import { Chat, type SpeakerOf } from '../control/Chat';
 import { canChat, isAgentLive } from '../control/run-state';
 import { activityText } from '../../lib/activity';
 import { ChangeCard } from '../review-loop/ChangeCard';
-import { isReviewLoopRun } from '../review-loop/logic';
+import { canRecheckChange, isReviewLoopRun } from '../review-loop/logic';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
 import {
@@ -339,7 +339,11 @@ export function SidePanel({
   const chatInput = useRef<HTMLTextAreaElement | null>(null);
   const approvals = run.approvals.filter((a) => a.agentRunId === agent.id);
   const waiting = approvals.filter((a) => a.status === 'pending').length;
-  const pendingReview = review?.state === 'pending';
+  // A loop run's change is checked again on its sealed commit until it is decided (RL-V); a
+  // legacy run's while its review is pending.
+  const canRunAgain = isReviewLoopRun(run)
+    ? canRecheckChange(run, agent.id)
+    : review?.state === 'pending';
 
   const label = (t: PanelTab) =>
     t === 'approvals' && waiting > 0 ? (
@@ -377,7 +381,7 @@ export function SidePanel({
         <ChangesTab runId={run.id} agent={agent} review={review} checks={checks} />
       )
     ) : t === 'checks' ? (
-      <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={pendingReview} />
+      <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={canRunAgain} />
     ) : t === 'approvals' ? (
       approvals.length === 0 ? (
         <p className="text-dim">{C.approvals.none}</p>

@@ -19,7 +19,6 @@ import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { HarnessCheckList, HarnessStatusView, HarnessTicketAction } from './HarnessPanel';
 import { ApprovalModeChoice, AutoRunWarning } from '../review-loop/ApprovalsEditor';
-import { allowlistFor } from '../review-loop/logic';
 import { AgentFields, ContextPicker } from './SetupSections';
 import {
   draftFromSetup,
@@ -173,10 +172,10 @@ export function NewProjectWizard() {
         return;
       }
       setErrors({});
-      // The mode, with the legacy allowlist that matches it (the request still requires it).
+      // The mode, without the legacy allowlist (the server keeps that in step with the mode).
+      const { allowlist: _legacy, ...request } = r.request;
       const saved = await save.run(id, {
-        ...r.request,
-        allowlist: allowlistFor(approvalMode),
+        ...request,
         approvals: { mode: approvalMode, commands: [...(setup.data?.approvals?.commands ?? [])] },
       });
       if (saved !== null) setStep(4);

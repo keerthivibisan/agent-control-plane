@@ -78,8 +78,6 @@ import {
   StartTicketRequestSchema,
   TicketBranchActionRequestSchema,
   TicketBranchReviewDtoSchema,
-  type RunDetailDto,
-  type TicketBranchReviewDto,
 } from '@acp/core/api';
 
 /**
@@ -1045,9 +1043,8 @@ export const harnessHistorySchemas = {
 // --- Review loop: the ticket branch and the Start overrides (RL-D, ADR-0021) ---------------------
 //
 // GET /api/runs/:id/ticket-branch → TicketBranchReviewDto (the combined change base..tip and the
-// checks on the tip); POST the same path (CSRF) with a TicketBranchActionRequest. The POST's body
-// is not fixed by the contract: the GET's TicketBranchReviewDto or the run's RunDetailDto both
-// parse, and the page refetches the ticket and the run afterwards either way.
+// checks on the tip); POST the same path (CSRF) with a TicketBranchActionRequest, answered with the
+// branch afterwards (the same TicketBranchReviewDto). The page refetches the ticket and the run.
 
 export type StartTicketRequest = ReturnType<typeof StartTicketRequestSchema.parse>;
 export type TicketBranchActionRequest = ReturnType<typeof TicketBranchActionRequestSchema.parse>;
@@ -1060,14 +1057,6 @@ export const reviewLoopSchemas = {
   ticketBranch: TicketBranchReviewDtoSchema,
 } as const;
 
-/** Either answer the server may give to a ticket-branch action. */
-const TicketBranchActionResultSchema: Schema<TicketBranchReviewDto | RunDetailDto> = {
-  safeParse(data: unknown) {
-    const review = TicketBranchReviewDtoSchema.safeParse(data);
-    return review.success ? review : RunDetailDtoSchema.safeParse(data);
-  },
-};
-
 /** Merge, merge anyway, request changes, discard or update the run's ticket branch. */
 export async function ticketBranchAction(
   client: ApiClient,
@@ -1079,6 +1068,6 @@ export async function ticketBranchAction(
     client,
     path,
     checked(TicketBranchActionRequestSchema, input, path),
-    TicketBranchActionResultSchema,
+    TicketBranchReviewDtoSchema,
   );
 }

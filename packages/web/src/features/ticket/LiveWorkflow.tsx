@@ -288,8 +288,8 @@ export function liveGraph(
     workflow.review?.reworkRounds ?? (run.changes ?? []).reduce((n, c) => n + c.reworkRounds, 0);
   const loop = isReviewLoopRun({ changes: run.changes, ticketBranch: run.ticketBranch })
     ? {
-        reviewer: runReviewer({ changes: run.changes }, review.reviewer),
-        maxReworkRounds: runMaxRounds({ changes: run.changes }, review.maxReworkRounds),
+        reviewer: runReviewer(run, review.reviewer),
+        maxReworkRounds: runMaxRounds(run, review.maxReworkRounds),
         counts: workflow.review,
         reworkLabel: REVIEW_LOOP_COPY.graph.rework(reworkRounds),
       }

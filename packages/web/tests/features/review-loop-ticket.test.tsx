@@ -31,8 +31,11 @@ import {
 import { inReviewScenario, TICKET_ID } from '../../e2e/ticket-fixtures';
 import { roundSentence } from '../../src/features/review-loop/ChangeCard';
 import {
+  canRecheckChange,
   isReviewLoopRun,
   ownerMayDecide,
+  runMaxRounds,
+  runReviewer,
   ticketBranchMode,
 } from '../../src/features/review-loop/logic';
 import { liveGraph } from '../../src/features/ticket/LiveWorkflow';
@@ -74,7 +77,8 @@ function server(sc: LoopScenario, routes: RouteTable = {}) {
   const base = fakeServer({
     ...sc.routes,
     [`POST ${LOOP_REVIEW_PATH}`]: ok(sc.routes[LOOP_REVIEW_PATH]),
-    [`POST ${LOOP_BRANCH_PATH}`]: ok(sc.routes[LOOP_RUN_PATH]),
+    // The server answers a ticket-branch action with the branch afterwards (RL-V).
+    [`POST ${LOOP_BRANCH_PATH}`]: ok(sc.routes[LOOP_BRANCH_PATH]),
     [`POST ${LOOP_TICKET_PATH}/start`]: ok(detail),
     ...routes,
   });
@@ -522,6 +526,34 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
   });
 });
 
+describe('the Checks tab’s Run again on a review-loop run (RL-V)', () => {
+  it('is offered for a sealed, undecided change, never for a merged one', () => {
+    const run = RunDetailDtoSchema.parse(loopNeedsYouScenario().routes[LOOP_RUN_PATH]);
+    expect(canRecheckChange(run, L_UI)).toBe(true); // needs-owner
+    expect(canRecheckChange(run, L_API)).toBe(false); // merged: its worktree is gone
+    expect(canRecheckChange(run, L_LEAD)).toBe(false); // no change
+    const working = RunDetailDtoSchema.parse(loopWorkingScenario().routes[LOOP_RUN_PATH]);
+    expect(canRecheckChange(working, L_UI)).toBe(true); // under review
+  });
+
+  it('runs the checks again on the change’s commit; the merged change has no button', async () => {
+    const s = render(loopNeedsYouScenario(), {
+      [`POST ${LOOP_RUN_PATH}/agents/${L_UI}/checks`]: ok([]),
+    });
+    const need = await screen.findByTestId('changes-need-you');
+    fireEvent.click(within(need).getByRole('button', { name: 'Open' }));
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Checks' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Run checks again' }));
+    await waitFor(() => expect(mutations(s)).toHaveLength(1));
+    expect(mutations(s)[0]?.path).toBe(`${LOOP_RUN_PATH}/agents/${L_UI}/checks`);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show the API builder in the side panel' }));
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Checks' }));
+    expect(within(panel()).getByTestId('checks')).toBeTruthy();
+    expect(within(panel()).queryByRole('button', { name: 'Run checks again' })).toBeNull();
+  });
+});
+
 describe('the live graph’s review-loop additions', () => {
   const graphOf = (sc: LoopScenario) =>
     liveGraph(
@@ -537,6 +569,23 @@ describe('the live graph’s review-loop additions', () => {
     expect(g.nodes.find((n) => n.id === 'review')?.data).toMatchObject({
       loop: { reviewer: 'agent', maxReworkRounds: 2, counts: { needsOwner: 1, merged: 1 } },
     });
+  });
+
+  it('reads the run’s own reviewer and rework limit when the server sends them (RL-V)', () => {
+    const sc = withRun(loopNeedsYouScenario(), (r) => ({
+      ...r,
+      reviewer: 'lead',
+      maxReworkRounds: 4,
+    }));
+    const g = graphOf(sc);
+    expect(g.nodes.find((n) => n.id === 'review')?.data).toMatchObject({
+      loop: { reviewer: 'lead', maxReworkRounds: 4 },
+    });
+    // Without them (an older server): the rounds, then the project's settings.
+    expect(runReviewer({ changes: [] }, 'lead')).toBe('lead');
+    expect(runMaxRounds({ changes: [] }, 3)).toBe(3);
+    expect(runReviewer({ changes: [], reviewer: 'agent' }, 'lead')).toBe('agent');
+    expect(runMaxRounds({ changes: [], maxReworkRounds: 0 }, 3)).toBe(0);
   });
 
   it('a legacy run keeps its graph', () => {

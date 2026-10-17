@@ -39,6 +39,21 @@ export function isReviewLoopRun(run: Pick<RunDetailDto, 'changes' | 'ticketBranc
 }
 
 /**
+ * The Checks tab's "Run again" for a review-loop run (RL-V): the server runs the checks again on
+ * the change's sealed commit while it is undecided (its worktree is still there), so it is offered
+ * for a sealed change that is not merged, discarded or empty. A live helper (rework) is hidden by
+ * the tab itself.
+ */
+export function canRecheckChange(run: Pick<RunDetailDto, 'changes'>, agentRunId: string): boolean {
+  const change = run.changes?.find((c) => c.agentRunId === agentRunId);
+  return (
+    change !== undefined &&
+    change.headCommit !== null &&
+    !FINAL_CHANGE_STATES.includes(change.state)
+  );
+}
+
+/**
  * The legacy allowlist that matches a mode, sent alongside `approvals` because the setup request
  * still requires it: Manual pre-approves nothing; Auto edits and Auto pre-approve both (and
  * `approvalsFromLegacy` maps that back to Auto edits, so the two never disagree).
@@ -218,22 +233,30 @@ export function ticketBranchMode(
 }
 
 /**
- * Who reviews this run's changes: what its review rounds show (a review agent's round means the
- * agent), else the project's current setting. The run's own snapshot is not in the run detail.
+ * Who reviews this run's changes: the run's own snapshot (`RunDetailDto.reviewer`, RL-V); for a
+ * server without it, what its review rounds show (a review agent's round means the agent), else
+ * the project's current setting.
  */
 export function runReviewer(
-  run: Pick<RunDetailDto, 'changes'>,
+  run: Pick<RunDetailDto, 'changes' | 'reviewer'>,
   fallback: ChangeReviewerMode,
 ): ChangeReviewerMode {
+  if (run.reviewer !== undefined) return run.reviewer;
   const rounds = (run.changes ?? []).flatMap((c) => c.reviews);
   if (rounds.some((r) => r.reviewer === 'agent')) return 'agent';
   if (rounds.some((r) => r.reviewer === 'lead')) return 'lead';
   return fallback;
 }
 
-/** The run's rework limit: what its changes carry, else the project's current setting. */
-export function runMaxRounds(run: Pick<RunDetailDto, 'changes'>, fallback: number): number {
-  return run.changes?.[0]?.maxReworkRounds ?? fallback;
+/**
+ * The run's rework limit: its own snapshot (`RunDetailDto.maxReworkRounds`, RL-V), else what its
+ * changes carry, else the project's current setting.
+ */
+export function runMaxRounds(
+  run: Pick<RunDetailDto, 'changes' | 'maxReworkRounds'>,
+  fallback: number,
+): number {
+  return run.maxReworkRounds ?? run.changes?.[0]?.maxReworkRounds ?? fallback;
 }
 
 /** "abc1234": a commit as people read it. */

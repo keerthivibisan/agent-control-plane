@@ -1671,6 +1671,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         checks: store.loopRepos.checkCommits.listForRun(runId),
         maxReworkRounds: integration.maxReworkRounds,
       });
+      dto.reviewer = integration.reviewer;
+      dto.maxReworkRounds = integration.maxReworkRounds;
     }
     return dto;
   }

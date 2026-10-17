@@ -112,7 +112,6 @@ describe('New project wizard (#/projects/new)', () => {
       maxDepth: 2,
       defaultBudgetTokensPerAgent: 250_000,
       model: null,
-      allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
       approvals: { mode: 'auto-edits', commands: [] },
       contextFiles: ['CLAUDE.md', 'AGENTS.md'],
     });

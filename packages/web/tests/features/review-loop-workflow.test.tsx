@@ -186,15 +186,15 @@ describe('approvals in the setup request', () => {
     }
   });
 
-  it('a setup with approvals always sends them, with the matching allowlist', () => {
+  it('a setup with approvals always sends them, without the legacy allowlist (RL-V)', () => {
     const setup = setupFixture({
       approvals: { mode: 'auto', commands: [{ argv: ['npm', 'test'], match: 'exact' }] },
     }) as never;
     const r = setupRequest(setup, limitsDraft(setup));
     expect(r.ok && r.request).toMatchObject({
-      allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
       approvals: { mode: 'auto', commands: [{ argv: ['npm', 'test'], match: 'exact' }] },
     });
+    expect(r.ok && 'allowlist' in r.request).toBe(false);
   });
 });
 
@@ -292,8 +292,9 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
     fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     await within(panel()).findByTestId('saved');
     expect(puts(s, WORKFLOW)).toHaveLength(0);
+    // RL-V: no legacy allowlist with the approvals (the server keeps it in step).
+    expect(puts(s, SETUP)[0]?.body).not.toHaveProperty('allowlist');
     expect(puts(s, SETUP)[0]?.body).toMatchObject({
-      allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
       approvals: {
         mode: 'auto',
         commands: [
@@ -317,8 +318,8 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
     expect(within(editor).getByText('Kept for Auto mode; not used in this mode.')).toBeTruthy();
     fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
     await within(panel()).findByTestId('saved');
+    expect(puts(s, SETUP)[0]?.body).not.toHaveProperty('allowlist');
     expect(puts(s, SETUP)[0]?.body).toMatchObject({
-      allowlist: { editInOwnWorktree: false, runHarnessChecks: false },
       approvals: { mode: 'manual', commands: [{ argv: ['npm', 'test'], match: 'exact' }] },
     });
   });

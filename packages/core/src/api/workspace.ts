@@ -109,7 +109,12 @@ export const UpdateProjectSetupRequestSchema = z.object({
   maxDepth: z.number().int().min(1).max(HARD_MAX_DEPTH),
   defaultBudgetTokensPerAgent: z.number().int().positive(),
   model: z.string().min(1).max(100).nullable(),
-  allowlist: ProjectAllowlistSchema,
+  /**
+   * The legacy pre-approved actions (before ADR-0021). Optional since RL-V: a client that sends
+   * `approvals` leaves it out and the stored value is kept; a setup saved without either keeps
+   * what it had.
+   */
+  allowlist: ProjectAllowlistSchema.optional(),
   /** ADR-0021. Absent: the stored approvals are kept (or, for an older setup, still none). */
   approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),

@@ -4,6 +4,8 @@ import {
   MAX_CONCURRENT_CHILD_AGENTS,
   MAX_DELEGATION_DEPTH,
   type ProjectAgentSetup,
+  type ProjectAllowlist,
+  type ProjectApprovals,
 } from '@acp/core';
 import { DbError, type ProjectSetupInput, type WorkspaceRepositories } from '@acp/db';
 
@@ -79,4 +81,15 @@ export function ensureSetup(
     }
   }
   throw new DbError('conflict', 'no free project key for this project');
+}
+
+/**
+ * The legacy pre-approved actions that match an approval mode (RL-V), for runs started before
+ * ADR-0021, which read the allowlist live: Manual pre-approves nothing; Auto edits and Auto
+ * pre-approve own-worktree edits and the harness checks (`approvalsFromLegacy` maps that back to
+ * Auto edits, never wider).
+ */
+export function legacyAllowlistOf(approvals: ProjectApprovals): ProjectAllowlist {
+  const on = approvals.mode !== 'manual';
+  return { editInOwnWorktree: on, runHarnessChecks: on };
 }

@@ -62,7 +62,7 @@ import type { CheckService } from './checks.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
-import { ensureSetup } from './setup.js';
+import { ensureSetup, legacyAllowlistOf } from './setup.js';
 
 /**
  * The Agent Workspace board (P4-D; README §4, §6, ADR-0016/0017): projects created from the UI,
@@ -440,12 +440,22 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const input = UpdateProjectSetupRequestSchema.parse(body);
       // ADR-0021: a request without `approvals` keeps the stored ones (an older client, or the
       // settings form that does not edit them); a setup that never had any keeps none.
-      const approvals = input.approvals ?? ws.projectSetup.get(projectId)?.approvals;
+      const stored = ws.projectSetup.get(projectId);
+      const approvals = input.approvals ?? stored?.approvals;
+      // RL-V: `allowlist` is optional. Runs started before ADR-0021 still read it live, so a
+      // request that sets only `approvals` keeps it in step with the mode (what the web sent
+      // before); a request with neither keeps the stored one.
+      const allowlist =
+        input.allowlist ??
+        (input.approvals !== undefined
+          ? legacyAllowlistOf(input.approvals)
+          : (stored?.allowlist ?? { editInOwnWorktree: false, runHarnessChecks: false }));
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
           planFirst: true,
           ...input,
+          allowlist,
           ...(approvals !== undefined && { approvals }),
         });
         notice('projects-changed', { projectId });

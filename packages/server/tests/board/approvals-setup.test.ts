@@ -55,4 +55,34 @@ describe('project approvals (ADR-0021 §1)', () => {
     const res = await s.send('put', url, BODY);
     expect(ProjectAgentSetupDtoSchema.parse(res.body).approvals).toBeUndefined();
   });
+
+  it('RL-V: allowlist is optional; with approvals only it follows the mode, else it is kept', async () => {
+    const s = await setupBoard();
+    const url = `/api/projects/${s.project.id}/setup`;
+    const { allowlist: _legacy, ...noAllowlist } = BODY;
+    const parse = (r: { body: unknown }) => ProjectAgentSetupDtoSchema.parse(r.body);
+
+    // Approvals only: the legacy allowlist (read live by runs from before ADR-0021) follows it.
+    const manual = parse(
+      await s.send('put', url, { ...noAllowlist, approvals: { mode: 'manual', commands: [] } }),
+    );
+    expect(manual.approvals?.mode).toBe('manual');
+    expect(manual.allowlist).toEqual({ editInOwnWorktree: false, runHarnessChecks: false });
+    const auto = parse(
+      await s.send('put', url, { ...noAllowlist, approvals: { mode: 'auto-edits', commands: [] } }),
+    );
+    expect(auto.allowlist).toEqual({ editInOwnWorktree: true, runHarnessChecks: true });
+
+    // Neither: both are kept as stored.
+    const kept = parse(await s.send('put', url, { ...noAllowlist, maxConcurrentHelpers: 2 }));
+    expect(kept).toMatchObject({
+      maxConcurrentHelpers: 2,
+      approvals: { mode: 'auto-edits', commands: [] },
+      allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
+    });
+
+    // An older client still sends both, and its allowlist is saved as sent.
+    const both = parse(await s.send('put', url, BODY));
+    expect(both.allowlist).toEqual(BODY.allowlist);
+  });
 });

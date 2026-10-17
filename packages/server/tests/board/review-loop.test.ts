@@ -137,7 +137,12 @@ describe('the review loop (ADR-0021 §3)', () => {
   it('rework resumes the same helper in its own worktree; discard and ask-owner are recorded', async () => {
     const s = await setupBoard({ files: FILES });
     const { ticket, runId, lead } = await approved(s, { reviewer: 'lead', maxReworkRounds: 1 });
-    expect((await run(s, runId)).approvalMode).toBe('auto-edits');
+    // RL-V: the run's snapshotted reviewer and rework limit are in its detail.
+    expect(await run(s, runId)).toMatchObject({
+      approvalMode: 'auto-edits',
+      reviewer: 'lead',
+      maxReworkRounds: 1,
+    });
     const worker = await helperDone(s, lead, runId, { 'a.txt': 'first\n', 'fixed.txt': 'ok\n' });
     // Reviewer "lead": the lead reviews itself; no review agent starts.
     expect(reviewers(s)).toEqual([]);

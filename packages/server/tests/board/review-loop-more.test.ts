@@ -247,6 +247,8 @@ describe("the owner's ticket-branch actions (ADR-0021 §4)", () => {
     expect(detail.approvalMode).toBeUndefined();
     expect(detail.ticketBranch).toBeUndefined();
     expect(detail.changes).toBeUndefined();
+    expect(detail.reviewer).toBeUndefined();
+    expect(detail.maxReworkRounds).toBeUndefined();
     expectError(await s.get(`/api/runs/${runId}/ticket-branch`), 404, 'no_ticket_branch');
   }, 60_000);
 });

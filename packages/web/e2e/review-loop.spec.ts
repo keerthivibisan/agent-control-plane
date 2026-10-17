@@ -107,9 +107,11 @@ async function serveLoop(page: Page, start: Stage): Promise<Loop> {
         json:
           url.pathname === LOOP_REVIEW_PATH
             ? routes[LOOP_REVIEW_PATH]
-            : url.pathname.endsWith('/start')
-              ? routes[LOOP_TICKET_PATH]
-              : routes[LOOP_RUN_PATH],
+            : url.pathname === LOOP_BRANCH_PATH
+              ? routes[LOOP_BRANCH_PATH]
+              : url.pathname.endsWith('/start')
+                ? routes[LOOP_TICKET_PATH]
+                : routes[LOOP_RUN_PATH],
       });
       return;
     }
@@ -259,8 +261,8 @@ test('the Workflow page: approvals with Auto’s command list, and the review st
   await shootPart(page, 'approvals-editor', 'stage-panel');
   await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByTestId('saved')).toBeVisible();
+  expect(puts[0]).not.toHaveProperty('allowlist');
   expect(puts[0]).toMatchObject({
-    allowlist: { editInOwnWorktree: true, runHarnessChecks: true },
     approvals: {
       mode: 'auto',
       commands: [

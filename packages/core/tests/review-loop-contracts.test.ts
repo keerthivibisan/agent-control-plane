@@ -161,6 +161,17 @@ describe('project setup with approvals', () => {
     ).toBe(false);
   });
 
+  it('RL-V: the legacy allowlist is optional in the setup update request', () => {
+    const { projectId: _p, planFirst: _f, updatedAt: _u, allowlist: _a, ...rest } = legacy;
+    expect(UpdateProjectSetupRequestSchema.safeParse(rest).success).toBe(true);
+    expect(
+      UpdateProjectSetupRequestSchema.safeParse({
+        ...rest,
+        approvals: { mode: 'auto-edits', commands: [] },
+      }).success,
+    ).toBe(true);
+  });
+
   it('caps the allowlist and refuses duplicates', () => {
     const many: CommandPattern[] = Array.from({ length: MAX_COMMAND_PATTERNS + 1 }, (_, i) => ({
       argv: ['make', `target-${i}`],
@@ -678,6 +689,14 @@ describe('review-loop DTOs', () => {
     approvals: [],
     messages: [],
   };
+
+  it('RL-V: the run detail carries the snapshotted reviewer and rework limit (optional)', () => {
+    expect(RunDetailDtoSchema.parse(run).reviewer).toBeUndefined();
+    const loop = RunDetailDtoSchema.parse({ ...run, reviewer: 'agent', maxReworkRounds: 2 });
+    expect(loop).toMatchObject({ reviewer: 'agent', maxReworkRounds: 2 });
+    expect(RunDetailDtoSchema.safeParse({ ...run, reviewer: 'owner' }).success).toBe(false);
+    expect(RunDetailDtoSchema.safeParse({ ...run, maxReworkRounds: -1 }).success).toBe(false);
+  });
 
   it('check runs record their commit; older check runs have none', () => {
     const { commit: _c, ...legacy } = check;

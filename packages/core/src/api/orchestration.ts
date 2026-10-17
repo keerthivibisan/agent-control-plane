@@ -23,6 +23,7 @@ import {
   CheckRunSchema,
   RepoRelativePathSchema,
 } from '../workspace/workspace.js';
+import { ChangeReviewerModeSchema } from '../workspace/workflow.js';
 
 /**
  * HTTP contracts for the control panel (Phase 3, milestone M1). Mutating requests also need the
@@ -196,6 +197,13 @@ export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   ticketBranch: TicketBranchDtoSchema.nullable().optional(),
   /** ADR-0021: each helper's change in the review loop, oldest first. Absent for legacy runs. */
   changes: z.array(ChangeReviewDtoSchema).optional(),
+  /** ADR-0021: who reviews each change in this run (its snapshot). Absent for legacy runs. */
+  reviewer: ChangeReviewerModeSchema.optional(),
+  /**
+   * ADR-0021: the run's snapshotted rework limit per change (the owner can grant a round past it).
+   * Absent for legacy runs.
+   */
+  maxReworkRounds: count.optional(),
 });
 export type RunDetailDto = z.infer<typeof RunDetailDtoSchema>;
 
@@ -279,7 +287,8 @@ export const ReviewActionRequestSchema = z
   });
 
 /**
- * POST `/api/runs/:id/ticket-branch` (ADR-0021 §4, CSRF). `merge`: fast-forward the base branch to
+ * POST `/api/runs/:id/ticket-branch` (ADR-0021 §4, CSRF); answers the branch afterwards as a
+ * `TicketBranchReviewDto` (the same body as the GET). `merge`: fast-forward the base branch to
  * the tip (the owner's tree must be clean and on the base branch); `merge-anyway`: the same with a
  * failed required check, with a reason; `request-changes`: the comment goes to the lead and the run
  * returns to RUNNING; `discard`: delete the ticket branch; `update-from-base`: when `baseMoved`,

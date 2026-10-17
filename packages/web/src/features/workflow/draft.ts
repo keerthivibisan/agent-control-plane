@@ -185,10 +185,11 @@ export function workflowRequest(draft: WorkflowDraft): Checked<UpdateWorkflowReq
 }
 
 /**
- * The whole setup PUT body: the saved setup with the page's limits and approvals in it. The legacy
- * `allowlist` is still required by the request: it follows the mode. A setup saved before ADR-0021
- * whose approvals the owner did not touch is sent as it was (its allowlist, no `approvals`), so a
- * limits-only save never changes how its runs ask.
+ * The whole setup PUT body: the saved setup with the page's limits and approvals in it. With
+ * `approvals` the legacy `allowlist` is left out (optional since RL-V; the server keeps it in step
+ * with the mode for runs from before ADR-0021). A setup saved before ADR-0021 whose approvals the
+ * owner did not touch is sent as it was (its allowlist, no `approvals`), so a limits-only save
+ * never changes how its runs ask.
  */
 export function setupRequest(
   setup: ProjectAgentSetupDto,
@@ -209,9 +210,7 @@ export function setupRequest(
     maxDepth: draft.maxDepth,
     defaultBudgetTokensPerAgent: budget,
     model: setup.model,
-    ...(keepLegacy
-      ? { allowlist: setup.allowlist }
-      : { allowlist: allowlistFor(approvals.mode), approvals }),
+    ...(keepLegacy ? { allowlist: setup.allowlist } : { approvals }),
     contextFiles: [...setup.contextFiles],
   });
   if (!parsed.success) return { ok: false, errors: { helpers: WORKFLOW_COPY.refusals.invalid } };
