@@ -9,7 +9,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | ---- | ----------------------------------------------------------------------- | --------- | --------------------------- | ----------------- | --------- |
 | WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                    | wp/wg-0-contracts | `5f6c1e8` |
 | WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                    | wp/wg-a-core      | `1da44e6` |
-| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **in progress**             | wp/wg-b-engine    |           |
+| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                    | wp/wg-b-engine    | `eb8276a` |
 | WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **in progress**             | wp/wg-c-server    |           |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
 | WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **in progress**             | wp/wg-e-live      |           |
