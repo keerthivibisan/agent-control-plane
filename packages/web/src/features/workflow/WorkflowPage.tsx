@@ -183,9 +183,10 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWor
               <p className="max-w-60 text-dim">{P.empty}</p>
             </div>
           ) : (
-            // Each stage's settings arrive with a short rise and fade, so switching stages reads as a
-            // change. A CSS animation (index.css), so reduced motion stops it and it costs no JS.
-            <div key={selected} className="animate-dialog-in">
+            // Each stage's settings fade in, so switching stages reads as a change. Opacity only:
+            // a moving panel would shift its fields under a click right after the stage opens. A
+            // CSS animation (index.css), so reduced motion stops it and it costs no JS.
+            <div key={selected} className="animate-fade-in">
               <div className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-4">
                 <StageHeading stage={selected} workflow={workflow} />
                 <button
