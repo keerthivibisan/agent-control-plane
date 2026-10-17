@@ -3,13 +3,13 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                    | After      | Status      | Branch           | Merged    |
-| ---- | -------------------------------------------------------- | ---------- | ----------- | ---------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**    | wp/rl-0-contract | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**    | wp/rl-a-engine   | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**    | wp/rl-b-server   | `a33fac5` |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**    | wp/rl-d-web      | `b31d1ec` |
-| RL-V | Verification and one consented real run                  | all        | in-progress | wp/rl-v-verify   | —         |
+| WP   | Title                                                    | After      | Status                                           | Branch           | Merged    |
+| ---- | -------------------------------------------------------- | ---------- | ------------------------------------------------ | ---------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006       | —          | **done**                                         | wp/rl-0-contract | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix     | RL-0       | **done**                                         | wp/rl-a-engine   | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes   | RL-0, RL-A | **done**                                         | wp/rl-b-server   | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge | RL-0, U-V  | **done**                                         | wp/rl-d-web      | `b31d1ec` |
+| RL-V | Verification and one consented real run                  | all        | automatic part **done**; real run awaits consent | wp/rl-v-verify   | `e689a79` |
 
 ## Owner decisions (2026-10-17)
 
@@ -77,3 +77,16 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
   - The coordinator ran pnpm check (2,506 tests) and the e2e (59/59).
   - **Gap for RL-V:** the workspace e2e server runs legacy runs by default (`ACP_E2E_REVIEW_LOOP=1`
     switches to the loop), so no browser e2e drives the loop against the real server yet.
+- 2026-10-17 **RL-V automatic part merged** (`e689a79`).
+  - A live browser e2e drives the whole loop on the real server: plan, two helpers, review,
+    rework, the lead's merges, an owner override, the final code review, the ticket-branch card,
+    Merge into main and Done.
+  - It found a real bug (the lead's note overwrote the reviewer's findings), now fixed.
+  - Refusal reasons are now `RefusalCode`s.
+  - `RunDetailDto.reviewer` and `maxReworkRounds`; the legacy `allowlist` is optional.
+  - Docs and CHANGELOG updated.
+  - The coordinator ran pnpm check (2,516 tests) and the e2e (60/60).
+  - The guarded real-run driver is in `packages/server/tests/verification/review-loop/real-run/drive.ts`.
+- 2026-10-17 the owner's app was restarted on the new code: backed up first, then migration 0006
+  was applied to the live database (the backup is in `~/.agent-control-plane/backups/`). The
+  owner's review-stage skill mapping works now.
