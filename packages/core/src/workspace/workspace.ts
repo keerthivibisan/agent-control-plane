@@ -113,6 +113,10 @@ export const TicketPlanStatusSchema = z.enum([
 ]);
 export type TicketPlanStatus = z.infer<typeof TicketPlanStatusSchema>;
 
+/** Who decided a plan: the owner, or Full auto's automatic approval (ADR-0022). */
+export const TicketPlanDeciderSchema = z.enum(['owner', 'auto']);
+export type TicketPlanDecider = z.infer<typeof TicketPlanDeciderSchema>;
+
 export const TicketPlanSchema = z.object({
   id: z.string().min(1),
   ticketId: z.string().min(1),
@@ -125,6 +129,11 @@ export const TicketPlanSchema = z.object({
   status: TicketPlanStatusSchema,
   createdAt: IsoTimestampSchema,
   decidedAt: IsoTimestampSchema.nullable(),
+  /**
+   * Who decided the plan (ADR-0022): `auto` when a Full auto run approved it automatically. Absent
+   * means the owner decided it (or it is not decided yet), as for every plan before Full auto.
+   */
+  decidedBy: TicketPlanDeciderSchema.optional(),
 });
 export type TicketPlan = z.infer<typeof TicketPlanSchema>;
 
@@ -147,9 +156,14 @@ export type ProjectAllowlist = z.infer<typeof ProjectAllowlistSchema>;
  * - `manual`: every edit, write and command asks, harness checks included;
  * - `auto-edits`: edits inside the agent's own worktree (never under `.git` or `.claude`) and
  *   commands that exactly match a harness check run without asking;
- * - `auto`: `auto-edits` plus the project's command allowlist (`ProjectApprovals.commands`).
+ * - `auto`: `auto-edits` plus the project's command allowlist (`ProjectApprovals.commands`);
+ * - `full-auto` (ADR-0022): helpers and the tester run in Claude Code's own auto mode (a classifier
+ *   model reviews risky actions) inside the operating-system sandbox, the plan is approved
+ *   automatically, and nothing asks the owner during the run: an action that still reaches the
+ *   gate is allowed only by the `auto` rules and otherwise denied. The owner sees only the final
+ *   ticket-branch merge. The lead, planner and reviewers are unchanged (read-only, never covered).
  */
-export const ApprovalModeSchema = z.enum(['manual', 'auto-edits', 'auto']);
+export const ApprovalModeSchema = z.enum(['manual', 'auto-edits', 'auto', 'full-auto']);
 export type ApprovalMode = z.infer<typeof ApprovalModeSchema>;
 export const APPROVAL_MODES = ApprovalModeSchema.options;
 /** The mode a newly created project starts with. Existing projects keep their mapped setting. */

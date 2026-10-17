@@ -70,7 +70,31 @@ export interface ManagedAgentSpec {
    * Absent: `final`, as before ADR-0021.
    */
   reviewScope?: ReviewScope;
+  /**
+   * Full auto (ADR-0022), for a `worker` or `tester` only: the agent runs in Claude Code's auto
+   * mode (SDK `permissionMode: 'auto'`, a classifier model reviews risky actions) and every shell
+   * command runs in the operating-system sandbox, which fails closed when it cannot start. Sandboxed
+   * commands may write only in `cwd` and `tempDir` and cannot read `denyRead` (absolute paths the
+   * server resolves from the user's home and its data folder). If auto mode or the sandbox is
+   * unavailable the agent ends with `finished.failure` and never runs unprotected. Ignored for the
+   * lead, planner and reviewers, which always keep the default mode.
+   */
+  fullAuto?: FullAutoSpec;
 }
+
+/** The sandbox paths of a Full auto agent (`ManagedAgentSpec.fullAuto`, ADR-0022). */
+export interface FullAutoSpec {
+  /** Absolute path of the run's temporary folder: writable, readable, and the agent's TMPDIR. */
+  tempDir: string;
+  /** Absolute paths sandboxed commands may not read (secrets, the app's data, Claude's config). */
+  denyRead: readonly string[];
+}
+
+/**
+ * Why a Full auto agent could not run protected (ADR-0022): Claude Code did not start in auto mode
+ * (the model or the account does not offer it), or the operating-system sandbox could not start.
+ */
+export type ManagedFailureCode = 'auto-mode-unavailable' | 'sandbox-unavailable';
 
 /** What a reviewer agent reviews (`ManagedAgentSpec.reviewScope`). */
 export type ReviewScope = 'change' | 'final';
@@ -113,6 +137,11 @@ export type ManagedAgentEvent =
       outcome: 'success' | 'error' | 'cancelled';
       /** Provider-reported cost of the run, when given; always an estimate. */
       reportedCostUsd: number | null;
+      /**
+       * Set when a Full auto agent ended because its protections were unavailable (ADR-0022); the
+       * outcome is then `error`. Absent for every other end.
+       */
+      failure?: ManagedFailureCode;
     };
 
 export interface ManagedAgentHandle {

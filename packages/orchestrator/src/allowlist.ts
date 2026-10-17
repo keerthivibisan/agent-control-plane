@@ -114,7 +114,9 @@ export type AllowlistVerdict =
 
 /**
  * Which rules each approval mode allows (ADR-0021 §1): manual none, auto-edits the edit and
- * harness-check rules, auto those plus the command allowlist.
+ * harness-check rules, auto those plus the command allowlist. Full auto (ADR-0022) allows the same
+ * rules as auto for a request that still reaches the gate; anything else is denied there without
+ * asking the owner (the server's gate), never parked.
  */
 export function ruleAllowedByMode(mode: ApprovalMode, rule: AllowRule): boolean {
   switch (mode) {
@@ -123,6 +125,7 @@ export function ruleAllowedByMode(mode: ApprovalMode, rule: AllowRule): boolean 
     case 'auto-edits':
       return rule === 'edit-in-own-worktree' || rule === 'run-harness-check';
     case 'auto':
+    case 'full-auto':
       return true;
   }
 }

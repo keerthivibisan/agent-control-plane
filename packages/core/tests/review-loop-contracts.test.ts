@@ -63,8 +63,8 @@ const accepts = (argv: string[], match: 'exact' | 'prefix' = 'exact') =>
   pattern(argv, match).success;
 
 describe('approval modes (ADR-0021 §1)', () => {
-  it('are manual, auto edits and auto; new projects start on auto edits', () => {
-    expect(APPROVAL_MODES).toEqual(['manual', 'auto-edits', 'auto']);
+  it('are manual, auto edits, auto and full auto; new projects start on auto edits', () => {
+    expect(APPROVAL_MODES).toEqual(['manual', 'auto-edits', 'auto', 'full-auto']);
     expect(DEFAULT_APPROVAL_MODE).toBe('auto-edits');
     expect(AllowRuleSchema.options).toEqual([
       'edit-in-own-worktree',

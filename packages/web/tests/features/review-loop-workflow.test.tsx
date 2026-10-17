@@ -216,14 +216,14 @@ describe('startRequest: only what differs from the project', () => {
 });
 
 describe('Workflow page: Approvals (Helpers panel)', () => {
-  it('replaces the pre-approved actions with the three modes and their sentences', async () => {
+  it('replaces the pre-approved actions with the four modes and their sentences', async () => {
     render();
     await open('Helpers');
     const editor = within(panel()).getByTestId('approvals-editor');
     expect(within(panel()).queryByText('Pre-approved actions')).toBeNull();
     expect(within(panel()).getByRole('heading', { name: 'Approvals' })).toBeTruthy();
     const radios = within(editor).getAllByRole('radio');
-    expect(radios).toHaveLength(3);
+    expect(radios).toHaveLength(4);
     // Edits only, before ADR-0021, maps to Manual (a legacy setup is never widened).
     expect(within(editor).getByLabelText<HTMLInputElement>(/^Manual/).checked).toBe(true);
     expect(within(editor).getByText(/every edit and every command waits for you/)).toBeTruthy();

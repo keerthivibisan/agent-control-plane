@@ -2761,6 +2761,7 @@ const MODE_WORDS: Readonly<Record<ApprovalMode, string>> = {
   manual: 'Manual',
   'auto-edits': 'Auto edits',
   auto: 'Auto',
+  'full-auto': 'Full auto',
 };
 
 /** The state chip of one helper's change ("Rework round 1 of 2", "Merged into acp/WEB-12"). */
@@ -2797,6 +2798,7 @@ export const REVIEW_LOOP_COPY = {
       manual: 'Manual',
       'auto-edits': 'Auto edits (recommended)',
       auto: 'Auto',
+      'full-auto': 'Full auto',
     } satisfies Record<ApprovalMode, string>,
     /** One plain sentence: what runs without asking. */
     hint: {
@@ -2805,6 +2807,8 @@ export const REVIEW_LOOP_COPY = {
       'auto-edits':
         'Edits inside the helper’s own copy and the project’s exact harness checks run without asking. Everything else asks.',
       auto: 'Like Auto edits, plus the commands you allow below. Everything else asks.',
+      'full-auto':
+        'Nothing asks you during the run: the plan is approved automatically, and helpers work in Claude Code’s auto mode with commands in the operating-system sandbox. You review everything once, in the final merge.',
     } satisfies Record<ApprovalMode, string>,
   },
   approvals: {

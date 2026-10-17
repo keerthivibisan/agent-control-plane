@@ -23,7 +23,12 @@ const S = REVIEW_LOOP_COPY.start;
 const M = REVIEW_LOOP_COPY.modes;
 const R = REVIEW_LOOP_COPY.review;
 const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
-const MODE_RANK: Readonly<Record<ApprovalMode, number>> = { manual: 0, 'auto-edits': 1, auto: 2 };
+const MODE_RANK: Readonly<Record<ApprovalMode, number>> = {
+  manual: 0,
+  'auto-edits': 1,
+  auto: 2,
+  'full-auto': 3,
+};
 
 /** "Auto edits (recommended) · Project setting": the project's own choice is marked. */
 function marked(label: string, isDefault: boolean): string {

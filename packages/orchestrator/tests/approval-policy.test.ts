@@ -38,6 +38,12 @@ describe('ruleAllowedByMode', () => {
       'command-allowlist': false,
     },
     auto: { 'edit-in-own-worktree': true, 'run-harness-check': true, 'command-allowlist': true },
+    // ADR-0022: what still reaches the gate in Full auto is judged by the auto rules, else denied.
+    'full-auto': {
+      'edit-in-own-worktree': true,
+      'run-harness-check': true,
+      'command-allowlist': true,
+    },
   };
   for (const [mode, rules] of Object.entries(table) as [
     ApprovalMode,
