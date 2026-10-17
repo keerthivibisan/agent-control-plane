@@ -63,14 +63,17 @@ export function TabList({
   className?: string;
 }) {
   return (
-    <RadixTabs.List
-      aria-label={label}
-      className={`flex min-w-0 items-center gap-4 overflow-x-auto border-b border-line ${className}`}
-    >
+    <RadixTabs.List aria-label={label} className={`${tabListClass} ${className}`}>
       {children}
     </RadixTabs.List>
   );
 }
+
+/** The underline tab look, shared by `Tab` (selected: Radix `data-state`) and `LinkTab`. */
+const tabClass =
+  'relative -mb-px inline-flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-0.5 font-medium whitespace-nowrap text-dim no-underline transition-colors hover:text-ink';
+
+const tabListClass = 'flex min-w-0 items-center gap-4 overflow-x-auto border-b border-line';
 
 export function Tab({
   value,
@@ -88,7 +91,7 @@ export function Tab({
       // A click without a mousedown (assistive tech, `element.click()`) selects the tab as well.
       onClick={() => select(value)}
       data-testid={testId}
-      className="relative -mb-px inline-flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-0.5 font-medium whitespace-nowrap text-dim transition-colors hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
+      className={`${tabClass} data-[state=active]:border-accent data-[state=active]:text-ink`}
     >
       {children}
     </RadixTabs.Trigger>
@@ -114,5 +117,47 @@ export function TabPanel({
     >
       {children}
     </RadixTabs.Content>
+  );
+}
+
+/**
+ * The link variant: sections that are addresses (Data health and its Connection), so a
+ * `navigation` of links with `aria-current="page"` on the open one, drawn like the tab bar above.
+ * Tab moves between the links as usual; there are no panels.
+ */
+export function LinkTabList({
+  label,
+  children,
+  className = '',
+}: {
+  /** Accessible name of the navigation. */
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <nav aria-label={label} className={`${tabListClass} ${className}`}>
+      {children}
+    </nav>
+  );
+}
+
+export function LinkTab({
+  href,
+  current,
+  children,
+}: {
+  href: string;
+  current: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      aria-current={current ? 'page' : undefined}
+      className={`${tabClass} aria-[current=page]:border-accent aria-[current=page]:text-ink`}
+    >
+      {children}
+    </a>
   );
 }

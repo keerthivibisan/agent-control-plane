@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { useRef } from 'react';
 import { Menu, MenuItem, MenuSeparator } from '../../components/Menu';
 import { BOARD_COPY } from '../../lib/copy';
 import { MoveIcon, STAGE_ICON, StartIcon } from './icons';
@@ -20,22 +20,9 @@ function TargetIcon({ target }: { target: MoveTarget }) {
 }
 
 /**
- * Arrow keys wrap from the last item to the first and back, as the board's menu always did; the
- * shared Menu (Radix) stops at the ends, so the wrap is added here. Radix has already handled the
- * key (and found nothing further to focus) when the event bubbles up to this wrapper.
- */
-function wrapAround(e: KeyboardEvent<HTMLDivElement>) {
-  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-  const at = items.findIndex((el) => el === document.activeElement);
-  if (e.key === 'ArrowDown' && at === items.length - 1) items[0]?.focus();
-  else if (e.key === 'ArrowUp' && at === 0) items[items.length - 1]?.focus();
-}
-
-/**
  * The keyboard alternative to dragging (README §5.2): a "Move" button opening a menu of the moves
- * the owner may make from this card. Arrow keys move between items, Enter picks, Escape closes and
- * puts focus back on the button.
+ * the owner may make from this card. Arrow keys move between items and wrap at the ends, as the
+ * board's menu always did; Enter picks, Escape closes and puts focus back on the button.
  */
 export function MoveMenu({
   ticketKey,
@@ -61,6 +48,7 @@ export function MoveMenu({
     <Menu
       label={C.menuLabel(ticketKey)}
       align="end"
+      loop
       trigger={
         <button
           ref={buttonRef}
@@ -74,29 +62,23 @@ export function MoveMenu({
         </button>
       }
     >
-      <div role="none" onKeyDown={wrapAround} className="flex flex-col">
-        {open.map((target) => (
+      {open.map((target) => (
+        <MenuItem key={target} icon={<TargetIcon target={target} />} onSelect={() => pick(target)}>
+          {LABEL[target]}
+        </MenuItem>
+      ))}
+      {moves.includes('CANCELLED') ? (
+        <>
+          {open.length > 0 ? <MenuSeparator /> : null}
           <MenuItem
-            key={target}
-            icon={<TargetIcon target={target} />}
-            onSelect={() => pick(target)}
+            tone="danger"
+            icon={<TargetIcon target="CANCELLED" />}
+            onSelect={() => pick('CANCELLED')}
           >
-            {LABEL[target]}
+            {LABEL.CANCELLED}
           </MenuItem>
-        ))}
-        {moves.includes('CANCELLED') ? (
-          <>
-            {open.length > 0 ? <MenuSeparator /> : null}
-            <MenuItem
-              tone="danger"
-              icon={<TargetIcon target="CANCELLED" />}
-              onSelect={() => pick('CANCELLED')}
-            >
-              {LABEL.CANCELLED}
-            </MenuItem>
-          </>
-        ) : null}
-      </div>
+        </>
+      ) : null}
     </Menu>
   );
 }

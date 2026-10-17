@@ -31,14 +31,6 @@ import { RemoveIcon } from '../workflow/icons';
 
 const A = AGENTS_COPY;
 const S = SKILLS_COPY;
-/**
- * The agents refusals plus `agent_in_use` (R-R: the server refuses deleting a file a stage uses,
- * as for skills). Belongs in `AGENTS_COPY.refusals`; kept here while another WP edits `copy.ts`.
- */
-const REFUSALS: Readonly<Record<string, string>> = {
-  ...A.refusals,
-  agent_in_use: 'A workflow stage still uses this agent file.',
-};
 const MODEL_SUGGESTIONS = ['sonnet', 'opus', 'haiku', 'inherit'];
 
 function sameForm(a: AgentForm, b: AgentForm): boolean {
@@ -348,7 +340,7 @@ export function AgentEditor({
             bytes={agentFileBytes(form)}
             sizeError={sizeError}
           />
-          <RefusalNotice error={save.error} refusals={REFUSALS} />
+          <RefusalNotice error={save.error} refusals={A.refusals} />
           {saved && !isNew ? <SavedNote>{S.editor.saved}</SavedNote> : null}
           <div className={FORM_ACTIONS}>
             <Button onClick={onCancel} disabled={save.pending}>
@@ -378,7 +370,7 @@ export function AgentEditor({
             commitClean: A.commit.clean,
             deleteButton: A.remove.button,
             deleteText: A.remove.text,
-            refusals: REFUSALS,
+            refusals: A.refusals,
           }}
           details={
             <CardRow label={A.card.model}>

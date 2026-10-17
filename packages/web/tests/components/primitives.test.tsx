@@ -12,7 +12,7 @@ import { Popover } from '../../src/components/Popover';
 import { QueryView } from '../../src/components/QueryView';
 import { Segmented } from '../../src/components/Segmented';
 import { LoadingBlock, Skeleton, SkeletonText } from '../../src/components/Skeleton';
-import { Tab, TabList, TabPanel, Tabs } from '../../src/components/Tabs';
+import { LinkTab, LinkTabList, Tab, TabList, TabPanel, Tabs } from '../../src/components/Tabs';
 
 describe('icons', () => {
   it('are decorative lucide strokes at 1.75px that add no text', () => {
@@ -226,13 +226,57 @@ describe('Dialog', () => {
     // Radix wraps focus from the last control back to the first.
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
   });
+
+  // U-V: the palette's "New ticket" closes one dialog and opens another in the same render.
+  it('leaves focus in a dialog opened as another closes; that one returns it to the first opener', async () => {
+    function Chain() {
+      const [open, setOpen] = useState<'none' | 'first' | 'second'>('none');
+      return (
+        <>
+          <button type="button" onClick={() => setOpen('first')}>
+            Search
+          </button>
+          {open === 'first' ? (
+            <Dialog title="Command palette" onClose={() => setOpen('none')}>
+              <button type="button" onClick={() => setOpen('second')}>
+                New ticket
+              </button>
+            </Dialog>
+          ) : null}
+          {open === 'second' ? (
+            <Dialog title="New ticket" onClose={() => setOpen('none')}>
+              <input aria-label="Title" />
+              <button type="button" onClick={() => setOpen('none')}>
+                Cancel
+              </button>
+            </Dialog>
+          ) : null}
+        </>
+      );
+    }
+    render(<Chain />);
+    const opener = screen.getByRole('button', { name: 'Search' });
+    act(() => opener.focus());
+    fireEvent.click(opener);
+    const palette = await screen.findByRole('dialog', { name: 'Command palette' });
+    fireEvent.click(within(palette).getByRole('button', { name: 'New ticket' }));
+    const second = await screen.findByRole('dialog', { name: 'New ticket' });
+    const title = within(second).getByRole('textbox', { name: 'Title' });
+    await waitFor(() => expect(document.activeElement).toBe(title));
+    // The closed palette's focus return (the next tick) must not pull focus out of it.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(document.activeElement).toBe(title);
+    fireEvent.click(within(second).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
 });
 
-function MenuHarness({ onPick }: { onPick: (v: string) => void }) {
+function MenuHarness({ onPick, loop = false }: { onPick: (v: string) => void; loop?: boolean }) {
   return (
     <Menu
       label="Move WEB-1"
       align="end"
+      loop={loop}
       trigger={
         <button type="button" aria-label="Move WEB-1">
           Move
@@ -287,6 +331,46 @@ describe('Menu', () => {
     fireEvent.click(within(await screen.findByRole('menu')).getByText('Cancel ticket'));
     expect(onPick).toHaveBeenCalledWith('CANCELLED');
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+
+  it('stops at the ends by default and wraps with `loop`', async () => {
+    const ends = async (loop: boolean) => {
+      const { unmount } = render(<MenuHarness onPick={() => {}} loop={loop} />);
+      const trigger = screen.getByRole('button', { name: 'Move WEB-1' });
+      act(() => trigger.focus());
+      fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+      const items = within(await screen.findByRole('menu')).getAllByRole('menuitem');
+      await waitFor(() => expect(document.activeElement).toBe(items[0]));
+      fireEvent.keyDown(items[0] as HTMLElement, { key: 'ArrowUp' });
+      await new Promise((r) => setTimeout(r, 10));
+      const at = document.activeElement;
+      unmount();
+      return at === items[0] ? 'first' : at === items[2] ? 'last' : 'other';
+    };
+    expect(await ends(false)).toBe('first');
+    expect(await ends(true)).toBe('last');
+  });
+});
+
+describe('LinkTab', () => {
+  it('is a labelled navigation of links, the open one marked aria-current', () => {
+    render(
+      <LinkTabList label="Data health sections">
+        <LinkTab href="#/health" current>
+          Overview
+        </LinkTab>
+        <LinkTab href="#/health/connection" current={false}>
+          Connection
+        </LinkTab>
+      </LinkTabList>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Data health sections' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual(['Overview', 'Connection']);
+    expect(links[0]?.getAttribute('aria-current')).toBe('page');
+    expect(links[1]?.hasAttribute('aria-current')).toBe(false);
+    expect(links[1]?.getAttribute('href')).toBe('#/health/connection');
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 });
 

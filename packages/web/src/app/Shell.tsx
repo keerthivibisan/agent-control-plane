@@ -69,11 +69,9 @@ export function Shell({
 
   const togglePalette = useCallback(() => setPaletteOpen((o) => !o), []);
   usePaletteShortcut(togglePalette);
-  // The palette's Dialog gives focus back to its opener on the tick after it closes. "New ticket"
-  // opens its dialog one tick later still, so focus lands in that dialog's first field.
-  const openNewTicket = useCallback((projectId: string) => {
-    window.setTimeout(() => window.setTimeout(() => setNewTicketFor(projectId), 0), 0);
-  }, []);
+  // "New ticket" opens its dialog as the palette closes; the shared Dialog leaves focus in the new
+  // one, which gives it back to the palette's opener when it closes.
+  const openNewTicket = useCallback((projectId: string) => setNewTicketFor(projectId), []);
 
   return (
     <ShellTooltipProvider>

@@ -1,3 +1,4 @@
+import { LinkTab, LinkTabList } from '../components/Tabs';
 import { DataHealthPage } from '../features/health/DataHealthPage';
 import { SetupPage } from '../features/setup/SetupPage';
 import { SHELL_COPY } from '../lib/copy';
@@ -16,23 +17,15 @@ const TABS: readonly { id: HealthTab; label: string; to: string }[] = [
  */
 export function HealthScreen({ tab }: { tab: HealthTab }) {
   // Under the page title, like every page's own controls (R-V visual problem 9). The sections are
-  // addresses, so they stay links in a navigation (with `aria-current`), drawn like the shared
-  // underline tab bar (components/Tabs.tsx, whose Radix tabs are buttons that switch panels).
+  // addresses, so they are the shared tab bar's link variant (a navigation with `aria-current`).
   const tabs = (
-    <nav aria-label={C.tabs} className="-mt-1 mb-6 flex items-center gap-5 border-b border-line">
+    <LinkTabList label={C.tabs} className="-mt-1 mb-6">
       {TABS.map((t) => (
-        <a
-          key={t.id}
-          href={t.to}
-          aria-current={t.id === tab ? 'page' : undefined}
-          className={`-mb-px inline-flex h-9 items-center border-b-2 px-0.5 font-medium whitespace-nowrap no-underline transition-colors ${
-            t.id === tab ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'
-          }`}
-        >
+        <LinkTab key={t.id} href={t.to} current={t.id === tab}>
           {t.label}
-        </a>
+        </LinkTab>
       ))}
-    </nav>
+    </LinkTabList>
   );
   return tab === 'overview' ? <DataHealthPage tabs={tabs} /> : <SetupPage tabs={tabs} />;
 }

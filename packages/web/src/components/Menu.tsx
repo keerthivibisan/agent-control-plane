@@ -8,7 +8,8 @@ export const floatingClass =
 /**
  * A menu button (Radix DropdownMenu): `role="menu"` with `menuitem`s; ArrowDown, Enter or Space on
  * the trigger opens it with the first item focused, arrows and Home/End move, typing jumps to an
- * item, Escape closes it and focus returns to the trigger.
+ * item, Escape closes it and focus returns to the trigger. With `loop`, the arrows wrap from the
+ * last item to the first and back.
  *
  * `trigger` is the button element (it gets `aria-haspopup`, `aria-expanded` and Radix's
  * `data-state`, so it must not carry the app's own `data-state`). Not modal by default: the rest
@@ -21,6 +22,7 @@ export function Menu({
   align = 'start',
   side = 'bottom',
   modal = false,
+  loop = false,
   testId,
   className = '',
 }: {
@@ -31,6 +33,8 @@ export function Menu({
   align?: 'start' | 'center' | 'end';
   side?: 'top' | 'right' | 'bottom' | 'left';
   modal?: boolean;
+  /** Arrow keys wrap at the ends. */
+  loop?: boolean;
   testId?: string;
   className?: string;
 }) {
@@ -53,6 +57,7 @@ export function Menu({
           side={side}
           sideOffset={4}
           collisionPadding={8}
+          loop={loop}
           data-testid={testId}
           {...(label ? { 'aria-label': label, 'aria-labelledby': undefined } : {})}
           className={`${floatingClass} flex min-w-56 flex-col p-1 focus:outline-none ${className}`}

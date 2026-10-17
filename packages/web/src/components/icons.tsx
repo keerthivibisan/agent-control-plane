@@ -87,10 +87,8 @@ export const PlusSmallIcon = icon(Plus, 'PlusSmallIcon');
 export const TicketIcon = icon(Ticket, 'TicketIcon');
 export const ArrowRightIcon = icon(ArrowRight, 'ArrowRightIcon');
 
-/*
- * Lucide equivalents of the board's own icons (features/board/icons.tsx), for U-C to adopt. The
- * board keeps its hand-drawn set until then.
- */
+// The board's icons (features/board/icons.tsx re-exports them); the alert and ticket types are used
+// across the app too.
 export const MoveIcon = icon(ArrowLeftRight, 'MoveIcon');
 export const AlertIcon = icon(TriangleAlert, 'AlertIcon');
 export const FeatureIcon = icon(Star, 'FeatureIcon');
