@@ -85,3 +85,24 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 
 - Also for U-V (from U-G): `sessions/FamilyTree.tsx` still has rounded cards and accent connectors;
   chat and comment bubbles use the olive `accent-soft`.
+- 2026-10-17 **owner decisions from real use (included in 0.1.0):**
+  1. **Approval modes** per ticket run, defaulting from the project:
+     - Manual: as today.
+     - Auto edits (the default): edits in the helper's own worktree and harness-check commands are
+       approved without asking.
+     - Auto: Auto edits plus a per-project command allowlist.
+
+     The lead never approves tool requests.
+
+  2. **Review loop before merge:**
+     - A reviewer (a review agent or the lead) reviews each helper's change.
+     - The lead merges it into a **ticket branch** or sends it back for rework (bounded rounds).
+     - The owner merges the ticket branch into `main` once.
+  3. **Fixes:**
+     - The planner assigned steps to "Lead" (it must assign them to helpers).
+     - The raw tool name `mcp__acp__agent_status` shows as an agent's "Latest" (humanize it).
+  4. **Chat:** the owner asked whether the lead chat shows engine messages. It doesn't: those are the
+     lead's own replies (ADR-0015).
+
+  A read-only design pass is running. Then ADR-0021, a coordinator contract commit, and engine,
+  server/adapter and web WPs; then a consented real run.
