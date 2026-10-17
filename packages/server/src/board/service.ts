@@ -1,6 +1,8 @@
 import {
   HARNESS_TICKET_TEMPLATE,
   TICKET_STAGES,
+  approvalsOf,
+  reviewStageOf,
   ticketStage,
   type CheckRun,
   type ProjectAgentSetup,
@@ -14,6 +16,7 @@ import {
   CreateTicketRequestSchema,
   MoveTicketRequestSchema,
   PlanDecisionRequestSchema,
+  StartTicketRequestSchema,
   TicketCommentRequestSchema,
   UpdateProjectSetupRequestSchema,
   UpdateTicketRequestSchema,
@@ -41,7 +44,7 @@ import {
 } from '@acp/db';
 import {
   deriveRunWorkflow,
-  isLiveAgentStatus,
+  isActiveAgentStatus,
   runSettingsFromSetup,
   ticketRunPrompts,
   type RunState,
@@ -87,7 +90,8 @@ export interface BoardService {
   ticket(ticketId: string): TicketDetailDto;
   updateTicket(ticketId: string, body: unknown): TicketDetailDto;
   moveTicket(ticketId: string, body: unknown): TicketDto;
-  startTicket(ticketId: string): Promise<TicketDetailDto>;
+  /** `body`: `StartTicketRequest` (ADR-0021 per-run overrides); empty uses the project's. */
+  startTicket(ticketId: string, body?: unknown): Promise<TicketDetailDto>;
   addComment(ticketId: string, body: unknown): TicketCommentDto;
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
@@ -108,6 +112,11 @@ export interface BoardServiceDeps {
   now: () => Date;
   publish: (notice: StreamNoticeDto) => void;
   logger: Logger;
+  /**
+   * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
+   * the legacy flow those runs keep stays covered. Production never sets it.
+   */
+  legacyTicketRuns?: boolean;
 }
 
 /** Run states in which the ticket's run still works or waits for the owner (not terminal). */
@@ -186,9 +195,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     return {
       status: state.run.status,
       pendingApprovals: state.approvals.filter((a) => a.status === 'pending').length,
-      // ADR-0019: the reviewer and the tester count as helpers.
-      helpersLive: state.agents.filter((a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status))
-        .length,
+      // ADR-0019: the reviewer and the tester count as helpers; ADR-0021: one waiting for its
+      // change to be decided has no process.
+      helpersLive: state.agents.filter(
+        (a) => countsAsHelper(a.kind) && isActiveAgentStatus(a.status),
+      ).length,
       budgetTokensUsed: state.agents.reduce((sum, a) => sum + a.budgetTokensUsed, 0),
       leadCostUsd: lead?.reportedCostUsd ?? null,
       updatedAt: state.run.updatedAt,
@@ -207,7 +218,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       status: run.status,
       pendingApprovals: orch.approvals.listForRun(runId).filter((a) => a.status === 'pending')
         .length,
-      helpersLive: agents.filter((a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status))
+      helpersLive: agents.filter((a) => countsAsHelper(a.kind) && isActiveAgentStatus(a.status))
         .length,
       budgetTokensUsed: agents.reduce((sum, a) => sum + a.budgetTokensUsed, 0),
       // Reported costs are kept in memory only; after a restart they are unavailable.
@@ -325,7 +336,18 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const runId = next.run.id;
       const status = next.run.status;
       const changed = prev === null || prev.run.status !== status;
-      if (changed && status === 'REVIEW' && ticketId !== null) deps.checks.runOnReview(runId);
+      if (changed && status === 'REVIEW' && ticketId !== null) {
+        // ADR-0021: a loop run's owner merges the ticket branch, so its tip is what gets checked
+        // (a temporary detached checkout); a legacy run checks each helper's worktree.
+        const tip =
+          next.integration === undefined ? undefined : loop.ticketBranches.getByRun(runId);
+        if (next.integration === undefined) deps.checks.runOnReview(runId);
+        else if (tip !== undefined && tip.state === 'open') {
+          deps.checks.startOnCommit(runId, null, tip.headCommit, () => {
+            notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
+          });
+        }
+      }
       if (changed && (status === 'CANCELLING' || status === 'CANCELLED' || status === 'FAILED')) {
         deps.checks.abortRun(runId);
       }
@@ -352,8 +374,13 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     },
 
     agentSetup: (projectId) => deps.harness.agentSetup(projectId),
-    allowlist: (projectId) => deps.harness.allowlist(projectId),
+    allowlist: (projectId, policy) => deps.harness.allowlist(projectId, policy),
     reviewGate: (runId, agentRunId) => deps.checks.gate(runId, agentRunId),
+    commitChecks: {
+      gate: (runId, agentRunId, commit) => deps.checks.gateForCommit(runId, agentRunId, commit),
+      start: (runId, agentRunId, commit, onFinished) =>
+        deps.checks.startOnCommit(runId, agentRunId, commit, onFinished),
+    },
 
     mergedAnyway({ runId, role, reason, failedChecks }) {
       // The owner's reason is their own text (ADR-0016): kept on the ticket, for the record.
@@ -559,7 +586,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       return toTicketDto(moved);
     },
 
-    async startTicket(ticketId) {
+    async startTicket(ticketId, body) {
+      // ADR-0021 §1, §3: per-run overrides; an empty or missing body uses the project's settings.
+      const options = StartTicketRequestSchema.parse(body ?? {});
       const ticket = ticketOrThrow(ticketId);
       if (!deps.control.enabled) throw managedDisabled();
       if (ticket.status === 'BACKLOG') {
@@ -574,6 +603,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const workflow = redesign.workflow.get(ticket.projectId);
       if (workflow === undefined) throw notFound(`Project ${ticket.projectId} not found`);
       const prompts = ticketRunPrompts(ticket, limits, workflow);
+      // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
+      const projectApprovals = approvalsOf(setup);
+      const approvals = {
+        mode: options.approvalMode ?? projectApprovals.mode,
+        commands: projectApprovals.commands,
+      };
+      const reviewStage = reviewStageOf(workflow);
+      const reviewLoop = {
+        ticketKey: ticket.key,
+        reviewer: options.reviewer ?? reviewStage.reviewer,
+        maxReworkRounds: options.maxReworkRounds ?? reviewStage.maxReworkRounds,
+      };
+      const legacy = deps.legacyTicketRuns === true;
       // Re-read: the ticket may have moved while the setup was read.
       const fresh = ticketOrThrow(ticketId);
       if (fresh.status !== ticket.status || fresh.currentRunId !== ticket.currentRunId) {
@@ -588,12 +630,18 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         workflow,
         limits,
         budget,
+        ...(!legacy && { reviewLoop, approvals }),
         inTransaction: (runId) => {
           ws.tickets.setStatus(ticketId, 'ACTIVE', { from: [ticket.status], currentRunId: runId });
         },
       });
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId: run.id });
-      logger.log('info', 'ticket started', { ticketId, runId: run.id });
+      logger.log('info', 'ticket started', {
+        ticketId,
+        runId: run.id,
+        approvalMode: legacy ? null : approvals.mode,
+        reviewer: legacy ? null : reviewLoop.reviewer,
+      });
       return detail(ticketId);
     },
 

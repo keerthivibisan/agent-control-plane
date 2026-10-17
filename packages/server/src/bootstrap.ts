@@ -66,6 +66,11 @@ export interface StartOptions {
   checkRunner?: CheckRunner;
   /** Tests: control-service timing overrides. */
   control?: { approvalTimeoutMs?: number; sweepIntervalMs?: number | null; cancelGraceMs?: number };
+  /**
+   * Tests only: start ticket runs without the review loop (ADR-0021), as runs started before it
+   * did, so the verification of that legacy flow keeps running against the real composition.
+   */
+  board?: { legacyTicketRuns?: boolean };
 }
 
 export interface RunningServer {
@@ -244,6 +249,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     now,
     publish: (n) => notifier.publish(n),
     logger,
+    ...(options.board?.legacyTicketRuns === true && { legacyTicketRuns: true }),
   });
   Object.assign(workspaceHooks, board.controlHooks());
   const workflow = createWorkflowService({

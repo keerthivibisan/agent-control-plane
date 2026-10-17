@@ -35,8 +35,16 @@ const REFUSAL_STATUS: Readonly<Record<RefusalCode, number>> = {
 
 const snake = (code: string): string => code.replaceAll('-', '_');
 
+/**
+ * The HTTP status follows the refusal's code; the error code is the specific review-loop reason
+ * when there is one (ADR-0021: `rework_limit`, `checks_failed`, `change_not_decidable`, …).
+ */
 export function refusalError(refusal: Refusal): HttpError {
-  return new HttpError(REFUSAL_STATUS[refusal.code], snake(refusal.code), refusal.message);
+  return new HttpError(
+    REFUSAL_STATUS[refusal.code],
+    snake(refusal.reason ?? refusal.code),
+    refusal.message,
+  );
 }
 
 /** Every workspace error is a refusal the owner can act on (clean the tree, switch back, ...). */

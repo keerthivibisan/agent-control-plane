@@ -58,7 +58,7 @@ async function run(s: Board, runId: string): Promise<RunDetailDto> {
 
 describe('approval decidedBy and run limits persistence (R-G)', () => {
   it('stores the owner as decider and the limits snapshot, and reloads both', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     await setLimits(s, 2, false);
     const { runId, worker } = await withHelper(s);
     const audit = createRedesignRepositories(s.db).runAudit;
@@ -86,7 +86,7 @@ describe('approval decidedBy and run limits persistence (R-G)', () => {
   });
 
   it('stores the allowlist as decider for an auto-approved edit in the helper worktree', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     await setLimits(s, 3, true);
     const { runId, worker } = await withHelper(s);
     const decision = await worker.ask('Edit', 'Edit src/app.ts', {

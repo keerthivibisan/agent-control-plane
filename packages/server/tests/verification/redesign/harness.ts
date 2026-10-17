@@ -132,6 +132,9 @@ export async function bootRedesign(options: RedesignBootOptions = {}): Promise<R
     managedAdapter: tee.adapter,
     // Skills and agent files are committed as the owner (ADR-0018): give the test repo an identity.
     git: createGitRunner({ env: GIT_TEST_IDENTITY_ENV }),
+    // R-V verifies the redesign stages of runs started before ADR-0021 (legacy flow, kept by such
+    // runs); the review loop is verified in tests/verification/review-loop.
+    board: { legacyTicketRuns: true },
   });
   const base = `http://127.0.0.1:${server.port}`;
   const responses: string[] = [];

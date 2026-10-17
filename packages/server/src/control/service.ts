@@ -5,6 +5,7 @@ import {
   APPROVAL_TIMEOUT_MS,
   HARD_MAX_DEPTH,
   isPathInside,
+  LeadToolInputs,
   type AgentRoleKind,
   type ManagedAgentEvent,
   type ManagedAgentSpec,
@@ -12,6 +13,7 @@ import {
   type ManagedExecutionAdapter,
   type PermissionDecision,
   type PermissionRequest,
+  type ProjectApprovals,
   type ProjectWorkflow,
   type RegisteredRoot,
   type RunBudget,
@@ -31,6 +33,7 @@ import {
   type RunSummaryDto,
   type RunWorkflowDto,
   type StreamNoticeDto,
+  type TicketBranchReviewDto,
 } from '@acp/core/api';
 import {
   MAX_PAGE_SIZE,
@@ -56,6 +59,7 @@ import {
   followUpEvent,
   followUpView,
   isAgentOverBudget,
+  isActiveAgentStatus,
   isApprovalOverdue,
   isLiveAgentStatus,
   isRunPastDeadline,
@@ -71,12 +75,14 @@ import {
   stopAgent,
   stopFollowUp,
   timeOutRun,
+  viewChangeReply,
   type AllowlistTarget,
   type AllowlistVerdict,
   type EngineAgent,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
+  type CreateRunInput,
   type FollowUpFacts,
   type PlanDecision,
   type Refusal,
@@ -113,6 +119,14 @@ import {
   type ReviewCheckout,
   type ReviewCheckouts,
 } from './review-checkouts.js';
+import {
+  REVIEWER_DIFF_MAX_BYTES,
+  VIEW_DIFF_MAX_BYTES,
+  createReviewLoop,
+  type CommitChecksHooks,
+  type MergeOutcome,
+} from './review-loop.js';
+import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
@@ -201,8 +215,13 @@ export interface ControlWorkspaceHooks {
   afterCommit?: (prev: RunState | null, next: RunState) => void;
   /** The project's context files and model for a run's agents; read once per run. */
   agentSetup?: (projectId: string) => Promise<AgentSetup>;
-  /** The project's allowlist and harness checks; null when the project has no setup. */
-  allowlist?: (projectId: string) => Promise<AllowlistContext | null>;
+  /**
+   * The project's allowlist and harness checks; null when nothing may run unasked. `policy`
+   * (ADR-0021): the run's snapshotted approval mode and command allowlist, which then decide.
+   */
+  allowlist?: (projectId: string, policy?: ProjectApprovals) => Promise<AllowlistContext | null>;
+  /** ADR-0021: the harness checks per commit (the merge gate and the checks it starts). */
+  commitChecks?: CommitChecksHooks;
   reviewGate?: (runId: string, agentRunId: string) => ReviewGate;
   /** The owner merged although a required check failed; `reason` is their own text. */
   mergedAnyway?: (input: {
@@ -226,6 +245,10 @@ export interface TicketRunInput {
   workflow?: ProjectWorkflow;
   limits: RunLimits;
   budget: RunBudget;
+  /** ADR-0021 §3: the review loop for this run (the board resolves the overrides); absent: legacy. */
+  reviewLoop?: CreateRunInput['reviewLoop'];
+  /** ADR-0021 §1: the approval policy snapshotted with the run; absent: the legacy allowlist. */
+  approvals?: ProjectApprovals;
   /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
   inTransaction?: (runId: string) => void;
 }
@@ -296,6 +319,13 @@ export interface ControlService {
    * returns the updated review.
    */
   reviewAction(runId: string, body: unknown): Promise<ReviewDto>;
+  /** ADR-0021 §4: the run's ticket branch, its combined change `base...tip` and its checks. */
+  ticketBranch(runId: string): Promise<TicketBranchReviewDto>;
+  /**
+   * ADR-0021 §4: the owner's merge (once, as a fast-forward), merge anyway, request changes,
+   * discard or update from the base branch; returns the ticket branch afterwards.
+   */
+  ticketBranchAction(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
   /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
   createTicketRun(input: TicketRunInput): RunDetailDto;
   /**
@@ -341,6 +371,12 @@ interface LiveRun {
    * agent record stays ended, and a run's cancellation never waits for it.
    */
   followUp: ManagedAgentHandle | undefined;
+  /** ADR-0021: the merge under way per agent (the lead's `merge_change` awaits its reply). */
+  merges: Map<string, Promise<MergeOutcome>>;
+  /** ADR-0021: one merge into the ticket branch at a time per run. */
+  mergeChain: Promise<unknown>;
+  /** ADR-0021: the latest commit whose checks were started per agent. */
+  checkTargets: Map<string, string>;
 }
 
 /** What `launch` needs from a `start-agent` effect. */
@@ -356,6 +392,10 @@ interface LaunchInput {
   /** The stage's agent file (ADR-0019 §6), when it could be read; its `model` is the fallback. */
   agentFile?: { profile: AgentProfile; model: string | null } | undefined;
   canStartHelpers?: boolean;
+  /** ADR-0021: a rework turn resumes this session (null: fresh). */
+  rework?: { resumeSessionId: string | null } | undefined;
+  /** ADR-0021: what a reviewer reviews. */
+  reviewScope?: 'change' | 'final' | undefined;
 }
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
@@ -401,7 +441,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   /** Agent folders under the data dir: helpers' worktrees and reviewers' checkouts. */
   const worktreesDirs = (() => {
     const dirs: string[] = [];
-    for (const name of ['worktrees', 'review-checkouts']) {
+    for (const name of ['worktrees', 'review-checkouts', 'ticket-checkouts']) {
       const dir = join(deps.dataDir, name);
       dirs.push(dir);
       try {
@@ -415,6 +455,20 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   })();
 
   const ctx = (): EngineContext => ({ now: deps.now(), newId });
+
+  /** ADR-0021: the review loop's git effects and the owner's loop actions. */
+  const loop = createReviewLoop({
+    store,
+    projectRoot: (projectId) => deps.repos.projects.getById(projectId)?.rootPath,
+    workspaces: deps.workspaces,
+    logger,
+    commitChecks: () => hooks.commitChecks,
+    apply: (live, command) => apply(live as LiveRun, command),
+    workspaceFor: (live, row) => workspaceFor(live as LiveRun, row),
+    ...(deps.flushIngestion !== undefined && { flushIngestion: deps.flushIngestion }),
+    track,
+    countDiagnostic: (code) => countDiagnostic(code),
+  });
 
   function track<T>(promise: Promise<T>): void {
     const p = promise.catch((error: unknown) => {
@@ -439,6 +493,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       cancellingSince: state.run.status === 'CANCELLING' ? deps.now().getTime() : null,
       reviewCheckouts: new Map(),
       followUp: undefined,
+      merges: new Map(),
+      mergeChain: Promise.resolve(),
+      checkTargets: new Map(),
     };
   }
 
@@ -580,7 +637,25 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           live.followUp?.abort();
           break;
         case 'create-review-checkout':
-          createReviewCheckout(live, effect.agentRunId);
+          createReviewCheckout(live, effect);
+          break;
+        // ADR-0021 review loop: git work on the server, results reported back to the engine.
+        case 'seal-change':
+          loop.sealChange(live, effect.agentRunId);
+          break;
+        case 'create-ticket-branch':
+          loop.createTicketBranch(live, effect.ticketKey);
+          break;
+        case 'merge-change':
+          loop.mergeChange(live, effect);
+          break;
+        case 'discard-change':
+          loop.discardChange(live, effect.agentRunId);
+          break;
+        case 'change-round':
+        case 'change-comment':
+          // Stored in the same transaction as the state (RunStore.commit); no text is logged.
+          logger.log('info', `${effect.type} stored`, { runId, agentRunId: effect.agentRunId });
           break;
         case 'remove-review-checkout':
           removeReviewCheckout(live, effect.agentRunId);
@@ -640,7 +715,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const before = new Map(prev.agents.map((a) => [a.id, a]));
     for (const agent of live.state.agents) {
       const was = before.get(agent.id);
-      if (was === undefined || !isLiveAgentStatus(was.status) || isLiveAgentStatus(agent.status)) {
+      // ADR-0021: a helper whose turn ended (AWAITING_REVIEW) has stopped working too.
+      if (
+        was === undefined ||
+        !isActiveAgentStatus(was.status) ||
+        isActiveAgentStatus(agent.status)
+      ) {
         continue;
       }
       const parent = live.state.agents.find((a) => a.id === agent.parentAgentRunId);
@@ -674,7 +754,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return;
     }
     const outcome =
-      child.status === 'SUCCEEDED'
+      child.status === 'SUCCEEDED' || child.status === 'AWAITING_REVIEW'
         ? 'finished'
         : child.status === 'CANCELLED'
           ? 'was stopped'
@@ -782,9 +862,21 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
+          const prompt =
+            effect.reviewScope === 'change'
+              ? await changeReviewerPrompt(live, agentRunId, effect.prompt)
+              : effect.prompt;
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, cwd: checkout.cwd, setup, plugin, agentFile });
+          launch(live, {
+            ...base,
+            prompt,
+            cwd: checkout.cwd,
+            setup,
+            plugin,
+            agentFile,
+            reviewScope: effect.reviewScope,
+          });
         })(),
       );
       return;
@@ -800,12 +892,22 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       agentDepth(live.state, worker) === 1;
     const prompt = canStartHelpers ? `${effect.prompt}\n\n${PARENT_HELPER_NOTE}` : effect.prompt;
 
+    if (effect.rework !== undefined) {
+      reworkAgent(live, effect, project.rootPath);
+      return;
+    }
+
     live.starting.add(agentRunId);
     track(
       (async () => {
         let ws: Workspace;
         try {
-          ws = await deps.workspaces.create(project.rootPath, runId, agentRunId);
+          ws = await deps.workspaces.create(
+            project.rootPath,
+            runId,
+            agentRunId,
+            fromTicketBranch(live, effect.fromBranch),
+          );
         } catch (error) {
           live.starting.delete(agentRunId);
           live.pendingSends.delete(agentRunId);
@@ -858,6 +960,95 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         });
       })(),
     );
+  }
+
+  /**
+   * ADR-0021: where a worker's or tester's worktree starts: the ticket branch's recorded tip when
+   * the engine names it (`start-agent.fromBranch`), else the project's HEAD (legacy runs).
+   */
+  function fromTicketBranch(
+    live: LiveRun,
+    branch: string | undefined,
+  ): { from?: { branch: string; commit: string } } {
+    if (branch === undefined) return {};
+    const row = store.loopRepos.ticketBranches.getByRun(live.state.run.id);
+    // The engine and the record agree on the name; a mismatch fails the start (never main).
+    if (row === undefined || row.branch !== branch || row.state !== 'open') {
+      return { from: { branch, commit: '' } };
+    }
+    return { from: { branch, commit: row.headCommit } };
+  }
+
+  /**
+   * A rework turn (ADR-0021 §3): the same helper in its own worktree, resuming its session, with
+   * the lead's or owner's comments as the prompt. Never with `canStartHelpers`.
+   */
+  function reworkAgent(
+    live: LiveRun,
+    effect: Extract<EngineEffect, { type: 'start-agent' }>,
+    projectRoot: string,
+  ): void {
+    const runId = live.state.run.id;
+    const agentRunId = effect.agentRunId;
+    live.starting.add(agentRunId);
+    track(
+      (async () => {
+        const row = store.repos.workspaces.getByAgentRun(agentRunId);
+        let ws: Workspace | undefined;
+        try {
+          ws =
+            row !== undefined && row.state === 'active' ? await workspaceFor(live, row) : undefined;
+        } catch (error) {
+          logger.log('warn', 'rework workspace unavailable', {
+            runId,
+            agentRunId,
+            ...errorFields(error),
+          });
+        }
+        if (ws === undefined) {
+          live.starting.delete(agentRunId);
+          live.pendingSends.delete(agentRunId);
+          logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-worktree' });
+          endWithError(live, agentRunId);
+          return;
+        }
+        const setup = await setupFor(live);
+        const plugin = await pluginFor(live, projectRoot, effect);
+        const agentFile = await agentFileFor(live, projectRoot, effect);
+        live.starting.delete(agentRunId);
+        if (!stillStarting(live, agentRunId)) return;
+        launch(live, {
+          agentRunId,
+          kind: effect.kind,
+          prompt: effect.prompt,
+          model: effect.model,
+          cwd: ws.cwd,
+          setup,
+          plugin,
+          agentFile,
+          rework: effect.rework,
+        });
+      })(),
+    );
+  }
+
+  /**
+   * A change reviewer's brief plus the change as a diff against the ticket branch, at most
+   * 64 KiB (ADR-0021 §3). Sent to the agent, never stored or logged.
+   */
+  async function changeReviewerPrompt(
+    live: LiveRun,
+    reviewerId: string,
+    brief: string,
+  ): Promise<string> {
+    const helperId = live.state.agents.find((a) => a.id === reviewerId)?.reviewsAgentRunId;
+    if (helperId === undefined) return brief;
+    const change = await loop.changeDiff(live, helperId, REVIEWER_DIFF_MAX_BYTES);
+    if (change === null || change.diff.trim() === '') {
+      return `${brief}\n\nNo diff could be read for this change; read the files in your folder.`;
+    }
+    const cut = change.truncated ? ' (cut at 64 KiB; read the rest in your folder)' : '';
+    return `${brief}\n\nThe change, as a diff against the ticket branch${cut}:\n\n${change.diff}`;
   }
 
   /**
@@ -1073,15 +1264,29 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     );
   }
 
-  /** `create-review-checkout`: the reviewer's `start-agent`, which follows, waits for it. */
-  function createReviewCheckout(live: LiveRun, agentRunId: string): void {
+  /**
+   * `create-review-checkout`: the reviewer's `start-agent`, which follows, waits for it. ADR-0021:
+   * a change reviewer reads the sealed commit (`commit`), the final reviewer the ticket branch's
+   * recorded tip (`ticketBranch`); neither, the project's HEAD (legacy runs).
+   */
+  function createReviewCheckout(
+    live: LiveRun,
+    effect: Extract<EngineEffect, { type: 'create-review-checkout' }>,
+  ): void {
+    const agentRunId = effect.agentRunId;
     const runId = live.state.run.id;
     const projectId = live.state.run.projectId;
     const project = deps.repos.projects.getById(projectId);
+    let commit = effect.commit;
+    if (commit === undefined && effect.ticketBranch !== undefined) {
+      const row = store.loopRepos.ticketBranches.getByRun(runId);
+      // Never fall back to main: a final review of the wrong code is worse than none.
+      commit = row?.branch === effect.ticketBranch ? row.headCommit : 'missing';
+    }
     const made: Promise<ReviewCheckout | null> =
       project === undefined
         ? Promise.resolve(null)
-        : reviewCheckouts.create(project.rootPath, runId, agentRunId).then(
+        : reviewCheckouts.create(project.rootPath, runId, agentRunId, commit).then(
             (checkout) => {
               activeCheckouts.set(agentRunId, { projectId, checkout });
               logger.log('info', 'review checkout created', { runId, agentRunId });
@@ -1168,10 +1373,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
       // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
       // to its own children, the planner's to submit_plan, the reviewer's to post_review.
-      spec.leadTools = (name, input) =>
-        new Promise<string>((resolve) => resolve(leadTool(live, agentRunId, name, input)));
+      spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
     }
-    if (kind === 'worker' && canStartHelpers) spec.canStartHelpers = true;
+    // A rework turn never starts helpers (ADR-0021 §3).
+    if (kind === 'worker' && canStartHelpers && input.rework === undefined) {
+      spec.canStartHelpers = true;
+    }
+    if (input.rework !== undefined) spec.rework = { ...input.rework };
+    if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
     let handle: ManagedAgentHandle;
@@ -1214,10 +1423,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     } catch (error) {
       logger.log('warn', 'agent stream failed', { runId, agentRunId, ...errorFields(error) });
     }
-    live.handles.delete(agentRunId);
+    // A rework turn's new process may already hold the slot; only drop this one.
+    if (live.handles.get(agentRunId) === handle) live.handles.delete(agentRunId);
     if (closed) return;
     const agent = live.state.agents.find((a) => a.id === agentRunId);
-    if (agent !== undefined && isLiveAgentStatus(agent.status)) {
+    // ADR-0021: AWAITING_REVIEW is live but has no process: its turn already ended.
+    if (agent !== undefined && isActiveAgentStatus(agent.status) && !live.handles.has(agentRunId)) {
       // The stream ended without a `finished` event: the agent is gone either way.
       apply(live, (s, c) =>
         agentEvent(s, agentRunId, { type: 'finished', outcome: 'error', reportedCostUsd: null }, c),
@@ -1313,7 +1524,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     target: AllowlistTarget,
     readAllowlist: NonNullable<ControlWorkspaceHooks['allowlist']>,
   ): Promise<AllowlistVerdict | undefined> {
-    const context = await readAllowlist(live.state.run.projectId);
+    // ADR-0021: a run with a snapshotted policy is judged by it, never by the live project setup.
+    const context = await readAllowlist(live.state.run.projectId, live.state.approvalPolicy);
     if (context === null) return undefined;
     const row = store.repos.workspaces.getByAgentRun(agentRunId);
     const ws =
@@ -1364,8 +1576,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return new Promise((resolve) => permissions.set(approvalId, resolve));
   }
 
-  /** Lead tool calls: the engine validates (ADR-0013); a refusal is returned to the model as an error. */
-  function leadTool(live: LiveRun, agentRunId: string, name: string, input: unknown): string {
+  /**
+   * Lead tool calls: the engine validates (ADR-0013); a refusal is returned to the model as an
+   * error. ADR-0021: `view_change` gets the change's diff appended (at most 32 KiB in all, sent
+   * and never stored); `merge_change` answers once the server's merge is done or blocked.
+   */
+  async function leadTool(
+    live: LiveRun,
+    agentRunId: string,
+    name: string,
+    input: unknown,
+  ): Promise<string> {
     const runId = live.state.run.id;
     const result = apply(live, (s, c) =>
       leadToolCall(
@@ -1379,6 +1600,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       throw new Error(result.refusal.message);
     }
     logger.log('info', 'lead tool called', { runId, tool: name });
+    if (name === 'view_change') {
+      const target = LeadToolInputs.view_change.safeParse(input);
+      if (!target.success) return result.value;
+      const change = await loop.changeDiff(live, target.data.agentId, VIEW_DIFF_MAX_BYTES);
+      return viewChangeReply(result.value, change?.diff ?? null);
+    }
+    if (name === 'merge_change') {
+      const target = LeadToolInputs.merge_change.safeParse(input);
+      const merging = target.success ? live.merges.get(target.data.agentId) : undefined;
+      if (merging === undefined) return result.value;
+      return (await merging).reply;
+    }
     return result.value;
   }
 
@@ -1394,12 +1627,27 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   function detail(live: LiveRun): RunDetailDto {
     const runId = live.state.run.id;
     const followUp = followUpView(live.state, followUpFacts(live));
-    return toRunDetail(live.state, {
+    const dto = toRunDetail(live.state, {
       stored: store.repos.agentRuns.listForRun(runId),
       workspaces: store.repos.workspaces.listForRun(runId),
       messages: store.repos.messages.list(runId, { limit: MAX_PAGE_SIZE }),
       ...(followUp !== undefined && { followUp }),
     });
+    // ADR-0021: absent for runs before it, so their detail is unchanged.
+    const policy = live.state.approvalPolicy;
+    if (policy !== undefined) dto.approvalMode = policy.mode;
+    const integration = live.state.integration;
+    if (integration !== undefined) {
+      const branch = store.loopRepos.ticketBranches.getByRun(runId);
+      dto.ticketBranch = branch === undefined ? null : toTicketBranchDto(branch);
+      dto.changes = toChangeReviewDtos({
+        agents: live.state.agents,
+        reviews: store.loopRepos.changeReviews.listForRun(runId),
+        checks: store.loopRepos.checkCommits.listForRun(runId),
+        maxReworkRounds: integration.maxReworkRounds,
+      });
+    }
+    return dto;
   }
 
   function agentDto(live: LiveRun, agentRunId: string): AgentRunDto {
@@ -1415,9 +1663,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function review(runId: string): Promise<ReviewDto> {
     const live = get(runId);
     const agents: ReviewDto['agents'] = [];
+    const tip = store.loopRepos.ticketBranches.getByRun(runId)?.headCommit;
     for (const agent of live.state.agents) {
       // Live helpers and testers are still changing their tree; they are reviewed once they stop.
-      if (!hasReviewableChange(agent.kind) || agent.review === null) continue;
+      // ADR-0021: in a loop run, a change is listed once it is sealed, until it is decided.
+      const state =
+        agent.review ??
+        (agent.change !== undefined && agent.change.headCommit !== null ? 'pending' : null);
+      if (!hasReviewableChange(agent.kind) || state === null) continue;
       const row = store.repos.workspaces.getByAgentRun(agent.id);
       if (row === undefined) continue;
       const base = {
@@ -1425,14 +1678,20 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         role: agent.role,
         branch: row.branch,
         baseBranch: row.baseBranch,
-        state: agent.review,
+        state,
       };
       if (row.state === 'removed') {
         agents.push({ ...base, files: [], diff: '', diffTruncated: false });
         continue;
       }
       try {
-        const changes = await deps.workspaces.changes(await workspaceFor(live, row));
+        const ws = await workspaceFor(live, row);
+        const sealed = agent.change !== undefined && agent.change.headCommit !== null;
+        // A sealed change is shown against the current ticket tip: only what it adds.
+        const changes =
+          sealed && tip !== undefined
+            ? await deps.workspaces.changeDiff(ws, tip)
+            : await deps.workspaces.changes(ws);
         store.repos.workspaces.setReview(row.id, {
           reviewState: row.reviewState,
           changedFiles: changes.files.length,
@@ -1569,7 +1828,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       try {
         const checkouts = await reviewCheckouts.cleanupOrphans();
         const plugins = await skillsPlugins.cleanupAll();
-        logger.log('info', 'temporary agent folders cleaned', { checkouts, plugins });
+        // ADR-0021: temporary checkouts of ticket branch tips (checks, update from base).
+        const tipCheckouts = await deps.workspaces.cleanupCheckouts();
+        logger.log('info', 'temporary agent folders cleaned', { checkouts, plugins, tipCheckouts });
       } catch (error) {
         logger.log('warn', 'temporary agent folder cleanup failed', errorFields(error));
       }
@@ -1746,8 +2007,32 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     async reviewAction(runId, body) {
       const input = ReviewActionRequestSchema.parse(body);
-      // RL-0 placeholder (ADR-0021): the contract accepts `rework`, but no run has the review loop
-      // yet. Refuse it here so it can never fall through to a merge; RL-B implements it.
+      const live = get(runId);
+      if (live.state.integration !== undefined) {
+        // ADR-0021: the owner decides a change instead of the lead (merges go into the ticket
+        // branch, never the base branch); the engine checks each action first.
+        await loop.ownerChangeAction(live, input, (failedChecks) => {
+          const role = live.state.agents.find((a) => a.id === input.agentRunId)?.role ?? 'Helper';
+          try {
+            hooks.mergedAnyway?.({
+              runId,
+              agentRunId: input.agentRunId,
+              role,
+              reason: input.reason ?? '',
+              failedChecks,
+            });
+          } catch (error) {
+            logger.log('error', 'merge-anyway record failed', { runId, ...errorFields(error) });
+          }
+        });
+        logger.log('info', 'change decided by owner', {
+          runId,
+          agentRunId: input.agentRunId,
+          action: input.action,
+        });
+        return review(runId);
+      }
+      // A run without the review loop has no rework: each change is merged or discarded.
       if (input.action === 'rework') {
         throw new HttpError(
           409,
@@ -1829,6 +2114,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             ...(input.plannerPrompt !== undefined && { plannerPrompt: input.plannerPrompt }),
           },
           ...(input.workflow !== undefined && { workflow: input.workflow }),
+          ...(input.reviewLoop !== undefined && { reviewLoop: input.reviewLoop }),
+          ...(input.approvals !== undefined && { approvals: input.approvals }),
           registeredProjectIds: projectIds(),
         },
         ctx(),
@@ -1853,7 +2140,37 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     runWorkflow(runId) {
-      return deriveRunWorkflow(get(runId).state);
+      const state = get(runId).state;
+      const dto = deriveRunWorkflow(state);
+      if (state.integration === undefined || dto.review !== undefined) return dto;
+      const changes = state.agents.flatMap((a) => (a.change === undefined ? [] : [a.change]));
+      return { ...dto, review: reviewCounts(changes) };
+    },
+
+    ticketBranch(runId) {
+      return loop.ticketBranchReview(get(runId));
+    },
+
+    async ticketBranchAction(runId, body) {
+      const live = get(runId);
+      await loop.ticketBranchAction(live, body, {
+        ownerComment: (text) => {
+          // The owner's own words (ADR-0016, ADR-0021 §6), kept on the ticket.
+          const ticketId = live.state.run.ticketId;
+          if (ticketId === null) return;
+          try {
+            store.workspaceRepos.comments.insert({
+              ticketId,
+              runId,
+              author: 'owner',
+              body: text.slice(0, 8000),
+            });
+          } catch (error) {
+            logger.log('error', 'owner comment not stored', { runId, ...errorFields(error) });
+          }
+        },
+      });
+      return loop.ticketBranchReview(live);
     },
 
     decidePlan(runId, planId, decision, comment) {

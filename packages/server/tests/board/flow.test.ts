@@ -31,7 +31,7 @@ const SETUP = {
 
 describe('start and plan decisions', () => {
   it('start creates a PLANNING run whose lead gets the brief; plans are versioned and stored', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket, detail: started } = await s.startTicket('Add dark mode');
     const parsed = TicketDetailDtoSchema.parse(started);
     expect(parsed.ticket).toMatchObject({ status: 'ACTIVE', stage: 'PLANNING' });
@@ -151,6 +151,7 @@ async function toReview(s: Awaited<ReturnType<typeof setupBoard>>, fix: boolean)
 describe('review, checks and merge (ADR-0017 §3–§4)', () => {
   it('runs the checks when the run enters review; a passing required check allows merge → Done', async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: { 'README.md': 'x\n', 'src/app.ts': '', ...PASSING_WHEN_FIXED },
     });
     const { ticket, runId, worker } = await toReview(s, true);
@@ -191,6 +192,7 @@ describe('review, checks and merge (ADR-0017 §3–§4)', () => {
 
   it('a failed required check blocks merge; merge anyway needs a reason and is recorded', async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: { 'README.md': 'x\n', 'src/app.ts': '', ...PASSING_WHEN_FIXED },
     });
     const { ticket, runId, worker } = await toReview(s, false);
@@ -242,6 +244,7 @@ describe('review, checks and merge (ADR-0017 §3–§4)', () => {
 
   it('merge anyway with a reason merges and keeps the reason on the ticket', async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: { 'README.md': 'x\n', 'src/app.ts': '', ...PASSING_WHEN_FIXED },
     });
     const { ticket, runId, worker } = await toReview(s, false);
@@ -260,6 +263,7 @@ describe('review, checks and merge (ADR-0017 §3–§4)', () => {
 
   it('refuses on-demand checks for a live agent, the lead, and an unknown agent', async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: { 'README.md': 'x\n', 'src/app.ts': '', ...PASSING_WHEN_FIXED },
     });
     const { ticket } = await s.startTicket();
@@ -289,7 +293,7 @@ describe('review, checks and merge (ADR-0017 §3–§4)', () => {
 
 describe('cancel, context and depth 2', () => {
   it('cancelling a ticket stops its run; a cancelled ticket can be re-run', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket } = await s.startTicket();
     const res = await s.post(`/api/tickets/${ticket.id}/move`, { status: 'CANCELLED' });
     expect(res.status).toBe(200);
@@ -306,7 +310,7 @@ describe('cancel, context and depth 2', () => {
   });
 
   it('a failed run puts the card back in Ready with a note; it can start again', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket } = await s.startTicket();
     s.fake.lead().finish('error');
     await s.settle();
@@ -323,6 +327,7 @@ describe('cancel, context and depth 2', () => {
 
   it('agents get the chosen context files and model', async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: { 'README.md': 'Project facts here.\n', 'src/app.ts': '' },
     });
     await s.send('put', `/api/projects/${s.project.id}/setup`, {
@@ -338,7 +343,7 @@ describe('cancel, context and depth 2', () => {
   });
 
   it('depth 2: a helper gets the child tools and is told when its own helper ends', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     await s.send('put', `/api/projects/${s.project.id}/setup`, { ...SETUP, maxDepth: 2 });
     const { ticket } = await s.startTicket();
     await s.submitPlan();
@@ -368,7 +373,7 @@ describe('cancel, context and depth 2', () => {
   });
 
   it('depth 1: helpers get no child tools', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket } = await s.startTicket();
     await s.submitPlan();
     const plan = (await s.detail(ticket.id)).plans[0];
@@ -385,7 +390,7 @@ describe('cancel, context and depth 2', () => {
 
 describe('project allowlist (ADR-0013 amendment)', () => {
   it("auto-approves an edit in the helper's own worktree, asks for one outside it, and never exposes the tool input", async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     await s.send('put', `/api/projects/${s.project.id}/setup`, {
       ...SETUP,
       allowlist: { editInOwnWorktree: true, runHarnessChecks: false },
@@ -438,7 +443,7 @@ describe('project allowlist (ADR-0013 amendment)', () => {
   });
 
   it('asks the owner for every edit while the allowlist is off', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket } = await s.startTicket();
     await s.submitPlan();
     const plan = (await s.detail(ticket.id)).plans[0];

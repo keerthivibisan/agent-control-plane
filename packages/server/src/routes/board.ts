@@ -91,7 +91,7 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
     res.json(out(TicketDtoSchema, board.moveTicket(param(req.params['id']), req.body)));
   });
   router.post('/tickets/:id/start', csrf, json, async (req, res) => {
-    const dto = await board.startTicket(param(req.params['id']));
+    const dto = await board.startTicket(param(req.params['id']), req.body);
     res.json(out(TicketDetailDtoSchema, dto));
   });
   router.post('/tickets/:id/comments', csrf, json, (req, res) => {

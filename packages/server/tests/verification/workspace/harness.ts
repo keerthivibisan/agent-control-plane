@@ -103,6 +103,8 @@ export interface WorkspaceBootOptions {
   claudeDir?: string;
   /** Shared across restarts so a test can search everything a server ever logged. */
   logs?: string[];
+  /** ADR-0021: start ticket runs with the review loop, as production does (default: legacy). */
+  reviewLoop?: boolean;
 }
 
 export async function bootWorkspace(options: WorkspaceBootOptions = {}): Promise<WorkspaceServer> {
@@ -124,6 +126,10 @@ export async function bootWorkspace(options: WorkspaceBootOptions = {}): Promise
     logger: createLogger((line) => logs.push(line)),
     managedAdapter: fake.adapter,
     git: createGitRunner({ env: GIT_TEST_ENV }),
+    // P4-H verifies the flow of ticket runs started before ADR-0021 (the owner merges each change
+    // into the base branch), which such runs keep; the review loop is verified in
+    // tests/verification/review-loop (`reviewLoop: true`).
+    board: { legacyTicketRuns: options.reviewLoop !== true },
   });
   const base = `http://127.0.0.1:${server.port}`;
   const responses: string[] = [];

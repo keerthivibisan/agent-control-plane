@@ -83,6 +83,8 @@ export function toApprovalDto(a: EngineApproval): ApprovalDto {
     summary: a.summary,
     status: a.status,
     decidedBy: a.decidedBy ?? null,
+    // ADR-0021: the rule that let it run unasked; absent for approvals before it.
+    ...(a.allowRule !== undefined && { allowRule: a.allowRule }),
     requestedAt: a.requestedAt,
     decidedAt: a.decidedAt,
   };

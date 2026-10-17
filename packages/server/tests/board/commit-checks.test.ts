@@ -17,6 +17,8 @@ async function helperRun(s: Awaited<ReturnType<typeof setupBoard>>) {
   await s.post(`/api/tickets/${ticket.id}/plans/${plan?.id ?? ''}/decision`, {
     decision: 'approve',
   });
+  // The ticket branch is created right after the plan's approval (ADR-0021 §4).
+  await s.settle();
   await s.fake.lead().callLead('start_agent', { role: 'Builder', task: 'Build the toggle' });
   await s.settle();
   const worker = s.fake.workers()[0];

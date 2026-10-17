@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
-import type { AgentRoleKind, HarnessCheck, ProjectAllowlist } from '@acp/core';
+import type { AgentRoleKind, HarnessCheck, ProjectAllowlist, ProjectApprovals } from '@acp/core';
 import { evaluateAllowlist, type AllowlistTarget, type AllowlistVerdict } from '@acp/orchestrator';
 import type { Workspace } from '../workspace/index.js';
 
@@ -12,7 +12,13 @@ import type { Workspace } from '../workspace/index.js';
  */
 
 export interface AllowlistContext {
-  allowlist: ProjectAllowlist;
+  /** The legacy project allowlist (runs without an approval policy). */
+  allowlist?: ProjectAllowlist;
+  /**
+   * ADR-0021: the run's snapshotted approval mode and command allowlist. When present it decides
+   * (the engine checks the rule against it again and records it).
+   */
+  policy?: ProjectApprovals;
   /**
    * The harness checks read from the **project's checkout**, never from the agent's worktree: a
    * manifest the agent edited is code under review and must not widen what runs unasked.
@@ -68,7 +74,8 @@ export async function allowlistVerdict(input: AllowlistVerdictInput): Promise<Al
       ? await resolveEditTarget(target.path, workspace.cwd)
       : null;
   return evaluateAllowlist({
-    allowlist: context.allowlist,
+    ...(context.policy !== undefined && { policy: context.policy }),
+    ...(context.allowlist !== undefined && { allowlist: context.allowlist }),
     agentKind: input.agentKind ?? 'worker',
     target,
     resolvedPath,

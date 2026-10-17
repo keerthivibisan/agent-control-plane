@@ -1,4 +1,4 @@
-import type { HarnessStatus, Project } from '@acp/core';
+import type { HarnessStatus, Project, ProjectApprovals } from '@acp/core';
 import type { Repositories, WorkspaceRepositories } from '@acp/db';
 import type { AgentSetup } from '../control/service.js';
 import type { AllowlistContext } from '../control/allowlist.js';
@@ -27,8 +27,12 @@ export interface ProjectHarness {
   read(project: Project): Promise<HarnessReadResult | null>;
   /** Context files and model for a run's agents (ADR-0012 amendment). */
   agentSetup(projectId: string): Promise<AgentSetup>;
-  /** The allowlist and the checks it may pre-approve; null without a project setup. */
-  allowlist(projectId: string): Promise<AllowlistContext | null>;
+  /**
+   * The allowlist and the checks it may pre-approve; null when nothing may run unasked. With a
+   * run's `policy` (ADR-0021) the policy decides: manual asks for everything (null); otherwise the
+   * checks are read for the exact-check rule. Without one, the legacy project allowlist applies.
+   */
+  allowlist(projectId: string, policy?: ProjectApprovals): Promise<AllowlistContext | null>;
 }
 
 export interface ProjectHarnessDeps {
@@ -107,8 +111,14 @@ export function createProjectHarness(deps: ProjectHarnessDeps): ProjectHarness {
       return { context: result.context, model: setup?.model ?? null };
     },
 
-    async allowlist(projectId) {
+    async allowlist(projectId, policy) {
       const project = deps.repos.projects.getById(projectId);
+      if (policy !== undefined) {
+        if (project === undefined || policy.mode === 'manual') return null;
+        // From the owner's checkout, never an agent's worktree (P4-C handoff).
+        const manifest = (await read(project))?.manifest ?? null;
+        return { policy, checks: manifest?.checks ?? [] };
+      }
       const setup = deps.workspace.projectSetup.get(projectId);
       if (project === undefined || setup === undefined) return null;
       const { editInOwnWorktree, runHarnessChecks } = setup.allowlist;

@@ -94,7 +94,7 @@ async function toMergedHelper(s: Board) {
 
 describe('separate planner (ADR-0019)', () => {
   it('starts the planner read-only in the project; the lead starts with the approved plan', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     await saveWorkflow(s, { plannerMode: 'separate', stages: stages() });
     const ticket = await startReady(s);
     const runId = await runIdOf(s, ticket.id);
@@ -132,7 +132,7 @@ describe('separate planner (ADR-0019)', () => {
 
 describe('post-merge stages: reviewer and tester (ADR-0019)', () => {
   it('reviews the merged main branch, posts a reviewer comment, then the tester change is merged', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const st = stages();
     st['code-review'] = { enabled: true, model: 'claude-review-model', skill: null };
     st['unit-tests'] = { enabled: true, model: null, skill: null };
@@ -223,7 +223,7 @@ describe('post-merge stages: reviewer and tester (ADR-0019)', () => {
   }, 60_000);
 
   it('answers off for stages the workflow switches off, and 404 for an unknown run', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const { ticket } = await s.startTicket();
     const runId = await runIdOf(s, ticket.id);
     expect(await runWorkflow(s, runId)).toEqual({
@@ -240,7 +240,7 @@ describe('post-merge stages: reviewer and tester (ADR-0019)', () => {
 
 describe('skills plugin (ADR-0019 §4)', () => {
   it('copies mapped skills from the checkout with front matter cut to name and description', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const skills = join(s.repo, '.claude', 'skills');
     mkdirSync(join(skills, 'planning'), { recursive: true });
     writeFileSync(
@@ -320,7 +320,7 @@ describe('stage agent files (ADR-0019 §6)', () => {
   }
 
   it("gives the lead the file's instructions and tools; the file model beats the project's", async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     expect((await s.send('put', `/api/projects/${s.project.id}/setup`, SETUP)).status).toBe(200);
     writeAgent(
       s.repo,
@@ -351,6 +351,7 @@ describe('stage agent files (ADR-0019 §6)', () => {
 
   it("an explicit stage model wins over the file's; a helper's file comes from the owner's checkout", async () => {
     const s = await setupBoard({
+      legacyRuns: true,
       files: {
         'README.md': 'hello\n',
         'src/app.ts': 'export {};\n',
@@ -394,6 +395,7 @@ describe('stage agent files (ADR-0019 §6)', () => {
   it('starts the agent without a profile when the file is missing or unparsable, and counts it', async () => {
     const entries: { message: string; fields: unknown }[] = [];
     const s = await setupBoard({
+      legacyRuns: true,
       logger: { log: (_level, message, fields) => entries.push({ message, fields }) },
     });
     expect((await s.send('put', `/api/projects/${s.project.id}/setup`, SETUP)).status).toBe(200);
@@ -419,7 +421,7 @@ describe('stage agent files (ADR-0019 §6)', () => {
   });
 
   it('a missing file for the lead: started without a profile, the run goes on', async () => {
-    const s = await setupBoard();
+    const s = await setupBoard({ legacyRuns: true });
     const st = stages();
     st.orchestrate = { model: null, skill: null, agent: 'gone-agent' };
     await saveWorkflow(s, { plannerMode: 'lead', stages: st });
@@ -435,7 +437,7 @@ describe('stage agent files (ADR-0019 §6)', () => {
 
 describe('Continue after a restart (ADR-0019, ADR-0013 §7)', () => {
   it('holds the interrupted code review until the owner continues, across restarts', async () => {
-    const first = await setupBoard();
+    const first = await setupBoard({ legacyRuns: true });
     const st = stages();
     st['code-review'] = { enabled: true, model: null, skill: null };
     await saveWorkflow(first, { plannerMode: 'lead', stages: st });
@@ -448,13 +450,13 @@ describe('Continue after a restart (ADR-0019, ADR-0013 §7)', () => {
 
     // "Crash": a second server opens the same database, data folder and repository.
     const reopen = { dbPath: first.dbPath, dataDir: first.dataDir, repo: first.repo };
-    const second = await setupBoard({ reopen });
+    const second = await setupBoard({ legacyRuns: true, reopen });
     expect(second.fake.agents).toEqual([]);
     expect(existsSync(checkout)).toBe(false);
     expect(await runWorkflow(second, runId)).toMatchObject({ 'code-review': 'needs-you' });
 
     // A third start must not begin the held stage by itself.
-    const third = await setupBoard({ reopen });
+    const third = await setupBoard({ legacyRuns: true, reopen });
     expect(third.fake.agents).toEqual([]);
     expect(await runWorkflow(third, runId)).toMatchObject({ 'code-review': 'needs-you' });
 

@@ -1,7 +1,7 @@
 import type { CheckRun } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import type { Repositories, ReviewLoopRepositories, WorkspaceRepositories } from '@acp/db';
-import { isLiveAgentStatus } from '@acp/orchestrator';
+import { isActiveAgentStatus, isLiveAgentStatus } from '@acp/orchestrator';
 import { hasReviewableChange } from '../control/roles.js';
 import type { ControlService, ReviewGate } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
@@ -144,6 +144,18 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     // ADR-0019: the tester's change is reviewed and checked like a helper's.
     if (!hasReviewableChange(agent.kind)) {
       throw new HttpError(409, 'not_a_helper', "Checks run on helper agents' changes only");
+    }
+    if (state.integration !== undefined && !isActiveAgentStatus(agent.status)) {
+      // ADR-0021: a loop run's change is checked on its sealed commit, stored with that commit.
+      const commit = agent.change?.headCommit ?? null;
+      if (commit === null) {
+        throw new HttpError(
+          409,
+          'not_sealed',
+          'This change is not sealed yet; check it once it is',
+        );
+      }
+      return runOnCommit(runId, agentRunId, commit);
     }
     if (isLiveAgentStatus(agent.status)) {
       throw new HttpError(

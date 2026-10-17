@@ -10,6 +10,8 @@ import {
 } from '../../src/workspace/index.js';
 import { git, head, makeRepo, spyingGit, tempDir, write } from './helpers.js';
 
+/** Real git in temp repos; slow on a loaded machine, so more than the 5 s default. */
+const GIT_TIMEOUT_MS = 30_000;
 const RUN = '3f1c2a9e-0b4d-4c55-9b0e-5a7d2f1e8c01';
 const A1 = 'b7e4d2a1-6c3f-4e8a-9d10-2f5b7c9e0a12';
 const A2 = 'c8f5e3b2-7d40-4f9b-8e21-3a6c8d0f1b23';
@@ -38,7 +40,7 @@ async function code(promise: Promise<unknown>): Promise<WorkspaceErrorCode> {
 const branches = (repo: string) =>
   git(repo, 'branch', '--format=%(refname:short)').trim().split('\n').sort();
 
-describe('createTicketBranch', () => {
+describe('createTicketBranch', { timeout: GIT_TIMEOUT_MS }, () => {
   it('creates acp/<KEY> at the base tip without touching the owner checkout', async () => {
     const { manager, calls } = setup();
     const repo = makeRepo();
@@ -89,128 +91,132 @@ async function loopSetup(files: Record<string, string> = { 'README.md': 'hello\n
   return { ...s, repo, tb, ref, w1, w2 };
 }
 
-describe('the review loop on the ticket branch (seal, integrate, advance)', () => {
-  it('starts helpers from the tip, seals, integrates and moves the branch by CAS', async () => {
-    const { manager, repo, tb, ref, w1, w2 } = await loopSetup();
-    expect(w1.baseBranch).toBe('acp/WEB-1');
-    expect(w1.baseCommit).toBe(tb.baseCommit);
-    write(w1.path, 'one.txt', '1\n');
-    write(w2.path, 'two.txt', '2\n');
+describe(
+  'the review loop on the ticket branch (seal, integrate, advance)',
+  { timeout: GIT_TIMEOUT_MS },
+  () => {
+    it('starts helpers from the tip, seals, integrates and moves the branch by CAS', async () => {
+      const { manager, repo, tb, ref, w1, w2 } = await loopSetup();
+      expect(w1.baseBranch).toBe('acp/WEB-1');
+      expect(w1.baseCommit).toBe(tb.baseCommit);
+      write(w1.path, 'one.txt', '1\n');
+      write(w2.path, 'two.txt', '2\n');
 
-    const sealed = await manager.seal(w1, { role: 'API builder' });
-    expect(sealed).toMatchObject({ changed: true, changedFiles: 1 });
-    expect(git(w1.path, 'log', '-1', '--format=%an%n%s')).toContain('Agent Control Plane');
+      const sealed = await manager.seal(w1, { role: 'API builder' });
+      expect(sealed).toMatchObject({ changed: true, changedFiles: 1 });
+      expect(git(w1.path, 'log', '-1', '--format=%an%n%s')).toContain('Agent Control Plane');
 
-    const first = await manager.integrate(w1, tb.baseCommit);
-    // The tip is the start: nothing to merge, the sealed commit itself is the result.
-    expect(first).toEqual({ outcome: 'integrated', commit: sealed.headCommit });
-    await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
-    expect(head(repo, 'refs/heads/acp/WEB-1')).toBe(first.commit);
+      const first = await manager.integrate(w1, tb.baseCommit);
+      // The tip is the start: nothing to merge, the sealed commit itself is the result.
+      expect(first).toEqual({ outcome: 'integrated', commit: sealed.headCommit });
+      await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
+      expect(head(repo, 'refs/heads/acp/WEB-1')).toBe(first.commit);
 
-    // The second helper started from the old tip: integration merges the new tip in.
-    await manager.seal(w2);
-    const second = await manager.integrate(w2, first.commit);
-    expect(second.outcome).toBe('integrated');
-    expect(
-      git(w2.path, 'show', '--quiet', '--format=%P', second.commit).trim().split(' '),
-    ).toHaveLength(2);
-    expect(readFileSync(join(w2.path, 'one.txt'), 'utf8')).toBe('1\n');
-    await manager.advanceTicketBranch(ref, first.commit, second.commit);
-    expect(git(repo, 'ls-tree', '--name-only', 'acp/WEB-1').trim().split('\n').sort()).toEqual([
-      'README.md',
-      'one.txt',
-      'two.txt',
-    ]);
-    // The owner's checkout never moved.
-    expect(head(repo)).toBe(tb.baseCommit);
-    expect(git(repo, 'status', '--porcelain')).toBe('');
-  });
-
-  it('reports an empty change as no-changes at seal and at integration', async () => {
-    const { manager, tb, w1, w2 } = await loopSetup();
-    expect(await manager.seal(w1)).toMatchObject({ changed: false, changedFiles: 0 });
-    expect(await manager.integrate(w1, tb.baseCommit)).toEqual({
-      outcome: 'no-changes',
-      commit: tb.baseCommit,
+      // The second helper started from the old tip: integration merges the new tip in.
+      await manager.seal(w2);
+      const second = await manager.integrate(w2, first.commit);
+      expect(second.outcome).toBe('integrated');
+      expect(
+        git(w2.path, 'show', '--quiet', '--format=%P', second.commit).trim().split(' '),
+      ).toHaveLength(2);
+      expect(readFileSync(join(w2.path, 'one.txt'), 'utf8')).toBe('1\n');
+      await manager.advanceTicketBranch(ref, first.commit, second.commit);
+      expect(git(repo, 'ls-tree', '--name-only', 'acp/WEB-1').trim().split('\n').sort()).toEqual([
+        'README.md',
+        'one.txt',
+        'two.txt',
+      ]);
+      // The owner's checkout never moved.
+      expect(head(repo)).toBe(tb.baseCommit);
+      expect(git(repo, 'status', '--porcelain')).toBe('');
     });
-    // A change identical to what the tip already has is no change either.
-    write(w2.path, 'README.md', 'hello\n');
-    expect((await manager.seal(w2)).changed).toBe(false);
-  });
 
-  it('a conflict is aborted and refused with the file names only', async () => {
-    const { manager, ref, tb, w1, w2 } = await loopSetup();
-    write(w1.path, 'README.md', 'one\n');
-    write(w2.path, 'README.md', 'two\n');
-    await manager.seal(w1);
-    const first = await manager.integrate(w1, tb.baseCommit);
-    await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
-    const sealed = await manager.seal(w2);
-    const error = await refusal(manager.integrate(w2, first.commit));
-    expect(error.code).toBe('merge-conflict');
-    expect(error.conflictFiles).toEqual(['README.md']);
-    expect(error.message).not.toContain('one');
-    // Aborted: the helper's branch and tree are as sealed.
-    expect(head(w2.path)).toBe(sealed.headCommit);
-    expect(git(w2.path, 'status', '--porcelain')).toBe('');
-    expect(readFileSync(join(w2.path, 'README.md'), 'utf8')).toBe('two\n');
-  });
+    it('reports an empty change as no-changes at seal and at integration', async () => {
+      const { manager, tb, w1, w2 } = await loopSetup();
+      expect(await manager.seal(w1)).toMatchObject({ changed: false, changedFiles: 0 });
+      expect(await manager.integrate(w1, tb.baseCommit)).toEqual({
+        outcome: 'no-changes',
+        commit: tb.baseCommit,
+      });
+      // A change identical to what the tip already has is no change either.
+      write(w2.path, 'README.md', 'hello\n');
+      expect((await manager.seal(w2)).changed).toBe(false);
+    });
 
-  it('refuses to integrate unsealed edits', async () => {
-    const { manager, tb, w1 } = await loopSetup();
-    write(w1.path, 'x.txt', 'x\n');
-    expect(await code(manager.integrate(w1, tb.baseCommit))).toBe('workspace-unsealed');
-  });
+    it('a conflict is aborted and refused with the file names only', async () => {
+      const { manager, ref, tb, w1, w2 } = await loopSetup();
+      write(w1.path, 'README.md', 'one\n');
+      write(w2.path, 'README.md', 'two\n');
+      await manager.seal(w1);
+      const first = await manager.integrate(w1, tb.baseCommit);
+      await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
+      const sealed = await manager.seal(w2);
+      const error = await refusal(manager.integrate(w2, first.commit));
+      expect(error.code).toBe('merge-conflict');
+      expect(error.conflictFiles).toEqual(['README.md']);
+      expect(error.message).not.toContain('one');
+      // Aborted: the helper's branch and tree are as sealed.
+      expect(head(w2.path)).toBe(sealed.headCommit);
+      expect(git(w2.path, 'status', '--porcelain')).toBe('');
+      expect(readFileSync(join(w2.path, 'README.md'), 'utf8')).toBe('two\n');
+    });
 
-  it('advance refuses a stale tip, a non-fast-forward and a checked-out branch', async () => {
-    const { manager, repo, ref, tb, w1, w2 } = await loopSetup();
-    write(w1.path, 'a.txt', 'a\n');
-    write(w2.path, 'b.txt', 'b\n');
-    const s1 = await manager.seal(w1);
-    const s2 = await manager.seal(w2);
-    await manager.advanceTicketBranch(ref, tb.baseCommit, s1.headCommit);
-    // Expected tip no longer matches: compare-and-swap refuses.
-    expect(await code(manager.advanceTicketBranch(ref, tb.baseCommit, s2.headCommit))).toBe(
-      'ticket-branch-moved',
-    );
-    // s2 does not contain s1: the move would drop a merged change.
-    expect(await code(manager.advanceTicketBranch(ref, s1.headCommit, s2.headCommit))).toBe(
-      'not-fast-forward',
-    );
-    const wt = join(tempDir('acp-tb-co-'), 'co');
-    git(repo, 'worktree', 'add', '--quiet', wt, 'acp/WEB-1');
-    write(w1.path, 'c.txt', 'c\n');
-    const s3 = await manager.seal(w1);
-    expect(await code(manager.advanceTicketBranch(ref, s1.headCommit, s3.headCommit))).toBe(
-      'ticket-branch-checked-out',
-    );
-    expect(head(repo, 'refs/heads/acp/WEB-1')).toBe(s1.headCommit);
-    expect(
-      await code(
-        manager.advanceTicketBranch({ ...ref, branch: 'main' }, s1.headCommit, s3.headCommit),
-      ),
-    ).toBe('invalid-ticket-branch');
-    expect(await code(manager.advanceTicketBranch(ref, 'HEAD', s3.headCommit))).toBe(
-      'invalid-ticket-branch',
-    );
-  });
+    it('refuses to integrate unsealed edits', async () => {
+      const { manager, tb, w1 } = await loopSetup();
+      write(w1.path, 'x.txt', 'x\n');
+      expect(await code(manager.integrate(w1, tb.baseCommit))).toBe('workspace-unsealed');
+    });
 
-  it('changeDiff shows only what the change adds to the tip', async () => {
-    const { manager, ref, tb, w1, w2 } = await loopSetup();
-    write(w1.path, 'one.txt', '1\n');
-    write(w2.path, 'two.txt', '2\n');
-    await manager.seal(w1);
-    const first = await manager.integrate(w1, tb.baseCommit);
-    await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
-    await manager.seal(w2);
-    const view = await manager.changeDiff(w2, first.commit, { maxDiffBytes: 32 * 1024 });
-    expect(view.files.map((f) => f.path)).toEqual(['two.txt']);
-    expect(view.diff).toContain('+2');
-    expect(view.diffTruncated).toBe(false);
-  });
-});
+    it('advance refuses a stale tip, a non-fast-forward and a checked-out branch', async () => {
+      const { manager, repo, ref, tb, w1, w2 } = await loopSetup();
+      write(w1.path, 'a.txt', 'a\n');
+      write(w2.path, 'b.txt', 'b\n');
+      const s1 = await manager.seal(w1);
+      const s2 = await manager.seal(w2);
+      await manager.advanceTicketBranch(ref, tb.baseCommit, s1.headCommit);
+      // Expected tip no longer matches: compare-and-swap refuses.
+      expect(await code(manager.advanceTicketBranch(ref, tb.baseCommit, s2.headCommit))).toBe(
+        'ticket-branch-moved',
+      );
+      // s2 does not contain s1: the move would drop a merged change.
+      expect(await code(manager.advanceTicketBranch(ref, s1.headCommit, s2.headCommit))).toBe(
+        'not-fast-forward',
+      );
+      const wt = join(tempDir('acp-tb-co-'), 'co');
+      git(repo, 'worktree', 'add', '--quiet', wt, 'acp/WEB-1');
+      write(w1.path, 'c.txt', 'c\n');
+      const s3 = await manager.seal(w1);
+      expect(await code(manager.advanceTicketBranch(ref, s1.headCommit, s3.headCommit))).toBe(
+        'ticket-branch-checked-out',
+      );
+      expect(head(repo, 'refs/heads/acp/WEB-1')).toBe(s1.headCommit);
+      expect(
+        await code(
+          manager.advanceTicketBranch({ ...ref, branch: 'main' }, s1.headCommit, s3.headCommit),
+        ),
+      ).toBe('invalid-ticket-branch');
+      expect(await code(manager.advanceTicketBranch(ref, 'HEAD', s3.headCommit))).toBe(
+        'invalid-ticket-branch',
+      );
+    });
 
-describe("the owner's final merge", () => {
+    it('changeDiff shows only what the change adds to the tip', async () => {
+      const { manager, ref, tb, w1, w2 } = await loopSetup();
+      write(w1.path, 'one.txt', '1\n');
+      write(w2.path, 'two.txt', '2\n');
+      await manager.seal(w1);
+      const first = await manager.integrate(w1, tb.baseCommit);
+      await manager.advanceTicketBranch(ref, tb.baseCommit, first.commit);
+      await manager.seal(w2);
+      const view = await manager.changeDiff(w2, first.commit, { maxDiffBytes: 32 * 1024 });
+      expect(view.files.map((f) => f.path)).toEqual(['two.txt']);
+      expect(view.diff).toContain('+2');
+      expect(view.diffTruncated).toBe(false);
+    });
+  },
+);
+
+describe("the owner's final merge", { timeout: GIT_TIMEOUT_MS }, () => {
   async function merged() {
     const s = await loopSetup();
     write(s.w1.path, 'one.txt', '1\n');
@@ -295,27 +301,31 @@ describe("the owner's final merge", () => {
   });
 });
 
-describe('temporary commit checkouts (checks on the ticket tip)', () => {
-  it('checks out a commit detached, in the project subfolder, and removes it', async () => {
-    const { dataDir, manager } = setup();
-    const repo = makeRepo({ 'apps/web/a.txt': 'a\n' });
-    const commit = head(repo);
-    const co = await manager.checkoutCommit(join(repo, 'apps', 'web'), RUN, commit);
-    expect(co.cwd).toBe(join(co.path, 'apps', 'web'));
-    expect(readFileSync(join(co.cwd, 'a.txt'), 'utf8')).toBe('a\n');
-    expect(git(co.path, 'rev-parse', 'HEAD').trim()).toBe(commit);
-    await manager.removeCheckout(co);
-    expect(existsSync(co.path)).toBe(false);
-    const left = await manager.checkoutCommit(repo, RUN, commit);
-    expect(await manager.cleanupCheckouts()).toBe(1);
-    expect(existsSync(left.path)).toBe(false);
-    expect(readdirSync(join(dataDir, 'ticket-checkouts'))).toEqual([]);
-    expect(await code(manager.checkoutCommit(repo, RUN, 'main'))).toBe('invalid-ticket-branch');
-    await expect(manager.removeCheckout({ ...left, path: repo })).rejects.toThrow();
-  });
-});
+describe(
+  'temporary commit checkouts (checks on the ticket tip)',
+  { timeout: GIT_TIMEOUT_MS },
+  () => {
+    it('checks out a commit detached, in the project subfolder, and removes it', async () => {
+      const { dataDir, manager } = setup();
+      const repo = makeRepo({ 'apps/web/a.txt': 'a\n' });
+      const commit = head(repo);
+      const co = await manager.checkoutCommit(join(repo, 'apps', 'web'), RUN, commit);
+      expect(co.cwd).toBe(join(co.path, 'apps', 'web'));
+      expect(readFileSync(join(co.cwd, 'a.txt'), 'utf8')).toBe('a\n');
+      expect(git(co.path, 'rev-parse', 'HEAD').trim()).toBe(commit);
+      await manager.removeCheckout(co);
+      expect(existsSync(co.path)).toBe(false);
+      const left = await manager.checkoutCommit(repo, RUN, commit);
+      expect(await manager.cleanupCheckouts()).toBe(1);
+      expect(existsSync(left.path)).toBe(false);
+      expect(readdirSync(join(dataDir, 'ticket-checkouts'))).toEqual([]);
+      expect(await code(manager.checkoutCommit(repo, RUN, 'main'))).toBe('invalid-ticket-branch');
+      await expect(manager.removeCheckout({ ...left, path: repo })).rejects.toThrow();
+    });
+  },
+);
 
-describe('git operations are serialized per worktree (U-V)', () => {
+describe('git operations are serialized per worktree (U-V)', { timeout: GIT_TIMEOUT_MS }, () => {
   it('concurrent changes() and seal() on one worktree all succeed', async () => {
     const { manager, w1 } = await loopSetup();
     for (let i = 0; i < 20; i++) write(w1.path, `f${i}.txt`, `${i}\n`);
@@ -345,24 +355,28 @@ describe('git operations are serialized per worktree (U-V)', () => {
   });
 });
 
-describe("the change reviewer's checkout of one sealed commit (ADR-0021 §3)", () => {
-  it('checks out the given commit detached; HEAD when none is given', async () => {
-    const { manager, dataDir, w1 } = await loopSetup();
-    write(w1.path, 'one.txt', '1\n');
-    const sealed = await manager.seal(w1);
-    const checkouts = createReviewCheckouts({ dataDir, git: spyingGit().git });
-    const change = await checkouts.create(w1.repoRoot, RUN, A2, sealed.headCommit);
-    expect(change.commit).toBe(sealed.headCommit);
-    expect(readFileSync(join(change.cwd, 'one.txt'), 'utf8')).toBe('1\n');
-    const main = await checkouts.create(w1.repoRoot, RUN, 'rev-2');
-    expect(main.commit).toBe(head(w1.repoRoot));
-    expect(existsSync(join(main.cwd, 'one.txt'))).toBe(false);
-    await checkouts.remove(change);
-    await checkouts.remove(main);
-    for (const bad of ['main', 'HEAD', 'f'.repeat(40)]) {
-      await expect(checkouts.create(w1.repoRoot, RUN, 'rev-3', bad)).rejects.toBeInstanceOf(
-        WorkspaceError,
-      );
-    }
-  });
-});
+describe(
+  "the change reviewer's checkout of one sealed commit (ADR-0021 §3)",
+  { timeout: GIT_TIMEOUT_MS },
+  () => {
+    it('checks out the given commit detached; HEAD when none is given', async () => {
+      const { manager, dataDir, w1 } = await loopSetup();
+      write(w1.path, 'one.txt', '1\n');
+      const sealed = await manager.seal(w1);
+      const checkouts = createReviewCheckouts({ dataDir, git: spyingGit().git });
+      const change = await checkouts.create(w1.repoRoot, RUN, A2, sealed.headCommit);
+      expect(change.commit).toBe(sealed.headCommit);
+      expect(readFileSync(join(change.cwd, 'one.txt'), 'utf8')).toBe('1\n');
+      const main = await checkouts.create(w1.repoRoot, RUN, 'rev-2');
+      expect(main.commit).toBe(head(w1.repoRoot));
+      expect(existsSync(join(main.cwd, 'one.txt'))).toBe(false);
+      await checkouts.remove(change);
+      await checkouts.remove(main);
+      for (const bad of ['main', 'HEAD', 'f'.repeat(40)]) {
+        await expect(checkouts.create(w1.repoRoot, RUN, 'rev-3', bad)).rejects.toBeInstanceOf(
+          WorkspaceError,
+        );
+      }
+    });
+  },
+);

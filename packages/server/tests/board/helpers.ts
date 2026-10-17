@@ -73,6 +73,11 @@ export interface BoardSetupOptions {
   enabled?: boolean;
   /** Restart tests: a second server over the first one's database, data dir and repository. */
   reopen?: { dbPath: string; dataDir: string; repo: string };
+  /**
+   * Start ticket runs without the review loop, as before ADR-0021 (the legacy flow those runs
+   * keep: the owner merges each change into the base branch). Default: the review loop.
+   */
+  legacyRuns?: boolean;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -144,6 +149,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     now,
     publish: base.publish,
     logger,
+    ...(options.legacyRuns === true && { legacyTicketRuns: true }),
   });
   Object.assign(hooks, board.controlHooks());
   const workflow = createWorkflowService({

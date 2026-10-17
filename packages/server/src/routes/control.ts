@@ -9,6 +9,7 @@ import {
   RunDetailDtoSchema,
   RunSummaryDtoSchema,
   RunWorkflowDtoSchema,
+  TicketBranchReviewDtoSchema,
 } from '@acp/core/api';
 import { requireCsrf } from '../control/csrf.js';
 import { managedDisabled } from '../control/errors.js';
@@ -79,6 +80,16 @@ export function createControlRouter(control: ControlService): Router {
   router.post('/runs/:id/review', csrf, json, async (req, res) => {
     const dto = await control.reviewAction(param(req.params['id']), req.body);
     res.json(out(ReviewDtoSchema, dto));
+  });
+
+  // ADR-0021 §4: the run's ticket branch and the owner's single merge into the base branch.
+  router.get('/runs/:id/ticket-branch', async (req, res) => {
+    const dto = await control.ticketBranch(param(req.params['id']));
+    res.json(out(TicketBranchReviewDtoSchema, dto));
+  });
+  router.post('/runs/:id/ticket-branch', csrf, json, async (req, res) => {
+    const dto = await control.ticketBranchAction(param(req.params['id']), req.body);
+    res.json(out(TicketBranchReviewDtoSchema, dto));
   });
 
   router.post('/approvals/:id', csrf, json, (req, res) => {

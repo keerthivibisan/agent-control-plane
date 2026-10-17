@@ -15,7 +15,8 @@ import {
  * the project's committed HEAD (its main branch, where helpers' changes were merged) checked out
  * into a **detached** worktree under `<dataDir>/review-checkouts/<runId>/<agentRunId>`. The
  * reviewer reads it, read-only; it is removed when the reviewer ends, and on start for any a crash
- * left behind. The owner's working tree is never used. Git calls use the workspace module's runner
+ * left behind. ADR-0021: a change reviewer's checkout is of the helper's sealed commit, and the
+ * final reviewer's of the ticket branch tip, both given as `commit`. The owner's working tree is never used. Git calls use the workspace module's runner
  * and safety config (argv only, no hooks, no fsmonitor, no submodules).
  */
 
