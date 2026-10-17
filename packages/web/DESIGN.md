@@ -165,7 +165,7 @@ themes: text 4.5:1 (AA), lines, dots, rings and chart series 3:1.
 In the dark theme elevation goes lighter (canvas < `sunken` < `panel` < `panel-raised`), so board
 columns and wells sit below the cards on them, as `sunken` does in the light theme.
 
-**Lime is a fill, not text, on ivory** (it is 1.1:1 against the canvas). In the light theme,
+**Lime is a fill, not text, on ivory** (1.0:1 against the canvas). In the light theme,
 anything that must be read in the accent (links, selected text, the focus ring) uses `accent`, the
 dark olive; in the dark theme `accent` is the lime itself. Lime fills carry graphite text
 (`accent-fill-ink`, 15.7:1). On ivory a lime fill or selection ring gets an `accent-fill-edge`
