@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   NODE_CAPABILITIES,
+  PlanStepSchema,
   StoredWorkflowJsonSchema,
   WORKFLOW_NODE_TYPES,
   WorkflowGraphSchema,
@@ -191,5 +192,14 @@ describe('additive tool and API contracts', () => {
     expect(SkillSummaryDtoSchema.safeParse(skill).success).toBe(true);
     const withNodes = { ...skill, usedByNodes: [{ nodeId: 'frontend', label: 'Frontend helper' }] };
     expect(SkillSummaryDtoSchema.parse(withNodes).usedByNodes).toHaveLength(1);
+  });
+});
+
+describe('plan steps keep their helper node (ADR-0023 §7)', () => {
+  it('stores an optional helper node id and still parses older steps', () => {
+    const step = { title: 'Page', role: 'Frontend helper', detail: '' };
+    expect(PlanStepSchema.parse(step)).toEqual(step);
+    expect(PlanStepSchema.parse({ ...step, helper: 'frontend' }).helper).toBe('frontend');
+    expect(PlanStepSchema.safeParse({ ...step, helper: 'Frontend' }).success).toBe(false);
   });
 });

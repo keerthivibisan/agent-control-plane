@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { WorkflowNodeIdSchema } from './node-id.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
 import {
@@ -114,6 +115,12 @@ export const PlanStepSchema = z.object({
    */
   role: z.string().trim().min(1).max(60),
   detail: z.string().max(2000),
+  /**
+   * ADR-0023 §7: the helper node the engine resolved for this step when the plan was submitted,
+   * stored so the step keeps its node across a restart. Absent for plans before ADR-0023 and for
+   * version 1 runs, where every step goes to the helper pool.
+   */
+  helper: WorkflowNodeIdSchema.optional(),
 });
 export type PlanStep = z.infer<typeof PlanStepSchema>;
 
