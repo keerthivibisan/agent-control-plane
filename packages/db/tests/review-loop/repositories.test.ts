@@ -356,16 +356,27 @@ describe('approvals allow rule and run snapshot (ADR-0021 §1)', () => {
         mode: 'auto' as const,
         commands: [{ argv: ['npm', 'test'], match: 'prefix' as const }],
       },
-      integration: { reviewer: 'agent' as const, maxReworkRounds: 2, handedOver: false },
+      integration: {
+        reviewer: 'agent' as const,
+        maxReworkRounds: 2,
+        handedOver: false,
+        ticketKey: 'WEB-1',
+        ticketBranch: 'acp/WEB-1' as string | null,
+      },
     };
     redesign.runAudit.setRunSnapshot(run.id, snapshot);
     expect(redesign.runAudit.getRunSnapshot(run.id)).toEqual(snapshot);
+    const before = { ...snapshot, integration: { ...snapshot.integration, ticketBranch: null } };
+    redesign.runAudit.setRunSnapshot(run.id, before);
+    expect(redesign.runAudit.getRunSnapshot(run.id)).toEqual(before);
     for (const bad of [
       { ...snapshot, approvals: { mode: 'yolo', commands: [] } },
       { ...snapshot, approvals: { mode: 'auto', commands: [{ argv: ['sh'], match: 'exact' }] } },
-      { ...snapshot, integration: { reviewer: 'robot', maxReworkRounds: 2, handedOver: false } },
-      { ...snapshot, integration: { reviewer: 'lead', maxReworkRounds: 9, handedOver: false } },
+      { ...snapshot, integration: { ...snapshot.integration, reviewer: 'robot' } },
+      { ...snapshot, integration: { ...snapshot.integration, maxReworkRounds: 9 } },
       { ...snapshot, integration: { reviewer: 'lead', maxReworkRounds: 1 } },
+      { ...snapshot, integration: { ...snapshot.integration, ticketKey: 'web-1' } },
+      { ...snapshot, integration: { ...snapshot.integration, ticketBranch: 'main' } },
       { ...snapshot, integration: { ...snapshot.integration, extra: 1 } },
       { ...snapshot, surprise: true },
     ]) {

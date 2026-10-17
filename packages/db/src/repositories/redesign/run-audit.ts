@@ -4,6 +4,7 @@ import {
   ProjectApprovalsSchema,
   ProjectWorkflowSchema,
   ReworkRoundsSchema,
+  TicketBranchNameSchema,
   WorkflowStageIdSchema,
   type ChangeReviewerMode,
   type ProjectApprovals,
@@ -64,16 +65,36 @@ export interface StoredRunIntegration {
   reviewer: ChangeReviewerMode;
   maxReworkRounds: number;
   handedOver: boolean;
+  /** The ticket's key (`WEB-12`), which names the ticket branch. */
+  ticketKey: string;
+  /** The ticket branch once created (`acp/WEB-12` or `-r<n>`); null before. */
+  ticketBranch: string | null;
 }
 
 function parseIntegration(value: unknown): StoredRunIntegration | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const { reviewer, maxReworkRounds, handedOver, ...extra } = value as Record<string, unknown>;
+  const { reviewer, maxReworkRounds, handedOver, ticketKey, ticketBranch, ...extra } =
+    value as Record<string, unknown>;
   if (Object.keys(extra).length > 0) return null;
   const r = ChangeReviewerModeSchema.safeParse(reviewer);
   const m = ReworkRoundsSchema.safeParse(maxReworkRounds);
   if (!r.success || !m.success || typeof handedOver !== 'boolean') return null;
-  return { reviewer: r.data, maxReworkRounds: m.data, handedOver };
+  // The key must give a valid ticket branch name, as the engine requires.
+  if (
+    typeof ticketKey !== 'string' ||
+    !TicketBranchNameSchema.safeParse(`acp/${ticketKey}`).success
+  ) {
+    return null;
+  }
+  const branch = ticketBranch === null ? null : TicketBranchNameSchema.safeParse(ticketBranch);
+  if (branch !== null && !branch.success) return null;
+  return {
+    reviewer: r.data,
+    maxReworkRounds: m.data,
+    handedOver,
+    ticketKey,
+    ticketBranch: branch === null ? null : branch.data,
+  };
 }
 
 const fail = (message: string) => ({ success: false as const, error: new Error(message) });
