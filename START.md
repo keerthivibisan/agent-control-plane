@@ -102,7 +102,8 @@ write for you there: your chat with a run's lead agent, and plans, review findin
 kept as ticket comments. Diffs and tool output are never stored.
 
 **What it reads.** Claude Code's session files under `~/.claude/projects` (or `ACP_CLAUDE_DIR`),
-read-only, and only for folders you added as projects. It never reads Claude Code's credentials
+read-only. It reads the first 64 KB of each session file to find the folder the session ran in,
+and reads the rest only for folders you added as projects. It never reads Claude Code's credentials
 (`~/.claude/sessions/`), settings files or history, and never changes them. See
 [docs/security.md](docs/security.md) and
 [docs/provider-adapters.md §3](docs/provider-adapters.md#3-file-access-allowlist-security-critical).

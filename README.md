@@ -153,7 +153,8 @@ The code is a TypeScript monorepo: shared contracts and logic (`@acp/core`), the
 
 - **Local only:** the server binds `127.0.0.1`. No telemetry, no update checks, no uploads. Agent
   runs start Claude Code, which talks to Anthropic as it always does.
-- **Read-only access to Claude Code data:** only the session files under `~/.claude/projects` for
+- **Read-only access to Claude Code data:** only the session files under `~/.claude/projects`. The
+  app reads the first 64 KB of each one to find the folder it belongs to, and reads the rest only for
   projects you added. Credentials (`~/.claude/sessions/`), settings files and history are never
   read, and Claude Code settings are never changed.
 - **No conversation content stored:** only ids, names, models, timestamps, statuses and token
