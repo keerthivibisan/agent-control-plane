@@ -14,6 +14,10 @@ import { defineConfig, devices } from '@playwright/test';
  *   registered as "e2e-app", on ACP_E2E_CONTROL_PORT (7441) plus a test-only driver for the fake
  *   agents on the next port. Neither the Agent SDK nor `claude` ever runs.
  *
+ * - `review-loop-live` (RL-V, review-loop-live.spec.ts): the workspace e2e server again, on its
+ *   own ports (ACP_E2E_LOOP_PORT, default ACP_E2E_CONTROL_PORT + 20, and the next port for its
+ *   driver) and data dir, starting review-loop ticket runs (ACP_E2E_REVIEW_LOOP=1).
+ *
  * - `ticket` (P4-G, ticket.spec.ts): the ticket page on the demo server's built UI, with the ticket
  *   and run routes answered from synthetic fixtures (page.route) until P4-D serves them.
  *
@@ -40,6 +44,14 @@ const WORKSPACE_DATA_DIR = (process.env.ACP_E2E_WORKSPACE_DATA_DIR ??= mkdtempSy
 ));
 process.env.ACP_E2E_WORKSPACE_DRIVER_URL ??= `http://127.0.0.1:${WORKSPACE_DRIVER_PORT}`;
 // --- end R-V
+// --- RL-V: a second workspace server that starts review-loop ticket runs (ADR-0021).
+const LOOP_PORT = Number(process.env.ACP_E2E_LOOP_PORT ?? String(CONTROL_PORT + 20));
+const LOOP_DRIVER_PORT = LOOP_PORT + 1;
+const LOOP_DATA_DIR = (process.env.ACP_E2E_LOOP_DATA_DIR ??= mkdtempSync(
+  join(tmpdir(), 'acp-e2e-loop-'),
+));
+process.env.ACP_E2E_LOOP_DRIVER_URL ??= `http://127.0.0.1:${LOOP_DRIVER_PORT}`;
+// --- end RL-V
 
 export default defineConfig({
   testDir: '.',
@@ -117,6 +129,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${WORKSPACE_PORT}` },
     },
     // --- end R-V
+    // --- RL-V: the review loop's owner flow on the real routes, agents scripted by the driver.
+    {
+      name: 'review-loop-live',
+      testMatch: 'review-loop-live.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${LOOP_PORT}` },
+    },
   ],
   webServer: [
     {
@@ -166,5 +184,22 @@ export default defineConfig({
       },
     },
     // --- end R-V
+    // --- RL-V: the same server, serving review-loop ticket runs.
+    {
+      command:
+        'node --conditions=development --import tsx tests/verification/redesign/e2e-server.ts',
+      cwd: '../../server',
+      url: `http://127.0.0.1:${LOOP_PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        ACP_PORT: String(LOOP_PORT),
+        ACP_E2E_DRIVER_PORT: String(LOOP_DRIVER_PORT),
+        ACP_DATA_DIR: LOOP_DATA_DIR,
+        ACP_E2E_REVIEW_LOOP: '1',
+      },
+    },
   ],
 });

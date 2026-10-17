@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { LeadToolName, ManagedAgentEvent } from '@acp/core';
 import { createLogger } from '../../../src/logger.js';
 import { createFakeManagedAdapter, type FakeAgent } from '../../control/fake-adapter.js';
-import { boot, makeTempDir, showFile } from '../control/harness.js';
+import { boot, dumpDatabase, git, makeTempDir, showFile } from '../control/harness.js';
 
 /*
  * R-V workspace e2e server (test-only; run by packages/web/e2e/playwright.config.ts, project
@@ -14,14 +14,24 @@ import { boot, makeTempDir, showFile } from '../control/harness.js';
  * the Agent SDK nor `claude` ever runs. Unlike the P3-F server no project is registered: the spec
  * creates one through the New project wizard, inside the temp parent folder this server makes.
  *
+ * RL-V: with ACP_E2E_REVIEW_LOOP=1 the same server starts review-loop ticket runs (ADR-0021); the
+ * Playwright config starts a second instance that way, on its own ports and data dir, for
+ * review-loop-live.spec.ts.
+ *
  * The fake agents are driven by the spec through a second, test-only HTTP listener on 127.0.0.1
  * (ACP_E2E_DRIVER_PORT). It exists only in this process; the product has no such route.
  *
  *   GET  /parent                       { parentDir }: the temp folder the wizard creates repos in
  *   GET  /agents                       every fake agent: id, kind, followUp, profile, skills, …
- *   POST /agents/:id/:action           started | usage | lead-text | finish | call-lead | write
+ *   POST /agents/:id/:action           started | usage | lead-text | finish | call-lead | write |
+ *                                      ask (a permission request: answers at once when a rule
+ *                                      decides it, else `{ pending: true }`)
  *   GET  /repo/show?root=&ref=&path=   a file on a ref of a repo under the parent folder
+ *   GET  /repo/branches?root=          the branches of such a repo (RL-V: the ticket branch goes)
+ *   POST /repo/commit                  { root, files }: the owner commits files on the current
+ *                                      branch of such a repo (RL-V: a harness before the ticket)
  *   GET  /logs                         the server's log lines (to assert no chat text is logged)
+ *   GET  /db/contains?text=            whether any database row holds the text (RL-V: no diff)
  */
 
 const PORT = Number(process.env['ACP_PORT'] ?? '7871');
@@ -29,6 +39,8 @@ const DRIVER_PORT = Number(process.env['ACP_E2E_DRIVER_PORT'] ?? String(PORT + 1
 const DATA_DIR = process.env['ACP_DATA_DIR'] ?? makeTempDir('acp-e2e-workspace-');
 const STATIC_DIR = fileURLToPath(new URL('../../../../web/dist', import.meta.url));
 const LOG_FILE = join(DATA_DIR, 'server.log');
+// Live mode's database file (`config.databasePath`).
+const DATABASE = join(DATA_DIR, 'acp.sqlite');
 
 mkdirSync(DATA_DIR, { recursive: true });
 writeFileSync(LOG_FILE, '');
@@ -47,8 +59,8 @@ const booted = await boot({
   logger,
   staticDir: STATIC_DIR,
   // workspace.spec.ts drives the flow of ticket runs started before ADR-0021 (the owner merges
-  // each change into main; the stages after it), which such runs keep. The review loop needs its
-  // own browser flow (RL-D/RL-V); set ACP_E2E_REVIEW_LOOP=1 to serve loop runs instead.
+  // each change into main; the stages after it), which such runs keep. The review loop has its
+  // own browser flow (RL-V, review-loop-live.spec.ts) on an instance with ACP_E2E_REVIEW_LOOP=1.
   board: { legacyTicketRuns: process.env['ACP_E2E_REVIEW_LOOP'] !== '1' },
 });
 
@@ -61,6 +73,9 @@ function agentView(a: FakeAgent) {
     profile: a.spec.profile?.name ?? null,
     skills: a.spec.skillPlugin?.skills ?? [],
     model: a.spec.model,
+    // ADR-0021: a change reviewer ('change') or the final reviewer ('final'); a rework turn.
+    reviewScope: a.spec.reviewScope ?? null,
+    rework: a.spec.rework !== undefined,
     prompt: a.spec.prompt,
     sent: a.sent,
     ended: a.ended,
@@ -101,6 +116,14 @@ async function act(agent: FakeAgent, action: string, b: Body): Promise<unknown> 
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : 'unknown' };
       }
+    case 'ask': {
+      // What the SDK's canUseTool does. A request a rule decides answers at once; one that waits
+      // for the owner keeps waiting in the server (the page answers it) and reports pending here.
+      const decision = agent.ask(str(b, 'toolName'), str(b, 'summary'), b['input']);
+      const pending = new Promise<'pending'>((r) => setTimeout(() => r('pending'), 2_000));
+      const first = await Promise.race([decision, pending]);
+      return first === 'pending' ? { pending: true } : { decision: first };
+    }
     case 'write': {
       // Only inside the agent's own directory (its worktree for a helper or the tester).
       const root = resolve(agent.spec.cwd);
@@ -121,6 +144,28 @@ async function readBody(req: IncomingMessage): Promise<Body> {
   return raw === '' ? {} : (JSON.parse(raw) as Body);
 }
 
+/** A repository the wizard made inside the temp parent folder; anything else is refused. */
+function testRepo(raw: string | null | undefined): string {
+  const root = resolve(raw ?? '');
+  if (!root.startsWith(parentDir + sep)) throw new Error('not a test repository');
+  return root;
+}
+
+/** The owner commits files on the repo's current branch (argument arrays, no shell). */
+function commitFiles(root: string, files: Record<string, unknown>): string {
+  for (const [path, content] of Object.entries(files)) {
+    const target = resolve(root, path);
+    if (!target.startsWith(root + sep) || typeof content !== 'string') {
+      throw new Error('a file outside the repository');
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content);
+    git(root, 'add', '--', path);
+  }
+  git(root, 'commit', '--quiet', '-m', 'Add the harness (synthetic e2e commit)');
+  return git(root, 'rev-parse', 'HEAD').trim();
+}
+
 function send(res: ServerResponse, status: number, value: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(value));
@@ -139,8 +184,7 @@ const driver = createServer((req, res) => {
       }
       if (req.method === 'GET' && url.pathname === '/repo/show') {
         // Only repositories the wizard made inside the temp parent folder.
-        const root = resolve(url.searchParams.get('root') ?? '');
-        if (!root.startsWith(parentDir + sep)) throw new Error('not a test repository');
+        const root = testRepo(url.searchParams.get('root'));
         const content = showFile(
           root,
           url.searchParams.get('ref') ?? 'main',
@@ -148,8 +192,24 @@ const driver = createServer((req, res) => {
         );
         return send(res, 200, { content });
       }
+      if (req.method === 'GET' && url.pathname === '/repo/branches') {
+        const root = testRepo(url.searchParams.get('root'));
+        const out = git(root, 'branch', '--list', '--format=%(refname:short)');
+        return send(res, 200, { branches: out.split('\n').filter((l) => l !== '') });
+      }
+      if (req.method === 'POST' && url.pathname === '/repo/commit') {
+        const body = await readBody(req);
+        const root = testRepo(typeof body['root'] === 'string' ? body['root'] : null);
+        const commit = commitFiles(root, (body['files'] ?? {}) as Record<string, unknown>);
+        return send(res, 200, { commit });
+      }
       if (req.method === 'GET' && url.pathname === '/logs') {
         return send(res, 200, { text: readFileSync(LOG_FILE, 'utf8') });
+      }
+      if (req.method === 'GET' && url.pathname === '/db/contains') {
+        const text = url.searchParams.get('text') ?? '';
+        if (text.length < 8) throw new Error('search for a distinctive marker');
+        return send(res, 200, { found: dumpDatabase(DATABASE).includes(text) });
       }
       if (req.method === 'POST' && parts[0] === 'agents' && parts.length === 3) {
         // The latest start of that agent run: a follow-up turn reuses the ended lead's id.
