@@ -4,17 +4,17 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
 `release/0.1.0`, from `main` at `ba280d9`). Work-package branches `wp/u-<id>-<slug>` come off
 `feature/ui-refresh` and are merged back with `--ff-only` after review.
 
-| WP  | Title                                                                     | After   | Status      | Branch                 | Merged    |
-| --- | ------------------------------------------------------------------------- | ------- | ----------- | ---------------------- | --------- |
-| U-0 | Docs, dependencies, DESIGN.md v2 direction                                | —       | **done**    | feature/ui-refresh     | —         |
-| U-A | Foundation: tokens, fonts, icons, primitives, motion                      | U-0     | **done**    | wp/u-a-foundation      | `a4a554f` |
-| U-B | Shell: top bar, sidebar, switcher, palette                                | U-A     | **done**    | wp/u-b-shell           | `7a253f1` |
-| U-C | Board                                                                     | U-A     | **done**    | wp/u-c-board           | `4dd57b9` |
-| U-D | Ticket page                                                               | U-A     | **done**    | wp/u-d-ticket          | `c1a0a98` |
-| U-E | Workflow, Skills & Agents                                                 | U-A     | **done**    | wp/u-e-workflow-skills | `405ea57` |
-| U-F | Tokens, Harness, Sessions, projects, settings, health                     | U-A     | **done**    | wp/u-f-pages           | `c7e80a7` |
-| U-G | Brand: Control Core logo, ivory/graphite/lime palette, square agent nodes | U-B…U-F | in-progress | wp/u-g-brand           | —         |
-| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG                 | U-B…U-F | todo        | —                      | —         |
+| WP  | Title                                                                     | After   | Status   | Branch                 | Merged    |
+| --- | ------------------------------------------------------------------------- | ------- | -------- | ---------------------- | --------- |
+| U-0 | Docs, dependencies, DESIGN.md v2 direction                                | —       | **done** | feature/ui-refresh     | —         |
+| U-A | Foundation: tokens, fonts, icons, primitives, motion                      | U-0     | **done** | wp/u-a-foundation      | `a4a554f` |
+| U-B | Shell: top bar, sidebar, switcher, palette                                | U-A     | **done** | wp/u-b-shell           | `7a253f1` |
+| U-C | Board                                                                     | U-A     | **done** | wp/u-c-board           | `4dd57b9` |
+| U-D | Ticket page                                                               | U-A     | **done** | wp/u-d-ticket          | `c1a0a98` |
+| U-E | Workflow, Skills & Agents                                                 | U-A     | **done** | wp/u-e-workflow-skills | `405ea57` |
+| U-F | Tokens, Harness, Sessions, projects, settings, health                     | U-A     | **done** | wp/u-f-pages           | `c7e80a7` |
+| U-G | Brand: Control Core logo, ivory/graphite/lime palette, square agent nodes | U-B…U-F | **done** | wp/u-g-brand           | `b4a38a9` |
+| U-V | Verification, contrast, bundle size, DESIGN.md, CHANGELOG                 | U-B…U-F | todo     | —                      | —         |
 
 ## Decisions (owner, 2026-10-17)
 
@@ -71,3 +71,17 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   - Decisions: full ivory/graphite/lime palette (replaces the blue), the name stays "Agent Control
     Plane", Inter + JetBrains Mono (swapped in `1f2065f`), square agent nodes.
   - New WP **U-G (brand)** runs before U-V.
+- 2026-10-17 **U-G (brand) merged** (`b4a38a9`).
+  - The Control Core mark and logo variants live in `packages/web/public/brand/` and `docs/brand/`
+    (clean SVGs, no scripts or external references), with an adaptive favicon.
+  - Ivory/graphite/lime palette, contrast test with 92 pairs, square agent nodes, README brand
+    section.
+  - Coordinator: pnpm check 2,227/2,227; e2e 50/52.
+- **Two e2e tests are flaky since the U-B shell** (1 in 3 runs at low load, so not only load):
+  - the `shell.spec` sidebar test ("Response has been disposed", a mocked-route race on reload);
+  - `workspace.spec`'s owner flow (waiting for the side panel's Merge button).
+
+  U-V fixes both first.
+
+- Also for U-V (from U-G): `sessions/FamilyTree.tsx` still has rounded cards and accent connectors;
+  chat and comment bubbles use the olive `accent-soft`.
