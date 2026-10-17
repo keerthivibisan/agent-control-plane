@@ -5,10 +5,11 @@
 
 /*
  * Design tokens v2 (packages/web/DESIGN.md, "Visual system"): a neutral zinc scale, near-black dark
- * surfaces, hairline borders, one indigo-violet accent, near-zero shadows except on popovers. Every
- * color is a CSS variable so the dark theme only redefines values, never class names; charts,
- * graphs and React Flow read the same names. Each `--color-*` here is also a Tailwind utility
- * (`bg-panel`, `text-dim`, `bg-token-output`, ...). Text pairs meet WCAG AA in both themes.
+ * surfaces, hairline borders, one blue accent (Jira/YouTrack-like; owner, 2026-10-17), near-zero
+ * shadows except on popovers. Every color is a CSS variable so the dark theme only redefines
+ * values, never class names; charts, graphs and React Flow read the same names. Each `--color-*`
+ * here is also a Tailwind utility (`bg-panel`, `text-dim`, `bg-token-output`, ...). Text pairs
+ * meet WCAG AA in both themes.
  */
 @theme {
   --font-sans:
@@ -90,11 +91,11 @@
    * `accent-fill` is the primary button: the same hue, kept dark enough for white text even in the
    * dark theme, where `accent` itself is light so that it reads as text on near-black.
    */
-  --color-accent: #5b57e8;
+  --color-accent: #0c66e4;
   --color-accent-ink: #ffffff;
-  --color-accent-soft: #efeffe;
-  --color-accent-fill: #5b57e8;
-  --color-accent-fill-hover: #4c48d9;
+  --color-accent-soft: #e9f2ff;
+  --color-accent-fill: #0c66e4;
+  --color-accent-fill-hover: #0055cc;
   --color-accent-fill-ink: #ffffff;
 
   /* Feedback. */
@@ -141,11 +142,11 @@
   --color-line-strong: #333339;
   --color-overlay: rgb(0 0 0 / 0.6);
 
-  --color-accent: #9496fb;
+  --color-accent: #579dff;
   --color-accent-ink: #0a0a0b;
-  --color-accent-soft: #1b1a36;
-  --color-accent-fill: #5e5ce6;
-  --color-accent-fill-hover: #5553de;
+  --color-accent-soft: #1c2b41;
+  --color-accent-fill: #0c66e4;
+  --color-accent-fill-hover: #0055cc;
   --color-accent-fill-ink: #ffffff;
 
   --color-success: #4ade80;

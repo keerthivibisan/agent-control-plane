@@ -11,7 +11,7 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > **v2 direction (UI refresh for v0.1.0, owner decision 2026-10-17; see
 > [docs/ui-refresh/README.md](../../docs/ui-refresh/README.md)):**
 >
-> - Linear/Vercel style: neutral zinc greys and one indigo-violet accent;
+> - Linear/Vercel style: neutral zinc greys and one blue (Jira/YouTrack-like; owner changed it from blue on 2026-10-17) accent;
 > - near-black dark surfaces, hairline borders, radius 8/6 px, almost no shadows;
 > - Geist Sans and Geist Mono (bundled), lucide icons;
 > - Radix for dialogs, menus, tabs, popovers and tooltips;
@@ -130,7 +130,7 @@ Enter opens, Esc closes, Tab stays in the field, and focus returns to the opener
 
 ## Visual system (src/index.css, src/components)
 
-v2 (UI refresh, WP U-A): Linear/Vercel style. Neutral zinc greys, one indigo-violet accent,
+v2 (UI refresh, WP U-A): Linear/Vercel style. Neutral zinc greys, one blue accent,
 hairline borders, near-black dark surfaces, almost no shadows.
 
 **Tokens.** All colors are CSS variables in `@theme` (`src/index.css`); `.dark` only redefines
@@ -147,9 +147,9 @@ meets WCAG AA (4.5:1) in both themes.
 | `ink` / `dim`                                                                                        | `#09090b` / `#5f5f69`         | `#ededef` / `#9f9fa9`         | text; secondary text                                 |
 | `line` / `line-strong`                                                                               | `#e8e8eb` / `#d6d6db`         | `#232327` / `#333339`         | hairline borders; field borders and hover borders    |
 | `overlay`                                                                                            | zinc-950 at 40%               | black at 60%                  | modal backdrop                                       |
-| `accent` / `accent-soft`                                                                             | `#5b57e8` / `#efeffe`         | `#9496fb` / `#1b1a36`         | links, focus ring, selection, active nav; soft fills |
+| `accent` / `accent-soft`                                                                             | `#0c66e4` / `#e9f2ff`         | `#579dff` / `#1c2b41`         | links, focus ring, selection, active nav; soft fills |
 | `accent-ink`                                                                                         | `#ffffff`                     | `#0a0a0b`                     | text on an `accent` fill                             |
-| `accent-fill` (`-hover/-ink`)                                                                        | `#5b57e8` / white text        | `#5e5ce6` / white text        | the primary button and the brand mark                |
+| `accent-fill` (`-hover/-ink`)                                                                        | `#0c66e4` / white text        | `#0c66e4` / white text        | the primary button and the brand mark                |
 | `observed` / `derived`                                                                               | `#047857` / `#0369a1`         | `#6ee7b7` / `#7dd3fc`         | `ProvenanceBadge`                                    |
 | `status-*`, `success`, `warning(-soft)`, `danger(-soft)`, `token-*`, `estimated(-bg)`, `unavailable` | see `index.css`               | see `index.css`               | **meaning only**, never decoration                   |
 

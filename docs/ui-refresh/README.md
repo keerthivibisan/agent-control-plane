@@ -78,8 +78,8 @@ no placeholder UIs, and local only.
   `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`. Body 13–14 px,
   tabular numbers, tighter headings.
 - **Color:** a neutral zinc-like scale with near-black dark surfaces (about `#0a0a0b` canvas,
-  `#111113` panel), hairline borders, and one accent. The default is an indigo-violet (about
-  `#6366f1`, adjustable at the checkpoint). Status colors are semantic and always paired with a
+  `#111113` panel), hairline borders, and one accent. The default is an blue (Jira/YouTrack-like; owner changed it from blue on 2026-10-17) (about
+  `#0c66e4`, adjustable at the checkpoint). Status colors are semantic and always paired with a
   word or icon. Light and dark both meet WCAG AA contrast for text.
 - **Shape:** radius 8 px (cards) and 6 px (controls), 1 px borders, almost no shadow except on
   popovers, and a 2 px accent focus ring.
