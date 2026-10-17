@@ -20,7 +20,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > - subtle motion that respects reduced motion.
 >
 > The principles below still hold. WP U-A replaced the "Visual system" section with the v2
-> tokens and components; pages adopt the new shared components in U-B…U-F.
+> tokens and components; every page adopted them in U-B…U-G, and U-V checked the whole app in
+> light and dark at 1440, 1024 and 390px, by keyboard and with reduced motion.
 
 ## Principles
 
@@ -47,39 +48,56 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 ## Layout (src/app)
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ [AC] Agent Control Plane │ [■ web-app ▾]                 [⌕ Search… ⌘K]  ☾  │  top bar
-├───────────────┬──────────────────────────────────────────────────────────────┤
-│ PROJECT       │  (demo banner)                                               │
-│  Board        │  Page title  ⓘ                              [Primary action] │
-│  Tokens       │  One line about the page.                                    │
-│  Sessions     │                                                              │
-│  Settings     │  cards…                                                      │
-│ ───────────── │                                                              │
-│  All projects │                                                              │
-│  Data health  │                                                              │
-│ ● Live        │                                                              │
-└───────────────┴──────────────────────────────────────────────────────────────┘
+┌──────────────┬────────────────────────────────────────────────────────────────┐
+│ ⧉ AGENT CON… │ [■ web-app ▾] / Board            [⌕ Search or jump to… ⌘K]  ◐  │  top bar, 48px
+├──────────────┼────────────────────────────────────────────────────────────────┤
+│ Project      │  (demo banner)                                                 │
+│ ▌Board       │  Page title  ⓘ                                [Primary action] │
+│  Workflow    │  One line about the page.                                      │
+│  …           │                                                                │
+│  Settings    │  cards…                                                        │
+│ ──────────── │                                                                │
+│  All projects│                                                                │
+│  Data health │                                                                │
+│ ● Live    [⇤]│                                                                │
+└──────────────┴────────────────────────────────────────────────────────────────┘
 ```
 
-- **Top bar** (`Shell.tsx`, sticky, 56px): the app mark (links to `#/`), the **project switcher**
-  (`ProjectSwitcher.tsx`: current project, a menu of projects with their folders, All projects and
-  New project; arrow keys, Esc), the **⌘K** button and the theme toggle.
-- **Project sidebar**: a "Project" label, the project's pages from `PROJECT_PAGES` (only the
-  `available` ones), a divider, then **All projects** and **Data health**. The footer has the
-  live-connection dot and the server status. Above 1280px it shows labels (15rem); at **1280px and
-  below it collapses to icons** (4.5rem; the label stays as `title` and screen-reader text). The
-  `wide:` Tailwind variant is that breakpoint (1281px). The active entry is a raised `panel` step
-  with a hairline and a 3px signal-lime marker on its left edge (outlined in `accent-fill-edge`).
+- **Top bar** (`TopBar.tsx`, sticky, **48px**; the shell sets `--spacing-topbar: 3rem` for the
+  sticky sidebar and demo banner under it):
+  - a **brand cell** as wide as the sidebar, so their borders line up: the Control Core mark
+    (`BrandMark`) and the wordmark, linking to `#/`; the mark alone over the rail;
+  - the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`: current project, a menu of
+    projects with their folders, All projects and New project), a slanted hairline, then the page;
+    on a narrow screen the page crumb gives way first, so the bar never scrolls sideways;
+  - the **⌘K** search button (the full "Search or jump to…" field when there is room, the icon
+    below that) and the **theme toggle** (System → Light → Dark, with a tooltip).
+- **Sidebar** (`Sidebar.tsx`): a "Project" label, the project's pages from `PROJECT_PAGES` (only
+  the `available` ones), a divider, then **All projects** and **Data health**. The footer has the
+  live-connection dot, the server status and the **sidebar toggle**.
+  - Two widths: the full list (15rem, `--spacing-sidebar`) or a **56px icon rail** whose entries
+    show their label as a tooltip (and keep it as screen-reader text).
+  - The toggle button or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is remembered
+    in this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice stored, the
+    rail is used at 1280px and below (`wide:` is the 1281px breakpoint) and the full list above.
+  - The active entry is a raised `panel` step with a hairline and a 3px signal-lime marker on its
+    left edge (outlined in `accent-fill-edge`).
 - **Which project:** the one in the address (`#/p/:projectId/...`), else the last one used
   (`src/app/last-project.ts`, localStorage, every access in try/catch). On All projects the
   switcher reads "All projects". The project section is hidden when there is no project.
-- **Main area:** max 88rem wide, 24px side padding (40px above 1280px), 32px top. Page header, then
-  cards in a 24px grid gap.
+- **Main area:** max 88rem wide; side padding 16px on a phone, 24px from `sm`, 40px above 1280px;
+  32px top (24px on a phone). Page header, then cards in a 24px grid gap.
+- **Page header** (`PageHeader`): the title, one line and an ⓘ; the actions on the right, wrapping
+  under the title before the title gets narrower than 18rem, and **under the title below `sm`**.
+- **Page change:** the page fades in with a 4px rise (200ms, `PageTransition.tsx`); the page is
+  never remounted, and nothing moves with reduced motion.
 - **Demo mode:** a slim banner "You're looking at sample data", sticky under the top bar.
-- **Data health** has two sections as a segmented control: **Overview** (`#/health`) and
-  **Connection** (`#/health/connection`, which was Setup: project folders and hooks).
-- Responsive down to ~1024px; tables become card lists below that.
+- **Data health** has two sections as link tabs (`LinkTabList`/`LinkTab`, a navigation with
+  `aria-current`): **Overview** (`#/health`) and **Connection** (`#/health/connection`, which was
+  Setup: project folders and hooks).
+- **Responsive down to a 390px phone** (e2e `pages.spec` checks every page there): the rail is the
+  default below 1280px, tables become card lists below `lg`, wide content (the board's columns, the
+  agent tree, graphs) scrolls inside its own frame, and the page itself never scrolls sideways.
 
 ### Routes
 
@@ -234,13 +252,21 @@ put it on an inner element.
 - **Status** (`StatusBadge`): dot (color plus shape) + word + ⓘ. `ProvenanceBadge`: tiny
   uppercase tag, `observed`/`derived` tokens; estimated is dashed and italic.
 - **Tabs** (`Tabs`, `TabList`, `Tab`, `TabPanel`; Radix Tabs): an underline tab bar; arrow keys
-  move and select, a click selects; controlled by the owner.
+  move and select, a click selects; controlled by the owner. **Link tabs** (`LinkTabList`,
+  `LinkTab`) draw the same bar for sections that are addresses: a `navigation` of links with
+  `aria-current="page"` (Data health).
 - **Dialog** (`Dialog`; Radix Dialog): open while mounted, `onClose` on Escape, backdrop click or
   the optional × (`closeLabel`); `aria-modal`, focus to `[data-autofocus]` or the first control,
-  Tab trapped, focus back to the opener just after it closes.
+  Tab trapped, focus back to the opener just after it closes, but only while focus is still in
+  the dialog or nowhere. A dialog opened in the same render that closed another (the palette's
+  New ticket) keeps focus and takes over the closed one's opener.
 - **Menu** (`Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator`; Radix DropdownMenu): a menu button;
-  ArrowDown/Enter/Space open it on the first item, arrows move, Escape closes to the trigger;
-  `tone="danger"` for destructive items. Not modal by default.
+  ArrowDown/Enter/Space open it on the first item, arrows move (`loop` wraps at the ends), Escape
+  closes to the trigger; `tone="danger"` for destructive items. Not modal by default. The
+  highlighted item has the `hover` fill, and with the keyboard the 2px accent ring, inset.
+- **Focus:** every interactive element shows a 2px `accent` outline on `:focus-visible` (3:1 or
+  more against its surface on ivory and graphite; e2e `focus-ring.ts` measures it). Never remove
+  it without an equal replacement.
 - **Popover** (`Popover`; Radix Popover): a small floating panel (`role="dialog"`, named by
   `label`) toggled by its trigger.
 - **Segmented** (`Segmented`): a labelled group of `aria-pressed` buttons on a `sunken` track.
@@ -263,8 +289,9 @@ put it on an inner element.
 
 ## Agent views (the logo's vocabulary)
 
-The ticket's agent canvas, its live workflow, the Workflow page, the sessions graph and the legacy
-control tree draw agents the way the logo does (owner decision, WP U-G):
+The ticket's agent canvas, its live workflow, the Workflow page, the sessions graph, the sessions
+family tree and the legacy control tree draw agents the way the logo does (owner decision, WP
+U-G; the family tree in U-V):
 
 - **Square nodes:** agent and stage nodes have a 2px radius (React Flow's
   `--xy-node-border-radius` too); tags on them are square as well. Start and Done stay pills: they
@@ -279,7 +306,11 @@ control tree draw agents the way the logo does (owner decision, WP U-G):
   working stage an outline with a lime halo. Idle and finished agents are neutral, and the budget
   bar is neutral within budget.
 - **Warning and danger only for real states:** a request waiting for you, a failed stage, a budget
-  near or over its limit.
+  near or over its limit. A passed check is `success` green (its own `passed` tone), not the grey
+  of finished work.
+- **Conversations stay neutral:** in the chat and the ticket's comments your messages are an
+  outlined bubble (`line-strong` on `panel`) and the agents' a filled one (`hover`); no accent
+  tint, since lime means working or selected.
 - Diagrams show only real relationships and states (AGENTS.md rule 1): no decorative nodes or
   lines.
 

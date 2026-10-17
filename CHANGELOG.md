@@ -7,6 +7,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- New logo
+  - The Control Core: a central square linked to four agent squares. It is in the top bar, the
+    browser tab and the README.
+- Collapsible sidebar
+  - Switch between the full list and a slim row of icons with the button at the bottom of the
+    sidebar, or with ⌘B (Ctrl+B on Windows and Linux).
+  - The app remembers your choice in this browser. Until you choose, narrow windows show the icons.
+  - In the slim view, each icon shows its name when you point at it.
+
+### Changed
+
+- A new look
+  - Warm ivory light theme, graphite dark theme and one lime accent.
+  - Inter for text and JetBrains Mono for ids and numbers, bundled with the app, so nothing is
+    loaded from the internet.
+  - Clearer icons, thinner borders, and loading placeholders shaped like the page.
+  - Short, subtle animations. They are turned off when your system asks for reduced motion.
+- A slimmer top bar
+  - It shows where you are: the project (with the project switcher), then the page.
+  - Search (⌘K) and the theme switch stay on the right.
+- Agent views
+  - Agents are drawn as squares, the way the logo draws them, in the ticket page, the Workflow
+    page and the session trees. The lead agent has a darker frame.
+  - Lime marks only an agent that is working or selected. Warning and error colours appear only
+    when something needs you or went wrong.
+  - Passed checks show a green dot.
+- Works on small screens
+  - Every page fits a phone-sized window: page titles keep their width, and buttons move under
+    the title instead of squeezing it.
+  - Wide content, such as the board's columns and the agent tree, scrolls inside its own area.
+- Keyboard use
+  - Menus, tabs and dialogs work with the keyboard, and the item in focus always shows a clear
+    outline in both themes.
+  - Showing or hiding a board column keeps the keyboard focus on that column's button.
+
+### Fixed
+
+- The ticket page could miss a helper's changes when several updates arrived at once, so the
+  Merge button did not appear until you reloaded the page.
+
 ## [0.0.1] - 2026-10-17
 
 The first preview of Agent Control Plane. It is a local app that lets you see your Claude Code
