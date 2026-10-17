@@ -14,6 +14,7 @@ const DOT: Record<ControlStatusCopy['tone'], string> = {
   working: 'bg-status-active ring-3 ring-status-active/20',
   waiting: 'bg-status-idle',
   done: 'bg-status-ended',
+  passed: 'bg-success',
   stopped: 'border-2 border-status-stale bg-transparent',
   problem: 'bg-danger',
 };

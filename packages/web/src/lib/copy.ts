@@ -865,7 +865,8 @@ export const SESSION_DETAIL_COPY = {
 export interface ControlStatusCopy {
   word: string;
   tip: string;
-  tone: 'working' | 'waiting' | 'done' | 'stopped' | 'problem';
+  /** `passed` is a check that succeeded (a green dot); `done` is work that ended (grey). */
+  tone: 'working' | 'waiting' | 'done' | 'passed' | 'stopped' | 'problem';
 }
 
 /**
@@ -1386,7 +1387,7 @@ export const SETUP_HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStat
 
 /** Check run results (ADR-0017) in words. */
 export const CHECK_STATUS_COPY: Readonly<Record<CheckRunStatus, ControlStatusCopy>> = {
-  passed: { word: 'Passed', tip: 'The command finished without an error.', tone: 'done' },
+  passed: { word: 'Passed', tip: 'The command finished without an error.', tone: 'passed' },
   failed: { word: 'Failed', tip: 'The command finished with an error.', tone: 'problem' },
   'timed-out': {
     word: 'Took too long',

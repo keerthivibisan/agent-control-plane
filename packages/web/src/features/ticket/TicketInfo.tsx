@@ -138,7 +138,7 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
                 <p
                   className={`rounded-card border px-3.5 py-2 whitespace-pre-wrap ${
                     c.author === 'owner'
-                      ? 'border-accent/15 bg-accent-soft'
+                      ? 'border-line-strong bg-panel'
                       : reviewer
                         ? 'border-line border-l-2 border-l-accent bg-panel'
                         : 'border-line bg-hover'

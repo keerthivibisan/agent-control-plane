@@ -74,7 +74,7 @@ function Bubble({
       <p
         className={`max-w-[85%] rounded-card px-3.5 py-2 break-words whitespace-pre-wrap text-ink ${
           owner
-            ? 'rounded-tr-[0.1875rem] border border-accent/15 bg-accent-soft'
+            ? 'rounded-tr-[0.1875rem] border border-line-strong bg-panel'
             : 'rounded-tl-[0.1875rem] border border-line bg-hover'
         }`}
       >

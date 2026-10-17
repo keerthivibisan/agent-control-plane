@@ -20,6 +20,7 @@ const QUIET = { sign: '–', className: 'bg-sunken text-dim' };
 // in project settings and on the ticket page): passed → ✓, failed and the like → ✗, else –.
 const MARK: Record<ControlStatusCopy['tone'], { sign: string; className: string }> = {
   done: { sign: '✓', className: 'bg-success/15 text-success' },
+  passed: { sign: '✓', className: 'bg-success/15 text-success' },
   problem: { sign: '✗', className: 'bg-danger/15 text-danger' },
   stopped: QUIET,
   waiting: QUIET,

@@ -24,15 +24,32 @@ const VERTICAL = 'before:absolute before:top-0 before:left-0 before:h-full befor
 const LAST_VERTICAL = 'last:before:h-[2.05rem]';
 const ELBOW = 'after:absolute after:top-[2.05rem] after:left-0 after:w-6 after:border-t-2';
 
-function MemberCard({ m, current: currentProps }: { m: FamilyMember; current: Current }) {
+function MemberCard({
+  m,
+  current: currentProps,
+  top,
+}: {
+  m: FamilyMember;
+  current: Current;
+  /** A top-level session (the one that started the others): framed in ink, as the controller. */
+  top: boolean;
+}) {
   const s = m.session;
   const current = s.id === currentProps.id;
   return (
     <div
       data-testid={`family-member-${s.id}`}
       data-current={current ? 'true' : undefined}
-      className={`relative max-w-xl rounded-card border bg-panel px-4 py-3 shadow-card transition-colors ${
-        current ? 'border-accent ring-3 ring-accent/20' : 'border-line hover:border-line-strong'
+      // Square, like every agent node (DESIGN.md, "Agent views"): the session outlined has the
+      // brand's lime ring, a top-level session an ink frame, the others a hairline.
+      className={`relative max-w-xl rounded-[2px] border bg-panel px-4 py-3 shadow-card transition-colors ${
+        current
+          ? `ring-3 ring-accent-fill/55 dark:ring-accent-fill/25 ${
+              top ? 'border-ink' : 'border-accent-fill-edge'
+            }`
+          : top
+            ? 'border-ink/70 hover:border-ink'
+            : 'border-line hover:border-line-strong'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -40,7 +57,7 @@ function MemberCard({ m, current: currentProps }: { m: FamilyMember; current: Cu
         <a
           href={href.session(s.id)}
           aria-current={current ? 'page' : undefined}
-          className="min-w-0 flex-1 truncate font-medium text-ink no-underline after:absolute after:inset-0 after:rounded-card hover:underline"
+          className="min-w-0 flex-1 truncate font-medium text-ink no-underline after:absolute after:inset-0 after:rounded-[2px] hover:underline"
         >
           {sessionName(s)}
         </a>
@@ -68,10 +85,10 @@ function MemberCard({ m, current: currentProps }: { m: FamilyMember; current: Cu
   );
 }
 
-function Branch({ m, current }: { m: FamilyMember; current: Current }) {
+function Branch({ m, current, top = false }: { m: FamilyMember; current: Current; top?: boolean }) {
   return (
     <div>
-      <MemberCard m={m} current={current} />
+      <MemberCard m={m} current={current} top={top} />
       {m.helpers.length > 0 ? (
         <ul
           className="ml-5"
@@ -80,7 +97,7 @@ function Branch({ m, current }: { m: FamilyMember; current: Current }) {
           {m.helpers.map((h) => (
             <li
               key={h.session.id}
-              className={`${BRANCH} ${VERTICAL} ${LAST_VERTICAL} ${ELBOW} before:border-accent/45 after:border-accent/45`}
+              className={`${BRANCH} ${VERTICAL} ${LAST_VERTICAL} ${ELBOW} before:border-line-strong after:border-line-strong`}
             >
               <Branch m={h} current={current} />
             </li>
@@ -130,7 +147,7 @@ export function FamilyTree({
     <ul aria-label={COPY.label} className="flex flex-col gap-6" data-testid="family-tree">
       {family.map((m) => (
         <li key={m.session.id}>
-          <Branch m={m} current={current} />
+          <Branch m={m} current={current} top />
         </li>
       ))}
     </ul>
