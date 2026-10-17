@@ -6,6 +6,8 @@ import {
   MAX_COMMAND_PATTERNS,
   RUN_OPTION_KEYS,
   approvalsOf,
+  isEditorNode,
+  isModeWithin,
   isSafeCommandToken,
   reviewStageOf,
   ticketOptionsDiffer,
@@ -17,6 +19,7 @@ import {
   type ProjectApprovals,
   type RunOptions,
   type TicketRunOptions,
+  type WorkflowGraph,
 } from '@acp/core';
 import type {
   ChangeReviewDto,
@@ -26,6 +29,7 @@ import type {
   StartTicketRequest,
   TicketBranchDto,
   TicketRunOptionsPatch,
+  WorkflowGraphDto,
 } from '@acp/core/api';
 import type { PillTone } from '../../components/Pill';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
@@ -323,4 +327,60 @@ export function optionsBadge(
     return [];
   });
   return parts.length === 0 ? null : parts.join(' · ');
+}
+
+// ---------------------------------------------------------------- run options as a limit (WG-E)
+
+/**
+ * What the run options need to know about the project's workflow (ADR-0023): each editing block
+ * runs with its own mode (or the project's), and a ticket's or run's mode is only a limit on it.
+ */
+export interface BlockModes {
+  /** The project's mode, which blocks set to "Project default" use. */
+  projectMode: ApprovalMode;
+  /** The loosest mode any editing block runs with; null when the workflow has none. */
+  loosest: ApprovalMode | null;
+}
+
+/** The loosest mode of the graph's editing blocks: each block's own, else the project's. */
+export function loosestBlockMode(
+  graph: Pick<WorkflowGraph, 'nodes'>,
+  projectMode: ApprovalMode,
+): ApprovalMode | null {
+  let loosest: ApprovalMode | null = null;
+  for (const node of graph.nodes) {
+    if (!isEditorNode(node)) continue;
+    const mode = node.approvalMode ?? projectMode;
+    if (loosest === null || !isModeWithin(mode, loosest)) loosest = mode;
+  }
+  return loosest;
+}
+
+export function blockModesOf(dto: Pick<WorkflowGraphDto, 'graph' | 'setup'>): BlockModes {
+  const projectMode = approvalsOf(dto.setup).mode;
+  return { projectMode, loosest: loosestBlockMode(dto.graph, projectMode) };
+}
+
+/**
+ * True when a limit of `mode` changes nothing: it is looser than every editing block, so no block
+ * runs differently. Unknown blocks (a server without graphs) never say so.
+ */
+export function limitHasNoEffect(mode: ApprovalMode, blocks: BlockModes | undefined): boolean {
+  return blocks !== undefined && blocks.loosest !== null && !isModeWithin(mode, blocks.loosest);
+}
+
+/**
+ * Distinct rounds of a change that this decider sent back for rework: `reviewer` is the review
+ * agent's direct rework (ADR-0023 route "direct"), `lead` the lead's. A decider's note on a round
+ * is a second row with the same decision, so rounds are counted once.
+ */
+export function reworkRoundsBy(
+  change: Pick<ChangeReviewDto, 'reviews'>,
+  decider: 'reviewer' | 'lead',
+): number {
+  return new Set(
+    change.reviews
+      .filter((r) => r.decision === 'rework' && r.decidedBy === decider)
+      .map((r) => r.round),
+  ).size;
 }

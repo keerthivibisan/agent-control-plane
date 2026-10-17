@@ -50,10 +50,10 @@ describe('board: Start with options', () => {
     renderWithApi(<BoardPage projectId={PROJECT_ID} />, s);
     const dialog = await openStartOptions();
     expect(within(dialog).getByRole('heading', { name: 'Start WEB-13' })).toBeTruthy();
-    expect(
-      (await within(dialog).findByLabelText<HTMLInputElement>(/^Auto edits.*Project setting/))
-        .checked,
-    ).toBe(true);
+    // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+    expect((await within(dialog).findByLabelText<HTMLInputElement>(/^No limit/)).checked).toBe(
+      true,
+    );
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
     await waitFor(() => expect(screen.queryByTestId('start-dialog')).toBeNull());
     expect(s.calls.filter((c) => c.method === 'POST')).toHaveLength(0);

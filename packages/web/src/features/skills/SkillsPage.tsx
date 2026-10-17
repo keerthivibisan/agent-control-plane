@@ -1,6 +1,6 @@
 import { stagesUsingAgent, type WorkflowStageId } from '@acp/core';
 import { useMemo, useState, type ReactNode } from 'react';
-import type { SkillCommitResultDto } from '@acp/core/api';
+import type { NodeUseDto, SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { PlusSmallIcon, SparkIcon } from '../../components/icons';
@@ -10,6 +10,8 @@ import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import {
   agentsPaths,
   agentsSchemas,
+  blockModesPaths,
+  blockModesSchemas,
   commitAgent,
   commitSkill,
   isAgentsPath,
@@ -33,6 +35,7 @@ import { RefusalNotice } from './bits';
 import { SkillEditor } from './SkillEditor';
 import { SkillList } from './SkillList';
 import type { SkillTemplate } from './templates';
+import { nodesUsingAgent } from './used-by';
 
 const C = SKILLS_COPY;
 const A = AGENTS_COPY;
@@ -246,6 +249,7 @@ function AgentDetailView({
   back,
   onDeleted,
   usedBy,
+  usedByNodes,
 }: {
   projectId: string;
   name: string;
@@ -253,6 +257,7 @@ function AgentDetailView({
   back: () => void;
   onDeleted: (name: string) => void;
   usedBy: readonly WorkflowStageId[] | undefined;
+  usedByNodes: readonly NodeUseDto[] | undefined;
 }) {
   const { data, error } = useApiQuery(agentsPaths.agent(projectId, name), agentsSchemas.detail);
   if (error !== null && data === undefined) return <Failure error={error} refusals={A.refusals} />;
@@ -267,6 +272,7 @@ function AgentDetailView({
       onCancel={back}
       onDeleted={onDeleted}
       usedBy={usedBy}
+      usedByNodes={usedByNodes}
     />
   );
 }
@@ -280,15 +286,19 @@ function AgentsTab({ projectId }: { projectId: string }) {
   const toList = () => setView({ kind: 'list' });
   // Which stages use each file (R-I): from the saved workflow; left out while it isn't known.
   const saved = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow).data;
+  // ADR-0023: the blocks that use each file, from the project's graph once the server has one.
+  const graph = useApiQuery(blockModesPaths.graph(projectId), blockModesSchemas.graph).data;
   const usage = useMemo<AgentUsage | undefined>(
     () =>
-      saved === undefined
+      saved === undefined && graph === undefined
         ? undefined
         : {
-            usedBy: (name) => stagesUsingAgent(saved.workflow, name),
+            usedBy: (name) => (saved === undefined ? [] : stagesUsingAgent(saved.workflow, name)),
+            usedByNodes:
+              graph === undefined ? undefined : (name) => nodesUsingAgent(graph.graph, name),
             href: href.projectPage(projectId, 'workflow'),
           },
-    [saved, projectId],
+    [saved, graph, projectId],
   );
 
   if (view.kind === 'new' || view.kind === 'edit') {
@@ -311,6 +321,7 @@ function AgentsTab({ projectId }: { projectId: string }) {
             existing={names}
             back={toList}
             usedBy={usage?.usedBy(view.name)}
+            usedByNodes={usage?.usedByNodes?.(view.name)}
             onDeleted={(name) => {
               setRemoved(name);
               toList();

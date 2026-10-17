@@ -3102,6 +3102,140 @@ export const REVIEW_LOOP_COPY = {
   },
 } as const;
 
+// --- Live run graph and run options as a limit (WG-E, wp/wg-e-live; ADR-0023) --------------------
+//
+// Add-only. The ticket page's live graph of the run's own workflow, the run options read as a
+// limit ("at most"), the change cards' direct rework by the review agent, and "Used by" blocks on
+// Skills & Agents. Plain owner words: blocks and links, never nodes, edges or engines.
+
+/** What a block is called by its kind on the live graph; a reviewer's word depends on its scope. */
+type LiveBlockKind =
+  | 'planner'
+  | 'lead'
+  | 'helper-pool'
+  | 'helper'
+  | 'reviewer-change'
+  | 'reviewer-final'
+  | 'tester'
+  | 'ticket'
+  | 'plan-approval'
+  | 'checks'
+  | 'ticket-merge'
+  | 'owner-merge'
+  | 'done';
+
+export const WORKFLOW_LIVE_COPY = {
+  graph: {
+    description: 'Where this run is: each block of the workflow it started with, live.',
+    tip: 'The blocks and links are this run’s workflow as it was when the run started, with the models, skills and approval modes it runs with. Click a block, or an agent on it, to show that agent in the side panel.',
+    label: 'This run’s workflow',
+    kinds: {
+      planner: 'Planner',
+      lead: 'Lead',
+      'helper-pool': 'Helper pool',
+      helper: 'Named helper',
+      'reviewer-change': 'Change reviewer',
+      'reviewer-final': 'Final reviewer',
+      tester: 'Tester',
+      ticket: 'Ticket',
+      'plan-approval': 'You',
+      checks: 'Checks',
+      'ticket-merge': 'Ticket branch',
+      'owner-merge': 'You',
+      done: 'Done',
+    } satisfies Record<LiveBlockKind, string>,
+    gateTitle: {
+      'plan-approval': 'Approve the plan',
+      'owner-merge': 'Merge into main',
+    },
+    planAuto: 'Approved automatically',
+    planAsks: 'You approve the plan',
+    readOnly: 'Read-only',
+    ownCopy: 'Own copy',
+    model: 'Model',
+    projectModel: 'Project default',
+    fileOrProjectModel: 'Agent file’s or project default',
+    noSkills: 'No skills',
+    mode: (mode: string) => `Mode: ${mode}`,
+    modeTip:
+      'The approval mode this block runs with in this run. A ticket or run setting can only make it more careful.',
+    sandboxed: 'Sandboxed',
+    sandboxTip:
+      'This block is set to Full auto, so its commands run in the operating-system sandbox, also when this run is more careful.',
+    direct: 'Sends changes back to the helper itself',
+    directTip:
+      'This review agent sends each change it reviews straight back to its helper for rework, telling the lead each round. Approved changes, or changes out of rounds, go to the lead, who merges.',
+    agentsLabel: (block: string) => `Agents of ${block}`,
+    agentsMore: (n: number) => `+${formatCount(n)}`,
+    agentsMoreTip: (n: number) =>
+      `${countOf(n, 'more agent', 'more agents')}. Click the block to show the one working now, or see them all under Agents.`,
+    selectAgent: (role: string) => `Show the ${role} in the side panel`,
+    rework: (n: number) => (n > 0 ? `Rework ×${formatCount(n)}` : 'Rework'),
+    directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
+    links: {
+      flow: 'Next step',
+      assigns: 'Assigns work',
+      review: 'Sends its change for review',
+      findings: 'Sends its findings',
+      rework: 'Sends the change back for rework',
+      merge: 'Merges through',
+    },
+    linkName: (kind: string, from: string, to: string) => `${kind}: from ${from} to ${to}`,
+    changes: 'Changes',
+  },
+  ceiling: {
+    /** The Start dialog's and the ticket's mode choice: a limit, never a loosening. */
+    legend: 'Approval mode: at most',
+    /** The ticket's Run options row. */
+    rowLabel: 'Approvals, at most',
+    noLimit: 'No limit',
+    noLimitHint: (projectMode: string) =>
+      `Each block runs with the mode set on the Workflow page. Blocks set to Project default use ${projectMode}.`,
+    noLimitOption: 'No limit: each block’s own mode',
+    summary: (mode: string) =>
+      `Approval mode: at most ${mode} — blocks set to a stricter mode keep it; this can’t loosen any block.`,
+    summaryNone: 'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
+    noEffect: (mode: string, loosest: string) =>
+      `No block in this workflow is set looser than ${loosest}, so “at most ${mode}” changes nothing.`,
+    ticketHint:
+      'A limit for this ticket’s runs: blocks set to a stricter mode keep it, and it can’t loosen any block.',
+    reviewerHint: {
+      agent: 'Each change follows the workflow’s review links.',
+      lead: 'Lead reviews: every change goes to the lead for this run, whatever the workflow’s review links say.',
+    },
+    ticketReviewerHint:
+      'Lead reviews sends every change to the lead on this ticket’s runs, whatever the workflow’s review links say. Review agent follows the workflow.',
+    roundsHint:
+      'Replaces every rework limit in the workflow for this run. Unchanged, each rework link keeps its own limit.',
+    ticketRoundsHint:
+      'Replaces every rework limit in the workflow on this ticket’s runs. Project default keeps each rework link’s own limit.',
+  },
+  changes: {
+    /** A round the review agent sent straight back to the helper (review route "direct"). */
+    directRework: 'Review agent sent it back to the helper for rework',
+    directRounds: (reviewer: number, lead: number) =>
+      [
+        `Review agent: ${countOf(reviewer, 'direct rework round', 'direct rework rounds')}`,
+        ...(lead > 0 ? [`lead: ${countOf(lead, 'rework round', 'rework rounds')}`] : []),
+      ].join(' · '),
+    directRoundsTip:
+      'In this workflow the review agent sends changes back to the helper itself, and the lead merges once the review agent approves (or its rounds run out).',
+    directBadge: (n: number) => `Direct rework ×${formatCount(n)}`,
+  },
+  usedBy: {
+    /** "Used by" names the workflow's blocks once the server sends them. */
+    inUse: (blocks: string) =>
+      `Used by ${blocks}. Remove it from those blocks on the Workflow page before deleting it.`,
+    openBlock: (block: string) => `Open ${block} on the Workflow page`,
+  },
+} as const;
+
+/** "Frontend helper, Helpers and Change reviewer": block labels in a sentence. */
+export function blockList(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1] ?? ''}`;
+}
+
 /**
  * A ticket's own run options (RL-H): the New ticket dialog, the ticket page's Run options, the
  * board card's badge and the Start dialog's markers. "Project default" follows the project's

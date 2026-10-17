@@ -97,14 +97,14 @@ describe('New ticket dialog: run options (RL-H)', () => {
     return dialog;
   }
 
-  it('starts at "Project default (<mode>)" and sends no options when left there', async () => {
+  it('starts at "No limit" and sends no options when left there', async () => {
     const s = server({
       [`POST /api/projects/${PROJECT_ID}/tickets`]: ticketDto({ id: 't-30', key: 'WEB-30' }),
     });
     const dialog = await open(s);
-    const mode = within(dialog).getByLabelText<HTMLSelectElement>('Approvals');
+    const mode = within(dialog).getByLabelText<HTMLSelectElement>('Approval mode: at most');
     await waitFor(() =>
-      expect(mode.selectedOptions[0]?.textContent).toBe('Project default (Auto edits)'),
+      expect(mode.selectedOptions[0]?.textContent).toBe('No limit: each block’s own mode'),
     );
     // Reviewer and rounds wait under "More options".
     const more = within(dialog).getByTestId('run-options-more');
@@ -127,7 +127,7 @@ describe('New ticket dialog: run options (RL-H)', () => {
       [`POST /api/projects/${PROJECT_ID}/tickets`]: ticketDto({ id: 't-30', key: 'WEB-30' }),
     });
     const dialog = await open(s);
-    const mode = within(dialog).getByLabelText('Approvals');
+    const mode = within(dialog).getByLabelText('Approval mode: at most');
     fireEvent.change(mode, { target: { value: 'full-auto' } });
     expect(within(dialog).getByTestId('full-auto-warning')).toBeTruthy();
     fireEvent.change(mode, { target: { value: 'manual' } });
@@ -150,7 +150,7 @@ describe('New ticket dialog: run options (RL-H)', () => {
       [`POST /api/projects/${PROJECT_ID}/tickets`]: ticketDto({ id: 't-30', key: 'WEB-30' }),
     });
     const dialog = await open(s);
-    const mode = within(dialog).getByLabelText('Approvals');
+    const mode = within(dialog).getByLabelText('Approval mode: at most');
     fireEvent.change(mode, { target: { value: 'auto' } });
     // Wider than the project: the plain warning.
     expect(within(dialog).getByTestId('approvals-warning')).toBeTruthy();
@@ -219,7 +219,7 @@ describe('ticket page: Run options (RL-H)', () => {
     );
     const section = screen.getByTestId('ticket-run-options');
     fireEvent.click(within(section).getByRole('button', { name: 'Change run options' }));
-    const mode = within(section).getByLabelText<HTMLSelectElement>('Approvals');
+    const mode = within(section).getByLabelText<HTMLSelectElement>('Approval mode: at most');
     expect(mode.value).toBe('manual');
     fireEvent.change(mode, { target: { value: '' } });
     fireEvent.change(within(section).getByLabelText('Rework rounds'), { target: { value: '3' } });
@@ -268,8 +268,13 @@ describe('Start dialog: pre-filled from the ticket (RL-H)', () => {
       await within(dialog).findByLabelText<HTMLInputElement>(/^Manual · This ticket/);
     expect(manualRadio.checked).toBe(true);
     expect(
-      within(dialog).getByLabelText<HTMLInputElement>(/^Auto edits.*Project setting/).checked,
+      within(dialog).getByLabelText<HTMLInputElement>(/^Auto edits \(recommended\)/).checked,
     ).toBe(false);
+    // The ticket has its own limit, so this run can't go without one.
+    expect(within(dialog).queryByLabelText(/^No limit/)).toBeNull();
+    expect(within(dialog).getByTestId('mode-limit-summary').textContent).toBe(
+      'Approval mode: at most Manual — blocks set to a stricter mode keep it; this can’t loosen any block.',
+    );
     expect(within(dialog).getByTestId('start-dialog-summary').textContent).toBe(
       'Same as this ticket’s settings.',
     );

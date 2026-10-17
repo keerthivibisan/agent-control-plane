@@ -13,17 +13,30 @@ import { InfoTip } from '../../components/InfoTip';
 import { Badge, Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { reviewAction } from '../../lib/api';
-import { CONTROL_COPY, REVIEW_LOOP_COPY, changeStateWord } from '../../lib/copy';
+import {
+  CONTROL_COPY,
+  REVIEW_LOOP_COPY,
+  WORKFLOW_LIVE_COPY,
+  changeStateWord,
+} from '../../lib/copy';
 import { ActionError, ConfirmAction } from '../control/bits';
 import { DiffView } from '../control/ReviewPanel';
 import { useTicketAction } from '../ticket/actions';
 import { Files } from '../ticket/ChangesTab';
 import { ReworkIcon } from './icons';
-import { changeTone, checksSummary, leadIsLive, ownerMayDecide, shortCommit } from './logic';
+import {
+  changeTone,
+  checksSummary,
+  leadIsLive,
+  ownerMayDecide,
+  reworkRoundsBy,
+  shortCommit,
+} from './logic';
 import { ReasonForm } from './ReasonForm';
 
 const C = REVIEW_LOOP_COPY.changes;
 const O = REVIEW_LOOP_COPY.changes.owner;
+const D = WORKFLOW_LIVE_COPY.changes;
 const MAX_REASON = 500;
 const MAX_COMMENT = 4000;
 
@@ -104,8 +117,17 @@ function Conflicts({ files, branch }: { files: readonly string[]; branch: string
   );
 }
 
-/** One round in words: "Review agent asked for rework · Lead sent it back for rework". */
+/**
+ * One round in words: "Review agent asked for rework · Lead sent it back for rework". A round the
+ * review agent decided itself (ADR-0023, route "direct") is one sentence: it sent the change
+ * straight back to the helper.
+ */
 export function roundSentence(r: ChangeReviewRoundDto): string {
+  if (r.decidedBy === 'reviewer' && r.decision !== null) {
+    return r.decision === 'rework'
+      ? D.directRework
+      : `${C.decider.reviewer} ${C.decision[r.decision]}`;
+  }
   const parts: string[] = [];
   if (r.reviewer === 'agent' && r.verdict !== null) {
     parts.push(`${C.reviewer.agent} ${C.verdict[r.verdict]}`);
@@ -188,6 +210,23 @@ function History({
         </ol>
       )}
     </section>
+  );
+}
+
+/**
+ * Route "direct" (ADR-0023): how often the review agent sent this change straight back to its
+ * helper, and the lead's own rounds. Nothing for a change only the lead sent back.
+ */
+function DirectRounds({ change }: { change: Pick<ChangeReviewDto, 'reviews'> }) {
+  const reviewer = reworkRoundsBy(change, 'reviewer');
+  if (reviewer === 0) return null;
+  const text = D.directRounds(reviewer, reworkRoundsBy(change, 'lead'));
+  return (
+    <p className="flex items-center gap-1 text-caption text-dim" data-testid="change-direct-rounds">
+      <ReworkIcon size={12} className="shrink-0" />
+      <span>{text}</span>
+      <InfoTip tip={D.directRoundsTip} label={text} />
+    </p>
   );
 }
 
@@ -330,6 +369,7 @@ export function ChangeCard({
           ) : null}
         </span>
       </div>
+      <DirectRounds change={change} />
       <Conflicts files={change.conflictFiles} branch={branch} />
       {ownerMayDecide(change, run) ? (
         <OwnerDecision run={run} change={change} branch={branch} />
@@ -377,11 +417,19 @@ export function ChangesOverview({
             <span className="min-w-0 font-medium">{c.role}</span>
             <ChangeStateChip change={c} branch={branch} />
             <ChangeChecks change={c} />
-            {c.reworkRounds > 0 ? (
+            {c.reworkRounds - reworkRoundsBy(c, 'reviewer') > 0 ? (
               <Badge>
                 <span className="inline-flex items-center gap-1">
                   <ReworkIcon size={12} />
-                  {REVIEW_LOOP_COPY.graph.rework(c.reworkRounds)}
+                  {REVIEW_LOOP_COPY.graph.rework(c.reworkRounds - reworkRoundsBy(c, 'reviewer'))}
+                </span>
+              </Badge>
+            ) : null}
+            {reworkRoundsBy(c, 'reviewer') > 0 ? (
+              <Badge>
+                <span className="inline-flex items-center gap-1" data-testid="change-direct-badge">
+                  <ReworkIcon size={12} />
+                  {D.directBadge(reworkRoundsBy(c, 'reviewer'))}
                 </span>
               </Badge>
             ) : null}

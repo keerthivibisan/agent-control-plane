@@ -38,7 +38,7 @@ function SkillCard({
     >
       <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2">
         <CardRow label={C.card.usedBy}>
-          <StageChips stages={skill.usedBy} />
+          <StageChips stages={skill.usedBy} nodes={skill.usedByNodes} />
         </CardRow>
       </dl>
       <ProblemList problems={skill.problems} />

@@ -13,17 +13,22 @@ import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { LoadingBlock } from '../../components/Skeleton';
 import { workflowPaths, workflowSchemas, type ApiError } from '../../lib/api';
-import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
+import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { ChoiceCards, NumberChoice } from '../project-setup/fields';
 import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
-import { projectRunDefaults, startRequest, type StartChoice } from './logic';
+import { limitHasNoEffect, projectRunDefaults, startRequest, type StartChoice } from './logic';
+import { NoEffectNote, useBlockModes } from './RunOptions';
 
 const S = REVIEW_LOOP_COPY.start;
 const M = REVIEW_LOOP_COPY.modes;
 const R = REVIEW_LOOP_COPY.review;
 const T = TICKET_OPTIONS_COPY.start;
+const L = WORKFLOW_LIVE_COPY.ceiling;
+/** The mode choice "No limit": nothing is sent, and each block keeps its own mode (ADR-0023). */
+const NO_LIMIT = 'no-limit' as const;
+type ModeChoice = ApprovalMode | typeof NO_LIMIT;
 const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
 const MODE_RANK: Readonly<Record<ApprovalMode, number>> = {
   manual: 0,
@@ -47,6 +52,10 @@ function marked(label: string, isDefault: boolean, isTicket = false): string {
  * the owner changes is sent (`StartTicketRequest`), so starting without a change is the plain
  * Start. If the project's settings can't be read, Start still works and the run takes the
  * ticket's and the project's as they are.
+ *
+ * ADR-0023: the mode is a limit ("at most"). Each editing block runs with its own mode, and a run
+ * or ticket mode can only make it more careful; "No limit" (nothing sent) leaves every block as
+ * set. With the project's graph known, a limit looser than every block says it changes nothing.
  */
 export function StartDialog({
   projectId,
@@ -69,7 +78,9 @@ export function StartDialog({
   onClose: () => void;
 }) {
   const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
+  const blocks = useBlockModes(projectId);
   const [picked, setPicked] = useState<Partial<StartChoice>>({});
+  const [pickedMode, setPickedMode] = useState<ModeChoice | null>(null);
   const name = useId();
   const dto = q.data;
   const own = compactRunOptions(ticketOptions);
@@ -79,13 +90,24 @@ export function StartDialog({
   const defaults: StartChoice | null =
     project === null ? null : resolveRunOptions(project, own).options;
   const choice: StartChoice | null = defaults === null ? null : { ...defaults, ...picked };
+  // The ticket's own limit, else none; any mode the owner picks is sent as this run's limit.
+  const defaultMode: ModeChoice = own.approvalMode ?? NO_LIMIT;
+  const mode: ModeChoice = pickedMode ?? defaultMode;
   const request: StartTicketRequest =
-    choice === null || defaults === null ? {} : startRequest(choice, defaults);
+    choice === null || defaults === null
+      ? {}
+      : {
+          ...(mode === defaultMode || mode === NO_LIMIT ? {} : { approvalMode: mode }),
+          ...startRequest({ ...choice, approvalMode: defaults.approvalMode }, defaults),
+        };
   const changed = Object.keys(request).length;
+  const limit: ApprovalMode | null = mode === NO_LIMIT ? null : mode;
+  // A server without graphs (no blocks known) still replaces the mode: keep its warnings.
   const wider =
-    choice !== null &&
+    blocks === undefined &&
+    limit !== null &&
     defaults !== null &&
-    MODE_RANK[choice.approvalMode] > MODE_RANK[defaults.approvalMode];
+    MODE_RANK[limit] > MODE_RANK[defaults.approvalMode];
 
   return (
     <Dialog
@@ -114,19 +136,37 @@ export function StartDialog({
           )
         ) : (
           <>
-            <ChoiceCards<ApprovalMode>
-              legend={S.mode}
+            <ChoiceCards<ModeChoice>
+              legend={L.legend}
+              hint={
+                <span data-testid="mode-limit-summary">
+                  {limit === null ? L.summaryNone : L.summary(M.word[limit])}
+                </span>
+              }
               name={`${name}-mode`}
-              value={choice.approvalMode}
+              value={mode}
               columns={1}
-              options={APPROVAL_MODES.map((m) => ({
-                value: m,
-                label: marked(M.label[m], m === project.approvalMode, m === own.approvalMode),
-                hint: M.hint[m],
-              }))}
-              onChange={(approvalMode) => setPicked((p) => ({ ...p, approvalMode }))}
+              options={[
+                ...(own.approvalMode === undefined
+                  ? [
+                      {
+                        value: NO_LIMIT,
+                        label: L.noLimit,
+                        hint: L.noLimitHint(M.word[blocks?.projectMode ?? project.approvalMode]),
+                      },
+                    ]
+                  : []),
+                ...APPROVAL_MODES.map((m) => ({
+                  value: m,
+                  label: marked(M.label[m], false, m === own.approvalMode),
+                  hint: M.hint[m],
+                })),
+              ]}
+              onChange={setPickedMode}
             />
-            {choice.approvalMode === 'full-auto' ? (
+            {limit !== null && limitHasNoEffect(limit, blocks) ? (
+              <NoEffectNote mode={limit} blocks={blocks} />
+            ) : blocks === undefined && limit === 'full-auto' ? (
               <FullAutoWarning />
             ) : wider ? (
               <AutoRunWarning />
@@ -138,7 +178,7 @@ export function StartDialog({
               options={(['agent', 'lead'] as const).map((r) => ({
                 value: r,
                 label: marked(R.reviewer[r], r === project.reviewer, r === own.reviewer),
-                hint: R.reviewerHint[r],
+                hint: L.reviewerHint[r],
               }))}
               onChange={(reviewer) => setPicked((p) => ({ ...p, reviewer }))}
             />
@@ -146,7 +186,7 @@ export function StartDialog({
               legend={S.rounds}
               hint={`${
                 own.maxReworkRounds === undefined ? '' : `${T.ticketRounds(own.maxReworkRounds)} `
-              }${S.projectRounds(project.maxReworkRounds)} ${R.roundsHint}`}
+              }${S.projectRounds(project.maxReworkRounds)} ${L.roundsHint}`}
               name={`${name}-rounds`}
               value={choice.maxReworkRounds}
               choices={ROUNDS}

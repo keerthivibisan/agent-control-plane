@@ -73,6 +73,11 @@ import {
 } from '@acp/core/api';
 // Ticket page live workflow and the harness history (redesign, R-H).
 import { RunWorkflowDtoSchema } from '@acp/core/api';
+// Live run graph and the blocks' modes for the run options (WG-E, ADR-0023).
+import {
+  RunWorkflowGraphDtoSchema,
+  WorkflowGraphDtoSchema as BlockModesGraphDtoSchema,
+} from '@acp/core/api';
 // Review loop: Start overrides and the ticket branch (RL-D, ADR-0021).
 import {
   StartTicketRequestSchema,
@@ -1021,11 +1026,35 @@ export function commitAgent(client: ApiClient, projectId: string, name: string) 
 export const runWorkflowPaths = {
   workflow: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow`,
   continue: (runId: string) => `${API_BASE}/runs/${enc(runId)}/continue`,
+  /** WG-E: the run's snapshot graph and each block's live state (`RunWorkflowGraphDto`). */
+  graph: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow-graph`,
 } as const;
 
 export const runWorkflowSchemas = {
   workflow: RunWorkflowDtoSchema,
+  graph: RunWorkflowGraphDtoSchema,
 } as const;
+
+// --- Live run graph and the blocks' modes (WG-E, wp/wg-e-live; ADR-0023) ------------------------
+//
+// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9). GET /api/runs/:id/workflow-graph
+// (`runWorkflowPaths.graph` above) answers the run's snapshot graph; a server from before it
+// answers 404 (or 409), and the ticket page then keeps the version 1 view. The run options read
+// the project's graph (GET /api/projects/:id/workflow-graph, the editor's path) only for the
+// blocks' own approval modes and "Used by"; without it they say nothing about the blocks.
+
+export const blockModesPaths = {
+  graph: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph`,
+} as const;
+
+export const blockModesSchemas = {
+  graph: BlockModesGraphDtoSchema,
+} as const;
+
+/** 404 or 409: the server has no graph for this run or project (a server from before ADR-0023). */
+export function isGraphUnavailable(error: ApiError | null): boolean {
+  return error !== null && error.kind === 'http' && (error.status === 404 || error.status === 409);
+}
 
 /** Continue: starts the post-merge stage a restart held (`code-review` or `unit-tests`). */
 export function continueRun(client: ApiClient, runId: string) {

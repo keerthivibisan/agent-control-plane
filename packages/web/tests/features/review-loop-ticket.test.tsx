@@ -684,10 +684,12 @@ describe('the Start dialog (ticket page Re-run)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run WEB-21 with options' }));
     const dialog = await screen.findByTestId('start-dialog');
     expect(within(dialog).getByRole('heading', { name: 'Re-run WEB-21' })).toBeTruthy();
-    const mode = await within(dialog).findByLabelText<HTMLInputElement>(
-      /Auto edits \(recommended\) · Project setting/,
-    );
+    // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+    const mode = await within(dialog).findByLabelText<HTMLInputElement>(/^No limit/);
     expect(mode.checked).toBe(true);
+    expect(within(dialog).getByTestId('mode-limit-summary').textContent).toBe(
+      'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
+    );
     expect(
       within(dialog).getByLabelText<HTMLInputElement>(
         /Review agent \(recommended\) · Project setting/,

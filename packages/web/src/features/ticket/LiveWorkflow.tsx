@@ -18,12 +18,9 @@ import {
   type NodeProps,
 } from '@xyflow/react';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
-import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { AlertIcon } from '../../components/icons';
-import { Pill, type PillTone } from '../../components/Pill';
 import {
-  continueRun,
+  isGraphUnavailable,
   runWorkflowPaths,
   runWorkflowSchemas,
   workflowPaths,
@@ -31,7 +28,6 @@ import {
 } from '../../lib/api';
 import { REVIEW_LOOP_COPY, TICKET_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
-import { ActionError } from '../control/bits';
 import { isAgentLive } from '../control/run-state';
 import {
   buildWorkflowGraph,
@@ -53,14 +49,10 @@ import {
   TerminalNodeView,
 } from '../workflow/WorkflowNodes';
 import { isReviewLoopRun, runMaxRounds, runReviewer } from '../review-loop/logic';
-import { useTicketAction } from './actions';
-import {
-  COMMENTS_ID,
-  heldStage,
-  runPlannerMode,
-  stageStates,
-  type PostMergeStage,
-} from './ticket-state';
+import { DONE_RING, STATE_RING, StateFrame } from './live-frame';
+import { HeldNotice, ReviewerFindingsLink, type LiveWorkflowProps } from './live-parts';
+import { LiveRunGraph } from './LiveRunGraph';
+import { heldStage, runPlannerMode, stageStates } from './ticket-state';
 
 const C = TICKET_COPY.workflow;
 
@@ -84,56 +76,13 @@ interface LiveRun {
 
 const LiveRunContext = createContext<LiveRun | null>(null);
 
-const STATE_TONE: Record<WorkflowStageState, PillTone> = {
-  off: 'neutral',
-  waiting: 'neutral',
-  active: 'accent',
-  'needs-you': 'warning',
-  done: 'success',
-  failed: 'danger',
-  skipped: 'neutral',
-};
-
-// A 1.5px state outline just outside the square node, with a soft halo; the graph's own
-// background (`canvas`) shows between them. Working is the brand's lime (an olive line with a lime
-// halo on ivory, lime on graphite); warning and danger only for the real states.
-const STATE_RING: Record<WorkflowStageState, string> = {
-  off: '',
-  waiting: '',
-  active:
-    'outline-[1.5px] outline-offset-2 outline-accent-fill-edge outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_45%,transparent)] dark:shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_14%,transparent)]',
-  'needs-you':
-    'outline-[1.5px] outline-offset-2 outline-warning outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-warning)_14%,transparent)]',
-  done: '',
-  failed:
-    'outline-[1.5px] outline-offset-2 outline-danger outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-danger)_12%,transparent)]',
-  skipped: '',
-};
-
-const DONE_RING =
-  'outline-[1.5px] outline-offset-2 outline-success outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-success)_12%,transparent)]';
-
 /** A stage's node with its state: a ring while it works or waits for you, and a word on top. */
 function LiveFrame({ stage, children }: { stage: WorkflowStageId; children: ReactNode }) {
   const live = useContext(LiveRunContext);
-  const state = live?.states[stage] ?? 'waiting';
-  const faded = state === 'waiting' || state === 'skipped';
   return (
-    <div
-      className={`relative h-full w-full rounded-[2px] ${STATE_RING[state]}`}
-      data-testid={`live-${stage}`}
-      data-state={state}
-    >
-      <div className={`h-full w-full ${faded ? 'opacity-60' : ''}`}>{children}</div>
-      {/* "Off" is already on the node itself. */}
-      {state === 'off' ? null : (
-        <span className="pointer-events-none absolute -top-2.5 right-3 rounded-full bg-panel">
-          <Pill tone={STATE_TONE[state]} testId="stage-state-word">
-            {C.states[state]}
-          </Pill>
-        </span>
-      )}
-    </div>
+    <StateFrame state={live?.states[stage] ?? 'waiting'} testId={`live-${stage}`}>
+      {children}
+    </StateFrame>
   );
 }
 
@@ -318,49 +267,29 @@ export function liveGraph(
   return { ...graph, nodes };
 }
 
-function HeldNotice({ runId, stage }: { runId: string; stage: PostMergeStage }) {
-  const go = useTicketAction(continueRun);
-  const name = WORKFLOW_COPY.stages[stage];
-  return (
-    <div
-      role="status"
-      data-testid="held-stage"
-      data-stage={stage}
-      className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-control border border-warning/30 bg-warning-soft px-4 py-3"
-    >
-      <AlertIcon size={16} className="shrink-0 self-start text-warning" />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-ink">{C.held.title(name)}</p>
-        <p className="text-dim">{C.held.text(name)}</p>
-      </div>
-      <Button variant="primary" disabled={go.pending} onClick={() => void go.run(runId)}>
-        {go.pending ? C.held.pending : C.held.action}
-      </Button>
-      {go.error ? (
-        <div className="basis-full">
-          <ActionError error={go.error} message={C.held.failed} />
-        </div>
-      ) : null}
-    </div>
-  );
+/**
+ * The run's live workflow at the top of the ticket page (ADR-0023): the run's own graph from
+ * `GET /api/runs/:id/workflow-graph`. A server from before it answers 404 or 409, and the page
+ * keeps the version 1 stages. Hidden while the route has not answered, or on another error.
+ */
+export function LiveWorkflow(props: LiveWorkflowProps) {
+  const graph = useApiQuery(runWorkflowPaths.graph(props.run.id), runWorkflowSchemas.graph);
+  if (graph.data !== undefined) return <LiveRunGraph dto={graph.data} {...props} />;
+  if (isGraphUnavailable(graph.error)) return <LiveWorkflowV1 {...props} />;
+  return null;
 }
 
 /**
- * The run's live workflow at the top of the ticket page. Hidden while either route has not
- * answered, and for a run the route doesn't know (404, or managed agents off).
+ * The version 1 live workflow (redesign R-H): the project's stages with each stage's state from
+ * `GET /runs/:id/workflow`, for a server without the run's graph. Hidden while either route has
+ * not answered, and for a run the route doesn't know (404, or managed agents off).
  */
-export function LiveWorkflow({
+export function LiveWorkflowV1({
   run,
   projectId,
   reviewerComments,
   onSelectAgent,
-}: {
-  run: RunDetailDto;
-  projectId: string;
-  /** Reviewer findings on this run (ticket comments by `reviewer`). */
-  reviewerComments: number;
-  onSelectAgent: (agentId: string, stage: WorkflowStageId) => void;
-}) {
+}: LiveWorkflowProps) {
   const runWorkflow = useApiQuery(runWorkflowPaths.workflow(run.id), runWorkflowSchemas.workflow);
   const project = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
   const rw = runWorkflow.data;
@@ -410,7 +339,9 @@ export function LiveWorkflow({
       testId="live-workflow"
     >
       <div className="pt-4">
-        {held !== null ? <HeldNotice runId={run.id} stage={held} /> : null}
+        {held !== null ? (
+          <HeldNotice runId={run.id} name={WORKFLOW_COPY.stages[held]} stage={held} />
+        ) : null}
         <div
           className={`w-full overflow-hidden border-t border-line ${
             changed || reviewerComments > 0 ? '' : 'rounded-b-card'
@@ -453,19 +384,7 @@ export function LiveWorkflow({
         </div>
         {changed || reviewerComments > 0 ? (
           <div className="flex flex-col gap-1 border-t border-line px-5 py-3 text-caption text-dim">
-            {reviewerComments > 0 ? (
-              // A button, not a hash link: the hash is the app's route.
-              <button
-                type="button"
-                className="w-fit text-left text-accent hover:underline"
-                data-testid="reviewer-findings-link"
-                onClick={() =>
-                  document.getElementById(COMMENTS_ID)?.scrollIntoView?.({ behavior: 'smooth' })
-                }
-              >
-                {C.reviewerComments(reviewerComments)}
-              </button>
-            ) : null}
+            {reviewerComments > 0 ? <ReviewerFindingsLink count={reviewerComments} /> : null}
             {changed ? <p>{C.changedSince}</p> : null}
           </div>
         ) : null}
