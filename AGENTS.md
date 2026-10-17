@@ -108,6 +108,7 @@ packages/core                 @acp/core                 contracts (zod) + pure l
 packages/db                   @acp/db                   SQLite, migrations, repositories
 packages/adapters/claude-code @acp/adapter-claude-code  transcript/meta/hook → NormalizedEvent
 packages/adapters/demo        @acp/adapter-demo         deterministic fixtures (tests/demo only)
+packages/orchestrator         @acp/orchestrator         pure run engine: plans, agents, review loop, workflow program
 packages/server               @acp/server               composition root: pipeline, REST, SSE, hooks
 packages/web                  @acp/web                  React UI
 test-fixtures/claude-code     sanitized provider fixtures (rules in its README)
@@ -117,7 +118,7 @@ docs/                         specs, plan, ADRs, research
 Dependency directions are enforced by ESLint (`eslint.config.js`):
 
 - `core` depends on nothing.
-- `db` and `adapters/*` depend only on `core`.
+- `db`, `orchestrator` and `adapters/*` depend only on `core`.
 - `server` depends on everything except `web`.
 - `web` depends only on `core`.
 
