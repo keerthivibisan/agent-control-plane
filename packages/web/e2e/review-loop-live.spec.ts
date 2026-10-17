@@ -721,3 +721,117 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
   expect((await run()).status).toBe('COMPLETED');
 });
+
+/*
+ * RL-H: ticket-level run options in the browser against the real server routes. In a Full auto
+ * project the owner creates a ticket set to Manual in the New ticket dialog; the board card says
+ * so; its run starts in Manual (the lead is not told the plan is approved automatically). On the
+ * ticket page the owner puts it back to "Project default"; after Stop all, the re-run follows the
+ * project again (Full auto). The fake adapter plays the lead; nothing else runs.
+ */
+test('ticket run options: a Manual ticket in a Full auto project, then back to the project default', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const { parentDir } = (await (await request.get(`${DRIVER}/parent`)).json()) as {
+    parentDir: string;
+  };
+
+  // ---- New project with Full auto.
+  await page.goto('/#/projects/new');
+  await page.getByText('Create a new repository').click();
+  await page.getByLabel('Create it inside').fill(parentDir);
+  await page.getByLabel('Repository name').fill('notes');
+  await page.getByRole('button', { name: 'Create repository' }).click();
+  const wizard = page.getByRole('form', { name: 'New project' });
+  await expect(wizard.getByRole('textbox', { name: 'Ticket prefix' })).toHaveValue('NOTES');
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 3 of 5');
+  await wizard.getByRole('radio', { name: /^Full auto/ }).check({ force: true });
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 4 of 5');
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 5 of 5');
+  await wizard.getByRole('button', { name: 'Finish and open the board' }).click();
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/board$/);
+
+  // ---- New ticket set to Manual; the project default is named in the dialog.
+  await page.getByRole('button', { name: 'New ticket' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await dialog.getByLabel('Title').fill('Rename the notes folder');
+  const mode = dialog.getByLabel('Approvals');
+  await expect(mode.locator('option').first()).toHaveText('Project default (Full auto)');
+  await mode.selectOption('manual');
+  await dialog.getByRole('button', { name: 'Create ticket' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Created NOTES-1 in Backlog.' }),
+  ).toBeVisible();
+  const cardOf = page.getByTestId('ticket-card').filter({ hasText: 'NOTES-1' });
+  await expect(cardOf.getByTestId('card-run-options')).toHaveAttribute(
+    'title',
+    'This ticket’s own run options: Manual',
+  );
+
+  // ---- Ready, Start: the run snapshots Manual, not the project's Full auto.
+  const move = async (item: string) => {
+    await page.getByRole('button', { name: 'Move NOTES-1' }).click();
+    await page.getByRole('menuitem', { name: item }).click();
+  };
+  await move('Move to Ready');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Moved NOTES-1 to Ready.' }),
+  ).toBeVisible();
+  await move('Start (the lead agent plans it)');
+  await page.getByRole('link', { name: /Rename the notes folder/ }).click();
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/tickets\/[^/]+$/);
+  const ticketId = /tickets\/([^/]+)$/.exec(page.url())?.[1] ?? '';
+  const ticketOf = async () =>
+    (await (await request.get(`/api/tickets/${ticketId}`)).json()) as {
+      ticket: { runOptions?: Record<string, unknown> };
+      currentRun: { id: string; approvalMode?: string } | null;
+    };
+  const first = await ticketOf();
+  expect(first.ticket.runOptions).toEqual({ approvalMode: 'manual' });
+  expect(first.currentRun?.approvalMode).toBe('manual');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Manual');
+  const leadAgent = await agentOf(
+    request,
+    (a) => a.kind === 'lead' && a.prompt.includes('Rename the notes folder'),
+  );
+  expect(leadAgent.prompt).not.toContain('your plan is approved automatically');
+
+  // ---- The ticket page: back to the project default.
+  const options = page.getByTestId('ticket-run-options');
+  await expect(options.getByTestId('run-option-mode')).toHaveText('Manual · This ticket');
+  await options.getByRole('button', { name: 'Change run options' }).click();
+  await options.getByLabel('Approvals').selectOption({ label: 'Project default (Full auto)' });
+  await options.getByRole('button', { name: 'Save' }).click();
+  await expect(options.getByTestId('run-option-mode')).toHaveText('Project default (Full auto)');
+  expect((await ticketOf()).ticket.runOptions).toBeUndefined();
+  // The started run keeps its own snapshot.
+  expect((await ticketOf()).currentRun?.approvalMode).toBe('manual');
+
+  // ---- Stop all, then Re-run: the new run follows the project (Full auto).
+  const firstRunId = first.currentRun?.id ?? '';
+  await page.getByRole('button', { name: 'Stop all' }).click();
+  const stopped = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith(`/api/runs/${firstRunId}/stop`),
+  );
+  await page.getByRole('button', { name: 'Stop everything' }).click();
+  expect((await stopped).status()).toBe(200);
+  await page.getByRole('button', { name: 'Re-run', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const t = await ticketOf();
+      return t.currentRun !== null && t.currentRun.id !== firstRunId
+        ? (t.currentRun.approvalMode ?? null)
+        : null;
+    })
+    .toBe('full-auto');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Full auto');
+  await page.goto(`/#/p/${/#\/p\/([^/]+)\//.exec(page.url())?.[1] ?? ''}/board`);
+  await expect(
+    page.getByTestId('ticket-card').filter({ hasText: 'NOTES-1' }).getByTestId('card-run-options'),
+  ).toHaveCount(0);
+});

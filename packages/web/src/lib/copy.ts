@@ -3100,3 +3100,49 @@ export const REVIEW_LOOP_COPY = {
     planApproved: 'Approved automatically (Full auto)',
   },
 } as const;
+
+/**
+ * A ticket's own run options (RL-H): the New ticket dialog, the ticket page's Run options, the
+ * board card's badge and the Start dialog's markers. "Project default" follows the project's
+ * settings, also when they change later.
+ */
+export const TICKET_OPTIONS_COPY = {
+  mode: 'Approvals',
+  modeHint:
+    'How much helpers may do without asking you on this ticket’s runs. Project default follows the project, also when it changes.',
+  reviewer: 'Who reviews each change',
+  rounds: 'Rework rounds',
+  more: 'More options',
+  /** The select's first option: "Project default (Full auto)", or without the value while unknown. */
+  projectDefault: (value: string | null) =>
+    value === null ? 'Project default' : `Project default (${value})`,
+  roundsValue: (n: number) => (n === 0 ? 'No rework' : countOf(n, 'rework round', 'rework rounds')),
+  section: {
+    title: 'Run options',
+    note: 'Each new run of this ticket starts with these. A run already started keeps its own.',
+    edit: 'Change',
+    editLabel: 'Change run options',
+    save: 'Save',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    failed: 'The run options weren’t saved.',
+    own: 'This ticket',
+  },
+  badge: {
+    /** The card chip's spoken label and tooltip. */
+    label: (parts: string) => `This ticket’s own run options: ${parts}`,
+    reviewer: {
+      agent: 'Review agent',
+      lead: 'Lead reviews',
+    } satisfies Record<ChangeReviewerMode, string>,
+  },
+  start: {
+    ticketSetting: 'This ticket',
+    ticketRounds: (n: number) => `This ticket: ${formatCount(n)}.`,
+    description:
+      'Choose how this run works. Each choice starts at this ticket’s setting (or the project’s) and applies to this run only.',
+    unchanged: 'Same as this ticket’s settings.',
+    changed: (n: number) =>
+      `${countOf(n, 'choice differs', 'choices differ')} from this ticket’s settings, for this run only.`,
+  },
+} as const;

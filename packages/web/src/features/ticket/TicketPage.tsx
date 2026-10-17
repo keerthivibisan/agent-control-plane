@@ -99,7 +99,7 @@ function StartButton({
   ticket,
   kind,
 }: {
-  ticket: Pick<TicketDto, 'id' | 'key' | 'projectId'>;
+  ticket: Pick<TicketDto, 'id' | 'key' | 'projectId' | 'runOptions'>;
   kind: 'start' | 'rerun';
 }) {
   const start = useTicketAction(rerunTicket);
@@ -141,6 +141,7 @@ function StartButton({
         <StartDialog
           projectId={ticket.projectId}
           ticketKey={ticket.key}
+          ticketOptions={ticket.runOptions}
           kind={kind}
           pending={withOptions.pending}
           error={withOptions.error}

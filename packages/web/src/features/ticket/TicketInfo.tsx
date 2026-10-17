@@ -9,6 +9,7 @@ import { RelativeTime } from '../../components/RelativeTime';
 import { addTicketComment, updateTicket } from '../../lib/api';
 import { RUN_STATUS_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError, StatusWord } from '../control/bits';
+import { TicketRunOptionsSection } from '../review-loop/RunOptions';
 import { useTicketAction } from './actions';
 import { EarlierPlans } from './PlanReview';
 import { COMMENTS_ID, runNumber } from './ticket-state';
@@ -265,6 +266,11 @@ export function TicketInfo({
           <Comments detail={detail} />
         </div>
         <div className="flex min-w-0 flex-col gap-7">
+          <TicketRunOptionsSection
+            key={detail.ticket.updatedAt}
+            ticket={detail.ticket}
+            heading={HEADING}
+          />
           <div className="flex flex-col gap-2" data-testid="plan-history">
             <h3 className={HEADING}>{C.history.plans}</h3>
             {plans.length === 0 ? (

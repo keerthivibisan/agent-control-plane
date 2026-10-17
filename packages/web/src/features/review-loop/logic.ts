@@ -4,23 +4,31 @@ import {
   FINAL_CHANGE_STATES,
   MAX_COMMAND_PATTERN_TOKENS,
   MAX_COMMAND_PATTERNS,
+  RUN_OPTION_KEYS,
+  approvalsOf,
   isSafeCommandToken,
+  reviewStageOf,
+  ticketOptionsDiffer,
   type ApprovalMode,
   type ChangeReviewerMode,
   type ChangeState,
   type CommandPattern,
   type ProjectAllowlist,
   type ProjectApprovals,
+  type RunOptions,
+  type TicketRunOptions,
 } from '@acp/core';
 import type {
   ChangeReviewDto,
   CheckRunDto,
+  ProjectWorkflowDto,
   RunDetailDto,
   StartTicketRequest,
   TicketBranchDto,
+  TicketRunOptionsPatch,
 } from '@acp/core/api';
 import type { PillTone } from '../../components/Pill';
-import { REVIEW_LOOP_COPY } from '../../lib/copy';
+import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
 import { isAgentLive } from '../control/run-state';
 import { isFailing } from '../ticket/ticket-state';
 
@@ -262,4 +270,57 @@ export function runMaxRounds(
 /** "abc1234": a commit as people read it. */
 export function shortCommit(commit: string): string {
   return commit.slice(0, 7);
+}
+
+// ---------------------------------------------------------------- ticket run options (RL-H)
+
+/** The project's run settings a ticket's "Project default" follows. */
+export function projectRunDefaults(
+  dto: Pick<ProjectWorkflowDto, 'setup' | 'workflow'>,
+): RunOptions {
+  const review = reviewStageOf(dto.workflow);
+  return {
+    approvalMode: approvalsOf(dto.setup).mode,
+    reviewer: review.reviewer,
+    maxReworkRounds: review.maxReworkRounds,
+  };
+}
+
+/**
+ * The PATCH body for the ticket page's Run options: every option, either set or `null` (back to
+ * the project default), so the saved options are exactly what the form shows.
+ */
+export function runOptionsPatch(draft: TicketRunOptions): TicketRunOptionsPatch {
+  return {
+    approvalMode: draft.approvalMode ?? null,
+    reviewer: draft.reviewer ?? null,
+    maxReworkRounds: draft.maxReworkRounds ?? null,
+  };
+}
+
+/**
+ * The board card's badge ("Manual", "Full auto · Lead reviews"): the ticket's options that differ
+ * from the project's settings now. While the project's settings are unknown, every set option
+ * shows. Null when the ticket follows the project.
+ */
+export function optionsBadge(
+  options: TicketRunOptions | undefined,
+  defaults: RunOptions | null,
+): string | null {
+  const keys =
+    defaults === null
+      ? RUN_OPTION_KEYS.filter((k) => options?.[k] !== undefined)
+      : ticketOptionsDiffer(defaults, options);
+  const B = TICKET_OPTIONS_COPY.badge;
+  const parts = keys.flatMap((k): string[] => {
+    if (k === 'approvalMode' && options?.approvalMode !== undefined) {
+      return [REVIEW_LOOP_COPY.modes.word[options.approvalMode]];
+    }
+    if (k === 'reviewer' && options?.reviewer !== undefined) return [B.reviewer[options.reviewer]];
+    if (k === 'maxReworkRounds' && options?.maxReworkRounds !== undefined) {
+      return [TICKET_OPTIONS_COPY.roundsValue(options.maxReworkRounds)];
+    }
+    return [];
+  });
+  return parts.length === 0 ? null : parts.join(' · ');
 }

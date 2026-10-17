@@ -2,6 +2,7 @@ import {
   TicketPrioritySchema,
   TicketTypeSchema,
   type TicketPriority,
+  type TicketRunOptions,
   type TicketType,
 } from '@acp/core';
 import type { TicketDto } from '@acp/core/api';
@@ -12,6 +13,7 @@ import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { createTicket } from '../../lib/api';
 import { BOARD_COPY, TICKET_PRIORITY_COPY, TICKET_TYPE_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
+import { RunOptionsFields, useProjectRunDefaults } from '../review-loop/RunOptions';
 import { useBoardAction } from './actions';
 import { parseLabels } from './moves';
 
@@ -70,7 +72,11 @@ function Field({
   );
 }
 
-/** "New ticket": title, type, priority, labels, description. The ticket lands in Backlog. */
+/**
+ * "New ticket": title, type, priority, labels, description, and the ticket's own run options
+ * (RL-H; "Project default" unless chosen, reviewer and rounds under "More options"). The ticket
+ * lands in Backlog.
+ */
 export function NewTicketDialog({
   projectId,
   onClose,
@@ -86,6 +92,8 @@ export function NewTicketDialog({
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [labels, setLabels] = useState('');
   const [description, setDescription] = useState('');
+  const [runOptions, setRunOptions] = useState<TicketRunOptions>({});
+  const defaults = useProjectRunDefaults(projectId);
   const [errors, setErrors] = useState<Errors>({});
   const ids = {
     title: useId(),
@@ -107,6 +115,8 @@ export function NewTicketDialog({
       type,
       priority,
       labels: parsedLabels,
+      // Only what the owner chose: an empty choice follows the project.
+      ...(Object.keys(runOptions).length > 0 && { runOptions }),
     });
     if (ticket !== null) onCreated(ticket);
   };
@@ -182,6 +192,12 @@ export function NewTicketDialog({
             className={inputClass('resize-y')}
           />
         </Field>
+        <RunOptionsFields
+          value={runOptions}
+          onChange={setRunOptions}
+          defaults={defaults}
+          collapse
+        />
         <ActionError error={create.error} message={C.failed} />
         <div className="-mx-5 -mb-5 flex justify-end gap-2 rounded-b-card border-t border-line bg-sunken/60 px-5 py-3">
           <Button onClick={close} disabled={create.pending}>

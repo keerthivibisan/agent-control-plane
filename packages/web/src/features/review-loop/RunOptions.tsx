@@ -1,0 +1,306 @@
+import {
+  APPROVAL_MODES,
+  ApprovalModeSchema,
+  ChangeReviewerModeSchema,
+  MAX_REWORK_ROUNDS,
+  compactRunOptions,
+  type RunOptions,
+  type TicketRunOptions,
+} from '@acp/core';
+import type { TicketDto } from '@acp/core/api';
+import { useId, useState, type ReactNode } from 'react';
+import { Button } from '../../components/Button';
+import { Details } from '../../components/Details';
+import { hintClass, inputClass, labelClass } from '../../components/Input';
+import { updateTicket, workflowPaths, workflowSchemas } from '../../lib/api';
+import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
+import { useApiQuery } from '../../lib/query';
+import { ActionError } from '../control/bits';
+import { useTicketAction } from '../ticket/actions';
+import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
+import { optionsBadge, projectRunDefaults, runOptionsPatch } from './logic';
+
+/*
+ * A ticket's own run options (RL-H): its approval mode, reviewer and rework rounds, each
+ * "Project default" unless the owner sets it. The server resolves run override > ticket > project
+ * when a run starts; these screens only show and change the ticket's choice.
+ */
+
+const C = TICKET_OPTIONS_COPY;
+const M = REVIEW_LOOP_COPY.modes;
+const R = REVIEW_LOOP_COPY.review;
+const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
+const MODE_RANK = { manual: 0, 'auto-edits': 1, auto: 2, 'full-auto': 3 } as const;
+/** The select value meaning "Project default" (nothing stored). */
+const DEFAULT = '';
+
+/**
+ * The project's settings that "Project default" follows, from the cached workflow query. Null
+ * while loading or when it can't be read: the screens then say "Project default" without a value.
+ */
+export function useProjectRunDefaults(projectId: string): RunOptions | null {
+  const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
+  return q.data === undefined ? null : projectRunDefaults(q.data);
+}
+
+function SelectField({
+  label,
+  hint,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        className={inputClass('pr-8')}
+      >
+        {children}
+      </select>
+      {hint ? (
+        <span id={`${id}-hint`} className={hintClass}>
+          {hint}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The three options as selects, each starting with "Project default (<value>)". With `collapse`
+ * (the New ticket dialog) the reviewer and rounds sit under "More options".
+ */
+export function RunOptionsFields({
+  value,
+  onChange,
+  defaults,
+  collapse = false,
+}: {
+  value: TicketRunOptions;
+  onChange: (next: TicketRunOptions) => void;
+  defaults: RunOptions | null;
+  collapse?: boolean;
+}) {
+  const set = (patch: TicketRunOptions) => onChange(compactRunOptions({ ...value, ...patch }));
+  const effectiveMode = value.approvalMode ?? defaults?.approvalMode;
+  const wider =
+    value.approvalMode !== undefined &&
+    defaults !== null &&
+    MODE_RANK[value.approvalMode] > MODE_RANK[defaults.approvalMode];
+  const review = (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <SelectField
+        label={C.reviewer}
+        value={value.reviewer ?? DEFAULT}
+        onChange={(v) =>
+          set({ reviewer: v === DEFAULT ? undefined : ChangeReviewerModeSchema.parse(v) })
+        }
+      >
+        <option value={DEFAULT}>
+          {C.projectDefault(defaults === null ? null : R.reviewerWord[defaults.reviewer])}
+        </option>
+        {(['agent', 'lead'] as const).map((r) => (
+          <option key={r} value={r}>
+            {R.reviewerWord[r]}
+          </option>
+        ))}
+      </SelectField>
+      <SelectField
+        label={C.rounds}
+        value={value.maxReworkRounds === undefined ? DEFAULT : String(value.maxReworkRounds)}
+        onChange={(v) => set({ maxReworkRounds: v === DEFAULT ? undefined : Number(v) })}
+      >
+        <option value={DEFAULT}>
+          {C.projectDefault(defaults === null ? null : C.roundsValue(defaults.maxReworkRounds))}
+        </option>
+        {ROUNDS.map((n) => (
+          <option key={n} value={String(n)}>
+            {C.roundsValue(n)}
+          </option>
+        ))}
+      </SelectField>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-3" data-testid="run-options-fields">
+      <SelectField
+        label={C.mode}
+        hint={C.modeHint}
+        value={value.approvalMode ?? DEFAULT}
+        onChange={(v) =>
+          set({ approvalMode: v === DEFAULT ? undefined : ApprovalModeSchema.parse(v) })
+        }
+      >
+        <option value={DEFAULT}>
+          {C.projectDefault(defaults === null ? null : M.word[defaults.approvalMode])}
+        </option>
+        {APPROVAL_MODES.map((m) => (
+          <option key={m} value={m}>
+            {M.word[m]}
+          </option>
+        ))}
+      </SelectField>
+      {value.approvalMode !== undefined && effectiveMode === 'full-auto' ? (
+        <FullAutoWarning />
+      ) : wider ? (
+        <AutoRunWarning />
+      ) : null}
+      {collapse ? (
+        <Details summary={C.more} testId="run-options-more" defaultOpen={hasReviewOptions(value)}>
+          {review}
+        </Details>
+      ) : (
+        review
+      )}
+    </div>
+  );
+}
+
+function hasReviewOptions(value: TicketRunOptions): boolean {
+  return value.reviewer !== undefined || value.maxReworkRounds !== undefined;
+}
+
+/** "Manual · This ticket" or "Project default (Full auto)". */
+function OptionValue({ own, word }: { own: string | undefined; word: string | null }) {
+  if (own !== undefined) {
+    return (
+      <span>
+        <span className="font-medium text-ink">{own}</span>
+        <span className="text-dim"> · {C.section.own}</span>
+      </span>
+    );
+  }
+  return <span className="text-dim">{C.projectDefault(word)}</span>;
+}
+
+/** The ticket page's Run options: what new runs start with, and a form to change it. */
+export function TicketRunOptionsSection({
+  ticket,
+  heading,
+}: {
+  ticket: Pick<TicketDto, 'id' | 'projectId' | 'runOptions'>;
+  /** The ticket card's heading style. */
+  heading: string;
+}) {
+  const defaults = useProjectRunDefaults(ticket.projectId);
+  const save = useTicketAction(updateTicket);
+  const [draft, setDraft] = useState<TicketRunOptions | null>(null);
+  const own = compactRunOptions(ticket.runOptions);
+  const S = C.section;
+
+  return (
+    <div className="flex flex-col gap-2" data-testid="ticket-run-options">
+      <div className="flex min-h-7 items-center gap-2">
+        <h3 className={heading}>{S.title}</h3>
+        {draft === null ? (
+          <Button
+            variant="quiet"
+            size="sm"
+            className="ml-auto"
+            aria-label={S.editLabel}
+            onClick={() => {
+              save.reset();
+              setDraft(own);
+            }}
+          >
+            {S.edit}
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-caption text-dim">{S.note}</p>
+      {draft === null ? (
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
+          <dt className="text-dim">{C.mode}</dt>
+          <dd data-testid="run-option-mode">
+            <OptionValue
+              own={own.approvalMode === undefined ? undefined : M.word[own.approvalMode]}
+              word={defaults === null ? null : M.word[defaults.approvalMode]}
+            />
+          </dd>
+          <dt className="text-dim">{C.reviewer}</dt>
+          <dd data-testid="run-option-reviewer">
+            <OptionValue
+              own={own.reviewer === undefined ? undefined : R.reviewerWord[own.reviewer]}
+              word={defaults === null ? null : R.reviewerWord[defaults.reviewer]}
+            />
+          </dd>
+          <dt className="text-dim">{C.rounds}</dt>
+          <dd data-testid="run-option-rounds">
+            <OptionValue
+              own={
+                own.maxReworkRounds === undefined ? undefined : C.roundsValue(own.maxReworkRounds)
+              }
+              word={defaults === null ? null : C.roundsValue(defaults.maxReworkRounds)}
+            />
+          </dd>
+        </dl>
+      ) : (
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save.run(ticket.id, { runOptions: runOptionsPatch(draft) }).then((done) => {
+              if (done !== null) setDraft(null);
+            });
+          }}
+        >
+          <RunOptionsFields value={draft} onChange={setDraft} defaults={defaults} />
+          <div className="flex gap-2">
+            <Button type="submit" variant="primary" disabled={save.pending}>
+              {save.pending ? S.saving : S.save}
+            </Button>
+            <Button onClick={() => setDraft(null)} disabled={save.pending}>
+              {S.cancel}
+            </Button>
+          </div>
+          <ActionError error={save.error} message={S.failed} />
+        </form>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The board card's chip when the ticket's options differ from the project's ("Manual"). It asks
+ * for the project's settings only for a ticket with options of its own (one cached request).
+ */
+export function RunOptionsBadge({
+  ticket,
+}: {
+  ticket: Pick<TicketDto, 'projectId' | 'runOptions'>;
+}) {
+  const own = compactRunOptions(ticket.runOptions);
+  const q = useApiQuery(
+    Object.keys(own).length > 0 ? workflowPaths.workflow(ticket.projectId) : null,
+    workflowSchemas.workflow,
+  );
+  // Nothing while the project's settings load, so a chip never flashes; if they can't be read,
+  // every option the ticket sets shows.
+  if (q.data === undefined && q.error === null) return null;
+  const text = optionsBadge(own, q.data === undefined ? null : projectRunDefaults(q.data));
+  if (text === null) return null;
+  return (
+    <span
+      data-testid="card-run-options"
+      title={C.badge.label(text)}
+      className="inline-flex h-5 items-center self-start rounded-[0.3125rem] border border-accent/30 bg-accent-soft px-1.5 text-caption font-medium whitespace-nowrap text-accent"
+    >
+      <span className="sr-only">{C.badge.label(text)}</span>
+      <span aria-hidden="true">{text}</span>
+    </span>
+  );
+}

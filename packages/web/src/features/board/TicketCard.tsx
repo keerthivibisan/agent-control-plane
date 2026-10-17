@@ -11,6 +11,7 @@ import {
   TICKET_TYPE_COPY,
 } from '../../lib/copy';
 import { formatCount, formatUsd } from '../../lib/format';
+import { RunOptionsBadge } from '../review-loop/RunOptions';
 import { href } from '../../lib/router';
 import { AlertIcon, BudgetIcon, HelpersIcon, PRIORITY_ICON, TICKET_TYPE_ICON } from './icons';
 import { MoveMenu } from './MoveMenu';
@@ -172,6 +173,9 @@ export function TicketCard({
           ))}
         </ul>
       ) : null}
+
+      {/* RL-H: the ticket's own run options, when they differ from the project's. */}
+      <RunOptionsBadge ticket={ticket} />
 
       {ticket.needsYou > 0 ? (
         <p

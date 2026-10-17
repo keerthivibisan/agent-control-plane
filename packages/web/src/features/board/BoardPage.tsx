@@ -269,6 +269,7 @@ function Board({ projectId }: { projectId: string }) {
         <StartDialog
           projectId={projectId}
           ticketKey={startWith.key}
+          ticketOptions={startWith.runOptions}
           kind="start"
           pending={startOptions.pending}
           error={startOptions.error}
