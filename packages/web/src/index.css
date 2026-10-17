@@ -69,109 +69,124 @@
   --spacing-sidebar-collapsed: 4.5rem;
   --spacing-content: 88rem;
 
-  /* Neutral surfaces and text (zinc). */
-  --color-canvas: #fafafa;
-  --color-panel: #ffffff;
+  /*
+   * Brand (docs/ui-refresh/brand-brief.md; README "Brand"): graphite and warm ivory are the
+   * identity, signal lime the one accent. Every UI color below is derived from these three, so a
+   * brand change is made here once. Lime is a fill (buttons, markers, the logo's centre), never
+   * small text on ivory: text that needs the accent uses `accent`, a dark olive in the light theme.
+   */
+  --color-brand-graphite: #171717;
+  --color-brand-ivory: #f4f0e8;
+  --color-brand-lime: #d8ff64;
+
+  /* Surfaces and text: warm ivory steps (canvas < panel < raised), warm-neutral grey lines. */
+  --color-canvas: var(--color-brand-ivory);
+  --color-panel: #fbf9f5;
   /* Menus, popovers and dialogs: the surface that floats above a panel. */
-  --color-panel-raised: #ffffff;
-  --color-sunken: #f4f4f5;
+  --color-panel-raised: #fefdfb;
+  --color-sunken: #ebe6dc;
   /* Row and item hover: one step off the panel. */
-  --color-hover: #f4f4f5;
+  --color-hover: #efebe3;
   /* The sidebar (and top bar) surface. */
-  --color-sidebar: #f7f7f8;
-  --color-ink: #09090b;
-  --color-dim: #5f5f69;
-  --color-line: #e8e8eb;
-  --color-line-strong: #d6d6db;
+  --color-sidebar: #efeae1;
+  --color-ink: var(--color-brand-graphite);
+  --color-dim: #5c5850;
+  --color-line: #e2dcd0;
+  --color-line-strong: #cdc6b8;
   /* Modal backdrop. */
-  --color-overlay: rgb(9 9 11 / 0.4);
+  --color-overlay: rgb(23 23 23 / 0.4);
 
   /*
-   * The one accent: links, focus, selection. `accent-ink` is text on an `accent` fill.
-   * `accent-fill` is the primary button: the same hue, kept dark enough for white text even in the
-   * dark theme, where `accent` itself is light so that it reads as text on near-black.
+   * The one accent, in two forms. `accent` is the text-safe one (links, focus ring, selected text,
+   * graph lines): a dark olive from the lime's hue in the light theme, the lime itself in the dark.
+   * `accent-fill` is always signal lime (the primary button, active and selected markers), with
+   * graphite `accent-fill-ink` on it; `accent-fill-edge` outlines a lime fill where it sits on
+   * ivory, which lime alone would not separate from. `accent-ink` is text on an `accent` fill.
    */
-  --color-accent: #0c66e4;
-  --color-accent-ink: #ffffff;
-  --color-accent-soft: #e9f2ff;
-  --color-accent-fill: #0c66e4;
-  --color-accent-fill-hover: #0055cc;
-  --color-accent-fill-ink: #ffffff;
+  --color-accent: #4b5e00;
+  --color-accent-ink: #fbf9f5;
+  --color-accent-soft: #e9ecd2;
+  --color-accent-fill: var(--color-brand-lime);
+  --color-accent-fill-hover: #cdf54f;
+  --color-accent-fill-ink: var(--color-brand-graphite);
+  --color-accent-fill-edge: #6f8a12;
 
   /* Feedback. */
-  --color-success: #15723a;
-  --color-warning: #b45309;
-  --color-warning-soft: #fff7e6;
-  --color-danger: #b42318;
-  --color-danger-soft: #fef1f0;
+  --color-success: #15703a;
+  --color-warning: #a14a06;
+  --color-warning-soft: #fbefd9;
+  --color-danger: #b02a1c;
+  --color-danger-soft: #fbe9e4;
 
   /* Session status (StatusBadge). Never the only signal: each status also has a word. */
-  --color-status-active: #16a34a;
-  --color-status-idle: #d97706;
-  --color-status-stale: #8a8a96;
-  --color-status-ended: #52525b;
-  --color-status-unknown: #a1a1aa;
+  --color-status-active: #1f8a46;
+  --color-status-idle: #c06a05;
+  --color-status-stale: #858075;
+  --color-status-ended: #4f4b44;
+  --color-status-unknown: #a29c90;
 
   /* Token types (input / output / cache write / cache read): one hue each, everywhere. */
-  --color-token-input: #3b82f6;
-  --color-token-output: #d97706;
-  --color-token-cache-write: #8b5cf6;
-  --color-token-cache-read: #0d9488;
+  --color-token-input: #3a6fd8;
+  --color-token-output: #c06a05;
+  --color-token-cache-write: #7d5bd0;
+  --color-token-cache-read: #0f8072;
 
   /* Where a value came from (ProvenanceBadge, ADR-0007). */
-  --color-observed: #047857;
-  --color-derived: #0369a1;
+  --color-observed: #11704f;
+  --color-derived: #1f5f8f;
 
   /* Estimated (provider-reported) values and unavailable ones. */
-  --color-estimated: #92400e;
-  --color-estimated-bg: #fef3c7;
-  --color-unavailable: #6b6b76;
+  --color-estimated: #8a3d0b;
+  --color-estimated-bg: #f9ecc8;
+  --color-unavailable: #66625a;
 }
 
 .dark {
-  /* Dark elevation goes lighter: canvas < sunken (wells, board columns) < panel < raised. */
-  --color-canvas: #0a0a0b;
-  --color-sunken: #0f0f11;
-  --color-panel: #131315;
-  --color-panel-raised: #18181b;
-  --color-hover: #1b1b1e;
-  --color-sidebar: #0c0c0e;
-  --color-ink: #ededef;
-  --color-dim: #9f9fa9;
-  --color-line: #232327;
-  --color-line-strong: #333339;
+  /* Graphite steps; dark elevation goes lighter: canvas < sunken < panel < raised. */
+  --color-canvas: var(--color-brand-graphite);
+  --color-sunken: #121212;
+  --color-panel: #1d1d1d;
+  --color-panel-raised: #252525;
+  --color-hover: #282828;
+  --color-sidebar: #131313;
+  --color-ink: var(--color-brand-ivory);
+  --color-dim: #a6a29a;
+  --color-line: #2c2c2c;
+  --color-line-strong: #3b3b3b;
   --color-overlay: rgb(0 0 0 / 0.6);
 
-  --color-accent: #579dff;
-  --color-accent-ink: #0a0a0b;
-  --color-accent-soft: #1c2b41;
-  --color-accent-fill: #0c66e4;
-  --color-accent-fill-hover: #0055cc;
-  --color-accent-fill-ink: #ffffff;
+  /* On graphite the lime itself is the text-safe accent. */
+  --color-accent: var(--color-brand-lime);
+  --color-accent-ink: var(--color-brand-graphite);
+  --color-accent-soft: #2a2f1a;
+  --color-accent-fill: var(--color-brand-lime);
+  --color-accent-fill-hover: #e3ff8a;
+  --color-accent-fill-ink: var(--color-brand-graphite);
+  --color-accent-fill-edge: var(--color-brand-lime);
 
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-warning-soft: #2b2210;
-  --color-danger: #f87171;
-  --color-danger-soft: #2a1416;
+  --color-success: #5fd68a;
+  --color-warning: #f5b84a;
+  --color-warning-soft: #2c2312;
+  --color-danger: #f47c6e;
+  --color-danger-soft: #2d1714;
 
-  --color-status-active: #4ade80;
-  --color-status-idle: #fbbf24;
-  --color-status-stale: #8b8b96;
-  --color-status-ended: #c4c4cc;
-  --color-status-unknown: #6b6b76;
+  --color-status-active: #5fd68a;
+  --color-status-idle: #f5b84a;
+  --color-status-stale: #8c877e;
+  --color-status-ended: #c9c4ba;
+  --color-status-unknown: #6c6860;
 
-  --color-token-input: #60a5fa;
-  --color-token-output: #fbbf24;
-  --color-token-cache-write: #a78bfa;
-  --color-token-cache-read: #2dd4bf;
+  --color-token-input: #7ea6f2;
+  --color-token-output: #f5b84a;
+  --color-token-cache-write: #b39cf0;
+  --color-token-cache-read: #4cc9b5;
 
-  --color-observed: #6ee7b7;
-  --color-derived: #7dd3fc;
+  --color-observed: #78dcb4;
+  --color-derived: #8cc4ee;
 
-  --color-estimated: #fcd34d;
-  --color-estimated-bg: #2e2208;
-  --color-unavailable: #9c9ca6;
+  --color-estimated: #f6cf6a;
+  --color-estimated-bg: #2e240c;
+  --color-unavailable: #a09b92;
 
   --shadow-card: 0 0 #0000;
   --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.02), 0 6px 16px -6px rgb(0 0 0 / 0.6);
@@ -289,7 +304,8 @@
   --xy-background-color: var(--color-canvas);
   --xy-background-pattern-color: var(--color-line-strong);
   --xy-node-background-color: var(--color-panel);
-  --xy-node-border-radius: var(--radius-card);
+  /* Agent and stage nodes are square, like the logo's (DESIGN.md, "Agent views"). */
+  --xy-node-border-radius: 2px;
   --xy-edge-label-background-color: var(--color-panel);
   --xy-edge-label-color: var(--color-ink);
   --xy-controls-button-background-color: var(--color-panel);

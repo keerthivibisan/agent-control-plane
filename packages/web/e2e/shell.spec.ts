@@ -420,3 +420,58 @@ test('board: the Move menu and the New ticket dialog with the keyboard (U-C)', a
   await expect(dialog).toHaveCount(0);
   await expect(open).toBeFocused();
 });
+
+// --- U-G (brand), add-only: the Control Core in the tab and the top bar, the top bar at a phone
+// width, and (with ACP_SCREENSHOT_DIR) the static marks rendered at 16, 24, 32 and 64px.
+
+test('brand: the favicon and the top-bar mark are the Control Core; the bar fits at 390px', async ({
+  page,
+  request,
+}) => {
+  const icon = await request.get('/brand/favicon.svg');
+  expect(icon.ok()).toBe(true);
+  expect(icon.headers()['content-type']).toContain('image/svg+xml');
+
+  const project = await demoApi(request);
+  await withTickets(page, project.id);
+  await page.goto(`/#/p/${project.id}/board`);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', '/brand/favicon.svg');
+  const home = page.getByRole('link', { name: 'Agent Control Plane home' });
+  await expect(home.locator('svg[data-brand-mark]')).toBeVisible();
+
+  const bar = page.locator('header[aria-label="App bar"]');
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.waitForTimeout(400);
+    await expect(home.locator('svg[data-brand-mark]')).toBeVisible();
+    // The bar never scrolls sideways: the trail gives way, the mark and the controls stay.
+    expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    if (SHOTS !== undefined) {
+      await page.screenshot({ path: `${SHOTS}/brand-narrow-390-${scheme}.png` });
+    }
+  }
+
+  if (SHOTS === undefined) return;
+  const url = (name: string) => new URL(`/brand/${name}`, page.url()).href;
+  const row = (name: string, bg: string) =>
+    `<div style="display:flex;gap:16px;align-items:end;padding:16px;background:${bg}">${[
+      16, 24, 32, 64,
+    ]
+      .map((s) => `<img src="${url(name)}" width="${s}" height="${s}" alt="">`)
+      .join('')}</div>`;
+  await page.setViewportSize({ width: 240, height: 200 });
+  // The favicon follows the color scheme: graphite for a light browser theme.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.setContent(
+    `<body style="margin:0">${row('control-plane-mark.svg', '#F4F0E8')}${row(
+      'control-plane-mark-mono-dark.svg',
+      '#F4F0E8',
+    )}${row('control-plane-mark-on-dark.svg', '#171717')}${row(
+      'control-plane-mark-mono-light.svg',
+      '#171717',
+    )}${row('favicon.svg', '#F4F0E8')}</body>`,
+  );
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({ path: `${SHOTS}/brand-mark-sizes.png`, fullPage: true });
+});

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { BrandMark } from '../../src/components/BrandMark';
+import { BrandLogo, BrandMark } from '../../src/components/BrandMark';
 import { Button, buttonClass } from '../../src/components/Button';
 import { Dialog } from '../../src/components/Dialog';
 import { InfoIcon, TicketIcon } from '../../src/components/icons';
@@ -64,7 +64,32 @@ describe('Button and fields', () => {
   it('BrandMark is decorative', () => {
     const { container } = render(<BrandMark />);
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
-    expect(container.firstElementChild?.getAttribute('style')).not.toMatch(/#[0-9a-f]{3,6}/i);
+    // Tokens and currentColor only: no hard-coded color anywhere in the mark.
+    expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  });
+
+  it('BrandMark is the Control Core: a lime centre, four nodes, a smaller grid when small', () => {
+    const { container, rerender } = render(<BrandMark size={32} />);
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 48 48');
+    expect(svg?.querySelector('rect')?.getAttribute('fill')).toBe('var(--color-accent-fill)');
+    rerender(<BrandMark size={16} tone="mono" />);
+    expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 16 16');
+    expect(container.querySelector('rect')?.getAttribute('fill')).toBe('currentColor');
+  });
+
+  it('BrandMark with a label is a named image', () => {
+    render(<BrandMark label="Agent Control Plane" />);
+    expect(screen.getByRole('img', { name: 'Agent Control Plane' })).toBeTruthy();
+  });
+
+  it('BrandLogo keeps the app name as text, visible or for screen readers only', () => {
+    const { container, rerender } = render(<BrandLogo />);
+    expect(container.textContent).toBe('Agent Control Plane');
+    expect(container.querySelector('.sr-only')).toBeNull();
+    rerender(<BrandLogo hideName />);
+    expect(container.textContent).toBe('Agent Control Plane');
+    expect(container.querySelector('.sr-only')?.textContent).toBe('Agent Control Plane');
   });
 });
 

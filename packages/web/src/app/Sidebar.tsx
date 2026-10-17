@@ -46,9 +46,11 @@ function NavLink({
       <a
         href={to}
         aria-current={active ? 'page' : undefined}
-        className={`flex h-8 items-center gap-2.5 rounded-control px-3 no-underline transition-colors focus-visible:-outline-offset-2 ${
+        // The active entry: a raised ivory/graphite step and the brand's lime marker on the left
+        // edge (framed on ivory, where lime alone would not show), like the logo's lit centre.
+        className={`relative flex h-8 items-center gap-2.5 rounded-control px-3 no-underline transition-colors focus-visible:-outline-offset-2 ${
           active
-            ? 'bg-accent-soft font-medium text-accent'
+            ? 'bg-panel font-medium text-ink shadow-[inset_0_0_0_1px_var(--color-line)] before:absolute before:top-1/2 before:left-0 before:h-4 before:w-[3px] before:-translate-y-1/2 before:bg-accent-fill before:shadow-[0_0_0_1px_var(--color-accent-fill-edge)]'
             : 'text-dim hover:bg-hover hover:text-ink'
         }`}
       >

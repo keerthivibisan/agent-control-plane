@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Agent Control Plane">
+  <title>Agent Control Plane</title>
+  <g stroke="#171717" stroke-width="2.5">
+    <path d="M7 7 24 24M41 7 24 24M7 41 24 24M41 41 24 24"/>
+  </g>
+  <g fill="#171717">
+    <rect x="3" y="3" width="8" height="8"/>
+    <rect x="37" y="3" width="8" height="8"/>
+    <rect x="3" y="37" width="8" height="8"/>
+    <rect x="37" y="37" width="8" height="8"/>
+  </g>
+  <rect x="17.25" y="17.25" width="13.5" height="13.5" fill="#D8FF64" stroke="#171717" stroke-width="2.5"/>
+</svg>

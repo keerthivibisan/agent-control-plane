@@ -5,7 +5,8 @@ export type ButtonSize = 'md' | 'sm';
 
 const VARIANT: Record<ButtonVariant, string> = {
   primary:
-    'border-transparent bg-accent-fill text-accent-fill-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.14),0_1px_2px_rgb(0_0_0/0.08)] hover:bg-accent-fill-hover',
+    // Signal lime with graphite text; on ivory a darker lime edge keeps it a button, not a stain.
+    'border-accent-fill-edge/45 bg-accent-fill text-accent-fill-ink shadow-[0_1px_1px_rgb(23_23_23/0.06)] hover:border-accent-fill-edge/70 hover:bg-accent-fill-hover',
   secondary: 'border-line-strong bg-panel text-ink shadow-card hover:bg-hover',
   quiet: 'border-transparent bg-transparent text-dim hover:bg-hover hover:text-ink',
   danger: 'border-danger/30 bg-danger-soft text-danger hover:border-danger/60',

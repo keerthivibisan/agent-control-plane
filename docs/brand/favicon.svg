@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="Agent Control Plane">
+  <title>Agent Control Plane</title>
+  <style>
+    .fg { fill: #171717; stroke: #171717; }
+    @media (prefers-color-scheme: dark) { .fg { fill: #F4F0E8; stroke: #F4F0E8; } }
+  </style>
+  <path class="fg" d="M2.5 2.5 8 8M13.5 2.5 8 8M2.5 13.5 8 8M13.5 13.5 8 8" fill="none" stroke-width="1"/>
+  <path class="fg" stroke="none" d="M1 1h3v3H1zM12 1h3v3h-3zM1 12h3v3H1zM12 12h3v3h-3z"/>
+  <rect class="fg" x="5.5" y="5.5" width="5" height="5" stroke-width="1" style="fill: #D8FF64"/>
+</svg>

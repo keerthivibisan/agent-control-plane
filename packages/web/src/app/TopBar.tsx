@@ -1,8 +1,8 @@
 import type { ProjectDto } from '@acp/core/api';
 import type { ComponentType } from 'react';
-import { BrandMark } from '../components/BrandMark';
+import { BrandLogo } from '../components/BrandMark';
 import { MonitorIcon, MoonIcon, SearchIcon, SunIcon, type IconProps } from '../components/icons';
-import { APP_NAME, SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
+import { SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
 import { href, type Route } from '../lib/router';
 import { useTheme, type ThemePreference } from '../lib/theme';
 import { crumbsFor } from './nav';
@@ -128,10 +128,9 @@ export function TopBar({
         <a
           href={href.home()}
           aria-label={SHELL_COPY.topBar.home}
-          className="flex min-w-0 items-center gap-2.5 rounded-control font-semibold text-ink no-underline"
+          className="flex min-w-0 items-center rounded-control text-ink no-underline"
         >
-          <BrandMark size={24} />
-          <span className={collapsed ? 'sr-only' : 'truncate whitespace-nowrap'}>{APP_NAME}</span>
+          <BrandLogo size={24} hideName={collapsed} />
         </a>
       </div>
       <div className="flex min-w-0 flex-1 items-center gap-2 px-3 wide:px-4">
