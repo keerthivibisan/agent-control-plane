@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { Menu, MenuItem, MenuSeparator } from '../../components/Menu';
-import { BOARD_COPY } from '../../lib/copy';
+import { BOARD_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
+import { OptionsIcon } from '../review-loop/icons';
 import { MoveIcon, STAGE_ICON, StartIcon } from './icons';
-import type { MoveTarget } from './moves';
+import type { BoardPick, MoveTarget } from './moves';
 
 const C = BOARD_COPY.move;
 
@@ -33,12 +34,12 @@ export function MoveMenu({
   ticketKey: string;
   moves: readonly MoveTarget[];
   disabled: boolean;
-  onPick: (target: MoveTarget) => void;
+  onPick: (target: BoardPick) => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   if (moves.length === 0) return null;
   const open = moves.filter((m) => m !== 'CANCELLED');
-  const pick = (target: MoveTarget) => {
+  const pick = (target: BoardPick) => {
     // Focus goes back to the button first, so a dialog opened by the pick (cancel asks first)
     // returns focus there when it closes.
     buttonRef.current?.focus();
@@ -62,11 +63,23 @@ export function MoveMenu({
         </button>
       }
     >
-      {open.map((target) => (
+      {open.flatMap((target) => [
         <MenuItem key={target} icon={<TargetIcon target={target} />} onSelect={() => pick(target)}>
           {LABEL[target]}
-        </MenuItem>
-      ))}
+        </MenuItem>,
+        // ADR-0021: Start, or start with this run's own approval mode, reviewer and rounds.
+        ...(target === 'PLANNING'
+          ? [
+              <MenuItem
+                key="START_OPTIONS"
+                icon={<OptionsIcon size={14} />}
+                onSelect={() => pick('START_OPTIONS')}
+              >
+                {REVIEW_LOOP_COPY.start.options}
+              </MenuItem>,
+            ]
+          : []),
+      ])}
       {moves.includes('CANCELLED') ? (
         <>
           {open.length > 0 ? <MenuSeparator /> : null}

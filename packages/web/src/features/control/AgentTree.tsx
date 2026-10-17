@@ -1,4 +1,5 @@
 import type { AgentRunDto } from '@acp/core/api';
+import { activityText } from '../../lib/activity';
 import { useState } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -139,7 +140,11 @@ function AgentCard({
       {agent.task ? <Task text={agent.task} /> : null}
       <p className="text-caption">
         <span className="text-dim">{C.latest}: </span>
-        {agent.latestActivity ?? <span className="text-unavailable">{C.noActivity}</span>}
+        {agent.latestActivity !== null ? (
+          activityText(agent.latestActivity)
+        ) : (
+          <span className="text-unavailable">{C.noActivity}</span>
+        )}
       </p>
       <BudgetBar budget={agent.budget} />
       <AgentCost sessionId={agent.sessionId} />

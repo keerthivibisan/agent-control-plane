@@ -1,4 +1,4 @@
-import type { AgentRunDto, CheckRunDto, ReviewDto } from '@acp/core/api';
+import type { AgentRunDto, ChangedFileDto, CheckRunDto, ReviewDto } from '@acp/core/api';
 import { useId, useState } from 'react';
 import { Button, buttonClass } from '../../components/Button';
 import { Details } from '../../components/Details';
@@ -18,13 +18,14 @@ const MAX_REASON = 500;
 
 type AgentReview = ReviewDto['agents'][number];
 
-function Files({ review }: { review: AgentReview }) {
-  if (review.files.length === 0) return <p className="text-dim">{R.noFiles}</p>;
+/** Changed files with +/− (also the review loop's change and ticket-branch cards). */
+export function Files({ files }: { files: readonly ChangedFileDto[] }) {
+  if (files.length === 0) return <p className="text-dim">{R.noFiles}</p>;
   return (
     <div>
-      <p className="text-caption font-medium">{R.files(review.files.length)}</p>
+      <p className="text-caption font-medium">{R.files(files.length)}</p>
       <ul className="mt-1.5 divide-y divide-line overflow-hidden rounded-control border border-line">
-        {review.files.map((f) => (
+        {files.map((f) => (
           <li
             key={f.path}
             className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-2.5 py-1.5 hover:bg-hover"
@@ -224,7 +225,7 @@ export function ChangesTab({
           {R.state[review.state]}
         </span>
       </p>
-      <Files review={review} />
+      <Files files={review.files} />
       {review.files.length > 0 || review.diff.length > 0 ? (
         <Details summary={R.diff} defaultOpen={pending}>
           <DiffView diff={review.diff} truncated={review.diffTruncated} />

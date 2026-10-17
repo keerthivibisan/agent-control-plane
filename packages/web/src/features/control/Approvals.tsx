@@ -6,7 +6,7 @@ import { AlertIcon } from '../../components/icons';
 import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decideApproval } from '../../lib/api';
-import { CONTROL_COPY } from '../../lib/copy';
+import { CONTROL_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useControlAction } from './actions';
 import { ActionError } from './bits';
 import { splitApprovals } from './run-state';
@@ -110,7 +110,10 @@ export function Approvals({
                   <span className="min-w-0 flex-1 font-mono break-all">{a.summary}</span>
                 )}
                 <Pill tone={a.status === 'approved' ? 'success' : 'neutral'}>
-                  {C.status[a.status]}
+                  {/* ADR-0021: which rule let it run without asking; earlier records as before. */}
+                  {a.decidedBy === 'allowlist' && a.allowRule !== null && a.allowRule !== undefined
+                    ? REVIEW_LOOP_COPY.autoApproved[a.allowRule]
+                    : C.status[a.status]}
                 </Pill>
                 <RelativeTime iso={a.decidedAt ?? a.requestedAt} />
               </li>

@@ -32,12 +32,23 @@ import {
   ticketPaths,
   ticketSchemas,
 } from '../../lib/api';
-import { CONTROL_COPY, RUN_STATUS_COPY, TICKET_COPY, TICKET_STAGE_COPY } from '../../lib/copy';
+import {
+  CONTROL_COPY,
+  REVIEW_LOOP_COPY,
+  RUN_STATUS_COPY,
+  TICKET_COPY,
+  TICKET_STAGE_COPY,
+} from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { canChat, closedByEngine, hasReview } from '../control/run-state';
+import { ChangesOverview, NeedsYouChanges } from '../review-loop/ChangeCard';
+import { OptionsIcon } from '../review-loop/icons';
+import { isReviewLoopRun } from '../review-loop/logic';
+import { TicketBranchCard } from '../review-loop/TicketBranchCard';
+import { StartDialog } from '../review-loop/StartDialog';
 import { useTicketAction } from './actions';
 import { AgentCanvas } from './AgentCanvas';
 import { PlanCard } from './PlanReview';
@@ -61,6 +72,7 @@ import {
 } from './ticket-state';
 
 const C = TICKET_COPY;
+const RL = REVIEW_LOOP_COPY;
 
 type AgentReview = ReviewDto['agents'][number];
 
@@ -83,19 +95,63 @@ function StopAll({ runId }: { runId: string }) {
   );
 }
 
-function StartButton({ ticketId, kind }: { ticketId: string; kind: 'start' | 'rerun' }) {
+function StartButton({
+  ticket,
+  kind,
+}: {
+  ticket: Pick<TicketDto, 'id' | 'key' | 'projectId'>;
+  kind: 'start' | 'rerun';
+}) {
   const start = useTicketAction(rerunTicket);
+  // ADR-0021: "Options" opens the Start dialog for this run's own settings; Start stays one click.
+  const withOptions = useTicketAction(rerunTicket);
+  const [dialog, setDialog] = useState(false);
+  const optionsName =
+    kind === 'rerun' ? RL.start.rerunOptionsFor(ticket.key) : RL.start.optionsFor(ticket.key);
   return (
     <div className="flex max-w-md flex-col items-end gap-2">
-      <Button
-        variant="primary"
-        title={kind === 'rerun' ? C.actions.rerunTip : undefined}
-        disabled={start.pending}
-        onClick={() => void start.run(ticketId)}
-      >
-        {start.pending ? C.actions.starting : kind === 'rerun' ? C.actions.rerun : C.actions.start}
-      </Button>
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="primary"
+          title={kind === 'rerun' ? C.actions.rerunTip : undefined}
+          disabled={start.pending}
+          onClick={() => void start.run(ticket.id)}
+        >
+          {start.pending
+            ? C.actions.starting
+            : kind === 'rerun'
+              ? C.actions.rerun
+              : C.actions.start}
+        </Button>
+        <Button
+          aria-label={optionsName}
+          title={optionsName}
+          disabled={start.pending}
+          onClick={() => {
+            withOptions.reset();
+            setDialog(true);
+          }}
+        >
+          <OptionsIcon size={15} />
+          {RL.start.optionsShort}
+        </Button>
+      </div>
       <ActionError error={start.error} message={C.actions.startFailed} />
+      {dialog ? (
+        <StartDialog
+          projectId={ticket.projectId}
+          ticketKey={ticket.key}
+          kind={kind}
+          pending={withOptions.pending}
+          error={withOptions.error}
+          onStart={(request) =>
+            void withOptions.run(ticket.id, request).then((done) => {
+              if (done !== null) setDialog(false);
+            })
+          }
+          onClose={() => setDialog(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -158,6 +214,16 @@ function Summary({ run, isCurrent }: { run: RunDetailDto | undefined; isCurrent:
         </>
       ) : null}
       <span className="text-ink">{C.summary.agents(run.agents.length)}</span>
+      {run.approvalMode !== undefined ? (
+        <>
+          <span aria-hidden="true" className="text-dim">
+            ·
+          </span>
+          <span className="text-ink" data-testid="run-approval-mode">
+            {RL.runMode(RL.modes.word[run.approvalMode])}
+          </span>
+        </>
+      ) : null}
       {waiting > 0 ? (
         <>
           <span aria-hidden="true" className="text-dim">
@@ -263,8 +329,12 @@ function RunView({
   tab: PanelTab;
   onTab: (tab: PanelTab) => void;
 }) {
+  const loop = isReviewLoopRun(run);
   const reviewQuery = useApiQuery(
-    hasReview(run) ? controlPaths.review(run.id) : null,
+    // A review-loop run's change cards show the files and diff once a change is sealed.
+    hasReview(run) || (run.changes ?? []).some((c) => c.headCommit !== null)
+      ? controlPaths.review(run.id)
+      : null,
     controlSchemas.review,
   );
   // The ticket carries the current run's checks; an earlier run's are fetched on their own.
@@ -303,12 +373,21 @@ function RunView({
           <Approvals approvals={pending} agents={run.agents} />
         </motion.div>
       ) : null}
-      <ReviewList
-        run={run}
-        reviews={reviews}
-        checks={checks}
-        onOpen={(id) => onSelect(id, 'changes')}
-      />
+      {loop ? (
+        // ADR-0021: the lead decides each change; the owner only where it is their turn, and
+        // merges the ticket branch once.
+        <>
+          <NeedsYouChanges run={run} onOpen={(id) => onSelect(id, 'changes')} />
+          {run.ticketBranch ? <TicketBranchCard run={run} branch={run.ticketBranch} /> : null}
+        </>
+      ) : (
+        <ReviewList
+          run={run}
+          reviews={reviews}
+          checks={checks}
+          onOpen={(id) => onSelect(id, 'changes')}
+        />
+      )}
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="flex min-w-0 flex-col gap-5">
           {plan ? (
@@ -332,6 +411,13 @@ function RunView({
               note={planning ? C.canvas.planning : undefined}
             />
           )}
+          {loop && !plan ? (
+            <ChangesOverview
+              run={run}
+              branch={run.ticketBranch?.branch ?? null}
+              onOpen={(id) => onSelect(id, 'changes')}
+            />
+          ) : null}
         </div>
         {selected ? (
           // Sticky under the top bar; slides in once when the run opens.
@@ -346,6 +432,7 @@ function RunView({
               onTab={onTab}
               review={reviews.find((r) => r.agentRunId === selected.id)}
               checks={checks}
+              comments={detail.comments}
             />
           </motion.div>
         ) : null}
@@ -482,7 +569,7 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
             {run !== undefined && isCurrent && canStopRun(run.status) ? (
               <StopAll runId={run.id} />
             ) : null}
-            {action !== null ? <StartButton ticketId={ticket.id} kind={action} /> : null}
+            {action !== null ? <StartButton ticket={ticket} kind={action} /> : null}
             <ButtonLink href={href.board(ticket.projectId)} variant="quiet">
               {C.openBoard}
             </ButtonLink>

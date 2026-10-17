@@ -1,4 +1,4 @@
-import type { WorkflowStageId } from '@acp/core';
+import { reviewStageOf, type WorkflowStageId } from '@acp/core';
 import type {
   AgentRunDto,
   ProjectWorkflowDto,
@@ -29,7 +29,7 @@ import {
   workflowPaths,
   workflowSchemas,
 } from '../../lib/api';
-import { TICKET_COPY, WORKFLOW_COPY } from '../../lib/copy';
+import { REVIEW_LOOP_COPY, TICKET_COPY, WORKFLOW_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { isAgentLive } from '../control/run-state';
@@ -52,6 +52,7 @@ import {
   ReviewNodeView,
   TerminalNodeView,
 } from '../workflow/WorkflowNodes';
+import { isReviewLoopRun, runMaxRounds, runReviewer } from '../review-loop/logic';
 import { useTicketAction } from './actions';
 import {
   COMMENTS_ID,
@@ -74,6 +75,11 @@ interface LiveRun {
   helpers: readonly AgentRunDto[];
   /** The run completed (every change merged or discarded): the Done node is lit. */
   completed: boolean;
+  /**
+   * The owner's merge of the ticket branch (review-loop runs): waiting, waiting for you (the run
+   * is in REVIEW with the branch open), or done (merged). Null for a run without the loop.
+   */
+  ownerMerge: 'waiting' | 'needs-you' | 'done' | null;
 }
 
 const LiveRunContext = createContext<LiveRun | null>(null);
@@ -155,9 +161,29 @@ function LiveReviewNode(props: NodeProps<ReviewNode>) {
   );
 }
 
+/** The owner's merge (ADR-0021 §4): ringed while it waits for you, green once merged. */
+function LiveOwnerMergeNode(props: NodeProps<GateNode>) {
+  const live = useContext(LiveRunContext);
+  const state = live?.ownerMerge ?? 'waiting';
+  return (
+    <div
+      className={`h-full w-full rounded-[2px] ${
+        state === 'needs-you' ? STATE_RING['needs-you'] : state === 'done' ? DONE_RING : ''
+      }`}
+      data-testid="live-owner-merge"
+      data-state={state}
+    >
+      <div className={`h-full w-full ${state === 'waiting' ? 'opacity-60' : ''}`}>
+        <GateNodeView {...props} />
+      </div>
+    </div>
+  );
+}
+
 /** The plan approval belongs to the plan stage: it is ringed while a plan waits for you. */
 function LiveGateNode(props: NodeProps<GateNode>) {
   const live = useContext(LiveRunContext);
+  if (props.data.gate === 'owner-merge') return <LiveOwnerMergeNode {...props} />;
   const waiting = live?.states.plan === 'needs-you';
   return (
     <div
@@ -192,6 +218,7 @@ function LiveHelperRow(_: NodeProps<HelperNode>) {
   const live = useContext(LiveRunContext);
   const helpers = live?.helpers ?? [];
   const working = helpers.filter((a) => isAgentLive(a.status)).length;
+  const waitingReview = helpers.filter((a) => a.status === 'AWAITING_REVIEW').length;
   return (
     <div
       className="flex h-full w-full items-center justify-between gap-2 rounded-[2px] border border-line bg-panel px-2.5 text-caption shadow-card"
@@ -205,6 +232,11 @@ function LiveHelperRow(_: NodeProps<HelperNode>) {
         <>
           <span className="font-medium">{TICKET_COPY.summary.agents(helpers.length)}</span>
           {working > 0 ? <span className="text-dim">{C.helpersWorking(working)}</span> : null}
+          {waitingReview > 0 ? (
+            <span className="text-dim" data-testid="helpers-waiting-review">
+              {REVIEW_LOOP_COPY.graph.helpersWaiting(waitingReview)}
+            </span>
+          ) : null}
         </>
       )}
     </div>
@@ -243,12 +275,25 @@ function FitOnResize() {
  * workflow states), with one helper row.
  */
 export function liveGraph(
-  run: Pick<RunDetailDto, 'agents'>,
+  run: Pick<RunDetailDto, 'agents'> & Partial<Pick<RunDetailDto, 'changes' | 'ticketBranch'>>,
   project: ProjectWorkflowDto,
   workflow: RunWorkflowDto,
 ): WorkflowGraph {
   const states = stageStates(workflow);
   const stages = project.workflow.stages;
+  // ADR-0021: a review-loop run shows its review counts, the rework loop and the owner's merge;
+  // a run from before it keeps the graph it always had.
+  const review = reviewStageOf(project.workflow);
+  const reworkRounds =
+    workflow.review?.reworkRounds ?? (run.changes ?? []).reduce((n, c) => n + c.reworkRounds, 0);
+  const loop = isReviewLoopRun({ changes: run.changes, ticketBranch: run.ticketBranch })
+    ? {
+        reviewer: runReviewer({ changes: run.changes }, review.reviewer),
+        maxReworkRounds: runMaxRounds({ changes: run.changes }, review.maxReworkRounds),
+        counts: workflow.review,
+        reworkLabel: REVIEW_LOOP_COPY.graph.rework(reworkRounds),
+      }
+    : null;
   const graph = buildWorkflowGraph(
     {
       plannerMode: runPlannerMode(run, project.workflow.plannerMode),
@@ -262,6 +307,8 @@ export function liveGraph(
     { ...project.setup, maxConcurrentHelpers: 1 },
     project.skills,
     WORKFLOW_COPY.edges,
+    undefined,
+    loop,
   );
   const nodes = graph.nodes.map((n): WorkflowNode => {
     if (n.type !== 'helpers') return n;
@@ -330,8 +377,15 @@ export function LiveWorkflow({
             states: stageStates(rw),
             helpers: run.agents.filter((a) => a.kind === 'worker'),
             completed: run.status === 'COMPLETED',
+            ownerMerge: !isReviewLoopRun(run)
+              ? null
+              : run.ticketBranch?.state === 'merged'
+                ? 'done'
+                : run.status === 'REVIEW' && run.ticketBranch?.state === 'open'
+                  ? 'needs-you'
+                  : 'waiting',
           },
-    [rw, run.agents, run.status],
+    [rw, run],
   );
   if (rw === undefined || pw === undefined || graph === null || live === null) return null;
 

@@ -8,7 +8,13 @@ import { HarnessIcon, TokensIcon } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import { Skeleton } from '../../components/Skeleton';
-import { boardPaths, boardSchemas, moveTicket, startTicket } from '../../lib/api';
+import {
+  boardPaths,
+  boardSchemas,
+  moveTicket,
+  startTicket,
+  type StartTicketRequest,
+} from '../../lib/api';
 import { BOARD_COPY, STAGE_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
@@ -16,7 +22,8 @@ import { ActionError } from '../control/bits';
 import { useBoardAction } from './actions';
 import { BoardColumns } from './BoardColumns';
 import { BoardIcon, CheckCircleIcon, PlusIcon } from './icons';
-import { boardColumns, moveRequest, ticketCount, type MoveTarget } from './moves';
+import { StartDialog } from '../review-loop/StartDialog';
+import { boardColumns, moveRequest, ticketCount, type BoardPick, type MoveTarget } from './moves';
 import { NewTicketDialog } from './NewTicketDialog';
 
 const C = BOARD_COPY;
@@ -95,6 +102,9 @@ function Board({ projectId }: { projectId: string }) {
   const start = useBoardAction(startTicket);
   const [creating, setCreating] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<TicketCardDto | null>(null);
+  /** The ticket whose Start dialog is open (ADR-0021: this run's own settings). */
+  const [startWith, setStartWith] = useState<TicketCardDto | null>(null);
+  const startOptions = useBoardAction(startTicket);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -130,9 +140,24 @@ function Board({ projectId }: { projectId: string }) {
     });
   };
 
-  const onMove = (ticket: TicketCardDto, target: MoveTarget) => {
-    if (target === 'CANCELLED') setConfirmCancel(ticket);
+  const onMove = (ticket: TicketCardDto, target: BoardPick) => {
+    if (target === 'START_OPTIONS') {
+      startOptions.reset();
+      setStartWith(ticket);
+    } else if (target === 'CANCELLED') setConfirmCancel(ticket);
     else void perform(ticket, target);
+  };
+
+  /** Start from the dialog; it stays open with the server's reason if the start is refused. */
+  const startWithOptions = async (ticket: TicketCardDto, request: StartTicketRequest) => {
+    setFeedback(null);
+    setFailed(null);
+    setBusyId(ticket.id);
+    const ok = (await startOptions.run(ticket.id, request)) !== null;
+    setBusyId(null);
+    if (!ok) return;
+    setStartWith(null);
+    setFeedback({ tone: 'ok', text: C.move.started(ticket.key) });
   };
 
   // Only a real "no such project" answer; an unknown route (an older server) is a plain error.
@@ -237,6 +262,18 @@ function Board({ projectId }: { projectId: string }) {
             setFailed(null);
             setFeedback({ tone: 'ok', text: C.dialog.created(t.key) });
           }}
+        />
+      ) : null}
+
+      {startWith ? (
+        <StartDialog
+          projectId={projectId}
+          ticketKey={startWith.key}
+          kind="start"
+          pending={startOptions.pending}
+          error={startOptions.error}
+          onStart={(request) => void startWithOptions(startWith, request)}
+          onClose={() => setStartWith(null)}
         />
       ) : null}
 

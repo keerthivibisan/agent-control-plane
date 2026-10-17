@@ -408,6 +408,8 @@ test('board: the Move menu and the New ticket dialog with the keyboard (U-C)', a
   await expect(menu.getByRole('menuitem')).toHaveText([
     'Move to Backlog',
     'Start (the lead agent plans it)',
+    // ADR-0021: start with this run's own approval mode, reviewer and rework rounds.
+    'Start with options…',
     'Cancel ticket…',
   ]);
   await expect(menu.getByRole('menuitem', { name: 'Move to Backlog' })).toBeFocused();

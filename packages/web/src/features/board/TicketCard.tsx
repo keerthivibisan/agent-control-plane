@@ -14,7 +14,7 @@ import { formatCount, formatUsd } from '../../lib/format';
 import { href } from '../../lib/router';
 import { AlertIcon, BudgetIcon, HelpersIcon, PRIORITY_ICON, TICKET_TYPE_ICON } from './icons';
 import { MoveMenu } from './MoveMenu';
-import { allowedMoves, isRunningStage, type MoveTarget } from './moves';
+import { allowedMoves, isRunningStage, type BoardPick } from './moves';
 
 const C = BOARD_COPY.card;
 
@@ -105,7 +105,7 @@ export function TicketCard({
   ticket: TicketCardDto;
   busy: boolean;
   dragging: boolean;
-  onMove: (ticket: TicketCardDto, target: MoveTarget) => void;
+  onMove: (ticket: TicketCardDto, target: BoardPick) => void;
   onDragStart: (ticket: TicketCardDto) => void;
   onDragEnd: () => void;
 }) {

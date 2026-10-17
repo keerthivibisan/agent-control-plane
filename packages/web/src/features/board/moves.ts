@@ -10,6 +10,12 @@ import type { BoardDto, TicketCardDto } from '@acp/core/api';
 /** A column the owner may move a card to. */
 export type MoveTarget = 'BACKLOG' | 'READY' | 'PLANNING' | 'CANCELLED';
 
+/**
+ * What the Move menu can pick: a column, or "Start with options…" (ADR-0021), which opens the
+ * Start dialog instead of starting at once. A drag is always a plain move.
+ */
+export type BoardPick = MoveTarget | 'START_OPTIONS';
+
 /** How a move reaches the server: a status change, or starting a run (Ready → Planning). */
 export type MoveRequest =
   { kind: 'move'; status: 'BACKLOG' | 'READY' | 'CANCELLED' } | { kind: 'start' };

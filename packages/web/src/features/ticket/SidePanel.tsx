@@ -4,6 +4,7 @@ import type {
   CheckRunDto,
   ReviewDto,
   RunDetailDto,
+  TicketCommentDto,
 } from '@acp/core/api';
 import { motion } from 'motion/react';
 import { useRef, useState, type ReactNode } from 'react';
@@ -19,6 +20,7 @@ import {
   describeEvent,
   FOLLOW_UP_COPY,
   NOT_REPORTED,
+  REVIEW_LOOP_COPY,
   TICKET_COPY,
 } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
@@ -27,6 +29,9 @@ import { Approvals } from '../control/Approvals';
 import { agentStatusCopy, StatusWord } from '../control/bits';
 import { Chat, type SpeakerOf } from '../control/Chat';
 import { canChat, isAgentLive } from '../control/run-state';
+import { activityText } from '../../lib/activity';
+import { ChangeCard } from '../review-loop/ChangeCard';
+import { isReviewLoopRun } from '../review-loop/logic';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
 import {
@@ -113,6 +118,38 @@ function speakerLabel(m: ChatMessageDto, agents: readonly AgentRunDto[]): Return
     : { label: C.speaker[who], ...tag };
 }
 
+/**
+ * The Changes tab of a review-loop run (ADR-0021): the agent's change card, from the run's
+ * `changes`. The lead and read-only agents say what they always said.
+ */
+function LoopChangesTab({
+  run,
+  agent,
+  review,
+  comments,
+}: {
+  run: RunDetailDto;
+  agent: AgentRunDto;
+  review: ReviewDto['agents'][number] | undefined;
+  comments: readonly TicketCommentDto[];
+}) {
+  if (agent.kind === 'lead') return <p className="text-dim">{C.changes.leadNone}</p>;
+  if (!hasWorktree(agent.kind)) return <p className="text-dim">{C.changes.readOnlyNone}</p>;
+  const change = run.changes?.find((c) => c.agentRunId === agent.id);
+  if (change === undefined) {
+    return <p className="text-dim">{REVIEW_LOOP_COPY.changes.stillWorking}</p>;
+  }
+  return (
+    <ChangeCard
+      run={run}
+      change={change}
+      review={review}
+      comments={comments.filter((c) => c.runId === null || c.runId === run.id)}
+      branch={run.ticketBranch?.branch ?? null}
+    />
+  );
+}
+
 const ACTIVITY_LIMIT = 20;
 
 /** Content-free sentences from the agent's observed session, newest first (DESIGN.md feed). */
@@ -126,7 +163,9 @@ function ActivityTab({ agent }: { agent: AgentRunDto }) {
     <div className="flex flex-col gap-3" data-testid="activity">
       <p className="rounded-control border border-line bg-sunken px-3 py-2 text-caption">
         <span className="text-dim">{C.activity.latest}: </span>
-        {agent.latestActivity ?? (
+        {agent.latestActivity !== null ? (
+          activityText(agent.latestActivity)
+        ) : (
           <span className="text-unavailable">{CONTROL_COPY.agents.noActivity}</span>
         )}
       </p>
@@ -283,6 +322,7 @@ export function SidePanel({
   onTab,
   review,
   checks,
+  comments = [],
 }: {
   run: RunDetailDto;
   agent: AgentRunDto;
@@ -290,6 +330,8 @@ export function SidePanel({
   onTab: (tab: PanelTab) => void;
   review: ReviewDto['agents'][number] | undefined;
   checks: readonly CheckRunDto[];
+  /** The ticket's comments: a change card shows the reviewer's findings kept there. */
+  comments?: readonly TicketCommentDto[];
 }) {
   const tabs = tabsFor(agent);
   const active = tabs.includes(tab) ? tab : (tabs[0] ?? 'activity');
@@ -329,7 +371,11 @@ export function SidePanel({
     ) : t === 'activity' ? (
       <ActivityTab agent={agent} />
     ) : t === 'changes' ? (
-      <ChangesTab runId={run.id} agent={agent} review={review} checks={checks} />
+      isReviewLoopRun(run) ? (
+        <LoopChangesTab run={run} agent={agent} review={review} comments={comments} />
+      ) : (
+        <ChangesTab runId={run.id} agent={agent} review={review} checks={checks} />
+      )
     ) : t === 'checks' ? (
       <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={pendingReview} />
     ) : t === 'approvals' ? (

@@ -10,6 +10,7 @@ import { formatCount } from '../../lib/format';
 import { BudgetBar } from '../control/AgentTree';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { buildAgentTree, isAgentLive, type AgentNode } from '../control/run-state';
+import { activityText } from '../../lib/activity';
 import { useTicketAction } from './actions';
 import { canHoldChat, descendantsBudget, hasWorktree, ROOT_ORDER } from './ticket-state';
 
@@ -215,7 +216,11 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       ) : null}
       <p className="line-clamp-2 border-t border-line pt-2 text-caption">
         <span className="text-dim">{A.latest}: </span>
-        {agent.latestActivity ?? <span className="text-unavailable">{A.noActivity}</span>}
+        {agent.latestActivity !== null ? (
+          activityText(agent.latestActivity)
+        ) : (
+          <span className="text-unavailable">{A.noActivity}</span>
+        )}
       </p>
       <div className="flex flex-col gap-2">
         {ctx.canMessage && promptable ? <PromptBox agent={agent} runId={ctx.runId} /> : null}

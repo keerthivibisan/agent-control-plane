@@ -44,7 +44,8 @@ export function CheckStatus({ check }: { check: Pick<CheckRunDto, 'status'> }) {
   );
 }
 
-function CheckRow({ check }: { check: CheckRunDto }) {
+/** One check run: its result, name, required or not, time and output (also the ticket branch). */
+export function CheckRow({ check }: { check: CheckRunDto }) {
   return (
     <li className="flex flex-col gap-2 px-3.5 py-2.5" data-testid={`check-${check.checkId}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

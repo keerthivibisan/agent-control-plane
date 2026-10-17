@@ -8,7 +8,7 @@ import { TRANSITION } from '../../components/motion';
 import { BOARD_COPY, STAGE_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import { STAGE_ICON } from './icons';
-import { canMove, type BoardColumn, type MoveTarget } from './moves';
+import { canMove, type BoardColumn, type BoardPick, type MoveTarget } from './moves';
 import { TICKET_DRAG_TYPE, TicketCard } from './TicketCard';
 
 const C = BOARD_COPY.column;
@@ -111,7 +111,7 @@ function Column({
   column: BoardColumn;
   busyId: string | null;
   drop: DropProps;
-  onMove: (ticket: TicketCardDto, target: MoveTarget) => void;
+  onMove: (ticket: TicketCardDto, target: BoardPick) => void;
   onDragStart: (ticket: TicketCardDto) => void;
   onDragEnd: () => void;
   onCollapse?: () => void;
@@ -320,7 +320,7 @@ export function BoardColumns({
 }: {
   columns: BoardColumn[];
   busyId: string | null;
-  onMove: (ticket: TicketCardDto, target: MoveTarget) => void;
+  onMove: (ticket: TicketCardDto, target: BoardPick) => void;
 }) {
   const [dragging, setDragging] = useState<TicketCardDto | null>(null);
   // Folded columns the owner opened.

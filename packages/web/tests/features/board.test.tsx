@@ -268,6 +268,8 @@ describe('board: keyboard Move menu', () => {
     expect(await menuItems('WEB-13')).toEqual([
       'Move to Backlog',
       'Start (the lead agent plans it)',
+      // ADR-0021: start with this run's own approval mode, reviewer and rework rounds.
+      'Start with options…',
       'Cancel ticket…',
     ]);
     expect(await menuItems('WEB-9')).toEqual(['Cancel ticket…']);
