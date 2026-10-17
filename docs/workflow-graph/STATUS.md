@@ -2,7 +2,7 @@
 
 Coordinator-owned. Plan: [README.md](README.md). Decision:
 [ADR-0023](../decisions/0023-editable-workflow-graphs.md). Branches `wp/wg-<id>-<slug>` come off
-`feature/workflow-graph` (from `release/0.2.0`, from `main` `b6a1f27`) and are merged back with
+`feature/workflow-graph` (from `main` `b6a1f27`) and are merged back with
 `--ff-only` after review.
 
 | WP   | Title                                                                   | After     | Status                      | Branch            | Merged    |
@@ -77,3 +77,8 @@ plan-approval` without a planner;
   each step's helper node. 3,909 tests.
 - 2026-10-18 WG-C started.
 - 2026-10-18 WG-E started in parallel with WG-C, against the DTOs with mocked routes.
+- 2026-10-18 **Branch flow changed by the owner.**
+  - Coordinators and agents never touch `main` (no commit, merge or reset).
+  - `dev` (from `main` `b6a1f27`) is the integration branch. `feature/workflow-graph` merges into
+    `dev` when the feature is done, and the owner raises the MR from `dev` to `main` and merges it.
+  - `release/0.2.0` was removed. It had no commits of its own, and `dev` replaces it.
