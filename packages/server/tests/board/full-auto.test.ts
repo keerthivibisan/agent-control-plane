@@ -15,8 +15,26 @@ import { FILES, run, type Board } from './loop-helpers.js';
 
 const FULL_AUTO = { approvalMode: 'full-auto', reviewer: 'lead' } as const;
 
-/** A Full auto ticket started; the lead has submitted its plan. */
-async function planned(s: Board) {
+/**
+ * A Full auto project (ADR-0023: a ticket's or run's mode only tightens its nodes, so Full auto
+ * starts from the project's mode), with a command allowlist when given.
+ */
+async function fullAutoProject(s: Board, commands: object[] = []) {
+  const setup = {
+    projectKey: 'WEBAPP',
+    maxConcurrentHelpers: 3,
+    maxDepth: 1,
+    defaultBudgetTokensPerAgent: 100_000,
+    model: null,
+    approvals: { mode: 'full-auto', commands },
+    contextFiles: [],
+  };
+  expect((await s.send('put', `/api/projects/${s.project.id}/setup`, setup)).status).toBe(200);
+}
+
+/** A Full auto ticket started in a Full auto project; the lead has submitted its plan. */
+async function planned(s: Board, options: { project?: boolean } = {}) {
+  if (options.project !== false) await fullAutoProject(s);
   const ticket = await s.createTicket('Add dark mode');
   expect((await s.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' })).status).toBe(200);
   expect((await s.post(`/api/tickets/${ticket.id}/start`, FULL_AUTO)).status).toBe(200);
@@ -121,17 +139,8 @@ describe('Full auto (ADR-0022)', () => {
 
   it('a project command allowlist never overrides an escalation in Full auto', async () => {
     const s = await setupBoard({ files: FILES });
-    const setup = {
-      projectKey: 'WEBAPP',
-      maxConcurrentHelpers: 3,
-      maxDepth: 1,
-      defaultBudgetTokensPerAgent: 100_000,
-      model: null,
-      approvals: { mode: 'full-auto', commands: [{ argv: ['npm'], match: 'prefix' }] },
-      contextFiles: [],
-    };
-    expect((await s.send('put', `/api/projects/${s.project.id}/setup`, setup)).status).toBe(200);
-    const { lead, runId } = await planned(s);
+    await fullAutoProject(s, [{ argv: ['npm'], match: 'prefix' }]);
+    const { lead, runId } = await planned(s, { project: false });
     const worker = await workerOf(s, lead);
     expect(await worker.ask('Bash', 'Bash npm test', { command: 'npm test' })).toEqual({
       allow: false,
@@ -179,6 +188,15 @@ describe('Full auto (ADR-0022)', () => {
       await s.settle();
     }
     expect(existsSync(tempDir)).toBe(false);
+  });
+
+  it('a Full auto ticket in an Auto edits project runs Auto edits (tighten only, ADR-0023)', async () => {
+    const s = await setupBoard({ files: FILES });
+    const { ticket, lead, reply, runId } = await planned(s, { project: false });
+    expect(lead.spec.prompt).not.toContain(FULL_AUTO_PLAN_LINE);
+    expect(reply).not.toContain('approved automatically');
+    expect((await s.detail(ticket.id)).currentRun?.status).toBe('PLAN_REVIEW');
+    expect((await run(s, runId)).approvalMode).toBe('auto-edits');
   });
 
   it('other modes give helpers no Full auto spec and still ask the owner', async () => {

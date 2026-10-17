@@ -20,10 +20,10 @@
 - [x] 2. Server, project workflow: `GET`/`PUT /api/projects/:id/workflow-graph`,
       `POST …/workflow-graph/validate`; skills and agent files "used by" from the graph; delete
       guards from the graph; v1 `GET /workflow` answers 409 for a v2-stored project
-- [ ] 3. Server, runs: `startTicket` validates (409 `workflow_invalid`), builds the ceilings and
+- [x] 3. Server, runs: `startTicket` validates (409 `workflow_invalid`), builds the ceilings and
       `graphContext`, compiles, snapshots `graph` and `graphContext`; restart reloads them;
       `ticketRunPrompts` from the program; `GET /api/runs/:id/workflow-graph`
-- [ ] 4. Control service: approvals per agent (`effectiveMode`, per-agent Full auto gate and
+- [x] 4. Control service: approvals per agent (`effectiveMode`, per-agent Full auto gate and
       allowlist; the lead, planner and reviewers never covered)
 - [ ] 5. Adapter: launch per agent from `agentLaunchMode` (auto mode + sandbox, sandbox only with
       `default`, never auto for the lead, planner or reviewers)
@@ -35,10 +35,11 @@
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                                                                                                       | Commit  | Checks                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------- |
-| 2026-10-18 | Claimed WG-C                                                                                                                        | b322cf6 | format ✓ lint ✓ typecheck ✓ test 3909/3909 ✓ build ✓ |
-| 2026-10-18 | db: stored workflow v1/v2, graph write, v1 write refused over a graph; snapshot `graph`/`graphContext`; plan step helper round trip | 2b7b064 | format ✓ lint ✓ typecheck ✓ test 3917/3917 ✓ build ✓ |
-| 2026-10-18 | Server: `/workflow-graph` GET, PUT (422), validate; v1 routes 409 for a graph; skills and agent files used by graph nodes           | (this)  | format ✓ lint ✓ typecheck ✓ test 3931/3931 ✓ build ✓ |
+| Date       | What was done                                                                                                                                        | Commit  | Checks                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| 2026-10-18 | Claimed WG-C                                                                                                                                         | b322cf6 | format ✓ lint ✓ typecheck ✓ test 3909/3909 ✓ build ✓                               |
+| 2026-10-18 | db: stored workflow v1/v2, graph write, v1 write refused over a graph; snapshot `graph`/`graphContext`; plan step helper round trip                  | 2b7b064 | format ✓ lint ✓ typecheck ✓ test 3917/3917 ✓ build ✓                               |
+| 2026-10-18 | Server: `/workflow-graph` GET, PUT (422), validate; v1 routes 409 for a graph; skills and agent files used by graph nodes                            | 8eeb914 | format ✓ lint ✓ typecheck ✓ test 3931/3931 ✓ build ✓                               |
+| 2026-10-18 | Runs: graph start (validate 409, ceilings, context, snapshot, prompts), restart reload, plan step helpers stored, run graph DTO; approvals per agent | (this)  | format ✓ lint ✓ typecheck ✓ test 3942/3942 ✓ build ✓ (package tests one at a time) |
 
 ## Decisions and findings

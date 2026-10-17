@@ -15,12 +15,14 @@ import {
   type ManagedExecutionAdapter,
   type PermissionDecision,
   type PermissionRequest,
+  type CompileContext,
   type ProjectApprovals,
   type ProjectWorkflow,
   type RegisteredRoot,
   type RunBudget,
   type RunStatus,
   type TicketPlan,
+  type WorkflowGraph,
 } from '@acp/core';
 import {
   ApprovalDecisionRequestSchema,
@@ -34,6 +36,7 @@ import {
   type RunDetailDto,
   type RunSummaryDto,
   type RunWorkflowDto,
+  type RunWorkflowGraphDto,
   type StreamNoticeDto,
   type TicketBranchReviewDto,
 } from '@acp/core/api';
@@ -47,8 +50,8 @@ import {
 import {
   agentDepth,
   agentEvent,
+  agentLaunchMode,
   allowlistTarget,
-  isFullAuto,
   cancelRun,
   checkReviewAction,
   completeCancellation,
@@ -57,6 +60,8 @@ import {
   decideApproval,
   decidePlan,
   deriveRunWorkflow,
+  deriveRunWorkflowGraph,
+  effectiveMode,
   expireApprovals,
   followUpChat,
   followUpEvent,
@@ -70,10 +75,13 @@ import {
   leadToolCall,
   ownerChat,
   pluginSkillName,
+  programOf,
   resolveAgentModel,
+  reviewRouteOf,
   recordReview,
   recoverAfterRestart,
   requestPermission,
+  runGraphOf,
   runLimits,
   stopAgent,
   stopFollowUp,
@@ -253,6 +261,12 @@ export interface TicketRunInput {
   reviewLoop?: CreateRunInput['reviewLoop'];
   /** ADR-0021 §1: the approval policy snapshotted with the run; absent: the legacy allowlist. */
   approvals?: ProjectApprovals;
+  /**
+   * ADR-0023: the project's workflow graph, validated, snapshotted with the run and compiled with
+   * `graphContext` (both or neither). Absent: the version 1 `workflow` (legacy test runs).
+   */
+  graph?: WorkflowGraph;
+  graphContext?: CompileContext;
   /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
   inTransaction?: (runId: string) => void;
 }
@@ -348,6 +362,11 @@ export interface ControlService {
   continueRun(runId: string): RunDetailDto;
   /** Each workflow stage's live state on the run (`deriveRunWorkflow`). */
   runWorkflow(runId: string): RunWorkflowDto;
+  /**
+   * ADR-0023: the graph the run snapshotted (a version 1 run's workflow migrated) and each node's
+   * live state (`deriveRunWorkflowGraph`).
+   */
+  runWorkflowGraph(runId: string): RunWorkflowGraphDto;
   /** The owner's decision on the plan waiting in PLAN_REVIEW; returns the decided plan. */
   decidePlan(runId: string, planId: string, decision: PlanDecision, comment?: string): TicketPlan;
   /** The run's engine state if this process holds it (live or loaded); never loads it. */
@@ -1328,14 +1347,30 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   }
 
   /**
-   * ADR-0022: the sandbox paths of a Full auto helper or tester, or undefined when the run is not
-   * Full auto. Null when they could not be prepared: the agent then fails, never unprotected.
+   * ADR-0022, ADR-0023 §5: the sandbox paths of a helper or tester whose node runs Full auto in
+   * this run (`agentLaunchMode`), or undefined when it does not. Null when it must not start: the
+   * paths could not be prepared, or its node is configured as Full auto but a ticket or run
+   * tightened it, which needs the sandbox without auto mode, a launch `ManagedAgentSpec` cannot
+   * express yet (contract proposal in docs/workflow-graph/wp/WG-C.md). The agent then fails,
+   * never unprotected and never looser than its mode.
    */
   async function fullAutoFor(
     live: LiveRun,
     agentRunId: string,
   ): Promise<FullAutoSpec | null | undefined> {
-    if (!isFullAuto(live.state)) return undefined;
+    const agent = live.state.agents.find((a) => a.id === agentRunId);
+    if (agent === undefined || !hasReviewableChange(agent.kind)) return undefined;
+    const launch = agentLaunchMode(live.state, agent);
+    if (!launch.sandbox) return undefined;
+    if (!launch.autoMode) {
+      countDiagnostic('sandbox-without-auto-mode-unsupported');
+      logger.log('warn', 'agent start refused', {
+        runId: live.state.run.id,
+        agentRunId,
+        code: 'sandbox-without-auto-mode',
+      });
+      return null;
+    }
     try {
       return await fullAutoPaths.specFor(live.state.run.id);
     } catch (error) {
@@ -1598,9 +1633,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     const target = allowlistTarget(request.toolName, toolInputOf(request));
     const readAllowlist = hooks.allowlist;
-    // ADR-0022: in Full auto nothing waits for the owner. What still reaches the gate (an auto-mode
-    // escalation) runs only when the Auto edits rules allow it, and is otherwise denied.
-    if (isFullAuto(live.state) && hasReviewableChange(kind)) {
+    // ADR-0022, ADR-0023 §5: for a helper or tester whose node runs Full auto in this run, nothing
+    // waits for the owner. What still reaches the gate (an auto-mode escalation) runs only when the
+    // Auto edits rules allow it, and is otherwise denied. Other agents of the run ask as usual.
+    if (hasReviewableChange(kind) && agentModeOf(live, agentRunId) === 'full-auto') {
       return fullAutoGate(live, agentRunId, kind, request, target, readAllowlist);
     }
     if (target === null || readAllowlist === undefined) {
@@ -1636,7 +1672,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         logger.log('warn', 'allowlist check failed', { runId, agentRunId, ...errorFields(error) });
       }
     }
-    // The run's policy is Full auto, so the engine pre-approves an allowed verdict: never parked.
+    // The agent's mode is Full auto, so the engine pre-approves an allowed verdict: never parked.
     if (verdict?.allowed === true) return parkForOwner(live, agentRunId, request, verdict);
     countDiagnostic('full-auto-denied');
     logger.log('info', 'full auto tool use denied', {
@@ -1655,13 +1691,30 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     target: AllowlistTarget,
     readAllowlist: NonNullable<ControlWorkspaceHooks['allowlist']>,
   ): Promise<AllowlistVerdict | undefined> {
-    // ADR-0021: a run with a snapshotted policy is judged by it, never by the live project setup.
-    const context = await readAllowlist(live.state.run.projectId, live.state.approvalPolicy);
+    // ADR-0021: a run with a snapshotted policy is judged by it, never by the live project setup;
+    // ADR-0023 §5: with this agent's own mode for the run (its node's, tightened), never the lead's
+    // or another node's. The engine checks the verdict against the same mode again.
+    const policy = live.state.approvalPolicy;
+    const mode = agentModeOf(live, agentRunId);
+    const context = await readAllowlist(
+      live.state.run.projectId,
+      policy === undefined ? undefined : { ...policy, mode: mode ?? policy.mode },
+    );
     if (context === null) return undefined;
     const row = store.repos.workspaces.getByAgentRun(agentRunId);
     const ws =
       row === undefined || row.state !== 'active' ? undefined : await workspaceFor(live, row);
     return allowlistVerdict({ target, context, workspace: ws ?? null, agentKind });
+  }
+
+  /**
+   * The approval mode this agent runs with (`effectiveMode`): its node's mode for the run, or the
+   * run's mode for an agent the program has no node for. Undefined for the lead, the planner and
+   * reviewers (never covered by a mode) and for runs without an approval policy.
+   */
+  function agentModeOf(live: LiveRun, agentRunId: string): ProjectApprovals['mode'] | undefined {
+    const agent = live.state.agents.find((a) => a.id === agentRunId);
+    return agent === undefined ? undefined : effectiveMode(live.state, agent);
   }
 
   /**
@@ -1771,11 +1824,22 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (integration !== undefined) {
       const branch = store.loopRepos.ticketBranches.getByRun(runId);
       dto.ticketBranch = branch === undefined ? null : toTicketBranchDto(branch);
+      const program = programOf(live.state);
       dto.changes = toChangeReviewDtos({
         agents: live.state.agents,
         reviews: store.loopRepos.changeReviews.listForRun(runId),
         checks: store.loopRepos.checkCommits.listForRun(runId),
         maxReworkRounds: integration.maxReworkRounds,
+        // ADR-0023: each change's rounds come from its node's review route (the lead's, plus the
+        // reviewer's on route c); a version 1 run's route carries its single limit.
+        maxRoundsOf: (agentRunId) => {
+          const agent = live.state.agents.find((a) => a.id === agentRunId);
+          if (agent === undefined) return integration.maxReworkRounds;
+          const route = reviewRouteOf(program, agent);
+          return route.by === 'agent' && route.then === 'direct'
+            ? route.leadRounds + route.reviewerRounds
+            : route.leadRounds;
+        },
       });
       dto.reviewer = integration.reviewer;
       dto.maxReworkRounds = integration.maxReworkRounds;
@@ -2256,6 +2320,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           ...(input.workflow !== undefined && { workflow: input.workflow }),
           ...(input.reviewLoop !== undefined && { reviewLoop: input.reviewLoop }),
           ...(input.approvals !== undefined && { approvals: input.approvals }),
+          ...(input.graph !== undefined && { graph: input.graph }),
+          ...(input.graphContext !== undefined && { graphContext: input.graphContext }),
           registeredProjectIds: projectIds(),
         },
         ctx(),
@@ -2285,6 +2351,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (state.integration === undefined || dto.review !== undefined) return dto;
       const changes = state.agents.flatMap((a) => (a.change === undefined ? [] : [a.change]));
       return { ...dto, review: reviewCounts(changes) };
+    },
+
+    runWorkflowGraph(runId) {
+      const state = get(runId).state;
+      return { runId, graph: runGraphOf(state), ...deriveRunWorkflowGraph(state) };
     },
 
     ticketBranch(runId) {

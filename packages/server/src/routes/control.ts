@@ -9,6 +9,7 @@ import {
   RunDetailDtoSchema,
   RunSummaryDtoSchema,
   RunWorkflowDtoSchema,
+  RunWorkflowGraphDtoSchema,
   TicketBranchReviewDtoSchema,
 } from '@acp/core/api';
 import { requireCsrf } from '../control/csrf.js';
@@ -55,6 +56,10 @@ export function createControlRouter(control: ControlService): Router {
   // restart held the next post-merge stage. Continue answers the run, like the other run actions.
   router.get('/runs/:id/workflow', (req, res) => {
     res.json(out(RunWorkflowDtoSchema, control.runWorkflow(param(req.params['id']))));
+  });
+  // ADR-0023: the graph the run snapshotted and each node's live state (read-only).
+  router.get('/runs/:id/workflow-graph', (req, res) => {
+    res.json(out(RunWorkflowGraphDtoSchema, control.runWorkflowGraph(param(req.params['id']))));
   });
   router.post('/runs/:id/continue', csrf, (req, res) => {
     res.json(out(RunDetailDtoSchema, control.continueRun(param(req.params['id']))));

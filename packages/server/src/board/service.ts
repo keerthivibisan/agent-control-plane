@@ -1,18 +1,29 @@
 import {
   HARNESS_TICKET_TEMPLATE,
+  MAX_REWORK_ROUNDS,
   TICKET_STAGES,
+  WorkflowGraphInvalidError,
   approvalsOf,
   compactRunOptions,
+  compileWorkflow,
   resolveRunOptions,
   reviewStageOf,
   ticketStage,
+  tightenMode,
+  validateWorkflowGraph,
+  type ApprovalMode,
   type CheckRun,
+  type CompileContext,
   type ProjectAgentSetup,
+  type RunBudget,
+  type RunOptions,
   type RunStatus,
   type Ticket,
   type TicketRunOptions,
   type TicketStage,
   type TokenCounts,
+  type WorkflowGraph,
+  type WorkflowProgram,
 } from '@acp/core';
 import {
   CreateRepoProjectRequestSchema,
@@ -27,6 +38,7 @@ import {
   type ContextCandidateDto,
   type HarnessStatusDto,
   type ProjectDto,
+  type RunDetailDto,
   type StreamNoticeDto,
   type TicketCardDto,
   type TicketCommentDto,
@@ -53,6 +65,7 @@ import {
   isActiveAgentStatus,
   runSettingsFromSetup,
   ticketRunPrompts,
+  type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
 import { managedDisabled } from '../control/errors.js';
@@ -70,6 +83,23 @@ import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
 import { ensureSetup, legacyAllowlistOf } from './setup.js';
+import { effectiveWorkflow, type EffectiveWorkflow } from '../workflow/graph.js';
+
+/**
+ * The project's workflow graph cannot run (ADR-0023 §3): the run is not created. The message is
+ * plain; the Workflow page shows the issues.
+ */
+export function workflowCannotRun(errors: number, first: string): HttpError {
+  const count = `${errors} problem${errors === 1 ? '' : 's'}`;
+  return new HttpError(
+    409,
+    'workflow_invalid',
+    `The project’s workflow cannot run: it has ${count}. ${first} Fix it on the Workflow page.`.replace(
+      /\s+/g,
+      ' ',
+    ),
+  );
+}
 
 /**
  * The Agent Workspace board (P4-D; README §4, §6, ADR-0016/0017): projects created from the UI,
@@ -356,6 +386,90 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     if (ticket.currentRunId === null) return false;
     const run = runView(ticket.currentRunId);
     return run !== null && !TERMINAL_RUN.has(run.status);
+  }
+
+  // ------------------------------------------------------------------ run start (ADR-0023)
+
+  /**
+   * The project-level review settings `resolveRunOptions` starts from: a version 1 workflow's
+   * review stage, as before; for a graph, what its routes amount to (a change reviewer or the
+   * lead, and the most rounds any route allows). Graph runs take their routes from the graph, so
+   * these only fill the run's review-loop record and its "from the project" source.
+   */
+  function projectReviewDefaults(
+    workflow: EffectiveWorkflow,
+    approvalMode: ApprovalMode,
+  ): RunOptions {
+    if (workflow.v1 !== undefined) {
+      const review = reviewStageOf(workflow.v1);
+      return { approvalMode, reviewer: review.reviewer, maxReworkRounds: review.maxReworkRounds };
+    }
+    const reviewers = workflow.graph.nodes.some(
+      (n) => n.type === 'reviewer' && n.scope === 'change',
+    );
+    const rounds = workflow.graph.edges.reduce(
+      (max, e) => (e.type === 'rework' ? Math.max(max, e.maxRounds) : max),
+      0,
+    );
+    return {
+      approvalMode,
+      reviewer: reviewers ? ('agent' as const) : ('lead' as const),
+      maxReworkRounds: Math.min(rounds, MAX_REWORK_ROUNDS),
+    };
+  }
+
+  /**
+   * Validates the graph as the editor and the PUT do, then compiles it with the run's context;
+   * any error refuses the start with 409 `workflow_invalid` before the run is created.
+   */
+  function runnableProgram(
+    graph: WorkflowGraph,
+    context: CompileContext,
+    setup: ProjectAgentSetup,
+  ): WorkflowProgram {
+    const issues = validateWorkflowGraph(graph, {
+      maxConcurrentHelpers: setup.maxConcurrentHelpers,
+      projectMode: context.projectMode,
+    });
+    const errors = issues.filter((i) => i.severity === 'error');
+    if (errors.length > 0) throw workflowCannotRun(errors.length, errors[0]?.message ?? '');
+    try {
+      return compileWorkflow(graph, context);
+    } catch (error) {
+      if (error instanceof WorkflowGraphInvalidError) {
+        throw workflowCannotRun(error.issues.length, error.issues[0]?.message ?? '');
+      }
+      throw error;
+    }
+  }
+
+  /** What every ticket run gets, whichever workflow it follows. */
+  function runBase(
+    ticket: Ticket,
+    prompts: { leadPrompt: string; plannerPrompt?: string },
+    limits: RunLimits,
+    budget: RunBudget,
+  ) {
+    return {
+      projectId: ticket.projectId,
+      ticketId: ticket.id,
+      title: `${ticket.key} ${ticket.title}`,
+      leadPrompt: prompts.leadPrompt,
+      ...(prompts.plannerPrompt !== undefined && { plannerPrompt: prompts.plannerPrompt }),
+      limits,
+      budget,
+      inTransaction: (runId: string) => {
+        ws.tickets.setStatus(ticket.id, 'ACTIVE', { from: [ticket.status], currentRunId: runId });
+      },
+    };
+  }
+
+  /** Re-read: the ticket may have moved while the setup was read. */
+  function checkUnchanged(ticket: Ticket): void {
+    const fresh = ticketOrThrow(ticket.id);
+    if (fresh.status !== ticket.status || fresh.currentRunId !== ticket.currentRunId) {
+      throw new HttpError(409, 'conflict', 'The ticket changed meanwhile; reload and try again');
+    }
   }
 
   // ------------------------------------------------------------------ control hooks
@@ -675,67 +789,87 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       }
       const setup = await setupFor(ticket.projectId);
       const { limits, budget } = runSettingsFromSetup(setup);
-      // ADR-0019: the project's workflow (the default until the owner saves one), snapshotted.
-      const workflow = redesign.workflow.get(ticket.projectId);
-      if (workflow === undefined) throw notFound(`Project ${ticket.projectId} not found`);
       // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
-      // RL-H: the one-run override wins over the ticket's own options, which win over the
-      // project's settings. The command allowlist is always the project's.
       const projectApprovals = approvalsOf(setup);
-      const reviewStage = reviewStageOf(workflow);
+      // ADR-0023: the project's graph (stored, or its version 1 workflow migrated), snapshotted.
+      const stored = redesign.workflow.stored(ticket.projectId);
+      if (stored === undefined) throw notFound(`Project ${ticket.projectId} not found`);
+      const workflow = effectiveWorkflow(stored, projectApprovals.mode);
+      const legacy = deps.legacyTicketRuns === true;
+      const runOptions = compactRunOptions(options);
+      // RL-H: the one-run override wins over the ticket's own options, which win over the
+      // project's settings, for the reviewer and the rounds. The command allowlist is always the
+      // project's.
       const effective = resolveRunOptions(
-        {
-          approvalMode: projectApprovals.mode,
-          reviewer: reviewStage.reviewer,
-          maxReworkRounds: reviewStage.maxReworkRounds,
-        },
+        projectReviewDefaults(workflow, projectApprovals.mode),
         ticket.runOptions,
-        compactRunOptions(options),
+        runOptions,
       );
-      const approvals = {
-        mode: effective.options.approvalMode,
-        commands: projectApprovals.commands,
-      };
-      const legacyRun = deps.legacyTicketRuns === true;
-      // ADR-0022: a Full auto run's briefs say the plan is approved automatically.
-      const prompts = ticketRunPrompts(ticket, limits, workflow, {
-        fullAuto: !legacyRun && approvals.mode === 'full-auto',
-      });
       const reviewLoop = {
         ticketKey: ticket.key,
         reviewer: effective.options.reviewer,
         maxReworkRounds: effective.options.maxReworkRounds,
       };
-      const legacy = legacyRun;
-      // Re-read: the ticket may have moved while the setup was read.
-      const fresh = ticketOrThrow(ticketId);
-      if (fresh.status !== ticket.status || fresh.currentRunId !== ticket.currentRunId) {
-        throw new HttpError(409, 'conflict', 'The ticket changed meanwhile; reload and try again');
+      let run: RunDetailDto;
+      if (legacy && workflow.v1 !== undefined) {
+        // Tests only: a version 1 project's legacy run stays exactly as before ADR-0021.
+        const prompts = ticketRunPrompts(ticket, limits, workflow.v1, { fullAuto: false });
+        checkUnchanged(ticket);
+        run = deps.control.createTicketRun({
+          ...runBase(ticket, prompts, limits, budget),
+          workflow: workflow.v1,
+        });
+      } else {
+        // ADR-0023 §5, refinements 5 and 7: the ticket's and the run's modes are ceilings (each
+        // only when set) that can only tighten a node; the reviewer and rounds overrides apply
+        // only when the ticket or the run sets them.
+        const approvalCeilings = [ticket.runOptions?.approvalMode, runOptions.approvalMode].filter(
+          (m) => m !== undefined,
+        );
+        const graphContext: CompileContext = {
+          projectMode: projectApprovals.mode,
+          approvalCeilings,
+          maxConcurrentHelpers: limits.maxConcurrentHelpers,
+          ...(effective.source.reviewer !== 'project' && { reviewer: effective.options.reviewer }),
+          ...(effective.source.maxReworkRounds !== 'project' && {
+            maxReworkRounds: effective.options.maxReworkRounds,
+          }),
+        };
+        const program = runnableProgram(workflow.graph, graphContext, setup);
+        // The run's own mode: the project's, tightened. The engine falls back to it for an agent
+        // it cannot map to a node, so that fallback is never looser than the ceilings.
+        const approvals = {
+          mode: tightenMode(null, projectApprovals.mode, ...approvalCeilings).mode,
+          commands: projectApprovals.commands,
+        };
+        const prompts = ticketRunPrompts(
+          ticket,
+          limits,
+          { plannerMode: program.planner === null ? 'lead' : 'separate' },
+          // ADR-0022, ADR-0023 §6: the briefs say so when the plan gate approves at once.
+          { fullAuto: program.planAutoApprove },
+        );
+        checkUnchanged(ticket);
+        run = deps.control.createTicketRun({
+          ...runBase(ticket, prompts, limits, budget),
+          // A version 1 project's runs keep its workflow too, for the version 1 live view.
+          ...(workflow.v1 !== undefined && { workflow: workflow.v1 }),
+          graph: workflow.graph,
+          graphContext,
+          ...(!legacy && { reviewLoop, approvals }),
+        });
       }
-      const run = deps.control.createTicketRun({
-        projectId: ticket.projectId,
-        ticketId,
-        title: `${ticket.key} ${ticket.title}`,
-        leadPrompt: prompts.leadPrompt,
-        ...(prompts.plannerPrompt !== undefined && { plannerPrompt: prompts.plannerPrompt }),
-        workflow,
-        limits,
-        budget,
-        ...(!legacy && { reviewLoop, approvals }),
-        inTransaction: (runId) => {
-          ws.tickets.setStatus(ticketId, 'ACTIVE', { from: [ticket.status], currentRunId: runId });
-        },
-      });
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId: run.id });
       logger.log('info', 'ticket started', {
         ticketId,
         runId: run.id,
-        approvalMode: legacy ? null : approvals.mode,
+        approvalMode: legacy ? null : (run.approvalMode ?? null),
         reviewer: legacy ? null : reviewLoop.reviewer,
         // Where each came from (run, ticket or project, RL-H): enum words only, no free text.
         approvalModeFrom: legacy ? null : effective.source.approvalMode,
         reviewerFrom: legacy ? null : effective.source.reviewer,
         maxReworkRoundsFrom: legacy ? null : effective.source.maxReworkRounds,
+        workflow: workflow.stored,
       });
       return detail(ticketId);
     },
