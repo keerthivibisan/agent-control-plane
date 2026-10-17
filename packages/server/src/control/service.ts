@@ -592,6 +592,31 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   function perform(live: LiveRun, effects: readonly EngineEffect[]): void {
     const runId = live.state.run.id;
+    // ADR-0021 §4: the ticket branch must exist before the lead hears of the plan's approval (or,
+    // in separate-planner mode, starts): a lead starts helpers at once, and `start_agent` is
+    // refused until `ticketBranchCreated`. The effects after `create-ticket-branch` wait for it;
+    // when the creation fails the run is stopped and they are dropped.
+    const branchAt = effects.findIndex((e) => e.type === 'create-ticket-branch');
+    if (branchAt !== -1) {
+      const branchEffect = effects[branchAt];
+      const after = effects.slice(branchAt + 1);
+      perform(live, effects.slice(0, branchAt));
+      if (branchEffect?.type !== 'create-ticket-branch') return;
+      track(
+        loop.createTicketBranch(live, branchEffect.ticketKey).then((created) => {
+          const status = live.state.run.status;
+          if (closed || !created || status === 'CANCELLING' || TERMINAL.includes(status)) {
+            logger.log('info', 'effects after the ticket branch dropped', {
+              runId,
+              count: after.length,
+            });
+            return;
+          }
+          perform(live, after);
+        }),
+      );
+      return;
+    }
     for (const effect of effects) {
       switch (effect.type) {
         case 'start-agent':
@@ -644,7 +669,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           loop.sealChange(live, effect.agentRunId);
           break;
         case 'create-ticket-branch':
-          loop.createTicketBranch(live, effect.ticketKey);
+          // Handled before the loop: the effects after it wait for the branch.
           break;
         case 'merge-change':
           loop.mergeChange(live, effect);

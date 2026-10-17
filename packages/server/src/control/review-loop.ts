@@ -238,51 +238,55 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     );
   }
 
-  function createTicketBranch(live: LoopLive, ticketKey: string): void {
+  /**
+   * Creates the run's ticket branch and reports it with `ticketBranchCreated`. Resolves true once
+   * the engine has recorded it (the caller then carries out the effects that reach the lead),
+   * false when it could not be made (the run is stopped) or recorded.
+   */
+  function createTicketBranch(live: LoopLive, ticketKey: string): Promise<boolean> {
     const runId = live.state.run.id;
-    ctx.track(
-      (async () => {
-        let branch: string;
-        const existing = loop.ticketBranches.getByRun(runId);
-        if (existing !== undefined) {
-          branch = existing.branch;
-        } else {
-          try {
-            const created = await ctx.workspaces.createTicketBranch(
-              projectRootOf(live),
-              ticketKey,
-              // An open ticket branch of another run keeps its name, even if git lost it.
-              (name) => loop.ticketBranches.getOpenByBranch(name) !== undefined,
-            );
-            loop.ticketBranches.insert({
-              runId,
-              projectId: live.state.run.projectId,
-              branch: created.branch,
-              baseBranch: created.baseBranch,
-              baseCommit: created.baseCommit,
-              headCommit: created.baseCommit,
-            });
-            branch = created.branch;
-          } catch (error) {
-            // No helper can start without it, and the engine has no command for a failed
-            // creation (RL-A notes): the run is stopped, and the reason is in the log.
-            ctx.countDiagnostic('ticket-branch-failed');
-            logger.log('warn', 'ticket branch not created; run stopped', {
-              runId,
-              code: codeOf(error),
-            });
-            ctx.apply(live, cancelRun);
-            return;
-          }
+    return (async (): Promise<boolean> => {
+      let branch: string;
+      const existing = loop.ticketBranches.getByRun(runId);
+      if (existing !== undefined) {
+        branch = existing.branch;
+      } else {
+        try {
+          const created = await ctx.workspaces.createTicketBranch(
+            projectRootOf(live),
+            ticketKey,
+            // An open ticket branch of another run keeps its name, even if git lost it.
+            (name) => loop.ticketBranches.getOpenByBranch(name) !== undefined,
+          );
+          loop.ticketBranches.insert({
+            runId,
+            projectId: live.state.run.projectId,
+            branch: created.branch,
+            baseBranch: created.baseBranch,
+            baseCommit: created.baseCommit,
+            headCommit: created.baseCommit,
+          });
+          branch = created.branch;
+        } catch (error) {
+          // No helper can start without it, and the engine has no command for a failed
+          // creation (RL-A notes): the run is stopped, and the reason is in the log.
+          ctx.countDiagnostic('ticket-branch-failed');
+          logger.log('warn', 'ticket branch not created; run stopped', {
+            runId,
+            code: codeOf(error),
+          });
+          ctx.apply(live, cancelRun);
+          return false;
         }
-        const applied = ctx.apply(live, (s, c) => ticketBranchCreated(s, branch, c));
-        if (!applied.ok) {
-          logger.log('info', 'ticket branch not recorded', { runId, code: applied.refusal.code });
-          return;
-        }
-        logger.log('info', 'ticket branch created', { runId });
-      })(),
-    );
+      }
+      const applied = ctx.apply(live, (s, c) => ticketBranchCreated(s, branch, c));
+      if (!applied.ok) {
+        logger.log('info', 'ticket branch not recorded', { runId, code: applied.refusal.code });
+        return false;
+      }
+      logger.log('info', 'ticket branch created', { runId });
+      return true;
+    })();
   }
 
   function mergeChange(
