@@ -22,6 +22,7 @@ import {
   decidePlan,
   evaluateAllowlist,
   isActiveAgentStatus,
+  isFinalChangeState,
   isLiveAgentStatus,
   isTerminalRunStatus,
   leadToolCall,
@@ -66,6 +67,11 @@ export interface ChoicePoint {
   key: string;
   /** Non-empty; the oracle must return one of them. */
   options: readonly string[];
+  /**
+   * The simulation's state at this point (engine state with ids replaced by positions, plus the
+   * fake agents' pending work), for the explorer to recognise states it already explored.
+   */
+  fingerprint?: () => string;
 }
 export type Oracle = (point: ChoicePoint) => string;
 
@@ -190,6 +196,75 @@ export function simulate(
   let index = 0;
   let interrupted = false;
   let state: RunState;
+
+  /**
+   * The state as far as it can still matter, for the explorer: ids replaced by positions, and
+   * history that no longer changes what happens dropped (ended change reviewers, the rounds and
+   * verdicts of decided changes, decided approvals, past merge attempts), so equal states reached
+   * by different paths match.
+   */
+  const fingerprint = (): string => {
+    const kept = state.agents.filter(
+      (a) =>
+        !(
+          a.kind === 'reviewer' &&
+          a.reviewsAgentRunId !== undefined &&
+          !isLiveAgentStatus(a.status)
+        ),
+    );
+    const pos = new Map(kept.map((a, i) => [a.id, `#${i}`]));
+    const id = (x: string | null | undefined) =>
+      x === null || x === undefined ? null : (pos.get(x) ?? '#gone');
+    const decided = (a: EngineAgent) =>
+      a.change !== undefined && isFinalChangeState(a.change.state);
+    return JSON.stringify({
+      run: state.run.status,
+      agents: kept.map((a) => [
+        a.kind,
+        a.role,
+        a.stage ?? null,
+        a.status,
+        a.review,
+        id(a.parentAgentRunId),
+        id(a.reviewsAgentRunId),
+        a.reviewPosts ?? 0,
+        a.awaitingHelpers === true,
+        turnOutcome.has(a.id),
+        a.change === undefined
+          ? null
+          : decided(a)
+            ? [a.change.state]
+            : [
+                a.change.state,
+                a.change.round,
+                a.change.reviewerRounds ?? 0,
+                a.change.verdict,
+                a.change.reviewer,
+                id(a.change.reviewerAgentRunId),
+                a.change.checks,
+                a.change.merging,
+                a.change.turnFailed,
+                a.change.conflictFiles.length,
+                turnOutcome.get(a.id) ?? null,
+                mergeAttempts.get(`${a.id}:${a.change.round}`) ?? 0,
+              ],
+      ]),
+      approvals: state.approvals
+        .filter((p) => p.status === 'pending')
+        .map((p) => [id(p.agentRunId), p.kind]),
+      plans: (state.plans ?? []).map((p) => p.status),
+      loop:
+        state.integration === undefined
+          ? null
+          : [state.integration.handedOver, state.integration.ticketBranch],
+      held: state.stagesHeld === true,
+      prompted: state.handoverPrompted === true,
+      queue: queue.map((q) => [q.k, 'id' in q ? id(q.id) : null]),
+      parked: [...parked.values()].map((p) => [id(p.id), p.perms.length]),
+      interrupted,
+    });
+  };
+  const ask: Oracle = (point) => oracle({ ...point, fingerprint });
 
   const record = (
     actor: string,
@@ -376,7 +451,7 @@ export function simulate(
           (o) => checkChangeAction(state, a.id, o, 'lead') === null,
         );
         if (options.length === 0) continue;
-        const choice = choose(oracle, `lead:${roleKey(a)}:${c.round}`, options);
+        const choice = choose(ask, `lead:${roleKey(a)}:${c.round}`, options);
         const r =
           choice === 'merge'
             ? tool(l, 'lead', 'merge_change', { agentId: a.id })
@@ -487,8 +562,8 @@ export function simulate(
     const options = loop ? ['changed', 'no-changes', 'error'] : ['success', 'error'];
     const outcome =
       a.kind === 'tester'
-        ? choose(oracle, `tester-turn:${round}`, options)
-        : choose(oracle, `turn:${roleKey(a)}:${round}`, options);
+        ? choose(ask, `tester-turn:${round}`, options)
+        : choose(ask, `turn:${roleKey(a)}:${round}`, options);
     turnOutcome.set(a.id, outcome);
     apply(roleKey(a), `finish ${outcome}`, (s, c) =>
       agentEvent(
@@ -542,7 +617,7 @@ export function simulate(
           const helper = agentOf(a.reviewsAgentRunId);
           const round = helper?.change?.round ?? 0;
           const role = helper === undefined ? 'unknown' : roleKey(helper);
-          const verdict = choose(oracle, `verdict:${role}:${round}`, ['approve', 'rework']);
+          const verdict = choose(ask, `verdict:${role}:${round}`, ['approve', 'rework']);
           tool(a, roleKey(a), 'submit_review', {
             verdict,
             findings: verdict === 'approve' ? 'Looks right.' : 'Handle the empty case.',
@@ -593,7 +668,7 @@ export function simulate(
       ? ['merged', 'conflict', 'no-changes']
       : ['merged', 'checks-failed', 'conflict', 'no-changes'];
     const role = a.kind === 'tester' ? 'tester' : roleKey(a);
-    const outcome = choose(oracle, `merge:${role}:${c.round}:${attempt}`, options);
+    const outcome = choose(ask, `merge:${role}:${c.round}:${attempt}`, options);
     const decider = by === 'owner' ? 'owner' : 'lead';
     if (outcome === 'merged' || outcome === 'no-changes') {
       apply('server', `merged ${outcome}`, (s, cx) =>
@@ -641,7 +716,7 @@ export function simulate(
         return true;
       }
       const role = a === undefined ? 'unknown' : roleKey(a);
-      const d = choose(oracle, `approval:${role}:${p.toolName ?? ''}`, ['approve', 'deny']);
+      const d = choose(ask, `approval:${role}:${p.toolName ?? ''}`, ['approve', 'deny']);
       apply('owner', `${d} ${p.toolName ?? ''}`, (s, c) =>
         decideApproval(s, p.id, d === 'approve' ? 'approve' : 'deny', c),
       );
@@ -649,7 +724,7 @@ export function simulate(
     }
     const plan = pendingPlan(state);
     if (status === 'PLAN_REVIEW' && plan !== undefined) {
-      const d = choose(oracle, `plan:${plan.version}`, ['approve', 'request-changes']);
+      const d = choose(ask, `plan:${plan.version}`, ['approve', 'request-changes']);
       apply('owner', `plan ${d}`, (s, c) =>
         d === 'approve'
           ? decidePlan(s, plan.id, 'approve', c)
@@ -666,7 +741,7 @@ export function simulate(
         );
         if (options.length === 0) continue;
         const role = a.kind === 'tester' ? 'tester' : roleKey(a);
-        const d = choose(oracle, `owner-change:${role}:${c.round}`, options);
+        const d = choose(ask, `owner-change:${role}:${c.round}`, options);
         if (d === 'merge' || d === 'merge-anyway') {
           apply('owner', d, (s, cx) =>
             beginChangeMerge(s, a.id, { by: 'owner', anyway: d === 'merge-anyway' }, cx),
@@ -690,7 +765,7 @@ export function simulate(
         if (a.kind !== 'worker' && a.kind !== 'tester') continue;
         if (isLiveAgentStatus(a.status) || a.review !== 'pending') continue;
         const role = a.kind === 'tester' ? 'tester' : roleKey(a);
-        const d = choose(oracle, `legacy-review:${role}`, ['merged', 'discarded', 'no-changes']);
+        const d = choose(ask, `legacy-review:${role}`, ['merged', 'discarded', 'no-changes']);
         apply('owner', `review ${d}`, (s, c) =>
           recordReview(s, a.id, d as 'merged' | 'discarded' | 'no-changes', c),
         );
