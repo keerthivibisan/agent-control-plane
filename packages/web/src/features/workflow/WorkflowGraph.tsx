@@ -144,9 +144,9 @@ function LegendItem({ sample, children }: { sample: ReactNode; children: ReactNo
   );
 }
 
-const SWATCH = 'inline-block h-3.5 w-5 shrink-0 rounded-[4px] border';
+const SWATCH = 'inline-block h-3.5 w-5 shrink-0 rounded-[2px] border';
 const CHIP =
-  'inline-flex h-4.5 shrink-0 items-center justify-center rounded-[0.3125rem] border px-1 text-micro font-medium';
+  'inline-flex h-4.5 shrink-0 items-center justify-center rounded-[2px] border px-1 text-micro font-medium';
 
 /** The graph's legend: line styles and node kinds, in words (color is never the only signal). */
 export function WorkflowLegend() {
@@ -166,7 +166,7 @@ export function WorkflowLegend() {
         {L.agent}
       </LegendItem>
       <LegendItem
-        sample={<span aria-hidden="true" className={`${SWATCH} border-accent/40 bg-accent-soft`} />}
+        sample={<span aria-hidden="true" className={`${SWATCH} border-line-strong bg-sunken`} />}
       >
         {L.you}
       </LegendItem>

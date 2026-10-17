@@ -145,19 +145,23 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       // A click anywhere on the card selects it; the header button is the keyboard way.
       onClick={() => ctx.onSelect(agent.id)}
       data-kind={agent.kind}
-      // A request waiting for you: a warning line along the top edge (with the words below it).
-      className={`relative flex w-48 cursor-pointer flex-col gap-2.5 rounded-card border bg-panel p-3 text-left transition-[border-color,box-shadow] duration-150 ${
+      // The logo's vocabulary (DESIGN.md, "Agent views"): square nodes, the lead framed in ink as
+      // the controller, a lime edge on top while the agent works, a lime ring when selected, and
+      // a warning line along the top only when a request waits for you (with the words below).
+      className={`relative flex w-48 cursor-pointer flex-col gap-2.5 rounded-[2px] border bg-panel p-3 text-left transition-[border-color,box-shadow] duration-150 ${
         selected
-          ? 'border-accent ring-3 ring-accent/20'
+          ? `${NODE_SELECTED} ${lead ? 'border-ink' : ''}`
           : waiting > 0
             ? 'border-warning/60 hover:border-warning'
-            : 'border-line hover:border-line-strong'
-      } ${
+            : lead
+              ? 'border-ink/70 hover:border-ink'
+              : 'border-line hover:border-line-strong'
+      } ${lead ? 'outline-1 -outline-offset-3 outline-ink/15 outline-solid' : ''} ${
         waiting > 0
           ? 'shadow-[inset_0_2px_0_var(--color-warning)]'
-          : selected
-            ? 'shadow-card'
-            : 'shadow-card hover:shadow-raised'
+          : live
+            ? LIVE_EDGE
+            : 'shadow-card'
       }`}
     >
       <header className="flex flex-col gap-1.5">
@@ -232,9 +236,14 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
   );
 }
 
+/** A selected agent: the lime ring of the brand (an olive edge keeps it a line on ivory). */
+const NODE_SELECTED = 'border-accent-fill-edge ring-3 ring-accent-fill/55 dark:ring-accent-fill/25';
+/** A working agent: a lime bar along the top edge, the logo's lit centre. */
+const LIVE_EDGE = 'shadow-[inset_0_3px_0_var(--color-accent-fill)]';
+
 // An org chart in CSS: each child draws its half of the bar above it and a stub down to its card;
-// the first and last child drop the outer half, an only child keeps just the stub.
-// v2: hairline connectors in the strong border color, quieter than the cards they join.
+// the first and last child drop the outer half, an only child keeps just the stub. Straight,
+// square-cornered hairline connectors in the strong border color, quieter than the cards they join.
 const CHILD_ROW =
   'relative flex justify-center pt-6 before:absolute before:top-0 before:left-1/2 before:h-6 before:border-l before:border-line-strong';
 const CHILD =

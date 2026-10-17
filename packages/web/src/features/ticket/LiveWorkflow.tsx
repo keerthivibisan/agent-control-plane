@@ -88,13 +88,14 @@ const STATE_TONE: Record<WorkflowStageState, PillTone> = {
   skipped: 'neutral',
 };
 
-// v2: a 1.5px state outline just outside the node, with a soft halo of the same hue; the graph's
-// own background (`canvas`) shows between them.
+// A 1.5px state outline just outside the square node, with a soft halo; the graph's own
+// background (`canvas`) shows between them. Working is the brand's lime (an olive line with a lime
+// halo on ivory, lime on graphite); warning and danger only for the real states.
 const STATE_RING: Record<WorkflowStageState, string> = {
   off: '',
   waiting: '',
   active:
-    'outline-[1.5px] outline-offset-2 outline-accent outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent)_12%,transparent)]',
+    'outline-[1.5px] outline-offset-2 outline-accent-fill-edge outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_45%,transparent)] dark:shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_14%,transparent)]',
   'needs-you':
     'outline-[1.5px] outline-offset-2 outline-warning outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-warning)_14%,transparent)]',
   done: '',
@@ -113,7 +114,7 @@ function LiveFrame({ stage, children }: { stage: WorkflowStageId; children: Reac
   const faded = state === 'waiting' || state === 'skipped';
   return (
     <div
-      className={`relative h-full w-full rounded-card ${STATE_RING[state]}`}
+      className={`relative h-full w-full rounded-[2px] ${STATE_RING[state]}`}
       data-testid={`live-${stage}`}
       data-state={state}
     >
@@ -160,7 +161,7 @@ function LiveGateNode(props: NodeProps<GateNode>) {
   const waiting = live?.states.plan === 'needs-you';
   return (
     <div
-      className={`h-full w-full rounded-card ${waiting ? STATE_RING['needs-you'] : ''}`}
+      className={`h-full w-full rounded-[2px] ${waiting ? STATE_RING['needs-you'] : ''}`}
       data-testid="live-approve"
       data-state={waiting ? 'needs-you' : undefined}
     >
@@ -193,7 +194,7 @@ function LiveHelperRow(_: NodeProps<HelperNode>) {
   const working = helpers.filter((a) => isAgentLive(a.status)).length;
   return (
     <div
-      className="flex h-full w-full items-center justify-between gap-2 rounded-control border border-line bg-panel px-2.5 text-caption shadow-card"
+      className="flex h-full w-full items-center justify-between gap-2 rounded-[2px] border border-line bg-panel px-2.5 text-caption shadow-card"
       data-testid="live-helpers-row"
     >
       <Handle id="in-left" type="target" position={Position.Left} className={HANDLE} />

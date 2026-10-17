@@ -36,7 +36,8 @@ export const Y_GAP = 170;
 
 /** Theme colors only (index.css), so both themes work. Dashes tell the kinds apart without color. */
 export const EDGE_STYLE: Record<SessionEdgeDto['kind'], { stroke: string; dash?: string }> = {
-  subagent: { stroke: 'var(--color-accent)' },
+  // Neutral ink: lime marks only what is working or selected (DESIGN.md, "Agent views").
+  subagent: { stroke: 'var(--color-ink)' },
   continuation: { stroke: 'var(--color-dim)', dash: '6 4' },
 };
 
@@ -169,7 +170,8 @@ export function buildGraph(
       id: `${e.kind}:${e.parentId}->${e.childId}`,
       source: e.parentId,
       target: e.childId,
-      type: 'smoothstep',
+      // Straight segments with square corners, as in the logo's connectors.
+      type: 'step',
       className: `edge-${e.kind}`,
       markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_STYLE[e.kind].stroke },
       style: {

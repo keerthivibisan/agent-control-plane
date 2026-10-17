@@ -74,32 +74,41 @@ function Handles({ only }: { only?: readonly HandleId[] }) {
   );
 }
 
-/** A tag on a node: squarer than a status pill, because it names a thing (DESIGN.md, "Pills"). */
+/** A tag on a node: square, like the node, because it names a thing (DESIGN.md, "Agent views"). */
 const TAG =
-  'inline-flex h-5 w-fit max-w-full min-w-0 items-center gap-1 rounded-[0.3125rem] border px-1.5 text-caption font-medium';
+  'inline-flex h-5 w-fit max-w-full min-w-0 items-center gap-1 rounded-[2px] border px-1.5 text-caption font-medium';
 
-/** How a stage node looks at rest: an agent, an agent stage that is off, the helpers box, you. */
-type FrameKind = 'agent' | 'off' | 'helpers' | 'you';
+/**
+ * How a stage node looks at rest: an agent, the lead (the controller, framed in ink like the
+ * logo's centre), an agent stage that is off, the helpers box, you. Square corners throughout
+ * (DESIGN.md, "Agent views"); lime only for the selection.
+ */
+type FrameKind = 'agent' | 'lead' | 'off' | 'helpers' | 'you';
 
 const FRAME_REST: Record<FrameKind, string> = {
   agent: 'border-line bg-panel shadow-card hover:border-line-strong hover:shadow-raised',
+  lead: 'border-ink/70 bg-panel shadow-card hover:border-ink hover:shadow-raised',
   off: 'border-dashed border-line-strong bg-sunken',
   // A shade between the well and the cards, so the helper rows inside read as cards on it.
   helpers:
     'border-line bg-[color-mix(in_srgb,var(--color-sunken)_55%,var(--color-panel))] hover:border-line-strong',
-  you: 'border-accent/35 bg-accent-soft hover:border-accent/60',
+  you: 'border-line-strong bg-sunken hover:border-dim/60',
 };
 
 const FRAME_SELECTED: Record<FrameKind, string> = {
-  agent: 'border-accent bg-panel shadow-raised',
-  off: 'border-accent bg-sunken',
-  helpers: 'border-accent bg-[color-mix(in_srgb,var(--color-sunken)_55%,var(--color-panel))]',
-  you: 'border-accent bg-accent-soft',
+  agent: 'border-accent-fill-edge bg-panel shadow-raised',
+  lead: 'border-ink bg-panel shadow-raised',
+  off: 'border-accent-fill-edge bg-sunken',
+  helpers:
+    'border-accent-fill-edge bg-[color-mix(in_srgb,var(--color-sunken)_55%,var(--color-panel))]',
+  you: 'border-accent-fill-edge bg-sunken',
 };
 
 function frame(selected: boolean, kind: FrameKind = 'agent'): string {
-  return `relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-card border px-3 py-2.5 text-left text-ink transition-[border-color,box-shadow,background-color] duration-150 ${
-    selected ? `${FRAME_SELECTED[kind]} ring-3 ring-accent/20` : FRAME_REST[kind]
+  return `relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-[2px] border px-3 py-2.5 text-left text-ink transition-[border-color,box-shadow,background-color] duration-150 ${
+    selected
+      ? `${FRAME_SELECTED[kind]} ring-3 ring-accent-fill/55 dark:ring-accent-fill/25`
+      : FRAME_REST[kind]
   }`;
 }
 
@@ -352,7 +361,10 @@ export function AgentNodeView({ data, id }: NodeProps<AgentNode>) {
   const off = !data.enabled;
   return (
     <div
-      className={frame(selected === data.stage, off ? 'off' : 'agent')}
+      className={frame(
+        selected === data.stage,
+        off ? 'off' : data.role === 'lead' ? 'lead' : 'agent',
+      )}
       data-testid={`wf-node-${id}`}
       data-role={data.role}
       data-enabled={data.enabled ? 'true' : 'false'}
@@ -414,14 +426,17 @@ export function HelperNodeView({ data }: NodeProps<HelperNode>) {
   const { selected } = useContext(WorkflowGraphContext);
   return (
     <div
-      className={`flex h-full w-full items-center justify-between gap-2 rounded-control border bg-panel px-2.5 text-caption shadow-card transition-colors duration-150 ${
-        selected === 'helpers' ? 'border-accent/50' : 'border-line hover:border-line-strong'
+      className={`flex h-full w-full items-center justify-between gap-2 rounded-[2px] border bg-panel px-2.5 text-caption shadow-card transition-colors duration-150 ${
+        selected === 'helpers'
+          ? 'border-accent-fill-edge/60'
+          : 'border-line hover:border-line-strong'
       }`}
       data-testid={`wf-helper-${data.index}`}
     >
       <Handles only={['in-left', 'out-right']} />
       <span className="flex items-center gap-1.5 font-medium">
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent/70" />
+        {/* A small square node, neutral: this is the setup, not an agent at work. */}
+        <span aria-hidden="true" className="size-1.5 shrink-0 bg-dim/70" />
         {C.helperName(data.index)}
       </span>
       {data.nested ? (
@@ -439,7 +454,7 @@ export function HelperNodeView({ data }: NodeProps<HelperNode>) {
 export function GateNodeView(_: NodeProps<GateNode>) {
   return (
     <div
-      className="relative flex h-full w-full flex-col justify-center gap-1 rounded-card border border-accent/35 bg-accent-soft px-3 py-2.5 text-ink"
+      className="relative flex h-full w-full flex-col justify-center gap-1 rounded-[2px] border border-line-strong bg-sunken px-3 py-2.5 text-ink"
       data-testid="wf-node-approve"
     >
       <Handles />

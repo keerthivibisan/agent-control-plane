@@ -19,8 +19,10 @@ import { budgetView, buildAgentTree, isAgentLive, type AgentNode } from './run-s
 const C = CONTROL_COPY.agents;
 const T = CONTROL_COPY.technical;
 
+// Neutral within the budget (lime marks only what works or is selected); warning and danger
+// only for the real states.
 const BAR: Record<ReturnType<typeof budgetView>['level'], string> = {
-  ok: 'bg-accent',
+  ok: 'bg-dim',
   near: 'bg-warning',
   over: 'bg-danger',
 };
@@ -118,7 +120,11 @@ function AgentCard({
     <article
       aria-label={agent.role}
       data-testid={`agent-${agent.id}`}
-      className="relative flex max-w-2xl flex-col gap-2.5 rounded-card border border-line bg-panel px-4 py-3 shadow-card transition-colors hover:border-line-strong"
+      // Square, the lead framed in ink as the controller, a lime top edge while it works
+      // (DESIGN.md, "Agent views").
+      className={`relative flex max-w-2xl flex-col gap-2.5 rounded-[2px] border bg-panel px-4 py-3 transition-colors ${
+        lead ? 'border-ink/70 hover:border-ink' : 'border-line hover:border-line-strong'
+      } ${live ? 'shadow-[inset_0_3px_0_var(--color-accent-fill)]' : 'shadow-card'}`}
     >
       <header className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-40 flex-1">
@@ -203,7 +209,7 @@ function Branch({ node, ...rest }: { node: AgentNode } & Omit<CardProps, 'agent'
           {node.children.map((c) => (
             <li
               key={c.agent.id}
-              className={`${BRANCH} ${VERTICAL} ${LAST_VERTICAL} ${ELBOW} before:border-accent/45 after:border-accent/45`}
+              className={`${BRANCH} ${VERTICAL} ${LAST_VERTICAL} ${ELBOW} before:border-line-strong after:border-line-strong`}
             >
               <Branch node={c} {...rest} />
             </li>

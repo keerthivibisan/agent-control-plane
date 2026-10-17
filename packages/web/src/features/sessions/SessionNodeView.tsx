@@ -23,10 +23,16 @@ export function SessionNodeView({ data }: NodeProps<SessionNode>) {
   const hasLinks = data.childEdgeCount > 0;
   return (
     <div
-      className={`rounded-card border bg-panel px-3.5 py-3 text-ink shadow-card ${
+      // Square, like every agent node (DESIGN.md, "Agent views"): the session in focus has the
+      // brand's lime ring, the root (the session that started the others) an ink frame.
+      className={`rounded-[2px] border bg-panel px-3.5 py-3 text-ink shadow-card ${
         data.isFocus
-          ? 'border-accent ring-3 ring-accent/20'
-          : 'border-line hover:border-line-strong'
+          ? `ring-3 ring-accent-fill/55 dark:ring-accent-fill/25 ${
+              data.isRoot ? 'border-ink' : 'border-accent-fill-edge'
+            }`
+          : data.isRoot
+            ? 'border-ink/70 hover:border-ink'
+            : 'border-line hover:border-line-strong'
       }`}
       style={{ width: NODE_WIDTH }}
       data-testid={`node-${s.id}`}
