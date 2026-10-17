@@ -46,6 +46,10 @@ const booted = await boot({
   adapter: fake.adapter,
   logger,
   staticDir: STATIC_DIR,
+  // workspace.spec.ts drives the flow of ticket runs started before ADR-0021 (the owner merges
+  // each change into main; the stages after it), which such runs keep. The review loop needs its
+  // own browser flow (RL-D/RL-V); set ACP_E2E_REVIEW_LOOP=1 to serve loop runs instead.
+  board: { legacyTicketRuns: process.env['ACP_E2E_REVIEW_LOOP'] !== '1' },
 });
 
 function agentView(a: FakeAgent) {

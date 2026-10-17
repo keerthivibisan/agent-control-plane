@@ -82,6 +82,7 @@ export interface BootOptions {
   /** Live mode only: an (empty) temp Claude dir, never the real ~/.claude. */
   claudeDir?: string;
   control?: StartOptions['control'];
+  board?: StartOptions['board'];
 }
 
 export interface Booted {
@@ -112,6 +113,7 @@ export async function boot(options: BootOptions): Promise<Booted> {
     git: createGitRunner({ env: GIT_ENV }),
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
     ...(options.control !== undefined && { control: options.control }),
+    ...(options.board !== undefined && { board: options.board }),
   });
   const base = `http://127.0.0.1:${server.port}`;
   const read = async (res: Response) => ({

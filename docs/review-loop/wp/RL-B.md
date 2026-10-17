@@ -38,7 +38,17 @@
 | 2026-10-17 | Rebased on `feature/ui-refresh` with RL-A; db: ticket key/branch snapshot | `8efe3f8` | format ✓ lint ✓ typecheck ✓ test 2430/2430 ✓ build ✓ |
 | 2026-10-17 | server: review loop wiring, ticket-branch routes, gate modes, DTOs        | `514b321` | format ✓ lint ✓ typecheck ✓ test 2430/2430 ✓ build ✓ |
 
-(Commit ids before the rebase on RL-A were rewritten by it; the ids above are the rebased ones.)
+| 2026-10-17 | Review fix: lead hears of approval only after the ticket branch exists | `1181575` | format ✓ lint ✓ typecheck ✓ test 2432/2432 ✓ build ✓ |
+| 2026-10-17 | Rebased on `b6f5511` (RL-D); workspace e2e server serves legacy runs | (this) | format ✓ lint ✓ typecheck ✓ test 2506/2506 ✓ build ✓ |
+
+(Commit ids were rewritten by each rebase; ids before the last rebase are the ones at the time.)
+
+**Web e2e** (`pnpm --filter @acp/web test:e2e`, `ACP_E2E_PORT=9151 ACP_E2E_CONTROL_PORT=9161`, on
+`feature/ui-refresh` `b6f5511` with RL-D): 59/59 passed, twice in a row. `workspace.spec.ts`
+drives the legacy owner flow (merge each change into main), so its e2e server now starts legacy
+ticket runs (`ACP_E2E_REVIEW_LOOP=1` serves loop runs); with loop runs it got past the
+`start_agent` race and then stopped at `request_review` ("Decide every change first"), as the
+loop requires. A browser flow on the real loop routes is a follow-up for RL-D/RL-V.
 
 ## Handoff notes
 
