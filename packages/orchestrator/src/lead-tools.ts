@@ -1,13 +1,21 @@
-import { LEAD_TOOL_NAMES, LeadToolInputs, REVIEW_LOOP_TOOL_NAMES } from '@acp/core';
+import { CHANGE_DECISION_TOOL_NAMES, LEAD_TOOL_NAMES, LeadToolInputs } from '@acp/core';
 import type { AgentRoleKind, LeadToolName } from '@acp/core';
 import type { z } from 'zod';
+import { beginChangeMerge, recordChangeDecision } from './change-commands.js';
 import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
+import { changeSummary } from './loop.js';
 import { submitPlan } from './plan.js';
 import { checkRunActive, checkStartAgent, isAgentOverBudget, mayStartHelpers } from './policy.js';
-import { postReview } from './review-tool.js';
-import { isSeparatePlanner, launchFields } from './stages.js';
+import { postReview, submitReview } from './review-tool.js';
+import { cleanSummary } from './summary.js';
+import {
+  hasReviewableChange,
+  isChangeReviewer,
+  isSeparatePlanner,
+  launchFields,
+} from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
@@ -17,7 +25,8 @@ export interface LeadToolCall {
   /**
    * The agent that made the call: the lead, or a helper allowed to start helpers (depth 2), which
    * gets the child-management tools for its own children only (ADR-0013 amendment). Also the
-   * planner (`submit_plan` only) and the reviewer (`post_review` only), ADR-0019.
+   * planner (`submit_plan` only) and the reviewer (`post_review` only), ADR-0019; and a change
+   * reviewer (`submit_review` only), ADR-0021.
    */
   callerAgentRunId: string;
   /** Tool name as the model sent it; anything outside `LeadToolInputs` is refused. */
@@ -51,9 +60,11 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
 /**
  * The control-plane tools one agent may use, for its `ManagedAgentSpec` (ADR-0019; the engine
  * still checks every call):
- * - lead: every lead tool; in separate planner mode, without `submit_plan`;
- * - planner: `submit_plan`; reviewer: `post_review`;
- * - worker: the child-management tools when it may start helpers (depth 2), else none;
+ * - lead: every lead tool; in separate planner mode, without `submit_plan`; the change tools
+ *   (ADR-0021) only in a run with the review loop;
+ * - planner: `submit_plan`; reviewer: `post_review`; change reviewer: `submit_review`;
+ * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
+ *   rework turn (ADR-0021);
  * - tester: none.
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
@@ -62,19 +73,21 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
   const kind: AgentRoleKind = agent.kind;
   switch (kind) {
     case 'lead':
-      // RL-0 placeholder: the review-loop tools (ADR-0021) are offered once RL-A handles them.
       return LEAD_TOOL_NAMES.filter(
         (n) =>
           n !== 'post_review' &&
-          !REVIEW_LOOP_TOOL_NAMES.includes(n) &&
+          n !== 'submit_review' &&
+          (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
     case 'planner':
       return ['submit_plan'];
     case 'reviewer':
-      return ['post_review'];
+      return isChangeReviewer(agent) ? ['submit_review'] : ['post_review'];
     case 'worker':
-      return mayStartHelpers(state, agent) ? CHILD_MANAGEMENT_TOOLS : [];
+      return agent.change === undefined && mayStartHelpers(state, agent)
+        ? CHILD_MANAGEMENT_TOOLS
+        : [];
     case 'tester':
       return [];
   }
@@ -104,18 +117,38 @@ export function leadToolCall(
   if (caller === undefined) {
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
+  const loop = state.integration !== undefined;
   if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
-    // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review.
+    // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
+    // reviewer's (ADR-0021) is submit_review.
+    const changeReviewer = isChangeReviewer(caller);
     const own =
       (caller.kind === 'planner' && call.name === 'submit_plan') ||
-      (caller.kind === 'reviewer' && call.name === 'post_review');
-    if (!own) return { ok: false, refusal: refusal('not-lead', NOT_YOUR_TOOL[caller.kind]) };
+      (caller.kind === 'reviewer' &&
+        call.name === (changeReviewer ? 'submit_review' : 'post_review'));
+    if (!own) {
+      return {
+        ok: false,
+        refusal: refusal(
+          'not-lead',
+          changeReviewer
+            ? 'A change reviewer can only submit its review (submit_review).'
+            : NOT_YOUR_TOOL[caller.kind],
+        ),
+      };
+    }
   } else if (call.name === 'post_review') {
     return { ok: false, refusal: refusal('not-lead', 'Only the reviewer can post a review.') };
+  } else if (call.name === 'submit_review' && loop) {
+    return {
+      ok: false,
+      refusal: refusal('not-lead', 'Only a change reviewer can submit a change review.'),
+    };
   } else if (caller.kind !== 'lead') {
-    // A helper may manage its own children only when the run allows depth 2 (ADR-0013 amendment).
+    // A helper may manage its own children only when the run allows depth 2 (ADR-0013 amendment),
+    // and never in a rework turn (ADR-0021).
     const childTool = CHILD_MANAGEMENT_TOOLS.includes(call.name);
-    if (!childTool || !mayStartHelpers(state, caller)) {
+    if (!childTool || !mayStartHelpers(state, caller) || caller.change !== undefined) {
       return {
         ok: false,
         refusal:
@@ -135,6 +168,14 @@ export function leadToolCall(
     a.kind === 'worker' && (caller.kind === 'lead' || a.parentAgentRunId === caller.id);
   const findManaged = (agentId: string): EngineAgent | undefined =>
     state.agents.find((a) => a.id === agentId && manages(a));
+  /** ADR-0021: the lead's change tools act on a helper's or the tester's change. */
+  const findChangeOwner = (agentId: string): EngineAgent | undefined =>
+    state.agents.find((a) => a.id === agentId && hasReviewableChange(a.kind));
+  /** Loop runs: the caller's "Latest" line names what it did (ADR-0021 fix). */
+  const humanized = (text: string) => (d: { agent: (id: string) => EngineAgent | undefined }) => {
+    const self = d.agent(caller.id);
+    if (self !== undefined) self.latestActivity = cleanSummary(text, 'Working');
+  };
 
   switch (call.name) {
     case 'start_agent': {
@@ -168,6 +209,8 @@ export function leadToolCall(
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
+        // ADR-0021 §4: helpers of a loop run start from the ticket branch's tip.
+        const branch = d.integration?.ticketBranch ?? null;
         d.effects.push({
           type: 'start-agent',
           agentRunId: id,
@@ -175,7 +218,9 @@ export function leadToolCall(
           role,
           ...launchFields(task, d.workflow, 'worker'),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
+          ...(branch !== null ? { fromBranch: branch } : {}),
         });
+        if (d.integration !== undefined) humanized(`Started ${role}`)(d);
         return { value: `Started agent ${id} (${role}).` };
       });
     }
@@ -205,7 +250,11 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
-      return readOnly(state, describeAgent(target));
+      if (!loop) return readOnly(state, describeAgent(target));
+      return applyCommand(state, ctx, (d) => {
+        humanized(`Checked on ${target.role}`)(d);
+        return { value: describeAgent(target) };
+      });
     }
 
     case 'message_agent': {
@@ -217,6 +266,15 @@ export function leadToolCall(
       if (target === undefined) return unknownWorker();
       if (!isLiveAgentStatus(target.status)) {
         return { ok: false, refusal: refusal('agent-not-live', 'That agent has stopped.') };
+      }
+      if (target.status === 'AWAITING_REVIEW') {
+        return {
+          ok: false,
+          refusal: refusal(
+            'agent-not-live',
+            'That helper finished its turn; its change is under review. Use request_rework to send it back with comments.',
+          ),
+        };
       }
       if (target.awaitingHelpers === true) {
         return {
@@ -240,6 +298,7 @@ export function leadToolCall(
       return applyCommand(state, ctx, (d) => {
         // Sent, never stored: lead-to-worker messages are worker conversation (ADR-0015).
         d.effects.push({ type: 'send-to-agent', agentRunId: target.id, text });
+        if (d.integration !== undefined) humanized(`Messaged ${target.role}`)(d);
         return { value: `Message sent to ${target.role}.` };
       });
     }
@@ -249,13 +308,24 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
-      return withReply(stopAgent(state, target.id, ctx), `Stopped ${target.role}.`);
+      const stopped = stopAgent(state, target.id, ctx);
+      if (stopped.ok && loop) {
+        const lead = stopped.state.agents.find((a) => a.id === caller.id);
+        if (lead !== undefined)
+          lead.latestActivity = cleanSummary(`Stopped ${target.role}`, 'Working');
+      }
+      return withReply(stopped, `Stopped ${target.role}.`);
     }
 
     case 'request_review': {
       const parsed = LeadToolInputs.request_review.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      return withReply(requestReview(state, ctx), 'The owner can now review the changes.');
+      return withReply(
+        requestReview(state, ctx),
+        loop
+          ? 'Handed over. The final review and tests, if the project runs them, work on the ticket branch and their findings come to you. Then the owner merges the ticket branch.'
+          : 'The owner can now review the changes.',
+      );
     }
 
     case 'submit_plan': {
@@ -270,22 +340,99 @@ export function leadToolCall(
       return postReview(state, caller.id, parsed.data.text, ctx);
     }
 
-    // RL-0 placeholder (ADR-0021): the review-loop tools exist in the contract, but no agent is
-    // offered them and no run has the loop yet. RL-A replaces this with the real handlers.
-    case 'view_change':
-    case 'merge_change':
-    case 'request_rework':
-    case 'discard_change':
-    case 'ask_owner':
-    case 'submit_review':
-      return {
-        ok: false,
-        refusal: refusal(
-          'run-not-active',
-          'This run has no review loop, so this tool is unavailable.',
-        ),
-      };
+    // ADR-0021 review loop. Runs without it never offer these tools; a call is refused.
+    case 'view_change': {
+      const parsed = LeadToolInputs.view_change.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target?.change === undefined) return unknownChange();
+      // The summary only; the server appends the diff (`viewChangeReply`, at most 32 KiB).
+      const summary = changeSummary(state, target);
+      return applyCommand(state, ctx, (d) => {
+        humanized(`Looked at ${target.role}'s change`)(d);
+        return { value: summary };
+      });
+    }
+
+    case 'merge_change': {
+      const parsed = LeadToolInputs.merge_change.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target === undefined) return unknownChange();
+      // The server merges on `merge-change`, then answers the lead with the result's text.
+      return beginChangeMerge(state, target.id, { by: 'lead' }, ctx);
+    }
+
+    case 'request_rework': {
+      const parsed = LeadToolInputs.request_rework.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target === undefined) return unknownChange();
+      return recordChangeDecision(
+        state,
+        target.id,
+        { decision: 'rework', by: 'lead', comments: parsed.data.comments },
+        ctx,
+      );
+    }
+
+    case 'discard_change': {
+      const parsed = LeadToolInputs.discard_change.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target === undefined) return unknownChange();
+      return recordChangeDecision(
+        state,
+        target.id,
+        { decision: 'discard', by: 'lead', comments: parsed.data.reason },
+        ctx,
+      );
+    }
+
+    case 'ask_owner': {
+      const parsed = LeadToolInputs.ask_owner.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target === undefined) return unknownChange();
+      return recordChangeDecision(
+        state,
+        target.id,
+        { decision: 'ask-owner', by: 'lead', comments: parsed.data.question },
+        ctx,
+      );
+    }
+
+    case 'submit_review': {
+      if (!loop) return noLoopTool();
+      const parsed = LeadToolInputs.submit_review.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      return submitReview(state, caller.id, parsed.data, ctx);
+    }
   }
+}
+
+/** A review-loop tool called in a run without the loop (the same text since RL-0). */
+function noLoopTool(): EngineResult<string> {
+  return {
+    ok: false,
+    refusal: refusal('run-not-active', 'This run has no review loop, so this tool is unavailable.'),
+  };
+}
+
+function unknownChange(): EngineResult<string> {
+  return {
+    ok: false,
+    refusal: refusal(
+      'unknown-agent',
+      'No helper with a change in this run has that id.',
+      'change-not-found',
+    ),
+  };
 }
 
 function describeAgent(a: EngineAgent): string {

@@ -1,8 +1,9 @@
 import { defaultProjectWorkflow, WORKFLOW_STAGES } from '@acp/core';
 import type { ProjectWorkflow, WorkflowStageId } from '@acp/core';
 import type { RunWorkflowDto, WorkflowStageState } from '@acp/core/api';
+import { isFinalChangeState } from './loop.js';
 import { approvedPlan } from './plan-read.js';
-import { anyHelperMerged, nextStage, stageOf } from './stages.js';
+import { anyHelperMerged, hasReviewableChange, nextStage, stageOf } from './stages.js';
 import type { EngineAgent, RunState } from './state.js';
 import { isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
 
@@ -22,7 +23,64 @@ export function deriveRunWorkflow(state: RunState, workflow?: ProjectWorkflow): 
       state: stageState(view, wf, stage),
       agentRunIds: agentsOf(view, wf, stage).map((a) => a.id),
     })),
+    ...(state.integration !== undefined ? { review: reviewCounts(state) } : {}),
   };
+}
+
+/** ADR-0021: how many changes are in each part of the review loop (the graph's review stage). */
+function reviewCounts(state: RunState): NonNullable<RunWorkflowDto['review']> {
+  const counts = {
+    waiting: 0,
+    inReview: 0,
+    rework: 0,
+    needsOwner: 0,
+    merged: 0,
+    discarded: 0,
+    noChanges: 0,
+    reworkRounds: 0,
+  };
+  for (const agent of state.agents) {
+    const change = agent.change;
+    if (!hasReviewableChange(agent.kind) || change === undefined) continue;
+    counts.reworkRounds += change.round;
+    switch (change.state) {
+      case 'sealing':
+      case 'ready':
+        counts.waiting++;
+        break;
+      case 'reviewing':
+      case 'decision':
+        counts.inReview++;
+        break;
+      case 'rework':
+        counts.rework++;
+        break;
+      case 'needs-owner':
+        counts.needsOwner++;
+        break;
+      case 'merged':
+        counts.merged++;
+        break;
+      case 'discarded':
+        counts.discarded++;
+        break;
+      case 'no-changes':
+        counts.noChanges++;
+        break;
+    }
+  }
+  return counts;
+}
+
+/** ADR-0021: the review stage of a loop run, from its changes. */
+function loopReviewState(state: RunState, stopped: boolean): WorkflowStageState {
+  const changes = state.agents.flatMap((a) =>
+    hasReviewableChange(a.kind) && a.change !== undefined ? [a.change] : [],
+  );
+  if (changes.some((c) => c.state === 'needs-owner')) return stopped ? 'skipped' : 'needs-you';
+  if (changes.some((c) => !isFinalChangeState(c.state))) return stopped ? 'skipped' : 'active';
+  if (changes.length > 0) return 'done';
+  return stopped || state.run.status === 'REVIEW' ? 'skipped' : 'waiting';
 }
 
 function agentsOf(state: RunState, wf: ProjectWorkflow, stage: WorkflowStageId): EngineAgent[] {
@@ -92,6 +150,8 @@ function stageState(
       if (isTicketRun && !approved)
         return stopped || status === 'NEEDS_REVIEW' ? 'skipped' : 'waiting';
       if (lead === undefined) return 'skipped';
+      // ADR-0021: after the handover the lead only waits for the final stages and the owner.
+      if (state.integration?.handedOver === true && isLiveAgentStatus(lead.status)) return 'done';
       // The engine stops the lead once the helpers' work is reviewed; its stage is then done.
       if (lead.status === 'CANCELLED' && (status === 'REVIEW' || status === 'COMPLETED')) {
         return 'done';
@@ -100,12 +160,25 @@ function stageState(
     }
 
     case 'helpers': {
+      // ADR-0021: a helper waiting for its change to be decided has done its work.
+      if (state.integration !== undefined && workers.length > 0) {
+        const working = workers.filter((w) => w.status !== 'AWAITING_REVIEW');
+        return working.some((w) => isLiveAgentStatus(w.status))
+          ? groupState(state, working)
+          : groupState(
+              state,
+              workers.map((w) =>
+                w.status === 'AWAITING_REVIEW' ? { ...w, status: 'SUCCEEDED' } : w,
+              ),
+            );
+      }
       if (workers.length > 0) return groupState(state, workers);
       // No helper (yet): the lead may still start some; once it is past that, none ran.
       return stopped || status === 'REVIEW' || status === 'NEEDS_REVIEW' ? 'skipped' : 'waiting';
     }
 
     case 'review': {
+      if (state.integration !== undefined) return loopReviewState(state, stopped);
       if (workers.length === 0) {
         return stopped || status === 'REVIEW' || status === 'NEEDS_REVIEW' ? 'skipped' : 'waiting';
       }
@@ -121,6 +194,15 @@ function stageState(
       if (!wf.stages[stage].enabled) return 'off';
       const last = agents[agents.length - 1];
       if (last !== undefined) {
+        // ADR-0021: the tester's change goes through the review loop.
+        const testerChange = stage === 'unit-tests' ? last.change : undefined;
+        if (testerChange !== undefined) {
+          if (testerChange.state === 'needs-owner') return stopped ? 'skipped' : 'needs-you';
+          if (!isFinalChangeState(testerChange.state)) {
+            return stopped ? 'skipped' : agentState(state, last);
+          }
+          return testerChange.state === 'discarded' ? 'skipped' : 'done';
+        }
         if (isLiveAgentStatus(last.status)) return agentState(state, last);
         if (stage === 'unit-tests') {
           if (last.review === 'pending' || last.review === null)

@@ -187,6 +187,12 @@ export function decidePlan(
     d.effects.push({ type: 'plan-decided', planId: plan.id, status: 'approved' });
     const limits = runLimits(d);
     const { maxConcurrentHelpers } = limits;
+    // ADR-0021 §4: the ticket branch is created at approval, before any helper can start (in
+    // both planner modes; `start_agent` waits for `ticketBranchCreated`).
+    const loop = d.integration !== undefined;
+    if (d.integration !== undefined) {
+      d.effects.push({ type: 'create-ticket-branch', ticketKey: d.integration.ticketKey });
+    }
     if (separate && lead !== undefined) {
       // The planner's work is done (it is read-only, so it never waits for a tool decision).
       d.endAgent(author, author.status === 'WAITING_APPROVAL' ? 'CANCELLED' : 'SUCCEEDED', true);
@@ -198,7 +204,7 @@ export function decidePlan(
         agentRunId: lead.id,
         kind: 'lead',
         role: lead.role,
-        ...launchFields(approvedPlanBrief(brief, plan, note, limits), d.workflow, 'lead'),
+        ...launchFields(approvedPlanBrief(brief, plan, note, limits, loop), d.workflow, 'lead'),
       });
       return { value: { ...plan } };
     }
@@ -208,7 +214,7 @@ export function decidePlan(
       text: [
         `The owner approved plan v${plan.version}.`,
         note.length > 0 ? `Owner's note: ${note}` : null,
-        `Start the helpers the plan needs with start_agent (at most ${maxConcurrentHelpers} at once), then call request_review when their work is done.`,
+        startLine(maxConcurrentHelpers, loop),
       ]
         .filter((l) => l !== null)
         .join('\n\n'),
@@ -266,12 +272,28 @@ export function ticketOrchestratorPrompt(ticket: TicketBriefFields, limits: RunL
   ].join('\n\n');
 }
 
+/**
+ * What the lead does after approval. With the review loop (ADR-0021 §3) it decides each change as
+ * it is reviewed and hands over once every change is decided.
+ */
+function startLine(maxConcurrentHelpers: number, loop: boolean): string {
+  if (!loop) {
+    return `Start the helpers the plan needs with start_agent (at most ${maxConcurrentHelpers} at once), then call request_review when their work is done.`;
+  }
+  return [
+    `Start the helpers the plan needs with start_agent (at most ${maxConcurrentHelpers} at once).`,
+    'When a helper finishes, its change is reviewed and you get a message. Decide each change with merge_change (into the ticket branch), request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows a change.',
+    'Call request_review once every change is decided. The owner then merges the ticket branch once.',
+  ].join(' ');
+}
+
 /** The lead's first message after approval in separate mode: its brief and the approved plan. */
 function approvedPlanBrief(
   brief: string,
   plan: TicketPlan,
   note: string,
   limits: RunLimits,
+  loop: boolean,
 ): string {
   return [
     brief,
@@ -283,7 +305,7 @@ function approvedPlanBrief(
       })
       .join('\n'),
     note.length > 0 ? `Owner's note: ${note}` : null,
-    `Start the helpers the plan needs with start_agent (at most ${limits.maxConcurrentHelpers} at once), then call request_review when their work is done.`,
+    startLine(limits.maxConcurrentHelpers, loop),
   ]
     .filter((l) => l !== null)
     .join('\n\n');

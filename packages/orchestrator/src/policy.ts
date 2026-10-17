@@ -5,7 +5,7 @@ import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
 import { countsAsHelper, hasReviewableChange } from './stages.js';
 import { agentDepth } from './tree.js';
-import { isLiveAgentStatus } from './transitions.js';
+import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 import type { EngineAgent, RunState } from './state.js';
 
 /**
@@ -100,11 +100,33 @@ export function checkStartAgent(
   if (isAgentOverBudget(caller)) {
     return refusal('over-budget', 'The calling agent reached its budget; the owner must raise it.');
   }
+  // ADR-0021: a helper's rework turn never manages helpers (no `canStartHelpers`).
+  if (caller.change !== undefined) {
+    return refusal('depth-exceeded', 'A rework turn cannot start helpers.');
+  }
+  const loop = state.integration;
+  if (loop !== undefined) {
+    if (loop.handedOver) {
+      return refusal(
+        'run-not-active',
+        'You handed the run over (request_review); no new helper can start.',
+        'handed-over',
+      );
+    }
+    if (loop.ticketBranch === null) {
+      return refusal(
+        'run-not-active',
+        'The ticket branch is still being created; try again in a moment.',
+        'ticket-branch-pending',
+      );
+    }
+  }
 
   const { maxConcurrentHelpers } = runLimits(state);
-  // The reviewer and the tester count as one helper each (ADR-0019 §3).
+  // The reviewer and the tester count as one helper each (ADR-0019 §3); so does a change reviewer
+  // (ADR-0021). A helper waiting for its change to be decided has no process and no slot.
   const liveWorkers = state.agents.filter(
-    (a) => countsAsHelper(a.kind) && isLiveAgentStatus(a.status),
+    (a) => countsAsHelper(a.kind) && isActiveAgentStatus(a.status),
   ).length;
   if (liveWorkers >= maxConcurrentHelpers) {
     return refusal(
@@ -120,6 +142,13 @@ export function checkStartAgent(
  * (ADR-0013 §5).
  */
 export function checkReviewAction(state: RunState, agentRunId: string): Refusal | null {
+  if (state.integration !== undefined) {
+    return refusal(
+      'review-not-allowed',
+      'This run uses the review loop: decide each change with the change actions, and the ticket branch at the end.',
+      'legacy-review',
+    );
+  }
   if (state.run.status !== 'REVIEW' && state.run.status !== 'NEEDS_REVIEW') {
     return refusal('review-not-allowed', 'Changes can be reviewed once every agent has stopped.');
   }

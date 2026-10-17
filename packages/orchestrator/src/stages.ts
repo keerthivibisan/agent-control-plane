@@ -1,3 +1,4 @@
+import { reviewStageOf } from '@acp/core';
 import type {
   AgentRoleKind,
   OrchestrationRun,
@@ -6,7 +7,7 @@ import type {
   WorkflowStageId,
 } from '@acp/core';
 import { approvedPlan } from './plan-read.js';
-import type { EngineAgent } from './state.js';
+import type { EngineAgent, RunIntegration } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
@@ -29,6 +30,7 @@ interface WorkflowView {
 interface BriefView extends AgentsView {
   readonly run: Pick<OrchestrationRun, 'title'>;
   readonly plans?: readonly TicketPlan[] | undefined;
+  readonly integration?: RunIntegration | undefined;
 }
 
 /** The stages that start an agent after the owner merged the helpers' work. */
@@ -75,6 +77,19 @@ export function isPostMergeRole(kind: AgentRoleKind): boolean {
 }
 
 /**
+ * A change reviewer (ADR-0021 §3): a `reviewer` that reviews one helper's change in the review
+ * loop (stage `review`), as opposed to the final code reviewer (stage `code-review`).
+ */
+export function isChangeReviewer(agent: Pick<EngineAgent, 'kind' | 'reviewsAgentRunId'>): boolean {
+  return agent.kind === 'reviewer' && agent.reviewsAgentRunId !== undefined;
+}
+
+/** The final code reviewer or the tester: the agents a post-merge stage starts (ADR-0019). */
+export function isStageAgent(agent: Pick<EngineAgent, 'kind' | 'reviewsAgentRunId'>): boolean {
+  return isPostMergeRole(agent.kind) && !isChangeReviewer(agent);
+}
+
+/**
  * Roles that only read and never ask to edit or run anything (ADR-0019). The lead is read-only
  * too, but the server denies its tool uses itself (ADR-0013 §2), so it is not listed here.
  */
@@ -87,8 +102,9 @@ export function anyHelperMerged(state: AgentsView): boolean {
   return state.agents.some((a) => a.kind === 'worker' && a.review === 'merged');
 }
 
+/** The last stage agent of a kind; change reviewers (ADR-0021) are not the code-review stage. */
 function lastOfKind(state: AgentsView, kind: AgentRoleKind): EngineAgent | undefined {
-  const all = state.agents.filter((a) => a.kind === kind);
+  const all = state.agents.filter((a) => a.kind === kind && !isChangeReviewer(a));
   return all[all.length - 1];
 }
 
@@ -281,6 +297,26 @@ export function launchFields(
   };
 }
 
+/**
+ * The launch fields of a change reviewer (ADR-0021 §3): the review stage's model, skill and agent
+ * file (`reviewStageOf`), present only when set, like `launchFields`.
+ */
+export function changeReviewerLaunchFields(
+  prompt: string,
+  workflow: ProjectWorkflow | undefined,
+): { prompt: string; model?: string; skills?: string[]; agent?: string } {
+  const review = workflow === undefined ? null : reviewStageOf(workflow);
+  const model = review?.model ?? null;
+  const skill = review?.skill ?? null;
+  const agent = review?.agent ?? null;
+  return {
+    prompt: skill === null ? prompt : `${prompt}\n\n${skillLine(skill)}`,
+    ...(model !== null ? { model } : {}),
+    ...(skill !== null ? { skills: [skill] } : {}),
+    ...(agent !== null ? { agent } : {}),
+  };
+}
+
 // ------------------------------------------------------------------ post-merge briefs
 
 /** The longest reviewer finding stored: the ticket comment limit (`TicketCommentSchema.body`). */
@@ -307,13 +343,16 @@ function mergedWork(state: AgentsView): string {
 
 /** The reviewer's fixed brief: what was merged, and how to report (ADR-0019 §2). */
 export function reviewerBrief(state: BriefView): string {
+  const branch = state.integration?.ticketBranch ?? null;
   return [
     `Final code review for "${state.run.title}".`,
-    'The owner merged the helpers’ changes into the main branch. Your working folder is a temporary read-only checkout of the merged result.',
+    branch === null
+      ? 'The owner merged the helpers’ changes into the main branch. Your working folder is a temporary read-only checkout of the merged result.'
+      : `The lead merged the helpers’ reviewed changes into the ticket branch ${branch}. Your working folder is a temporary read-only checkout of its tip. The owner merges the branch into the main branch after your review.`,
     ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
     'Read the changed code. Look for bugs, risky changes, missing tests and unclear code. You cannot edit files or run commands.',
-    `Post your findings with post_review as plain text (up to ${REVIEW_POST_MAX_CHARS} characters each, at most ${MAX_REVIEW_POSTS} posts). They become comments on the ticket; they do not block or merge anything. When you have posted, you are done.`,
+    `Post your findings with post_review as plain text (up to ${REVIEW_POST_MAX_CHARS} characters each, at most ${MAX_REVIEW_POSTS} posts). They become comments on the ticket${branch === null ? '' : ' and are sent to the lead'}; they do not block or merge anything. When you have posted, you are done.`,
   ].join('\n\n');
 }
 
@@ -324,6 +363,30 @@ export function testerBrief(state: BriefView): string {
     ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
     'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.',
-    'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.',
+    (state.integration?.ticketBranch ?? null) === null
+      ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
+      : 'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes, after the project’s checks.',
+  ].join('\n\n');
+}
+
+/** The longest helper task quoted in a change reviewer's brief. */
+const BRIEF_TASK_MAX_CHARS = 2000;
+
+/**
+ * A change reviewer's fixed brief (ADR-0021 §3). The server appends the change's diff (at most
+ * 64 KiB, sent and never stored); the reviewer reads the detached checkout of the sealed commit.
+ */
+export function changeReviewerBrief(
+  state: BriefView,
+  helper: Pick<EngineAgent, 'role' | 'task'>,
+  round: number,
+): string {
+  const task = helper.task ?? '(no task text)';
+  return [
+    `Review one helper’s change for "${state.run.title}"${round > 0 ? ` (after rework round ${round})` : ''}.`,
+    `The helper "${helper.role}" was asked to: ${task.length <= BRIEF_TASK_MAX_CHARS ? task : `${task.slice(0, BRIEF_TASK_MAX_CHARS - 1)}…`}`,
+    ...planLines(approvedPlan({ plans: state.plans ?? [] })),
+    'Your working folder is a temporary read-only checkout of the change. Read the changed code and judge whether it does the task correctly and safely: bugs, risky changes, missing tests, unclear code. You cannot edit files or run commands.',
+    'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They go to the lead, who decides, and become a comment on the ticket. Your verdict is advice; it does not merge or block anything. Then you are done.',
   ].join('\n\n');
 }

@@ -1,12 +1,29 @@
 import { z } from 'zod';
-import type { AgentRoleKind, HarnessCheck, ProjectAllowlist } from '@acp/core';
+import {
+  BARE_COMMAND_PATTERN,
+  CommandPatternSchema,
+  FORBIDDEN_ALLOWLIST_COMMANDS,
+  GIT_READ_ONLY_SUBCOMMANDS,
+  isForbiddenGitOption,
+  isSafeCommandToken,
+} from '@acp/core';
+import type {
+  AgentRoleKind,
+  AllowRule,
+  ApprovalMode,
+  CommandPattern,
+  HarnessCheck,
+  ProjectAllowlist,
+  ProjectApprovals,
+} from '@acp/core';
 import { hasReviewableChange } from './stages.js';
 
 /**
- * Per-project allowlist of pre-approved safe actions (ADR-0013 amendment). Pure: the server
- * resolves real paths (realpath, so symlinks cannot escape) and reads the harness manifest, then
- * asks this module for a verdict and passes it to `requestPermission`. Everything not allowed here
- * still asks the owner. The rules fail closed: anything unusual is "ask".
+ * Pre-approved safe actions: the per-project allowlist (ADR-0013 amendment) and, from ADR-0021,
+ * the run's approval mode and command allowlist. Pure: the server resolves real paths (realpath,
+ * so symlinks cannot escape) and reads the harness manifest, then asks this module for a verdict
+ * and passes it to `requestPermission`, which checks it again against the run's mode. Everything
+ * not allowed here still asks the owner. The rules fail closed: anything unusual is "ask".
  */
 
 export const EDIT_TOOL_NAMES = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] as const;
@@ -88,13 +105,76 @@ export function checkCommandLine(argv: readonly string[]): string | null {
   return argv.every((t) => SAFE_TOKEN.test(t)) ? argv.join(' ') : null;
 }
 
-export type AllowlistRule = 'edit-in-own-worktree' | 'run-harness-check';
+/** Why an action ran without asking; the same strings as core's `AllowRule` (ADR-0021). */
+export type AllowlistRule = AllowRule;
 
 export type AllowlistVerdict =
-  { allowed: true; rule: AllowlistRule; checkId?: string } | { allowed: false; reason: string };
+  | { allowed: true; rule: AllowlistRule; checkId?: string; pattern?: CommandPattern }
+  | { allowed: false; reason: string };
+
+/**
+ * Which rules each approval mode allows (ADR-0021 §1): manual none, auto-edits the edit and
+ * harness-check rules, auto those plus the command allowlist.
+ */
+export function ruleAllowedByMode(mode: ApprovalMode, rule: AllowRule): boolean {
+  switch (mode) {
+    case 'manual':
+      return false;
+    case 'auto-edits':
+      return rule === 'edit-in-own-worktree' || rule === 'run-harness-check';
+    case 'auto':
+      return true;
+  }
+}
+
+/** The whole command: safe tokens separated by single spaces, nothing else (ADR-0021 §2). */
+const WHOLE_COMMAND = /^[A-Za-z0-9._/:=@+%,-]+( [A-Za-z0-9._/:=@+%,-]+)*$/;
+/** Longer commands are never matched; no allowlist entry needs one. */
+const MAX_COMMAND_CHARS = 4096;
+
+/**
+ * The first allowlist pattern the actual command matches, or null (ADR-0021 §2). The command must
+ * be safe tokens joined by single spaces (no quotes, `$`, `;`, `|`, `&`, redirects, globs,
+ * newlines or tabs), argv[0] a bare command name that is not forbidden, every token free of
+ * absolute paths and `..`, and a `git` call read-only with no forbidden option. Patterns are
+ * re-validated here, so a stored pattern that no longer passes the schema never matches.
+ * `run_in_background` calls never get this far (`allowlistTarget` returns null for them).
+ */
+export function matchCommandAllowlist(
+  command: string,
+  patterns: readonly CommandPattern[],
+): CommandPattern | null {
+  if (command.length > MAX_COMMAND_CHARS || !WHOLE_COMMAND.test(command)) return null;
+  const argv = command.split(' ');
+  const [name, sub] = argv;
+  if (name === undefined || !BARE_COMMAND_PATTERN.test(name)) return null;
+  if (FORBIDDEN_ALLOWLIST_COMMANDS.includes(name)) return null;
+  if (!argv.every(isSafeCommandToken)) return null;
+  if (name === 'git') {
+    if (sub === undefined || !GIT_READ_ONLY_SUBCOMMANDS.includes(sub)) return null;
+    if (argv.some(isForbiddenGitOption)) return null;
+  }
+  for (const pattern of patterns) {
+    if (!CommandPatternSchema.safeParse(pattern).success) continue;
+    const words = pattern.argv;
+    const sameStart = words.every((w, i) => argv[i] === w);
+    if (!sameStart) continue;
+    if (pattern.match === 'exact' ? argv.length === words.length : argv.length >= words.length) {
+      return pattern;
+    }
+  }
+  return null;
+}
 
 export interface AllowlistInput {
-  allowlist: ProjectAllowlist;
+  /**
+   * The run's approval policy (ADR-0021), snapshotted at its start. When present it decides and
+   * `allowlist` is ignored: manual asks for everything; auto-edits allows edits in the agent's own
+   * worktree and exact harness checks; auto adds the command allowlist.
+   */
+  policy?: ProjectApprovals;
+  /** The legacy project allowlist (runs without a policy). Neither present: everything asks. */
+  allowlist?: ProjectAllowlist;
   /**
    * Only helpers are covered (README §4.1 step 3), and the tester, whose allowlist is the
    * helpers' (ADR-0019); the lead always asks, and the planner and reviewer never edit.
@@ -115,9 +195,34 @@ export interface AllowlistInput {
 
 const ask = (reason: string): AllowlistVerdict => ({ allowed: false, reason });
 
-/** Decides whether the project allowlist pre-approves one tool call (ADR-0013 amendment). */
+/** What each source allows: the legacy switches, or the rules of the run's mode. */
+function allows(input: AllowlistInput): {
+  edits: boolean;
+  checks: boolean;
+  commands: readonly CommandPattern[] | null;
+} {
+  const { policy, allowlist } = input;
+  if (policy !== undefined) {
+    return {
+      edits: ruleAllowedByMode(policy.mode, 'edit-in-own-worktree'),
+      checks: ruleAllowedByMode(policy.mode, 'run-harness-check'),
+      commands: ruleAllowedByMode(policy.mode, 'command-allowlist') ? policy.commands : null,
+    };
+  }
+  return {
+    edits: allowlist?.editInOwnWorktree === true,
+    checks: allowlist?.runHarnessChecks === true,
+    commands: null,
+  };
+}
+
+/**
+ * Decides whether the run's approval policy (ADR-0021), or for older runs the project allowlist
+ * (ADR-0013 amendment), pre-approves one tool call.
+ */
 export function evaluateAllowlist(input: AllowlistInput): AllowlistVerdict {
-  const { allowlist, target } = input;
+  const { target } = input;
+  const allowed = allows(input);
   if (!hasReviewableChange(input.agentKind)) {
     return ask(
       input.agentKind === 'lead'
@@ -128,7 +233,7 @@ export function evaluateAllowlist(input: AllowlistInput): AllowlistVerdict {
   if (target === null) return ask('This action is not covered by the allowlist.');
 
   if (target.kind === 'edit') {
-    if (!allowlist.editInOwnWorktree) return ask('Edits are not pre-approved in this project.');
+    if (!allowed.edits) return ask('Edits are not pre-approved in this project.');
     const { resolvedPath, worktreeRoot } = input;
     if (resolvedPath === null || worktreeRoot === null) {
       return ask('The file location could not be checked.');
@@ -145,12 +250,19 @@ export function evaluateAllowlist(input: AllowlistInput): AllowlistVerdict {
     return { allowed: true, rule: 'edit-in-own-worktree' };
   }
 
-  if (!allowlist.runHarnessChecks) return ask('Checks are not pre-approved in this project.');
-  for (const check of input.checks) {
-    const line = checkCommandLine(check.argv);
-    if (line !== null && line === target.command) {
-      return { allowed: true, rule: 'run-harness-check', checkId: check.id };
+  if (allowed.checks) {
+    for (const check of input.checks) {
+      const line = checkCommandLine(check.argv);
+      if (line !== null && line === target.command) {
+        return { allowed: true, rule: 'run-harness-check', checkId: check.id };
+      }
     }
   }
+  if (allowed.commands !== null) {
+    const pattern = matchCommandAllowlist(target.command, allowed.commands);
+    if (pattern !== null) return { allowed: true, rule: 'command-allowlist', pattern };
+    return ask("The command is not exactly one of this project's checks or allowed commands.");
+  }
+  if (!allowed.checks) return ask('Checks are not pre-approved in this project.');
   return ask("The command is not exactly one of this project's checks.");
 }

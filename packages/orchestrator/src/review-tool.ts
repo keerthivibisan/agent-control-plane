@@ -1,8 +1,11 @@
 import { redact, TicketCommentSchema } from '@acp/core';
+import type { ChangeVerdict } from '@acp/core';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
-import { MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS } from './stages.js';
+import { emitRound, leadCanDecide, notifyLead } from './loop.js';
+import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS } from './stages.js';
 import type { EngineContext, EngineResult, RunState } from './state.js';
+import { cleanSummary } from './summary.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
@@ -24,7 +27,9 @@ export function cleanReviewBody(text: string): string {
 
 /**
  * A reviewer's `post_review`. Allowed for a live reviewer of a run in REVIEW, at most
- * `MAX_REVIEW_POSTS` times. Emits `review-comment`; the server stores it.
+ * `MAX_REVIEW_POSTS` times. Emits `review-comment`; the server stores it. With the review loop
+ * (ADR-0021 §5) the final review runs while the run is RUNNING and each finding also goes to the
+ * live lead.
  */
 export function postReview(
   state: RunState,
@@ -37,10 +42,17 @@ export function postReview(
     if (reviewer?.kind !== 'reviewer') {
       return refusal('not-lead', 'Only the reviewer can post a review.');
     }
+    if (isChangeReviewer(reviewer)) {
+      return refusal('not-lead', 'A change reviewer submits its review with submit_review.');
+    }
     if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
       return refusal('run-cancelling', 'The run is being stopped.');
     }
-    if (d.run.status !== 'REVIEW' || !isLiveAgentStatus(reviewer.status)) {
+    const loop = d.integration !== undefined;
+    const reviewing = loop
+      ? ['RUNNING', 'BLOCKED', 'REVIEW'].includes(d.run.status)
+      : d.run.status === 'REVIEW';
+    if (!reviewing || !isLiveAgentStatus(reviewer.status)) {
       return refusal('run-not-active', 'The code review is over.');
     }
     const posted = reviewer.reviewPosts ?? 0;
@@ -56,6 +68,75 @@ export function postReview(
     }
     reviewer.reviewPosts = posted + 1;
     d.effects.push({ type: 'review-comment', agentRunId: reviewer.id, body });
+    if (loop) notifyLead(d, `Final code review finding:\n\n${body}`);
     return { value: 'Posted to the ticket. Post more findings, or finish if you are done.' };
+  });
+}
+
+/**
+ * A change reviewer's `submit_review` (ADR-0021 §3; input validated with
+ * `LeadToolInputs.submit_review`): once per review, while its change is under its review. The
+ * findings become a ticket comment by author `reviewer` and go to the lead with the verdict; the
+ * change waits for the lead's decision (or the owner's, when no lead is live). The verdict is
+ * advice, never a gate.
+ */
+export function submitReview(
+  state: RunState,
+  callerAgentRunId: string,
+  input: { verdict: ChangeVerdict; findings: string },
+  ctx: EngineContext,
+): EngineResult<string> {
+  return applyCommand(state, ctx, (d) => {
+    const reviewer = d.agent(callerAgentRunId);
+    if (reviewer === undefined || !isChangeReviewer(reviewer)) {
+      return refusal('not-lead', 'Only a change reviewer can submit a change review.');
+    }
+    if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
+      return refusal('run-cancelling', 'The run is being stopped.');
+    }
+    if (!isLiveAgentStatus(reviewer.status)) {
+      return refusal('run-not-active', 'This review is over.');
+    }
+    const helper = d.agent(reviewer.reviewsAgentRunId ?? '');
+    const change = helper?.change;
+    if (
+      helper === undefined ||
+      change?.state !== 'reviewing' ||
+      change.reviewerAgentRunId !== reviewer.id
+    ) {
+      return refusal(
+        'run-not-active',
+        'Your review was already submitted, or the change was decided; end your turn now.',
+      );
+    }
+    const body = cleanReviewBody(input.findings);
+    if (!TicketCommentSchema.shape.body.safeParse(body).success) {
+      return refusal('invalid-input', 'The findings are empty.');
+    }
+    change.verdict = input.verdict;
+    change.state = leadCanDecide(d) ? 'decision' : 'needs-owner';
+    reviewer.reviewPosts = 1;
+    reviewer.latestActivity = cleanSummary(
+      `Reviewed ${helper.role}'s change: ${input.verdict}`,
+      'Reviewed a change',
+    );
+    d.effects.push({
+      type: 'review-comment',
+      agentRunId: reviewer.id,
+      body,
+      changeOf: helper.id,
+      round: change.round,
+      verdict: input.verdict,
+    });
+    emitRound(d, helper);
+    notifyLead(
+      d,
+      [
+        `The review agent reviewed ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}). Verdict: ${input.verdict}.`,
+        `Findings:\n${body}`,
+        'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.',
+      ].join('\n\n'),
+    );
+    return { value: 'Submitted. Your review is done: end your turn now.' };
   });
 }

@@ -16,8 +16,10 @@ export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> 
   RUNNING: ['BLOCKED', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   // BLOCKED = every live agent waits for the owner (an approval or a budget decision).
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
-  // REVIEW → COMPLETED only once the owner merged or discarded every worker's changes.
-  REVIEW: ['COMPLETED', 'CANCELLING'],
+  // REVIEW → COMPLETED only once the owner merged or discarded every worker's changes (legacy), or
+  // merged or discarded the ticket branch (ADR-0021). REVIEW → RUNNING only for the owner's
+  // "request changes" on the ticket branch while the lead is live (ADR-0021 §4).
+  REVIEW: ['COMPLETED', 'RUNNING', 'CANCELLING'],
   // After a restart the owner reviews what the interrupted workers left, or cancels.
   NEEDS_REVIEW: ['REVIEW', 'CANCELLING'],
   CANCELLING: ['CANCELLED'],
@@ -29,10 +31,20 @@ export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> 
 export const AGENT_TRANSITIONS: Readonly<Record<AgentRunStatus, readonly AgentRunStatus[]>> =
   Object.freeze({
     QUEUED: ['STARTING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
-    STARTING: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
+    // → AWAITING_REVIEW (ADR-0021 §3): a helper or tester of a review-loop run ended its turn.
+    STARTING: [
+      'RUNNING',
+      'AWAITING_REVIEW',
+      'SUCCEEDED',
+      'FAILED',
+      'CANCELLED',
+      'TIMED_OUT',
+      'NEEDS_REVIEW',
+    ],
     RUNNING: [
       'WAITING_APPROVAL',
       'BLOCKED',
+      'AWAITING_REVIEW',
       'SUCCEEDED',
       'FAILED',
       'CANCELLED',
@@ -42,11 +54,18 @@ export const AGENT_TRANSITIONS: Readonly<Record<AgentRunStatus, readonly AgentRu
     // The SDK is parked in our permission callback, so it cannot succeed from here; it can crash.
     WAITING_APPROVAL: ['RUNNING', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
     // Budget soft cap (ADR-0014): the owner raises the cap (→ RUNNING) or stops the agent.
-    BLOCKED: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
-    // ADR-0021 review loop. RL-0 placeholder: the outgoing edges only (rework → STARTING, decided
-    // → SUCCEEDED, Stop all → CANCELLED, restart → NEEDS_REVIEW), so the status is not terminal.
-    // No edge leads INTO it yet, so no agent can reach it; RL-A adds RUNNING/STARTING/BLOCKED →
-    // AWAITING_REVIEW with the loop.
+    BLOCKED: [
+      'RUNNING',
+      'AWAITING_REVIEW',
+      'SUCCEEDED',
+      'FAILED',
+      'CANCELLED',
+      'TIMED_OUT',
+      'NEEDS_REVIEW',
+    ],
+    // ADR-0021 review loop: no process runs while the change is sealed, reviewed and decided.
+    // Rework → STARTING; merged or no changes → SUCCEEDED; discarded or Stop all → CANCELLED;
+    // restart → NEEDS_REVIEW. FAILED is kept for a corrupt or unknown end.
     AWAITING_REVIEW: ['STARTING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
     SUCCEEDED: [],
     FAILED: [],
@@ -89,4 +108,13 @@ export function isTerminalRunStatus(status: RunStatus): boolean {
 /** Live = not ended: the agent may still run, spend budget, or ask for approval. */
 export function isLiveAgentStatus(status: AgentRunStatus): boolean {
   return AGENT_TRANSITIONS[status].length > 0;
+}
+
+/**
+ * Active = live and not AWAITING_REVIEW (ADR-0021): a process runs (or is starting) for it. Used for
+ * the helper limit, the live-worker checks and BLOCKED; an agent waiting for its change to be
+ * decided has no process and holds no slot. Same as live for runs without the review loop.
+ */
+export function isActiveAgentStatus(status: AgentRunStatus): boolean {
+  return status !== 'AWAITING_REVIEW' && isLiveAgentStatus(status);
 }

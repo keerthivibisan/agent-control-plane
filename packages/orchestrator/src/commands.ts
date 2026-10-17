@@ -1,10 +1,22 @@
 import {
   APPROVAL_TIMEOUT_MS,
+  ChangeReviewerModeSchema,
   DEFAULT_AGENT_BUDGET_TOKENS,
+  ProjectApprovalsSchema,
   ProjectWorkflowSchema,
+  ReworkRoundsSchema,
+  TicketBranchNameSchema,
   TokenCountsSchema,
 } from '@acp/core';
-import type { ManagedAgentEvent, PermissionRequest, ProjectWorkflow, RunBudget } from '@acp/core';
+import type {
+  AllowRule,
+  ChangeReviewerMode,
+  ManagedAgentEvent,
+  PermissionRequest,
+  ProjectApprovals,
+  ProjectWorkflow,
+  RunBudget,
+} from '@acp/core';
 import { recordUsage, EMPTY_LEDGER } from './budget.js';
 import { cleanSummary, Draft, DuplicateIdError, formatTokens } from './draft.js';
 import { IllegalTransitionError, refusal } from './errors.js';
@@ -17,12 +29,14 @@ import {
   checkReviewAction,
   checkRunActive,
 } from './policy.js';
+import { ruleAllowedByMode } from './allowlist.js';
 import type { AllowlistVerdict } from './allowlist.js';
+import { enterReview, isFinalChangeState, undecidedChanges, waitingLines } from './loop.js';
 import {
   hasPostMergeStages,
   hasReviewableChange,
-  isPostMergeRole,
   isReadOnlyRole,
+  isStageAgent,
   launchFields,
   nextStage,
 } from './stages.js';
@@ -31,10 +45,11 @@ import type {
   EngineApproval,
   EngineContext,
   EngineResult,
+  RunIntegration,
   RunLimits,
   RunState,
 } from './state.js';
-import { isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
+import { isActiveAgentStatus, isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
 import { descendantsOf } from './tree.js';
 
 /** Return value of a command body: a refusal (state unchanged), or a value. */
@@ -99,7 +114,54 @@ export interface CreateRunInput {
    * `defaultProjectWorkflow()`, gives exactly the Phase 4 flow.
    */
   workflow?: ProjectWorkflow;
+  /**
+   * The review loop (ADR-0021 §3–4), ticket runs only. Absent: the legacy flow, where the owner
+   * reviews and merges each change. The server resolves the run overrides first:
+   * `reviewer` = `StartTicketRequest.reviewer ?? reviewStageOf(workflow).reviewer`, and the same
+   * for `maxReworkRounds`. `ticketKey` (e.g. `WEB-12`) names the ticket branch.
+   */
+  reviewLoop?: { ticketKey: string; reviewer: ChangeReviewerMode; maxReworkRounds: number };
+  /**
+   * The run's approval policy (ADR-0021 §1): `approvalsOf(setup)` with
+   * `StartTicketRequest.approvalMode` applied. Snapshotted; later project changes never apply.
+   */
+  approvals?: ProjectApprovals;
   registeredProjectIds: Iterable<string>;
+}
+
+/** Validates the review-loop and approval inputs (the engine never trusts its caller). */
+function checkLoopInputs(
+  input: CreateRunInput,
+): Refusal | { integration: RunIntegration | undefined; approvals: ProjectApprovals | undefined } {
+  let approvals: ProjectApprovals | undefined;
+  if (input.approvals !== undefined) {
+    const parsed = ProjectApprovalsSchema.safeParse(input.approvals);
+    if (!parsed.success) return refusal('invalid-input', 'The approval settings are not valid.');
+    approvals = parsed.data;
+  }
+  const loop = input.reviewLoop;
+  if (loop === undefined) return { integration: undefined, approvals };
+  if (input.ticket === undefined) {
+    return refusal('invalid-input', 'The review loop applies to ticket runs only.');
+  }
+  if (!TicketBranchNameSchema.safeParse(`acp/${loop.ticketKey}`).success) {
+    return refusal('invalid-input', 'The ticket key does not give a valid ticket branch name.');
+  }
+  const reviewer = ChangeReviewerModeSchema.safeParse(loop.reviewer);
+  const rounds = ReworkRoundsSchema.safeParse(loop.maxReworkRounds);
+  if (!reviewer.success || !rounds.success) {
+    return refusal('invalid-input', 'The review settings are not valid.');
+  }
+  return {
+    integration: {
+      reviewer: reviewer.data,
+      maxReworkRounds: rounds.data,
+      handedOver: false,
+      ticketKey: loop.ticketKey,
+      ticketBranch: null,
+    },
+    approvals,
+  };
 }
 
 /** Validates the workflow against its schema and the run (the engine never trusts its caller). */
@@ -157,6 +219,8 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
   const checked = checkWorkflow(input);
   if ('code' in checked) return { ok: false, refusal: checked };
   const workflow = checked.workflow;
+  const loopInputs = checkLoopInputs(input);
+  if ('code' in loopInputs) return { ok: false, refusal: loopInputs };
   const budget: RunBudget = input.budget ?? {
     maxTokensPerAgent: DEFAULT_AGENT_BUDGET_TOKENS,
     softCostUsdPerRun: null,
@@ -198,10 +262,12 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     ledger: EMPTY_LEDGER,
     limits,
   };
+  if (loopInputs.approvals !== undefined) state.approvalPolicy = loopInputs.approvals;
   if (ticket === undefined) return { ok: true, state, effects: [], value: state };
 
   const initial: RunState = { ...state, plans: [] };
   if (workflow !== undefined) initial.workflow = workflow;
+  if (loopInputs.integration !== undefined) initial.integration = loopInputs.integration;
   const started = applyCommand(initial, ctx, (d) => {
     d.setRunStatus('PLANNING');
     const draftLead = d.lead();
@@ -310,6 +376,14 @@ export function agentEvent(
           agentRunId: agent.id,
           providerSessionId: event.providerSessionId,
         });
+        // ADR-0021: a rework turn resumes the helper's first session; keep it (evidence only).
+        if (
+          d.integration !== undefined &&
+          hasReviewableChange(agent.kind) &&
+          agent.sessionId === null
+        ) {
+          agent.sessionId = event.providerSessionId;
+        }
         if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
         else if (!live) d.effects.push({ type: 'diagnostic', code: 'event-after-end', agentRunId });
         return done;
@@ -347,6 +421,11 @@ export function agentEvent(
         const cost = event.reportedCostUsd;
         if (cost !== null && Number.isFinite(cost) && cost >= 0) agent.reportedCostUsd = cost;
         if (!live) return done;
+        if (agent.status === 'AWAITING_REVIEW') {
+          // Its turn already ended (review loop); a second report changes nothing.
+          d.effects.push({ type: 'diagnostic', code: 'event-after-end', agentRunId });
+          return done;
+        }
         const to =
           event.outcome === 'success'
             ? 'SUCCEEDED'
@@ -359,10 +438,21 @@ export function agentEvent(
           to === 'SUCCEEDED' &&
           agent.kind === 'worker' &&
           (agent.status === 'RUNNING' || agent.status === 'STARTING') &&
-          descendantsOf(d, agent.id).some((a) => isLiveAgentStatus(a.status))
+          descendantsOf(d, agent.id).some((a) => isActiveAgentStatus(a.status))
         ) {
           d.setAgentStatus(agent, 'RUNNING');
           agent.awaitingHelpers = true;
+          return done;
+        }
+        // ADR-0021 §3: a helper's or tester's turn that ends (well or with an error) goes to the
+        // review loop. One parked in an approval cannot finish its turn, so it ends as before.
+        if (
+          d.integration !== undefined &&
+          hasReviewableChange(agent.kind) &&
+          event.outcome !== 'cancelled' &&
+          agent.status !== 'WAITING_APPROVAL'
+        ) {
+          enterReview(d, agent, event.outcome === 'error');
           return done;
         }
         // A blocked or waiting agent cannot succeed mid-turn; treat a success report there as an end.
@@ -418,13 +508,26 @@ export function requestPermission(
     if (!isLiveAgentStatus(agent.status)) {
       return refusal('agent-not-live', 'The agent has ended.');
     }
+    if (agent.status === 'AWAITING_REVIEW') {
+      return refusal('agent-not-live', 'The agent finished its turn; its change is under review.');
+    }
     if (agent.status === 'BLOCKED' || agent.budgetTokensUsed >= agent.budgetLimit) {
       return refusal('over-budget', 'The agent reached its budget; the owner must raise it.');
     }
     if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
     const toolName = cleanSummary(request.toolName, 'Tool');
-    // The tester's allowlist is the helpers' (ADR-0019).
-    if (options.allowlist?.allowed === true && hasReviewableChange(agent.kind)) {
+    // ADR-0021: a run with an approval policy re-checks the verdict's rule against its mode and
+    // records the rule. Runs without one keep the legacy allowlist behaviour.
+    const verdict = options.allowlist;
+    const policy = d.approvalPolicy;
+    let allowRule: AllowRule | null = null;
+    const preApproved =
+      verdict?.allowed === true &&
+      (policy === undefined || ruleAllowedByMode(policy.mode, verdict.rule));
+    if (verdict?.allowed === true && policy !== undefined) allowRule = verdict.rule;
+    // The tester's allowlist is the helpers' (ADR-0019). The lead, planner and reviewers are never
+    // pre-approved, whatever the verdict says.
+    if (preApproved && hasReviewableChange(agent.kind)) {
       const auto: EngineApproval = {
         id: d.freshId(),
         runId: d.run.id,
@@ -437,6 +540,7 @@ export function requestPermission(
         requestedAt: d.now,
         decidedAt: null,
         decidedBy: null,
+        ...(allowRule !== null ? { allowRule } : {}),
       };
       d.approvals.push(auto);
       // Recorded for audit, then resolved at once: the owner is not asked (ADR-0013 amendment).
@@ -592,6 +696,12 @@ export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContex
     if (!isLiveAgentStatus(agent.status)) {
       return refusal('agent-not-live', 'The agent has already stopped.');
     }
+    if (agent.status === 'AWAITING_REVIEW') {
+      return refusal(
+        'agent-not-live',
+        'That helper finished its turn and has nothing running; decide its change instead (discard it to drop the work).',
+      );
+    }
     d.endAgentTree(agent, 'CANCELLED', true);
     return done;
   });
@@ -661,6 +771,31 @@ export function requestReview(state: RunState, ctx: EngineContext): EngineResult
   return applyCommand(state, ctx, (d) => {
     const runRefusal = checkRunActive(d.run.status);
     if (runRefusal !== null) return runRefusal;
+    const loop = d.integration;
+    if (loop !== undefined) {
+      // ADR-0021 §3: the handover. Every change must be decided; then the final stages run on
+      // the ticket branch and the owner merges it once. No new helper starts after this.
+      if (loop.handedOver) {
+        return refusal('run-not-active', 'You already handed the run over.', 'handed-over');
+      }
+      if (d.agents.some((a) => a.kind !== 'lead' && isActiveAgentStatus(a.status))) {
+        return refusal(
+          'workers-still-running',
+          'Some agents are still working; wait for them or stop them first.',
+        );
+      }
+      const waiting = waitingLines(d);
+      if (waiting.length > 0) {
+        return refusal(
+          'workers-still-running',
+          `Decide every change first:\n${waiting.join('\n')}`,
+          'changes-undecided',
+        );
+      }
+      loop.handedOver = true;
+      // `reconcile` starts the next stage, or moves the run to REVIEW for the owner's merge.
+      return done;
+    }
     if (d.liveWorkers().length > 0) {
       return refusal('workers-still-running', 'Some agents are still working; stop them first.');
     }
@@ -702,9 +837,7 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     const runInterrupted = ['QUEUED', 'PLANNING', 'PLAN_REVIEW', 'RUNNING', 'BLOCKED'].includes(
       d.run.status,
     );
-    const stageInterrupted = d.agents.some(
-      (a) => isPostMergeRole(a.kind) && isLiveAgentStatus(a.status),
-    );
+    const stageInterrupted = d.agents.some((a) => isStageAgent(a) && isLiveAgentStatus(a.status));
     // ADR-0019: after a restart no stage starts by itself; the owner continues (`continueStages`).
     if (!cancelling && (runInterrupted || stageInterrupted) && hasPostMergeStages(d.workflow)) {
       d.stagesHeld = true;
@@ -717,6 +850,16 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     for (const agent of d.agents) {
       if (isLiveAgentStatus(agent.status)) {
         d.setAgentStatus(agent, cancelling ? 'CANCELLED' : 'NEEDS_REVIEW');
+      }
+    }
+    // ADR-0021 §5: helpers waiting for review and change reviewers became NEEDS_REVIEW above;
+    // every undecided change goes to the owner. Nothing is relaunched.
+    if (d.integration !== undefined && !cancelling) {
+      for (const agent of d.agents) {
+        const change = agent.change;
+        if (change === undefined || isFinalChangeState(change.state)) continue;
+        change.state = 'needs-owner';
+        change.merging = false;
       }
     }
     if (cancelling) d.setRunStatus('CANCELLED');
@@ -744,7 +887,11 @@ export function continueStages(state: RunState, ctx: EngineContext): EngineResul
     if (d.agents.some((a) => a.kind !== 'lead' && isLiveAgentStatus(a.status))) {
       return refusal('workers-still-running', 'Some agents are still working.');
     }
-    if (d.agents.some((a) => hasReviewableChange(a.kind) && a.review === 'pending')) {
+    const unreviewed =
+      d.integration !== undefined
+        ? undecidedChanges(d).length > 0
+        : d.agents.some((a) => hasReviewableChange(a.kind) && a.review === 'pending');
+    if (unreviewed) {
       return refusal('review-not-allowed', 'Review the remaining changes first.');
     }
     if (nextStage(d) === null) return refusal('run-not-active', 'No stage is left to start.');

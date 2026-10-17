@@ -48,13 +48,53 @@ export const REFUSAL_CODES = [
 ] as const;
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 
+/**
+ * A more specific reason for a review-loop refusal (ADR-0021). It rides on an existing
+ * `RefusalCode` so that consumers with an exhaustive map over the codes keep compiling; the server
+ * may show or map it. Codes they ride on:
+ * - `unknown-agent`: `change-not-found`;
+ * - `review-not-allowed`: `change-not-decidable`, `change-busy`, `rework-limit`, `merge-conflict`,
+ *   `checks-pending`, `checks-failed`, `legacy-review`, `no-ticket-branch`;
+ * - `workers-still-running`: `changes-undecided`;
+ * - `run-not-active`: `handed-over`, `ticket-branch-pending`.
+ */
+export const REFUSAL_REASONS = [
+  /** No helper or tester with a change in the review loop has that id. */
+  'change-not-found',
+  /** The change is not at a point where this decision can be taken (sealing, under review, …). */
+  'change-not-decidable',
+  /** A merge of this change is already under way on the server. */
+  'change-busy',
+  /** The lead used every rework round the run allows (the owner can grant another). */
+  'rework-limit',
+  /** The change conflicts with the ticket branch. */
+  'merge-conflict',
+  /** The required checks are still running on the change. */
+  'checks-pending',
+  /** A required check failed on the change. */
+  'checks-failed',
+  /** The run uses the legacy per-change owner review, not the review loop (or the reverse). */
+  'legacy-review',
+  /** The run has no ticket branch. */
+  'no-ticket-branch',
+  /** Some change is not decided yet (request_review needs every change decided). */
+  'changes-undecided',
+  /** The lead handed the run over; no new helper starts. */
+  'handed-over',
+  /** The ticket branch is still being created after plan approval. */
+  'ticket-branch-pending',
+] as const;
+export type RefusalReason = (typeof REFUSAL_REASONS)[number];
+
 export interface Refusal {
   code: RefusalCode;
   message: string;
+  /** Review-loop refusals only (ADR-0021): the specific reason. */
+  reason?: RefusalReason;
 }
 
-export function refusal(code: RefusalCode, message: string): Refusal {
-  return { code, message };
+export function refusal(code: RefusalCode, message: string, reason?: RefusalReason): Refusal {
+  return reason === undefined ? { code, message } : { code, message, reason };
 }
 
 /** Thrown by the low-level transition helpers; the command layer turns it into a refusal. */

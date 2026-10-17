@@ -22,7 +22,8 @@ const EXPECTED_RUN: Record<RunStatus, RunStatus[]> = {
   PLAN_REVIEW: ['PLANNING', 'RUNNING', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   RUNNING: ['BLOCKED', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
-  REVIEW: ['COMPLETED', 'CANCELLING'],
+  // ADR-0021: REVIEW → RUNNING for the owner's "request changes" on the ticket branch.
+  REVIEW: ['COMPLETED', 'RUNNING', 'CANCELLING'],
   NEEDS_REVIEW: ['REVIEW', 'CANCELLING'],
   CANCELLING: ['CANCELLED'],
   COMPLETED: [],
@@ -32,10 +33,20 @@ const EXPECTED_RUN: Record<RunStatus, RunStatus[]> = {
 
 const EXPECTED_AGENT: Record<AgentRunStatus, AgentRunStatus[]> = {
   QUEUED: ['STARTING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
-  STARTING: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
+  // ADR-0021: a helper's or tester's turn that ends goes to AWAITING_REVIEW in a loop run.
+  STARTING: [
+    'RUNNING',
+    'AWAITING_REVIEW',
+    'SUCCEEDED',
+    'FAILED',
+    'CANCELLED',
+    'TIMED_OUT',
+    'NEEDS_REVIEW',
+  ],
   RUNNING: [
     'WAITING_APPROVAL',
     'BLOCKED',
+    'AWAITING_REVIEW',
     'SUCCEEDED',
     'FAILED',
     'CANCELLED',
@@ -43,8 +54,16 @@ const EXPECTED_AGENT: Record<AgentRunStatus, AgentRunStatus[]> = {
     'NEEDS_REVIEW',
   ],
   WAITING_APPROVAL: ['RUNNING', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
-  BLOCKED: ['RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'NEEDS_REVIEW'],
-  // ADR-0021 (RL-0 placeholder): outgoing edges only; RL-A adds the edges into it.
+  BLOCKED: [
+    'RUNNING',
+    'AWAITING_REVIEW',
+    'SUCCEEDED',
+    'FAILED',
+    'CANCELLED',
+    'TIMED_OUT',
+    'NEEDS_REVIEW',
+  ],
+  // ADR-0021: rework → STARTING; merged → SUCCEEDED; discarded / Stop all → CANCELLED; restart.
   AWAITING_REVIEW: ['STARTING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'],
   SUCCEEDED: [],
   FAILED: [],

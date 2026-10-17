@@ -1,11 +1,20 @@
 import type {
   AgentRoleKind,
   AgentRun,
+  AllowRule,
   ApprovalKindSchema,
   ApprovalStatus,
+  ChangeDecider,
+  ChangeDecision,
+  ChangeReviewerKind,
+  ChangeReviewerMode,
+  ChangeState,
+  ChangeVerdict,
   OrchestrationRun,
   PermissionDecision,
+  ProjectApprovals,
   ProjectWorkflow,
+  ReviewScope,
   ReviewState,
   TicketPlan,
   WorkflowStageId,
@@ -45,6 +54,65 @@ export interface EngineAgent extends AgentRun {
   stage?: WorkflowStageId;
   /** Reviewer only: how many findings it posted with `post_review` (a count, never the text). */
   reviewPosts?: number;
+  /**
+   * The review loop (ADR-0021): this helper's or tester's change, from the moment its turn ends.
+   * Absent for runs without the loop, for agents with no change, and while a helper works its
+   * first turn.
+   */
+  change?: EngineChange;
+  /**
+   * A change reviewer (kind `reviewer`, stage `review`, ADR-0021 §3): the helper or tester whose
+   * change it reviews. Absent for the final code reviewer (stage `code-review`).
+   */
+  reviewsAgentRunId?: string;
+}
+
+/**
+ * One helper's (or the tester's) change in the review loop (ADR-0021 §3). Holds no diff and no
+ * conversation text: commits, counts, states and file names only. `state`, `round` and
+ * `headCommit` are persisted (`managed_workspaces`); the rest lives with the live run, since a
+ * restart puts every undecided change in `needs-owner` (ADR-0013 §7).
+ */
+export interface EngineChange {
+  state: ChangeState;
+  /** Rework rounds used so far; also the current review round (0 = the first review). */
+  round: number;
+  /** This round's review-agent verdict: advice for the lead, never a gate. */
+  verdict: ChangeVerdict | null;
+  /** Who reviews this round: a review agent, the lead, or the owner; null until assigned. */
+  reviewer: ChangeReviewerKind | null;
+  /** This round's review agent; null when the lead or owner reviews, or none was assigned. */
+  reviewerAgentRunId: string | null;
+  /** The sealed commit; null before sealing (or for a stopped helper's unsealed work). */
+  headCommit: string | null;
+  changedFiles: number | null;
+  /** When the change became `ready`: reviewers take the oldest first. */
+  readyAt: string | null;
+  /** The required harness checks on the change, as the server last reported them. */
+  checks: 'pending' | 'passed' | 'failed' | null;
+  /** Files that conflicted with the ticket branch on the last merge attempt. */
+  conflictFiles: readonly string[];
+  /** A `merge-change` effect is out and the server has not reported back yet. */
+  merging: boolean;
+  /** The helper's last turn ended with an error; its change still goes through the loop. */
+  turnFailed: boolean;
+}
+
+/**
+ * The review loop's run settings (ADR-0021), snapshotted when the run is created. When a run has
+ * none it follows the legacy flow: the owner reviews and merges each change into the base branch.
+ */
+export interface RunIntegration {
+  /** Who reviews each change before the lead decides. */
+  reviewer: ChangeReviewerMode;
+  /** Rework rounds the lead may ask for per change (the owner may grant more). */
+  maxReworkRounds: number;
+  /** The lead called `request_review`: every change was decided; no new helper starts. */
+  handedOver: boolean;
+  /** The ticket's key (`WEB-12`), for `create-ticket-branch`. */
+  ticketKey: string;
+  /** The ticket branch the server created (`acp/WEB-12`); null until `ticketBranchCreated`. */
+  ticketBranch: string | null;
 }
 
 /** An owner decision request (ADR-0013 §4, ADR-0014). The summary is redacted, ≤ 200 characters. */
@@ -66,6 +134,11 @@ export interface EngineApproval {
    * Optional so Phase 3 rows loaded without it stay valid.
    */
   decidedBy?: ApprovalDecider | null;
+  /**
+   * The rule that approved it without asking (ADR-0021 §1): set on approvals decided by
+   * `allowlist` in runs with an approval policy. Absent otherwise.
+   */
+  allowRule?: AllowRule | null;
 }
 
 export type ApprovalDecider = 'owner' | 'allowlist' | 'timeout';
@@ -127,6 +200,15 @@ export interface RunState {
    * Absent until the owner's first follow-up message.
    */
   followUp?: FollowUpState;
+  /**
+   * The review loop (ADR-0021), snapshotted at creation. Absent: the legacy flow, unchanged.
+   */
+  integration?: RunIntegration;
+  /**
+   * The run's approval mode and command allowlist (ADR-0021 §1), snapshotted at creation; the
+   * engine re-checks each pre-approval against it. Absent: the legacy project allowlist.
+   */
+  approvalPolicy?: ProjectApprovals;
 }
 
 /** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
@@ -199,20 +281,94 @@ export type EngineEffect =
        * (`resolveAgentModel`). A missing or unsafe file never blocks the start.
        */
       agent?: string;
+      /**
+       * A rework turn (ADR-0021 §3): the helper works again in its own worktree on the comments in
+       * `prompt`, resuming `resumeSessionId` (null: a fresh session). Never with `canStartHelpers`.
+       */
+      rework?: { resumeSessionId: string | null };
+      /** A reviewer: `change` (one helper's change, `submit_review`) or `final` (`post_review`). */
+      reviewScope?: ReviewScope;
+      /**
+       * Review loop (ADR-0021 §4): create the worker's or tester's worktree from the tip of this
+       * ticket branch instead of the project's base branch.
+       */
+      fromBranch?: string;
     }
   /**
-   * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout of the
-   * project's main branch (the "Run checks now" mechanism, ADR-0017) and start the reviewer in it,
-   * read-only. The reviewer reads the merged result there.
+   * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout and start
+   * the reviewer in it, read-only.
+   * - neither field: the project's main branch (the "Run checks now" mechanism, ADR-0017);
+   * - `commit` and `reviewsAgentRunId` (ADR-0021 change reviewer): the sealed commit of that
+   *   helper's change; the server appends the change's diff (at most 64 KiB, sent, never stored)
+   *   to the reviewer's brief;
+   * - `ticketBranch` (ADR-0021 final reviewer): the ticket branch's tip.
    */
-  | { type: 'create-review-checkout'; agentRunId: string }
+  | {
+      type: 'create-review-checkout';
+      agentRunId: string;
+      commit?: string;
+      reviewsAgentRunId?: string;
+      ticketBranch?: string;
+    }
   /** The reviewer ended (or a restart found it interrupted): remove its temporary checkout. */
   | { type: 'remove-review-checkout'; agentRunId: string }
   /**
    * Store a reviewer finding as a ticket comment (author `reviewer`, ADR-0019; ADR-0016's stored
    * scope). `body` is the reviewer's plain text, redacted and capped to the comment limit.
    */
-  | { type: 'review-comment'; agentRunId: string; body: string }
+  | {
+      type: 'review-comment';
+      agentRunId: string;
+      body: string;
+      /** A change reviewer's findings (ADR-0021): whose change, which round, and the verdict. */
+      changeOf?: string;
+      round?: number;
+      verdict?: ChangeVerdict;
+    }
+  /**
+   * Review loop (ADR-0021 §3): the helper's (or tester's) turn ended; commit its worktree, then
+   * report with `changeSealed`.
+   */
+  | { type: 'seal-change'; agentRunId: string }
+  /**
+   * Plan approval in a review-loop run (ADR-0021 §4): create `acp/<KEY>` (or `-r<n>`) from the
+   * base branch tip, then report the name with `ticketBranchCreated`. Always before any helper.
+   */
+  | { type: 'create-ticket-branch'; ticketKey: string }
+  /**
+   * Merge the change into the ticket branch (seal, integrate, require the checks on that commit,
+   * advance by compare-and-swap), then report with `recordChangeDecision` or `changeMergeBlocked`.
+   * `anyway`: the owner's merge past a failed required check.
+   */
+  | { type: 'merge-change'; agentRunId: string; by: ChangeDecider; anyway: boolean }
+  /** The change was discarded: remove the helper's worktree (idempotent). */
+  | { type: 'discard-change'; agentRunId: string }
+  /**
+   * The `change_reviews` row for (agentRunId, round), emitted whenever it changes: the reviewer is
+   * assigned, the verdict arrives, or the round is decided. Upsert by (agentRunId, round).
+   */
+  | {
+      type: 'change-round';
+      agentRunId: string;
+      round: number;
+      reviewer: ChangeReviewerKind;
+      reviewerAgentRunId: string | null;
+      verdict: ChangeVerdict | null;
+      decision: ChangeDecision | null;
+      decidedBy: ChangeDecider | null;
+    }
+  /**
+   * The lead's or owner's note on a change (rework comments, discard reason, question for the
+   * owner), stored as a ticket comment by that author and linked to the round's row (ADR-0021 §6).
+   */
+  | {
+      type: 'change-comment';
+      agentRunId: string;
+      round: number;
+      author: 'lead' | 'owner';
+      kind: 'rework' | 'discard' | 'ask-owner';
+      body: string;
+    }
   | { type: 'send-to-agent'; agentRunId: string; text: string }
   /** Stop the current turn but keep the session (budget cap reached). */
   | { type: 'interrupt-agent'; agentRunId: string }

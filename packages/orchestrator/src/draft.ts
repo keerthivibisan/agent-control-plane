@@ -1,8 +1,8 @@
-import { redact } from '@acp/core';
 import type {
   AgentRunStatus,
   OrchestrationRun,
   PermissionDecision,
+  ProjectApprovals,
   ProjectWorkflow,
   RunStatus,
   TicketPlan,
@@ -12,14 +12,22 @@ import type { UsageLedger } from './budget.js';
 import {
   assertAgentTransition,
   assertRunTransition,
+  isActiveAgentStatus,
   isLiveAgentStatus,
   isTerminalRunStatus,
 } from './transitions.js';
+import {
+  enterReview,
+  stoppedWithoutReview,
+  sweepLoop,
+  undecidedChanges,
+  waitingLines,
+} from './loop.js';
 import { agentDepth, childrenOf, descendantsOf } from './tree.js';
 import {
   hasReviewableChange,
-  isPostMergeRole,
   isSeparatePlanner,
+  isStageAgent,
   nextStage,
   launchFields,
   reviewerBrief,
@@ -34,19 +42,13 @@ import type {
   EngineContext,
   EngineEffect,
   FollowUpState,
+  RunIntegration,
   RunLimits,
   RunState,
 } from './state.js';
+import { cleanSummary } from './summary.js';
 
-/** Max length of an approval summary or activity line shown in the panel (ADR-0013 §4). */
-export const SUMMARY_MAX_CHARS = 200;
-
-/** Redacts secrets and caps the length; summaries come from tool targets, which may hold anything. */
-export function cleanSummary(text: string, fallback: string): string {
-  const flat = redact(text).replace(/\s+/g, ' ').trim();
-  const value = flat.length > 0 ? flat : fallback;
-  return value.length <= SUMMARY_MAX_CHARS ? value : `${value.slice(0, SUMMARY_MAX_CHARS - 1)}…`;
-}
+export { SUMMARY_MAX_CHARS, cleanSummary } from './summary.js';
 
 const RESUME_AFTER_RAISE = 'The owner raised your budget. Continue your task.';
 const DENIED_BY_OWNER = 'The owner denied this action.';
@@ -72,11 +74,17 @@ export class Draft {
   stagesHeld: boolean;
   /** The ended lead's follow-up chat (`RunState.followUp`, ADR-0020). */
   followUp: FollowUpState | undefined;
+  /** The review loop's settings (`RunState.integration`, ADR-0021); undefined: legacy flow. */
+  integration: RunIntegration | undefined;
+  /** The run's approval policy (`RunState.approvalPolicy`, ADR-0021). */
+  readonly approvalPolicy: ProjectApprovals | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
   /** Reviewers that ended in this command; their checkouts are removed after any abort. */
   private readonly endedReviewers: string[] = [];
+  /** Loop runs: helpers that stopped in this command with work waiting for a decision. */
+  private readonly stoppedHelpers: string[] = [];
 
   constructor(
     state: RunState,
@@ -97,6 +105,9 @@ export class Draft {
       followUp === undefined
         ? undefined
         : { ...followUp, turn: followUp.turn === null ? null : { ...followUp.turn } };
+    this.integration = state.integration === undefined ? undefined : { ...state.integration };
+    this.approvalPolicy = state.approvalPolicy;
+    for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.nowIso = ctx.now.toISOString();
   }
 
@@ -127,8 +138,9 @@ export class Draft {
     return this.agents.filter((a) => a.kind === 'worker');
   }
 
+  /** Workers with a process (ADR-0021: one waiting for its change to be decided has none). */
   liveWorkers(): EngineAgent[] {
-    return this.workers().filter((a) => isLiveAgentStatus(a.status));
+    return this.workers().filter((a) => isActiveAgentStatus(a.status));
   }
 
   idInUse(id: string): boolean {
@@ -157,21 +169,37 @@ export class Draft {
   setAgentStatus(agent: EngineAgent, to: AgentRunStatus): void {
     if (agent.status === to) return;
     assertAgentTransition(agent.status, to);
+    const from = agent.status;
     agent.status = to;
     if (!isLiveAgentStatus(to)) {
       agent.endedAt = this.now;
-      // Helpers and the tester leave a worktree the owner merges or discards (ADR-0019).
-      if (hasReviewableChange(agent.kind) && agent.review === null) agent.review = 'pending';
+      if (hasReviewableChange(agent.kind)) {
+        if (this.integration === undefined) {
+          // Helpers and the tester leave a worktree the owner merges or discards (ADR-0019).
+          if (agent.review === null) agent.review = 'pending';
+        } else if (from !== 'AWAITING_REVIEW' && !this.isStopping()) {
+          // ADR-0021: stopped mid-turn while the run goes on; its work waits for a decision.
+          stoppedWithoutReview(agent);
+          this.stoppedHelpers.push(agent.id);
+        }
+      }
       if (agent.kind === 'reviewer') this.endedReviewers.push(agent.id);
     }
+  }
+
+  /** The run is being stopped or has ended: nothing new is decided or started. */
+  isStopping(): boolean {
+    return this.run.status === 'CANCELLING' || isTerminalRunStatus(this.run.status);
   }
 
   /** Ends a live agent and settles its open approvals first, so no SDK callback is left hanging. */
   endAgent(agent: EngineAgent, to: AgentRunStatus, abort: boolean): void {
     if (!isLiveAgentStatus(agent.status)) return;
+    // An agent waiting for its change to be decided (ADR-0021) has no process to abort.
+    const hasProcess = agent.status !== 'AWAITING_REVIEW';
     this.settlePendingApprovals(agent.id, 'denied', DENIED_AGENT_STOPPED);
     this.setAgentStatus(agent, to);
-    if (abort) this.effects.push({ type: 'abort-agent', agentRunId: agent.id });
+    if (abort && hasProcess) this.effects.push({ type: 'abort-agent', agentRunId: agent.id });
   }
 
   /**
@@ -187,6 +215,9 @@ export class Draft {
     if (seen.has(agent.id)) return;
     seen.add(agent.id);
     for (const child of childrenOf(this, agent.id)) this.endAgentTree(child, to, abort, seen);
+    // ADR-0021: a helper whose turn is over keeps its change for the lead (or owner) to decide;
+    // stopping its parent stops work, not decisions. Only Stop all cancels it.
+    if (agent.status === 'AWAITING_REVIEW') return;
     this.endAgent(agent, to, abort);
   }
 
@@ -292,7 +323,14 @@ export class Draft {
 
   resumeAfterRaise(agent: EngineAgent): void {
     this.setAgentStatus(agent, 'RUNNING');
-    this.effects.push({ type: 'send-to-agent', agentRunId: agent.id, text: RESUME_AFTER_RAISE });
+    // ADR-0021: messages about changes are held while the lead is BLOCKED; list what waits.
+    const waiting =
+      agent.kind === 'lead' && this.integration !== undefined ? waitingLines(this) : [];
+    const text =
+      waiting.length === 0
+        ? RESUME_AFTER_RAISE
+        : `${RESUME_AFTER_RAISE}\n\nChanges not decided yet:\n${waiting.join('\n')}`;
+    this.effects.push({ type: 'send-to-agent', agentRunId: agent.id, text });
   }
 
   /**
@@ -308,9 +346,12 @@ export class Draft {
     for (const agent of this.agents) {
       if (agent.awaitingHelpers !== true || !isLiveAgentStatus(agent.status)) continue;
       const below = descendantsOf(this, agent.id);
-      if (below.some((a) => isLiveAgentStatus(a.status))) continue;
+      // A helper waiting for its change to be decided (ADR-0021) no longer holds its parent.
+      if (below.some((a) => isActiveAgentStatus(a.status))) continue;
       agent.awaitingHelpers = false;
-      this.setAgentStatus(agent, 'SUCCEEDED');
+      // ADR-0021: at depth 2 every change goes through the loop, the parent's own too.
+      if (this.integration !== undefined) enterReview(this, agent, false);
+      else this.setAgentStatus(agent, 'SUCCEEDED');
     }
 
     const lead = this.lead();
@@ -341,6 +382,10 @@ export class Draft {
       }
     }
 
+    const loop = this.integration;
+    const loopStatus = ['RUNNING', 'BLOCKED', 'REVIEW'].includes(this.run.status);
+    if (loop !== undefined && loopStatus) sweepLoop(this, this.stoppedHelpers.splice(0));
+
     if (this.run.status === 'RUNNING' || this.run.status === 'BLOCKED') {
       const leadLive = lead !== undefined && isLiveAgentStatus(lead.status);
       const workers = this.workers();
@@ -349,12 +394,33 @@ export class Draft {
           lead !== undefined && lead.status !== 'SUCCEEDED' && lead.status !== 'CANCELLED';
         this.setRunStatus(workers.length === 0 && leadFailed ? 'FAILED' : 'REVIEW');
       } else {
-        const live = this.agents.filter((a) => isLiveAgentStatus(a.status));
-        const allWaiting = live.every(
-          (a) => a.status === 'WAITING_APPROVAL' || a.status === 'BLOCKED',
-        );
-        this.setRunStatus(allWaiting ? 'BLOCKED' : 'RUNNING');
+        // ADR-0021 §5: after the handover the final stages run on the ticket branch while the run
+        // stays RUNNING and the lead stays live; with none left, the owner's final merge follows.
+        if (loop?.handedOver === true && leadLive && this.loopSettled()) {
+          const next = nextStage(this);
+          if (next === null) this.setRunStatus('REVIEW');
+          else if (!this.stagesHeld) this.startStage(next);
+        }
+        if (this.run.status === 'RUNNING' || this.run.status === 'BLOCKED') {
+          const live = this.agents.filter((a) => isActiveAgentStatus(a.status));
+          const allWaiting = live.every(
+            (a) => a.status === 'WAITING_APPROVAL' || a.status === 'BLOCKED',
+          );
+          this.setRunStatus(allWaiting ? 'BLOCKED' : 'RUNNING');
+        }
       }
+    }
+
+    if (loop !== undefined) {
+      // ADR-0021: REVIEW waits for the owner's single merge of the ticket branch; it never
+      // completes by itself. Without a lead (it ended early, or a restart), the final stages
+      // start here once every change is decided, as in the legacy flow.
+      const leadLive = lead !== undefined && isLiveAgentStatus(lead.status);
+      if (this.run.status === 'REVIEW' && !leadLive && this.loopSettled() && !this.stagesHeld) {
+        const next = nextStage(this);
+        if (next !== null) this.startStage(next);
+      }
+      return;
     }
 
     // REVIEW covers stages 4–6 (ADR-0019): the owner reviews the helpers' changes, then the
@@ -364,9 +430,7 @@ export class Draft {
       const unresolved = this.agents.some(
         (a) => hasReviewableChange(a.kind) && (a.review === null || a.review === 'pending'),
       );
-      const stageLive = this.agents.some(
-        (a) => isPostMergeRole(a.kind) && isLiveAgentStatus(a.status),
-      );
+      const stageLive = this.agents.some((a) => isStageAgent(a) && isLiveAgentStatus(a.status));
       if (!unresolved && !stageLive) {
         const next = nextStage(this);
         if (next === null) {
@@ -380,16 +444,29 @@ export class Draft {
     }
   }
 
+  /** Loop runs: no agent but the lead has a process, and every change is decided. */
+  loopSettled(): boolean {
+    return (
+      !this.agents.some((a) => a.kind !== 'lead' && isActiveAgentStatus(a.status)) &&
+      undecidedChanges(this).length === 0
+    );
+  }
+
   /**
    * Starts the reviewer or the tester (ADR-0019). The helpers are done and reviewed, so the lead's
    * conversation is over and it is stopped, as at completion. The new agent counts as one helper;
    * none is live at this point, so it always fits the run's helper limit.
+   *
+   * ADR-0021 (loop runs): the lead stays live; the reviewer reads a detached checkout of the
+   * ticket branch tip (`reviewScope: 'final'`) and the tester's worktree starts from that tip.
    */
   private startStage(stage: PostMergeStage): void {
     // A reviewer that just ended gives back its checkout before the next stage starts.
     this.flushCheckoutRemovals();
     const lead = this.lead();
-    if (lead !== undefined) this.endAgent(lead, 'CANCELLED', true);
+    const loop = this.integration;
+    if (lead !== undefined && loop === undefined) this.endAgent(lead, 'CANCELLED', true);
+    const branch = loop?.ticketBranch ?? null;
     const kind = stage === 'code-review' ? 'reviewer' : 'tester';
     const agent: EngineAgent = {
       id: this.freshId(),
@@ -413,15 +490,28 @@ export class Draft {
     this.agents.push(agent);
     this.setAgentStatus(agent, 'STARTING');
     if (kind === 'reviewer') {
-      this.effects.push({ type: 'create-review-checkout', agentRunId: agent.id });
+      this.effects.push({
+        type: 'create-review-checkout',
+        agentRunId: agent.id,
+        ...(branch !== null ? { ticketBranch: branch } : {}),
+      });
     }
     const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
+    const loopFields =
+      loop === undefined
+        ? {}
+        : kind === 'reviewer'
+          ? { reviewScope: 'final' as const }
+          : branch !== null
+            ? { fromBranch: branch }
+            : {};
     this.effects.push({
       type: 'start-agent',
       agentRunId: agent.id,
       kind,
       role: agent.role,
       ...launchFields(brief, this.workflow, kind),
+      ...loopFields,
     });
   }
 
@@ -446,6 +536,8 @@ export class Draft {
     if (this.leadBrief !== undefined) state.leadBrief = this.leadBrief;
     if (this.stagesHeld) state.stagesHeld = true;
     if (this.followUp !== undefined) state.followUp = this.followUp;
+    if (this.integration !== undefined) state.integration = this.integration;
+    if (this.approvalPolicy !== undefined) state.approvalPolicy = this.approvalPolicy;
     return state;
   }
 
