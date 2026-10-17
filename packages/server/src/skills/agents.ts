@@ -1,10 +1,4 @@
-import {
-  AgentToolNameSchema,
-  MAX_AGENT_BYTES,
-  MAX_SKILL_DESCRIPTION,
-  stagesUsingAgent,
-  type ProjectWorkflow,
-} from '@acp/core';
+import { AgentToolNameSchema, MAX_AGENT_BYTES, MAX_SKILL_DESCRIPTION } from '@acp/core';
 import {
   AgentDefinitionWriteRequestSchema,
   type AgentDefinitionCommitResultDto,
@@ -16,7 +10,7 @@ import type { Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/index.js';
 import { skillError } from './errors.js';
 import { parseAgentFile, serializeAgentFile } from './frontmatter.js';
-import { inUseError } from './in-use.js';
+import { refuseWhenInUse, type WorkflowUse } from './in-use.js';
 import { agentTarget, listAgentFiles } from './paths.js';
 import { createFileStore, type ProjectRef } from './store.js';
 
@@ -33,10 +27,11 @@ import { createFileStore, type ProjectRef } from './store.js';
 export interface AgentsServiceDeps {
   git: GitRunner;
   /**
-   * The project's saved workflow, for the delete guard. Required, unlike the skills default: the
-   * default workflow names no agent file, so a default would silently turn the guard off.
+   * The project's effective workflow (ADR-0023: its graph, plus the version 1 workflow it came
+   * from), for the delete guard. Required, unlike the skills default: the default workflow names
+   * no agent file, so a default would silently turn the guard off.
    */
-  workflowOf: (projectId: string) => ProjectWorkflow | Promise<ProjectWorkflow>;
+  workflowOf: (projectId: string) => WorkflowUse | Promise<WorkflowUse>;
   logger?: Logger;
   /** The owner's home folder, whose `.claude` is never opened. Injected so tests never use it. */
   homeDir?: string;
@@ -158,8 +153,7 @@ export function createAgentsService(deps: AgentsServiceDeps): AgentsService {
       toDetail: (_project, file) =>
         Promise.resolve(toAgentDetail({ ...file, relFile: file.target.relFile })),
       async beforeDelete(project, name) {
-        const stages = stagesUsingAgent(await deps.workflowOf(project.id), name);
-        if (stages.length > 0) throw inUseError('agent_in_use', 'agent file', stages);
+        refuseWhenInUse(await deps.workflowOf(project.id), 'agent', name);
       },
     },
   );

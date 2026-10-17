@@ -85,7 +85,7 @@ describe('PUT /api/projects/:id/workflow (R-G)', () => {
 
     const again = await s.get(`/api/projects/${s.project.id}/workflow`);
     expect(dtoOf(again).workflow).toEqual(dto.workflow);
-    expect(s.workflow.workflowFor(s.project.id)).toEqual(dto.workflow);
+    expect((await s.workflow.effective(s.project.id)).v1).toEqual(dto.workflow);
   });
 
   it('round-trips stage agent files; a stage without one stays without (R-I)', async () => {

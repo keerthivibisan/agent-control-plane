@@ -1,9 +1,8 @@
 import {
+  DEFAULT_APPROVAL_MODE,
   MAX_SKILL_BYTES,
   MAX_SKILL_DESCRIPTION,
   defaultProjectWorkflow,
-  stagesUsingSkill,
-  type ProjectWorkflow,
 } from '@acp/core';
 import {
   SkillWriteRequestSchema,
@@ -16,7 +15,8 @@ import type { Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/index.js';
 import { skillError } from './errors.js';
 import { parseSkillFile, serializeSkillFile } from './frontmatter.js';
-import { inUseError } from './in-use.js';
+import { effectiveWorkflow, nodesUsing, stagesUsing } from '../workflow/graph.js';
+import { refuseWhenInUse, type WorkflowUse } from './in-use.js';
 import { listSkillFolders, skillTarget } from './paths.js';
 import { createFileStore, type ProjectRef } from './store.js';
 
@@ -31,8 +31,11 @@ export type SkillProject = ProjectRef;
 export interface SkillsServiceDeps {
   git: GitRunner;
   now: () => Date;
-  /** The project's workflow, for "used by" and the delete guard. Default: the default workflow. */
-  workflowOf?: (projectId: string) => ProjectWorkflow | Promise<ProjectWorkflow>;
+  /**
+   * The project's effective workflow (ADR-0023: its graph, plus the version 1 workflow it came
+   * from), for "used by" and the delete guard. Default: the default workflow.
+   */
+  workflowOf?: (projectId: string) => WorkflowUse | Promise<WorkflowUse>;
   logger?: Logger;
   /** The owner's home folder, whose `.claude` is never opened. Injected so tests never use it. */
   homeDir?: string;
@@ -62,9 +65,11 @@ export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
   const { now } = deps;
   const workflowOf =
     deps.workflowOf ??
-    ((projectId: string) => defaultProjectWorkflow(projectId, now().toISOString()));
-  const usedBy = async (project: ProjectRef, name: string) =>
-    stagesUsingSkill(await workflowOf(project.id), name);
+    ((projectId: string): WorkflowUse =>
+      effectiveWorkflow(
+        { kind: 'default', workflow: defaultProjectWorkflow(projectId, now().toISOString()) },
+        DEFAULT_APPROVAL_MODE,
+      ));
 
   const store = createFileStore<SkillWriteRequest, SkillDetailDto>(
     {
@@ -114,11 +119,13 @@ export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
             }
           }
         }
+        const workflow = await workflowOf(project.id);
         return {
           name: file.name,
           description,
           path: file.target.relFile,
-          usedBy: await usedBy(project, file.name),
+          usedBy: stagesUsing(workflow, 'skill', file.name),
+          usedByNodes: nodesUsing(workflow.graph, 'skill', file.name),
           sizeBytes: file.sizeBytes,
           lastCommittedAt: file.lastCommittedAt,
           uncommitted: file.uncommitted,
@@ -127,8 +134,7 @@ export function createSkillsService(deps: SkillsServiceDeps): SkillsService {
         };
       },
       async beforeDelete(project, name) {
-        const stages = await usedBy(project, name);
-        if (stages.length > 0) throw inUseError('skill_in_use', 'skill', stages);
+        refuseWhenInUse(await workflowOf(project.id), 'skill', name);
       },
     },
   );

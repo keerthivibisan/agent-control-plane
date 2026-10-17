@@ -1,6 +1,11 @@
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { defaultProjectWorkflow, type ProjectWorkflow, type SkillName } from '@acp/core';
+import {
+  defaultProjectWorkflow,
+  type ProjectWorkflow,
+  type SkillName,
+  type WorkflowGraph,
+} from '@acp/core';
 import type { LogFields, Logger } from '../../src/logger.js';
 import {
   createAgentsService,
@@ -10,6 +15,8 @@ import {
 import { execFile } from 'node:child_process';
 import { GIT_TEST_ENV, makeRepo, tempDir, type ExecCall } from '../workspace/helpers.js';
 import { createGitRunner, type ExecFileFn } from '../../src/workspace/index.js';
+import { effectiveWorkflow } from '../../src/workflow/graph.js';
+import type { WorkflowUse } from '../../src/skills/in-use.js';
 
 /**
  * Skills tests run against throwaway `git init` repositories in temp dirs (never a real project
@@ -68,23 +75,28 @@ export function setupSkills(
   };
   const git = createGitRunner({ execFile: spyExec, env: GIT_IDENTITY_ENV });
   const { logger, lines } = captureLogger();
-  const state = {
+  // A version 1 workflow (`workflow`), or a stored graph (`graph`, ADR-0023) when one is set.
+  const state: { workflow: ProjectWorkflow; graph?: WorkflowGraph } = {
     workflow: options.workflow ?? defaultProjectWorkflow('p1', SKILLS_NOW.toISOString()),
   };
+  const workflowOf = (): WorkflowUse =>
+    state.graph !== undefined
+      ? { graph: state.graph }
+      : effectiveWorkflow({ kind: 'v1', workflow: state.workflow }, 'auto-edits');
   // A stand-in home folder: the real one (and its ~/.claude) is never consulted.
   const homeDir = tempDir('acp-skills-home-');
   const skills = createSkillsService({
     homeDir,
     git,
     now: () => SKILLS_NOW,
-    workflowOf: () => state.workflow,
+    workflowOf,
     logger,
   });
   const agents = createAgentsService({
     homeDir,
     git,
     logger,
-    workflowOf: () => state.workflow,
+    workflowOf,
   });
   return { root, project, skills, agents, logs: lines, state, calls, homeDir };
 }

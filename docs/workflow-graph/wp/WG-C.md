@@ -17,7 +17,7 @@
 - [x] 1. db: `project_workflow` reads `StoredWorkflowJsonSchema` (v1 or v2), writes v2; a v1 write
       over a stored v2 graph is refused (typed error → 409); the run snapshot gains `graph?` and
       `graphContext?` (Zod on read and write; older snapshots parse); plan steps keep `helper`
-- [ ] 2. Server, project workflow: `GET`/`PUT /api/projects/:id/workflow-graph`,
+- [x] 2. Server, project workflow: `GET`/`PUT /api/projects/:id/workflow-graph`,
       `POST …/workflow-graph/validate`; skills and agent files "used by" from the graph; delete
       guards from the graph; v1 `GET /workflow` answers 409 for a v2-stored project
 - [ ] 3. Server, runs: `startTicket` validates (409 `workflow_invalid`), builds the ceilings and
@@ -38,6 +38,7 @@
 | Date       | What was done                                                                                                                       | Commit  | Checks                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------- |
 | 2026-10-18 | Claimed WG-C                                                                                                                        | b322cf6 | format ✓ lint ✓ typecheck ✓ test 3909/3909 ✓ build ✓ |
-| 2026-10-18 | db: stored workflow v1/v2, graph write, v1 write refused over a graph; snapshot `graph`/`graphContext`; plan step helper round trip | (this)  | format ✓ lint ✓ typecheck ✓ test 3917/3917 ✓ build ✓ |
+| 2026-10-18 | db: stored workflow v1/v2, graph write, v1 write refused over a graph; snapshot `graph`/`graphContext`; plan step helper round trip | 2b7b064 | format ✓ lint ✓ typecheck ✓ test 3917/3917 ✓ build ✓ |
+| 2026-10-18 | Server: `/workflow-graph` GET, PUT (422), validate; v1 routes 409 for a graph; skills and agent files used by graph nodes           | (this)  | format ✓ lint ✓ typecheck ✓ test 3931/3931 ✓ build ✓ |
 
 ## Decisions and findings

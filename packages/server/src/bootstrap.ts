@@ -261,18 +261,19 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     now,
     publish: (n) => notifier.publish(n),
   });
-  // Project skills (ADR-0018): "used by" and the delete guard follow the saved workflow.
+  // Project skills (ADR-0018): "used by" and the delete guard follow the project's workflow graph
+  // (ADR-0023), or its version 1 workflow when it has no graph yet.
   const skills = createSkillsService({
     git,
     now,
     logger,
-    workflowOf: (projectId) => workflow.workflowFor(projectId),
+    workflowOf: (projectId) => workflow.effective(projectId),
   });
-  // Agent files (ADR-0018 amendment): a file a stage uses can't be deleted either.
+  // Agent files (ADR-0018 amendment): a file a node uses can't be deleted either.
   const agents = createAgentsService({
     git,
     logger,
-    workflowOf: (projectId) => workflow.workflowFor(projectId),
+    workflowOf: (projectId) => workflow.effective(projectId),
   });
 
   const app = createApp({
