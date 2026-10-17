@@ -158,6 +158,24 @@ describe('submit_plan', () => {
     expect(refused(submit(stopping))).toBe('run-cancelling');
   });
 
+  it('refuses a step given to the lead or the planner, naming the step', () => {
+    for (const role of ['Lead', ' lead ', 'The lead', 'Planner', 'orchestrator']) {
+      const r = submit(planningRun(), {
+        summary: 'x',
+        steps: [
+          { title: 'Theme store', role: 'Store', detail: 'Persist the theme.' },
+          { title: 'Check it', role, detail: 'Read the result.' },
+        ],
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.refusal.code).toBe('invalid-input');
+        expect(r.refusal.message).toContain('Check it');
+      }
+    }
+    expect(submit(planningRun()).ok).toBe(true);
+  });
+
   it('counts distinct helper roles, ignoring case and the lead', () => {
     expect(
       plannedHelpers([{ role: 'UI' }, { role: 'ui' }, { role: 'Lead' }, { role: ' lead ' }]),

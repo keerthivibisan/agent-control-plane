@@ -134,7 +134,7 @@ export const PLAN_INPUT = {
   steps: [
     { title: 'Theme store', role: 'Store', detail: 'Persist the theme.' },
     { title: 'Toggle', role: 'UI', detail: 'Add the switch.' },
-    { title: 'Wire up', role: 'Lead', detail: 'Check the result.' },
+    { title: 'Wire up', role: 'UI', detail: 'Connect the toggle to the store.' },
   ],
 };
 

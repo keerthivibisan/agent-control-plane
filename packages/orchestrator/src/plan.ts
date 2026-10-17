@@ -21,7 +21,24 @@ import { isLiveAgentStatus } from './transitions.js';
 /** The role name for steps the lead does itself; not counted as a helper. */
 export const LEAD_ROLE = 'Lead';
 
-/** Distinct helper roles in the steps, ignoring case and the lead's own steps. */
+/**
+ * Roles a plan step may not name: the lead and the planner are read-only coordinators, so a step
+ * given to them would never be done (owner report, 2026-10-17). Compared trimmed, ignoring case.
+ */
+const NON_HELPER_ROLES: ReadonlySet<string> = new Set([
+  'lead',
+  'the lead',
+  'lead agent',
+  'planner',
+  'orchestrator',
+]);
+
+/** True when a plan step names a coordinator instead of a helper role. */
+export function isNonHelperRole(role: string): boolean {
+  return NON_HELPER_ROLES.has(role.trim().toLowerCase());
+}
+
+/** Distinct helper roles in the steps, ignoring case and the lead's own steps (older plans). */
 export function plannedHelpers(steps: readonly Pick<PlanStep, 'role'>[]): number {
   const roles = new Set(
     steps.map((s) => s.role.trim().toLowerCase()).filter((r) => r !== LEAD_ROLE.toLowerCase()),
@@ -66,6 +83,13 @@ export function submitPlan(
     const ticketId = d.run.ticketId;
     if (d.run.status !== 'PLANNING' || ticketId === null) {
       return refusal('run-not-active', 'This run is not planning; there is no plan to submit.');
+    }
+    const coordinatorStep = input.steps.find((s) => isNonHelperRole(s.role));
+    if (coordinatorStep !== undefined) {
+      return refusal(
+        'invalid-input',
+        `Step "${coordinatorStep.title}" is given to "${coordinatorStep.role.trim()}". The lead and the planner only coordinate and cannot edit files: give every step the helper role that will do it, then submit the plan again.`,
+      );
     }
     // Defensive: a leftover proposal would make two plans wait at once.
     for (const p of d.plans) {
@@ -218,7 +242,7 @@ export function ticketPlannerPrompt(ticket: TicketBriefFields, limits: RunLimits
     ...ticketHeader(ticket),
     [
       'You are the planner. Read the code you need; you cannot edit files, run commands or start helpers.',
-      `Call submit_plan with a short summary and 1 to 12 steps. Give each step the helper role that will do it, or "${LEAD_ROLE}" for steps the lead agent does itself.`,
+      `Call submit_plan with a short summary and 1 to 12 steps. Give every step the helper role that will do it (for example "API builder" or "Tests"). The lead only coordinates and cannot edit files, so reading the code and coordinating are not steps, and no step may be given to "${LEAD_ROLE}".`,
       'If the owner asks for changes, you will get their comment: revise the plan and call submit_plan again.',
       'Once the owner approves the plan, a lead agent carries it out and your work is done.',
       `Up to ${limits.maxConcurrentHelpers} helpers can work at once.`,
@@ -296,7 +320,7 @@ export function ticketLeadPrompt(
     description.length > 0 ? description : '(No description.)',
     [
       'Plan first. Read the code you need; edits, commands and helpers are refused until the owner approves your plan.',
-      `Then call submit_plan with a short summary and 1 to 12 steps. Give each step the helper role that will do it, or "${LEAD_ROLE}" for steps you do yourself.`,
+      `Then call submit_plan with a short summary and 1 to 12 steps. Give every step the helper role that will do it (for example "API builder" or "Tests"). You only coordinate and cannot edit files, so reading the code and coordinating are not steps, and no step may be given to "${LEAD_ROLE}".`,
       'If the owner asks for changes, you will get their comment: revise the plan and call submit_plan again.',
       `After approval, up to ${limits.maxConcurrentHelpers} helpers can work at once.`,
       limits.maxDepth >= 2
