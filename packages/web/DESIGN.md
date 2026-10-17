@@ -11,9 +11,11 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > **v2 direction (UI refresh for v0.1.0, owner decision 2026-10-17; see
 > [docs/ui-refresh/README.md](../../docs/ui-refresh/README.md)):**
 >
-> - Linear/Vercel style: neutral zinc greys and one blue (Jira/YouTrack-like; owner changed it from blue on 2026-10-17) accent;
-> - near-black dark surfaces, hairline borders, radius 8/6 px, almost no shadows;
-> - Geist Sans and Geist Mono (bundled), lucide icons;
+> - Linear/Vercel style with the **Control Core brand** (WP U-G, owner decisions in
+>   [brand-brief.md](../../docs/ui-refresh/brand-brief.md)): warm ivory light theme, graphite dark
+>   theme, one signal-lime accent;
+> - hairline borders, radius 8/6 px for cards and controls, square agent nodes, almost no shadows;
+> - Inter and JetBrains Mono (bundled), lucide icons;
 > - Radix for dialogs, menus, tabs, popovers and tooltips;
 > - subtle motion that respects reduced motion.
 >
@@ -34,7 +36,7 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
    - token types are shown side by side and **never added into one total**;
    - there is no "completed" status;
    - a parent we have no evidence for reads "No known parent".
-4. **Calm visuals.** Neutral surfaces, one accent color, soft rounded cards, generous spacing, light
+4. **Calm visuals.** Neutral surfaces, one accent color, softly rounded cards (square agent nodes), generous spacing, light
    and dark themes, readable 14–15px body text, tabular numbers. Color is never the only signal
    (status has a word and an icon/dot).
 5. **Fewer words on the page.** One short line under each title. Longer explanations go into an
@@ -67,8 +69,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
   `available` ones), a divider, then **All projects** and **Data health**. The footer has the
   live-connection dot and the server status. Above 1280px it shows labels (15rem); at **1280px and
   below it collapses to icons** (4.5rem; the label stays as `title` and screen-reader text). The
-  `wide:` Tailwind variant is that breakpoint (1281px). The active entry has a soft accent fill
-  and a 3px accent bar on the left.
+  `wide:` Tailwind variant is that breakpoint (1281px). The active entry is a raised `panel` step
+  with a hairline and a 3px signal-lime marker on its left edge (outlined in `accent-fill-edge`).
 - **Which project:** the one in the address (`#/p/:projectId/...`), else the last one used
   (`src/app/last-project.ts`, localStorage, every access in try/catch). On All projects the
   switcher reads "All projects". The project section is hidden when there is no project.
@@ -130,37 +132,55 @@ Enter opens, Esc closes, Tab stays in the field, and focus returns to the opener
 
 ## Visual system (src/index.css, src/components)
 
-v2 (UI refresh, WP U-A): Linear/Vercel style. Neutral zinc greys, one blue accent,
-hairline borders, near-black dark surfaces, almost no shadows.
+v2 (UI refresh, WP U-A), branded in WP U-G: Linear/Vercel structure (hairline borders, almost
+no shadows) on the Control Core palette: **graphite `#171717`**, **warm ivory `#F4F0E8`** and
+**signal lime `#D8FF64`** (README, "Brand").
 
 **Tokens.** All colors are CSS variables in `@theme` (`src/index.css`); `.dark` only redefines
 values, and every name is also a Tailwind utility (`bg-panel`, `text-dim`). Charts, graphs and
-React Flow read the same names, so never rename one; add a new one instead. Every text pair below
-meets WCAG AA (4.5:1) in both themes.
+React Flow read the same names, so never rename one; add a new one instead. The three brand colors
+are tokens of their own (`brand-graphite`, `brand-ivory`, `brand-lime`) and the UI tokens derive
+from them. `tests/design/contrast.test.ts` reads `index.css` and checks every pair below in both
+themes: text 4.5:1 (AA), lines, dots, rings and chart series 3:1.
 
-| Token                                                                                                | Light                         | Dark                          | Use                                                  |
-| ---------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------- | ---------------------------------------------------- |
-| `canvas` / `panel` / `sunken`                                                                        | `#fafafa` `#ffffff` `#f4f4f5` | `#0a0a0b` `#131315` `#0f0f11` | page; cards; wells, tracks, segmented controls       |
-| `panel-raised`                                                                                       | `#ffffff`                     | `#18181b`                     | menus, popovers, dialogs (above a panel)             |
-| `hover`                                                                                              | `#f4f4f5`                     | `#1b1b1e`                     | row, item and quiet-button hover                     |
-| `sidebar`                                                                                            | `#f7f7f8`                     | `#0c0c0e`                     | the sidebar and top bar surface (U-B)                |
-| `ink` / `dim`                                                                                        | `#09090b` / `#5f5f69`         | `#ededef` / `#9f9fa9`         | text; secondary text                                 |
-| `line` / `line-strong`                                                                               | `#e8e8eb` / `#d6d6db`         | `#232327` / `#333339`         | hairline borders; field borders and hover borders    |
-| `overlay`                                                                                            | zinc-950 at 40%               | black at 60%                  | modal backdrop                                       |
-| `accent` / `accent-soft`                                                                             | `#0c66e4` / `#e9f2ff`         | `#579dff` / `#1c2b41`         | links, focus ring, selection, active nav; soft fills |
-| `accent-ink`                                                                                         | `#ffffff`                     | `#0a0a0b`                     | text on an `accent` fill                             |
-| `accent-fill` (`-hover/-ink`)                                                                        | `#0c66e4` / white text        | `#0c66e4` / white text        | the primary button and the brand mark                |
-| `observed` / `derived`                                                                               | `#047857` / `#0369a1`         | `#6ee7b7` / `#7dd3fc`         | `ProvenanceBadge`                                    |
-| `status-*`, `success`, `warning(-soft)`, `danger(-soft)`, `token-*`, `estimated(-bg)`, `unavailable` | see `index.css`               | see `index.css`               | **meaning only**, never decoration                   |
+| Token                                                     | Light                         | Dark                          | Use                                                       |
+| --------------------------------------------------------- | ----------------------------- | ----------------------------- | --------------------------------------------------------- |
+| `brand-graphite` / `brand-ivory` / `brand-lime`           | `#171717` `#f4f0e8` `#d8ff64` | same                          | the identity; the tokens below derive from them           |
+| `canvas` / `panel` / `sunken`                             | `#f4f0e8` `#fbf9f5` `#ebe6dc` | `#171717` `#1d1d1d` `#121212` | page (ivory / graphite); cards; wells, tracks, segmented  |
+| `panel-raised`                                            | `#fefdfb`                     | `#252525`                     | menus, popovers, dialogs (above a panel)                  |
+| `hover`                                                   | `#efebe3`                     | `#282828`                     | row, item and quiet-button hover                          |
+| `sidebar`                                                 | `#efeae1`                     | `#131313`                     | the sidebar and top bar surface                           |
+| `ink` / `dim`                                             | `#171717` / `#5c5850`         | `#f4f0e8` / `#a6a29a`         | text (graphite / ivory); secondary text                   |
+| `line` / `line-strong`                                    | `#e2dcd0` / `#cdc6b8`         | `#2c2c2c` / `#3b3b3b`         | warm-neutral hairlines; field and hover borders           |
+| `overlay`                                                 | graphite at 40%               | black at 60%                  | modal backdrop                                            |
+| `accent`                                                  | `#4b5e00` (dark olive)        | `#d8ff64` (lime)              | the text-safe accent: links, focus ring, selected text    |
+| `accent-soft`                                             | `#e9ecd2`                     | `#2a2f1a`                     | quiet selected fills (table row, accent pill, chips)      |
+| `accent-ink`                                              | `#fbf9f5`                     | `#171717`                     | text on an `accent` fill                                  |
+| `accent-fill` (`-hover`) / `accent-fill-ink`              | lime (`#cdf54f`) / graphite   | lime (`#e3ff8a`) / graphite   | the primary button, active and selected markers, the logo |
+| `accent-fill-edge`                                        | `#6f8a12`                     | lime                          | outlines a lime fill or selection where it sits on ivory  |
+| `observed` / `derived`                                    | `#11704f` / `#1f5f8f`         | `#78dcb4` / `#8cc4ee`         | `ProvenanceBadge`                                         |
+| `status-*`, `success`, `warning(-soft)`, `danger(-soft)`, | see `index.css`               | see `index.css`               | **meaning only**, never decoration                        |
+| `token-*`, `estimated(-bg)`, `unavailable`                |                               |                               |                                                           |
 
 In the dark theme elevation goes lighter (canvas < `sunken` < `panel` < `panel-raised`), so board
 columns and wells sit below the cards on them, as `sunken` does in the light theme.
 
-`accent` is light in the dark theme so it reads as text on near-black; that is why the primary
-button uses `accent-fill`, which stays dark enough for white text in both themes.
+**Lime is a fill, not text, on ivory** (it is 1.1:1 against the canvas). In the light theme,
+anything that must be read in the accent (links, selected text, the focus ring) uses `accent`, the
+dark olive; in the dark theme `accent` is the lime itself. Lime fills carry graphite text
+(`accent-fill-ink`, 15.7:1). On ivory a lime fill or selection ring gets an `accent-fill-edge`
+outline so it stays a shape. Lime is never a large background (the demo banner is a neutral
+`sunken` band).
 
-- **Type:** Geist Sans for the UI, Geist Mono for ids, keys, numbers in code and paths (both
-  bundled, latin `woff2` only: `src/components/fonts.css`). Body 14/20px; `text-micro` 11px (tiny
+Measured ratios (light / dark): `ink` on every surface ≥ 14.4 / ≥ 12.9; `dim` ≥ 5.6 / ≥ 5.8;
+`accent` ≥ 5.8 / ≥ 12.1; graphite on lime 15.7 (hover 14.3 / 16.2); `success` 5.4 / 9.2;
+`warning` 5.3 / 8.7; `danger` 5.6 / 6.4; `observed` 5.8 / 10.2; `derived` 6.5 / 9.0;
+`estimated` on its band 6.5 / 10.2; `unavailable` 5.3 / 6.1; `accent-fill-edge` 3.5 / 14.8;
+status dots ≥ 3.7 / ≥ 4.7; chart series (`token-*`) ≥ 3.8 / ≥ 6.9.
+
+- **Type:** Inter for the UI, JetBrains Mono for ids, keys, numbers in code and paths (both
+  bundled, latin `woff2` only: `src/components/fonts.css`). The wordmark is Inter semibold,
+  uppercase, tracked 0.1em. Body 14/20px; `text-micro` 11px (tiny
   badges and technical lines only); `text-caption` 12px; `text-title` 15px (card titles);
   `text-section` 18px; `text-page` 24px; `text-stat` 26px. Headings carry their own tighter
   tracking in the token (don't add `tracking-tight`). Tables and `<time>` use tabular numbers;
@@ -171,8 +191,9 @@ button uses `accent-fill`, which stays dark enough for white text in both themes
   round, tags (`Badge`) 5px. Borders are 1px `line`; hover moves to `line-strong`.
 - **Elevation:** flat. `shadow-card` is almost nothing (none in dark), `shadow-raised` a hint on
   hover of clickable cards, `shadow-pop` only for menus, popovers, dialogs and tooltips.
-- **Focus:** a 2px `accent` outline with a 2px offset on every interactive element (base layer);
-  fields instead turn their border `accent` with a soft 3px accent ring.
+- **Focus:** a 2px `accent` outline (olive on ivory, lime on graphite) with a 2px offset on every
+  interactive element (base layer); fields instead turn their border `accent` with a soft 3px
+  accent ring.
 - **Motion** (`src/components/motion.tsx`, keyframes in `index.css`): 150–200ms, ease-out
   (`--ease-out-soft`). Menus and popovers `animate-pop-in`, dialogs `animate-dialog-in`, tooltips
   and backdrops `animate-fade-in`; Motion presets `fade`, `fadeUp`, `slideInRight`, `list` /
@@ -201,7 +222,7 @@ put it on an inner element.
   instead of spinners; the loading words stay in the page, visually hidden. `QueryView` uses
   `LoadingBlock`.
 - **Buttons** (`Button`, `ButtonLink`, `buttonClass`): 32px (`sm`: 28px). `primary`
-  (`accent-fill`, one per page area), `secondary` (bordered panel), `quiet` (text, `hover` fill),
+  (signal lime with graphite text and an `accent-fill-edge` hairline, one per page area), `secondary` (bordered panel), `quiet` (text, `hover` fill),
   `danger` (soft red, for confirmations).
 - **Inputs** (`Input.tsx`): **native** `<input>`, `<select>`, `<textarea>`, checkboxes and radios,
   restyled. One field style, `fieldClass` (34px, `line-strong` border, accent focus, danger border
@@ -228,12 +249,39 @@ put it on an inner element.
   `canvas` text; dark theme: `panel-raised` with a `line-strong` border. 12px text.
 - **Errors** (`ErrorNotice`): an alert on `warning-soft` (server unreachable) or `danger-soft`,
   with an icon; tokens only.
-- **Brand** (`BrandMark`): "AC" on an `accent-fill` tile, tokens only; the app name or a label
-  next to it names it.
+- **Brand** (`BrandMark`, `BrandLogo`): the Control Core drawn with `currentColor` (graphite on
+  ivory, ivory on graphite) and an `accent-fill` centre framed in the mark's own color; `tone="mono"`
+  for one color. From 20px it uses the master geometry (48 grid), below it the 16-grid one (the
+  favicon's). Decorative (`aria-hidden`) unless given a `label`, which makes it `role="img"`.
+  `BrandLogo` adds the wordmark: the app name as text, uppercase in CSS only, or screen-reader-only
+  with `hideName` (the icon rail). The static files and their rules are in the README, "Brand".
+  The logo is identity, never decoration: one in the top bar, one in the tab.
 - **Icons** (`components/icons.tsx`): lucide icons under the app's names (`BoardNavIcon`,
   `TokensIcon`, …), `IconProps` (`size`, SVG props), 1.75px strokes, `currentColor`,
   `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
   `FeatureIcon`, `BugIcon`, `ChoreIcon` and `CloseIcon` are there for the board and dialogs.
+
+## Agent views (the logo's vocabulary)
+
+The ticket's agent canvas, its live workflow, the Workflow page, the sessions graph and the legacy
+control tree draw agents the way the logo does (owner decision, WP U-G):
+
+- **Square nodes:** agent and stage nodes have a 2px radius (React Flow's
+  `--xy-node-border-radius` too); tags on them are square as well. Start and Done stay pills: they
+  are not agents.
+- **The controller stands out:** the lead (and the root of a sessions graph) is framed in `ink`;
+  other agents in `line`.
+- **Straight connectors:** React Flow edges are `step` (straight segments, square corners); the CSS
+  trees draw straight elbows in `line-strong`. Lines are neutral (`dim`, `ink`); kinds differ by
+  dashes, never by the accent.
+- **Lime means working or selected, nothing else:** a working agent has a lime top edge; the
+  selected node a lime ring (with an `accent-fill-edge` border on ivory); the live workflow's
+  working stage an outline with a lime halo. Idle and finished agents are neutral, and the budget
+  bar is neutral within budget.
+- **Warning and danger only for real states:** a request waiting for you, a failed stage, a budget
+  near or over its limit.
+- Diagrams show only real relationships and states (AGENTS.md rule 1): no decorative nodes or
+  lines.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 

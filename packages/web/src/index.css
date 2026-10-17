@@ -4,12 +4,12 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens v2 (packages/web/DESIGN.md, "Visual system"): a neutral zinc scale, near-black dark
- * surfaces, hairline borders, one blue accent (Jira/YouTrack-like; owner, 2026-10-17), near-zero
- * shadows except on popovers. Every color is a CSS variable so the dark theme only redefines
- * values, never class names; charts, graphs and React Flow read the same names. Each `--color-*`
- * here is also a Tailwind utility (`bg-panel`, `text-dim`, `bg-token-output`, ...). Text pairs
- * meet WCAG AA in both themes.
+ * Design tokens v2 (packages/web/DESIGN.md, "Visual system"), on the Control Core brand (WP U-G):
+ * warm ivory light surfaces, graphite dark ones, hairline borders, one signal-lime accent,
+ * near-zero shadows except on popovers. Every color is a CSS variable so the dark theme only
+ * redefines values, never class names; charts, graphs and React Flow read the same names. Each
+ * `--color-*` here is also a Tailwind utility (`bg-panel`, `text-dim`, `bg-token-output`, ...).
+ * Text pairs meet WCAG AA in both themes (tests/design/contrast.test.ts).
  */
 @theme {
   --font-sans:

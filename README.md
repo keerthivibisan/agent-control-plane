@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/control-plane-logo-on-dark.svg">
+    <img src="docs/brand/control-plane-logo.svg" alt="Agent Control Plane" width="390">
+  </picture>
+</p>
+
 # Agent Control Plane
 
 **One control plane for every coding agent.** Agent Control Plane is an open-source, local-first
@@ -130,6 +137,35 @@ data in a separate database, or `ACP_MANAGED=off` to turn managed agents off.
 
 `pnpm check` runs format check, lint, typecheck, tests, and build. Details are in
 [docs/development.md](docs/development.md).
+
+## Brand
+
+The mark is the **Control Core**: a dominant centre square (the control plane), four smaller
+square nodes at the corners (the managed agents) and straight diagonal connectors (coordination
+and delegated work). The files are in [docs/brand/](docs/brand/) (the app serves the same files
+from `packages/web/public/brand/`).
+
+| File                             | Use                                                            |
+| -------------------------------- | -------------------------------------------------------------- |
+| `control-plane-logo.svg`         | primary: the mark and the AGENT CONTROL PLANE wordmark, light  |
+| `control-plane-logo-on-dark.svg` | the same on dark backgrounds                                   |
+| `control-plane-mark.svg`         | the symbol alone (navigation, avatar), lime centre, light      |
+| `control-plane-mark-on-dark.svg` | the symbol on dark backgrounds                                 |
+| `control-plane-*-mono-dark.svg`  | one color, graphite, for light backgrounds                     |
+| `control-plane-*-mono-light.svg` | one color, ivory, for dark backgrounds                         |
+| `favicon.svg`                    | the browser tab: a 16-pixel grid, follows the light/dark theme |
+
+- **Colors:** graphite `#171717` and warm ivory `#F4F0E8` are the identity; signal lime
+  `#D8FF64` is the accent, used as a fill (the logo's centre, primary buttons, active and selected
+  markers), never as a large background and never as small text on ivory.
+- **Fonts:** Inter for the interface and the wordmark (uppercase, semibold, tracked), JetBrains
+  Mono for ids, keys and other technical labels. Both are bundled; nothing loads from a CDN. In
+  the standalone SVGs the wordmark is live text in a system-safe stack (Inter, Helvetica Neue,
+  Arial) whose width is fixed, so the lockup keeps its proportions with any of them.
+- **Usage:** keep the mark square and undistorted, with clear space of at least one corner node
+  around it; don't recolor it beyond the variants above, add effects, or use it as decoration.
+  In the app, `BrandMark` and `BrandLogo` (`packages/web/src/components/BrandMark.tsx`) draw it
+  from the theme's tokens.
 
 ## Documentation
 
