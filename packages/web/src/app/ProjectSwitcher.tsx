@@ -37,7 +37,7 @@ export function ProjectMark({ name, size = 'md' }: { name: string; size?: 'sm' |
 }
 
 const itemClass = (selected: boolean) =>
-  `flex items-center gap-2.5 rounded-control px-2 py-1.5 text-ink no-underline outline-none select-none data-[highlighted]:bg-hover focus-visible:outline-none ${
+  `flex items-center gap-2.5 rounded-control px-2 py-1.5 text-ink no-underline outline-none select-none data-[highlighted]:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid ${
     selected ? 'bg-accent-soft/50' : ''
   }`;
 

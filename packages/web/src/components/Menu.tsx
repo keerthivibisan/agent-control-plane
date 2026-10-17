@@ -70,7 +70,7 @@ export function Menu({
 }
 
 const itemClass =
-  'flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover';
+  'flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover';
 
 /** One choice in a `Menu`. `tone="danger"` for a destructive one (cancel, delete). */
 export function MenuItem({

@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expectFocusRing } from './focus-ring.js';
 import { PROJECT_ID, TICKET_ID, fixtureProject, workingScenario } from './ticket-fixtures.js';
 
 /*
@@ -482,3 +483,50 @@ test('brand: the favicon and the top-bar mark are the Control Core; the bar fits
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: `${SHOTS}/brand-mark-sizes.png`, fullPage: true });
 });
+
+// --- U-V (verification), add-only: the board from the keyboard, with a visible focus ring.
+
+test('board keyboard: Move menu items and column Show/Hide show a focus ring on ivory and graphite (U-V)', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  await withTickets(page, project.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto(`/#/p/${project.id}/board`);
+    await expect(page.getByTestId('board-counts')).toBeVisible();
+    await page.keyboard.press('Shift');
+
+    // The Move menu: the highlighted item carries the ring, and the arrows wrap.
+    const move = page.getByRole('button', { name: 'Move API-2' });
+    await move.focus();
+    await expectFocusRing(page, 'Move API-2');
+    await page.keyboard.press('ArrowDown');
+    const menu = page.getByRole('menu', { name: 'Move API-2' });
+    await expect(menu.getByRole('menuitem', { name: 'Move to Backlog' })).toBeFocused();
+    await expectFocusRing(page, 'Move to Backlog');
+    await page.keyboard.press('ArrowUp');
+    await expect(menu.getByRole('menuitem', { name: 'Cancel ticket…' })).toBeFocused();
+    await expectFocusRing(page, 'Cancel ticket…');
+    if (SHOTS !== undefined) {
+      await page.screenshot({ path: `${SHOTS}/uv-move-menu-focus-1440-${scheme}.png` });
+    }
+    await page.keyboard.press('Escape');
+    await expect(move).toBeFocused();
+
+    // A folded column: Show unfolds it and focus moves to its Hide button, and back.
+    const planning = page.getByTestId('column-PLANNING');
+    await planning.getByRole('button', { name: /^Show planning/ }).focus();
+    await expectFocusRing(page, /^Show planning/);
+    await page.keyboard.press('Enter');
+    await expect(planning).not.toHaveAttribute('data-collapsed', 'true');
+    await expect(planning.getByRole('button', { name: 'Hide planning' })).toBeFocused();
+    await expectFocusRing(page, 'Hide planning');
+    await page.keyboard.press('Enter');
+    await expect(planning).toHaveAttribute('data-collapsed', 'true');
+    await expect(planning.getByRole('button', { name: /^Show planning/ })).toBeFocused();
+  }
+});
+// --- end U-V

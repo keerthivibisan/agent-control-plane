@@ -326,13 +326,30 @@ export function BoardColumns({
   // Folded columns the owner opened.
   const [opened, setOpened] = useState<ReadonlySet<TicketStage>>(new Set());
   const scroller = useRef<HTMLDivElement>(null);
-  const toggle = (stage: TicketStage, open: boolean) =>
+  // Show and Hide swap the column for its rail (and back), so the button that had focus goes
+  // away; focus moves to the one that replaced it, so a keyboard user keeps their place.
+  const refocus = useRef<{ stage: TicketStage; open: boolean } | null>(null);
+  const toggle = (stage: TicketStage, open: boolean) => {
+    const column = scroller.current?.querySelector(`[data-testid="column-${stage}"]`);
+    refocus.current = column?.contains(document.activeElement) === true ? { stage, open } : null;
     setOpened((prev) => {
       const next = new Set(prev);
       if (open) next.add(stage);
       else next.delete(stage);
       return next;
     });
+  };
+  useEffect(() => {
+    const want = refocus.current;
+    if (want === null) return;
+    refocus.current = null;
+    const word = STAGE_COPY[want.stage].word;
+    const column = scroller.current?.querySelector(`[data-testid="column-${want.stage}"]`);
+    const target = want.open
+      ? column?.querySelector<HTMLElement>(`button[aria-label="${C.hideLabel(word)}"]`)
+      : column?.querySelector<HTMLElement>('button');
+    target?.focus();
+  }, [opened]);
   const drop: DropProps = {
     dragging,
     onDrop: (ticket, target) => {

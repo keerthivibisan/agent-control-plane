@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
 import { BoardPage } from '../../src/features/board/BoardPage';
@@ -119,6 +119,29 @@ describe('board: layout and honest numbers', () => {
     expect(screen.getByTestId('column-PLANNING').dataset.collapsed).toBe('true');
     // jsdom has no layout, so the row never overflows and shows no scroll hint.
     expect(screen.queryByTestId('board-scroll-on')).toBeNull();
+  });
+
+  // U-V keyboard pass: Show and Hide replace the button that had focus.
+  it('keeps keyboard focus on the column toggle when Show and Hide swap the rail', async () => {
+    renderBoard(server());
+    await screen.findAllByTestId('ticket-card');
+    const show = within(screen.getByTestId('column-PLANNING')).getByRole('button', {
+      name: 'Show planning (0)',
+    });
+    act(() => show.focus());
+    fireEvent.click(show);
+    const hide = within(screen.getByTestId('column-PLANNING')).getByRole('button', {
+      name: 'Hide planning',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(hide));
+    fireEvent.click(hide);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        within(screen.getByTestId('column-PLANNING')).getByRole('button', {
+          name: 'Show planning (0)',
+        }),
+      ),
+    );
   });
 
   it('a folded empty column still takes a drop', async () => {

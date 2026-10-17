@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expectFocusRing } from './focus-ring.js';
 import { PROJECT_ID, TICKET_ID, fixtureProject, workingScenario } from './ticket-fixtures.js';
 
 /*
@@ -295,6 +296,62 @@ test.describe('U-V', () => {
       [el, el.parentElement].map((e) => (e ? getComputedStyle(e).animationDuration : '0s')),
     );
     for (const d of durations) expect(parseFloat(d)).toBeLessThan(0.001);
+  });
+
+  // The board's Move menu and column Show/Hide are in shell.spec (they need tickets on the board).
+  test('keyboard: the sidebar toggle, a dialog and tabs, with a focus ring on ivory and graphite', async ({
+    page,
+    request,
+  }) => {
+    const project = await demoApi(request);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto(`/#/p/${project.id}/board`);
+      await expect(h1(page)).toContainText('demo-api');
+      // A key press first, so focus moved by script counts as keyboard focus (:focus-visible).
+      await page.keyboard.press('Shift');
+
+      // The sidebar toggle works from the keyboard and keeps focus.
+      const sidebar = page.getByTestId('sidebar');
+      await page.getByRole('button', { name: 'Collapse sidebar' }).focus();
+      await expectFocusRing(page, 'Collapse sidebar');
+      await page.keyboard.press('Enter');
+      await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+      await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
+
+      // New ticket: focus goes into the dialog; Escape closes it and returns focus.
+      const open = page.getByRole('button', { name: 'New ticket' }).first();
+      await open.focus();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'New ticket' });
+      await expect(dialog.getByLabel('Title')).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(open).toBeFocused();
+      await expectFocusRing(page, 'New ticket');
+
+      // Tabs on Skills & Agents: the arrows move and select, with the ring on the tab.
+      await page.goto(`/#/p/${project.id}/skills`);
+      await page.getByRole('tab', { name: 'Skills' }).focus();
+      await page.keyboard.press('ArrowRight');
+      const agents = page.getByRole('tab', { name: 'Agents' });
+      await expect(agents).toBeFocused();
+      await expect(agents).toHaveAttribute('aria-selected', 'true');
+      await expectFocusRing(page, 'Agents');
+
+      // Data health's section links take the same ring.
+      await page.goto('/#/health');
+      await page
+        .getByRole('navigation', { name: 'Data health sections' })
+        .getByRole('link', {
+          name: 'Connection',
+        })
+        .focus();
+      await expectFocusRing(page, 'Connection');
+    }
   });
 });
 // --- end U-V
