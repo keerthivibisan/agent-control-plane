@@ -73,13 +73,13 @@ describe('approval modes (ADR-0021 §1)', () => {
     ]);
   });
 
-  it('maps a legacy allowlist: edits on is auto edits, anything else manual, no commands', () => {
+  it('maps a legacy allowlist without widening it: both on is auto edits, else manual', () => {
     expect(approvalsFromLegacy({ editInOwnWorktree: true, runHarnessChecks: true })).toEqual({
       mode: 'auto-edits',
       commands: [],
     });
     expect(approvalsFromLegacy({ editInOwnWorktree: true, runHarnessChecks: false })).toEqual({
-      mode: 'auto-edits',
+      mode: 'manual',
       commands: [],
     });
     expect(approvalsFromLegacy({ editInOwnWorktree: false, runHarnessChecks: true })).toEqual({

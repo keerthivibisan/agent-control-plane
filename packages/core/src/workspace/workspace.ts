@@ -340,11 +340,14 @@ export const ProjectApprovalsSchema = z.object({
 export type ProjectApprovals = z.infer<typeof ProjectApprovalsSchema>;
 
 /**
- * The mode a project set up before ADR-0021 behaves as: edits pre-approved means `auto-edits`,
- * anything else `manual`. No command allowlist existed, so `commands` is empty.
+ * The mode a project set up before ADR-0021 behaves as. A legacy setup is never widened: only a
+ * project that already pre-approved both edits and harness checks is `auto-edits`; any other mix is
+ * `manual`, which can only ask more often (coordinator decision 2026-10-17, ADR-0021 §1). No command
+ * allowlist existed, so `commands` is empty.
  */
 export function approvalsFromLegacy(allowlist: ProjectAllowlist): ProjectApprovals {
-  return { mode: allowlist.editInOwnWorktree ? 'auto-edits' : 'manual', commands: [] };
+  const both = allowlist.editInOwnWorktree && allowlist.runHarnessChecks;
+  return { mode: both ? 'auto-edits' : 'manual', commands: [] };
 }
 
 /** A project's effective approvals: its own, or the legacy allowlist's mapping when it has none. */

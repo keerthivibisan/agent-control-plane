@@ -1,6 +1,6 @@
 # ADR-0021: Approval modes, the review loop and the ticket branch
 
-- **Status:** proposed — owner decisions 2026-10-17, awaiting coordinator acceptance
+- **Status:** accepted — owner decisions in chat 2026-10-17 (docs/review-loop/README.md §1); accepted by the coordinator on those decisions
 - **Date:** 2026-10-17
 - **Deciders:** project owner (decisions, docs/review-loop/STATUS.md); coordinator (RL-0 draft)
 - **Amends:** ADR-0013 §4–§5 and its 2026-10-13 amendment, ADR-0016 (stored text), ADR-0017 §4,
@@ -43,7 +43,7 @@ and unit tests (ADR-0019) run after those merges, and the engine stops the lead 
      decided by `allowlist`.
    - **New projects** start on `auto-edits` (`DEFAULT_APPROVAL_MODE`). **Existing projects** keep
      their behaviour: a setup without `approvals` maps from its legacy allowlist
-     (`approvalsFromLegacy`: edits on → `auto-edits`, otherwise `manual`; no commands). The legacy
+     (`approvalsFromLegacy`: only a setup that pre-approved both edits and harness checks becomes `auto-edits`; any other mix becomes `manual`, so a legacy setup is never widened; no commands). The legacy
      `allowlist` field stays until the server and web move off it.
 
 2. **The command allowlist and its format.** At most `MAX_COMMAND_PATTERNS = 30` patterns per
@@ -173,7 +173,10 @@ lead, the lead, planner and orchestrator. Control-tool names in an agent's "Late
   gate's modes, the change tools and the final-merge routes. **Web (RL-D):** the approvals editor,
   the Start dialog, change cards and the ticket-branch card.
 - Runs started before this ADR keep the legacy flow (no snapshot, no ticket branch).
-- **Open points for acceptance** (RL-0 report): the legacy mapping makes a project with edits on and
-  checks off auto-approve exact harness checks; the column is `commit_sha` because `commit` is an
-  SQL keyword; the ticket-branch request has a fifth action `update-from-base` for "Update from
-  main"; `RunDetailDto.changes` carries the change cards.
+- **Settled at acceptance (2026-10-17):**
+  - the legacy mapping never widens a setup: edits on with checks off maps to `manual`, not
+    `auto-edits`;
+  - the column is `commit_sha`, because `commit` is an SQL keyword;
+  - the ticket-branch request has a fifth action, `update-from-base`, for "Update from main";
+  - `RunDetailDto.changes` carries the change cards;
+  - enum-like columns are length-checked in SQL and value-checked by Zod, as in 0002–0005.
