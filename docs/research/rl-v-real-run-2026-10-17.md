@@ -98,3 +98,37 @@ Same driver and setup, on `feature/ui-refresh` `57387c1`.
 
 - **Content:** 71 log lines with no plan summary, comment text or diff line; no diff line in the
   database (21 diff lines checked).
+
+## Third run: Full auto after RL-G and RL-H (2026-10-17, owner consent): passed
+
+The same driver with `ACP_REAL_RUN_MODE=full-auto`, on `feature/ui-refresh` `4242ce4`.
+
+- **Every Full auto assertion was true:** no owner approvals, the plan approved automatically,
+  helpers started, helpers asked for auto mode and the sandbox, helpers reported auto mode, the
+  other roles stayed default, no protection failures, the final merge reached.
+- **Counts:** the owner was asked 0 times, the plan never waited for the owner, 0 requests were
+  denied without asking, and 0 were denied by the classifier.
+- **Permission modes** (`system/init`):
+  - helpers: `permissionMode: auto`, with the sandbox requested;
+  - lead, change reviewers and final reviewer: `default`, with no sandbox.
+- **Run:** `COMPLETED`, ticket `DONE`. Plan, orchestrate, helpers, review and code-review were all
+  `done`; there was no nudge. Two changes were approved by review agents and merged by the lead
+  into `acp/RLV-1` (2 files each, checks passed, 0 rework rounds). The owner's final merge put
+  `main` at the merged commit, and the branch was deleted.
+- **Budget tokens:**
+
+  | Agent     | Budget tokens (of 80k) |
+  | --------- | ---------------------- |
+  | lead      | 18.2k                  |
+  | helpers   | 13.7k and 8.4k         |
+  | reviewers | 9.3k, 4.3k and 11.3k   |
+
+  About 65k in total; auto-mode classifier calls are not included.
+
+- **Content:**
+  - No plan summary, comment or diff line appeared in the 60 log lines.
+  - The driver's "diff line in the database" flag was true. The matching lines were in
+    `ticket_plans.steps` and `agent_runs.task`: the planner put short code snippets in the plan,
+    and the lead passed them on in the helpers' tasks.
+  - Plans and tasks are stored by design (ADR-0015, ADR-0016); no diff or tool output was stored.
+  - Follow-up: the driver should exclude plan and task text from that check.

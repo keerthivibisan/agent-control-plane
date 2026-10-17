@@ -3,15 +3,15 @@
 Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` come off
 `feature/ui-refresh` (the 0.1.0 line) and are merged back with `--ff-only` after review.
 
-| WP   | Title                                                             | After      | Status                              | Branch                 | Merged    |
-| ---- | ----------------------------------------------------------------- | ---------- | ----------------------------------- | ---------------------- | --------- |
-| RL-0 | ADR-0021, core contract (additive), migration 0006                | —          | **done**                            | wp/rl-0-contract       | `3a46106` |
-| RL-A | Engine: review loop, rework, handover, plan-role fix              | RL-0       | **done**                            | wp/rl-a-engine         | `0a50962` |
-| RL-B | Server, db, git and adapter: ticket branch, gate modes            | RL-0, RL-A | **done**                            | wp/rl-b-server         | `a33fac5` |
-| RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                            | wp/rl-d-web            | `b31d1ec` |
-| RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed)        | wp/rl-v-verify         | `e689a79` |
-| RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | **done** (real run pending consent) | wp/rl-g-full-auto      | `25554ce` |
-| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | **done**                            | wp/rl-h-ticket-options | `40e985d` |
+| WP   | Title                                                             | After      | Status                       | Branch                 | Merged    |
+| ---- | ----------------------------------------------------------------- | ---------- | ---------------------------- | ---------------------- | --------- |
+| RL-0 | ADR-0021, core contract (additive), migration 0006                | —          | **done**                     | wp/rl-0-contract       | `3a46106` |
+| RL-A | Engine: review loop, rework, handover, plan-role fix              | RL-0       | **done**                     | wp/rl-a-engine         | `0a50962` |
+| RL-B | Server, db, git and adapter: ticket branch, gate modes            | RL-0, RL-A | **done**                     | wp/rl-b-server         | `a33fac5` |
+| RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                     | wp/rl-d-web            | `b31d1ec` |
+| RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed) | wp/rl-v-verify         | `e689a79` |
+| RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | **done** (real run passed)   | wp/rl-g-full-auto      | `25554ce` |
+| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | **done**                     | wp/rl-h-ticket-options | `40e985d` |
 
 ## Owner decisions (2026-10-17)
 
@@ -156,3 +156,9 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
     1. back up the owner's database, then restart the owner's app (applies 0007), with consent;
     2. one combined consented real run (Full auto);
     3. redo the 0.1.0 release commit and tag.
+- 2026-10-17 the owner's app was restarted on `4242ce4`: backed up first
+  (`~/.agent-control-plane/backups/acp-before-0007-*`), then migration 0007 applied.
+- 2026-10-17 **real run 3 (Full auto, owner consent) passed**. All assertions were true: owner
+  asked 0 times, plan auto-approved, helpers in auto mode with the sandbox, others default, the
+  final merge reached. About 65k budget tokens. The "db diff line" flag came from plan and task
+  text, which is stored by design. Next: the 0.1.0 release.

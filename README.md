@@ -12,8 +12,9 @@ application for observing, orchestrating, and improving AI-assisted software dev
 provider is Claude Code. Codex support will follow through a separate adapter.
 
 > **Status: v0.1.0 (preview).** Session monitoring, projects and tickets with managed agent runs,
-> approval modes, a review loop on a ticket branch, the workflow, skills and agent files, harness
-> checks and token reports are implemented and verified. The latest real runs against Claude Code
+> approval modes (including Full auto) per project, ticket or run, a review loop on a ticket branch,
+> the workflow, skills and agent files, harness checks and token reports are implemented and
+> verified. The latest real runs against Claude Code
 > passed on 2026-10-17 ([docs/research/rl-v-real-run-2026-10-17.md](docs/research/rl-v-real-run-2026-10-17.md)).
 >
 > **Implemented and tested** (about 2,500 unit and integration tests, plus 60 browser end-to-end

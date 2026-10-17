@@ -9,9 +9,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.0] - 2026-10-17
 
-A new look and a review loop. The app has a new identity, works on small screens, and ticket runs
-now review each helper's change before it is merged into a ticket branch that you merge into main
-once. Before 1.0.0, features and data formats may still change between releases.
+A new look and a review loop. The app has a new identity and works on small screens. Ticket runs now
+review each helper's change before it is merged into a ticket branch that you merge into main once,
+and a new Full auto mode lets a run go from plan to that final merge without asking you anything.
+Approval settings can be set per project, per ticket or for a single run. Before 1.0.0, features
+and data formats may still change between releases.
 
 ### Added
 
