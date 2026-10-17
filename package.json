@@ -1,6 +1,6 @@
 {
   "name": "agent-control-plane",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Local-first control plane for observing, orchestrating, and improving AI-assisted software development.",
   "license": "MIT",

@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
+A new look and a review loop. The app has a new identity, works on small screens, and ticket runs
+now review each helper's change before it is merged into a ticket branch that you merge into main
+once. Before 1.0.0, features and data formats may still change between releases.
+
 ### Added
 
 - New logo
@@ -148,5 +154,6 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/keerthivibisan/agent-control-plane/releases/tag/v0.0.1

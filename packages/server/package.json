@@ -1,6 +1,6 @@
 {
   "name": "@acp/server",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Express REST API, ingestion pipeline wiring, and SSE stream. Owned by P1-D.",
   "license": "MIT",

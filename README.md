@@ -11,10 +11,10 @@
 application for observing, orchestrating, and improving AI-assisted software development. The first
 provider is Claude Code. Codex support will follow through a separate adapter.
 
-> **Status: v0.0.1 (first preview).** Session monitoring, projects and tickets with managed agent
-> runs, the workflow, skills and agent files, harness checks and token reports are implemented and
-> verified. Two real runs against
-> Claude Code passed on 2026-10-16 ([docs/research/r-v-real-run-2026-10-16.md](docs/research/r-v-real-run-2026-10-16.md)).
+> **Status: v0.1.0 (preview).** Session monitoring, projects and tickets with managed agent runs,
+> approval modes, a review loop on a ticket branch, the workflow, skills and agent files, harness
+> checks and token reports are implemented and verified. The latest real runs against Claude Code
+> passed on 2026-10-17 ([docs/research/rl-v-real-run-2026-10-17.md](docs/research/rl-v-real-run-2026-10-17.md)).
 >
 > **Implemented and tested** (about 2,500 unit and integration tests, plus 60 browser end-to-end
 > tests):

@@ -1,6 +1,6 @@
 {
   "name": "@acp/db",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "SQLite persistence: migrations, repositories, transactions. Owned by work package P1-B.",
   "license": "MIT",
