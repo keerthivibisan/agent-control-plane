@@ -5,147 +5,192 @@
   </picture>
 </p>
 
+<p align="center">
+  <strong>See what your coding agents are doing, and run them from one board.</strong><br>
+  Local-first, open source, for Claude Code.
+</p>
+
+<p align="center">
+  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-171717">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-171717">
+  <img alt="Node 22" src="https://img.shields.io/badge/node-22-171717">
+</p>
+
 # Agent Control Plane
 
-**One control plane for every coding agent.** Agent Control Plane is an open-source, local-first
-application for observing, orchestrating, and improving AI-assisted software development. The first
-provider is Claude Code. Codex support will follow through a separate adapter.
+Agent Control Plane is a local web app for working with AI coding agents. It reads your Claude Code
+sessions and shows which ones are running, which agent started which helper, and how many tokens
+each used. It also runs agents for you: give a ticket to a lead agent, approve its plan, and follow
+its helpers, their reviews and the checks until you merge the result once.
 
-> **Status: v0.1.0 (preview).** Session monitoring, projects and tickets with managed agent runs,
-> approval modes (including Full auto) per project, ticket or run, a review loop on a ticket branch,
-> the workflow, skills and agent files, harness checks and token reports are implemented and
-> verified. The latest real runs against Claude Code
-> passed on 2026-10-17 ([docs/research/rl-v-real-run-2026-10-17.md](docs/research/rl-v-real-run-2026-10-17.md)).
->
-> **Implemented and tested** (about 2,500 unit and integration tests, plus 60 browser end-to-end
-> tests):
->
-> - **Observing Claude Code sessions:**
->   - discovery and incremental reading;
->   - usage accounting with dedup by message id;
->   - subagent and fork relationships;
->   - optional hooks.
-> - **A workspace per project in the browser:**
->   - **Board** of tickets;
->   - **Workflow:** the fixed stages, each with its own model, skill and agent file;
->   - **Skills & Agents:** edit `.claude/skills` and `.claude/agents` files, then commit them;
->   - **Harness** checks;
->   - **Tokens:** new work vs cache reuse;
->   - **Sessions**, **Settings** and **Data health**.
-> - **Managed runs per ticket:**
->   1. A planner proposes a plan, and you approve it or ask for changes. Approving it creates the
->      ticket's own branch (`acp/<KEY>`).
->   2. A lead starts helper agents for the plan's steps, each in its own git worktree.
->   3. Approval modes per project, changeable per run: **Manual** (everything asks), **Auto edits**
->      (edits in the helper's own worktree and exact harness checks run unasked; the default for
->      new projects) or **Auto** (plus a command allowlist). Auto-approved requests show the rule.
->   4. Each finished change is reviewed (by a read-only review agent, or the lead). The lead merges
->      it into the ticket branch once the required checks pass, sends it back for rework (2 rounds
->      by default), discards it, or asks you.
->   5. An optional read-only code reviewer and a unit-test writer run on the ticket branch. Then you
->      merge the ticket branch into main once (or merge anyway with a reason, request changes, or
->      discard it).
->   6. After a run ends, you can still ask its lead questions (answers only).
-> - **Guardrails:** every role has a fixed tool set; budgets, Stop and Stop all, and safe restarts
->   apply throughout.
-> - **Local only:** the server binds 127.0.0.1, and no conversation content is stored except the
->   owner's chat with the lead (ADR-0015) and the plans, reviewer findings and lead notes kept as
->   ticket comments (ADR-0016, ADR-0021). Diffs and tool output are never stored.
->
-> See [CHANGELOG.md](CHANGELOG.md), [docs/redesign/README.md](docs/redesign/README.md) and
-> [docs/implementation-plan.md](docs/implementation-plan.md).
+Everything runs on your computer. The server listens on `127.0.0.1` only, there is no telemetry, and
+your conversations with Claude Code are not stored.
 
-## The problem
+> **Status: v0.1.0 (preview).** Features and data formats may still change before 1.0.0. Claude Code
+> is the first supported agent; Codex support is planned. The latest real runs against Claude Code
+> passed on 2026-10-17 ([report](docs/research/rl-v-real-run-2026-10-17.md)).
 
-Developers now run many coding-agent sessions across many repositories: terminals, the desktop app,
-IDEs, and subagents spawned by other agents. It is hard to answer basic questions:
+## What it does
 
-- Which sessions are active, which project do they belong to, and what are they doing?
-- Which agent spawned which subagent?
-- How many input, output, and cache tokens did each session use, without double-counting?
-- Did the work actually pass validation?
+The board: one per project, from idea to merged change.
 
-## Goals
+![The board of a sample project, with tickets in Backlog, Ready, Agents working and Needs you](docs/images/board.png)
 
-- **Observe**: discover sessions, show parent-child relationships, track status and usage.
-  Every number is labeled observed, derived, estimated, or unavailable.
-- **Orchestrate** (later): delegate tasks to agents within enforced limits, isolate workspaces, and
-  validate the integrated result.
-- **Improve** (later): compare harness configurations with reproducible evidence.
+A ticket with a live run: the lead agent, its helpers and the review agents, and each change with
+its state, its checks and the reviewer's findings.
 
-## Non-goals (for now)
+![A ticket page during a run: the agent tree, a change sent back for rework, and the change list](docs/images/ticket-run.png)
 
-- Cloud hosting or multi-tenant deployment.
-- Uploading any transcript, code, or credential.
-- Distributed infrastructure.
-- Cost figures presented as authoritative.
-- Modifying your Claude Code settings.
+| The workflow of a project                                                                                              | Sessions and the agent tree                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ![The workflow: plan, approve, orchestrate, helpers, review, code review, unit tests, merge](docs/images/workflow.png) | ![The sessions of a sample project with the helper agents one session started](docs/images/sessions.png) |
+| **Tokens: new work and cache reuse**                                                                                   | **Skills and agent files**                                                                               |
+| ![Token usage over three weeks, by day](docs/images/tokens.png)                                                        | ![The Skills & Agents page with three skills](docs/images/skills.png)                                    |
 
-## Principles
+<details>
+<summary>Dark theme</summary>
 
-- **Local-first:**
-  - the server binds to `127.0.0.1`;
-  - data stays in `~/.agent-control-plane/`;
-  - no telemetry.
-- **Evidence over assumptions:**
-  - an unknown parent stays unknown;
-  - missing usage shows as _unavailable_, never 0.
-- **Privacy:**
-  - Phase 1 stores no conversation content, only ids, names, models, timestamps, and token counts;
-  - credential files such as `~/.claude/sessions/` are never read.
+![The board in the dark theme](docs/images/board-dark.png)
 
-See [docs/security.md](docs/security.md).
+![A ticket page during a run in the dark theme](docs/images/ticket-run-dark.png)
 
-## Planned features
+</details>
 
-| Feature                                                                                                   | Phase | Status                    |
-| --------------------------------------------------------------------------------------------------------- | ----- | ------------------------- |
-| Core contracts (events, usage, sessions, provenance, adapter interface)                                   | 0     | **implemented**           |
-| Session observability: discovery, subagent tree, usage accounting, live updates                           | 1     | **implemented, verified** |
-| Usage reliability, pricing table, OpenTelemetry, purge                                                    | 2     | planned                   |
-| Managed orchestration: lead and helpers, budgets, worktrees, approvals                                    | 3     | **M1 implemented**        |
-| Agent workspace: board, tickets, plan-first runs, harness checks, workflow stages, skills and agent files | 4     | **implemented, verified** |
-| Harness Lab                                                                                               | 5     | planned                   |
-| Codex adapter                                                                                             | 6     | planned                   |
-| Evidence-driven recommendations                                                                           | 7     | research                  |
+_The screenshots show sample data only: the built-in demo and synthetic tickets, not real projects._
 
-See [docs/roadmap.md](docs/roadmap.md).
+## Features
 
-## Requirements
+**Observe your Claude Code sessions**
 
-- Node.js **22.x, at least 22.12** (`.nvmrc`)
-- pnpm **10.26.x**
-- A C/C++ toolchain, which `better-sqlite3` may need to compile
+- Finds sessions in the projects you add and keeps reading them as they grow.
+- Shows which session started which helper agent, and which session continued another. A link is
+  drawn only where Claude Code's own records show it.
+- Counts input, output and cache tokens with each reply counted once, and labels every number as
+  observed, derived, estimated or unavailable. Missing usage shows as unavailable, never as 0.
+- Optional Claude Code hooks for instant "Waiting for you" and ended sessions.
 
-## Development
+**A workspace for each project**
 
-```bash
-nvm use
-```
+- **Board** of tickets, from Backlog to Done.
+- **Workflow:** the stages a ticket goes through, each with its own model, skill and agent file.
+- **Skills & Agents:** edit the project's `.claude/skills` and `.claude/agents` files and commit
+  them.
+- **Harness:** the checks a change must pass before it is merged.
+- **Tokens:** what the project used, by day, session, ticket, role and model.
+- **Sessions**, **Settings** and **Data health**.
 
-```bash
-corepack enable
-```
+**Agent runs on a ticket**
+
+1. A planner proposes a plan. You approve it or ask for changes. Approving creates the ticket's own
+   branch (`acp/<KEY>`).
+2. A lead agent starts helper agents for the plan's steps, each in its own git worktree.
+3. Approval modes per project, ticket or run: **Manual** (everything asks), **Auto edits** (edits in
+   the helper's own copy and the project's exact checks run unasked; the default for new projects),
+   **Auto** (plus commands you list) and **Full auto** (nothing asks; helpers work in Claude Code's
+   auto mode inside your operating system's sandbox). Auto-approved requests show the rule that
+   allowed them.
+4. Each finished change is reviewed by a read-only review agent or by the lead. The lead merges it
+   into the ticket branch once its required checks pass, sends it back for rework (2 rounds by
+   default), discards it, or asks you.
+5. An optional read-only code reviewer and a unit-test writer run on the ticket branch. Then you
+   merge the ticket branch into main once, or merge anyway with a reason, request changes, or
+   discard it.
+6. After a run ends, you can still ask its lead questions.
+
+**Guardrails:** every role has a fixed set of tools; budgets per agent, Stop and Stop all, a run
+timeout and safe restarts apply throughout.
+
+<!-- v0.2.0: workflow graph section added at release -->
+
+## Quick start
+
+You need Node 22 and pnpm 10.26 ([BUILD.md](BUILD.md#prerequisites) has the details).
 
 ```bash
 pnpm install
 ```
 
 ```bash
-pnpm check
-```
-
-To run the app (server on 127.0.0.1:7420, web UI on http://127.0.0.1:5173):
-
-```bash
 pnpm dev
 ```
 
-It reads your Claude Code data (`~/.claude/projects`) read-only. Set `ACP_MODE=demo` for sample
-data in a separate database, or `ACP_MANAGED=off` to turn managed agents off.
+Open **http://127.0.0.1:5173** and add your first project. To look around with sample data first,
+run `ACP_MODE=demo pnpm dev` instead. Agent runs need Claude Code signed in on this computer and
+use your own Claude account.
 
-`pnpm check` runs format check, lint, typecheck, tests, and build. Details are in
-[docs/development.md](docs/development.md).
+[START.md](START.md) covers the built app, configuration, where data lives, hooks and your first
+ticket.
+
+## Build from source
+
+```bash
+pnpm check
+```
+
+It runs the format check, lint, typecheck, about 3,900 unit and integration tests, and the build.
+The browser end-to-end suite (about 60 tests) runs separately. See [BUILD.md](BUILD.md).
+
+## How it works
+
+One Node.js process on `127.0.0.1` serves the API, live updates and the web UI, and keeps its data in
+a local SQLite database.
+
+```mermaid
+flowchart LR
+  CC["Claude Code session files<br/>~/.claude/projects (read-only)"] --> S
+  HK["Claude Code hooks<br/>(optional)"] --> S
+  S["Server on 127.0.0.1<br/>Node.js · Express"] <--> DB[("SQLite<br/>~/.agent-control-plane")]
+  UI["Web UI<br/>React, in your browser"] <--> S
+  S -->|"Claude Agent SDK"| AG["Agent runs<br/>one git worktree per helper"]
+```
+
+The code is a TypeScript monorepo: shared contracts and logic (`@acp/core`), the database
+(`@acp/db`), the Claude Code reader (`@acp/adapter-claude-code`), the run engine
+(`@acp/orchestrator`), the server (`@acp/server`) and the web UI (`@acp/web`). See
+[docs/architecture.md](docs/architecture.md).
+
+## Privacy and safety
+
+- **Local only:** the server binds `127.0.0.1`. No telemetry, no update checks, no uploads. Agent
+  runs start Claude Code, which talks to Anthropic as it always does.
+- **Read-only access to Claude Code data:** only the session files under `~/.claude/projects` for
+  projects you added. Credentials (`~/.claude/sessions/`), settings files and history are never
+  read, and Claude Code settings are never changed.
+- **No conversation content stored:** only ids, names, models, timestamps, statuses and token
+  counts, plus the text you exchange in the app: your chat with a run's lead, and the plans, review
+  findings and lead notes kept as ticket comments. Diffs and tool output are never stored.
+- **You decide what lands:** agents work in their own git worktrees, and nothing reaches main
+  without your merge.
+
+Details: [docs/security.md](docs/security.md). Report vulnerabilities as described in
+[SECURITY.md](SECURITY.md).
+
+## Roadmap
+
+Next up: editable workflow graphs, usage reliability and a pricing table, harness experiments that
+compare agent setups, a Codex adapter, and recommendations backed by evidence. See
+[docs/roadmap.md](docs/roadmap.md) and [CHANGELOG.md](CHANGELOG.md).
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Domain model](docs/domain-model.md)
+- [Event and usage accounting](docs/usage-accounting.md)
+- [Provider adapters](docs/provider-adapters.md)
+- [Orchestration lifecycle](docs/orchestration-lifecycle.md)
+- [Security model](docs/security.md)
+- [Development](docs/development.md)
+- [Research notes](docs/research/)
+
+Design decisions are recorded as ADRs in [docs/decisions/](docs/decisions/README.md), for example
+[why TypeScript](docs/decisions/0001-pnpm-workspace-and-toolchain.md),
+[SQLite](docs/decisions/0003-sqlite-local-first.md) and
+[the Claude Agent SDK](docs/decisions/0012-managed-execution-agent-sdk.md).
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md). Coding agents must follow [AGENTS.md](AGENTS.md)
+([CLAUDE.md](CLAUDE.md) for Claude Code).
 
 ## Brand
 
@@ -176,23 +221,6 @@ from `packages/web/public/brand/`).
   In the app, `BrandMark` and `BrandLogo` (`packages/web/src/components/BrandMark.tsx`) draw it
   from the theme's tokens.
 
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Domain model](docs/domain-model.md)
-- [Event and usage accounting](docs/usage-accounting.md)
-- [Provider adapters](docs/provider-adapters.md)
-- [Orchestration lifecycle (Phase 3 design)](docs/orchestration-lifecycle.md)
-- [Security model](docs/security.md)
-- [Implementation plan](docs/implementation-plan.md)
-- [Decision records](docs/decisions/README.md)
-- [Research notes](docs/research/)
-
-## Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md). Coding agents must follow [AGENTS.md](AGENTS.md)
-([CLAUDE.md](CLAUDE.md) for Claude Code).
-
 ## License
 
-MIT (provisional; see [ADR-0010](docs/decisions/0010-license.md)).
+[MIT](LICENSE) ([ADR-0010](docs/decisions/0010-license.md)).
