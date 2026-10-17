@@ -38,11 +38,12 @@ describe('ruleAllowedByMode', () => {
       'command-allowlist': false,
     },
     auto: { 'edit-in-own-worktree': true, 'run-harness-check': true, 'command-allowlist': true },
-    // ADR-0022: what still reaches the gate in Full auto is judged by the auto rules, else denied.
+    // ADR-0022: what still reaches the gate in Full auto was escalated by the classifier; only the
+    // two narrow rules may allow it, never the command allowlist.
     'full-auto': {
       'edit-in-own-worktree': true,
       'run-harness-check': true,
-      'command-allowlist': true,
+      'command-allowlist': false,
     },
   };
   for (const [mode, rules] of Object.entries(table) as [

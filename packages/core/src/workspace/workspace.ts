@@ -160,7 +160,7 @@ export type ProjectAllowlist = z.infer<typeof ProjectAllowlistSchema>;
  * - `full-auto` (ADR-0022): helpers and the tester run in Claude Code's own auto mode (a classifier
  *   model reviews risky actions) inside the operating-system sandbox, the plan is approved
  *   automatically, and nothing asks the owner during the run: an action that still reaches the
- *   gate is allowed only by the `auto` rules and otherwise denied. The owner sees only the final
+ *   gate is allowed only by the `auto-edits` rules and otherwise denied. The owner sees only the final
  *   ticket-branch merge. The lead, planner and reviewers are unchanged (read-only, never covered).
  */
 export const ApprovalModeSchema = z.enum(['manual', 'auto-edits', 'auto', 'full-auto']);

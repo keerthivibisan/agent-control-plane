@@ -1599,7 +1599,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const target = allowlistTarget(request.toolName, toolInputOf(request));
     const readAllowlist = hooks.allowlist;
     // ADR-0022: in Full auto nothing waits for the owner. What still reaches the gate (an auto-mode
-    // escalation) runs only when the auto rules allow it, and is otherwise denied.
+    // escalation) runs only when the Auto edits rules allow it, and is otherwise denied.
     if (isFullAuto(live.state) && hasReviewableChange(kind)) {
       return fullAutoGate(live, agentRunId, kind, request, target, readAllowlist);
     }

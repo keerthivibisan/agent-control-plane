@@ -8,7 +8,7 @@ import { FILES, run, type Board } from './loop-helpers.js';
 
 /*
  * Full auto through the routes (ADR-0022, RL-G): the plan is approved automatically; helpers get
- * the sandbox paths; whatever still reaches the gate runs only by the auto rules and is otherwise
+ * the sandbox paths; whatever still reaches the gate runs only by the Auto edits rules and is otherwise
  * denied without asking the owner; the run's temp folder goes when the run ends. The fake managed
  * adapter plays every agent; git runs in a throwaway repository; the home folder is a temp one.
  */
@@ -94,7 +94,7 @@ describe('Full auto (ADR-0022)', () => {
     expect(worker.spec.cwd.startsWith(realpathSync(s.dataDir))).toBe(true);
   });
 
-  it('denies what reaches the gate without asking; the auto rules still allow theirs', async () => {
+  it('denies what reaches the gate without asking; the Auto edits rules still allow theirs', async () => {
     const s = await setupBoard({ files: FILES });
     const { lead, runId } = await planned(s);
     const worker = await workerOf(s, lead);
@@ -117,6 +117,33 @@ describe('Full auto (ADR-0022)', () => {
       ['approved', 'allowlist', 'edit-in-own-worktree'],
     ]);
     expect(detail.agents.find((a) => a.id === worker.id)?.status).toBe('RUNNING');
+  });
+
+  it('a project command allowlist never overrides an escalation in Full auto', async () => {
+    const s = await setupBoard({ files: FILES });
+    const setup = {
+      projectKey: 'WEBAPP',
+      maxConcurrentHelpers: 3,
+      maxDepth: 1,
+      defaultBudgetTokensPerAgent: 100_000,
+      model: null,
+      approvals: { mode: 'full-auto', commands: [{ argv: ['npm'], match: 'prefix' }] },
+      contextFiles: [],
+    };
+    expect((await s.send('put', `/api/projects/${s.project.id}/setup`, setup)).status).toBe(200);
+    const { lead, runId } = await planned(s);
+    const worker = await workerOf(s, lead);
+    expect(await worker.ask('Bash', 'Bash npm test', { command: 'npm test' })).toEqual({
+      allow: false,
+      message: FULL_AUTO_DENIED_MESSAGE,
+    });
+    // An exact harness check is still allowed (the Auto edits rule).
+    expect(await worker.ask('Bash', 'Bash node', { command: 'node check.mjs' })).toEqual({
+      allow: true,
+    });
+    expect((await run(s, runId)).approvals.map((a) => a.allowRule ?? null)).toEqual([
+      'run-harness-check',
+    ]);
   });
 
   it('a helper whose protections were unavailable fails with a readable reason', async () => {
