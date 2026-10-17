@@ -107,7 +107,14 @@ describe('RL-B review loop (real composition)', () => {
       expectStatus(await b.get(`/api/runs/${runId}/ticket-branch`), 200),
     );
     expect(review.files.map((f) => f.path)).toEqual(['hello.txt']);
-    expectStatus(await b.post(`/api/runs/${runId}/ticket-branch`, { action: 'merge' }), 200);
+    // The checks on the tip start at REVIEW; under load they may still run (409 checks_running),
+    // and the owner then clicks again.
+    const merged = await waitFor(async () => {
+      const res = await b.post(`/api/runs/${runId}/ticket-branch`, { action: 'merge' });
+      const code = (res.body as { error?: { code?: string } } | null)?.error?.code;
+      return res.status === 409 && code === 'checks_running' ? undefined : res;
+    }, 'the tip checks to finish');
+    expectStatus(merged, 200);
     await waitForTicket(b, ticket.id, (d) => d.ticket.status === 'DONE', 'the ticket done');
     expect(readFileSync(join(project.rootPath, 'hello.txt'), 'utf8')).toContain('hello');
     expect(git(project.rootPath, 'branch', '--list', branch).trim()).toBe('');
