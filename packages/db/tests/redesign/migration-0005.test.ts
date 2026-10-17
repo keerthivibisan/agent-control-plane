@@ -15,7 +15,12 @@ import { setupInput, setupWorkspace, ticketWithRun } from '../workspace/setup.js
 
 describe('migration 0005_stage_agents (R-G Part 2)', () => {
   it('ships as version 5', () => {
-    expect(loadMigrations(DEFAULT_MIGRATIONS_DIR).map((m) => m.version)).toEqual([1, 2, 3, 4, 5]);
+    // 0006 (RL-0) follows; the first five stay as shipped.
+    expect(
+      loadMigrations(DEFAULT_MIGRATIONS_DIR)
+        .map((m) => m.version)
+        .slice(0, 5),
+    ).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('lets the planner, reviewer and tester run without a parent, next to the lead', () => {

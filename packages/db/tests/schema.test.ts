@@ -44,6 +44,9 @@ const PHASE4_TABLES = ['check_runs', 'project_setup', 'ticket_comments', 'ticket
 /** Added by 0004 (R-G, project workspace redesign). */
 const REDESIGN_TABLES = ['project_workflow'];
 
+/** Added by 0006 (RL-0, ADR-0021: the review loop and the ticket branch). */
+const REVIEW_LOOP_TABLES = ['change_reviews', 'ticket_branches'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -120,10 +123,16 @@ describe('0001_observability schema (B3)', () => {
     }
   });
 
-  it('with 0002-0004 applied, adds exactly the Phase 3, Phase 4 and redesign tables', () => {
+  it('with 0002-0006 applied, adds exactly the Phase 3, Phase 4, redesign and review-loop tables', () => {
     const tables = describeSchema(db).map((t) => t.table);
     expect(tables).toEqual(
-      [...PHASE1_TABLES, ...PHASE3_TABLES, ...PHASE4_TABLES, ...REDESIGN_TABLES].sort(),
+      [
+        ...PHASE1_TABLES,
+        ...PHASE3_TABLES,
+        ...PHASE4_TABLES,
+        ...REDESIGN_TABLES,
+        ...REVIEW_LOOP_TABLES,
+      ].sort(),
     );
   });
 
