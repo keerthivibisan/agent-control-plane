@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | WP   | Title                                                                   | After     | Status          | Branch            | Merged |
 | ---- | ----------------------------------------------------------------------- | --------- | --------------- | ----------------- | ------ |
 | WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **in progress** | wp/wg-0-contracts |        |
-| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | not started     | wp/wg-a-core      |        |
+| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **in progress** | wp/wg-a-core      |        |
 | WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | not started     | wp/wg-b-engine    |        |
 | WG-C | Server, db and adapter; API fuzz                                        | WG-B      | not started     | wp/wg-c-server    |        |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | not started     | wp/wg-d-editor    |        |
@@ -34,3 +34,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 
 - 2026-10-17 Plan approved by the owner. `release/0.2.0` and `feature/workflow-graph` created from
   `main` `b6a1f27`. WG-0 started.
+- 2026-10-17 WG-0 merged (`5f6c1e8`): graph contract, DTOs, ADR-0023 (accepted), docs.
+  - Coordinator change: the tool fields (`helper?`) and the `reviewer` decider moved to WG-B,
+    because they mean something only once the engine uses them.
+  - Coordinator check: 2,635 tests.
+- 2026-10-17 WG-A started.
