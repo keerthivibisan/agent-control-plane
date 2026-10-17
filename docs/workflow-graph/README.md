@@ -4,7 +4,7 @@ Coordinator-owned plan. Status: [STATUS.md](STATUS.md). Decision: [ADR-0023](../
 Progress files: `wp/WG-*.md`, one per WP, edited only by that WP's agent (protocol:
 `docs/phase-4/README.md` §9 with these paths). Branches `wp/wg-<id>-<slug>` come off
 `feature/workflow-graph` and merge back with `--ff-only` after review. The finished feature merges
-into `dev`, and the owner merges `dev` into `main` by MR. Agents and the coordinator never touch
+into `release/0.2.0`, and the owner merges `release/0.2.0` into `main` by MR. Agents and the coordinator never touch
 `main`.
 
 > **Read §"WG-0 refinements" at the end first.** WG-0 settled details the plan left open;
@@ -43,7 +43,7 @@ In every scenario the owner still merges the ticket branch into `main` once.
   - "Lead reviews" stays as a ticket/run override;
   - a plan step with no matching helper node is refused, with the list of helper nodes.
 
-**Branches:** `dev` from `main` (`b6a1f27`), then `feature/workflow-graph`, then
+**Branches:** `release/0.2.0` from `main` (`b6a1f27`), then `feature/workflow-graph`, then
 `wp/wg-*`.
 
 ## Approach: a graph of rule-checked building blocks
@@ -214,7 +214,7 @@ coordinator reviews and merges `--ff-only`; `pnpm check` and e2e before each mer
 | WG-V | Verification: e2e per scenario; consented real runs for a, b, c and one mixed-mode run                  | `e2e/**`, real-run driver                                                                                         | all             |
 
 **Order:** WG-0 → WG-A (WG-D starts on fixtures) → WG-B → WG-C in parallel with WG-E → WG-V. The
-release: the feature merges into `dev`, and the owner raises the MR from `dev` to `main`, merges it
+release: the feature merges into `release/0.2.0`, and the owner raises the MR from `release/0.2.0` to `main`, merges it
 and tags the release.
 
 ## Critical files
