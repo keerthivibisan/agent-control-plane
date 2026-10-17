@@ -59,6 +59,21 @@ import { dumpDatabase, git } from '../../control/harness.js';
  * Stop: Ctrl-C (or the overall time limit, ACP_REAL_RUN_LIMIT_MS, default 30 minutes) stops every
  * agent (`POST /api/runs/:id/stop`) and closes the server. Temp folders are kept for inspection
  * unless ACP_REAL_RUN_CLEANUP=1.
+ *
+ * RL-G (ADR-0022): ACP_REAL_RUN_MODE=full-auto runs the same flow in Full auto instead of Auto edits
+ * (the default, `auto-edits`; any other value is refused). The project and the run are set to Full
+ * auto; the driver does NOT approve the plan (it must be approved automatically) and still denies
+ * anything that asks. It also records, content-free: each start's SDK `permissionMode` and the
+ * sandbox switches it asked for (booleans and path counts, never the paths), each `system/init`'s
+ * reported `permissionMode`, and `system/permission_denied` counts by decision reason type. The
+ * summary then has `fullAuto.assertions`: no approval ever waited for the owner, the plan was
+ * approved automatically, every helper and tester asked for auto mode with the sandbox and its
+ * `system/init` reported `auto`, the lead, planner and reviewers stayed in `default`, no agent
+ * failed for lack of auto mode or the sandbox, and the run reached the owner's final merge. Any
+ * false assertion makes the driver exit 1. Run it from packages/server:
+ *
+ *   ACP_REAL_RUN=1 ACP_REAL_RUN_MODE=full-auto node --conditions=development --import tsx \
+ *     tests/verification/review-loop/real-run/drive.ts
  */
 
 if (process.env['ACP_REAL_RUN'] !== '1') {
@@ -69,6 +84,13 @@ if (process.env['CI'] !== undefined) {
   console.error('Refusing: never in CI.');
   process.exit(2);
 }
+
+const MODE = process.env['ACP_REAL_RUN_MODE'] ?? 'auto-edits';
+if (MODE !== 'auto-edits' && MODE !== 'full-auto') {
+  console.error('Refusing: ACP_REAL_RUN_MODE must be auto-edits or full-auto.');
+  process.exit(2);
+}
+const FULL_AUTO = MODE === 'full-auto';
 
 const LIMIT_MS = Number(process.env['ACP_REAL_RUN_LIMIT_MS'] ?? String(30 * 60_000));
 const NUDGE = process.env['ACP_REAL_RUN_NUDGE'] === '1';
@@ -136,8 +158,29 @@ interface Start {
     skills: string[] | null;
     resume: string | null;
     model: string | null;
+    /** RL-G: the SDK permission mode the adapter asked for. */
+    permissionMode: string | null;
+    /** RL-G: the sandbox switches asked for (booleans and path counts only, never paths). */
+    sandbox: {
+      enabled: boolean;
+      failIfUnavailable: boolean;
+      allowUnsandboxedCommands: boolean | null;
+      autoAllowBashIfSandboxed: boolean | null;
+      network: boolean;
+      allowWrite: number;
+      denyRead: number;
+      denyRules: number;
+    } | null;
   };
-  init: { tools: string[]; skills: string[]; model: string | null }[];
+  init: {
+    tools: string[];
+    skills: string[];
+    model: string | null;
+    /** RL-G: the mode the session reports it started in. */
+    permissionMode: string | null;
+  }[];
+  /** RL-G: `system/permission_denied` messages by decision reason type (no text). */
+  denials: Record<string, number>;
   results: { subtype: string; isError: boolean; reportedCostUsd: number | null }[];
   gate: Record<string, number>;
 }
@@ -177,10 +220,25 @@ const observingQuery: ManagedQueryFn = (params) => {
       skills: o.skills === undefined ? null : strings(o.skills),
       resume: o.resume === undefined ? null : 'set',
       model: o.model ?? null,
+      permissionMode: o.permissionMode ?? null,
+      sandbox:
+        o.sandbox === undefined
+          ? null
+          : {
+              enabled: o.sandbox.enabled === true,
+              failIfUnavailable: o.sandbox.failIfUnavailable === true,
+              allowUnsandboxedCommands: o.sandbox.allowUnsandboxedCommands ?? null,
+              autoAllowBashIfSandboxed: o.sandbox.autoAllowBashIfSandboxed ?? null,
+              network: o.sandbox.network !== undefined,
+              allowWrite: o.sandbox.filesystem?.allowWrite?.length ?? 0,
+              denyRead: o.sandbox.filesystem?.denyRead?.length ?? 0,
+              denyRules: (o.disallowedTools ?? []).filter((t) => t.includes('(')).length,
+            },
     },
     init: [],
     results: [],
     gate: {},
+    denials: {},
   };
   starts.push(start);
   // The real gate, counted by tool name and outcome only (never its input).
@@ -205,7 +263,12 @@ const observingQuery: ManagedQueryFn = (params) => {
             tools: strings(msg['tools']),
             skills: names(msg['skills']),
             model: str(msg['model']),
+            permissionMode: str(msg['permissionMode']),
           });
+        }
+        if (msg['type'] === 'system' && msg['subtype'] === 'permission_denied') {
+          const reason = str(msg['decision_reason_type']) ?? 'unknown';
+          start.denials[reason] = (start.denials[reason] ?? 0) + 1;
         }
         if (msg['type'] === 'result') {
           const cost = msg['total_cost_usd'];
@@ -357,7 +420,7 @@ const flow = async (): Promise<Record<string, unknown>> => {
     maxDepth: 1,
     defaultBudgetTokensPerAgent: BUDGET,
     model: null,
-    approvals: { mode: 'auto-edits', commands: [] },
+    approvals: { mode: MODE, commands: [] },
     contextFiles: [],
   });
   await post(`${p}/skills`, {
@@ -401,7 +464,7 @@ const flow = async (): Promise<Record<string, unknown>> => {
   await post(`/api/tickets/${ticket.id}/move`, { status: 'READY' });
   const started = TicketDetailDtoSchema.parse(
     await post(`/api/tickets/${ticket.id}/start`, {
-      approvalMode: 'auto-edits',
+      approvalMode: MODE,
       reviewer: 'agent',
       maxReworkRounds: MAX_REWORK_ROUNDS,
     }),
@@ -412,14 +475,26 @@ const flow = async (): Promise<Record<string, unknown>> => {
   const detail = async (): Promise<RunDetailDto> =>
     RunDetailDtoSchema.parse(await get(`/api/runs/${rid}`));
 
+  // Full auto: the plan must be approved automatically; the driver never approves it. A plan
+  // that waits for the owner instead is recorded (an assertion fails) and then approved, so the
+  // rest of the run can still be observed.
+  let planWaitedForOwner = false;
   const plan = await until('the plan', async () => {
     const d = TicketDetailDtoSchema.parse(await get(`/api/tickets/${ticket.id}`));
-    return d.ticket.stage === 'PLAN_REVIEW' ? d.plans.at(-1) : undefined;
+    const last = d.plans.at(-1);
+    if (d.ticket.stage === 'PLAN_REVIEW') {
+      if (FULL_AUTO) planWaitedForOwner = true;
+      return last;
+    }
+    return FULL_AUTO && last?.status === 'approved' ? last : undefined;
   });
   const planShape = { steps: plan.steps.length, roles: plan.steps.map((s) => s.role) };
-  await post(`/api/tickets/${ticket.id}/plans/${plan.id}/decision`, { decision: 'approve' });
+  if (!FULL_AUTO || planWaitedForOwner) {
+    await post(`/api/tickets/${ticket.id}/plans/${plan.id}/decision`, { decision: 'approve' });
+  }
 
   const denied: Record<string, number> = {};
+  let ownerAsked = 0;
   const ownerDecisions: Record<string, number> = {};
   const tips = new Set<string>();
   const branchStates = new Set<string>();
@@ -441,6 +516,7 @@ const flow = async (): Promise<Record<string, unknown>> => {
     for (const a of r.approvals.filter((x) => x.status === 'pending')) {
       await post(`/api/approvals/${a.id}`, { decision: 'deny', message: 'Not in this run.' });
       count(denied, `${kindOf(a.agentRunId)}:${a.toolName ?? a.kind}`);
+      ownerAsked++;
     }
     if (r.status === 'COMPLETED' || r.status === 'FAILED' || r.status === 'CANCELLED') return true;
     // A change the lead handed to the owner: merge it when its checks passed, else discard.
@@ -490,6 +566,9 @@ const flow = async (): Promise<Record<string, unknown>> => {
 
   const end = await detail();
   const roles = new Map(end.agents.map((a) => [a.id, a.kind]));
+  const finalPlan = TicketDetailDtoSchema.parse(await get(`/api/tickets/${ticket.id}`)).plans.find(
+    (x) => x.id === plan.id,
+  );
   const stagesAtEnd = Object.fromEntries(
     RunWorkflowDtoSchema.parse(await get(`/api/runs/${rid}/workflow`)).stages.map((s) => [
       s.stage,
@@ -520,7 +599,53 @@ const flow = async (): Promise<Record<string, unknown>> => {
   await closeServer();
   const db = dumpDatabase(config.databasePath);
 
+  // RL-G: what Full auto promises, checked from aggregates only.
+  const editing = (k: AgentRoleKind) => k === 'worker' || k === 'tester';
+  const helperStarts = starts.filter((s) => editing(s.kind) && !s.followUp);
+  const otherStarts = starts.filter((s) => !editing(s.kind));
+  const fullAuto = FULL_AUTO
+    ? {
+        assertions: {
+          noOwnerApprovals: ownerAsked === 0 && end.approvals.every((a) => a.decidedBy !== 'owner'),
+          planApprovedAutomatically: !planWaitedForOwner && finalPlan?.decidedBy === 'auto',
+          helpersStarted: helperStarts.length > 0,
+          helpersAskedForAutoModeAndSandbox: helperStarts.every(
+            (s) =>
+              s.options.permissionMode === 'auto' &&
+              s.options.sandbox?.enabled === true &&
+              s.options.sandbox.failIfUnavailable &&
+              s.options.sandbox.allowUnsandboxedCommands === false &&
+              !s.options.sandbox.network,
+          ),
+          helpersReportedAutoMode: helperStarts.every(
+            (s) => s.init.length > 0 && s.init.every((i) => i.permissionMode === 'auto'),
+          ),
+          othersStayedDefault: otherStarts.every(
+            (s) => s.options.permissionMode === 'default' && s.options.sandbox === null,
+          ),
+          noProtectionFailures: end.agents.every(
+            (a) => !(a.latestActivity ?? '').startsWith('Could not start:'),
+          ),
+          // Set inside the polling closure, which TypeScript does not follow.
+          reachedFinalMerge: (finalMerge as { status: string } | null)?.status === 'merged',
+        },
+        ownerAsked,
+        planWaitedForOwner,
+        deniedWithoutAsking: starts.reduce(
+          (n, s) =>
+            n +
+            Object.entries(s.gate)
+              .filter(([k]) => k.endsWith(':deny'))
+              .reduce((m, [, v]) => m + v, 0),
+          0,
+        ),
+        classifierDenials: starts.reduce((n, s) => n + (s.denials['classifier'] ?? 0), 0),
+      }
+    : null;
+
   return {
+    mode: MODE,
+    fullAuto,
     run: {
       status: end.status,
       ticketStatus: ticketAtEnd.ticket.status,
@@ -583,6 +708,13 @@ try {
   writeFileSync(join(dataDir, 'real-run-summary.json'), `${text}\n`);
   console.error(text);
   await stopAll('done');
+  const checks = (summary['fullAuto'] as { assertions?: Record<string, boolean> } | null)
+    ?.assertions;
+  const failed = Object.entries(checks ?? {}).filter(([, ok]) => !ok);
+  if (failed.length > 0) {
+    console.error(`Full auto assertions failed: ${failed.map(([k]) => k).join(', ')}`);
+    process.exit(1);
+  }
   process.exit(0);
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'failed');
