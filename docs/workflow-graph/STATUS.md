@@ -83,3 +83,14 @@ plan-approval` without a planner;
     merges into it when the feature is done.
   - The MR from `release/0.2.0` to `main` is always raised in GitHub, and the owner merges it
     there. `main` changes only through that merge.
+- 2026-10-18 Docs merged (`cb9c4c2`, owner request).
+  - Added: ADR-0001's "why TypeScript" amendment, `BUILD.md`, `START.md`, a README landing page
+    with 8 sample-data screenshots, and a reproducible screenshot spec
+    (`e2e/readme-screenshots.config.ts`, which runs only with `ACP_README_SHOTS`).
+  - Coordinator fix: the app reads the first 64 KB of every session file to find its folder, and
+    reads the rest only for added projects.
+  - Coordinator follow-up (`d38ce0e`): stale facts in `AGENTS.md` and `CLAUDE.md`.
+  - 3,909 tests; full e2e 62/62 (the docs agent's run).
+  - **At release:** add the workflow-graph section at the README placeholder, re-run the screenshot
+    spec so the Workflow shot shows the editor, bump the badges, and refresh the stale
+    `docs/roadmap.md` and `docs/architecture.md` headers.
