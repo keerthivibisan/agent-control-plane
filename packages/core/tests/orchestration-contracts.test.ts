@@ -69,6 +69,22 @@ describe('lead tools', () => {
     ).toBe(false);
   });
 
+  it('start_agent and plan steps may name a helper node (ADR-0023 §7)', () => {
+    const start = LeadToolInputs.start_agent;
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: 'frontend' }).success).toBe(true);
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: 'Frontend' }).success).toBe(false);
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: '' }).success).toBe(false);
+    const step = { title: 'Toggle', role: 'UI', detail: '' };
+    const plan = LeadToolInputs.submit_plan;
+    expect(plan.safeParse({ summary: 's', steps: [step] }).success).toBe(true);
+    expect(plan.safeParse({ summary: 's', steps: [{ ...step, helper: 'frontend' }] }).success).toBe(
+      true,
+    );
+    expect(plan.safeParse({ summary: 's', steps: [{ ...step, helper: '1x' }] }).success).toBe(
+      false,
+    );
+  });
+
   it('post_review takes plain text up to the ticket comment limit (decision B)', () => {
     expect(LeadToolInputs.post_review.safeParse({ text: 'Looks fine.' }).success).toBe(true);
     expect(LeadToolInputs.post_review.safeParse({ text: '   ' }).success).toBe(false);

@@ -13,6 +13,7 @@ describe('P3-B lead tools (ADR-0012)', () => {
     expect(Object.keys((startAgent?.inputSchema ?? {}) as Record<string, unknown>)).toEqual([
       'role',
       'task',
+      'helper',
     ]);
   });
 

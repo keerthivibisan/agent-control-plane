@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 
 /**
  * Managed orchestration domain (Phase 3; docs/orchestration-lifecycle.md, ADR-0012..0015).
@@ -183,6 +184,12 @@ export const LeadToolInputs = {
   start_agent: z.object({
     role: z.string().min(1).max(60),
     task: z.string().min(1).max(4000),
+    /**
+     * The helper node of the run's workflow graph to start (ADR-0023 §7), e.g. `frontend`.
+     * Without it the engine takes the named helper whose label equals `role` (trimmed, ignoring
+     * case), else the helper pool, and otherwise refuses with the list of helper nodes.
+     */
+    helper: WorkflowNodeIdSchema.optional(),
   }),
   list_agents: z.object({}),
   message_agent: z.object({ agentId: z.string().min(1), text: z.string().min(1).max(4000) }),
@@ -203,6 +210,12 @@ export const LeadToolInputs = {
           title: z.string().trim().min(1).max(120),
           role: z.string().trim().min(1).max(60),
           detail: z.string().max(2000),
+          /**
+           * The helper node that does this step (ADR-0023 §7). Resolved like `start_agent.helper`
+           * when the plan is submitted: a step no helper node can take is refused, with the list
+           * of helper nodes.
+           */
+          helper: WorkflowNodeIdSchema.optional(),
         }),
       )
       .min(1)
