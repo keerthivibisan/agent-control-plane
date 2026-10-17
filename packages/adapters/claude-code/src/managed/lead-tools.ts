@@ -25,7 +25,7 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   stop_agent: 'Stop one of your worker agents.',
   agent_status: "Get one of your worker agents' status, latest activity and budget use.",
   request_review:
-    "Hand the work over when you are done: no helper is working and, with change review, every helper's change is decided. The final review and the owner come next.",
+    "Hand the work over when you are done: no helper is working and, with change review, every helper's change is decided. With change review you must call it once every change is decided (merged, discarded or with no changes): nothing goes on until you do. The final review and the owner come next.",
   submit_plan:
     'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
   post_review:

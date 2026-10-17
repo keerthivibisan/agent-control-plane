@@ -205,6 +205,12 @@ export interface RunState {
    */
   integration?: RunIntegration;
   /**
+   * Loop runs (RL-F): the lead was told that every change is decided and it should hand over.
+   * Cleared when a helper or reviewer works again or a change is undecided, so the next such
+   * point tells it once more. In memory only, like the ledger: after a restart the lead is gone.
+   */
+  handoverPrompted?: boolean;
+  /**
    * The run's approval mode and command allowlist (ADR-0021 §1), snapshotted at creation; the
    * engine re-checks each pre-approval against it. Absent: the legacy project allowlist.
    */

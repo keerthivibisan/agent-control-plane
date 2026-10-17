@@ -203,6 +203,42 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
   assignReviewers(d);
 }
 
+/**
+ * RL-F: the lead is told once that it should hand over. A real run (2026-10-17) showed a lead that
+ * ended its turn after every change was decided and waited for the run timeout without calling
+ * `request_review`, since nothing would ever start a new turn. At an idle point (not handed over,
+ * the run RUNNING or BLOCKED, at least one change, every change decided, no agent but the lead
+ * working) the lead gets one engine message; it is told again only after a helper or reviewer
+ * worked again or a change became undecided. A BLOCKED lead is told once it can read messages
+ * again (after the budget raise).
+ */
+export function promptHandover(d: Draft): void {
+  const loop = d.integration;
+  if (loop === undefined || loop.handedOver) return;
+  if (d.run.status !== 'RUNNING' && d.run.status !== 'BLOCKED') return;
+  const changes = changeAgents(d);
+  if (changes.length === 0 || !d.loopSettled()) {
+    d.handoverPrompted = false;
+    return;
+  }
+  if (d.handoverPrompted) return;
+  const lead = d.lead();
+  if (lead === undefined || !isActiveAgentStatus(lead.status) || lead.status === 'BLOCKED') return;
+  d.handoverPrompted = true;
+  notifyLead(d, handoverPromptText(d, changes));
+}
+
+function handoverPromptText(d: Draft, changes: readonly EngineAgent[]): string {
+  const count = (state: ChangeState) => changes.filter((a) => a.change?.state === state).length;
+  const merged = count('merged');
+  const branch = branchLabel(d);
+  const decided = `Every change is decided (${merged} merged into ${branch}, ${count('discarded')} discarded, ${count('no-changes')} with no changes) and no helper is working.`;
+  if (merged > 0) {
+    return `${decided} Hand over with request_review, or start helpers with start_agent for work that is still missing.`;
+  }
+  return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review.`;
+}
+
 /** Changes waiting for a reviewer, oldest first (ties: the agent's creation order). */
 function readyQueue(d: Draft): EngineAgent[] {
   return changeAgents(d)

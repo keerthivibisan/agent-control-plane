@@ -16,6 +16,13 @@ describe('P3-B lead tools (ADR-0012)', () => {
     ]);
   });
 
+  it('tells the lead that request_review must be called once every change is decided (RL-F)', () => {
+    const tools = leadToolDefinitions(() => Promise.resolve(''));
+    const description = tools.find((t) => t.name === 'request_review')?.description ?? '';
+    expect(description).toContain('you must call it once every change is decided');
+    expect(description).toContain('nothing goes on until you do');
+  });
+
   it('calls the engine handler with the tool name and input and returns its text', async () => {
     const calls: [LeadToolName, unknown][] = [];
     const tools = leadToolDefinitions((name, input) => {

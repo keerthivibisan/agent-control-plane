@@ -17,14 +17,15 @@
 
 - [x] A. A new file in a new folder inside the helper's worktree is auto-approved (nearest
       existing ancestor, `packages/server/src/control/allowlist.ts`)
-- [ ] B. The engine tells the lead once to hand over when every change is decided and nothing
+- [x] B. The engine tells the lead once to hand over when every change is decided and nothing
       is live; the lead's brief and `request_review` say it must hand over
 
 ## Work log (append-only; newest last)
 
-| Date       | What was done                                         | Commit | Checks     |
-| ---------- | ----------------------------------------------------- | ------ | ---------- |
-| 2026-10-17 | Bug A: resolve new paths through the nearest ancestor | (this) | see commit |
+| Date       | What was done                                            | Commit    | Checks                                               |
+| ---------- | -------------------------------------------------------- | --------- | ---------------------------------------------------- |
+| 2026-10-17 | Bug A: resolve new paths through the nearest ancestor    | `310f41a` | format ✓ lint ✓ typecheck ✓ test 2520/2520 ✓ build ✓ |
+| 2026-10-17 | Bug B: one hand-over prompt to the lead at an idle point | (this)    | see commit                                           |
 
 ## Decisions and findings
 
@@ -35,3 +36,16 @@
    dangling symlink, a loop, no permission) asks: writing through a dangling symlink creates its
    target wherever it points, which the old code allowed for a dangling link at the file itself.
    The engine's checks (inside the worktree, not under `.git`/`.claude`) are unchanged.
+2. **Bug B.** `promptHandover` (`packages/orchestrator/src/loop.ts`) runs in `Draft.reconcile` for
+   loop runs. At an idle point (not handed over, run RUNNING or BLOCKED, at least one change, every
+   change final, no agent but the lead active) it sends the lead one `send-to-agent` message with
+   the counts, saying plainly when nothing was merged. `RunState.handoverPrompted` (engine state,
+   in memory only like `leadBrief` and `followUp`; not in the run snapshot, whose parser rejects
+   unknown keys) remembers that the point was announced; it clears when any agent but the lead is
+   active or a change is undecided. A BLOCKED lead is not told (a message would start a turn past
+   its budget); it is told after the raise. The owner's "Request changes" marks it as told, since
+   the owner's message already says what to do. No server or adapter wiring was needed: the
+   existing `send-to-agent` effect delivers it (asserted in
+   `packages/server/tests/board/review-loop.test.ts`). The lead's post-approval brief and the
+   `request_review` tool description now say it must hand over once every change is decided; the
+   legacy (no loop) brief is unchanged.

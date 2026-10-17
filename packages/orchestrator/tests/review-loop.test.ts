@@ -131,6 +131,8 @@ describe('plan approval and the ticket branch', () => {
     const [text] = leadMessages(r.effects);
     expect(text).toContain('merge_change');
     expect(text).toContain('request_review once every change is decided');
+    // RL-F: a lead that just ended its turn here waited for the run timeout.
+    expect(text).toContain('nothing goes on until you call it');
   });
 
   it('separate planner mode: the branch comes before the lead starts', () => {

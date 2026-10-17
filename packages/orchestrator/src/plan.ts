@@ -283,7 +283,7 @@ function startLine(maxConcurrentHelpers: number, loop: boolean): string {
   return [
     `Start the helpers the plan needs with start_agent (at most ${maxConcurrentHelpers} at once).`,
     'When a helper finishes, its change is reviewed and you get a message. Decide each change with merge_change (into the ticket branch), request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows a change.',
-    'Call request_review once every change is decided. The owner then merges the ticket branch once.',
+    'Call request_review once every change is decided (merged, discarded or with no changes): that hands the work over, and nothing goes on until you call it, so do not just end your turn and wait. If work is still missing, start helpers for it first. The owner then merges the ticket branch once.',
   ].join(' ');
 }
 

@@ -422,6 +422,9 @@ export function requestTicketChanges(
     const loop = d.integration;
     if (loop === undefined) return noLoop();
     loop.handedOver = false;
+    // The owner's message below already says what to do; the "hand over" prompt waits for the
+    // next idle point after new helper work (RL-F).
+    d.handoverPrompted = true;
     d.setRunStatus('RUNNING');
     notifyLead(
       d,

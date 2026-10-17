@@ -100,6 +100,13 @@ describe('the review loop (ADR-0021 §3)', () => {
     expect(head(s.repo)).toBe(base);
     expect(existsSync(s.worktree(runId, worker.id))).toBe(false);
 
+    // RL-F: every change is decided and nothing else works, so the lead is told once, through
+    // the server, to hand over.
+    await s.settle();
+    expect(lead.sent.filter((t) => t.startsWith('Every change is decided'))).toEqual([
+      expect.stringContaining('(1 merged into acp/WEBAPP-1, 0 discarded, 0 with no changes)'),
+    ]);
+
     // Hand over: no code-review or unit-tests stage in the default workflow → REVIEW.
     expect(await lead.callLead('request_review', {})).toBeTruthy();
     detail = await run(s, runId);

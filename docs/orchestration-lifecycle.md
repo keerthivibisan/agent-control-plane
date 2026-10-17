@@ -64,6 +64,12 @@ Verified with fake agents against the real server, real git and real harness che
 - **Handover:** `request_review` is refused while a helper works or a change is undecided. After
   it, no helper starts; the final code review and the unit tests (if on) run on the ticket branch
   while the lead stays live.
+- **Hand-over prompt (RL-F):** when the lead has not handed over, every change is decided and no
+  other agent works, the engine sends the lead one message with the counts (merged into the ticket
+  branch, discarded, with no changes) asking it to call `request_review` or start helpers for
+  missing work; with nothing merged it says so. It is sent once per such point, again only after
+  new helper or reviewer work, never after the handover, and not with the owner's "Request
+  changes" message. A BLOCKED lead gets it after its budget raise.
 - **The owner merges once:** at `REVIEW` the checks run on the tip (a detached temporary
   checkout). The ticket-branch card shows the combined diff `base..tip` and those checks. Merge
   needs a clean owner tree on the base branch, an unmoved base and passed required checks, then

@@ -18,6 +18,7 @@ import {
 } from './transitions.js';
 import {
   enterReview,
+  promptHandover,
   stoppedWithoutReview,
   sweepLoop,
   undecidedChanges,
@@ -76,6 +77,8 @@ export class Draft {
   followUp: FollowUpState | undefined;
   /** The review loop's settings (`RunState.integration`, ADR-0021); undefined: legacy flow. */
   integration: RunIntegration | undefined;
+  /** Loop runs: the lead was told to hand over at this idle point (`RunState.handoverPrompted`). */
+  handoverPrompted: boolean;
   /** The run's approval policy (`RunState.approvalPolicy`, ADR-0021). */
   readonly approvalPolicy: ProjectApprovals | undefined;
   readonly effects: EngineEffect[] = [];
@@ -106,6 +109,7 @@ export class Draft {
         ? undefined
         : { ...followUp, turn: followUp.turn === null ? null : { ...followUp.turn } };
     this.integration = state.integration === undefined ? undefined : { ...state.integration };
+    this.handoverPrompted = state.handoverPrompted === true;
     this.approvalPolicy = state.approvalPolicy;
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.nowIso = ctx.now.toISOString();
@@ -412,6 +416,7 @@ export class Draft {
     }
 
     if (loop !== undefined) {
+      promptHandover(this);
       // ADR-0021: REVIEW waits for the owner's single merge of the ticket branch; it never
       // completes by itself. Without a lead (it ended early, or a restart), the final stages
       // start here once every change is decided, as in the legacy flow.
@@ -537,6 +542,7 @@ export class Draft {
     if (this.stagesHeld) state.stagesHeld = true;
     if (this.followUp !== undefined) state.followUp = this.followUp;
     if (this.integration !== undefined) state.integration = this.integration;
+    if (this.handoverPrompted) state.handoverPrompted = true;
     if (this.approvalPolicy !== undefined) state.approvalPolicy = this.approvalPolicy;
     return state;
   }
