@@ -29,3 +29,11 @@ Coordinator-owned. Plan: [README.md](README.md). Integration branch `feature/ui-
   - dependencies added (`f516686`);
   - a flaky harness-runner test made deterministic (`b1ee82d`);
   - docs (this commit).
+- 2026-10-17 U-A merged (`a4a554f`):
+  - v2 tokens (light and dark), Geist fonts (latin woff2 only), lucide icons;
+  - shared Tabs, Dialog, Menu, Popover, Segmented and Skeleton;
+  - MotionConfig, test stubs, and 7 unused components removed.
+  - Coordinator re-ran pnpm check (2,119 tests) and the e2e (49/49).
+  - Bundle: JS +10 kB, CSS +6.5 kB, fonts +52 kB.
+  - Tooltip/InfoTip stay hand-built (Radix Tooltip would change tap behaviour).
+  - Waiting for the owner's design checkpoint before U-B…U-F.
