@@ -43,6 +43,13 @@ once. Before 1.0.0, features and data formats may still change between releases.
   - If auto mode or the sandbox is not available, the helper stops and says why; it never runs
     unprotected. Anything that would still need a decision is refused instead of waiting for you.
   - It can still make mistakes: you review everything once, when you merge the ticket branch.
+- Run options for each ticket
+  - Give one ticket its own approval mode, reviewer and rework rounds, for example Manual for a
+    risky ticket in a Full auto project. Choose them in the New ticket dialog or later on the
+    ticket page; each starts at "Project default".
+  - An option left on "Project default" follows the project, also when you change the project
+    later. A choice in "Start with options…" still applies to that one run only.
+  - The board card shows a small badge when a ticket's options differ from the project's.
 - Review before merge, with rework
   - Each helper's finished change is reviewed before it goes anywhere: by a read-only review
     agent (the default) or by the lead.

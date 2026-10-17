@@ -355,3 +355,27 @@ merge.
   review loop; `main` changes only on the owner's merge.
 - **Real run:** `ACP_REAL_RUN=1 ACP_REAL_RUN_MODE=full-auto` with the RL-V driver, only after the
   owner's consent in chat.
+
+## 11. Ticket-level run options (RL-H)
+
+Owner decision (2026-10-17, STATUS.md): a ticket can keep its own run options, "if we need some
+ticket to be manual".
+
+- **Options:** approval mode, reviewer (review agent or lead) and rework rounds. Each is "Project
+  default" unless set; an unset option follows the project, also after a project change.
+- **Precedence when a run starts:** the one-run override (`StartTicketRequest`, "Start with
+  options…") > the ticket's options > the project's settings (`resolveRunOptions` in core). The
+  run snapshots the result, as before; changing the ticket later never reaches a started run. The
+  command allowlist stays the project's.
+- **Contract (additive):** `TicketRunOptionsSchema {approvalMode?, reviewer?, maxReworkRounds?}`;
+  `Ticket.runOptions?` (so `TicketDto` and `TicketCardDto`); `CreateTicketRequest.runOptions?`;
+  `UpdateTicketRequest.runOptions?` as a patch where `null` puts an option back to the project
+  default (and `runOptions: null` clears all).
+- **Storage:** migration `0007_ticket_run_options.sql`, a nullable JSON column
+  `tickets.run_options` (NULL = all project default), read and written by
+  `createReviewLoopRepositories().ticketRunOptions` so the Phase 4 tickets repository stays as
+  shipped.
+- **Web:** the New ticket dialog (approvals visible, reviewer and rounds under "More options",
+  each "Project default (<value>)"); the ticket page's Run options (view and Change); a board
+  badge when the ticket's options differ from the project's; the Start dialog starts at the
+  ticket's options and marks them "This ticket".
