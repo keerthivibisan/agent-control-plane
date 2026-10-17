@@ -80,5 +80,6 @@ plan-approval` without a planner;
 - 2026-10-18 **Branch flow (owner decision).**
   - Coordinators and agents never touch `main` (no commit, merge or reset).
   - `release/0.2.0` (from `main` `b6a1f27`) is the integration branch. `feature/workflow-graph`
-    merges into it when the feature is done, and the owner raises the MR from `release/0.2.0` to
-    `main`, merges it and tags.
+    merges into it when the feature is done.
+  - The MR from `release/0.2.0` to `main` is always raised in GitHub, and the owner merges it
+    there. `main` changes only through that merge.
