@@ -7,7 +7,7 @@ import { inputClass } from '../../components/Input';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decidePlan } from '../../lib/api';
-import { PLAN_STATUS_COPY, TICKET_COPY } from '../../lib/copy';
+import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from './actions';
 import { commentsOnPlan } from './ticket-state';
@@ -56,7 +56,11 @@ function PlanMeta({ plan }: { plan: TicketPlanDto }) {
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-dim tabular-nums">
       <span className="font-medium text-ink">{C.version(plan.version)}</span>
       <span>{C.helpers(plan.plannedHelpers)}</span>
-      <span data-plan-status={plan.status}>{PLAN_STATUS_COPY[plan.status]}</span>
+      <span data-plan-status={plan.status}>
+        {plan.status === 'approved' && plan.decidedBy === 'auto'
+          ? REVIEW_LOOP_COPY.fullAuto.planApproved
+          : PLAN_STATUS_COPY[plan.status]}
+      </span>
       <RelativeTime iso={plan.decidedAt ?? plan.createdAt} />
     </span>
   );

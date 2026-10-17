@@ -246,6 +246,22 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
     expect(within(editor).getByTestId('command-list')).toBeTruthy();
   });
 
+  it('Full auto shows its own honest warning, no command list, and saves the mode (ADR-0022)', async () => {
+    const s = render();
+    await open('Helpers');
+    const editor = within(panel()).getByTestId('approvals-editor');
+    fireEvent.click(within(editor).getByLabelText(/^Full auto/));
+    expect(within(editor).getByText(/Nothing asks you during the run/)).toBeTruthy();
+    expect(within(editor).getByTestId('full-auto-warning').textContent).toContain(
+      'it can still make mistakes — you review everything once in the final merge',
+    );
+    expect(within(editor).queryByTestId('approvals-warning')).toBeNull();
+    expect(within(editor).queryByTestId('command-list')).toBeNull();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
+    await within(panel()).findByTestId('saved');
+    expect(puts(s, SETUP)[0]?.body).toMatchObject({ approvals: { mode: 'full-auto' } });
+  });
+
   it('refuses a command inline, adds valid ones, removes one, and saves the approvals', async () => {
     const s = render();
     await open('Helpers');

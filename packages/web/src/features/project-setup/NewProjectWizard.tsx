@@ -18,7 +18,7 @@ import { href, navigate } from '../../lib/router';
 import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { HarnessCheckList, HarnessStatusView, HarnessTicketAction } from './HarnessPanel';
-import { ApprovalModeChoice, AutoRunWarning } from '../review-loop/ApprovalsEditor';
+import { ApprovalModeChoice, ModeWarning } from '../review-loop/ApprovalsEditor';
 import { AgentFields, ContextPicker } from './SetupSections';
 import {
   draftFromSetup,
@@ -213,8 +213,8 @@ export function NewProjectWizard() {
   } else if (key === 'allowlist') {
     body = (
       <div className="flex flex-col gap-4" data-testid="wizard-approvals">
-        <ApprovalModeChoice value={approvalMode} onChange={setMode} columns={3} />
-        {approvalMode !== 'manual' ? <AutoRunWarning /> : null}
+        <ApprovalModeChoice value={approvalMode} onChange={setMode} columns={2} />
+        <ModeWarning mode={approvalMode} />
         {approvalMode === 'auto' ? (
           <p className="text-caption text-dim">{REVIEW_LOOP_COPY.wizard.autoCommands}</p>
         ) : null}

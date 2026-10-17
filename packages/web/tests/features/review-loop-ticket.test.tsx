@@ -758,6 +758,59 @@ describe('the Start dialog (ticket page Re-run)', () => {
   });
 });
 
+describe('ticket page: a Full auto run (ADR-0022)', () => {
+  /** The working scenario in Full auto, with its plan approved automatically. */
+  function fullAuto(): LoopScenario {
+    const sc = withRun(loopWorkingScenario(), (run) => ({ ...run, approvalMode: 'full-auto' }));
+    const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
+    const plan = {
+      id: 'plan-fa-1',
+      ticketId: LOOP_TICKET_ID,
+      runId: LOOP_RUN_ID,
+      version: 1,
+      summary: 'Synthetic plan.',
+      steps: [{ title: 'Build the API', role: 'API builder', detail: '' }],
+      plannedHelpers: 1,
+      status: 'approved',
+      createdAt: '2026-10-17T09:00:00.000Z',
+      decidedAt: '2026-10-17T09:00:00.000Z',
+      decidedBy: 'auto',
+    };
+    return { routes: { ...sc.routes, [LOOP_TICKET_PATH]: { ...detail, plans: [plan] } } };
+  }
+
+  it('the fixture matches the contract', () => {
+    const detail = TicketDetailDtoSchema.parse(fullAuto().routes[LOOP_TICKET_PATH]);
+    expect(detail.plans[0]?.decidedBy).toBe('auto');
+    expect(detail.currentRun?.approvalMode).toBe('full-auto');
+  });
+
+  it('names the mode and shows the plan as approved automatically', async () => {
+    render(fullAuto());
+    expect((await screen.findByTestId('run-approval-mode')).textContent).toBe(
+      'Approvals: Full auto',
+    );
+    const history = await screen.findByTestId('plan-history');
+    expect(within(history).getByText('Approved automatically (Full auto)')).toBeTruthy();
+  });
+
+  it('the Approvals tab says Claude Code’s auto mode makes the decisions', async () => {
+    render(fullAuto());
+    await openChange('API builder');
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Approvals' }));
+    expect(within(panel()).getByTestId('full-auto-approvals-note').textContent).toContain(
+      'Claude Code’s auto mode decides each helper action in this run',
+    );
+  });
+
+  it('other modes show no Full auto note', async () => {
+    render(loopWorkingScenario());
+    await openChange('API builder');
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Approvals' }));
+    expect(within(panel()).queryByTestId('full-auto-approvals-note')).toBeNull();
+  });
+});
+
 // Unused imports guard: the run id is part of the paths above.
 void LOOP_RUN_ID;
 void L_API;

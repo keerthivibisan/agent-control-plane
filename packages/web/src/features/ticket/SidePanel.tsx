@@ -26,6 +26,7 @@ import {
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { Approvals } from '../control/Approvals';
+import { FullAutoApprovalsNote } from '../review-loop/ApprovalsEditor';
 import { agentStatusCopy, StatusWord } from '../control/bits';
 import { Chat, type SpeakerOf } from '../control/Chat';
 import { canChat, isAgentLive } from '../control/run-state';
@@ -383,11 +384,14 @@ export function SidePanel({
     ) : t === 'checks' ? (
       <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={canRunAgain} />
     ) : t === 'approvals' ? (
-      approvals.length === 0 ? (
-        <p className="text-dim">{C.approvals.none}</p>
-      ) : (
-        <Approvals approvals={approvals} agents={run.agents} />
-      )
+      <div className="flex flex-col gap-3">
+        {run.approvalMode === 'full-auto' ? <FullAutoApprovalsNote /> : null}
+        {approvals.length === 0 ? (
+          <p className="text-dim">{C.approvals.none}</p>
+        ) : (
+          <Approvals approvals={approvals} agents={run.agents} />
+        )}
+      </div>
     ) : (
       <DetailsTab agent={agent} review={review} />
     );

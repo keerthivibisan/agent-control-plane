@@ -75,6 +75,26 @@ describe('board: Start with options', () => {
     expect((await screen.findByTestId('board-feedback')).textContent).toContain('WEB-13');
   });
 
+  it('Full auto shows its honest warning and starts with it (ADR-0022)', async () => {
+    const s = server();
+    renderWithApi(<BoardPage projectId={PROJECT_ID} />, s);
+    const dialog = await openStartOptions();
+    expect(within(dialog).queryByTestId('full-auto-warning')).toBeNull();
+    fireEvent.click(await within(dialog).findByLabelText(/^Full auto/));
+    const warning = within(dialog).getByTestId('full-auto-warning');
+    expect(warning.textContent).toContain(
+      'Claude Code’s auto mode reviews risky actions with a second model and commands run in the operating-system sandbox; it can still make mistakes — you review everything once in the final merge.',
+    );
+    // Its own warning replaces the Auto edits/Auto one.
+    expect(within(dialog).queryByTestId('approvals-warning')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
+    await waitFor(() => expect(s.calls.filter((c) => c.method === 'POST')).toHaveLength(1));
+    expect(s.calls.find((c) => c.method === 'POST')).toMatchObject({
+      path: START,
+      body: { approvalMode: 'full-auto' },
+    });
+  });
+
   it('a refused start keeps the dialog open with the server’s reason', async () => {
     const s = server({
       [`POST ${START}`]: jsonResponse(409, {

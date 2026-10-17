@@ -88,7 +88,12 @@ describe('New project wizard (#/projects/new)', () => {
     expect(within(allow).getByTestId('approvals-warning')).toBeTruthy();
     fireEvent.click(within(allow).getByLabelText(/^Manual/));
     expect(within(allow).queryByTestId('approvals-warning')).toBeNull();
+    // ADR-0022: Full auto has its own warning instead.
+    fireEvent.click(within(allow).getByLabelText(/^Full auto/));
+    expect(within(allow).getByTestId('full-auto-warning')).toBeTruthy();
+    expect(within(allow).queryByTestId('approvals-warning')).toBeNull();
     fireEvent.click(within(allow).getByLabelText(/^Auto edits/));
+    expect(within(allow).queryByTestId('full-auto-warning')).toBeNull();
     next();
 
     // Step 4: suggested files are pre-selected, with the limits counted.

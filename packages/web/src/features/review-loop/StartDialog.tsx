@@ -16,7 +16,7 @@ import { REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { ChoiceCards, NumberChoice } from '../project-setup/fields';
-import { AutoRunWarning } from './ApprovalsEditor';
+import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
 import { startRequest, type StartChoice } from './logic';
 
 const S = REVIEW_LOOP_COPY.start;
@@ -118,7 +118,11 @@ export function StartDialog({
               }))}
               onChange={(approvalMode) => setPicked((p) => ({ ...p, approvalMode }))}
             />
-            {wider ? <AutoRunWarning /> : null}
+            {choice.approvalMode === 'full-auto' ? (
+              <FullAutoWarning />
+            ) : wider ? (
+              <AutoRunWarning />
+            ) : null}
             <ChoiceCards<ChangeReviewerMode>
               legend={S.reviewer}
               name={`${name}-reviewer`}

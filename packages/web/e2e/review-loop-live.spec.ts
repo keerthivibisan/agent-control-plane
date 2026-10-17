@@ -56,6 +56,8 @@ interface DriverAgent {
   kind: string;
   reviewScope: 'change' | 'final' | null;
   rework: boolean;
+  /** ADR-0022: the agent was started in Full auto (auto mode + sandbox). */
+  fullAuto: boolean;
   prompt: string;
   sent: string[];
   ended: boolean;
@@ -543,4 +545,179 @@ test('the review loop: two helpers, review, rework, an owner override, one final
     await request.get(`${DRIVER}/db/contains`, { params: { text: DIFF_MARKER } })
   ).json()) as { found: boolean };
   expect(db.found).toBe(false);
+});
+
+/*
+ * RL-G (ADR-0022): Full auto in the browser against the real server routes. The owner picks Full
+ * auto in the New project wizard; the lead's plan is approved automatically (no plan card asks);
+ * the helper starts in Full auto (the fake adapter records its sandbox spec); an action that still
+ * reaches the gate is denied at once with nothing waiting for the owner; the change goes through
+ * the review agent and the lead's merge; the owner's only click is Merge into main.
+ */
+test('Full auto: plan approved automatically, nothing asks, one final merge', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(180_000);
+  const { parentDir } = (await (await request.get(`${DRIVER}/parent`)).json()) as {
+    parentDir: string;
+  };
+  const repo = `${parentDir}/cart`;
+
+  // ---- New project with Full auto, and its plain warning.
+  await page.goto('/#/projects/new');
+  await page.getByText('Create a new repository').click();
+  await page.getByLabel('Create it inside').fill(parentDir);
+  await page.getByLabel('Repository name').fill('cart');
+  await page.getByRole('button', { name: 'Create repository' }).click();
+  const wizard = page.getByRole('form', { name: 'New project' });
+  await expect(wizard.getByRole('textbox', { name: 'Ticket prefix' })).toHaveValue('CART');
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 3 of 5');
+  await wizard.getByRole('radio', { name: /^Full auto/ }).check({ force: true });
+  await expect(wizard.getByTestId('full-auto-warning')).toContainText(
+    'you review everything once in the final merge',
+  );
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 4 of 5');
+  await wizard.getByRole('button', { name: 'Next' }).click();
+  await expect(wizard).toContainText('Step 5 of 5');
+  await wizard.getByRole('button', { name: 'Finish and open the board' }).click();
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/board$/);
+  const committed = await request.post(`${DRIVER}/repo/commit`, {
+    data: { root: repo, files: HARNESS },
+  });
+  expect(committed.ok(), await committed.text()).toBe(true);
+
+  // ---- A ticket, Ready, Start.
+  await page.getByRole('button', { name: 'New ticket' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await dialog.getByLabel('Title').fill('Show the cart total');
+  await dialog.getByRole('button', { name: 'Create ticket' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Created CART-1 in Backlog.' }),
+  ).toBeVisible();
+  const move = async (item: string) => {
+    await page.getByRole('button', { name: 'Move CART-1' }).click();
+    await page.getByRole('menuitem', { name: item }).click();
+  };
+  await move('Move to Ready');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Moved CART-1 to Ready.' }),
+  ).toBeVisible();
+  await move('Start (the lead agent plans it)');
+  await page.getByRole('link', { name: /Show the cart total/ }).click();
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/tickets\/[^/]+$/);
+  const ticketId = /tickets\/([^/]+)$/.exec(page.url())?.[1] ?? '';
+  const ticket = (await (await request.get(`/api/tickets/${ticketId}`)).json()) as {
+    currentRun: { id: string } | null;
+  };
+  const runId = ticket.currentRun?.id ?? '';
+  const run = async (): Promise<Run> =>
+    (await (await request.get(`/api/runs/${runId}`)).json()) as Run;
+  const waitRun = async (what: (r: Run) => boolean) => {
+    let last: Run | undefined;
+    await expect
+      .poll(async () => {
+        last = await run();
+        return what(last);
+      })
+      .toBe(true);
+    return last as Run;
+  };
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Full auto');
+
+  // ---- The plan is approved automatically: the run goes on, nothing waits for the owner.
+  const leadAgent = await agentOf(
+    request,
+    (a) => a.kind === 'lead' && a.prompt.includes('Show the cart total'),
+  );
+  expect(leadAgent.fullAuto).toBe(false);
+  expect(leadAgent.prompt).toContain('your plan is approved automatically');
+  await act(request, leadAgent.id, 'started', { sessionId: 'sess-rlg-lead' });
+  const reply = await lead(request, leadAgent.id, 'submit_plan', {
+    summary: 'Compute and show the cart total',
+    steps: [{ title: 'Show the total', role: 'Cart builder', detail: 'One helper' }],
+  });
+  expect(reply).toContain('approved automatically (Full auto)');
+  const branched = await waitRun((r) => r.ticketBranch?.state === 'open');
+  expect(branched.status).toBe('RUNNING');
+  await expect(page.getByTestId('plan-card')).toHaveCount(0);
+  await expect(page.getByTestId('plan-history')).toContainText(
+    'Approved automatically (Full auto)',
+  );
+  await expect
+    .poll(async () => (await agentOf(request, (a) => a.id === leadAgent.id)).sent.join('\n'))
+    .toContain('approved automatically (Full auto)');
+
+  // ---- The helper runs in Full auto; what reaches the gate is denied without asking.
+  await lead(request, leadAgent.id, 'start_agent', { role: 'Cart builder', task: 'Show it' });
+  const withHelper = await waitRun((r) => r.agents.some((a) => a.role === 'Cart builder'));
+  const helperId = withHelper.agents.find((a) => a.role === 'Cart builder')?.id ?? '';
+  const helper = await agentOf(request, (a) => a.id === helperId);
+  expect(helper.fullAuto).toBe(true);
+  await act(request, helper.id, 'started');
+  const denied = await act(request, helper.id, 'ask', {
+    toolName: 'Bash',
+    summary: 'curl example.test',
+    input: { command: 'curl https://example.test' },
+  });
+  expect(denied.pending).toBeUndefined();
+  expect(denied.decision).toMatchObject({ allow: false });
+  await page.getByRole('button', { name: 'Show the Cart builder in the side panel' }).click();
+  const side = page.getByTestId('side-panel');
+  await side.getByRole('tab', { name: /Approvals/ }).click();
+  await expect(side.getByTestId('full-auto-approvals-note')).toContainText(
+    'Claude Code’s auto mode decides each helper action',
+  );
+  await act(request, helper.id, 'write', {
+    path: 'cart-total.ts',
+    content: 'export const total = (xs: number[]) => xs.reduce((a, b) => a + b, 0);\n',
+  });
+  await act(request, helper.id, 'finish');
+
+  // ---- Review agent, the lead's merge, hand over.
+  const reviewed = await waitRun(
+    (r) =>
+      r.changes?.some((c) => typeof agentRound(c.reviews, 0)?.reviewerAgentRunId === 'string') ===
+      true,
+  );
+  const reviewerId = agentRound(reviewed.changes?.[0]?.reviews, 0)?.reviewerAgentRunId ?? '';
+  const reviewer = await agentOf(request, (a) => a.id === reviewerId);
+  await act(request, reviewer.id, 'started');
+  await lead(request, reviewer.id, 'submit_review', {
+    verdict: 'approve',
+    findings: 'Small and right. Synthetic finding.',
+  });
+  await act(request, reviewer.id, 'finish');
+  await expect
+    .poll(
+      async () => {
+        const out = await act(request, leadAgent.id, 'call-lead', {
+          name: 'merge_change',
+          input: { agentId: helper.id },
+        });
+        return out.text ?? out.error ?? '';
+      },
+      { timeout: 45_000, intervals: [500] },
+    )
+    .toContain('Merged Cart builder into acp/CART-1');
+  await lead(request, leadAgent.id, 'request_review', {});
+  await waitRun((r) => r.status === 'REVIEW');
+
+  // ---- No approval ever waited for the owner; the only click is Merge into main.
+  expect((await run()).approvals.filter((a) => a.decidedBy === 'owner')).toEqual([]);
+  await expect(page.getByTestId('approvals')).toHaveCount(0);
+  const branchCard = page.getByTestId('ticket-branch');
+  // The checks on the tip run first (RL-B); Merge waits for them.
+  await expect(branchCard.getByTestId('branch-checks')).toContainText('Passed', {
+    timeout: 45_000,
+  });
+  await expect(branchCard).toContainText('cart-total.ts');
+  await branchCard.getByRole('button', { name: 'Merge into main' }).click();
+  await expect(branchCard.getByTestId('confirm')).toContainText('Merge acp/CART-1 into main?');
+  await branchCard.getByRole('button', { name: 'Merge', exact: true }).click();
+  await expect(branchCard.getByTestId('branch-state')).toHaveText('Merged into main');
+  await expect(page.getByTestId('ticket-stage')).toContainText('Done');
+  expect((await run()).status).toBe('COMPLETED');
 });

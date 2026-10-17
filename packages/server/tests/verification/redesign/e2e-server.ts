@@ -76,6 +76,8 @@ function agentView(a: FakeAgent) {
     // ADR-0021: a change reviewer ('change') or the final reviewer ('final'); a rework turn.
     reviewScope: a.spec.reviewScope ?? null,
     rework: a.spec.rework !== undefined,
+    // ADR-0022: a Full auto helper or tester carries its sandbox paths (never shown: paths only).
+    fullAuto: a.spec.fullAuto !== undefined,
     prompt: a.spec.prompt,
     sent: a.sent,
     ended: a.ended,

@@ -3090,4 +3090,13 @@ export const REVIEW_LOOP_COPY = {
     'run-harness-check': 'Approved automatically: harness check',
     'command-allowlist': 'Approved automatically: allowed command',
   } satisfies Record<AllowRule, string>,
+  /** Full auto (ADR-0022, RL-G). */
+  fullAuto: {
+    warningTitle: 'Full auto: you review everything once, at the end',
+    warning:
+      'Claude Code’s auto mode reviews risky actions with a second model and commands run in the operating-system sandbox; it can still make mistakes — you review everything once in the final merge.',
+    approvalsNote:
+      'Full auto: Claude Code’s auto mode decides each helper action in this run, and nothing waits for you. Its decisions are not listed here; you review the whole result once, at the final merge.',
+    planApproved: 'Approved automatically (Full auto)',
+  },
 } as const;

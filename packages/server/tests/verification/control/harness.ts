@@ -97,14 +97,18 @@ export async function boot(options: BootOptions): Promise<Booted> {
   if (options.mode === 'live' && options.claudeDir === undefined) {
     throw new Error('live mode needs a temp claudeDir');
   }
-  const config = loadConfig({
-    ACP_MODE: options.mode,
-    ACP_DATA_DIR: options.dataDir,
-    ACP_PORT: String(options.port ?? 7441),
-    // Live mode polls only this temp dir; demo mode never reads a Claude dir.
-    ACP_CLAUDE_DIR: options.claudeDir ?? join(options.dataDir, 'no-claude-dir'),
-    ACP_POLL_INTERVAL_MS: '1000',
-  });
+  const config = loadConfig(
+    {
+      ACP_MODE: options.mode,
+      ACP_DATA_DIR: options.dataDir,
+      ACP_PORT: String(options.port ?? 7441),
+      // Live mode polls only this temp dir; demo mode never reads a Claude dir.
+      ACP_CLAUDE_DIR: options.claudeDir ?? join(options.dataDir, 'no-claude-dir'),
+      ACP_POLL_INTERVAL_MS: '1000',
+    },
+    // A temp home: Full auto's deny-read list (ADR-0022) never names the real one.
+    { homeDir: join(options.dataDir, 'e2e-home') },
+  );
   const server = await startServer({
     config,
     port: options.port ?? 0,

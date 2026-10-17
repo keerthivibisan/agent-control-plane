@@ -13,11 +13,7 @@ import {
 import { href } from '../../lib/router';
 import { CheckboxField, ChoiceCards, NumberChoice, TextField } from '../project-setup/fields';
 import { DEPTH_CHOICES, HELPER_CHOICES, parseTokens } from '../project-setup/setup-form';
-import {
-  ApprovalModeChoice,
-  AutoRunWarning,
-  CommandListEditor,
-} from '../review-loop/ApprovalsEditor';
+import { ApprovalModeChoice, ModeWarning, CommandListEditor } from '../review-loop/ApprovalsEditor';
 import type { DraftErrors, LimitsDraft, ReviewDraft, StageDraft, WorkflowDraft } from './draft';
 import { OPTIONAL_STAGES, type AgentStageId, type WorkflowRole } from './graph';
 import { MergeIcon, ROLE_ICON } from './icons';
@@ -323,7 +319,7 @@ function HelperLimits({
             value={limits.approvalMode}
             onChange={(approvalMode) => onLimits({ approvalMode })}
           />
-          {limits.approvalMode !== 'manual' ? <AutoRunWarning /> : null}
+          <ModeWarning mode={limits.approvalMode} />
           {limits.approvalMode === 'auto' || limits.commands.length > 0 ? (
             <CommandListEditor
               commands={limits.commands}

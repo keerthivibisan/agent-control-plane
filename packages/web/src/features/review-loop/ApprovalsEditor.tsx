@@ -17,7 +17,7 @@ import { checkCommand, commandText } from './logic';
 const A = REVIEW_LOOP_COPY.approvals;
 const M = REVIEW_LOOP_COPY.modes;
 
-/** The three modes as native radios, each with the sentence of what runs without asking. */
+/** The four modes as native radios, each with the sentence of what runs without asking. */
 export function ApprovalModeChoice({
   value,
   onChange,
@@ -25,7 +25,7 @@ export function ApprovalModeChoice({
 }: {
   value: ApprovalMode;
   onChange: (mode: ApprovalMode) => void;
-  columns?: 1 | 3;
+  columns?: 1 | 2 | 3;
 }) {
   const name = useId();
   return (
@@ -56,6 +56,47 @@ export function AutoRunWarning() {
         <p className="text-ink">{A.warning}</p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Full auto's plain warning (ADR-0022): Claude Code's auto mode and the operating-system sandbox
+ * protect the run, but can still make mistakes; the owner reviews everything once, at the end.
+ */
+export function FullAutoWarning() {
+  const F = REVIEW_LOOP_COPY.fullAuto;
+  return (
+    <div
+      className="flex items-start gap-2 rounded-control border border-warning/25 bg-warning-soft px-3 py-2.5 text-caption"
+      data-testid="full-auto-warning"
+    >
+      <AlertIcon size={14} className="mt-px shrink-0 text-warning" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="font-medium text-warning">{F.warningTitle}</p>
+        <p className="text-ink">{F.warning}</p>
+      </div>
+    </div>
+  );
+}
+
+/** The warning a mode needs: none for Manual, Full auto's own, else the Auto edits/Auto one. */
+export function ModeWarning({ mode }: { mode: ApprovalMode }) {
+  if (mode === 'manual') return null;
+  return mode === 'full-auto' ? <FullAutoWarning /> : <AutoRunWarning />;
+}
+
+/**
+ * The approvals tab of a Full auto run (ADR-0022): its decisions are made by Claude Code's auto
+ * mode, which this app does not see one by one, so the list stays (nearly) empty.
+ */
+export function FullAutoApprovalsNote() {
+  return (
+    <p
+      className="rounded-control border border-line bg-sunken px-3 py-2.5 text-caption text-dim"
+      data-testid="full-auto-approvals-note"
+    >
+      {REVIEW_LOOP_COPY.fullAuto.approvalsNote}
+    </p>
   );
 }
 
