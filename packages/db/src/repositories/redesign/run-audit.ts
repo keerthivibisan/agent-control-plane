@@ -1,14 +1,19 @@
 import {
+  ApprovalModeSchema,
   ChangeReviewerModeSchema,
   ProjectAgentSetupSchema,
   ProjectApprovalsSchema,
   ProjectWorkflowSchema,
   ReworkRoundsSchema,
   TicketBranchNameSchema,
+  WorkflowGraphSchema,
   WorkflowNodeIdSchema,
+  type ApprovalMode,
   type ChangeReviewerMode,
+  type CompileContext,
   type ProjectApprovals,
   type ProjectWorkflow,
+  type WorkflowGraph,
   type WorkflowNodeId,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
@@ -63,6 +68,13 @@ export interface StoredRunSnapshot extends StoredRunLimits {
    * `auto`). Absent when the owner decided the plan, and for runs before it.
    */
   autoApprovedPlanId?: string;
+  /**
+   * ADR-0023: the workflow graph the run follows (the engine's `RunState.graph`), snapshotted at
+   * start, and the context it compiles with (`RunState.graphContext`). Always together. Absent for
+   * runs before it, which compile their version 1 `workflow` migrated.
+   */
+  graph?: WorkflowGraph;
+  graphContext?: CompileContext;
 }
 
 /** The review loop settings the run snapshotted, plus whether the lead has handed over. */
@@ -104,13 +116,70 @@ function parseIntegration(value: unknown): StoredRunIntegration | null {
 
 const fail = (message: string) => ({ success: false as const, error: new Error(message) });
 
+/** At most the ticket's and the run's mode (README WG-0 refinements 5 and 7). */
+const MAX_APPROVAL_CEILINGS = 2;
+const HelperLimitSchema = ProjectAgentSetupSchema.shape.maxConcurrentHelpers;
+
+/**
+ * A graph run's compile context (`CompileContext`), each field checked with core's schema and no
+ * other key allowed. The optional overrides are left out, never stored as undefined.
+ */
+function parseGraphContext(value: unknown): CompileContext | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const {
+    projectMode,
+    approvalCeilings,
+    reviewer,
+    maxReworkRounds,
+    maxConcurrentHelpers,
+    ...extra
+  } = value as Record<string, unknown>;
+  if (Object.keys(extra).length > 0) return null;
+  const mode = ApprovalModeSchema.safeParse(projectMode);
+  const helpers = HelperLimitSchema.safeParse(maxConcurrentHelpers);
+  if (!mode.success || !helpers.success) return null;
+  if (!Array.isArray(approvalCeilings) || approvalCeilings.length > MAX_APPROVAL_CEILINGS) {
+    return null;
+  }
+  const ceilings: ApprovalMode[] = [];
+  for (const ceiling of approvalCeilings) {
+    const parsed = ApprovalModeSchema.safeParse(ceiling);
+    if (!parsed.success) return null;
+    ceilings.push(parsed.data);
+  }
+  const context: CompileContext = {
+    projectMode: mode.data,
+    approvalCeilings: ceilings,
+    maxConcurrentHelpers: helpers.data,
+  };
+  if (reviewer !== undefined) {
+    const parsed = ChangeReviewerModeSchema.safeParse(reviewer);
+    if (!parsed.success) return null;
+    context.reviewer = parsed.data;
+  }
+  if (maxReworkRounds !== undefined) {
+    const parsed = ReworkRoundsSchema.safeParse(maxReworkRounds);
+    if (!parsed.success) return null;
+    context.maxReworkRounds = parsed.data;
+  }
+  return context;
+}
+
 export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
   safeParse(value: unknown) {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       return fail('expected an object');
     }
-    const { workflow, stagesHeld, approvals, integration, autoApprovedPlanId, ...rest } =
-      value as Record<string, unknown>;
+    const {
+      workflow,
+      stagesHeld,
+      approvals,
+      integration,
+      autoApprovedPlanId,
+      graph,
+      graphContext,
+      ...rest
+    } = value as Record<string, unknown>;
     const limits = StoredRunLimitsSchema.safeParse(rest);
     if (!limits.success) return fail('invalid limits');
     const snapshot: StoredRunSnapshot = { ...limits.data };
@@ -142,6 +211,19 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
         return fail('invalid autoApprovedPlanId');
       }
       snapshot.autoApprovedPlanId = autoApprovedPlanId;
+    }
+    if (graph !== undefined || graphContext !== undefined) {
+      // The program is compiled from both, so one without the other is not a graph run.
+      const parsedGraph = WorkflowGraphSchema.safeParse(graph);
+      if (!parsedGraph.success) return fail('invalid graph');
+      const context = parseGraphContext(graphContext);
+      if (context === null) return fail('invalid graphContext');
+      // The engine compiles the pool with the run's own helper limit (`createRun` checks it too).
+      if (context.maxConcurrentHelpers !== snapshot.maxConcurrentHelpers) {
+        return fail("graphContext's helper limit is not the run's");
+      }
+      snapshot.graph = parsedGraph.data;
+      snapshot.graphContext = context;
     }
     return { success: true as const, data: snapshot };
   },
