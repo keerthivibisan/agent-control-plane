@@ -5,15 +5,15 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 `feature/workflow-graph` (from `release/0.2.0`, from `main` `b6a1f27`) and are merged back with
 `--ff-only` after review.
 
-| WP   | Title                                                                   | After     | Status          | Branch            | Merged    |
-| ---- | ----------------------------------------------------------------------- | --------- | --------------- | ----------------- | --------- |
-| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**        | wp/wg-0-contracts | `5f6c1e8` |
-| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**        | wp/wg-a-core      | `1da44e6` |
-| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **in progress** | wp/wg-b-engine    |           |
-| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | not started     | wp/wg-c-server    |           |
-| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **in progress** | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | not started     | wp/wg-e-live      |           |
-| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started     | wp/wg-v-verify    |           |
+| WP   | Title                                                                   | After     | Status                      | Branch            | Merged    |
+| ---- | ----------------------------------------------------------------------- | --------- | --------------------------- | ----------------- | --------- |
+| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                    | wp/wg-0-contracts | `5f6c1e8` |
+| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                    | wp/wg-a-core      | `1da44e6` |
+| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **in progress**             | wp/wg-b-engine    |           |
+| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | not started                 | wp/wg-c-server    |           |
+| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | not started                 | wp/wg-e-live      |           |
+| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                 | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
 
@@ -51,3 +51,12 @@ plan-approval` without a planner;
     - `maxReworkRounds` replaces rounds on existing rework edges and adds none.
   - Coordinator check: 2,717 tests.
 - 2026-10-17 WG-B (engine and simulator) and WG-D (editor) started in parallel.
+- 2026-10-17 WG-D in review (`cf2424f`): graph editor, Project defaults card, wizard template step;
+  2,725 tests; workflow e2e 6/6 on mocked routes.
+  - Held until WG-C serves `/workflow-graph`: against a real server the page would fail to load.
+  - Before merging, WG-D rebases on WG-C and updates the three e2e specs that drive the old page
+    (`review-loop`, `workspace`, `review-loop-live`), so the full e2e suite stays green.
+  - Decisions accepted:
+    - a 422 shows the issues from `…/validate`;
+    - the template choice is in wizard step 2;
+    - the default choice saves nothing.
