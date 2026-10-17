@@ -40,6 +40,9 @@ unit-tests`.
    - `tester`: a worker with its own worktree, started after the merge, with the brief "write unit
      tests for the merged change". Its change goes through the same review, checks and merge. Its
      allowlist and budget are the helpers'.
+   - (Amended by ADR-0021 §3, §5: a `reviewer` can also review one helper's change before the lead
+     decides (`submit_review`); the final code review and the tester work on the ticket branch tip
+     before the owner's merge, not on the merged base branch.)
 3. **Sequencing and limits.**
    - The ticket reaches **Done** only after every enabled stage has finished: the tester's change is
      merged, or discarded by the owner, and the reviewer has posted.
@@ -47,6 +50,8 @@ unit-tests`.
      Reviewer and tester count as one helper each, against the same concurrency limit, and only after
      the helpers are done.
    - Stop and Stop all cover every stage.
+   - (Amended by ADR-0021 §5: the final stages run while the run stays RUNNING and the lead stays
+     live; the run reaches REVIEW for the owner's single merge only when no stage is left.)
 4. **Skills.**
    - A stage with `skill` set has one line added to its agent's instructions: "Use the project skill
      `<name>`."

@@ -34,6 +34,9 @@ before merge. Running a project's checks means running project code.
      This is the project's tool output, not conversation content.
 4. **Merge rule.** A failed required check blocks a plain merge; "Merge anyway" needs a typed reason
    and the owner's click. Nothing merges automatically.
+   (Amended by ADR-0021 §3–4: the required checks gate the lead's merge of each change into the
+   ticket branch, on the commit they ran on; the owner's single merge of the ticket branch into
+   the base branch keeps this rule, including "Merge anyway" with a reason.)
 
 ## Consequences
 

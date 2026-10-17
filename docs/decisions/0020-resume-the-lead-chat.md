@@ -16,6 +16,10 @@ the lead:
 An app restart also ends it: the work becomes `NEEDS_REVIEW` and is never relaunched (ADR-0013 §7).
 The chat then closes for good, and the owner loses the agent that knows the run best.
 
+(Amended by ADR-0021 §5: with the review loop the lead is no longer stopped when the final code
+review or unit-tests stage starts; it stays live until no stage is left. The follow-up turn still
+applies once the lead has ended.)
+
 The lead's conversation is not lost. The SDK saves every session to disk by default
 (`persistSession`, default true, sdk 0.3.296), and the app already links each agent to its provider
 session (`agent_run_sessions`). The SDK's `resume: <sessionId>` continues a saved conversation.

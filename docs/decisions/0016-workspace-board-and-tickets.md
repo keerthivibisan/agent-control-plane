@@ -25,6 +25,8 @@ approval of a plan first (docs/phase-4/README.md).
 - **Stored text (amends ADR-0009/0015):** ticket titles and descriptions, owner comments, the lead's
   plans and its comments to the owner. Worker conversation content, thinking and tool input/output
   are still never stored.
+  (Amended by ADR-0021 §6: reviewer findings and the lead's rework and discard notes are stored
+  as ticket comments too.)
 - **Tickets are cancelled, never deleted.** A project with tickets cannot be removed from the app
   (409); its folder is never deleted.
 

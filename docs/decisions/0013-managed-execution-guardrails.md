@@ -25,9 +25,13 @@ The engine (`@acp/orchestrator`) and server enforce, and tests prove:
    other tool use (edits, writes, shell commands, web access) creates an Approval shown in the panel
    with a short redacted summary (tool name and target, max 200 characters). Approve or Deny; no
    answer within `APPROVAL_TIMEOUT_MS` means deny.
+   (Amended by ADR-0021 §1–2: per-run approval modes and a command allowlist for helpers and
+   testers; the lead never approves a tool request.)
 5. **Review before merge.** Agent changes stay on their branches. The panel shows the diff and changed
    files; the owner clicks Merge (only into a clean base branch; otherwise refused with a reason) or
    Discard. Nothing merges automatically.
+   (Amended by ADR-0021 §3–4: with the review loop the lead merges each reviewed change into the
+   run's ticket branch, and the owner merges that branch into the base branch once.)
 6. **Local only.** 127.0.0.1, the existing local-only guard, plus a per-page CSRF token
    (`X-ACP-CSRF`, from `GET /api/control/token`) on every mutating control-panel route.
 7. **Restart.** Live work interrupted by a restart becomes `NEEDS_REVIEW`; it is never relaunched
@@ -53,4 +57,5 @@ over-budget agent, a non-read-only tool without approval, a merge into a dirty b
   - `runHarnessChecks`: a Bash call auto-approved only when its command string exactly equals one of
     the harness checks' argv joined by single spaces, with no shell metacharacters.
     Auto-approvals are recorded as approvals with `decidedBy: allowlist`.
+    (Amended by ADR-0021 §1: the allowlist becomes the `auto-edits` and `auto` approval modes.)
 - **Checks** are a third allowed process kind, under ADR-0017's execution policy.
