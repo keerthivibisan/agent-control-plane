@@ -7,11 +7,12 @@ import {
 import type { TicketDto } from '@acp/core/api';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
+import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { createTicket } from '../../lib/api';
 import { BOARD_COPY, TICKET_PRIORITY_COPY, TICKET_TYPE_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useBoardAction } from './actions';
-import { Dialog } from './Dialog';
 import { parseLabels } from './moves';
 
 const C = BOARD_COPY.dialog;
@@ -19,9 +20,6 @@ const MAX_TITLE = 200;
 const MAX_LABELS = 10;
 const MAX_LABEL = 30;
 const MAX_DESCRIPTION = 20_000;
-
-const fieldClass =
-  'w-full rounded-control border border-line-strong bg-panel px-3 py-2 text-ink placeholder:text-dim/70';
 
 interface Errors {
   title?: string;
@@ -53,13 +51,13 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="font-medium">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>
         {label}
       </label>
       {children}
       {hint ? (
-        <span id={`${id}-hint`} className="text-caption text-dim">
+        <span id={`${id}-hint`} className={hintClass}>
           {hint}
         </span>
       ) : null}
@@ -130,7 +128,7 @@ export function NewTicketDialog({
             placeholder={C.titlePlaceholder}
             aria-invalid={errors.title ? true : undefined}
             aria-describedby={errors.title ? `${ids.title}-error` : undefined}
-            className={`${fieldClass} ${errors.title ? 'border-danger' : ''}`}
+            className={inputClass()}
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
@@ -139,7 +137,7 @@ export function NewTicketDialog({
               id={ids.type}
               value={type}
               onChange={(e) => setType(TicketTypeSchema.parse(e.target.value))}
-              className={fieldClass}
+              className={inputClass('pr-8')}
             >
               {TicketTypeSchema.options.map((t) => (
                 <option key={t} value={t}>
@@ -153,7 +151,7 @@ export function NewTicketDialog({
               id={ids.priority}
               value={priority}
               onChange={(e) => setPriority(TicketPrioritySchema.parse(e.target.value))}
-              className={fieldClass}
+              className={inputClass('pr-8')}
             >
               {TicketPrioritySchema.options.map((p) => (
                 <option key={p} value={p}>
@@ -170,7 +168,7 @@ export function NewTicketDialog({
             onChange={(e) => setLabels(e.target.value)}
             aria-invalid={errors.labels ? true : undefined}
             aria-describedby={`${ids.labels}-hint${errors.labels ? ` ${ids.labels}-error` : ''}`}
-            className={`${fieldClass} ${errors.labels ? 'border-danger' : ''}`}
+            className={inputClass()}
           />
         </Field>
         <Field id={ids.description} label={C.descriptionField} hint={C.descriptionHint}>
@@ -181,11 +179,11 @@ export function NewTicketDialog({
             maxLength={MAX_DESCRIPTION}
             onChange={(e) => setDescription(e.target.value)}
             aria-describedby={`${ids.description}-hint`}
-            className={`${fieldClass} resize-y`}
+            className={inputClass('resize-y')}
           />
         </Field>
         <ActionError error={create.error} message={C.failed} />
-        <div className="flex justify-end gap-2">
+        <div className="-mx-5 -mb-5 flex justify-end gap-2 rounded-b-card border-t border-line bg-sunken/60 px-5 py-3">
           <Button onClick={close} disabled={create.pending}>
             {C.cancel}
           </Button>

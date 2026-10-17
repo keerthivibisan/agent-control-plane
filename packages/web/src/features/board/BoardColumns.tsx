@@ -1,10 +1,13 @@
 import type { TicketStage } from '@acp/core';
 import type { TicketCardDto } from '@acp/core/api';
+import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react';
 import { ChevronRightIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
+import { TRANSITION } from '../../components/motion';
 import { BOARD_COPY, STAGE_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
+import { STAGE_ICON } from './icons';
 import { canMove, type BoardColumn, type MoveTarget } from './moves';
 import { TICKET_DRAG_TYPE, TicketCard } from './TicketCard';
 
@@ -44,27 +47,56 @@ function useDropTarget(stage: TicketStage, { dragging, onDrop }: DropProps) {
       : accepts
         ? over
           ? 'bg-accent-soft outline-2 -outline-offset-2 outline-accent'
-          : 'outline-2 -outline-offset-2 outline-dashed outline-accent/50'
-        : dragging.stage === stage
-          ? ''
-          : 'opacity-50';
-  return { handlers, tone, accepts };
+          : 'outline-1 -outline-offset-1 outline-dashed outline-accent/60'
+        : '';
+  // Columns that refuse the dragged card dim (through Motion, which owns the opacity).
+  const dimmed = dragging !== null && !accepts && dragging.stage !== stage;
+  return { handlers, tone, dimmed };
+}
+
+/** A column's count: a small round badge, read out as "3 tickets" where it is named. */
+function CountBadge({ count, label }: { count: number; label?: string }) {
+  return (
+    <span
+      className="inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full border border-line bg-panel px-1.5 text-micro font-medium text-dim tabular-nums"
+      {...(label ? { 'aria-label': label } : { 'aria-hidden': true })}
+    >
+      {formatCount(count)}
+    </span>
+  );
 }
 
 function ColumnHeader({ stage, count }: { stage: TicketStage; count: number }) {
   const s = STAGE_COPY[stage];
+  const { Icon, tone } = STAGE_ICON[stage];
   return (
-    <span className="flex min-w-0 items-center gap-1">
-      <span className="truncate font-semibold">{s.word}</span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Icon size={15} strokeWidth={2} className={`shrink-0 ${tone}`} />
+      <span className="truncate font-medium tracking-[-0.006em]">{s.word}</span>
+      <CountBadge count={count} label={C.count(count)} />
       <InfoTip tip={s.tip} label={s.word} />
-      <span
-        className="ml-0.5 rounded-full bg-panel px-1.5 text-caption text-dim tabular-nums"
-        aria-label={C.count(count)}
-      >
-        {formatCount(count)}
-      </span>
     </span>
   );
+}
+
+/** Columns and rails share one surface: a quiet well under the cards. */
+const SURFACE =
+  'rounded-card border border-line/60 bg-sunken/80 transition-[background-color,outline-color] duration-150';
+
+/**
+ * Motion for a column or a rail: it slides to its new place when a neighbour folds or unfolds,
+ * and one that appears after the first paint (an unfolded rail, a folded column) fades in
+ * (the row's AnimatePresence skips the first paint).
+ * Reduced motion turns both off (MotionConfig in main.tsx).
+ */
+function columnMotion(stage: TicketStage, dimmed: boolean) {
+  return {
+    layout: 'position' as const,
+    layoutId: `board-column-${stage}`,
+    transition: TRANSITION.base,
+    initial: { opacity: 0 },
+    animate: { opacity: dimmed ? 0.4 : 1 },
+  };
 }
 
 function Column({
@@ -84,17 +116,19 @@ function Column({
   onDragEnd: () => void;
   onCollapse?: () => void;
 }) {
-  const { handlers, tone } = useDropTarget(column.stage, drop);
+  const { handlers, tone, dimmed } = useDropTarget(column.stage, drop);
   const s = STAGE_COPY[column.stage];
+  const { Icon } = STAGE_ICON[column.stage];
   return (
-    <section
+    <motion.section
       aria-label={s.word}
       data-testid={`column-${column.stage}`}
       data-tickets={column.tickets.length}
       {...handlers}
-      className={`flex w-64 shrink-0 flex-col rounded-card bg-sunken transition-[opacity,background-color] ${tone}`}
+      {...columnMotion(column.stage, dimmed)}
+      className={`group/column flex w-[17rem] shrink-0 flex-col ${SURFACE} ${tone}`}
     >
-      <header className="flex items-center gap-2 px-3 pt-3 pb-2">
+      <header className="flex h-10 shrink-0 items-center gap-2 pr-1.5 pl-3">
         <h2 className="min-w-0 flex-1 text-body">
           <ColumnHeader stage={column.stage} count={column.tickets.length} />
         </h2>
@@ -103,7 +137,7 @@ function Column({
             type="button"
             onClick={onCollapse}
             aria-label={C.hideLabel(s.word)}
-            className="rounded-control px-1.5 py-0.5 text-caption text-dim hover:bg-panel hover:text-ink"
+            className="inline-flex h-6 items-center rounded-control px-1.5 text-caption font-medium text-dim opacity-0 transition-[opacity,background-color,color] duration-150 group-hover/column:opacity-100 hover:bg-hover hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           >
             {C.hide}
           </button>
@@ -111,7 +145,14 @@ function Column({
       </header>
       <ol className="flex flex-1 flex-col gap-2 px-2 pb-2">
         {column.tickets.map((t) => (
-          <li key={t.id}>
+          // A card that changes column glides from its old place (same layoutId).
+          <motion.li
+            key={t.id}
+            layout="position"
+            layoutId={`board-ticket-${t.id}`}
+            initial={false}
+            transition={TRANSITION.base}
+          >
             <TicketCard
               ticket={t}
               busy={busyId === t.id}
@@ -120,15 +161,16 @@ function Column({
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
             />
-          </li>
+          </motion.li>
         ))}
         {column.tickets.length === 0 ? (
-          <li className="rounded-control border border-dashed border-line-strong px-3 py-4 text-center text-caption text-dim">
+          <li className="flex flex-col items-center gap-2 rounded-control border border-dashed border-line-strong px-4 py-6 text-center text-caption text-dim">
+            <Icon size={16} className="opacity-60" />
             {s.empty}
           </li>
         ) : null}
       </ol>
-    </section>
+    </motion.section>
   );
 }
 
@@ -145,33 +187,37 @@ function Rail({
   drop: DropProps;
   onExpand: () => void;
 }) {
-  const { handlers, tone } = useDropTarget(column.stage, drop);
+  const { handlers, tone, dimmed } = useDropTarget(column.stage, drop);
   const s = STAGE_COPY[column.stage];
+  const { Icon, tone: iconTone } = STAGE_ICON[column.stage];
   const n = column.tickets.length;
   return (
-    <section
+    <motion.section
       aria-label={s.word}
       data-testid={`column-${column.stage}`}
       data-collapsed="true"
       data-tickets={n}
       {...handlers}
-      className={`flex w-12 shrink-0 flex-col items-center rounded-card bg-sunken py-3 transition-[opacity,background-color] ${tone}`}
+      {...columnMotion(column.stage, dimmed)}
+      className={`flex w-10 shrink-0 flex-col ${SURFACE} ${tone}`}
     >
       <button
         type="button"
         onClick={onExpand}
         aria-label={C.show(s.word, n)}
         title={n === 0 ? `${s.word}: ${s.empty}` : s.tip}
-        className="flex flex-1 flex-col items-center gap-2 rounded-control px-1 py-1 text-dim hover:text-ink"
+        className="flex flex-1 flex-col items-center gap-2.5 rounded-card px-1 py-3 text-dim transition-colors duration-150 hover:bg-hover hover:text-ink"
       >
-        <span className="rounded-full bg-panel px-1.5 text-caption tabular-nums" aria-hidden="true">
-          {formatCount(n)}
-        </span>
-        <span className="text-caption font-medium [writing-mode:vertical-rl]" aria-hidden="true">
+        <Icon size={15} strokeWidth={2} className={n === 0 ? 'opacity-70' : iconTone} />
+        <CountBadge count={n} />
+        <span
+          className="text-caption font-medium tracking-[-0.006em] [writing-mode:vertical-rl]"
+          aria-hidden="true"
+        >
           {s.word}
         </span>
       </button>
-    </section>
+    </motion.section>
   );
 }
 
@@ -250,10 +296,12 @@ function Edge({
         onDragOver={() => onScroll(back ? -0.05 : 0.05)}
         aria-label={count ? `${label} (${count})` : label}
         title={label}
-        className="pointer-events-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-panel px-2 text-caption font-medium text-ink shadow-raised hover:border-accent"
+        className={`pointer-events-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-panel-raised text-caption font-medium text-ink shadow-raised transition-colors duration-150 hover:border-accent/60 hover:text-accent ${
+          count ? 'pr-1.5 pl-2.5' : 'px-1.5'
+        }`}
       >
         {count ? <span className="whitespace-nowrap">{count}</span> : null}
-        <ChevronRightIcon size={16} className={back ? 'rotate-180' : ''} />
+        <ChevronRightIcon size={15} className={back ? 'rotate-180' : ''} />
       </button>
     </div>
   );
@@ -315,31 +363,35 @@ export function BoardColumns({
 
   return (
     <div className="relative">
-      <div
+      <motion.div
         ref={scroller}
+        layoutScroll
         className="relative -mx-1 overflow-x-auto px-1 pt-1 pb-4"
         data-testid="board-columns"
       >
-        <div className="flex min-h-[28rem] items-stretch gap-3">
-          {columns.map((column) =>
-            foldable(column) && !opened.has(column.stage) ? (
-              <Rail
-                key={column.stage}
-                column={column}
-                drop={drop}
-                onExpand={() => toggle(column.stage, true)}
-              />
-            ) : (
-              <Column
-                key={column.stage}
-                column={column}
-                {...common}
-                {...(foldable(column) ? { onCollapse: () => toggle(column.stage, false) } : {})}
-              />
-            ),
-          )}
+        <div className="flex min-h-[28rem] items-stretch gap-2.5">
+          {/* initial={false}: on first paint nothing fades; a column that appears later does. */}
+          <AnimatePresence initial={false}>
+            {columns.map((column) =>
+              foldable(column) && !opened.has(column.stage) ? (
+                <Rail
+                  key={column.stage}
+                  column={column}
+                  drop={drop}
+                  onExpand={() => toggle(column.stage, true)}
+                />
+              ) : (
+                <Column
+                  key={column.stage}
+                  column={column}
+                  {...common}
+                  {...(foldable(column) ? { onCollapse: () => toggle(column.stage, false) } : {})}
+                />
+              ),
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
       {overflow.back ? <Edge side="back" label={C.scrollBack} onScroll={scrollBy} /> : null}
       {overflow.on ? (
         <Edge

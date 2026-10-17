@@ -1,85 +1,93 @@
-import type { TicketType } from '@acp/core';
-import type { ComponentType, ReactNode } from 'react';
-import type { IconProps } from '../../components/icons';
+import type { TicketPriority, TicketStage, TicketType } from '@acp/core';
+import {
+  ChevronDown,
+  ChevronsUp,
+  ChevronUp,
+  Circle,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleDotDashed,
+  CircleEllipsis,
+  CirclePlay,
+  CircleX,
+  Equal,
+  Gauge,
+  Play,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import type { ComponentType } from 'react';
+import {
+  AlertIcon,
+  BoardNavIcon,
+  BugIcon,
+  ChoreIcon,
+  FeatureIcon,
+  HarnessIcon,
+  MoveIcon,
+  PlusSmallIcon,
+  type IconProps,
+} from '../../components/icons';
 
-/** Board icons, in the style of components/icons.tsx (24×24 strokes, decorative). */
-function Svg({ size = 18, children, ...rest }: IconProps & { children: ReactNode }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      {...rest}
-    >
-      {children}
-    </svg>
-  );
+/*
+ * The board's icons: lucide, like components/icons.tsx (24×24 strokes at 1.75px, decorative,
+ * `aria-hidden`). Each one sits next to a word or an accessible name, so icons never add text.
+ */
+
+function icon(Lucide: LucideIcon, name: string): ComponentType<IconProps> {
+  function BoardIcon({ size = 18, strokeWidth = 1.75, ...rest }: IconProps) {
+    return (
+      <Lucide
+        size={size}
+        strokeWidth={strokeWidth}
+        aria-hidden="true"
+        focusable="false"
+        {...rest}
+      />
+    );
+  }
+  BoardIcon.displayName = name;
+  return BoardIcon;
 }
 
-/** Sidebar icon: three columns of cards. */
-export const BoardIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="3" y="4" width="5" height="16" rx="1.5" />
-    <rect x="9.5" y="4" width="5" height="10" rx="1.5" />
-    <rect x="16" y="4" width="5" height="13" rx="1.5" />
-  </Svg>
-);
-
-export const PlusIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 5v14M5 12h14" />
-  </Svg>
-);
-
-export const MoveIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M5 12h14M15 8l4 4-4 4M9 8 5 12l4 4" />
-  </Svg>
-);
-
-export const AlertIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 3 2.5 20h19z" />
-    <path d="M12 10v4M12 17h.01" />
-  </Svg>
-);
-
-const FeatureIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="m12 3 2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8-4.3-4.1 5.9-.8z" />
-  </Svg>
-);
-
-const BugIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <rect x="7" y="7" width="10" height="13" rx="5" />
-    <path d="M12 11v9M7 12H3M21 12h-4M7 17l-3 2M17 17l3 2M9 7l-2-3M15 7l2-3" />
-  </Svg>
-);
-
-const ChoreIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M14.5 6.5a4 4 0 0 0-5.4 5.1L3.5 17.2a1.8 1.8 0 0 0 2.5 2.5l5.6-5.6a4 4 0 0 0 5.1-5.4l-2.4 2.4-2.3-.4-.4-2.3z" />
-  </Svg>
-);
-
-const HarnessIcon = (p: IconProps) => (
-  <Svg {...p}>
-    <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z" />
-    <path d="m8.5 12 2.5 2.5 4.5-5" />
-  </Svg>
-);
+export { AlertIcon, MoveIcon };
+export const BoardIcon = BoardNavIcon;
+export const PlusIcon = PlusSmallIcon;
+export const HelpersIcon = icon(Users, 'HelpersIcon');
+export const BudgetIcon = icon(Gauge, 'BudgetIcon');
+export const StartIcon = icon(Play, 'StartIcon');
+export const CheckCircleIcon = icon(CircleCheck, 'CheckCircleIcon');
 
 export const TICKET_TYPE_ICON: Readonly<Record<TicketType, ComponentType<IconProps>>> = {
   feature: FeatureIcon,
   bug: BugIcon,
   chore: ChoreIcon,
   harness: HarnessIcon,
+};
+
+/**
+ * One glyph per stage, in the familiar circle language (dashed = not started, play = agents at work,
+ * check = done), with a status color. The column title always says the stage in words.
+ */
+export const STAGE_ICON: Readonly<
+  Record<TicketStage, { Icon: ComponentType<IconProps>; tone: string }>
+> = {
+  BACKLOG: { Icon: icon(CircleDashed, 'BacklogIcon'), tone: 'text-dim' },
+  READY: { Icon: icon(Circle, 'ReadyIcon'), tone: 'text-ink' },
+  PLANNING: { Icon: icon(CircleDotDashed, 'PlanningIcon'), tone: 'text-accent' },
+  PLAN_REVIEW: { Icon: icon(CircleEllipsis, 'PlanReviewIcon'), tone: 'text-warning' },
+  WORKING: { Icon: icon(CirclePlay, 'WorkingIcon'), tone: 'text-status-active' },
+  NEEDS_YOU: { Icon: AlertIcon, tone: 'text-warning' },
+  IN_REVIEW: { Icon: icon(CircleDot, 'InReviewIcon'), tone: 'text-accent' },
+  DONE: { Icon: CheckCircleIcon, tone: 'text-success' },
+  CANCELLED: { Icon: icon(CircleX, 'CancelledIcon'), tone: 'text-dim' },
+};
+
+/** Chevrons per priority (down, level, up, double up); the word is always shown beside it. */
+export const PRIORITY_ICON: Readonly<Record<TicketPriority, ComponentType<IconProps>>> = {
+  low: icon(ChevronDown, 'LowPriorityIcon'),
+  medium: icon(Equal, 'MediumPriorityIcon'),
+  high: icon(ChevronUp, 'HighPriorityIcon'),
+  urgent: icon(ChevronsUp, 'UrgentPriorityIcon'),
 };

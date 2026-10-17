@@ -1,4 +1,4 @@
-import type { TicketPriority } from '@acp/core';
+import type { TicketPriority, TicketType } from '@acp/core';
 import type { TicketCardDto } from '@acp/core/api';
 import type { DragEvent } from 'react';
 import { RelativeTime } from '../../components/RelativeTime';
@@ -12,7 +12,7 @@ import {
 } from '../../lib/copy';
 import { formatCount, formatUsd } from '../../lib/format';
 import { href } from '../../lib/router';
-import { AlertIcon, TICKET_TYPE_ICON } from './icons';
+import { AlertIcon, BudgetIcon, HelpersIcon, PRIORITY_ICON, TICKET_TYPE_ICON } from './icons';
 import { MoveMenu } from './MoveMenu';
 import { allowedMoves, isRunningStage, type MoveTarget } from './moves';
 
@@ -21,8 +21,19 @@ const C = BOARD_COPY.card;
 /** Drag payload type: only board cards carry it, so other drags (text, files) are ignored. */
 export const TICKET_DRAG_TYPE = 'application/x-acp-ticket';
 
-/** Bars filled per priority; the word is always shown too, so color is never the only signal. */
-const PRIORITY_BARS: Record<TicketPriority, number> = { low: 1, medium: 2, high: 3, urgent: 3 };
+/** A label or the ticket type: a small, quiet chip. */
+const CHIP =
+  'inline-flex h-5 items-center rounded-[0.3125rem] border px-1.5 text-caption font-medium whitespace-nowrap text-dim';
+
+/** Type icon tone: a bug stands out; the type is also said in words (sr-only, and as a chip). */
+const TYPE_TONE: Record<TicketType, string> = {
+  feature: '',
+  bug: 'text-danger',
+  chore: '',
+  harness: 'text-success',
+};
+
+/** Priority tone: the icon and the word always come together, so color is never the only signal. */
 const PRIORITY_TONE: Record<TicketPriority, string> = {
   low: 'text-dim',
   medium: 'text-dim',
@@ -32,22 +43,15 @@ const PRIORITY_TONE: Record<TicketPriority, string> = {
 
 function Priority({ priority }: { priority: TicketPriority }) {
   const word = TICKET_PRIORITY_COPY[priority];
+  const Icon = PRIORITY_ICON[priority];
   return (
     <span
-      className={`inline-flex items-center gap-1 text-caption ${PRIORITY_TONE[priority]}`}
+      className={`inline-flex shrink-0 items-center gap-1 text-caption ${PRIORITY_TONE[priority]}`}
       data-priority={priority}
       title={C.priority(word)}
     >
-      <span aria-hidden="true" className="inline-flex h-2.5 items-end gap-px">
-        {[1, 2, 3].map((n) => (
-          <span
-            key={n}
-            className={`w-[3px] rounded-[1px] ${n <= PRIORITY_BARS[priority] ? 'bg-current' : 'bg-line-strong'}`}
-            style={{ height: `${n * 3 + 1}px` }}
-          />
-        ))}
-      </span>
-      <span className={priority === 'urgent' ? 'font-semibold' : ''}>
+      <Icon size={14} strokeWidth={2.25} />
+      <span className={priority === 'urgent' || priority === 'high' ? 'font-medium' : ''}>
         <span className="sr-only">{C.priority(word)}</span>
         <span aria-hidden="true">{word}</span>
       </span>
@@ -127,18 +131,22 @@ export function TicketCard({
       draggable={draggable}
       onDragStart={draggable ? start : undefined}
       onDragEnd={onDragEnd}
-      className={`group relative flex flex-col gap-2 rounded-control border bg-panel px-3 py-2.5 shadow-card transition-[border-color,opacity] ${
+      className={`group relative flex flex-col gap-2 rounded-card border bg-panel p-3 shadow-card transition-[border-color,box-shadow,opacity] duration-150 has-[a:focus-visible]:border-accent/60 ${
         draggable ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${dragging ? 'border-accent opacity-50' : 'border-line hover:border-line-strong'} ${
-        busy ? 'opacity-60' : ''
-      }`}
+      } ${
+        dragging
+          ? 'border-dashed border-accent opacity-45 shadow-none'
+          : 'border-line hover:border-line-strong hover:shadow-raised'
+      } ${busy ? 'opacity-60' : ''}`}
     >
-      <div className="flex items-center gap-2 text-caption text-dim">
-        <span className="inline-flex items-center gap-1" title={type.tip}>
-          <TypeIcon size={14} className={ticket.type === 'bug' ? 'text-danger' : ''} />
+      <div className="flex min-w-0 items-center gap-1.5 text-caption text-dim">
+        <span className="inline-flex shrink-0 items-center" title={type.tip}>
+          <TypeIcon size={14} className={TYPE_TONE[ticket.type]} />
           <span className="sr-only">{type.word}</span>
         </span>
-        <span className="font-mono tracking-tight">{ticket.key}</span>
+        <span className="truncate font-mono text-micro tracking-tight tabular-nums">
+          {ticket.key}
+        </span>
         <span className="flex-1" />
         <Priority priority={ticket.priority} />
       </div>
@@ -147,7 +155,7 @@ export function TicketCard({
         id={`ticket-${ticket.id}`}
         href={href.ticket(ticket)}
         draggable={false}
-        className="font-medium break-words text-ink no-underline hover:text-accent hover:underline"
+        className="leading-snug font-medium break-words text-ink no-underline decoration-line-strong underline-offset-2 transition-colors hover:text-accent"
       >
         {ticket.title}
       </a>
@@ -155,13 +163,10 @@ export function TicketCard({
       {ticket.labels.length > 0 || ticket.type !== 'feature' ? (
         <ul className="flex flex-wrap gap-1" aria-label="Labels">
           {ticket.type !== 'feature' ? (
-            <li className="rounded-full bg-sunken px-2 py-px text-caption text-dim">{type.word}</li>
+            <li className={`${CHIP} border-transparent bg-sunken`}>{type.word}</li>
           ) : null}
           {ticket.labels.map((l) => (
-            <li
-              key={l}
-              className="rounded-full border border-line px-2 py-px text-caption text-dim"
-            >
+            <li key={l} className={`${CHIP} border-line`}>
               {l}
             </li>
           ))}
@@ -171,34 +176,49 @@ export function TicketCard({
       {ticket.needsYou > 0 ? (
         <p
           data-testid="needs-you"
-          className="inline-flex items-center gap-1.5 self-start rounded-full bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning"
+          className="inline-flex h-5 items-center gap-1 self-start rounded-full border border-warning/25 bg-warning-soft px-2 text-caption font-medium text-warning"
         >
-          <AlertIcon size={13} />
+          <AlertIcon size={12} strokeWidth={2} />
           {C.needsYou(ticket.needsYou)}
         </p>
       ) : null}
 
       {running && (ticket.activeHelpers > 0 || ticket.budgetTokensUsed !== null) ? (
-        <p className="flex flex-wrap gap-x-2 text-caption text-dim" data-testid="card-run">
-          {ticket.activeHelpers > 0 ? <span>{C.helpers(ticket.activeHelpers)}</span> : null}
+        <p
+          className="flex flex-wrap items-center gap-x-1.5 text-caption text-dim"
+          data-testid="card-run"
+        >
+          {ticket.activeHelpers > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <HelpersIcon size={12} />
+              {C.helpers(ticket.activeHelpers)}
+            </span>
+          ) : null}
           {ticket.activeHelpers > 0 && ticket.budgetTokensUsed !== null ? (
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
           ) : null}
           {ticket.budgetTokensUsed !== null ? (
-            <BudgetTokens value={ticket.budgetTokensUsed} />
+            <span className="inline-flex items-center gap-1">
+              <BudgetIcon size={12} />
+              <BudgetTokens value={ticket.budgetTokensUsed} />
+            </span>
           ) : null}
         </p>
       ) : null}
 
       {(ticket.lastRunOutcome !== null && !running) || ticket.latestEstimatedCost !== null ? (
-        <p className="flex flex-wrap items-center gap-x-2 text-caption text-dim">
+        <p className="flex flex-wrap items-center gap-x-1.5 text-caption text-dim">
           {ticket.lastRunOutcome !== null && !running ? (
-            <span className={ticket.lastRunOutcome === 'failed' ? 'text-danger' : ''}>
+            <span className={ticket.lastRunOutcome === 'failed' ? 'font-medium text-danger' : ''}>
               {C.lastRun[ticket.lastRunOutcome]}
             </span>
           ) : null}
           {ticket.lastRunOutcome !== null && !running && ticket.latestEstimatedCost !== null ? (
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true" className="text-line-strong">
+              ·
+            </span>
           ) : null}
           {ticket.latestEstimatedCost !== null ? (
             <LatestCost cost={ticket.latestEstimatedCost} />
@@ -206,7 +226,7 @@ export function TicketCard({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-2 text-caption text-dim">
+      <div className="-mx-3 -mb-1 flex items-center gap-2 border-t border-line/70 px-3 pt-2 text-caption text-dim">
         <span className="min-w-0 truncate">
           {ticket.lastActivityAt !== null ? 'Active ' : 'Updated '}
           <RelativeTime iso={ticket.lastActivityAt ?? ticket.updatedAt} />

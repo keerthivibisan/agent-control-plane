@@ -232,11 +232,13 @@ describe('board: keyboard Move menu', () => {
       const button = within(card).queryByRole('button', { name: `Move ${key}` });
       if (!button) return null;
       fireEvent.click(button);
-      const menu = within(card).getByRole('menu');
+      // The menu is portaled to <body> (shared Menu, Radix), so it is found on the screen.
+      const menu = await screen.findByRole('menu', { name: `Move ${key}` });
       const items = within(menu)
         .getAllByRole('menuitem')
         .map((i) => i.textContent);
       fireEvent.keyDown(menu, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
       return items;
     };
     expect(await menuItems('WEB-14')).toEqual(['Move to Ready', 'Cancel ticket…']);
@@ -262,14 +264,16 @@ describe('board: keyboard Move menu', () => {
     const card = await findCard('WEB-14');
     const button = within(card).getByRole('button', { name: 'Move WEB-14' });
     fireEvent.keyDown(button, { key: 'ArrowDown' });
-    const menu = within(card).getByRole('menu');
+    const menu = await screen.findByRole('menu', { name: 'Move WEB-14' });
     const [toReady, cancel] = within(menu).getAllByRole('menuitem');
-    expect(document.activeElement).toBe(toReady);
-    fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(cancel);
-    fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(toReady);
+    // Radix moves focus on the next tick, and arrow keys act on the focused item.
+    await waitFor(() => expect(document.activeElement).toBe(toReady));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowDown' });
+    await waitFor(() => expect(document.activeElement).toBe(cancel));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowDown' });
+    await waitFor(() => expect(document.activeElement).toBe(toReady));
     fireEvent.click(toReady as HTMLElement);
+    await waitFor(() => expect(document.activeElement).toBe(button));
     await waitFor(() => expect(posts(s)).toHaveLength(1));
     expect(posts(s)[0]).toMatchObject({
       path: '/api/tickets/t-14/move',
@@ -292,7 +296,7 @@ describe('board: keyboard Move menu', () => {
     const card = await findCard('WEB-13');
     fireEvent.click(within(card).getByRole('button', { name: 'Move WEB-13' }));
     fireEvent.click(
-      within(card).getByRole('menuitem', { name: 'Start (the lead agent plans it)' }),
+      await screen.findByRole('menuitem', { name: 'Start (the lead agent plans it)' }),
     );
     await waitFor(() => expect(posts(s)).toHaveLength(1));
     expect(posts(s)[0]?.path).toBe('/api/tickets/t-13/start');
@@ -310,16 +314,20 @@ describe('board: keyboard Move menu', () => {
     });
     renderBoard(s);
     const card = await findCard('WEB-9');
-    fireEvent.click(within(card).getByRole('button', { name: 'Move WEB-9' }));
-    fireEvent.click(within(card).getByRole('menuitem', { name: 'Cancel ticket…' }));
+    const move = within(card).getByRole('button', { name: 'Move WEB-9' });
+    fireEvent.click(move);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cancel ticket…' }));
     let dialog = screen.getByRole('dialog', { name: 'Cancel WEB-9?' });
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Keep it' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(posts(s)).toHaveLength(0);
+    // Radix returns focus on the next tick.
+    await waitFor(() => expect(document.activeElement).toBe(move));
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Move WEB-9' }));
-    fireEvent.click(within(card).getByRole('menuitem', { name: 'Cancel ticket…' }));
+    fireEvent.click(move);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cancel ticket…' }));
     dialog = screen.getByRole('dialog', { name: 'Cancel WEB-9?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel ticket' }));
     await waitFor(() => expect(posts(s)).toHaveLength(1));
@@ -345,7 +353,7 @@ describe('board: keyboard Move menu', () => {
     renderBoard(s);
     const card = await findCard('WEB-14');
     fireEvent.click(within(card).getByRole('button', { name: 'Move WEB-14' }));
-    fireEvent.click(within(card).getByRole('menuitem', { name: 'Move to Ready' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to Ready' }));
     expect((await screen.findAllByRole('alert'))[0]?.textContent).toBe(
       "WEB-14 didn't move. The ticket changed meanwhile.",
     );
@@ -459,7 +467,8 @@ describe('board: New ticket dialog', () => {
     fireEvent.click(open);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(open);
+    // The shared Dialog (Radix) returns focus on the next tick.
+    await waitFor(() => expect(document.activeElement).toBe(open));
   });
 });
 
