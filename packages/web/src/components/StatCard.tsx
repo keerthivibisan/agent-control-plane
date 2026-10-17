@@ -24,17 +24,17 @@ export function StatCard({
   const body = (
     <>
       <div className="pr-6 text-caption font-medium text-dim">{label}</div>
-      <div className="mt-2 text-stat font-semibold tracking-tight tabular-nums">{value}</div>
+      <div className="mt-1.5 text-stat font-semibold tabular-nums">{value}</div>
       {sublabel ? <div className="mt-1 text-caption text-dim">{sublabel}</div> : null}
     </>
   );
-  const frame = 'block h-full min-w-0 rounded-card border border-line bg-panel p-5 shadow-card';
+  const frame = 'block h-full min-w-0 rounded-card border border-line bg-panel p-4 shadow-card';
   return (
     <div className="relative min-w-0" data-testid={testId}>
       {href ? (
         <a
           href={href}
-          className={`${frame} text-ink no-underline transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-raised`}
+          className={`${frame} text-ink no-underline transition-[border-color,background-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-raised`}
         >
           {body}
         </a>
@@ -43,7 +43,7 @@ export function StatCard({
       )}
       {/* Outside the link: a button inside an <a> is invalid and would hijack the click. */}
       {tip ? (
-        <span className="absolute top-3.5 right-3.5">
+        <span className="absolute top-3 right-3">
           <InfoTip tip={tip} label={label} />
         </span>
       ) : null}

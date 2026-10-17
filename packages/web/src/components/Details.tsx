@@ -22,11 +22,14 @@ export function Details({
       data-testid={testId}
       className="group rounded-card border border-line bg-panel"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-card px-4 py-2.5 text-dim select-none hover:text-ink [&::-webkit-details-marker]:hidden">
-        <ChevronRightIcon size={16} className="transition-transform group-open:rotate-90" />
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-card px-3.5 py-2 text-dim transition-colors select-none hover:text-ink [&::-webkit-details-marker]:hidden">
+        <ChevronRightIcon
+          size={15}
+          className="transition-transform duration-150 group-open:rotate-90"
+        />
         {summary}
       </summary>
-      <div className="border-t border-line px-4 py-3">{children}</div>
+      <div className="border-t border-line px-3.5 py-3">{children}</div>
     </details>
   );
 }

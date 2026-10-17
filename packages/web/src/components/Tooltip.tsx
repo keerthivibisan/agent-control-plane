@@ -19,7 +19,9 @@ interface Position {
 const HALF_WIDTH = 152;
 
 /**
- * Hover and keyboard-focus tooltip state. The bubble is portaled to <body> and only exists while
+ * Hover and keyboard-focus tooltip state. Hand-built rather than Radix Tooltip on purpose: it opens
+ * at once on mouseenter, focus and (InfoTip) tap, and its text exists once, only while open; Radix
+ * opens on pointer moves after a delay, never on tap, and renders the text twice. The bubble is portaled to <body> and only exists while
  * open, so it never adds text to its trigger (tests and screen readers read the trigger's own
  * text) and is never clipped by a scrolling table. While open, the trigger is `aria-describedby`
  * the bubble.
@@ -77,7 +79,7 @@ export function useTooltip(content: ReactNode) {
               top: pos.y,
               transform: pos.below ? 'translateX(-50%)' : 'translate(-50%, -100%)',
             }}
-            className="pointer-events-none z-[60] block w-max max-w-72 rounded-control bg-ink px-3 py-2 text-caption leading-[1.125rem] font-normal tracking-normal text-canvas normal-case shadow-pop"
+            className="pointer-events-none z-[60] block w-max max-w-72 animate-fade-in rounded-control border border-transparent bg-ink px-2.5 py-1.5 text-caption leading-[1.125rem] font-normal tracking-normal text-canvas normal-case shadow-pop dark:border-line-strong dark:bg-panel-raised dark:text-ink"
           >
             {content}
           </span>,

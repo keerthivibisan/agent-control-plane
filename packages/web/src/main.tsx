@@ -1,8 +1,10 @@
 import '@xyflow/react/dist/style.css';
+import './components/fonts.css';
 import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
+import { MotionProvider } from './components/motion';
 import { createApiClient } from './lib/api';
 import { QueryStore } from './lib/query-store';
 import { applyTheme, readThemePreference } from './lib/theme';
@@ -17,6 +19,8 @@ const store = new QueryStore(createApiClient());
 
 createRoot(container).render(
   <StrictMode>
-    <App store={store} />
+    <MotionProvider>
+      <App store={store} />
+    </MotionProvider>
   </StrictMode>,
 );

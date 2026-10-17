@@ -4,7 +4,7 @@ import { InfoTip } from './InfoTip';
 /**
  * Top of every page (DESIGN.md, "Page header"): the title, one short line saying what the page
  * shows, and the primary action on the right. Longer explanations go into `tip`, an ⓘ next to the
- * title, instead of a paragraph. Supersedes `PageHeader` in ./Panel.
+ * title, instead of a paragraph.
  */
 export function PageHeader({
   title,
@@ -22,16 +22,16 @@ export function PageHeader({
   tip?: string;
 }) {
   return (
-    <header className="mb-8 flex flex-wrap items-end gap-x-6 gap-y-4">
+    <header className="mb-6 flex flex-wrap items-end gap-x-6 gap-y-3">
       <div className="min-w-0 flex-1">
-        {eyebrow ? <div className="mb-2 text-caption text-dim">{eyebrow}</div> : null}
-        <h1 className="flex items-center gap-2 text-page font-semibold tracking-tight break-words">
+        {eyebrow ? <div className="mb-1.5 text-caption text-dim">{eyebrow}</div> : null}
+        <h1 className="flex items-center gap-2 text-page font-semibold break-words">
           <span className="min-w-0">{title}</span>
           {tip ? (
             <InfoTip tip={tip} label={typeof title === 'string' ? title : 'this page'} />
           ) : null}
         </h1>
-        {description ? <p className="mt-1.5 max-w-3xl text-dim">{description}</p> : null}
+        {description ? <p className="mt-1 max-w-3xl text-dim">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
@@ -55,7 +55,7 @@ export function SectionHeader({
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-      <h2 className="flex items-center gap-1.5 text-section font-semibold tracking-tight">
+      <h2 className="flex items-center gap-1.5 text-section font-semibold">
         {/* The id names the section; on the text only, so the ⓘ's label isn't part of it. */}
         <span id={id}>{title}</span>
         {tip ? <InfoTip tip={tip} label={title} /> : null}

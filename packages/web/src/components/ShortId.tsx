@@ -46,7 +46,7 @@ export function ShortId({
         type="button"
         onClick={copy}
         aria-label={`Copy ${label}`}
-        className="inline-flex size-5 items-center justify-center rounded text-dim hover:bg-sunken hover:text-ink"
+        className="inline-flex size-5 items-center justify-center rounded-[0.25rem] text-dim transition-colors hover:bg-hover hover:text-ink"
       >
         {state === 'copied' ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
       </button>

@@ -4,42 +4,62 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens (packages/web/DESIGN.md, "Visual system"): neutral surfaces, one accent, soft
- * borders and shadows, an 8-pt spacing rhythm. Every color is a CSS variable so the dark theme only
- * redefines values, never class names. Each `--color-*` here is also a Tailwind utility
- * (`bg-panel`, `text-dim`, `bg-token-output`, ...).
+ * Design tokens v2 (packages/web/DESIGN.md, "Visual system"): a neutral zinc scale, near-black dark
+ * surfaces, hairline borders, one indigo-violet accent, near-zero shadows except on popovers. Every
+ * color is a CSS variable so the dark theme only redefines values, never class names; charts,
+ * graphs and React Flow read the same names. Each `--color-*` here is also a Tailwind utility
+ * (`bg-panel`, `text-dim`, `bg-token-output`, ...). Text pairs meet WCAG AA in both themes.
  */
 @theme {
   --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-mono:
+    'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+    monospace;
 
   /*
-   * Typography scale: body is 14px. `text-title` is a card or section title, `text-section` a
-   * heading inside a page, `text-page` the page title, `text-stat` the big number on a StatCard.
+   * Typography scale: body is 14px with a 20px line; `text-micro` (11px) is for tiny badges and
+   * technical lines only. `text-title` is a card title, `text-section`
+   * a heading inside a page, `text-page` the page title, `text-stat` the big number on a StatCard.
+   * Headings carry their own (tighter) tracking.
    */
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
   --text-body: 0.875rem;
-  --text-body--line-height: 1.375rem;
-  --text-title: 1.0625rem;
-  --text-title--line-height: 1.5rem;
-  --text-section: 1.25rem;
-  --text-section--line-height: 1.75rem;
-  --text-page: 1.75rem;
-  --text-page--line-height: 2.25rem;
-  --text-stat: 1.75rem;
-  --text-stat--line-height: 2.25rem;
+  --text-body--line-height: 1.25rem;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.375rem;
+  --text-title--letter-spacing: -0.011em;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.625rem;
+  --text-section--letter-spacing: -0.016em;
+  --text-page: 1.5rem;
+  --text-page--line-height: 2rem;
+  --text-page--letter-spacing: -0.024em;
+  --text-stat: 1.625rem;
+  --text-stat--line-height: 2rem;
+  --text-stat--letter-spacing: -0.024em;
 
   /* Radius: cards and controls. */
-  --radius-card: 0.75rem;
-  --radius-control: 0.5rem;
+  --radius-card: 0.5rem;
+  --radius-control: 0.375rem;
 
-  /* Elevation: barely-there at rest, a little lift on hover, a real shadow for popovers. */
-  --shadow-card: 0 1px 2px rgb(15 15 20 / 0.04);
-  --shadow-raised: 0 1px 2px rgb(15 15 20 / 0.05), 0 6px 16px -4px rgb(15 15 20 / 0.08);
-  --shadow-pop: 0 2px 8px rgb(15 15 20 / 0.06), 0 18px 44px -12px rgb(15 15 20 / 0.28);
+  /* Elevation: flat at rest (borders do the work), a hint on hover, a real shadow for popovers. */
+  --shadow-card: 0 1px 2px rgb(9 9 11 / 0.03);
+  --shadow-raised: 0 1px 2px rgb(9 9 11 / 0.04), 0 4px 12px -4px rgb(9 9 11 / 0.08);
+  --shadow-pop:
+    0 0 0 1px rgb(9 9 11 / 0.04), 0 4px 12px -2px rgb(9 9 11 / 0.08),
+    0 16px 40px -12px rgb(9 9 11 / 0.22);
+
+  /* Motion: the durations and the easing that menus, dialogs and popovers share. */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-pop-in: pop-in 160ms var(--ease-out-soft);
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-dialog-in: dialog-in 180ms var(--ease-out-soft);
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 
   /* Layout. The sidebar shows labels above 1280px (`wide:`) and icons only at 1280px and below. */
   --breakpoint-wide: 80.0625rem;
@@ -48,19 +68,34 @@
   --spacing-sidebar-collapsed: 4.5rem;
   --spacing-content: 88rem;
 
-  /* Neutral surfaces and text. */
-  --color-canvas: #f7f7f8;
+  /* Neutral surfaces and text (zinc). */
+  --color-canvas: #fafafa;
   --color-panel: #ffffff;
-  --color-sunken: #f2f2f4;
-  --color-ink: #18181b;
-  --color-dim: #5d5d68;
-  --color-line: #e8e8ec;
-  --color-line-strong: #d4d4da;
+  /* Menus, popovers and dialogs: the surface that floats above a panel. */
+  --color-panel-raised: #ffffff;
+  --color-sunken: #f4f4f5;
+  /* Row and item hover: one step off the panel. */
+  --color-hover: #f4f4f5;
+  /* The sidebar (and top bar) surface. */
+  --color-sidebar: #f7f7f8;
+  --color-ink: #09090b;
+  --color-dim: #5f5f69;
+  --color-line: #e8e8eb;
+  --color-line-strong: #d6d6db;
+  /* Modal backdrop. */
+  --color-overlay: rgb(9 9 11 / 0.4);
 
-  /* The one accent (links, focus, selection, the primary button). */
-  --color-accent: #4f46e5;
+  /*
+   * The one accent: links, focus, selection. `accent-ink` is text on an `accent` fill.
+   * `accent-fill` is the primary button: the same hue, kept dark enough for white text even in the
+   * dark theme, where `accent` itself is light so that it reads as text on near-black.
+   */
+  --color-accent: #5b57e8;
   --color-accent-ink: #ffffff;
-  --color-accent-soft: #eef0ff;
+  --color-accent-soft: #efeffe;
+  --color-accent-fill: #5b57e8;
+  --color-accent-fill-hover: #4c48d9;
+  --color-accent-fill-ink: #ffffff;
 
   /* Feedback. */
   --color-success: #15803d;
@@ -72,9 +107,9 @@
   /* Session status (StatusBadge). Never the only signal: each status also has a word. */
   --color-status-active: #16a34a;
   --color-status-idle: #d97706;
-  --color-status-stale: #8a94a3;
-  --color-status-ended: #4b5563;
-  --color-status-unknown: #a3aab5;
+  --color-status-stale: #8a8a96;
+  --color-status-ended: #52525b;
+  --color-status-unknown: #a1a1aa;
 
   /* Token types (input / output / cache write / cache read): one hue each, everywhere. */
   --color-token-input: #3b82f6;
@@ -82,49 +117,91 @@
   --color-token-cache-write: #8b5cf6;
   --color-token-cache-read: #0d9488;
 
+  /* Where a value came from (ProvenanceBadge, ADR-0007). */
+  --color-observed: #047857;
+  --color-derived: #0369a1;
+
   /* Estimated (provider-reported) values and unavailable ones. */
   --color-estimated: #92400e;
   --color-estimated-bg: #fef3c7;
-  --color-unavailable: #6b7280;
+  --color-unavailable: #6b6b76;
 }
 
 .dark {
-  --color-canvas: #0d0d10;
-  --color-panel: #16161a;
-  --color-sunken: #1e1e23;
-  --color-ink: #ededf0;
-  --color-dim: #a1a1ad;
-  --color-line: #27272d;
-  --color-line-strong: #3b3b43;
+  --color-canvas: #0a0a0b;
+  --color-panel: #111113;
+  --color-panel-raised: #161618;
+  --color-sunken: #18181b;
+  --color-hover: #1a1a1d;
+  --color-sidebar: #0c0c0e;
+  --color-ink: #ededef;
+  --color-dim: #9f9fa9;
+  --color-line: #222226;
+  --color-line-strong: #323238;
+  --color-overlay: rgb(0 0 0 / 0.6);
 
-  --color-accent: #8b93ff;
-  --color-accent-ink: #0d0d10;
-  --color-accent-soft: #23244a;
+  --color-accent: #9496fb;
+  --color-accent-ink: #0a0a0b;
+  --color-accent-soft: #1b1a36;
+  --color-accent-fill: #5e5ce6;
+  --color-accent-fill-hover: #6b69ee;
+  --color-accent-fill-ink: #ffffff;
 
   --color-success: #4ade80;
   --color-warning: #fbbf24;
-  --color-warning-soft: #2e2410;
+  --color-warning-soft: #2b2210;
   --color-danger: #f87171;
-  --color-danger-soft: #2f1517;
+  --color-danger-soft: #2a1416;
 
   --color-status-active: #4ade80;
   --color-status-idle: #fbbf24;
-  --color-status-stale: #8b95a5;
-  --color-status-ended: #c3c9d2;
-  --color-status-unknown: #6b7380;
+  --color-status-stale: #8b8b96;
+  --color-status-ended: #c4c4cc;
+  --color-status-unknown: #6b6b76;
 
   --color-token-input: #60a5fa;
   --color-token-output: #fbbf24;
   --color-token-cache-write: #a78bfa;
   --color-token-cache-read: #2dd4bf;
 
-  --color-estimated: #fcd34d;
-  --color-estimated-bg: #3b2a0a;
-  --color-unavailable: #9ca3af;
+  --color-observed: #6ee7b7;
+  --color-derived: #7dd3fc;
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 20px -6px rgb(0 0 0 / 0.5);
-  --shadow-pop: 0 2px 8px rgb(0 0 0 / 0.4), 0 20px 48px -12px rgb(0 0 0 / 0.7);
+  --color-estimated: #fcd34d;
+  --color-estimated-bg: #2e2208;
+  --color-unavailable: #9c9ca6;
+
+  --shadow-card: 0 0 #0000;
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.02), 0 6px 16px -6px rgb(0 0 0 / 0.6);
+  --shadow-pop:
+    0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px -4px rgb(0 0 0 / 0.6),
+    0 24px 56px -16px rgb(0 0 0 / 0.8);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+@keyframes shimmer {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 /* In the base layer, so any utility class (e.g. `text-dim` on a nav link) overrides these. */
@@ -147,41 +224,74 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Numbers in tables and times line up. */
+  table,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+
   a {
     color: var(--color-accent);
-    text-underline-offset: 2px;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
   }
 
   ::selection {
-    background: var(--color-accent-soft);
+    background: color-mix(in srgb, var(--color-accent) 24%, transparent);
   }
 
   /* Native checkboxes, radios and ranges take the accent. */
   input,
   select,
   textarea {
-    accent-color: var(--color-accent);
+    accent-color: var(--color-accent-fill);
   }
 
   ::placeholder {
     color: color-mix(in srgb, var(--color-dim) 75%, transparent);
   }
 
-  /* One visible focus style for every interactive element. */
+  /* One visible focus style for every interactive element: a 2px accent ring. */
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+
+  /* Thin, quiet scrollbars that follow the theme. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 /* React Flow follows the app theme. */
 .react-flow {
   --xy-background-color: var(--color-canvas);
+  --xy-background-pattern-color: var(--color-line-strong);
   --xy-node-background-color: var(--color-panel);
-  --xy-node-border-radius: 10px;
+  --xy-node-border-radius: var(--radius-card);
   --xy-edge-label-background-color: var(--color-panel);
   --xy-edge-label-color: var(--color-ink);
   --xy-controls-button-background-color: var(--color-panel);
+  --xy-controls-button-background-color-hover: var(--color-hover);
   --xy-controls-button-color: var(--color-ink);
   --xy-controls-button-border-color: var(--color-line);
   --xy-minimap-background-color: var(--color-panel);

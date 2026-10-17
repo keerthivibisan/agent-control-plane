@@ -31,10 +31,10 @@ export function Pager({
   fetching?: boolean;
 }) {
   const btn =
-    'rounded border border-line px-1.5 text-[11px] hover:bg-sunken disabled:opacity-40 disabled:hover:bg-transparent';
+    'inline-flex h-6 items-center rounded-control border border-line bg-panel px-2 text-caption text-ink transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-panel';
   return (
     <div
-      className="flex items-center gap-1.5 text-[11px] text-dim"
+      className="flex items-center gap-1.5 text-caption text-dim"
       role="navigation"
       aria-label="Pages"
     >
@@ -44,7 +44,7 @@ export function Pager({
       <button type="button" className={btn} onClick={onPrev} disabled={pageNumber === 1}>
         previous
       </button>
-      <span>page {pageNumber}</span>
+      <span className="px-1 tabular-nums">page {pageNumber}</span>
       <button
         type="button"
         className={btn}

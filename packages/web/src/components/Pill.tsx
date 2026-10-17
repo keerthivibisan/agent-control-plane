@@ -4,10 +4,10 @@ export type PillTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 
 const TONE: Record<PillTone, { frame: string; dot: string }> = {
   neutral: { frame: 'border-line bg-sunken text-dim', dot: 'bg-status-stale' },
-  accent: { frame: 'border-accent/25 bg-accent-soft text-accent', dot: 'bg-accent' },
-  success: { frame: 'border-success/25 bg-success/10 text-success', dot: 'bg-status-active' },
-  warning: { frame: 'border-warning/30 bg-warning-soft text-warning', dot: 'bg-status-idle' },
-  danger: { frame: 'border-danger/30 bg-danger-soft text-danger', dot: 'bg-danger' },
+  accent: { frame: 'border-accent/20 bg-accent-soft text-accent', dot: 'bg-accent' },
+  success: { frame: 'border-success/20 bg-success/10 text-success', dot: 'bg-status-active' },
+  warning: { frame: 'border-warning/25 bg-warning-soft text-warning', dot: 'bg-status-idle' },
+  danger: { frame: 'border-danger/25 bg-danger-soft text-danger', dot: 'bg-danger' },
 };
 
 /**
@@ -33,11 +33,41 @@ export function Pill({
       data-testid={testId}
       data-tone={tone}
       title={title}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption font-medium whitespace-nowrap ${t.frame}`}
+      className={`inline-flex h-5 items-center gap-1.5 rounded-full border px-2 text-caption font-medium whitespace-nowrap ${t.frame}`}
     >
       {dot ? (
         <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${t.dot}`} />
       ) : null}
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A quiet tag: a label, a count, a type ("Bug", "api"). Squarer than a Pill and without a dot,
+ * because it names a thing rather than a state.
+ */
+export function Badge({
+  tone = 'neutral',
+  children,
+  testId,
+  title,
+  mono = false,
+}: {
+  tone?: PillTone;
+  children: ReactNode;
+  testId?: string;
+  title?: string;
+  /** Monospace, for keys and ids (`WEB-12`). */
+  mono?: boolean;
+}) {
+  return (
+    <span
+      data-testid={testId}
+      data-tone={tone}
+      title={title}
+      className={`inline-flex h-5 items-center rounded-[0.3125rem] border px-1.5 text-caption font-medium whitespace-nowrap tabular-nums ${mono ? 'font-mono' : ''} ${TONE[tone].frame}`}
+    >
       {children}
     </span>
   );

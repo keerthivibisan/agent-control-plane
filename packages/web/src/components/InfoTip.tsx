@@ -16,9 +16,9 @@ export function InfoTip({ tip, label }: { tip: string; label: string }) {
       onClick={triggerProps.onFocus}
       aria-label={`About ${label}`}
       data-tip={tip}
-      className="inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full align-middle text-dim hover:text-ink"
+      className="inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full align-middle text-dim/80 transition-colors hover:text-ink"
     >
-      <InfoIcon size={15} />
+      <InfoIcon size={14} />
       {bubble}
     </button>
   );

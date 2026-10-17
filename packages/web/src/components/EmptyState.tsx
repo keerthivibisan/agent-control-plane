@@ -2,9 +2,8 @@ import type { ReactNode } from 'react';
 import { InboxIcon } from './icons';
 
 /**
- * A friendly "nothing here yet" block (DESIGN.md, "Empty state"): a small illustration (the icon
- * on soft accent rings), a short title, one sentence, and at most one action. Supersedes
- * `EmptyState` in ./Panel.
+ * A friendly "nothing here yet" block (DESIGN.md, "Empty state"): the icon on a small bordered
+ * tile, a short title, one sentence, and at most one action.
  */
 export function EmptyState({
   title,
@@ -25,23 +24,24 @@ export function EmptyState({
   return (
     <div
       data-testid={testId}
-      className={`flex flex-col items-center text-center ${compact ? 'gap-1.5 py-4' : 'gap-2 py-12'}`}
+      className={`flex flex-col items-center text-center ${compact ? 'gap-1 py-4' : 'gap-1.5 py-12'}`}
     >
       {compact ? (
-        <span className="mb-1 flex size-9 items-center justify-center rounded-full bg-sunken text-dim">
-          {icon ?? <InboxIcon size={18} />}
+        <span
+          aria-hidden="true"
+          className="mb-1.5 flex size-8 items-center justify-center rounded-control border border-line bg-sunken text-dim"
+        >
+          {icon ?? <InboxIcon size={16} />}
         </span>
       ) : (
         <span
           aria-hidden="true"
-          className="mb-3 flex size-20 items-center justify-center rounded-full bg-accent-soft/60 ring-8 ring-accent-soft/30"
+          className="relative mb-3 flex size-11 items-center justify-center rounded-card border border-line bg-panel text-dim shadow-[0_1px_2px_rgb(0_0_0/0.05),0_0_0_4px_var(--color-sunken)]"
         >
-          <span className="flex size-12 items-center justify-center rounded-2xl border border-line bg-panel text-accent shadow-raised">
-            {icon ?? <InboxIcon size={22} />}
-          </span>
+          {icon ?? <InboxIcon size={20} />}
         </span>
       )}
-      <p className={compact ? 'font-medium' : 'text-title font-semibold tracking-tight'}>{title}</p>
+      <p className={compact ? 'font-medium' : 'text-title font-semibold'}>{title}</p>
       {text ? <p className="max-w-md text-dim">{text}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}
     </div>

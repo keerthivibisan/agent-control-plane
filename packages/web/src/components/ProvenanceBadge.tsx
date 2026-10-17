@@ -1,8 +1,8 @@
 import type { Provenance } from '@acp/core';
 
 const STYLES: Record<Provenance, string> = {
-  observed: 'border-emerald-600/40 text-emerald-700 dark:text-emerald-300',
-  derived: 'border-sky-600/40 text-sky-700 dark:text-sky-300',
+  observed: 'border-observed/35 text-observed',
+  derived: 'border-derived/35 text-derived',
   // Estimated values must never look authoritative: italic, dashed, warm.
   estimated: 'border-dashed border-estimated/60 bg-estimated-bg italic text-estimated',
   unavailable: 'border-dashed border-unavailable/50 text-unavailable',
@@ -19,7 +19,7 @@ const TITLES: Record<Provenance, string> = {
 export function ProvenanceBadge({ provenance, label }: { provenance: Provenance; label?: string }) {
   return (
     <span
-      className={`inline-flex items-center rounded border px-1 text-[10px] leading-4 font-medium tracking-wide uppercase ${STYLES[provenance]}`}
+      className={`inline-flex items-center rounded-[0.25rem] border px-1 text-micro leading-4 font-medium tracking-wide uppercase ${STYLES[provenance]}`}
       title={TITLES[provenance]}
       data-provenance={provenance}
     >
