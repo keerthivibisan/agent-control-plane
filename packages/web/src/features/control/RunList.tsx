@@ -26,7 +26,10 @@ export function RunList() {
               {[...list]
                 .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
                 .map((r) => (
-                  <li key={r.id} className="relative rounded-control px-2 py-2.5 hover:bg-sunken">
+                  <li
+                    key={r.id}
+                    className="relative rounded-control px-2 py-2.5 transition-colors hover:bg-hover"
+                  >
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <a
                         href={href.run(r)}

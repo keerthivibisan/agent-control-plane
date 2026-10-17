@@ -34,7 +34,7 @@ function StatusCounts({ counts }: { counts: OverviewDto['sessionsByStatus'] }) {
             key={s}
             data-status-count={s}
             aria-label={`${STATUS_COPY[s].word}: ${OVERVIEW_COPY.sessions(counts[s])}`}
-            className="min-w-0 rounded-control border border-line bg-sunken/40 px-4 py-3"
+            className="min-w-0 rounded-control border border-line bg-sunken/50 px-4 py-3"
           >
             <StatusBadge status={s} withTip={false} />
             <div className="mt-1 text-title font-semibold tabular-nums">

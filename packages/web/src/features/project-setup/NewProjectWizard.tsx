@@ -44,7 +44,7 @@ const STEP_TEXT: Record<StepKey, { title: string; description: string }> = {
 function Progress({ current }: { current: number }) {
   return (
     <nav aria-label={W.progressLabel} className="mb-6">
-      <ol className="flex flex-wrap items-center gap-x-4 gap-y-3 xl:gap-x-2">
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-3">
         {STEPS.map((key, i) => {
           const done = i < current;
           const active = i === current;
@@ -57,19 +57,24 @@ function Progress({ current }: { current: number }) {
             >
               <span
                 aria-hidden="true"
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-caption font-semibold ${
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-caption font-semibold tabular-nums transition-colors duration-200 ${
                   done
-                    ? 'bg-accent text-accent-ink'
+                    ? 'bg-accent-fill text-accent-fill-ink'
                     : active
-                      ? 'bg-accent-soft text-accent ring-2 ring-accent'
+                      ? 'border border-accent bg-accent-soft text-accent shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-accent)_18%,transparent)]'
                       : 'border border-line-strong bg-panel text-dim'
                 }`}
               >
-                {done ? <CheckIcon size={14} /> : i + 1}
+                {done ? <CheckIcon size={13} strokeWidth={2.5} /> : i + 1}
               </span>
-              <span className={active ? 'font-medium text-ink' : 'text-dim'}>{W.steps[key]}</span>
+              <span className={active ? 'font-medium text-ink' : done ? 'text-ink' : 'text-dim'}>
+                {W.steps[key]}
+              </span>
               {i < STEPS.length - 1 ? (
-                <span aria-hidden="true" className="mx-1 hidden h-px w-8 bg-line-strong xl:block" />
+                <span
+                  aria-hidden="true"
+                  className={`mx-1 hidden h-px w-6 sm:block xl:w-10 ${done ? 'bg-accent/60' : 'bg-line-strong'}`}
+                />
               ) : null}
             </li>
           );
@@ -222,14 +227,16 @@ export function NewProjectWizard() {
           title={text.title}
           description={text.description}
           actions={
-            <span className="text-caption text-dim">{W.stepOf(step + 1, STEPS.length)}</span>
+            <span className="text-caption text-dim tabular-nums">
+              {W.stepOf(step + 1, STEPS.length)}
+            </span>
           }
           testId={`wizard-step-${key}`}
         >
           <div className="flex flex-col gap-6">
             {body}
             <ActionError error={save.error} message={W.saveFailed} />
-            <div className="flex items-center gap-2 border-t border-line pt-4">
+            <div className="-mx-5 -mb-5 flex items-center gap-2 rounded-b-card border-t border-line bg-sunken/40 px-5 py-3">
               {step > 0 ? (
                 <Button onClick={() => setStep(step - 1)} disabled={pending}>
                   {W.back}

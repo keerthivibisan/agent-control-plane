@@ -2,6 +2,7 @@ import { SessionStatusSchema } from '@acp/core';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { InfoTip } from '../../components/InfoTip';
+import { fieldClass, labelClass } from '../../components/Input';
 import { paths, schemas } from '../../lib/api';
 import { SESSIONS_COPY, STATUS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
@@ -10,13 +11,13 @@ import { explorerHref, hasFilters, type ExplorerParams } from './explorer-params
 
 const COPY = SESSIONS_COPY.filters;
 
-export const fieldClass =
-  'h-9 rounded-control border border-line bg-panel px-2.5 text-ink hover:border-line-strong';
+/** Room for the native arrow, so a long model name never runs under it. */
+const SELECT = 'pr-8';
 
 function Field({ label, tip, children }: { label: string; tip?: string; children: ReactNode }) {
   return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="flex items-center gap-1 text-caption font-medium text-dim">
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className={`flex items-center gap-1 ${labelClass} text-dim`}>
         {label}
         {tip ? <InfoTip tip={tip} label={label} /> : null}
       </span>
@@ -58,12 +59,12 @@ export function Filters({
     <form
       onSubmit={onSubmit}
       aria-label={COPY.label}
-      className="flex flex-wrap items-end gap-x-4 gap-y-3"
+      className="flex flex-wrap items-end gap-x-3 gap-y-3"
     >
       {scopeProjectId === undefined ? (
         <Field label={COPY.project}>
           <select
-            className={`${fieldClass} w-48`}
+            className={`${fieldClass} ${SELECT} w-48`}
             value={params.projectId ?? ''}
             onChange={(e) => go({ projectId: e.target.value || undefined })}
           >
@@ -78,7 +79,7 @@ export function Filters({
       ) : null}
       <Field label={COPY.status}>
         <select
-          className={`${fieldClass} w-36`}
+          className={`${fieldClass} ${SELECT} w-36`}
           value={params.status ?? ''}
           onChange={(e) => go({ status: e.target.value || undefined })}
         >
@@ -92,7 +93,7 @@ export function Filters({
       </Field>
       <Field label={COPY.model}>
         <select
-          className={`${fieldClass} w-52`}
+          className={`${fieldClass} ${SELECT} w-52`}
           value={params.model ?? ''}
           onChange={(e) => go({ model: e.target.value || undefined })}
         >
@@ -107,7 +108,7 @@ export function Filters({
       {providers.length > 1 ? (
         <Field label={COPY.provider}>
           <select
-            className={`${fieldClass} w-40`}
+            className={`${fieldClass} ${SELECT} w-40`}
             value={params.provider ?? ''}
             onChange={(e) => go({ provider: e.target.value || undefined })}
           >
@@ -133,7 +134,7 @@ export function Filters({
           </Field>
         </div>
         {/* Enter submits; the button is there for pointer users and to make that discoverable. */}
-        <Button type="submit" className="h-9">
+        <Button type="submit" className="h-[2.125rem]">
           {COPY.find}
         </Button>
       </div>
@@ -141,7 +142,7 @@ export function Filters({
         <ButtonLink
           href={explorerHref({ projectId: scopeProjectId, root: params.root, view: params.view })}
           variant="quiet"
-          className="h-9"
+          className="h-[2.125rem]"
         >
           {COPY.clear}
         </ButtonLink>

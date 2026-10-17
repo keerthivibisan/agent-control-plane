@@ -56,7 +56,7 @@ export function CostCard({ snapshot }: { snapshot: UsageSnapshotDto | null }) {
   return (
     <Card title={title} testId="snapshot" padded={false}>
       <div className="px-5 pb-4">
-        <div className="text-stat font-semibold tracking-tight">
+        <div className="text-stat font-semibold tabular-nums">
           <EstimatedCost cost={snapshot.reportedCostUsd} showLabel={false} />
         </div>
         <p className="mt-1 text-dim">
@@ -70,7 +70,7 @@ export function CostCard({ snapshot }: { snapshot: UsageSnapshotDto | null }) {
         <p className="mt-1 text-caption text-dim">{COPY.runningTotal}</p>
       </div>
       <div className="border-t border-line">
-        <h3 className="px-5 pt-3 pb-1 text-caption font-medium text-dim">{COPY.byModel}</h3>
+        <h3 className="px-5 pt-3 pb-2 text-caption font-medium text-dim">{COPY.byModel}</h3>
         {rows.length === 0 ? (
           <p className="px-5 pb-4 text-dim">{COPY.noModels}</p>
         ) : (

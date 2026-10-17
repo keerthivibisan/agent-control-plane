@@ -1,6 +1,7 @@
 import type { AgentRunDto, ReviewDto } from '@acp/core/api';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { Pill } from '../../components/Pill';
 import { QueryView } from '../../components/QueryView';
 import { controlPaths, controlSchemas, reviewAction } from '../../lib/api';
 import { CONTROL_COPY } from '../../lib/copy';
@@ -46,7 +47,7 @@ export function DiffView({ diff, truncated }: { diff: string; truncated: boolean
       {truncated ? (
         <p
           role="note"
-          className="rounded-control border border-warning/40 bg-warning-soft px-3 py-2 text-caption"
+          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption"
           data-testid="diff-truncated"
         >
           {C.truncated}
@@ -99,16 +100,13 @@ function AgentReviewCard({
     <article
       aria-label={review.role}
       data-testid={`review-${review.agentRunId}`}
-      className="flex flex-col gap-3 rounded-card border border-line bg-panel px-4 py-3"
+      className="flex flex-col gap-3 rounded-card border border-line bg-panel px-4 py-3 shadow-card"
     >
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="font-medium">{review.role}</h3>
         <span className="text-caption text-dim">{C.into(review.baseBranch)}</span>
-        <span
-          className={`ml-auto text-caption font-medium ${pending ? 'text-warning' : 'text-dim'}`}
-          data-state={review.state}
-        >
-          {C.state[review.state]}
+        <span className="ml-auto" data-state={review.state}>
+          <Pill tone={pending ? 'warning' : 'neutral'}>{C.state[review.state]}</Pill>
         </span>
       </header>
       {review.files.length === 0 ? (

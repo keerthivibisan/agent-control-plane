@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button, buttonClass } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import type { IconProps } from '../../components/icons';
+import { AlertIcon, type IconProps } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import type { AgentRunDto, RunDetailDto } from '@acp/core/api';
 import type { ApiError } from '../../lib/api';
@@ -49,8 +49,12 @@ export function StatusWord({
   );
 }
 
-export const dangerButtonClass =
-  'inline-flex items-center gap-1.5 rounded-control border border-danger/40 bg-danger-soft px-3 py-1.5 font-medium text-danger transition-colors hover:border-danger disabled:cursor-not-allowed disabled:opacity-50';
+/** The shared danger button (DESIGN.md, "Buttons"); kept under this name for its importers. */
+export const dangerButtonClass = buttonClass('danger');
+
+/** A failed action's sentence: soft red, with an icon (the words carry the meaning). */
+export const alertClass =
+  'flex items-start gap-2 rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger';
 
 /**
  * A button that asks first: the first click shows the question with a confirm and a cancel
@@ -106,17 +110,13 @@ export function ConfirmAction({
       role="group"
       data-testid="confirm"
       aria-labelledby={questionId}
-      className="flex w-full flex-col gap-2 rounded-control border border-line-strong bg-sunken px-3 py-2.5"
+      className="flex w-full animate-fade-in flex-col gap-2.5 rounded-control border border-line-strong bg-sunken px-3 py-2.5"
     >
       <p id={questionId}>{question}</p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className={
-            danger
-              ? dangerButtonClass
-              : 'inline-flex items-center gap-1.5 rounded-control border border-accent bg-accent px-3 py-1.5 font-medium text-accent-ink hover:opacity-90'
-          }
+          className={danger ? dangerButtonClass : buttonClass('primary')}
           disabled={pending}
           onClick={() => {
             void onConfirm().finally(() => setAsking(false));
@@ -146,12 +146,12 @@ export function ActionError({ error, message }: { error: ApiError | null; messag
   if (error === null) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <p
-        role="alert"
-        className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
-      >
-        {message}
-        {error.kind === 'http' ? ` ${error.message}` : null}
+      <p role="alert" className={alertClass}>
+        <AlertIcon size={16} className="mt-0.5 shrink-0" />
+        <span className="min-w-0">
+          {message}
+          {error.kind === 'http' ? ` ${error.message}` : null}
+        </span>
       </p>
       <Details>
         <ErrorNotice error={error} />
@@ -160,10 +160,10 @@ export function ActionError({ error, message }: { error: ApiError | null; messag
   );
 }
 
-/** A labelled fact in a strip: "Status / Running". */
+/** A labelled fact in a strip: "Status / Running". One cell of a hairline grid (`gap-px`). */
 export function Fact({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex min-w-36 flex-1 flex-col gap-1 bg-panel px-4 py-3">
       <dt className="text-caption text-dim">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>

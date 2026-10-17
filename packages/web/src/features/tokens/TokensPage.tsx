@@ -10,9 +10,10 @@ import { ProvenanceBadge } from '../../components/ProvenanceBadge';
 import { QueryView } from '../../components/QueryView';
 import { TokenValue } from '../../components/TokenValue';
 import { tokensPaths, tokensSchemas } from '../../lib/api';
-import { TOKEN_TYPES, TOKENS_COPY } from '../../lib/copy';
+import { PAGES_REFRESH_COPY, TOKEN_TYPES, TOKENS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { RangeControl } from './RangeControl';
+import { TokensSkeleton } from './TokensSkeleton';
 import { TokensBreakdown } from './TokensBreakdown';
 import { CACHE, formatDayLong, NEW_WORK, TokensChart, type DayRow } from './TokensChart';
 import { CountsOnly, TokenTiles } from './TokenTiles';
@@ -50,7 +51,7 @@ function Charts({ data }: { data: ProjectTokensDto }) {
       testId="tokens-charts"
       actions={
         rows.length > 0 ? (
-          <Button onClick={() => setAsTable((v) => !v)} aria-pressed={asTable}>
+          <Button size="sm" onClick={() => setAsTable((v) => !v)} aria-pressed={asTable}>
             {asTable ? C.showChart : C.showTable}
           </Button>
         ) : undefined
@@ -64,7 +65,7 @@ function Charts({ data }: { data: ProjectTokensDto }) {
           text={TOKENS_COPY.emptyRange.text}
         />
       ) : asTable ? (
-        <div data-testid="tokens-day-table" className="-mx-6">
+        <div data-testid="tokens-day-table" className="-mx-5 border-y border-line">
           <DataTable
             label={C.tableLabel}
             columns={DAY_COLUMNS}
@@ -154,7 +155,11 @@ export function TokensPage({
       <div className="-mt-2 mb-6">
         <RangeControl projectId={projectId} params={params} now={now} />
       </div>
-      <QueryView query={query}>{(data) => <Body data={data} params={params} />}</QueryView>
+      {query.data === undefined && query.error === null ? (
+        <TokensSkeleton label={PAGES_REFRESH_COPY.loading} />
+      ) : (
+        <QueryView query={query}>{(data) => <Body data={data} params={params} />}</QueryView>
+      )}
     </div>
   );
 }

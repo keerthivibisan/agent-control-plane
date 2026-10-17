@@ -2,9 +2,11 @@ import { useId, useState, type FormEvent } from 'react';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { CheckIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon } from '../../components/icons';
+import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { SETUP_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
+import { alertClass } from '../control/bits';
 import { useRegisterProject, type FieldErrors, type RegisterResult } from './register';
 
 const C = SETUP_COPY.addProject;
@@ -23,7 +25,7 @@ export function RegisterNotice({
     return (
       <div
         role="status"
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/30 bg-success/10 px-3 py-2"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/25 bg-success/10 px-3 py-2"
       >
         <CheckIcon size={16} className="shrink-0 text-success" />
         <span>
@@ -39,21 +41,19 @@ export function RegisterNotice({
   if (result.kind === 'invalid') {
     if (!showInvalid) return null;
     return (
-      <p
-        role="alert"
-        className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
-      >
-        {[result.fields.name, result.fields.rootPath].filter(Boolean).join(' ')}
+      <p role="alert" className={alertClass}>
+        <AlertIcon size={16} className="mt-0.5 shrink-0" />
+        <span className="min-w-0">
+          {[result.fields.name, result.fields.rootPath].filter(Boolean).join(' ')}
+        </span>
       </p>
     );
   }
   return (
     <div className="flex flex-col gap-2">
-      <p
-        role="alert"
-        className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
-      >
-        {result.message}
+      <p role="alert" className={alertClass}>
+        <AlertIcon size={16} className="mt-0.5 shrink-0" />
+        <span className="min-w-0">{result.message}</span>
       </p>
       <Details>
         <ErrorNotice error={result.error} />
@@ -85,8 +85,8 @@ function Field({
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
-      <label htmlFor={id} className="font-medium">
+    <div className={`flex min-w-0 flex-col gap-1.5 ${className}`}>
+      <label htmlFor={id} className={labelClass}>
         {label}
       </label>
       <input
@@ -96,15 +96,18 @@ function Field({
         placeholder={placeholder}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-        className={`rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 ${
-          error ? 'border-danger' : 'border-line-strong'
-        } ${mono ? 'font-mono' : ''}`}
+        className={inputClass(mono ? 'font-mono' : '')}
       />
-      <span id={hintId} className="text-caption text-dim">
+      <span id={hintId} className={hintClass}>
         {hint}
       </span>
       {error ? (
-        <span id={errorId} role="alert" className="text-caption text-danger" data-field-error>
+        <span
+          id={errorId}
+          role="alert"
+          className="text-caption font-medium text-danger"
+          data-field-error
+        >
           {error}
         </span>
       ) : null}

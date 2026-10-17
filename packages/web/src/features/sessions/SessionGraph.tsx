@@ -82,7 +82,7 @@ export function SessionGraph({ sessionId }: { sessionId: string }) {
               {COPY.dangling(model.danglingEdges)}
             </p>
           ) : null}
-          <div className="h-[520px] overflow-hidden rounded-control border border-line">
+          <div className="h-[520px] overflow-hidden rounded-card border border-line bg-canvas">
             <GraphActions.Provider value={actions}>
               <ReactFlow
                 nodes={model?.nodes ?? []}
@@ -95,7 +95,7 @@ export function SessionGraph({ sessionId }: { sessionId: string }) {
                 minZoom={0.2}
                 proOptions={{ hideAttribution: true }}
               >
-                <Background color="var(--color-line-strong)" gap={20} />
+                <Background color="var(--color-line-strong)" gap={20} size={1.25} />
                 <Controls showInteractive={false} />
               </ReactFlow>
             </GraphActions.Provider>

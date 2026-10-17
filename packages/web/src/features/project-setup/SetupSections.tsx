@@ -4,6 +4,8 @@ import { useId } from 'react';
 import { CONTROL_COPY, PROJECT_SETUP_COPY, formatKiB } from '../../lib/copy';
 import type { QueryState } from '../../lib/query-store';
 import { ErrorNotice } from '../../components/ErrorNotice';
+import { Badge } from '../../components/Pill';
+import { LoadingBlock } from '../../components/Skeleton';
 import { CheckboxField, ChoiceCards, FixedSetting, NumberChoice, TextField } from './fields';
 import {
   DEPTH_CHOICES,
@@ -163,7 +165,7 @@ export function ContextPicker({
 
   if (candidates.data === undefined) {
     if (candidates.error) return <ErrorNotice error={candidates.error} />;
-    return <p className="text-dim italic">{X.loading}</p>;
+    return <LoadingBlock label={X.loading} />;
   }
   const list = rows(draft.contextFiles, candidates.data);
   const overFiles = draft.contextFiles.length > MAX_CONTEXT_FILES;
@@ -185,17 +187,17 @@ export function ContextPicker({
         <span className="text-dim">{X.limits(MAX_CONTEXT_FILES, MAX_CONTEXT_KIB)}</span>
       </div>
       {list.length === 0 ? (
-        <p className="rounded-control border border-dashed border-line-strong px-3 py-4 text-center text-dim">
+        <p className="rounded-control border border-dashed border-line-strong bg-sunken/40 px-3 py-6 text-center text-dim">
           {X.none}
         </p>
       ) : (
         <ul
           aria-label={X.listLabel}
-          className="flex max-h-80 flex-col divide-y divide-line overflow-y-auto rounded-control border border-line"
+          className="flex max-h-80 flex-col divide-y divide-line overflow-y-auto rounded-control border border-line-strong"
         >
           {list.map((r) => (
             <li key={r.path}>
-              <label className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-sunken">
+              <label className="flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-hover has-checked:bg-accent-soft/40">
                 <input
                   type="checkbox"
                   checked={chosen.has(r.path)}
@@ -206,11 +208,7 @@ export function ContextPicker({
                 <span className="min-w-0 flex-1 truncate font-mono text-caption" title={r.path}>
                   {r.path}
                 </span>
-                {r.suggested ? (
-                  <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-caption font-medium text-accent">
-                    {X.suggested}
-                  </span>
-                ) : null}
+                {r.suggested ? <Badge tone="accent">{X.suggested}</Badge> : null}
                 <span className="shrink-0 text-caption text-dim tabular-nums">
                   {r.listed ? formatKiB(r.sizeBytes ?? 0) : X.notListed}
                 </span>

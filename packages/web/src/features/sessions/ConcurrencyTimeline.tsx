@@ -73,12 +73,21 @@ export function ConcurrencyTimeline({ sessions }: { sessions: readonly SessionSu
             <div key={s.id} role="listitem" className="contents">
               <a
                 href={href.session(s.id)}
-                className="truncate py-1.5 text-ink"
+                className="truncate py-1.5 text-ink no-underline hover:text-accent"
                 title={sessionName(s)}
               >
                 {sessionName(s)}
               </a>
               <div className="relative h-8 border-b border-line/60">
+                {/* Faint guides under each time label, so a bar can be read against the axis. */}
+                {model.ticks.map((t) => (
+                  <span
+                    key={t.pct}
+                    aria-hidden="true"
+                    className="absolute inset-y-0 w-px bg-line/70"
+                    style={{ left: `${t.pct}%` }}
+                  />
+                ))}
                 <div
                   className="absolute top-2.5 h-3"
                   style={{

@@ -1,7 +1,7 @@
-import { inputClass } from '../../components/Input';
+import { fieldClass, labelClass } from '../../components/Input';
 import { TOKENS_COPY, type DatePreset } from '../../lib/copy';
 import { navigate } from '../../lib/router';
-import { Segmented } from './Segmented';
+import { Segmented } from '../../components/Segmented';
 import { presetDays, tokensHref, type TokensParams } from './tokens-params';
 
 const PRESETS: readonly DatePreset[] = ['7d', '30d', 'all', 'custom'];
@@ -43,21 +43,21 @@ export function RangeControl({
       />
       {params.preset === 'custom' ? (
         <div className="flex items-end gap-2">
-          <label className="flex flex-col gap-1 text-caption font-medium text-dim">
+          <label className={`flex flex-col gap-1.5 ${labelClass} text-dim`}>
             {R.from}
             <input
               type="date"
-              className={inputClass('w-40')}
+              className={`${fieldClass} h-8 w-40 py-1 tabular-nums`}
               value={params.from ?? ''}
               max={params.to}
               onChange={(e) => go({ from: e.target.value || undefined })}
             />
           </label>
-          <label className="flex flex-col gap-1 text-caption font-medium text-dim">
+          <label className={`flex flex-col gap-1.5 ${labelClass} text-dim`}>
             {R.to}
             <input
               type="date"
-              className={inputClass('w-40')}
+              className={`${fieldClass} h-8 w-40 py-1 tabular-nums`}
               value={params.to ?? ''}
               min={params.from}
               onChange={(e) => go({ to: e.target.value || undefined })}
@@ -65,7 +65,7 @@ export function RangeControl({
           </label>
         </div>
       ) : null}
-      {params.preset !== 'all' ? <p className="pb-2 text-caption text-dim">{R.utcNote}</p> : null}
+      {params.preset !== 'all' ? <p className="pb-1.5 text-caption text-dim">{R.utcNote}</p> : null}
     </form>
   );
 }

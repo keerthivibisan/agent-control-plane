@@ -135,14 +135,15 @@ export function ActivityFeed({ sessionId }: { sessionId: string }) {
             <li
               key={e.id}
               data-event-type={e.eventType}
-              className="flex items-baseline gap-3 border-b border-line/70 py-2.5 last:border-b-0"
+              // A thin line joins the dots into a timeline; it stops at the first and last dot.
+              className="relative flex items-baseline gap-3 py-2 before:absolute before:top-0 before:bottom-0 before:left-[3.5px] before:w-px before:bg-line first:before:top-4 last:before:bottom-[calc(100%-1rem)] only:before:hidden"
             >
               <span
                 aria-hidden="true"
-                className={`inline-block size-2 shrink-0 translate-y-[-1px] rounded-full ${dotClass(e)}`}
+                className={`relative inline-block size-2 shrink-0 translate-y-[-1px] rounded-full ring-4 ring-panel ${dotClass(e)}`}
               />
               <span className="min-w-0 flex-1 break-words">{describeEvent(e)}</span>
-              <span className="shrink-0 text-caption text-dim">
+              <span className="shrink-0 text-caption text-dim tabular-nums">
                 <EventTime e={e} />
               </span>
             </li>
@@ -159,7 +160,7 @@ export function ActivityFeed({ sessionId }: { sessionId: string }) {
       {events.length > 0 ? (
         <div className="mt-4">
           <Details summary={COPY.rawSummary} testId="raw-events">
-            <div className="-mx-4 -my-3 overflow-x-auto">
+            <div className="-mx-3.5 -my-3 overflow-x-auto">
               <DataTable
                 label={COPY.rawTable}
                 columns={RAW_COLUMNS}

@@ -5,6 +5,7 @@ import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { EmptyState } from '../../components/EmptyState';
 import { InfoTip } from '../../components/InfoTip';
+import { fieldClass, hintClass, labelClass } from '../../components/Input';
 import { QueryView } from '../../components/QueryView';
 import { paths, schemas, sendChat, startRun, type StartRunRequest } from '../../lib/api';
 import { CONTROL_COPY } from '../../lib/copy';
@@ -28,9 +29,6 @@ function budgetSummary(raw: string): string {
     ? `${C.budget}: ${formatCount(n)} budget tokens`
     : C.budget;
 }
-
-const fieldClass =
-  'rounded-control border border-line-strong bg-panel px-3 py-2 text-ink placeholder:text-dim/70';
 
 /** Shown when no run is open: pick a project, say what to do, start (POST /api/runs). */
 export function StartRun() {
@@ -85,8 +83,8 @@ export function StartRun() {
             />
           ) : (
             <form className="flex flex-col gap-4" onSubmit={(e) => void submit(e)} noValidate>
-              <div className="flex flex-col gap-1">
-                <label htmlFor={ids.project} className="font-medium">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={ids.project} className={labelClass}>
                   {C.project}
                 </label>
                 <select
@@ -94,7 +92,7 @@ export function StartRun() {
                   value={projectId}
                   onChange={(e) => setProjectId(e.target.value)}
                   aria-invalid={errors.project ? true : undefined}
-                  className={`${fieldClass} ${errors.project ? 'border-danger' : ''}`}
+                  className={`${fieldClass} pr-8`}
                 >
                   <option value="">{C.chooseProject}</option>
                   {list.map((p) => (
@@ -103,15 +101,15 @@ export function StartRun() {
                     </option>
                   ))}
                 </select>
-                <span className="text-caption text-dim">{C.projectHint}</span>
+                <span className={hintClass}>{C.projectHint}</span>
                 {errors.project ? (
-                  <span role="alert" className="text-caption text-danger">
+                  <span role="alert" className="text-caption font-medium text-danger">
                     {errors.project}
                   </span>
                 ) : null}
               </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor={ids.task} className="font-medium">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={ids.task} className={labelClass}>
                   {C.task}
                 </label>
                 <textarea
@@ -123,12 +121,12 @@ export function StartRun() {
                   placeholder={C.taskPlaceholder}
                   className={`${fieldClass} resize-y`}
                 />
-                <span className="text-caption text-dim">{C.taskHint}</span>
+                <span className={hintClass}>{C.taskHint}</span>
               </div>
               <Details summary={budgetSummary(budget)}>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <span className="flex items-center gap-1">
-                    <label htmlFor={ids.budget} className="font-medium">
+                    <label htmlFor={ids.budget} className={labelClass}>
                       {C.budget}
                     </label>
                     <InfoTip
@@ -142,11 +140,11 @@ export function StartRun() {
                     value={budget}
                     onChange={(e) => setBudget(e.target.value)}
                     aria-invalid={errors.budget ? true : undefined}
-                    className={`${fieldClass} max-w-60 tabular-nums ${errors.budget ? 'border-danger' : ''}`}
+                    className={`${fieldClass} max-w-60 tabular-nums`}
                   />
-                  <span className="text-caption text-dim">{C.budgetHint}</span>
+                  <span className={hintClass}>{C.budgetHint}</span>
                   {errors.budget ? (
-                    <span role="alert" className="text-caption text-danger">
+                    <span role="alert" className="text-caption font-medium text-danger">
                       {errors.budget}
                     </span>
                   ) : null}

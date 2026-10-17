@@ -46,7 +46,7 @@ export function AllProjectsPage() {
               />
             </Card>
           ) : (
-            <div className="flex flex-col gap-12">
+            <div className="flex flex-col gap-10">
               <ul
                 aria-label={C.cardsLabel}
                 className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3"

@@ -3,9 +3,10 @@ import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { HarnessIcon } from '../../components/icons';
+import { AlertIcon, ChevronRightIcon, HarnessIcon } from '../../components/icons';
 import { Pill, type PillTone } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
+import { LoadingBlock } from '../../components/Skeleton';
 import type { ApiError } from '../../lib/api';
 import { CHECK_STATUS_COPY, HARNESS_PAGE_COPY } from '../../lib/copy';
 import { formatDuration, formatRelative } from '../../lib/format';
@@ -22,10 +23,10 @@ function summaryTone(s: RunSummary): PillTone {
   return s.passed < s.total ? 'warning' : 'success';
 }
 
-/** One check's result: status, required or optional, duration, and its output tail behind Details. */
+/** One check's result: status, required or optional, duration, and its output tail (collapsed). */
 function CheckResult({ run }: { run: CheckRunDto }) {
   return (
-    <li className="flex flex-col gap-2 py-3" data-check={run.checkId} data-status={run.status}>
+    <li className="flex flex-col gap-2 px-4 py-3" data-check={run.checkId} data-status={run.status}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">{run.name}</span>
         <RequiredPill required={run.required} />
@@ -34,16 +35,24 @@ function CheckResult({ run }: { run: CheckRunDto }) {
           {C.duration(formatDuration(run.durationMs))} · {C.exitCode(run.exitCode)}
         </span>
       </div>
-      {/* A failed check's output is what the owner came for: open it. */}
-      <Details summary={C.output} defaultOpen={run.status !== 'passed' && run.status !== 'skipped'}>
+      {/* A failed check's output is what the owner came for: open it. A native <details> lighter
+          than the bordered Details block, because every result row has one. */}
+      <details open={run.status !== 'passed' && run.status !== 'skipped'} className="group/output">
+        <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-control text-caption text-dim transition-colors select-none hover:text-ink [&::-webkit-details-marker]:hidden">
+          <ChevronRightIcon
+            size={14}
+            className="transition-transform duration-150 group-open/output:rotate-90"
+          />
+          {C.output}
+        </summary>
         {run.outputTail.length > 0 ? (
-          <pre className="max-h-72 overflow-auto rounded-control bg-sunken p-3 font-mono text-caption whitespace-pre-wrap">
+          <pre className="mt-2 max-h-72 overflow-auto rounded-control border border-line bg-sunken px-3 py-2.5 font-mono text-caption leading-5 whitespace-pre-wrap">
             {run.outputTail}
           </pre>
         ) : (
-          <p className="text-dim">{C.noOutput}</p>
+          <p className="mt-2 text-caption text-dim">{C.noOutput}</p>
         )}
-      </Details>
+      </details>
     </li>
   );
 }
@@ -99,8 +108,9 @@ function EntryBody({ entry }: { entry: Entry }) {
         <p
           role="alert"
           data-code={entry.error.code ?? undefined}
-          className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
+          className="flex items-start gap-2 rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger"
         >
+          <AlertIcon size={16} className="mt-0.5 shrink-0" />
           {runErrorText(entry.error)}
         </p>
         <Details>
@@ -113,7 +123,10 @@ function EntryBody({ entry }: { entry: Entry }) {
     return <EmptyState compact title={C.noResults} text={C.noResultsText} />;
   }
   return (
-    <ul aria-label={C.resultsLabel} className="flex flex-col divide-y divide-line">
+    <ul
+      aria-label={C.resultsLabel}
+      className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line"
+    >
       {entry.results.map((r) => (
         <CheckResult key={r.id} run={r} />
       ))}
@@ -180,7 +193,7 @@ export function RunsCard({
     >
       {latest === undefined ? (
         loading ? (
-          <p className="text-dim">{C.loading}</p>
+          <LoadingBlock label={C.loading} />
         ) : (
           <EmptyState
             compact
@@ -190,9 +203,9 @@ export function RunsCard({
           />
         )
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           <section aria-label={C.latest} data-testid="latest-run" data-state={entryState(latest)}>
-            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="font-semibold">{C.latest}</h3>
               <span className="text-caption text-dim">
                 {C.started} <RelativeTime iso={latest.startedAt} now={now} />

@@ -1,62 +1,47 @@
 import type { SessionSummaryDto } from '@acp/core/api';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { fieldClass } from '../../components/Input';
+import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import { SESSIONS_COPY } from '../../lib/copy';
 import { idPrefix } from '../../lib/format';
 import { navigate } from '../../lib/router';
 import { ConcurrencyTimeline } from './ConcurrencyTimeline';
 import { explorerHref, type ExplorerParams, type RelateView } from './explorer-params';
-import { fieldClass } from './Filters';
 import { isHelperAgent, sessionName } from './session-bits';
 import { SessionFamily } from './FamilyTree';
 import { FamilyLegend, SessionGraph } from './SessionGraph';
 
 const COPY = SESSIONS_COPY.relate;
 
-function Tabs({ params, view }: { params: ExplorerParams; view: RelateView }) {
-  const relationships = view !== 'timeline';
-  const tab = (v: RelateView, selected: boolean, label: string) => (
-    <a
-      href={explorerHref({ ...params, view: v })}
-      role="tab"
-      aria-selected={selected}
-      className={`rounded-control px-3 py-1.5 font-medium no-underline transition-colors ${
-        selected ? 'bg-panel text-ink shadow-card' : 'text-dim hover:text-ink'
-      }`}
-    >
-      {label}
-    </a>
-  );
-  return (
-    <div
-      role="tablist"
-      aria-label={COPY.title}
-      className="flex gap-1 rounded-control bg-sunken p-1"
-    >
-      {tab('relationships', relationships, COPY.tabs.relationships)}
-      {tab('timeline', !relationships, COPY.tabs.timeline)}
-    </div>
-  );
-}
+/** The two tabs: the tree/diagram view counts as "Relationships". */
+type RelateTab = 'relationships' | 'timeline';
 
-/** Tree (default, easiest to read) or the same family as a zoomable diagram. */
+/**
+ * Tree (default, easiest to read) or the same family as a zoomable diagram. Links, not buttons:
+ * each view has its own address. Drawn as a small segmented control.
+ */
 function ShowAs({ params, view }: { params: ExplorerParams; view: RelateView }) {
   const option = (v: RelateView, label: string) => (
     <a
       href={explorerHref({ ...params, view: v })}
       aria-current={view === v ? 'true' : undefined}
-      className={`rounded-control px-2.5 py-1 no-underline ${
-        view === v ? 'bg-accent-soft font-medium text-accent' : 'text-dim hover:text-ink'
+      className={`inline-flex h-6 items-center rounded-[calc(var(--radius-control)-2px)] px-2.5 text-caption font-medium no-underline transition-colors ${
+        view === v
+          ? 'bg-panel text-ink shadow-[0_0_0_1px_var(--color-line),0_1px_2px_rgb(0_0_0/0.06)]'
+          : 'text-dim hover:text-ink'
       }`}
     >
       {label}
     </a>
   );
   return (
-    <div className="flex items-center gap-1" role="group" aria-label={SESSIONS_COPY.family.showAs}>
-      <span className="mr-1 text-dim">{SESSIONS_COPY.family.showAs}</span>
-      {option('relationships', SESSIONS_COPY.family.tree)}
-      {option('graph', SESSIONS_COPY.family.diagram)}
+    <div className="flex items-center gap-2" role="group" aria-label={SESSIONS_COPY.family.showAs}>
+      <span className="text-caption font-medium text-dim">{SESSIONS_COPY.family.showAs}</span>
+      <span className="inline-flex gap-0.5 rounded-control border border-line bg-sunken p-0.5">
+        {option('relationships', SESSIONS_COPY.family.tree)}
+        {option('graph', SESSIONS_COPY.family.diagram)}
+      </span>
     </div>
   );
 }
@@ -84,9 +69,9 @@ function RootPicker({
   const listed = options.some((s) => s.id === root);
   return (
     <label className="flex flex-wrap items-center gap-2">
-      <span className="text-dim">{COPY.pick}</span>
+      <span className="text-caption font-medium text-dim">{COPY.pick}</span>
       <select
-        className={`${fieldClass} max-w-full min-w-0 sm:w-80`}
+        className={`${fieldClass} max-w-full min-w-0 pr-8 sm:w-80`}
         value={root}
         onChange={(e) =>
           navigate(explorerHref({ ...params, root: e.target.value, view: 'relationships' }))
@@ -113,45 +98,49 @@ export function HowSessionsRelate({
   sessions: readonly SessionSummaryDto[];
 }) {
   const view = params.view ?? 'relationships';
+  const tab: RelateTab = view === 'timeline' ? 'timeline' : 'relationships';
   const root = pickRoot(params, sessions);
   return (
-    <Card
-      title={COPY.title}
-      description={COPY.description}
-      actions={<Tabs params={params} view={view} />}
-      testId="how-sessions-relate"
-    >
-      <div
-        role="tabpanel"
-        aria-label={view === 'timeline' ? COPY.tabs.timeline : COPY.tabs.relationships}
+    <Card title={COPY.title} description={COPY.description} testId="how-sessions-relate">
+      {/* The tab is part of the address (`view`), so a choice is a navigation. */}
+      <Tabs<RelateTab>
+        value={tab}
+        onValueChange={(next) => navigate(explorerHref({ ...params, view: next }))}
       >
-        {view === 'timeline' ? (
+        <TabList label={COPY.title} className="-mx-5 mb-5 px-5">
+          <Tab value="relationships">{COPY.tabs.relationships}</Tab>
+          <Tab value="timeline">{COPY.tabs.timeline}</Tab>
+        </TabList>
+        <TabPanel value="timeline">
           <ConcurrencyTimeline sessions={sessions} />
-        ) : root === null ? (
-          <EmptyState compact title={COPY.tabs.relationships} text={COPY.pickHint} />
-        ) : (
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-              <RootPicker params={params} sessions={sessions} root={root} />
-              <ShowAs params={params} view={view} />
+        </TabPanel>
+        <TabPanel value="relationships">
+          {root === null ? (
+            <EmptyState compact title={COPY.tabs.relationships} text={COPY.pickHint} />
+          ) : (
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                <RootPicker params={params} sessions={sessions} root={root} />
+                <ShowAs params={params} view={view} />
+              </div>
+              {view === 'graph' ? (
+                // Remount per root so collapsed nodes never carry over to another family.
+                <SessionGraph key={root} sessionId={root} />
+              ) : (
+                <>
+                  <FamilyLegend />
+                  <SessionFamily
+                    sessionId={root}
+                    currentLabel={SESSIONS_COPY.family.selected}
+                    outlineRoot={false}
+                  />
+                  <p className="text-caption text-dim">{COPY.evidenceNote}</p>
+                </>
+              )}
             </div>
-            {view === 'graph' ? (
-              // Remount per root so collapsed nodes never carry over to another family.
-              <SessionGraph key={root} sessionId={root} />
-            ) : (
-              <>
-                <FamilyLegend />
-                <SessionFamily
-                  sessionId={root}
-                  currentLabel={SESSIONS_COPY.family.selected}
-                  outlineRoot={false}
-                />
-                <p className="text-caption text-dim">{COPY.evidenceNote}</p>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </TabPanel>
+      </Tabs>
     </Card>
   );
 }

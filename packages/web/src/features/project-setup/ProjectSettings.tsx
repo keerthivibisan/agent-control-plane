@@ -2,7 +2,8 @@ import type { ContextCandidateDto, ProjectAgentSetupDto, ProjectDto } from '@acp
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
+import { labelClass } from '../../components/Input';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
@@ -49,7 +50,7 @@ function sameSettings(a: SettingsDraft, b: SettingsDraft): boolean {
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="font-medium">{label}</dt>
+      <dt className={labelClass}>{label}</dt>
       <dd className="min-w-0 break-words text-dim">{children}</dd>
     </div>
   );
@@ -184,7 +185,10 @@ function MovedRow({
 }) {
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3" data-testid={testId}>
-      <span aria-hidden="true" className="text-dim">
+      <span
+        aria-hidden="true"
+        className="flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-sunken text-dim"
+      >
         {icon}
       </span>
       <span className="min-w-0 flex-1">{text}</span>
@@ -212,14 +216,14 @@ function SettingsBody({ project }: { project: ProjectDto }) {
         <Card title={S.elsewhere.title} testId="settings-elsewhere">
           <ul className="-my-3 flex flex-col divide-y divide-line">
             <MovedRow
-              icon={<WorkflowIcon size={18} />}
+              icon={<WorkflowIcon size={16} />}
               text={S.elsewhere.workflow}
               link={S.elsewhere.workflowLink}
               to={href.projectPage(id, 'workflow')}
               testId="settings-workflow-link"
             />
             <MovedRow
-              icon={<HarnessIcon size={18} />}
+              icon={<HarnessIcon size={16} />}
               text={S.elsewhere.harness}
               link={S.elsewhere.harnessLink}
               to={href.projectPage(id, 'harness')}
@@ -228,7 +232,10 @@ function SettingsBody({ project }: { project: ProjectDto }) {
           </ul>
         </Card>
         <Card title={S.danger} testId="settings-danger" className="border-danger/30">
-          <p className="max-w-3xl text-dim">{S.dangerText}</p>
+          <p className="flex items-start gap-2.5 rounded-control border border-danger/20 bg-danger-soft/50 px-3 py-2.5 text-dim">
+            <AlertIcon size={16} className="mt-0.5 shrink-0 text-danger" />
+            <span>{S.dangerText}</span>
+          </p>
         </Card>
       </div>
     </div>

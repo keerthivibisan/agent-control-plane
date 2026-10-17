@@ -87,7 +87,7 @@ function Task({ text }: { text: string }) {
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="ml-1 text-accent hover:underline"
+          className="ml-1 font-medium text-accent hover:underline"
         >
           {open ? C.showLess : C.showAll}
         </button>
@@ -115,7 +115,7 @@ function AgentCard({
     <article
       aria-label={agent.role}
       data-testid={`agent-${agent.id}`}
-      className="relative flex max-w-2xl flex-col gap-2.5 rounded-card border border-line bg-panel px-4 py-3 shadow-card"
+      className="relative flex max-w-2xl flex-col gap-2.5 rounded-card border border-line bg-panel px-4 py-3 shadow-card transition-colors hover:border-line-strong"
     >
       <header className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-40 flex-1">

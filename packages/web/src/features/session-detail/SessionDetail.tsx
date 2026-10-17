@@ -22,7 +22,7 @@ const COPY = SESSION_DETAIL_COPY;
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex min-w-36 flex-1 flex-col gap-1 bg-panel px-4 py-3">
       <dt className="text-caption text-dim">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>
@@ -35,7 +35,8 @@ function Facts({ s }: { s: SessionDetailDto }) {
   const projectName = projects.data?.find((p) => p.id === s.projectId)?.name;
   return (
     <dl
-      className="mb-6 flex flex-wrap gap-x-10 gap-y-4 rounded-card border border-line bg-panel px-5 py-4 shadow-card"
+      // Hairlines between the facts: the 1px gaps show the border color behind the cells.
+      className="mb-6 flex flex-wrap gap-px overflow-hidden rounded-card border border-line bg-line shadow-card"
       data-testid="session-facts"
     >
       <Fact label={COPY.status}>

@@ -16,7 +16,7 @@ import {
 import { formatCount, shortId } from '../../lib/format';
 import { href, navigate } from '../../lib/router';
 import { Figure, NEW_WORK_TYPES, Share, TOTAL_TYPES } from './figures';
-import { Segmented } from './Segmented';
+import { Segmented } from '../../components/Segmented';
 import { tokensHref, type TokensParams } from './tokens-params';
 
 const B = TOKENS_COPY.breakdown;
@@ -244,7 +244,7 @@ export function TokensBreakdown({
       testId="tokens-breakdown"
       actions={<ProvenanceBadge provenance="derived" />}
     >
-      <div className="px-6 pb-4">
+      <div className="px-5 pb-4">
         <Segmented
           label={B.by}
           value={by}

@@ -1,14 +1,13 @@
 import { useId, type ReactNode } from 'react';
 import { CheckIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
+import { hintClass, inputClass, labelClass } from '../../components/Input';
 
 /**
  * Form pieces for the wizard and the settings page: a label, a plain-language hint, and an error
- * sentence wired to the control with aria-describedby (same look as the Setup page's form).
+ * sentence wired to the control with aria-describedby. The field look is the shared one
+ * (components/Input), which also turns the border red for `aria-invalid`.
  */
-
-export const inputClass =
-  'w-full rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70';
 
 function describedBy(hintId: string, errorId: string, error: string | undefined) {
   return error ? `${hintId} ${errorId}` : hintId;
@@ -17,7 +16,7 @@ function describedBy(hintId: string, errorId: string, error: string | undefined)
 function FieldError({ id, error }: { id: string; error: string | undefined }) {
   if (!error) return null;
   return (
-    <span id={id} role="alert" className="text-caption text-danger" data-field-error>
+    <span id={id} role="alert" className="text-caption font-medium text-danger" data-field-error>
       {error}
     </span>
   );
@@ -50,9 +49,9 @@ export function TextField({
 }) {
   const id = useId();
   return (
-    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+    <div className={`flex min-w-0 flex-col gap-1.5 ${className}`}>
       <span className="flex items-center gap-1">
-        <label htmlFor={id} className="font-medium">
+        <label htmlFor={id} className={labelClass}>
           {label}
         </label>
         {tip ? <InfoTip tip={tip} label={label} /> : null}
@@ -67,11 +66,11 @@ export function TextField({
         autoComplete="off"
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(`${id}-hint`, `${id}-error`, error)}
-        className={`${inputClass} ${error ? 'border-danger' : 'border-line-strong'} ${
-          mono ? 'font-mono' : ''
-        } ${numeric ? 'tabular-nums' : ''} ${inputClassName}`}
+        className={inputClass(
+          `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${inputClassName}`,
+        )}
       />
-      <span id={`${id}-hint`} className="text-caption text-dim">
+      <span id={`${id}-hint`} className={hintClass}>
         {hint}
       </span>
       <FieldError id={`${id}-error`} error={error} />
@@ -98,8 +97,8 @@ export function TextAreaField({
 }) {
   const id = useId();
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={id} className="font-medium">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>
         {label}
       </label>
       <textarea
@@ -110,9 +109,9 @@ export function TextAreaField({
         placeholder={placeholder}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(`${id}-hint`, `${id}-error`, error)}
-        className={`${inputClass} resize-y font-mono ${error ? 'border-danger' : 'border-line-strong'}`}
+        className={inputClass('resize-y font-mono')}
       />
-      <span id={`${id}-hint`} className="text-caption text-dim">
+      <span id={`${id}-hint`} className={hintClass}>
         {hint}
       </span>
       <FieldError id={`${id}-error`} error={error} />
@@ -144,17 +143,17 @@ export function ChoiceCards<V extends string | number>({
   const hintId = useId();
   return (
     <fieldset className="flex min-w-0 flex-col gap-2" aria-describedby={hint ? hintId : undefined}>
-      <legend className="mb-1 font-medium">{legend}</legend>
+      <legend className={`mb-1.5 ${labelClass}`}>{legend}</legend>
       <div className={`grid gap-2 ${columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
         {options.map((o) => {
           const checked = o.value === value;
           return (
             <label
               key={String(o.value)}
-              className={`flex cursor-pointer items-start gap-3 rounded-control border px-3 py-2.5 transition-colors ${
+              className={`flex cursor-pointer items-start gap-3 rounded-control border px-3 py-2.5 transition-[background-color,border-color,box-shadow] duration-150 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent ${
                 checked
-                  ? 'border-accent bg-accent-soft/60'
-                  : 'border-line-strong bg-panel hover:bg-sunken'
+                  ? 'border-accent bg-accent-soft/60 shadow-[0_0_0_1px_var(--color-accent)]'
+                  : 'border-line-strong bg-panel hover:bg-hover'
               }`}
             >
               <input
@@ -173,7 +172,7 @@ export function ChoiceCards<V extends string | number>({
         })}
       </div>
       {hint ? (
-        <span id={hintId} className="text-caption text-dim">
+        <span id={hintId} className={hintClass}>
           {hint}
         </span>
       ) : null}
@@ -202,17 +201,19 @@ export function NumberChoice({
 }) {
   const hintId = useId();
   return (
-    <fieldset className="flex min-w-0 flex-col gap-1" aria-describedby={hintId}>
-      <legend className="mb-1 font-medium">{legend}</legend>
+    <fieldset className="flex min-w-0 flex-col gap-1.5" aria-describedby={hintId}>
+      <legend className={`mb-1.5 ${labelClass}`}>{legend}</legend>
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex overflow-hidden rounded-control border border-line-strong">
+        <div className="inline-flex overflow-hidden rounded-control border border-line-strong shadow-card">
           {choices.map((n) => {
             const checked = n === value;
             return (
               <label
                 key={n}
-                className={`relative flex min-w-10 cursor-pointer items-center justify-center border-line-strong px-3 py-1.5 tabular-nums not-first:border-l has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-accent ${
-                  checked ? 'bg-accent font-semibold text-accent-ink' : 'bg-panel hover:bg-sunken'
+                className={`relative flex h-8 min-w-10 cursor-pointer items-center justify-center border-line-strong px-3 tabular-nums transition-colors not-first:border-l has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-accent ${
+                  checked
+                    ? 'bg-accent-fill font-semibold text-accent-fill-ink'
+                    : 'bg-panel text-ink hover:bg-hover'
                 }`}
               >
                 <input
@@ -230,7 +231,7 @@ export function NumberChoice({
         </div>
         <span className="text-dim">{valueText(value)}</span>
       </div>
-      <span id={hintId} className="text-caption text-dim">
+      <span id={hintId} className={hintClass}>
         {hint}
       </span>
     </fieldset>
@@ -256,7 +257,7 @@ export function CheckboxField({
   return (
     <div
       className={`flex items-start gap-3 rounded-control border px-3 py-3 transition-colors ${
-        checked ? 'border-accent/60 bg-accent-soft/40' : 'border-line bg-panel'
+        checked ? 'border-accent/50 bg-accent-soft/40' : 'border-line-strong bg-panel'
       }`}
     >
       <input
@@ -271,7 +272,7 @@ export function CheckboxField({
         <label htmlFor={id} className="cursor-pointer font-medium">
           {label}
         </label>
-        <span id={`${id}-hint`} className="text-caption text-dim">
+        <span id={`${id}-hint`} className={hintClass}>
           {hint}
           {note ? (
             <>
@@ -296,13 +297,13 @@ export function FixedSetting({
   hint: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="font-medium">{label}</span>
-      <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-sunken px-2.5 py-0.5 text-caption font-medium">
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className={labelClass}>{label}</span>
+      <span className="inline-flex h-6 w-fit items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 text-caption font-medium">
         <CheckIcon size={14} className="text-success" />
         {value}
       </span>
-      <span className="text-caption text-dim">{hint}</span>
+      <span className={hintClass}>{hint}</span>
     </div>
   );
 }
@@ -323,7 +324,7 @@ export function FormSection({
   return (
     <section aria-labelledby={id} data-testid={testId} className="flex min-w-0 flex-col gap-4">
       <div>
-        <h3 id={id} className="font-semibold">
+        <h3 id={id} className="text-title font-semibold">
           {title}
         </h3>
         {description ? <p className="mt-0.5 text-dim">{description}</p> : null}

@@ -2,7 +2,7 @@ import type { CapabilitiesDto, DiagnosticsDto } from '@acp/core/api';
 import type { ReactNode } from 'react';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
-import { CheckIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { RelativeTime } from '../../components/RelativeTime';
 import { fileIssueText, HEALTH_COPY } from '../../lib/copy';
@@ -10,28 +10,6 @@ import { formatCount } from '../../lib/format';
 import type { HealthSummary } from './health-summary';
 
 const H = HEALTH_COPY;
-
-/** Not in the shared icon set: a triangle with "!" for things that need a look. */
-function AlertIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      className={className}
-    >
-      <path d="M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" />
-      <path d="M12 9.5v4M12 17h.01" />
-    </svg>
-  );
-}
 
 /** A calm "nothing to report" line inside a card. */
 function AllClear({ children }: { children: ReactNode }) {
@@ -64,12 +42,15 @@ export function HealthVerdict({ summary }: { summary: HealthSummary }) {
       data-testid="health-summary"
       data-state={summary.state}
       className={`flex gap-4 rounded-card border px-5 py-4 shadow-card ${
-        attention ? 'border-warning/40 bg-warning-soft' : 'border-line bg-panel'
+        attention ? 'border-warning/30 bg-warning-soft' : 'border-line bg-panel'
       }`}
     >
       <span
-        className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
-          attention ? 'bg-warning/15 text-warning' : 'bg-success/10 text-success'
+        aria-hidden="true"
+        className={`flex size-10 shrink-0 items-center justify-center rounded-card border ${
+          attention
+            ? 'border-warning/30 bg-panel text-warning'
+            : 'border-success/25 bg-success/10 text-success'
         }`}
       >
         {attention ? <AlertIcon size={20} /> : <CheckIcon size={20} />}
@@ -78,7 +59,10 @@ export function HealthVerdict({ summary }: { summary: HealthSummary }) {
         <p className="text-title font-semibold">{title}</p>
         <p className="text-dim">{text}</p>
         {attention ? (
-          <ul className="mt-2 flex list-disc flex-col gap-0.5 pl-5" data-testid="health-problems">
+          <ul
+            className="mt-2 flex list-disc flex-col gap-0.5 pl-5 marker:text-warning"
+            data-testid="health-problems"
+          >
             {summary.problems.map((p) => (
               <li key={p.key} data-problem={p.key}>
                 {p.text}
@@ -123,10 +107,12 @@ function CountList({
       {rows.map((r) => (
         <li
           key={r.key}
-          className="flex items-baseline justify-between gap-4 border-b border-line py-2 last:border-b-0"
+          className="flex items-baseline justify-between gap-4 border-b border-line py-2 first:pt-0 last:border-b-0 last:pb-0"
         >
           <span className="min-w-0 break-words">{r.name}</span>
-          <span className="shrink-0 text-dim tabular-nums">{H.skipped.count(r.count)}</span>
+          <span className="shrink-0 text-caption text-dim tabular-nums">
+            {H.skipped.count(r.count)}
+          </span>
         </li>
       ))}
     </ul>
@@ -224,8 +210,8 @@ export function ParseErrorsCard({ d }: { d: DiagnosticsDto }) {
 
 function Counter({ label, tip, children }: { label: string; tip?: string; children: ReactNode }) {
   return (
-    <div className="min-w-0">
-      <dt className="flex items-center gap-1 text-dim">
+    <div className="min-w-0 bg-panel px-4 py-3">
+      <dt className="flex items-center gap-1 text-caption text-dim">
         <span>{label}</span>
         {tip ? <InfoTip tip={tip} label={label} /> : null}
       </dt>
@@ -240,7 +226,7 @@ export function ReadingCard({ d }: { d: DiagnosticsDto }) {
   return (
     <Card title={R.title} description={R.description} testId="health-reading">
       <dl
-        className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line sm:grid-cols-4"
         data-testid="ingestion-counters"
       >
         <Counter label={R.lastPoll}>
@@ -275,7 +261,7 @@ export function CapabilitiesCard({ caps }: { caps: CapabilitiesDto }) {
       <div className="flex flex-col gap-6">
         {caps.providers.map((p) => (
           <div key={p.provider} data-provider={p.provider} className="flex flex-col gap-4">
-            <h3 className="font-semibold">{C.providerName(p.provider)}</h3>
+            <h3 className="text-title font-semibold">{C.providerName(p.provider)}</h3>
             <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 md:grid-cols-2">
               {OBSERVATIONS.map((k) => (
                 <li key={k} className="flex items-center gap-2" data-observation={k}>

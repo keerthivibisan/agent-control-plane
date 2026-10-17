@@ -1,8 +1,9 @@
 import type { TokenCounts } from '@acp/core';
+import { useId } from 'react';
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -64,8 +65,8 @@ function Swatch({ type, index }: { type: TokenCategory; index: number }) {
 function DayTooltip({ row, series }: { row: DayRow | undefined; series: SeriesPair }) {
   if (!row) return null;
   return (
-    <div className="rounded-control border border-line bg-panel px-3 py-2 text-caption text-ink shadow-pop">
-      <div className="mb-1 font-medium">{formatDayLong(row.day)}</div>
+    <div className="min-w-44 rounded-control border border-line bg-panel-raised px-3 py-2 text-caption text-ink shadow-pop">
+      <div className="mb-1.5 font-medium">{formatDayLong(row.day)}</div>
       {series.map((key, i) => {
         const v = row[key];
         return (
@@ -86,9 +87,10 @@ function DayTooltip({ row, series }: { row: DayRow | undefined; series: SeriesPa
 }
 
 /**
- * Tokens per UTC day as two plain lines: not stacked, and `connectNulls` off, so a day that did
- * not report a type is a gap, never a zero. New work and cache differ by about 1000×, so each pair
- * gets its own chart and its own scale (never a second y-axis).
+ * Tokens per UTC day as two plain lines, each over a faint fill that fades to the axis: not
+ * stacked, and `connectNulls` off, so a day that did not report a type is a gap, never a zero. New
+ * work and cache differ by about 1000×, so each pair gets its own chart and its own scale (never a
+ * second y-axis).
  */
 export function TokensChart({
   title,
@@ -99,10 +101,14 @@ export function TokensChart({
   rows: readonly DayRow[];
   series: SeriesPair;
 }) {
+  // Gradient ids must be unique per chart and safe inside `url(#…)`.
+  const fillId = `fill${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  // Dots help to read a few days; on a long range they would crowd the line, so only on hover.
+  const dots = rows.length <= 31;
   return (
     <figure className="m-0 min-w-0" data-testid={`tokens-chart-${series[0]}`}>
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="font-medium">{title}</span>
+        <span className="font-medium text-ink">{title}</span>
         <span className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-dim">
           {series.map((key, i) => (
             <span key={key} className="inline-flex items-center gap-1.5">
@@ -121,14 +127,23 @@ export function TokensChart({
           height="100%"
           initialDimension={{ width: 560, height: 224 }}
         >
-          <LineChart data={[...rows]} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="var(--color-line)" vertical={false} />
+          <AreaChart data={[...rows]} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <defs>
+              {series.map((key) => (
+                <linearGradient key={key} id={`${fillId}-${key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={TOKEN_TYPE_COLOR[key].css} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={TOKEN_TYPE_COLOR[key].css} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid stroke="var(--color-line)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="day"
               tickFormatter={formatDayShort}
               tick={{ fontSize: 12, fill: 'var(--color-dim)' }}
               tickLine={false}
-              axisLine={{ stroke: 'var(--color-line-strong)' }}
+              axisLine={{ stroke: 'var(--color-line)' }}
+              tickMargin={6}
               minTickGap={24}
             />
             <YAxis
@@ -139,7 +154,7 @@ export function TokensChart({
               width={48}
             />
             <Tooltip
-              cursor={{ stroke: 'var(--color-line-strong)' }}
+              cursor={{ stroke: 'var(--color-line-strong)', strokeDasharray: '3 3' }}
               isAnimationActive={false}
               content={(props) => (
                 <DayTooltip
@@ -151,7 +166,7 @@ export function TokensChart({
               )}
             />
             {series.map((key, i) => (
-              <Line
+              <Area
                 key={key}
                 type="linear"
                 dataKey={key}
@@ -159,18 +174,23 @@ export function TokensChart({
                 stroke={TOKEN_TYPE_COLOR[key].css}
                 strokeWidth={2}
                 strokeDasharray={dash(i)}
-                dot={{
-                  r: rows.length > 45 ? 2.5 : 4,
-                  strokeWidth: 1.5,
-                  stroke: 'var(--color-panel)',
-                  fill: TOKEN_TYPE_COLOR[key].css,
-                }}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-panel)' }}
+                fill={`url(#${fillId}-${key})`}
+                dot={
+                  dots
+                    ? {
+                        r: 3,
+                        strokeWidth: 1.5,
+                        stroke: 'var(--color-panel)',
+                        fill: TOKEN_TYPE_COLOR[key].css,
+                      }
+                    : false
+                }
+                activeDot={{ r: 4.5, strokeWidth: 2, stroke: 'var(--color-panel)' }}
                 connectNulls={false}
                 isAnimationActive={false}
               />
             ))}
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
       <div className="mt-1 text-right text-caption text-dim" aria-hidden="true">

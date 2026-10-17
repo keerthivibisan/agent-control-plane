@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card } from '../../components/Card';
 import { PageHeader } from '../../components/PageHeader';
+import { Badge } from '../../components/Pill';
 import { QueryView } from '../../components/QueryView';
 import { paths, schemas } from '../../lib/api';
 import { GLOSSARY, PAGES, SETUP_COPY } from '../../lib/copy';
@@ -24,8 +25,10 @@ function Step({
       <div className="flex shrink-0 flex-col items-center pt-4">
         <span
           aria-hidden="true"
-          className={`flex size-8 items-center justify-center rounded-full text-body font-semibold ${
-            optional ? 'border border-line-strong bg-panel text-dim' : 'bg-accent-soft text-accent'
+          className={`flex size-7 items-center justify-center rounded-full border text-caption font-semibold tabular-nums ${
+            optional
+              ? 'border-dashed border-line-strong bg-panel text-dim'
+              : 'border-accent/30 bg-accent-soft text-accent'
           }`}
         >
           {n}
@@ -82,7 +85,7 @@ export function SetupPage({ tabs }: { tabs?: ReactNode } = {}) {
           <Card
             title={SETUP_COPY.hooks.title}
             description={SETUP_COPY.hooks.description}
-            actions={<span className="text-caption text-dim">{SETUP_COPY.optional}</span>}
+            actions={<Badge>{SETUP_COPY.optional}</Badge>}
             testId="setup-hooks"
           >
             <QueryView query={caps}>{(c) => <HooksSetup caps={c} />}</QueryView>

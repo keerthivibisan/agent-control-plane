@@ -3,6 +3,7 @@ import { ProjectMark } from '../../app/ProjectSwitcher';
 import { InfoTip } from '../../components/InfoTip';
 import { Pill, type PillTone } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
+import { Skeleton } from '../../components/Skeleton';
 import { boardPaths, boardSchemas } from '../../lib/api';
 import {
   ALL_PROJECTS_COPY,
@@ -48,7 +49,7 @@ export function ProjectCard({
       <div className="flex items-start gap-3">
         <ProjectMark name={project.name} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-title font-semibold tracking-tight">
+          <h3 className="truncate text-title font-semibold">
             <a
               href={href.project(project.id)}
               className="text-ink no-underline after:absolute after:inset-0 after:rounded-card"
@@ -71,12 +72,13 @@ export function ProjectCard({
         ) : null}
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="card-runs">
+      <div
+        className="mt-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-2"
+        data-testid="card-runs"
+      >
         {b ? (
           <>
-            <span className="text-caption font-medium tracking-wide text-dim uppercase">
-              {C.agents}
-            </span>
+            <span className="text-caption font-medium text-dim">{C.agents}</span>
             <span className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden="true"
@@ -96,11 +98,13 @@ export function ProjectCard({
         ) : board.error ? (
           <span className="text-unavailable">{C.runsUnavailable}</span>
         ) : (
-          <span className="text-dim">…</span>
+          <span className="inline-flex items-center gap-2 text-dim">
+            <Skeleton className="h-3.5 w-40" />…
+          </span>
         )}
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-4 text-caption">
+      <dl className="mt-auto grid grid-cols-2 gap-3 border-t border-line pt-4 text-caption">
         <div className="min-w-0">
           <dt className="text-dim">{C.sessionsLabel}</dt>
           <dd className="mt-0.5 font-medium">

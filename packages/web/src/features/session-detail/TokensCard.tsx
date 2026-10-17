@@ -22,7 +22,10 @@ function Part({
 }) {
   const { term: label, tip } = GLOSSARY[term];
   return (
-    <section aria-label={label} className="rounded-control bg-sunken/60 px-4 py-3.5">
+    <section
+      aria-label={label}
+      className="rounded-control border border-line bg-sunken/50 px-4 py-3.5"
+    >
       <h3 className="mb-3 flex items-center gap-1 font-medium">
         {label}
         <InfoTip tip={tip} label={label} />

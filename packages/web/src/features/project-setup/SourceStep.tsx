@@ -2,10 +2,11 @@ import type { ProjectDto } from '@acp/core/api';
 import { useId, useState } from 'react';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { CheckIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon } from '../../components/icons';
 import { ApiError, createRepoProject } from '../../lib/api';
 import { PROJECT_SETUP_COPY, SETUP_COPY } from '../../lib/copy';
 import { useQueryStore } from '../../lib/query';
+import { alertClass } from '../control/bits';
 import { useRegisterProject, type FieldErrors } from '../setup/register';
 import { ChoiceCards, TextAreaField, TextField } from './fields';
 import {
@@ -177,11 +178,9 @@ export function SourceStep({ state }: { state: SourceStepState }) {
       )}
       {failure ? (
         <div className="flex flex-col gap-2">
-          <p
-            role="alert"
-            className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
-          >
-            {failure.message}
+          <p role="alert" className={alertClass}>
+            <AlertIcon size={16} className="mt-0.5 shrink-0" />
+            <span className="min-w-0">{failure.message}</span>
           </p>
           <Details>
             <ErrorNotice error={failure.error} />
@@ -198,7 +197,7 @@ export function SourceDone({ project, created }: { project: ProjectDto; created:
     <div className="flex flex-col gap-3">
       <div
         role="status"
-        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/30 bg-success/10 px-3 py-2"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/25 bg-success/10 px-3 py-2"
       >
         <CheckIcon size={16} className="shrink-0 text-success" />
         <span>

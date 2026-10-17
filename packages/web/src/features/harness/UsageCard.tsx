@@ -1,7 +1,13 @@
 import type { ComponentType } from 'react';
 import { isProjectPageAvailable } from '../../app/project-pages';
 import { Card } from '../../components/Card';
-import { CheckIcon, HarnessIcon, TicketIcon, type IconProps } from '../../components/icons';
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  HarnessIcon,
+  TicketIcon,
+  type IconProps,
+} from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { HARNESS_PAGE_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
@@ -39,7 +45,10 @@ export function UsageCard({
       <ul className="flex flex-col gap-5">
         {USES.map(({ id, icon: Icon, title, text, tip }) => (
           <li key={id} data-use={id} className="flex gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-sunken text-dim">
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-sunken text-dim"
+            >
               <Icon size={16} />
             </span>
             <div className="min-w-0">
@@ -53,8 +62,12 @@ export function UsageCard({
         ))}
       </ul>
       {isProjectPageAvailable('workflow') ? (
-        <a href={href.projectPage(projectId, 'workflow')} className="mt-5 inline-block">
+        <a
+          href={href.projectPage(projectId, 'workflow')}
+          className="mt-5 inline-flex items-center gap-1 font-medium"
+        >
           {C.workflow}
+          <ArrowRightIcon size={14} />
         </a>
       ) : null}
     </Card>

@@ -1,6 +1,6 @@
 import type { CapabilitiesDto } from '@acp/core/api';
 import { useEffect, useState } from 'react';
-import { CheckIcon, CopyIcon } from '../../components/icons';
+import { CheckIcon, CopyIcon, InfoIcon } from '../../components/icons';
 import { SETUP_COPY } from '../../lib/copy';
 
 const C = SETUP_COPY.hooks;
@@ -39,7 +39,7 @@ export function CopyableCode({
     }
   };
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-sunken py-1.5 pr-1.5 pl-3">
+    <div className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-sunken py-1 pr-1 pl-3">
       <code className="min-w-0 flex-1 font-mono text-caption break-all">{text}</code>
       <span role="status" className="text-caption text-dim">
         {state === 'copied'
@@ -52,7 +52,7 @@ export function CopyableCode({
         type="button"
         onClick={copy}
         aria-label={SETUP_COPY.copy.action(label)}
-        className="inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim hover:bg-panel hover:text-ink"
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
       >
         {state === 'copied' ? <CheckIcon size={15} /> : <CopyIcon size={15} />}
       </button>
@@ -91,7 +91,7 @@ export function HooksSetup({ caps }: { caps: CapabilitiesDto }) {
         {caps.mode === 'demo' ? <p className="text-dim">{C.demo}</p> : null}
       </div>
       <div>
-        <h3 className="mb-1.5 font-semibold">{C.whatTheyAdd}</h3>
+        <h3 className="mb-2 font-semibold">{C.whatTheyAdd}</h3>
         <ul className="flex flex-col gap-1">
           {C.benefits.map((b) => (
             <li key={b} className="flex items-start gap-2">
@@ -102,7 +102,7 @@ export function HooksSetup({ caps }: { caps: CapabilitiesDto }) {
         </ul>
       </div>
       <div>
-        <h3 className="mb-1.5 font-semibold">{C.stepsTitle}</h3>
+        <h3 className="mb-2 font-semibold">{C.stepsTitle}</h3>
         <ol className="flex list-decimal flex-col gap-3 pl-5 marker:text-dim">
           <li className="pl-1">
             <p className="mb-1.5">{C.steps.print}</p>
@@ -117,8 +117,11 @@ export function HooksSetup({ caps }: { caps: CapabilitiesDto }) {
         <p className="text-dim">{C.receiverLabel}</p>
         <CopyableCode text={caps.hooks.receiverUrl} label={C.receiverName} />
       </div>
-      <p className="rounded-control bg-sunken px-3 py-2 text-dim">
-        {C.neverEdits} {C.serverDown}
+      <p className="flex items-start gap-2 rounded-control border border-line bg-sunken/60 px-3 py-2.5 text-dim">
+        <InfoIcon size={16} className="mt-0.5 shrink-0" />
+        <span>
+          {C.neverEdits} {C.serverDown}
+        </span>
       </p>
     </div>
   );

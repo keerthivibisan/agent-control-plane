@@ -69,7 +69,7 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
           // An invalid manifest usually lists nothing usable: no empty Checks card for it.
           const hasChecks = canRun || h.checks.length > 0;
           return (
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
               <StatusCard
                 className="xl:col-span-3"
                 harness={h}

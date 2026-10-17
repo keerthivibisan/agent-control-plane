@@ -2708,3 +2708,12 @@ export const FOLLOW_UP_COPY = {
   tagTip: 'Said after the run ended. The lead came back to answer; it reads but changes nothing.',
   divider: 'After the run ended',
 } as const;
+
+// --- UI refresh, remaining pages (U-F, wp/u-f-pages) --------------------------------------------
+//
+// Add-only. Words the refreshed pages need that had no home yet; the same text as before.
+
+export const PAGES_REFRESH_COPY = {
+  /** The loading words under a page-shaped skeleton (screen readers only), as QueryView says. */
+  loading: 'Loading…',
+} as const;

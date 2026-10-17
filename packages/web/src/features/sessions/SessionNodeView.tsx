@@ -24,7 +24,9 @@ export function SessionNodeView({ data }: NodeProps<SessionNode>) {
   return (
     <div
       className={`rounded-card border bg-panel px-3.5 py-3 text-ink shadow-card ${
-        data.isFocus ? 'border-accent ring-3 ring-accent/25' : 'border-line'
+        data.isFocus
+          ? 'border-accent ring-3 ring-accent/20'
+          : 'border-line hover:border-line-strong'
       }`}
       style={{ width: NODE_WIDTH }}
       data-testid={`node-${s.id}`}
@@ -66,7 +68,7 @@ export function SessionNodeView({ data }: NodeProps<SessionNode>) {
         <button
           type="button"
           onClick={() => toggle(s.id)}
-          className="nodrag mt-2 rounded-control px-1.5 py-0.5 text-caption text-accent hover:bg-sunken"
+          className="nodrag mt-2 rounded-control px-1.5 py-0.5 text-caption font-medium text-accent hover:bg-hover"
           aria-expanded={!data.collapsed}
         >
           {data.collapsed

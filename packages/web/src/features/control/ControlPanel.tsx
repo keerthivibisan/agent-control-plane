@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ButtonLink } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { EmptyState } from '../../components/EmptyState';
+import { AlertIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
@@ -30,7 +31,7 @@ function RunFacts({ run }: { run: RunDetailDto }) {
   const project = projects.data?.find((p) => p.id === run.projectId);
   return (
     <div className="mb-6 flex flex-col gap-3" data-testid="run-facts">
-      <dl className="flex flex-wrap gap-x-10 gap-y-4 rounded-card border border-line bg-panel px-5 py-4 shadow-card">
+      <dl className="flex flex-wrap gap-px overflow-hidden rounded-card border border-line bg-line shadow-card">
         <Fact label={C.facts.status}>
           <StatusWord status={RUN_STATUS_COPY[run.status]} value={run.status} />
         </Fact>
@@ -85,10 +86,18 @@ function StatusNote({ run }: { run: RunDetailDto }) {
   if (!['REVIEW', 'NEEDS_REVIEW', 'FAILED'].includes(run.status)) return null;
   const s = RUN_STATUS_COPY[run.status];
   const tone =
-    s.tone === 'problem' ? 'border-danger/30 bg-danger-soft' : 'border-warning/40 bg-warning-soft';
+    s.tone === 'problem'
+      ? 'border-danger/25 bg-danger-soft [&_svg]:text-danger'
+      : 'border-warning/30 bg-warning-soft [&_svg]:text-warning';
   return (
-    <p role="status" className={`mb-6 rounded-card border px-5 py-3 ${tone}`}>
-      <strong className="font-semibold">{s.word}.</strong> {s.tip}
+    <p
+      role="status"
+      className={`mb-6 flex items-start gap-2.5 rounded-card border px-5 py-3 ${tone}`}
+    >
+      <AlertIcon size={16} className="mt-0.5 shrink-0" />
+      <span>
+        <strong className="font-semibold">{s.word}.</strong> {s.tip}
+      </span>
     </p>
   );
 }

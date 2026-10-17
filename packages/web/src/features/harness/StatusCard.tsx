@@ -2,7 +2,7 @@ import type { HarnessStatusDto, TicketDto } from '@acp/core/api';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
-import { HarnessIcon } from '../../components/icons';
+import { AlertIcon, HarnessIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
@@ -85,7 +85,7 @@ function HarnessTicket({
     <div
       data-testid="harness-ticket"
       data-stage={ticket.stage}
-      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-control border border-line bg-sunken/60 px-4 py-3"
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-control border border-line bg-sunken px-4 py-3"
     >
       <span className="text-caption text-dim">{B.ticket}</span>
       <a href={href.ticket(ticket)} className="min-w-0 font-medium">
@@ -148,8 +148,8 @@ export function StatusCard({
   const required = harness.checks.filter((c) => c.required).length;
   const problemTone =
     state === 'invalid'
-      ? 'border-danger/30 bg-danger-soft text-danger'
-      : 'border-warning/30 bg-warning-soft text-warning';
+      ? 'border-danger/25 bg-danger-soft text-danger'
+      : 'border-warning/25 bg-warning-soft text-warning';
   return (
     <Card
       title={C.title}
@@ -176,13 +176,13 @@ export function StatusCard({
           <div className="flex items-start gap-4">
             <span
               aria-hidden="true"
-              className={`flex size-12 shrink-0 items-center justify-center rounded-2xl border ${ICON_FRAME[state]}`}
+              className={`flex size-11 shrink-0 items-center justify-center rounded-card border ${ICON_FRAME[state]}`}
             >
               <HarnessIcon size={22} />
             </span>
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-section font-semibold tracking-tight">{C.headline[state]}</p>
+                <p className="text-section font-semibold">{C.headline[state]}</p>
                 {harness.checks.length > 0 ? (
                   <Pill tone={HARNESS_TONE[state]}>
                     {C.counts(harness.checks.length, required)}
@@ -194,13 +194,16 @@ export function StatusCard({
           </div>
         )}
         {harness.problems.length > 0 ? (
-          <div className={`rounded-control border px-4 py-3 ${problemTone}`}>
-            <p className="font-medium">{C.problems}</p>
-            <ul className="mt-1 list-disc pl-5 text-ink">
-              {harness.problems.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
+          <div className={`flex gap-3 rounded-control border px-4 py-3 ${problemTone}`}>
+            <AlertIcon size={16} className="mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium">{C.problems}</p>
+              <ul className="mt-1 list-disc pl-5 text-ink marker:text-dim">
+                {harness.problems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         ) : null}
         <ActionError error={build.error} message={B.failed} />

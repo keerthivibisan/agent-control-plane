@@ -38,7 +38,7 @@ const COLUMNS: readonly Column<Check>[] = [
     label: C.command,
     // The argv as the server runs it, word by word; never a shell line (ADR-0017 §3).
     cell: (c) => (
-      <code className="rounded bg-sunken px-1.5 py-0.5 font-mono text-caption break-all">
+      <code className="rounded-[0.3125rem] border border-line bg-sunken px-1.5 py-0.5 font-mono text-caption break-all">
         {c.argv.join(' ')}
       </code>
     ),

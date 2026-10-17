@@ -2,6 +2,7 @@ import { APPROVAL_TIMEOUT_MS } from '@acp/core';
 import type { AgentRunDto, ApprovalDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
+import { AlertIcon } from '../../components/icons';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decideApproval } from '../../lib/api';
 import { CONTROL_COPY } from '../../lib/copy';
@@ -20,14 +21,14 @@ function Request({ approval, role }: { approval: ApprovalDto; role: string }) {
   const budget = approval.kind === 'budget-raise';
   return (
     <li
-      className="flex flex-col gap-2 rounded-control border border-line bg-panel px-4 py-3"
+      className="flex flex-col gap-2 rounded-control border border-line bg-panel px-4 py-3 shadow-card"
       data-testid={`approval-${approval.id}`}
     >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p>{budget ? C.budgetRaise(role) : C.toolUse(role)}</p>
           {budget ? null : (
-            <p className="rounded-control bg-sunken px-2.5 py-1.5 font-mono text-caption break-all">
+            <p className="rounded-control border border-line bg-sunken px-2.5 py-1.5 font-mono text-caption break-all">
               {approval.summary}
             </p>
           )}
@@ -76,9 +77,12 @@ export function Approvals({
         <section
           aria-label={C.title}
           data-testid="approvals"
-          className="rounded-card border border-warning/40 bg-warning-soft px-5 py-4 shadow-card"
+          className="rounded-card border border-warning/30 bg-warning-soft px-5 py-4 shadow-card"
         >
-          <h2 className="text-title font-semibold">{C.title}</h2>
+          <h2 className="flex items-center gap-2 text-title font-semibold">
+            <AlertIcon size={16} className="shrink-0 text-warning" />
+            {C.title}
+          </h2>
           <p className="mt-0.5 text-dim">
             {C.description} {C.timeout(Math.round(APPROVAL_TIMEOUT_MS / 60_000))}
           </p>

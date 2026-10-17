@@ -1,7 +1,8 @@
 import type { HarnessStatusDto } from '@acp/core/api';
 import { useMemo } from 'react';
 import { Button } from '../../components/Button';
-import { CheckIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon } from '../../components/icons';
+import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { createHarnessTicket, isProjectSetupPath } from '../../lib/api';
 import { SETUP_HARNESS_STATE_COPY, PROJECT_SETUP_COPY } from '../../lib/copy';
@@ -27,9 +28,12 @@ export function HarnessStatusView({ harness }: { harness: HarnessStatusDto }) {
       </div>
       <p className="max-w-3xl">{copy.tip}</p>
       {harness.problems.length > 0 ? (
-        <div className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2">
-          <p className="font-medium text-warning">{H.problems}</p>
-          <ul className="mt-1 list-disc pl-5">
+        <div className="rounded-control border border-warning/25 bg-warning-soft px-3 py-2.5">
+          <p className="flex items-center gap-2 font-medium text-warning">
+            <AlertIcon size={16} className="shrink-0" />
+            {H.problems}
+          </p>
+          <ul className="mt-1 list-disc pl-11 marker:text-dim">
             {harness.problems.map((p) => (
               <li key={p}>{p}</li>
             ))}
@@ -45,26 +49,24 @@ export function HarnessCheckList({ harness }: { harness: HarnessStatusDto }) {
   if (harness.state === 'none') return null;
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="font-medium">{H.checks}</h4>
+      <h4 className="text-caption font-medium text-dim">{H.checks}</h4>
       {harness.checks.length === 0 ? (
         <p className="text-dim">{H.noChecks}</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-line rounded-control border border-line">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line">
           {harness.checks.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+            <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
               <span className="font-medium">{c.name}</span>
-              <code className="rounded bg-sunken px-1.5 py-0.5 font-mono text-caption text-dim">
-                {c.id}
-              </code>
-              <span
-                className={`ml-auto rounded-full px-2 py-0.5 text-caption font-medium ${
-                  c.required ? 'bg-accent-soft text-accent' : 'bg-sunken text-dim'
-                }`}
-                title={c.required ? H.requiredTip : undefined}
-              >
-                {c.required ? H.required : H.optional}
+              <Badge mono>{c.id}</Badge>
+              <span className="ml-auto">
+                <Badge
+                  tone={c.required ? 'accent' : 'neutral'}
+                  {...(c.required ? { title: H.requiredTip } : {})}
+                >
+                  {c.required ? H.required : H.optional}
+                </Badge>
               </span>
-              <code className="basis-full break-all font-mono text-caption">
+              <code className="basis-full font-mono text-caption break-all text-ink">
                 {c.argv.join(' ')}
               </code>
               <span className="text-caption text-dim">
@@ -99,7 +101,7 @@ export function HarnessTicketAction({
       {ticket ? (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/30 bg-success/10 px-3 py-2"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-success/25 bg-success/10 px-3 py-2"
         >
           <CheckIcon size={16} className="shrink-0 text-success" />
           <span>
