@@ -7,9 +7,9 @@
 
 | Field   | Value                                                 |
 | ------- | ----------------------------------------------------- |
-| Status  | in-progress                                           |
+| Status  | review                                                |
 | Owner   | agent (RL-F)                                          |
-| Branch  | `wp/rl-f-fixes` (from `feature/ui-refresh` `fa58c87`) |
+| Branch  | `wp/rl-f-fixes` (from `feature/ui-refresh` `57ab978`) |
 | Started | 2026-10-17                                            |
 | Updated | 2026-10-17                                            |
 
@@ -24,8 +24,9 @@
 
 | Date       | What was done                                            | Commit    | Checks                                               |
 | ---------- | -------------------------------------------------------- | --------- | ---------------------------------------------------- |
-| 2026-10-17 | Bug A: resolve new paths through the nearest ancestor    | `310f41a` | format ✓ lint ✓ typecheck ✓ test 2520/2520 ✓ build ✓ |
-| 2026-10-17 | Bug B: one hand-over prompt to the lead at an idle point | (this)    | see commit                                           |
+| 2026-10-17 | Bug A: resolve new paths through the nearest ancestor    | `28ccab2` | format ✓ lint ✓ typecheck ✓ test 2520/2520 ✓ build ✓ |
+| 2026-10-17 | Bug B: one hand-over prompt to the lead at an idle point | `60c5d91` | format ✓ lint ✓ typecheck ✓ test 2529/2529 ✓ build ✓ |
+| 2026-10-17 | Rebased on `57ab978`; full e2e; to review                | (this)    | check ✓ test 2529/2529 ✓; e2e 60/60 ✓                |
 
 ## Decisions and findings
 
@@ -49,3 +50,10 @@
    `packages/server/tests/board/review-loop.test.ts`). The lead's post-approval brief and the
    `request_review` tool description now say it must hand over once every change is decided; the
    legacy (no loop) brief is unchanged.
+
+## Follow-ups (not in RL-F's paths)
+
+1. `packages/server/README.md` still says the allowlist is "Not active yet" (the managed adapter's
+   `PermissionRequest` carrying no tool input); the real run and the tests show it is active. A
+   docs fix for the coordinator.
+2. The second consented real run (owner's consent in chat) checks both fixes on real agents.
