@@ -4,6 +4,7 @@ import {
   createRun,
   decidePlan,
   leadToolCall,
+  recordChangeDecision,
   ticketBranchCreated,
 } from '../src/index.js';
 import type { EngineEffect, EngineResult, RunState } from '../src/index.js';
@@ -164,4 +165,30 @@ export function leadMessages(effects: readonly EngineEffect[]): string[] {
   return effectsOf(effects, 'send-to-agent')
     .filter((e) => e.agentRunId === LEAD)
     .map((e) => e.text);
+}
+
+export const A = 'wa-1';
+export const RA = 'rv-1';
+
+/** Helper A's change waits for the lead's decision (the review agent `rv-1` said approve). */
+export function inDecision(o: LoopOptions = {}): RunState {
+  const s = readyForReview(helper(loopRunning(o), 'API builder', 'wa'), A);
+  return ok(
+    leadTool(s, 'submit_review', { verdict: 'approve', findings: 'Looks right.' }, 'sr', RA),
+  ).state;
+}
+
+/** Helper A's change merged into the ticket branch by the lead; its review agent finished. */
+export function mergedA(o: LoopOptions = {}): RunState {
+  let s = inDecision(o);
+  s = ok(finishTurn(s, RA, 'success', 5500)).state;
+  s = ok(leadTool(s, 'merge_change', { agentId: A }, 'm')).state;
+  return ok(
+    recordChangeDecision(
+      s,
+      A,
+      { decision: 'merge', by: 'lead', outcome: 'merged', headCommit: 'def5678' },
+      makeCtx(7000, 'md'),
+    ),
+  ).state;
 }
