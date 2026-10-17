@@ -21,7 +21,7 @@ function Step({
   children: ReactNode;
 }) {
   return (
-    <li className="flex gap-4" data-step={n}>
+    <li className="group flex gap-4" data-step={n}>
       <div className="flex shrink-0 flex-col items-center pt-4">
         <span
           aria-hidden="true"
@@ -33,6 +33,8 @@ function Step({
         >
           {n}
         </span>
+        {/* A thin line down to the next step's number, so the steps read as one checklist. */}
+        <span aria-hidden="true" className="mt-2 -mb-8 w-px flex-1 bg-line group-last:hidden" />
       </div>
       <div className="min-w-0 flex-1">
         <span className="sr-only">

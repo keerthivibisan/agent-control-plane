@@ -3,6 +3,7 @@ import type { AgentRunDto, ApprovalDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { AlertIcon } from '../../components/icons';
+import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decideApproval } from '../../lib/api';
 import { CONTROL_COPY } from '../../lib/copy';
@@ -25,7 +26,8 @@ function Request({ approval, role }: { approval: ApprovalDto; role: string }) {
       data-testid={`approval-${approval.id}`}
     >
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* At least 14rem for the request, so in a narrow panel the buttons move below it. */}
+        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
           <p>{budget ? C.budgetRaise(role) : C.toolUse(role)}</p>
           {budget ? null : (
             <p className="rounded-control border border-line bg-sunken px-2.5 py-1.5 font-mono text-caption break-all">
@@ -77,7 +79,7 @@ export function Approvals({
         <section
           aria-label={C.title}
           data-testid="approvals"
-          className="rounded-card border border-warning/30 bg-warning-soft px-5 py-4 shadow-card"
+          className="rounded-card border border-warning/30 bg-warning-soft px-4 py-4 shadow-card sm:px-5"
         >
           <h2 className="flex items-center gap-2 text-title font-semibold">
             <AlertIcon size={16} className="shrink-0 text-warning" />
@@ -95,18 +97,21 @@ export function Approvals({
       ) : null}
       {decided.length > 0 ? (
         <Details summary={C.history(decided.length)} testId="approval-history">
-          <ul className="flex flex-col gap-2 text-caption">
+          <ul className="flex flex-col divide-y divide-line text-caption">
             {decided.map((a) => (
-              <li key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+              <li
+                key={a.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
+              >
                 <span className="font-medium">{roleOf(agents, a.agentRunId)}</span>
                 {a.kind === 'budget-raise' ? (
                   <span className="min-w-0 flex-1">{C.budgetRaiseShort}</span>
                 ) : (
                   <span className="min-w-0 flex-1 font-mono break-all">{a.summary}</span>
                 )}
-                <span className={a.status === 'approved' ? 'text-success' : 'text-dim'}>
+                <Pill tone={a.status === 'approved' ? 'success' : 'neutral'}>
                   {C.status[a.status]}
-                </span>
+                </Pill>
                 <RelativeTime iso={a.decidedAt ?? a.requestedAt} />
               </li>
             ))}

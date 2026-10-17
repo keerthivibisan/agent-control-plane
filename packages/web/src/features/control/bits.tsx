@@ -97,7 +97,8 @@ export function ConfirmAction({
     return (
       <Button
         variant={primary ? 'primary' : 'secondary'}
-        className={danger && !primary ? 'hover:border-danger/60' : ''}
+        // Its own width, also in a column (an agent card), where flex would stretch it.
+        className={`w-fit ${danger && !primary ? 'hover:border-danger/60 hover:text-danger' : ''}`}
         onClick={() => setAsking(true)}
         disabled={disabled || pending}
       >

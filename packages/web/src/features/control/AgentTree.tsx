@@ -30,11 +30,14 @@ export function BudgetBar({ budget }: { budget: AgentRunDto['budget'] }) {
   const v = budgetView(budget);
   const text = C.budgetText(formatCount(budget.used), formatCount(budget.limit));
   return (
-    <div className="flex flex-col gap-1" data-testid="budget">
-      <div className="flex flex-wrap items-center gap-x-1 text-caption">
+    // A container: in a narrow agent card the figure gets its own line, smaller and unbroken.
+    <div className="@container flex flex-col gap-1" data-testid="budget">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-caption">
         <span className="text-dim">{CONTROL_COPY.terms.budget.term}</span>
         <InfoTip tip={CONTROL_COPY.terms.budget.tip} label={CONTROL_COPY.terms.budget.term} />
-        <span className="ml-auto font-medium tabular-nums">{text}</span>
+        <span className="ml-auto font-medium whitespace-nowrap tabular-nums @max-[15rem]:ml-0 @max-[15rem]:basis-full @max-[15rem]:text-micro">
+          {text}
+        </span>
       </div>
       <div
         role="meter"
