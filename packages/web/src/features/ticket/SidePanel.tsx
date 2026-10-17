@@ -5,10 +5,14 @@ import type {
   ReviewDto,
   RunDetailDto,
 } from '@acp/core/api';
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { useRef, useState, type ReactNode } from 'react';
 import { ButtonLink } from '../../components/Button';
 import { EstimatedCost } from '../../components/EstimatedCost';
+import { enter, fade } from '../../components/motion';
 import { RelativeTime } from '../../components/RelativeTime';
+import { Skeleton } from '../../components/Skeleton';
+import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import { paths, schemas } from '../../lib/api';
 import {
   CONTROL_COPY,
@@ -120,7 +124,7 @@ function ActivityTab({ agent }: { agent: AgentRunDto }) {
   const items = events.data?.items.slice(0, ACTIVITY_LIMIT) ?? [];
   return (
     <div className="flex flex-col gap-3" data-testid="activity">
-      <p className="text-caption">
+      <p className="rounded-control border border-line bg-sunken px-3 py-2 text-caption">
         <span className="text-dim">{C.activity.latest}: </span>
         {agent.latestActivity ?? (
           <span className="text-unavailable">{CONTROL_COPY.agents.noActivity}</span>
@@ -129,23 +133,39 @@ function ActivityTab({ agent }: { agent: AgentRunDto }) {
       {agent.sessionId === null ? (
         <p className="text-dim">{C.activity.noSession}</p>
       ) : events.data === undefined ? (
-        <p className="text-dim">{events.error ? events.error.message : C.activity.loading}</p>
+        events.error ? (
+          <p className="text-dim">{events.error.message}</p>
+        ) : (
+          <div data-loading="" className="flex flex-col gap-3 py-1">
+            <span className="sr-only">{C.activity.loading}</span>
+            {[0, 1, 2].map((i) => (
+              <span key={i} aria-hidden="true" className="flex items-center gap-3">
+                <Skeleton className="size-1.5 rounded-full" />
+                <Skeleton className={`h-3.5 ${i === 2 ? 'w-1/2' : 'w-3/4'}`} />
+                <Skeleton className="ml-auto h-3 w-12" />
+              </span>
+            ))}
+          </div>
+        )
       ) : items.length === 0 ? (
         <p className="text-dim">{C.activity.empty}</p>
       ) : (
-        <ol className="flex flex-col" aria-label={C.activity.title}>
+        <ol
+          className="relative flex flex-col before:absolute before:top-3 before:bottom-3 before:left-[2.5px] before:border-l before:border-line"
+          aria-label={C.activity.title}
+        >
           {items.map((e) => (
             <li
               key={e.id}
               data-event-type={e.eventType}
-              className="flex items-baseline gap-3 border-b border-line/70 py-2 last:border-b-0"
+              className="relative flex items-baseline gap-3 py-1.5"
             >
               <span
                 aria-hidden="true"
-                className="inline-block size-1.5 shrink-0 translate-y-[-2px] rounded-full bg-line-strong"
+                className="inline-block size-1.5 shrink-0 translate-y-[-2px] rounded-full bg-line-strong ring-3 ring-panel"
               />
               <span className="min-w-0 flex-1 break-words">{describeEvent(e)}</span>
-              <span className="shrink-0 text-caption text-dim">
+              <span className="shrink-0 text-caption text-dim tabular-nums">
                 <RelativeTime iso={e.occurredAt ?? e.observedAt} />
               </span>
             </li>
@@ -164,7 +184,7 @@ function ActivityTab({ agent }: { agent: AgentRunDto }) {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <>
-      <dt className="text-dim">{label}</dt>
+      <dt className="text-caption leading-5 text-dim">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </>
   );
@@ -190,7 +210,7 @@ function DetailsTab({
   };
   return (
     <dl
-      className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2"
+      className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5"
       data-testid="details"
     >
       <Row label={D.kind}>{C.roles[agent.kind].term}</Row>
@@ -273,42 +293,53 @@ export function SidePanel({
 }) {
   const tabs = tabsFor(agent);
   const active = tabs.includes(tab) ? tab : (tabs[0] ?? 'activity');
-  const baseId = useId();
-  const refs = useRef(new Map<PanelTab, HTMLButtonElement>());
   const [draft, setDraft] = useState('');
   const chatInput = useRef<HTMLTextAreaElement | null>(null);
   const approvals = run.approvals.filter((a) => a.agentRunId === agent.id);
   const waiting = approvals.filter((a) => a.status === 'pending').length;
   const pendingReview = review?.state === 'pending';
 
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const i = tabs.indexOf(active);
-    const next =
-      e.key === 'ArrowRight'
-        ? tabs[(i + 1) % tabs.length]
-        : e.key === 'ArrowLeft'
-          ? tabs[(i - 1 + tabs.length) % tabs.length]
-          : e.key === 'Home'
-            ? tabs[0]
-            : e.key === 'End'
-              ? tabs[tabs.length - 1]
-              : undefined;
-    if (next === undefined) return;
-    e.preventDefault();
-    onTab(next);
-    refs.current.get(next)?.focus();
-  };
-
   const label = (t: PanelTab) =>
     t === 'approvals' && waiting > 0 ? (
       <>
         {C.panel.tabs[t]}{' '}
-        <span className="rounded-full bg-warning px-1.5 text-caption font-semibold text-panel tabular-nums">
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warning px-1 text-micro font-semibold text-panel tabular-nums">
           {waiting}
         </span>
       </>
     ) : (
       C.panel.tabs[t]
+    );
+
+  const body = (t: PanelTab): ReactNode =>
+    t === 'chat' ? (
+      <div className="-mx-5 -my-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none">
+        <Chat
+          runId={run.id}
+          messages={run.messages}
+          draft={draft}
+          onDraft={setDraft}
+          inputRef={chatInput}
+          speakerOf={(m) => speakerLabel(m, run.agents)}
+          followUpDivider={F.divider}
+          who={chatWho(run, agent)}
+          {...chatBox(run, agent)}
+        />
+      </div>
+    ) : t === 'activity' ? (
+      <ActivityTab agent={agent} />
+    ) : t === 'changes' ? (
+      <ChangesTab runId={run.id} agent={agent} review={review} checks={checks} />
+    ) : t === 'checks' ? (
+      <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={pendingReview} />
+    ) : t === 'approvals' ? (
+      approvals.length === 0 ? (
+        <p className="text-dim">{C.approvals.none}</p>
+      ) : (
+        <Approvals approvals={approvals} agents={run.agents} />
+      )
+    ) : (
+      <DetailsTab agent={agent} review={review} />
     );
 
   return (
@@ -317,80 +348,40 @@ export function SidePanel({
       data-testid="side-panel"
       className="flex min-w-0 flex-col rounded-card border border-line bg-panel shadow-card"
     >
-      <header className="flex flex-col gap-1 px-5 pt-4">
+      {/* A soft fade when another agent opens in the panel (the panel itself stays). */}
+      <motion.header
+        key={agent.id}
+        className="flex flex-col gap-1 px-5 pt-4"
+        initial={{ opacity: 0.4 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15 }}
+      >
         <span
-          className="text-caption tracking-wide text-dim uppercase"
+          className="text-micro font-medium tracking-wider text-dim uppercase"
           title={C.roles[agent.kind].tip}
         >
           {C.roles[agent.kind].term}
         </span>
         <h2 className="text-title font-semibold break-words">{agent.role}</h2>
-        <StatusWord status={agentStatusCopy(agent, run)} value={agent.status} />
-      </header>
-      <div
-        role="tablist"
-        aria-label={agent.role}
-        onKeyDown={onKeyDown}
-        className="mt-3 flex gap-x-1 overflow-x-auto border-b border-line px-3.5"
-      >
+        <span className="text-caption">
+          <StatusWord status={agentStatusCopy(agent, run)} value={agent.status} />
+        </span>
+      </motion.header>
+      <Tabs value={active} onValueChange={onTab}>
+        <TabList label={agent.role} className="mt-3 gap-3! px-5 text-[0.8125rem]">
+          {tabs.map((t) => (
+            <Tab key={t} value={t}>
+              {label(t)}
+            </Tab>
+          ))}
+        </TabList>
         {tabs.map((t) => (
-          <button
-            key={t}
-            ref={(el) => {
-              if (el) refs.current.set(t, el);
-              else refs.current.delete(t);
-            }}
-            type="button"
-            role="tab"
-            id={`${baseId}-tab-${t}`}
-            aria-selected={t === active}
-            aria-controls={`${baseId}-panel`}
-            tabIndex={t === active ? 0 : -1}
-            onClick={() => onTab(t)}
-            className={`inline-flex shrink-0 items-center gap-1 border-b-2 px-1.5 py-2 text-[0.8125rem] font-medium transition-colors ${
-              t === active ? 'border-accent text-ink' : 'border-transparent text-dim hover:text-ink'
-            }`}
-          >
-            {label(t)}
-          </button>
+          <TabPanel key={t} value={t} className="px-5 py-4">
+            {/* Each tab's content mounts when it opens, and fades in. */}
+            <motion.div {...enter(fade)}>{body(t)}</motion.div>
+          </TabPanel>
         ))}
-      </div>
-      <div
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={`${baseId}-tab-${active}`}
-        className="min-w-0 px-5 py-4"
-      >
-        {active === 'chat' ? (
-          <div className="-mx-5 -my-4 [&>section]:rounded-none [&>section]:border-0 [&>section]:shadow-none">
-            <Chat
-              runId={run.id}
-              messages={run.messages}
-              draft={draft}
-              onDraft={setDraft}
-              inputRef={chatInput}
-              speakerOf={(m) => speakerLabel(m, run.agents)}
-              followUpDivider={F.divider}
-              who={chatWho(run, agent)}
-              {...chatBox(run, agent)}
-            />
-          </div>
-        ) : active === 'activity' ? (
-          <ActivityTab agent={agent} />
-        ) : active === 'changes' ? (
-          <ChangesTab runId={run.id} agent={agent} review={review} checks={checks} />
-        ) : active === 'checks' ? (
-          <ChecksTab runId={run.id} agent={agent} checks={checks} canRunAgain={pendingReview} />
-        ) : active === 'approvals' ? (
-          approvals.length === 0 ? (
-            <p className="text-dim">{C.approvals.none}</p>
-          ) : (
-            <Approvals approvals={approvals} agents={run.agents} />
-          )
-        ) : (
-          <DetailsTab agent={agent} review={review} />
-        )}
-      </div>
+      </Tabs>
     </section>
   );
 }

@@ -3,6 +3,8 @@ import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { inputClass } from '../../components/Input';
+import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decidePlan } from '../../lib/api';
 import { PLAN_STATUS_COPY, TICKET_COPY } from '../../lib/copy';
@@ -18,25 +20,25 @@ export function PlanBody({ plan }: { plan: TicketPlanDto }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="whitespace-pre-wrap">{plan.summary}</p>
-      <ol className="flex flex-col gap-2" aria-label={C.title}>
+      <ol
+        className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line"
+        aria-label={C.title}
+      >
         {plan.steps.map((s, i) => (
-          <li
-            key={i}
-            className="flex gap-3 rounded-control border border-line bg-canvas px-3.5 py-2.5"
-          >
+          <li key={i} className="flex gap-3 px-4 py-3">
             <span
               aria-hidden="true"
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-caption font-semibold text-accent tabular-nums"
+              className="flex size-5 shrink-0 translate-y-px items-center justify-center rounded-full border border-accent/25 bg-accent-soft font-mono text-micro font-semibold text-accent tabular-nums"
             >
               {i + 1}
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                 <span className="font-medium">{s.title}</span>
-                <span className="rounded-full bg-sunken px-2 py-0.5 text-caption text-dim">
+                <Badge>
                   <span className="sr-only">{C.stepRole} </span>
                   {s.role}
-                </span>
+                </Badge>
               </div>
               {s.detail.length > 0 ? (
                 <p className="text-caption whitespace-pre-wrap text-dim">{s.detail}</p>
@@ -51,7 +53,7 @@ export function PlanBody({ plan }: { plan: TicketPlanDto }) {
 
 function PlanMeta({ plan }: { plan: TicketPlanDto }) {
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-dim">
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-dim tabular-nums">
       <span className="font-medium text-ink">{C.version(plan.version)}</span>
       <span>{C.helpers(plan.plannedHelpers)}</span>
       <span data-plan-status={plan.status}>{PLAN_STATUS_COPY[plan.status]}</span>
@@ -67,7 +69,7 @@ function PlanComments({ comments }: { comments: readonly TicketCommentDto[] }) {
       {comments.map((c) => (
         <li
           key={c.id}
-          className="rounded-control border-l-2 border-warning bg-warning-soft px-3 py-2"
+          className="rounded-control border border-l-2 border-warning/25 border-l-warning bg-warning-soft px-3 py-2"
         >
           <span className="text-caption font-medium">
             {c.author === 'owner'
@@ -151,12 +153,17 @@ export function PlanCard({
   };
 
   return (
-    <Card title={C.title} description={C.intro} testId="plan-card" className="border-accent/40">
+    <Card
+      title={C.title}
+      description={C.intro}
+      testId="plan-card"
+      className="border-accent/35! ring-3 ring-accent/10"
+    >
       <div className="flex flex-col gap-5">
         <PlanMeta plan={plan} />
         <PlanBody plan={plan} />
         <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <label htmlFor={inputId} className="font-medium">
+          <label htmlFor={inputId} className="text-caption font-medium">
             {C.commentLabel}
           </label>
           <textarea
@@ -170,9 +177,7 @@ export function PlanCard({
             placeholder={C.commentPlaceholder}
             aria-describedby={hintId}
             aria-invalid={missing || tooLong ? true : undefined}
-            className={`resize-y rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 ${
-              missing || tooLong ? 'border-danger' : 'border-line-strong'
-            }`}
+            className={inputClass('resize-y px-3 py-2')}
           />
           <span id={hintId} className="text-caption text-dim">
             {missing ? (
@@ -183,7 +188,7 @@ export function PlanCard({
               C.commentHint
             )}
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-1 flex flex-wrap gap-2">
             <Button variant="primary" disabled={decide.pending} onClick={approve}>
               {decide.pending ? C.approving : C.approve}
             </Button>

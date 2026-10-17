@@ -7,6 +7,8 @@ import type {
   WorkflowStageState,
 } from '@acp/core/api';
 import {
+  Background,
+  BackgroundVariant,
   Handle,
   Position,
   ReactFlow,
@@ -18,6 +20,7 @@ import {
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { AlertIcon } from '../../components/icons';
 import { Pill, type PillTone } from '../../components/Pill';
 import {
   continueRun,
@@ -85,15 +88,23 @@ const STATE_TONE: Record<WorkflowStageState, PillTone> = {
   skipped: 'neutral',
 };
 
+// v2: a 1.5px state outline just outside the node, with a soft halo of the same hue; the graph's
+// own background (`canvas`) shows between them.
 const STATE_RING: Record<WorkflowStageState, string> = {
   off: '',
   waiting: '',
-  active: 'ring-2 ring-accent/70 ring-offset-2 ring-offset-panel',
-  'needs-you': 'ring-2 ring-warning ring-offset-2 ring-offset-panel',
+  active:
+    'outline-[1.5px] outline-offset-2 outline-accent outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent)_12%,transparent)]',
+  'needs-you':
+    'outline-[1.5px] outline-offset-2 outline-warning outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-warning)_14%,transparent)]',
   done: '',
-  failed: 'ring-2 ring-danger/70 ring-offset-2 ring-offset-panel',
+  failed:
+    'outline-[1.5px] outline-offset-2 outline-danger outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-danger)_12%,transparent)]',
   skipped: '',
 };
+
+const DONE_RING =
+  'outline-[1.5px] outline-offset-2 outline-success outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-success)_12%,transparent)]';
 
 /** A stage's node with its state: a ring while it works or waits for you, and a word on top. */
 function LiveFrame({ stage, children }: { stage: WorkflowStageId; children: ReactNode }) {
@@ -106,10 +117,10 @@ function LiveFrame({ stage, children }: { stage: WorkflowStageId; children: Reac
       data-testid={`live-${stage}`}
       data-state={state}
     >
-      <div className={`h-full w-full ${faded ? 'opacity-70' : ''}`}>{children}</div>
+      <div className={`h-full w-full ${faded ? 'opacity-60' : ''}`}>{children}</div>
       {/* "Off" is already on the node itself. */}
       {state === 'off' ? null : (
-        <span className="pointer-events-none absolute -top-3 right-3">
+        <span className="pointer-events-none absolute -top-2.5 right-3 rounded-full bg-panel">
           <Pill tone={STATE_TONE[state]} testId="stage-state-word">
             {C.states[state]}
           </Pill>
@@ -164,7 +175,7 @@ function LiveTerminalNode(props: NodeProps<TerminalNode>) {
   const lit = props.data.terminal === 'done' && live?.completed === true;
   return (
     <div
-      className={`relative h-full w-full rounded-full ${lit ? 'ring-2 ring-success/70 ring-offset-2 ring-offset-panel' : ''}`}
+      className={`relative h-full w-full rounded-full ${lit ? DONE_RING : ''}`}
       data-testid={`live-${props.data.terminal}`}
       data-state={lit ? 'done' : undefined}
     >
@@ -267,10 +278,11 @@ function HeldNotice({ runId, stage }: { runId: string; stage: PostMergeStage }) 
       role="status"
       data-testid="held-stage"
       data-stage={stage}
-      className="mx-6 mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-control border border-warning/40 bg-warning-soft px-4 py-3"
+      className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-control border border-warning/30 bg-warning-soft px-4 py-3"
     >
+      <AlertIcon size={16} className="shrink-0 self-start text-warning" />
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-warning">{C.held.title(name)}</p>
+        <p className="font-medium text-ink">{C.held.title(name)}</p>
         <p className="text-dim">{C.held.text(name)}</p>
       </div>
       <Button variant="primary" disabled={go.pending} onClick={() => void go.run(runId)}>
@@ -345,7 +357,9 @@ export function LiveWorkflow({
       <div className="pt-4">
         {held !== null ? <HeldNotice runId={run.id} stage={held} /> : null}
         <div
-          className="w-full overflow-hidden"
+          className={`w-full overflow-hidden border-t border-line ${
+            changed || reviewerComments > 0 ? '' : 'rounded-b-card'
+          }`}
           style={{
             aspectRatio: `${graph.width} / ${graph.height + 40}`,
             maxHeight: 620,
@@ -377,12 +391,13 @@ export function LiveWorkflow({
               maxZoom={1}
               proOptions={{ hideAttribution: true }}
             >
+              <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
               <FitOnResize />
             </ReactFlow>
           </LiveRunContext.Provider>
         </div>
         {changed || reviewerComments > 0 ? (
-          <div className="flex flex-col gap-1 border-t border-line px-6 py-3 text-caption text-dim">
+          <div className="flex flex-col gap-1 border-t border-line px-5 py-3 text-caption text-dim">
             {reviewerComments > 0 ? (
               // A button, not a hash link: the hash is the app's route.
               <button

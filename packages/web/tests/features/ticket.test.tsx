@@ -43,7 +43,13 @@ import { createApiClient, updateTicket, type FetchLike } from '../../src/lib/api
 import { parseRoute } from '../../src/lib/router';
 import { QueryStore } from '../../src/lib/query-store';
 import { project } from '../fixtures/dto';
-import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
+import {
+  fakeServer,
+  jsonResponse,
+  renderWithApi,
+  type FakeServer,
+  type RouteTable,
+} from '../helpers';
 
 const TICKET = `/api/tickets/${TICKET_ID}`;
 const webApp = project({ id: PROJECT_ID, name: 'web-app' });
@@ -308,13 +314,18 @@ describe('ticket page: agents working', () => {
     renderTicket(server(workingScenario()));
     const panel = await screen.findByTestId('side-panel');
     const chat = within(panel).getByRole('tab', { name: 'Chat' });
+    // The shared Tabs (Radix) move focus, and with it the selection, on the next tick.
     fireEvent.keyDown(chat, { key: 'ArrowRight' });
-    expect(within(panel).getByRole('tab', { name: 'Activity' }).getAttribute('aria-selected')).toBe(
-      'true',
+    await waitFor(() =>
+      expect(
+        within(panel).getByRole('tab', { name: 'Activity' }).getAttribute('aria-selected'),
+      ).toBe('true'),
     );
     fireEvent.keyDown(chat, { key: 'End' });
-    expect(within(panel).getByRole('tab', { name: 'Details' }).getAttribute('aria-selected')).toBe(
-      'true',
+    await waitFor(() =>
+      expect(
+        within(panel).getByRole('tab', { name: 'Details' }).getAttribute('aria-selected'),
+      ).toBe('true'),
     );
     expect(within(panel).getByTestId('details').textContent).toContain(LEAD);
   });
@@ -791,5 +802,37 @@ describe('ticket api client', () => {
       kind: 'parse',
     });
     expect(mutations(s)).toEqual([]);
+  });
+});
+
+// --- UI refresh (U-D): the ticket page's loading shape and header tags -------------------------
+
+describe('ticket page: look (UI refresh U-D)', () => {
+  it('shows a page-shaped skeleton while the ticket loads, with the loading words kept', () => {
+    // The ticket never answers: the page stays in its loading state.
+    const pending: FakeServer = { fetch: () => new Promise<Response>(() => {}), calls: [] };
+    const { container } = renderWithApi(<TicketPage id={TICKET_ID} />, pending);
+    const loading = container.querySelector('[data-loading]');
+    expect(loading).not.toBeNull();
+    expect(loading?.textContent).toBe('Loading the ticket…');
+    expect(loading?.querySelectorAll('[data-skeleton]').length).toBeGreaterThan(3);
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+  });
+
+  it('shows the type, priority and labels as tags, urgency in the tone as well as the word', async () => {
+    renderTicket(server(workingScenario()));
+    const heading = await screen.findByRole('heading', { level: 1 });
+    const header = heading.closest('header');
+    expect(header).not.toBeNull();
+    const tags = [...(header?.querySelectorAll('[data-tone]') ?? [])].map((t) => [
+      t.textContent,
+      t.getAttribute('data-tone'),
+    ]);
+    expect(tags).toEqual([
+      ['Feature', 'neutral'],
+      ['High priority', 'warning'],
+      ['ui', 'neutral'],
+      ['settings', 'neutral'],
+    ]);
   });
 });

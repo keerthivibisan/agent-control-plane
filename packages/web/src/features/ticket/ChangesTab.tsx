@@ -1,11 +1,12 @@
 import type { AgentRunDto, CheckRunDto, ReviewDto } from '@acp/core/api';
 import { useId, useState } from 'react';
-import { Button } from '../../components/Button';
+import { Button, buttonClass } from '../../components/Button';
 import { Details } from '../../components/Details';
+import { inputClass } from '../../components/Input';
 import { reviewAction } from '../../lib/api';
 import { CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
-import { ActionError, ConfirmAction, dangerButtonClass } from '../control/bits';
+import { ActionError, ConfirmAction } from '../control/bits';
 import { DiffView } from '../control/ReviewPanel';
 import { isAgentLive } from '../control/run-state';
 import { useTicketAction } from './actions';
@@ -22,15 +23,18 @@ function Files({ review }: { review: AgentReview }) {
   return (
     <div>
       <p className="text-caption font-medium">{R.files(review.files.length)}</p>
-      <ul className="mt-1 divide-y divide-line">
+      <ul className="mt-1.5 divide-y divide-line overflow-hidden rounded-control border border-line">
         {review.files.map((f) => (
-          <li key={f.path} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-1">
+          <li
+            key={f.path}
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-2.5 py-1.5 hover:bg-hover"
+          >
             <span className="w-16 shrink-0 text-caption text-dim">{R.fileStatus[f.status]}</span>
             <span className="min-w-0 flex-1 font-mono text-caption break-all">{f.path}</span>
             {f.additions === null && f.deletions === null ? (
               <span className="text-caption text-unavailable">{R.linesNotReported}</span>
             ) : (
-              <span className="flex gap-2 text-caption tabular-nums">
+              <span className="flex gap-2 font-mono text-caption tabular-nums">
                 {f.additions !== null ? (
                   <span className="text-success" title={R.added(f.additions)}>
                     +{formatCount(f.additions)}
@@ -100,7 +104,7 @@ function MergeAnyway({
         aria-invalid={tooLong ? true : undefined}
         // Focus lands in the box: the reason comes first.
         autoFocus
-        className="resize-y rounded-control border border-line-strong bg-panel px-3 py-2 text-ink placeholder:text-dim/70"
+        className={inputClass('resize-y px-3 py-2')}
       />
       <span id={hintId} className="text-caption text-dim">
         {tooLong ? <span className="text-danger">{C.reasonTooLong}</span> : C.reasonHint}
@@ -108,7 +112,7 @@ function MergeAnyway({
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          className={dangerButtonClass}
+          className={buttonClass('danger')}
           disabled={pending || trimmed.length === 0 || tooLong}
         >
           {pending ? R.working : C.confirmMergeAnyway}
@@ -149,7 +153,7 @@ function ReviewActions({
       {gate.kind === 'blocked' ? (
         <p
           role="alert"
-          className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
+          className="rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger"
           data-testid="merge-blocked"
         >
           {C.blocked(gate.failing.map((c) => c.name).join(', '))}
@@ -209,10 +213,12 @@ export function ChangesTab({
   const pending = review.state === 'pending';
   return (
     <div className="flex flex-col gap-3" data-testid="changes">
-      <p className="flex flex-wrap items-baseline gap-x-3 text-caption">
+      <p className="flex flex-wrap items-center gap-x-3 text-caption">
         <span className="text-dim">{R.into(review.baseBranch)}</span>
         <span
-          className={`ml-auto font-medium ${pending ? 'text-warning' : 'text-dim'}`}
+          className={`ml-auto inline-flex h-5 items-center rounded-full border px-2 font-medium ${
+            pending ? 'border-warning/25 bg-warning-soft text-warning' : 'border-line text-dim'
+          }`}
           data-state={review.state}
         >
           {R.state[review.state]}

@@ -2,6 +2,7 @@ import type { AgentRunDto, CheckRunDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { InfoTip } from '../../components/InfoTip';
+import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { runAgentChecks } from '../../lib/api';
 import { CHECK_STATUS_COPY, TICKET_COPY, type ControlStatusCopy } from '../../lib/copy';
@@ -33,7 +34,7 @@ export function CheckStatus({ check }: { check: Pick<CheckRunDto, 'status'> }) {
     <span className="inline-flex items-center gap-1.5" data-check-status={check.status}>
       <span
         aria-hidden="true"
-        className={`inline-flex size-5 items-center justify-center rounded-full text-caption font-bold ${m.className}`}
+        className={`inline-flex size-[1.125rem] items-center justify-center rounded-full text-micro font-semibold ${m.className}`}
       >
         {m.sign}
       </span>
@@ -44,20 +45,13 @@ export function CheckStatus({ check }: { check: Pick<CheckRunDto, 'status'> }) {
 
 function CheckRow({ check }: { check: CheckRunDto }) {
   return (
-    <li
-      className="flex flex-col gap-2 rounded-control border border-line bg-panel px-3.5 py-2.5"
-      data-testid={`check-${check.checkId}`}
-    >
+    <li className="flex flex-col gap-2 px-3.5 py-2.5" data-testid={`check-${check.checkId}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <CheckStatus check={check} />
         <span className="font-medium">{check.name}</span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-caption ${
-            check.required ? 'bg-accent-soft text-accent' : 'bg-sunken text-dim'
-          }`}
-        >
+        <Badge tone={check.required ? 'accent' : 'neutral'}>
           {check.required ? C.required : C.optional}
-        </span>
+        </Badge>
         <span className="ml-auto text-caption text-dim tabular-nums">
           {C.duration(formatDuration(check.durationMs))} ·{' '}
           {check.exitCode === null ? C.noExitCode : C.exitCode(check.exitCode)}
@@ -67,7 +61,7 @@ function CheckRow({ check }: { check: CheckRunDto }) {
         {check.outputTail.length === 0 ? (
           <p className="text-dim">{C.noOutput}</p>
         ) : (
-          <pre className="max-h-64 overflow-auto rounded-control bg-canvas p-2.5 font-mono text-caption leading-5 whitespace-pre-wrap">
+          <pre className="max-h-64 overflow-auto rounded-control border border-line bg-sunken p-2.5 font-mono text-caption leading-5 whitespace-pre-wrap">
             {check.outputTail}
           </pre>
         )}
@@ -112,7 +106,10 @@ export function ChecksTab({
       </div>
       <ActionError error={again.error} message={C.runFailed} />
       {latest.length > 0 ? (
-        <ul className="flex flex-col gap-2" aria-label={C.title}>
+        <ul
+          className="flex flex-col divide-y divide-line rounded-card border border-line"
+          aria-label={C.title}
+        >
           {latest.map((c) => (
             <CheckRow key={c.id} check={c} />
           ))}

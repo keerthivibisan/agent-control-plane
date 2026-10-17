@@ -4,12 +4,26 @@ import type {
   ReviewDto,
   RunDetailDto,
   TicketDetailDto,
+  TicketDto,
 } from '@acp/core/api';
-import { useId, useState } from 'react';
+import { motion } from 'motion/react';
+import { useId, useState, type ComponentType } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
+import {
+  AlertIcon,
+  BugIcon,
+  ChoreIcon,
+  FeatureIcon,
+  HarnessIcon,
+  type IconProps,
+} from '../../components/icons';
+import { fieldClass } from '../../components/Input';
+import { enter, fadeUp, slideInRight } from '../../components/motion';
 import { PageHeader } from '../../components/PageHeader';
+import { Badge, type PillTone } from '../../components/Pill';
 import { QueryView } from '../../components/QueryView';
+import { Skeleton } from '../../components/Skeleton';
 import {
   controlPaths,
   controlSchemas,
@@ -107,7 +121,7 @@ function RunPicker({
         id={id}
         value={runId}
         onChange={(e) => onPick(e.target.value)}
-        className="rounded-control border border-line bg-panel px-2.5 py-1.5 text-ink"
+        className={`h-8 py-0 pr-7 pl-2.5 text-caption font-medium tabular-nums ${fieldClass}`}
       >
         {detail.runs.map((r) => (
           <option key={r.id} value={r.id}>
@@ -128,11 +142,11 @@ function RunPicker({
  * left out for the current run: the stage pill in the header already says it, in the board's word.
  */
 function Summary({ run, isCurrent }: { run: RunDetailDto | undefined; isCurrent: boolean }) {
-  if (run === undefined) return <p className="text-dim">{C.summary.noRun}</p>;
+  if (run === undefined) return <p className="text-caption text-dim">{C.summary.noRun}</p>;
   const waiting = run.approvals.filter((a) => a.status === 'pending').length;
   return (
     <p
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-dim tabular-nums"
       data-testid="ticket-summary"
     >
       {showRunStatus(isCurrent, run.status) ? (
@@ -143,7 +157,7 @@ function Summary({ run, isCurrent }: { run: RunDetailDto | undefined; isCurrent:
           </span>
         </>
       ) : null}
-      <span>{C.summary.agents(run.agents.length)}</span>
+      <span className="text-ink">{C.summary.agents(run.agents.length)}</span>
       {waiting > 0 ? (
         <>
           <span aria-hidden="true" className="text-dim">
@@ -155,7 +169,7 @@ function Summary({ run, isCurrent }: { run: RunDetailDto | undefined; isCurrent:
       <span aria-hidden="true" className="text-dim">
         ·
       </span>
-      <span>{C.summary.budget(runBudgetUsed(run.agents))}</span>
+      <span className="text-ink">{C.summary.budget(runBudgetUsed(run.agents))}</span>
     </p>
   );
 }
@@ -180,30 +194,30 @@ function ReviewList({
     <section
       aria-label={C.review.title}
       data-testid="review-list"
-      className="rounded-card border border-warning/40 bg-warning-soft px-5 py-4 shadow-card"
+      className="rounded-card border border-warning/30 bg-warning-soft px-5 py-4"
     >
-      <h2 className="text-title font-semibold">{C.review.title}</h2>
+      <h2 className="flex items-center gap-2 text-title font-semibold">
+        <AlertIcon size={16} className="text-warning" />
+        {C.review.title}
+      </h2>
       <p className="mt-0.5 text-dim">{C.review.description}</p>
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="mt-3 flex flex-col divide-y divide-line overflow-hidden rounded-control border border-line bg-panel">
         {waiting.map((a) => {
           const gate = mergeGate(agentChecks(checks, a.id).latest);
           const review = reviews.find((r) => r.agentRunId === a.id);
           return (
-            <li
-              key={a.id}
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-control border border-line bg-panel px-4 py-2.5"
-            >
+            <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
               <span className="font-medium">{a.role}</span>
               <span className="text-caption text-dim">
                 {C.review.files(review ? review.files.length : (a.review?.changedFiles ?? null))}
               </span>
               <span className="text-caption">
                 {gate.kind === 'blocked' ? (
-                  <span aria-hidden="true" className="mr-1 font-bold text-danger">
+                  <span aria-hidden="true" className="mr-1.5 font-semibold text-danger">
                     ✗
                   </span>
                 ) : gate.kind === 'passed' ? (
-                  <span aria-hidden="true" className="mr-1 font-bold text-success">
+                  <span aria-hidden="true" className="mr-1.5 font-semibold text-success">
                     ✓
                   </span>
                 ) : null}
@@ -277,14 +291,18 @@ function RunView({
   ).length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <LiveWorkflow
         run={run}
         projectId={detail.ticket.projectId}
         reviewerComments={reviewerComments}
         onSelectAgent={(id, stage) => onSelect(id, stage === 'review' ? 'changes' : undefined)}
       />
-      {pending.length > 0 ? <Approvals approvals={pending} agents={run.agents} /> : null}
+      {pending.length > 0 ? (
+        <motion.div {...enter(fadeUp)}>
+          <Approvals approvals={pending} agents={run.agents} />
+        </motion.div>
+      ) : null}
       <ReviewList
         run={run}
         reviews={reviews}
@@ -292,7 +310,7 @@ function RunView({
         onOpen={(id) => onSelect(id, 'changes')}
       />
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-5">
           {plan ? (
             <PlanCard
               ticketId={detail.ticket.id}
@@ -316,7 +334,11 @@ function RunView({
           )}
         </div>
         {selected ? (
-          <div className="min-w-0 xl:sticky xl:top-6">
+          // Sticky under the top bar; slides in once when the run opens.
+          <motion.div
+            className="min-w-0 xl:sticky xl:top-[calc(var(--spacing-topbar)+1.25rem)]"
+            {...enter(slideInRight)}
+          >
             <SidePanel
               run={run}
               agent={selected}
@@ -325,8 +347,74 @@ function RunView({
               review={reviews.find((r) => r.agentRunId === selected.id)}
               checks={checks}
             />
-          </div>
+          </motion.div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+const TYPE_ICON: Record<TicketDto['type'], ComponentType<IconProps>> = {
+  feature: FeatureIcon,
+  bug: BugIcon,
+  chore: ChoreIcon,
+  harness: HarnessIcon,
+};
+
+/** Urgency reads in the tag's tone as well as its word. */
+const PRIORITY_TONE: Record<TicketDto['priority'], PillTone> = {
+  low: 'neutral',
+  medium: 'neutral',
+  high: 'warning',
+  urgent: 'danger',
+};
+
+/** "Feature" with its icon (the icon adds no text). */
+function TypeBadge({ type }: { type: TicketDto['type'] }) {
+  const Icon = TYPE_ICON[type];
+  return (
+    <Badge>
+      <span className="inline-flex items-center gap-1">
+        <Icon size={12} />
+        {C.type[type]}
+      </span>
+    </Badge>
+  );
+}
+
+/**
+ * The page's shape while the ticket loads: header, workflow, agents and panel. The loading words
+ * stay in the page for screen readers, as in `LoadingBlock`.
+ */
+function TicketSkeleton() {
+  return (
+    <div data-loading="" className="flex flex-col gap-5">
+      <span className="sr-only">{C.loading}</span>
+      <div aria-hidden="true" className="flex flex-col gap-2.5">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-7 w-80 max-w-full" />
+        <div className="flex gap-1.5">
+          <Skeleton className="h-6 w-28 rounded-full" />
+          <Skeleton className="h-5 w-16" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+      </div>
+      <div aria-hidden="true" className="rounded-card border border-line bg-panel p-5">
+        <Skeleton className="mb-4 h-4 w-24" />
+        <Skeleton className="h-56 w-full rounded-card" />
+      </div>
+      <div aria-hidden="true" className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
+        <div className="rounded-card border border-line bg-panel p-5">
+          <Skeleton className="mb-5 h-4 w-20" />
+          <div className="flex justify-center gap-3">
+            <Skeleton className="h-36 w-48 rounded-card" />
+          </div>
+        </div>
+        <div className="rounded-card border border-line bg-panel p-5">
+          <Skeleton className="mb-2 h-3 w-20" />
+          <Skeleton className="mb-5 h-4 w-28" />
+          <Skeleton className="h-28 w-full rounded-card" />
+        </div>
       </div>
     </div>
   );
@@ -362,28 +450,29 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
   return (
     <div>
       <PageHeader
-        eyebrow={<a href={href.board(ticket.projectId)}>← {C.backToBoard}</a>}
+        eyebrow={
+          <a href={href.board(ticket.projectId)} className="text-dim no-underline hover:text-ink">
+            ← {C.backToBoard}
+          </a>
+        }
         title={
           <span>
-            <span className="mr-2 font-mono text-dim">{ticket.key}</span>
+            <span className="mr-2.5 font-mono font-medium text-dim">{ticket.key}</span>
             {ticket.title}
           </span>
         }
         description={
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="mt-1 flex flex-wrap items-center gap-1.5">
             <span
-              className="inline-flex items-center rounded-full border border-line bg-panel px-2.5 py-0.5"
+              className="inline-flex h-6 items-center rounded-full border border-line bg-panel px-2.5 text-caption font-medium text-ink"
               data-testid="ticket-stage"
             >
               <StatusWord status={stage} value={ticket.stage} />
             </span>
-            <span>{C.type[ticket.type]}</span>
-            <span aria-hidden="true">·</span>
-            <span>{C.priority[ticket.priority]}</span>
+            <TypeBadge type={ticket.type} />
+            <Badge tone={PRIORITY_TONE[ticket.priority]}>{C.priority[ticket.priority]}</Badge>
             {ticket.labels.map((l) => (
-              <span key={l} className="rounded-full bg-sunken px-2 py-0.5 text-caption">
-                {l}
-              </span>
+              <Badge key={l}>{l}</Badge>
             ))}
           </span>
         }
@@ -400,20 +489,21 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
           </>
         }
       />
-      <div className="mb-6 flex flex-col gap-3">
+      <div className="-mt-2 mb-5 flex flex-col gap-3">
         <Summary run={run} isCurrent={isCurrent} />
         {note !== null ? (
           <p
             role="status"
-            className="rounded-card border border-danger/30 bg-danger-soft px-5 py-3"
+            className="flex items-center gap-2.5 rounded-card border border-danger/25 bg-danger-soft px-4 py-2.5 text-ink"
           >
+            <AlertIcon size={16} className="text-danger" />
             {C.lastRun[note]}
           </p>
         ) : null}
         {!isCurrent ? (
           <p
             role="status"
-            className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-sunken px-5 py-3"
+            className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-sunken px-4 py-2.5"
           >
             {C.runPicker.earlier}
             <button
@@ -442,7 +532,7 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
           {() => null}
         </QueryView>
       ) : null}
-      <div className="mt-8">
+      <div className="mt-6">
         <TicketInfo detail={detail} shownRunId={run?.id ?? null} onShowRun={showRun} />
       </div>
     </div>
@@ -469,6 +559,7 @@ export function TicketPage({ id }: { id: string }) {
       />
     );
   }
+  if (detail.data === undefined && detail.error === null) return <TicketSkeleton />;
   return (
     <QueryView query={detail} loading={C.loading}>
       {(d) => <Ticket detail={d} />}

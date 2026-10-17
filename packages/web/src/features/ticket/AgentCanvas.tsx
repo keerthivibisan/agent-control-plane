@@ -1,6 +1,9 @@
 import type { AgentRunDto } from '@acp/core/api';
 import { useId, useState, type KeyboardEvent } from 'react';
+import { buttonClass } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ArrowRightIcon } from '../../components/icons';
+import { fieldClass } from '../../components/Input';
 import { messageAgent, sendChat, stopAgent } from '../../lib/api';
 import { AGENT_FINISHED_COPY, AGENT_STATUS_COPY, CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
@@ -100,42 +103,21 @@ function PromptBox({ agent, runId }: { agent: AgentRunDto; runId: string }) {
                 : C.messagePlaceholder
           }
           aria-invalid={tooLong ? true : undefined}
-          className={`min-w-0 flex-1 rounded-control border bg-canvas px-2 py-1.5 text-caption text-ink placeholder:text-dim/70 ${
-            tooLong ? 'border-danger' : 'border-line'
-          }`}
+          className={`h-8 flex-1 px-2 py-0 text-caption ${fieldClass}`}
         />
         <button
           type="submit"
           aria-label={C.send}
           title={C.send}
           disabled={action.pending || tooLong || text.trim().length === 0}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-control border border-accent bg-accent text-accent-ink hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`${buttonClass('primary')} w-8 px-0!`}
         >
-          <SendIcon />
+          <ArrowRightIcon size={15} />
         </button>
       </div>
       {tooLong ? <span className="text-caption text-danger">{C.tooLong}</span> : null}
       <ActionError error={action.error} message={C.sendFailed} />
     </form>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
   );
 }
 
@@ -163,44 +145,57 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       // A click anywhere on the card selects it; the header button is the keyboard way.
       onClick={() => ctx.onSelect(agent.id)}
       data-kind={agent.kind}
-      className={`relative flex w-48 flex-col gap-2 rounded-card border bg-panel px-3 py-3 text-left shadow-card transition-shadow ${
-        selected ? 'border-accent ring-2 ring-accent/25' : 'border-line hover:border-line-strong'
-      } ${waiting > 0 ? 'border-t-4 border-t-warning' : ''}`}
+      // A request waiting for you: a warning line along the top edge (with the words below it).
+      className={`relative flex w-48 cursor-pointer flex-col gap-2.5 rounded-card border bg-panel p-3 text-left transition-[border-color,box-shadow] duration-150 ${
+        selected
+          ? 'border-accent ring-3 ring-accent/20'
+          : waiting > 0
+            ? 'border-warning/60 hover:border-warning'
+            : 'border-line hover:border-line-strong'
+      } ${
+        waiting > 0
+          ? 'shadow-[inset_0_2px_0_var(--color-warning)]'
+          : selected
+            ? 'shadow-card'
+            : 'shadow-card hover:shadow-raised'
+      }`}
     >
-      <header className="flex flex-col gap-1">
+      <header className="flex flex-col gap-1.5">
         <button
           type="button"
           onClick={() => ctx.onSelect(agent.id)}
           aria-pressed={selected}
           aria-label={C.select(agent.role)}
-          className="rounded-control text-left"
+          className="flex flex-col gap-0.5 rounded-control text-left"
         >
           <span
-            className="block text-caption tracking-wide text-dim uppercase"
+            className="block text-micro font-medium tracking-wider text-dim uppercase"
             data-testid="agent-term"
             title={term.tip}
           >
             {term.term}
           </span>
-          <span className="block font-semibold break-words">{agent.role}</span>
+          <span className="block leading-5 font-semibold break-words">{agent.role}</span>
         </button>
-        <StatusWord
-          status={
-            ctx.finished.has(agent.id) ? AGENT_FINISHED_COPY : AGENT_STATUS_COPY[agent.status]
-          }
-          value={agent.status}
-          withTip={false}
-        />
+        <span className="text-caption">
+          <StatusWord
+            status={
+              ctx.finished.has(agent.id) ? AGENT_FINISHED_COPY : AGENT_STATUS_COPY[agent.status]
+            }
+            value={agent.status}
+            withTip={false}
+          />
+        </span>
       </header>
       {waiting > 0 ? (
-        <p className="w-fit rounded-full bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning">
+        <p className="w-fit rounded-full border border-warning/25 bg-warning-soft px-2 py-0.5 text-caption font-medium text-warning">
           ⚠ {C.needsYou(waiting)}
         </p>
       ) : null}
       {!hasWorktree(agent.kind) ? null : (
         <p className="text-caption" data-testid="agent-branch">
           {branch ? (
-            <span className="block truncate font-mono" title={branch}>
+            <span className="block truncate font-mono text-dim" title={branch}>
               {shortBranch(branch)}
             </span>
           ) : (
@@ -214,7 +209,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
           {C.withHelpers(formatCount(agent.budget.used + helpersBudget))}
         </p>
       ) : null}
-      <p className="line-clamp-2 text-caption">
+      <p className="line-clamp-2 border-t border-line pt-2 text-caption">
         <span className="text-dim">{A.latest}: </span>
         {agent.latestActivity ?? <span className="text-unavailable">{A.noActivity}</span>}
       </p>
@@ -239,12 +234,13 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
 
 // An org chart in CSS: each child draws its half of the bar above it and a stub down to its card;
 // the first and last child drop the outer half, an only child keeps just the stub.
+// v2: hairline connectors in the strong border color, quieter than the cards they join.
 const CHILD_ROW =
-  'relative flex justify-center pt-6 before:absolute before:top-0 before:left-1/2 before:h-6 before:border-l-2 before:border-accent/40';
+  'relative flex justify-center pt-6 before:absolute before:top-0 before:left-1/2 before:h-6 before:border-l before:border-line-strong';
 const CHILD =
   'relative flex flex-col items-center px-1.5 pt-6 ' +
-  'before:absolute before:top-0 before:right-1/2 before:w-1/2 before:border-t-2 before:border-accent/40 ' +
-  'after:absolute after:top-0 after:left-1/2 after:h-6 after:w-1/2 after:border-t-2 after:border-l-2 after:border-accent/40 ' +
+  'before:absolute before:top-0 before:right-1/2 before:w-1/2 before:border-t before:border-line-strong ' +
+  'after:absolute after:top-0 after:left-1/2 after:h-6 after:w-1/2 after:border-t after:border-l after:border-line-strong ' +
   'first:before:border-t-0 last:after:border-t-0';
 
 function Branch({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
@@ -282,7 +278,7 @@ export function AgentCanvas({
   return (
     <Card title={C.title} description={C.description} testId="agent-canvas" padded={false}>
       {/* The side padding sits on the tree itself, so a wide tree keeps it when it scrolls. */}
-      <div className="overflow-x-auto pt-2 pb-6">
+      <div className="overflow-x-auto pt-3 pb-6">
         {tree.length === 0 ? (
           <p className="px-5 text-dim">{C.noAgents}</p>
         ) : (
@@ -298,7 +294,7 @@ export function AgentCanvas({
           </ul>
         )}
         {note ? (
-          <p className="mx-5 mt-5 max-w-lg rounded-control sm:mx-auto bg-sunken px-4 py-3 text-center text-dim">
+          <p className="mx-5 mt-5 max-w-lg rounded-control border border-dashed border-line-strong px-4 py-3 text-center text-dim sm:mx-auto">
             {note}
           </p>
         ) : tree.length > 0 && helpers === 0 ? (

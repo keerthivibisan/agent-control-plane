@@ -3,6 +3,7 @@ import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { inputClass, labelClass } from '../../components/Input';
 import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { addTicketComment, updateTicket } from '../../lib/api';
@@ -16,8 +17,8 @@ const C = TICKET_COPY;
 const MAX_DESCRIPTION = 20_000;
 const MAX_COMMENT = 8000;
 
-const fieldClass =
-  'rounded-control border border-line-strong bg-panel px-3 py-2 text-ink placeholder:text-dim/70';
+/** A heading inside the ticket card: small, quiet, uppercase by style only (the text is as is). */
+const HEADING = 'text-caption font-semibold tracking-wide text-dim uppercase';
 
 function Description({ detail }: { detail: TicketDetailDto }) {
   const { ticket } = detail;
@@ -33,10 +34,11 @@ function Description({ detail }: { detail: TicketDetailDto }) {
   if (!editing) {
     return (
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <h3 className="font-medium">{C.ticket.description}</h3>
+        <div className="flex min-h-7 items-center gap-2">
+          <h3 className={HEADING}>{C.ticket.description}</h3>
           <Button
             variant="quiet"
+            size="sm"
             className="ml-auto"
             onClick={() => {
               setTitle(ticket.title);
@@ -48,7 +50,7 @@ function Description({ detail }: { detail: TicketDetailDto }) {
           </Button>
         </div>
         {ticket.description.trim().length > 0 ? (
-          <p className="whitespace-pre-wrap" data-testid="ticket-description">
+          <p className="leading-6 whitespace-pre-wrap" data-testid="ticket-description">
             {ticket.description}
           </p>
         ) : (
@@ -68,16 +70,16 @@ function Description({ detail }: { detail: TicketDetailDto }) {
         });
       }}
     >
-      <label htmlFor={titleId} className="font-medium">
+      <label htmlFor={titleId} className={labelClass}>
         {C.ticket.titleLabel}
       </label>
       <input
         id={titleId}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className={fieldClass}
+        className={inputClass()}
       />
-      <label htmlFor={textId} className="font-medium">
+      <label htmlFor={textId} className={`mt-1 ${labelClass}`}>
         {C.ticket.description}
       </label>
       <textarea
@@ -85,9 +87,9 @@ function Description({ detail }: { detail: TicketDetailDto }) {
         rows={6}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className={`resize-y ${fieldClass}`}
+        className={inputClass('resize-y px-3 py-2')}
       />
-      <div className="flex gap-2">
+      <div className="mt-1 flex gap-2">
         <Button type="submit" variant="primary" disabled={save.pending || !valid}>
           {save.pending ? C.ticket.saving : C.ticket.save}
         </Button>
@@ -109,7 +111,7 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
   const tooLong = body.length > MAX_COMMENT;
   return (
     <div className="flex scroll-mt-24 flex-col gap-3" data-testid="comments" id={COMMENTS_ID}>
-      <h3 className="font-medium">{C.comments.title}</h3>
+      <h3 className={HEADING}>{C.comments.title}</h3>
       {sorted.length === 0 ? (
         <p className="text-dim">{C.comments.empty}</p>
       ) : (
@@ -134,12 +136,12 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
                   <RelativeTime iso={c.createdAt} />
                 </span>
                 <p
-                  className={`rounded-card px-3.5 py-2.5 whitespace-pre-wrap ${
+                  className={`rounded-card border px-3.5 py-2 whitespace-pre-wrap ${
                     c.author === 'owner'
-                      ? 'bg-accent-soft'
+                      ? 'border-accent/15 bg-accent-soft'
                       : reviewer
-                        ? 'border border-l-4 border-line border-l-accent bg-panel'
-                        : 'border border-line bg-sunken'
+                        ? 'border-line border-l-2 border-l-accent bg-panel'
+                        : 'border-line bg-hover'
                   }`}
                 >
                   {c.body}
@@ -170,11 +172,12 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
           onChange={(e) => setBody(e.target.value)}
           placeholder={C.comments.placeholder}
           aria-invalid={tooLong ? true : undefined}
-          className={`resize-y ${fieldClass}`}
+          className={inputClass('resize-y px-3 py-2')}
         />
         {tooLong ? <span className="text-caption text-danger">{C.canvas.tooLong}</span> : null}
         <Button
           type="submit"
+          size="sm"
           className="self-end"
           disabled={add.pending || tooLong || body.trim().length === 0}
         >
@@ -197,16 +200,21 @@ function Runs({
 }) {
   return (
     <div className="flex flex-col gap-2" data-testid="run-history">
-      <h3 className="font-medium">{C.history.runs}</h3>
+      <h3 className={HEADING}>{C.history.runs}</h3>
       {detail.runs.length === 0 ? (
         <p className="text-dim">{C.history.noRuns}</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-line">
+        <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-card border border-line">
           {detail.runs.map((r) => {
             const n = runNumber(detail.runs, r.id) ?? 0;
             const shown = r.id === shownRunId;
             return (
-              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+              <li
+                key={r.id}
+                className={`flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-1.5 ${
+                  shown ? 'bg-sunken' : ''
+                }`}
+              >
                 <span className="font-medium tabular-nums">{C.history.run(n)}</span>
                 <StatusWord status={RUN_STATUS_COPY[r.status]} value={r.status} withTip={false} />
                 <span className="text-caption text-dim">
@@ -215,7 +223,12 @@ function Runs({
                 {shown ? (
                   <span className="ml-auto text-caption text-dim">{C.history.showing}</span>
                 ) : (
-                  <Button variant="quiet" className="ml-auto" onClick={() => onShowRun(r.id)}>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => onShowRun(r.id)}
+                  >
                     {C.history.show}
                   </Button>
                 )}
@@ -247,13 +260,13 @@ export function TicketInfo({
   return (
     <Card title={C.ticket.title} testId="ticket-info">
       <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
-        <div className="flex min-w-0 flex-col gap-8">
+        <div className="flex min-w-0 flex-col gap-7">
           <Description key={detail.ticket.updatedAt} detail={detail} />
           <Comments detail={detail} />
         </div>
-        <div className="flex min-w-0 flex-col gap-8">
+        <div className="flex min-w-0 flex-col gap-7">
           <div className="flex flex-col gap-2" data-testid="plan-history">
-            <h3 className="font-medium">{C.history.plans}</h3>
+            <h3 className={HEADING}>{C.history.plans}</h3>
             {plans.length === 0 ? (
               <p className="text-dim">{C.history.noPlans}</p>
             ) : (

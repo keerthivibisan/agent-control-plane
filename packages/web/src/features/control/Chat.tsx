@@ -1,8 +1,20 @@
 import type { ChatMessageDto } from '@acp/core/api';
-import { Fragment, useEffect, useId, useRef, type KeyboardEvent, type RefObject } from 'react';
+import { motion } from 'motion/react';
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { inputClass } from '../../components/Input';
+import { listItem } from '../../components/motion';
+import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { sendChat } from '../../lib/api';
 import { CONTROL_COPY } from '../../lib/copy';
@@ -22,41 +34,53 @@ export type SpeakerOf = (m: ChatMessageDto) => {
   tag?: { label: string; tip?: string };
 };
 
-function Bubble({ m, speakerOf }: { m: ChatMessageDto; speakerOf: SpeakerOf | undefined }) {
+function Bubble({
+  m,
+  speakerOf,
+  arriving,
+}: {
+  m: ChatMessageDto;
+  speakerOf: SpeakerOf | undefined;
+  /** A message that arrived while the chat was open rises in; the first ones are just there. */
+  arriving: boolean;
+}) {
   const owner = m.role === 'owner';
   const speaker = speakerOf?.(m) ?? { label: owner ? C.you : C.lead };
   return (
-    <li
+    <motion.li
+      variants={listItem}
+      initial={arriving ? 'hidden' : false}
+      animate="visible"
       className={`flex flex-col gap-1 ${owner ? 'items-end' : 'items-start'}`}
       data-testid="chat-message"
       data-role={m.role}
       data-follow-up={m.followUp === true ? 'true' : undefined}
     >
-      <span className="flex items-center gap-2 text-caption text-dim">
-        <span className="font-medium" title={speaker.tip} data-testid="chat-speaker">
+      <span className="flex items-center gap-2 px-0.5 text-caption text-dim">
+        <span className="font-medium text-ink" title={speaker.tip} data-testid="chat-speaker">
           {speaker.label}
         </span>
         {speaker.tag ? (
-          <span
-            className="rounded-full border border-line px-1.5 text-[0.6875rem] leading-4 font-medium"
-            title={speaker.tag.tip}
-            data-testid="chat-tag"
+          <Badge
+            tone="accent"
+            testId="chat-tag"
+            {...(speaker.tag.tip !== undefined ? { title: speaker.tag.tip } : {})}
           >
             {speaker.tag.label}
-          </span>
+          </Badge>
         ) : null}
         <RelativeTime iso={m.createdAt} />
       </span>
       <p
-        className={`max-w-[85%] rounded-card px-3.5 py-2.5 break-words whitespace-pre-wrap ${
+        className={`max-w-[85%] rounded-card px-3.5 py-2 break-words whitespace-pre-wrap text-ink ${
           owner
-            ? 'rounded-tr-sm bg-accent-soft text-ink'
-            : 'rounded-tl-sm border border-line bg-sunken text-ink'
+            ? 'rounded-tr-[0.1875rem] border border-accent/15 bg-accent-soft'
+            : 'rounded-tl-[0.1875rem] border border-line bg-hover'
         }`}
       >
         {m.text}
       </p>
-    </li>
+    </motion.li>
   );
 }
 
@@ -115,6 +139,8 @@ export function Chat({
   const tooLong = draft.length > MAX_CHARS;
   const busy = waiting !== undefined;
   const line = waiting ?? notice;
+  // Messages already there when the chat opens don't animate; later ones do.
+  const [initialIds] = useState<ReadonlySet<string>>(() => new Set(messages.map((m) => m.id)));
 
   // Keep the newest message in view as the conversation grows.
   useEffect(() => {
@@ -150,7 +176,7 @@ export function Chat({
             <Fragment key={m.id}>
               {m.id === firstFollowUp ? (
                 <li
-                  className="flex items-center gap-3 text-caption text-dim"
+                  className="flex items-center gap-3 py-1 text-caption font-medium text-dim"
                   data-testid="chat-divider"
                 >
                   <span aria-hidden="true" className="h-px flex-1 bg-line" />
@@ -158,7 +184,7 @@ export function Chat({
                   <span aria-hidden="true" className="h-px flex-1 bg-line" />
                 </li>
               ) : null}
-              <Bubble m={m} speakerOf={speakerOf} />
+              <Bubble m={m} speakerOf={speakerOf} arriving={!initialIds.has(m.id)} />
             </Fragment>
           ))}
         </ol>
@@ -177,7 +203,7 @@ export function Chat({
             <p
               id={noticeId}
               role={busy ? 'status' : undefined}
-              className="flex items-start gap-2 text-caption text-dim"
+              className="flex items-start gap-2 rounded-control bg-sunken px-3 py-2 text-caption text-dim"
               data-testid="chat-notice"
             >
               {busy ? (
@@ -203,9 +229,7 @@ export function Chat({
             placeholder={placeholder ?? words.placeholder}
             aria-describedby={line !== undefined ? `${noticeId} ${hintId}` : hintId}
             aria-invalid={tooLong ? true : undefined}
-            className={`resize-y rounded-control border bg-panel px-3 py-2 text-ink placeholder:text-dim/70 disabled:cursor-not-allowed disabled:opacity-60 ${
-              tooLong ? 'border-danger' : 'border-line-strong'
-            }`}
+            className={inputClass('resize-y px-3 py-2')}
           />
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span id={hintId} className="flex-1 text-caption text-dim">
