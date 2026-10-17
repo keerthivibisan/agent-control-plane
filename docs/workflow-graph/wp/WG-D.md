@@ -6,7 +6,7 @@
 
 | Field   | Value                                            |
 | ------- | ------------------------------------------------ |
-| Status  | in-progress                                      |
+| Status  | review                                           |
 | Owner   | WG-D agent (Claude Code)                         |
 | Branch  | `wp/wg-d-editor` (from `feature/workflow-graph`) |
 | Started | 2026-10-17                                       |
@@ -27,7 +27,7 @@
 - [x] 7. vitest: reducer, NodePanel, IssuesList focus, template picker and restore, save
       disabled, 422, wizard template step
 - [x] 8. e2e (`workflow.spec.ts`, mocked routes) with the light and dark screenshot hooks
-- [ ] 9. Status `review` and the completion report
+- [x] 9. Status `review` and the completion report
 
 ## Work log (append-only; newest last)
 
@@ -35,7 +35,8 @@
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
 | 2026-10-17 | Claimed WG-D                                                                                                                                                                       | 650fd18 | format ✓ lint ✓ typecheck ✓ test 2717/2717 ✓ build ✓                     |
 | 2026-10-17 | Graph editor (reducer, layout, canvas, palette, panels, problems, templates), the Workflow page on `/workflow-graph`, project defaults card, wizard template choice; vitest        | ec34efa | format ✓ lint ✓ typecheck ✓ test 2725/2725 ✓ build ✓                     |
-| 2026-10-17 | Three-row layout, Done under your merge, warnings word and icon-only workspace marker on blocks; e2e `workflow.spec.ts` rewritten for the editor (6 tests, light/dark screenshots) | (this)  | format ✓ lint ✓ typecheck ✓ test 2725/2725 ✓ build ✓; e2e workflow 6/6 ✓ |
+| 2026-10-17 | Three-row layout, Done under your merge, warnings word and icon-only workspace marker on blocks; e2e `workflow.spec.ts` rewritten for the editor (6 tests, light/dark screenshots) | 5e22faf | format ✓ lint ✓ typecheck ✓ test 2725/2725 ✓ build ✓; e2e workflow 6/6 ✓ |
+| 2026-10-17 | Status `review`, completion report                                                                                                                                                 | (this)  | format ✓ lint ✓ typecheck ✓ test 2725/2725 ✓ build ✓; e2e workflow 6/6 ✓ |
 
 ## Decisions and findings
 
@@ -83,3 +84,59 @@
   page's live graph imports them (WG-E): `graph.ts`, `WorkflowNodes.tsx`, `icons.tsx` and the
   `WORKFLOW_COPY` entries they use. `updateWorkflow`, `isWorkflowPath` and `UpdateWorkflowRequest`
   in `lib/api.ts` are now unused; they go with the version 1 endpoints (WG-V).
+
+## Completion report — WG-D
+
+1. **Summary:** the Workflow page is a graph editor on `GET`/`PUT /api/projects/:id/workflow-graph`
+   (canvas, palette, block and link panels, live problems, templates and restore, guarded save
+   with the server's 422 issues), the project's limits and approvals stay in a Project defaults
+   card, and the new-project wizard offers the templates in step 2 and saves the choice on finish.
+2. **Files:**
+   - created: `packages/web/src/features/workflow/editor/` (`state.ts`, `layout.ts`, `flow.ts`,
+     `nodes.tsx`, `GraphEditor.tsx`, `Palette.tsx`, `NodePanel.tsx`, `EdgePanel.tsx`,
+     `IssuesList.tsx`, `TemplatePicker.tsx`, `templates.ts`, `issues.ts`, `save.ts`,
+     `useUnsavedGuard.ts`), `features/workflow/ProjectDefaults.tsx`,
+     `features/project-setup/WorkflowTemplateChoice.tsx`,
+     `tests/features/workflow-editor.test.tsx`, `tests/features/workflow-editor-state.test.ts`;
+   - modified: `features/workflow/WorkflowPage.tsx` (rewritten), `features/workflow/draft.ts`
+     (setup draft only), `features/project-setup/NewProjectWizard.tsx`, `lib/api.ts` (new
+     endpoints), `lib/copy.ts` (`WORKFLOW_GRAPH_COPY`), `e2e/workflow.spec.ts` (rewritten),
+     `e2e/workflow-fixtures.ts` (graph fixtures added), `tests/features/project-setup.test.tsx`,
+     `tests/features/review-loop-workflow.test.tsx`, `tests/features/stage-agent-files.test.tsx`,
+     this file;
+   - deleted: `features/workflow/StagePanel.tsx`, `WorkflowGraph.tsx`, `AgentFiles.tsx`,
+     `tests/features/workflow.test.tsx`.
+3. **Commands:** `pnpm check` from the worktree root: format ✓, lint ✓, typecheck ✓, test 2725
+   passed (core 399, adapters/demo 12, orchestrator 574, adapters/claude-code 348, db 195, web 716,
+   server 481), build ✓. `pnpm --filter @acp/web test:e2e --project=workflow` (ports 7631/7641):
+   6/6 passed. The whole e2e suite: 59 passed, 3 failed, 2 did not run; the 3 failures are the
+   version 1 Workflow page steps in WG-V's specs (see 7).
+4. **Acceptance criteria:**
+   - editor (canvas, typed handles, link-kind choice, refused drags, delete, nudging, light and
+     dark): met (e2e named-helper and block-panel tests, screenshots);
+   - palette with `NODE_CAPABILITIES` limits and reasons: met (vitest, e2e);
+   - block panel fields, no mode on read-only blocks, Full auto warning, plan auto switch: met;
+   - link panel rounds 0–5: met; problems list live with click to focus: met;
+   - templates with review styles and planner toggle, restore, confirmation: met;
+   - save disabled with errors, unsaved guard, 422 issues: met;
+   - Workflow page on the new endpoints with limits and approvals kept: met;
+   - wizard template step with PUT on finish: met (in step 2, see Decisions);
+   - plain copy: met; keyboard focus visible and labelled controls: met (e2e focus ring, labels).
+5. **Assumptions:** under "Decisions and findings" (422 issues via `…/validate`, wizard step 2 and
+   no save for the default, plan step follows Full auto, forced wiring, layout, guard scope).
+6. **Contract or shared-file changes:** none made, none required. Optional: a 422 body carrying
+   `issues` would need `ErrorDtoSchema` extended (coordinator).
+7. **Known gaps / follow-ups:**
+   - **Depends on WG-C:** the real `GET`/`PUT /api/projects/:id/workflow-graph` and
+     `POST …/validate`. Until then the page shows the load error against a real server; the
+     editor is tested on mocked routes only.
+   - **WG-V's e2e specs still drive the version 1 page:** `review-loop.spec.ts` ("the Workflow
+     page: approvals… and the review stage": `Change Helpers`), `workspace.spec.ts` (`wf-node-plan`
+     and the stage panel) and `review-loop-live.spec.ts` (`Change Review & merge`) fail at those
+     steps. The approvals now live in the Project defaults card; the stage settings are block
+     settings. Their wizard steps still pass.
+   - The Skills & Agents page's "Used by" still reads the version 1 workflow; `usedByNodes` (in the
+     DTO) is for whoever moves it.
+   - ⌘K palette navigation is not caught by the unsaved-changes guard.
+8. **Next:** WG-C (serve the endpoints), then WG-V updates the three specs above and runs the
+   editor against the real server.
