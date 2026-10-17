@@ -55,33 +55,57 @@ account.
 
 ### Step 1: finish WG-C (server, db, adapter)
 
-Committed on `wp/wg-c-server` (on top of the feature branch at `c0a1a49`):
+Committed on `wp/wg-c-server`, on top of the feature branch at `c0a1a49`. Each commit is green;
+under heavy load the package tests were run one at a time.
 
-- `2b7b064` db: graphs in `project_workflow` (v1 or v2) and in the run snapshot;
-- `8eeb914` server: `GET`/`PUT /api/projects/:id/workflow-graph`, `POST …/validate`, "used by"
-  and delete guards from the graph;
-- `38407f6` server: ticket runs on graphs (validate → 409 `workflow_invalid`, ceilings,
-  `graphContext`, snapshot), approvals per agent;
-- `b7caf02` adapter: launch protection per agent (auto mode plus sandbox; sandbox with `default`
-  for a tightened Full auto block; never auto for lead, planner or reviewers).
+| Commit    | What                                                                                                                                                                                                                                                                               |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2b7b064` | db: `project_workflow` holds v1 or v2; a v1 write over a stored graph is refused (typed, 409); the run snapshot gains `graph`/`graphContext`; plan steps keep their helper node                                                                                                    |
+| `8eeb914` | server: `GET`/`PUT /api/projects/:id/workflow-graph` (PUT 422 `workflow_invalid`), `POST …/validate`; v1 `/workflow` answers 409 `workflow_is_graph` for a graph project; "used by" and delete guards from the graph                                                               |
+| `38407f6` | server: ticket runs on graphs (an invalid graph → 409 `workflow_invalid`, no run); ticket and run modes are ceilings; graph and context snapshotted; a restart compiles the same program; `GET /api/runs/:id/workflow-graph`; per-agent mode at the gate, the allowlist and launch |
+| `b7caf02` | adapter: launch decided per agent (auto mode plus sandbox, or the sandbox alone in `default`)                                                                                                                                                                                      |
+| `dd05a0b` | progress file: paused, with "Resume here"                                                                                                                                                                                                                                          |
 
-Not committed when paused (in the worktree): `packages/server/tests/workflow/graph-fuzz.test.ts`
-(the API fuzz) and `packages/server/tests/board/graph-scenarios.test.ts` (scenarios a, b, c end to
-end). Then: docs (`security.md`, `architecture.md`), status `review`, `pnpm check`, and the full
-e2e on free ports.
+**Uncommitted in the worktree:**
 
-**To resume:** continue in the same worktree and branch (never restart). Read the WG-C progress
-file's "Resume here", finish tasks 6–8, then the coordinator reviews and merges with `--ff-only`
-(rebase on the feature branch first; only docs commits were added there since).
+- `packages/server/tests/workflow/graph-fuzz.test.ts`: the API fuzz, which passes. 50 generated
+  graphs save and start; over 250 mutants get 422 on save and 409 on start, with issues equal to
+  `validateWorkflowGraph`'s.
+- `packages/server/tests/board/graph-scenarios.test.ts`: scenarios a, b and c to the owner's merge,
+  named helpers, a refused plan step, `maxInstances`, plan auto and its tightening, and a v1
+  project. 10 tests pass. **The last test, the server-level mixed-mode run, times out at 60 s.**
+  It probably waits on a tester `Bash` permission parked for the owner, or a Manual helper's
+  undecided change at handover.
+
+**Next:**
+
+1. Run `-t "mixed-mode"` alone, then fix or drop that test.
+2. Run `pnpm check` and commit both files.
+3. Task 8: update `docs/security.md` and `docs/architecture.md`, set status `review`, run
+   `pnpm check` and the full e2e (ports 7731/7741), and write the report.
+
+**Open decision for the coordinator (contract change, not made):** an optional
+`ManagedAgentSpec.sandbox?: FullAutoSpec` (the diff is in WG-C.md), so the adapter can run the OS
+sandbox without auto mode. Until it lands, a Full auto block that a ticket or run tightens **fails
+closed at start** (diagnostic `sandbox-without-auto-mode-unsupported`). That is safe, but it does
+not yet meet the owner's decision "keeps the sandbox when tightened". Recommended: accept it, as
+a coordinator contract commit in `packages/core/src/adapters/**` (a shared v1 contract, so do it
+in a separate commit), then let WG-C wire it.
+
+**Changed behaviour WG-C made on purpose** (the owner's tighten-only decision): a ticket or run
+mode can no longer loosen the project's or a block's. The existing Full auto and run-options tests
+were updated to match. Also, v1 projects now start graph runs from their migrated workflow, and
+still snapshot the v1 workflow.
 
 **Review points for the coordinator:**
 
 - the run's `approvalPolicy.mode` snapshot must be the tightened mode (the engine's fallback for an
   editing agent without a block);
 - the lead and reviewers are never covered by any mode, and the lead never approves;
-- a tightened Full auto block keeps the sandbox, but with `permissionMode: 'default'`;
+- a tightened Full auto block keeps the sandbox, with `permissionMode: 'default'` (after the
+  contract above);
 - no new SQL migration (ADR-0023 §9);
-- e2e stays green.
+- the full e2e stays green: WG-C changed the run-options behaviour, so check the review-loop specs.
 
 ### Step 2: merge WG-D (graph editor), held until WG-C
 
