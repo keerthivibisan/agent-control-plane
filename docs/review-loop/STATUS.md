@@ -11,6 +11,7 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
 | RL-D | Web: approvals editor, Start dialog, change cards, merge          | RL-0, U-V  | **done**                     | wp/rl-d-web       | `b31d1ec` |
 | RL-V | Verification and one consented real run                           | all        | **done** (real run 2 passed) | wp/rl-v-verify    | `e689a79` |
 | RL-G | Full auto: Claude Code auto mode + OS sandbox; plan auto-approved | RL-V       | in-progress                  | wp/rl-g-full-auto | —         |
+| RL-H | Ticket-level run options (approval mode, reviewer, rework rounds) | RL-G       | todo (owner, 2026-10-17)     | —                 | —         |
 
 ## Owner decisions (2026-10-17)
 
@@ -126,3 +127,11 @@ Coordinator-owned. Plan: [README.md](README.md). Branches `wp/rl-<id>-<slug>` co
   - The docs recommend an isolation boundary for unattended runs.
   - Auto-approved calls skip `canUseTool`.
   - Auto mode needs a supported model.
+
+- 2026-10-17 **owner: ticket-level options** ("if we need some ticket to be manual").
+  - Today there are a project default and a per-run override ("Start with options…").
+  - **RL-H** adds a persistent per-ticket setting: approval mode, reviewer and rework rounds, each
+    defaulting to "Project default". Precedence: run override > ticket > project. It is set in
+    New ticket and on the ticket page, with a board badge when it differs.
+  - It needs migration 0007 (a ticket column) and contract fields.
+  - It starts after RL-G, which touches the same approval-mode code. Both go into 0.1.0.
