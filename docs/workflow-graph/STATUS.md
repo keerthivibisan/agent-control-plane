@@ -6,15 +6,15 @@ Coordinator-owned. **Paused 2026-10-18: resume from [RESUME.md](RESUME.md).** Pl
 `feature/workflow-graph` (from `main` `b6a1f27`) and are merged back with
 `--ff-only` after review.
 
-| WP   | Title                                                                   | After     | Status                          | Branch            | Merged    |
-| ---- | ----------------------------------------------------------------------- | --------- | ------------------------------- | ----------------- | --------- |
-| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                        | wp/wg-0-contracts | `5f6c1e8` |
-| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                        | wp/wg-a-core      | `1da44e6` |
-| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                        | wp/wg-b-engine    | `eb8276a` |
-| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **done**                        | wp/wg-c-server    | `4742d8d` |
-| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **in progress** (rebase on C+E) | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**                        | wp/wg-e-live      | `059820b` |
-| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                     | wp/wg-v-verify    |           |
+| WP   | Title                                                                   | After     | Status          | Branch            | Merged    |
+| ---- | ----------------------------------------------------------------------- | --------- | --------------- | ----------------- | --------- |
+| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**        | wp/wg-0-contracts | `5f6c1e8` |
+| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**        | wp/wg-a-core      | `1da44e6` |
+| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**        | wp/wg-b-engine    | `eb8276a` |
+| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **done**        | wp/wg-c-server    | `4742d8d` |
+| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **done**        | wp/wg-d-editor    | `f2a1211` |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**        | wp/wg-e-live      | `059820b` |
+| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | **in progress** | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
 
@@ -139,3 +139,14 @@ plan-approval` without a planner;
     tree, since the live graph has a button with the same name.
   - Coordinator check: 4,001 tests; full e2e 65/65.
 - 2026-10-20 WG-D resumed: rebase on WG-C and WG-E, update the Workflow-page e2e steps.
+- 2026-10-20 WG-D merged (`f2a1211`).
+  - It adds the graph editor on the real endpoints and the wizard's template step.
+  - Three e2e specs now drive the real editor, and a new `workflow-live` e2e project covers
+    default, v1 and v2 projects, saving, a real 422, the v1 409 and the wizard, against the real
+    server.
+  - The dead v1 client code is removed; the core v1 DTOs stay for WG-V.
+  - Coordinator check: 4,009 tests; full e2e 71/71 (ports 7931/7941).
+  - Screenshots weren't viewed by the coordinator (a read setting blocks files outside the main
+    repo). The UI is checked in the browser in WG-V.
+- 2026-10-20 WG-V part 1 running in `../acp-wg-v`: the upgrade test, the data-copy check script,
+  and the real-run driver (prepared, with a fake-adapter dry run).
