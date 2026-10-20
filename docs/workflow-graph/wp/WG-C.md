@@ -52,8 +52,9 @@
 
 - Paused 2026-10-18 (`844eb24`), resumed 2026-10-20. Rebased onto `feature/workflow-graph`
   (`58050e5`, with the coordinator's `ManagedAgentSpec.sandbox` contract `1a341dc`): the commits
-  in the log above before the pause now have these ids: claim `726062d`, db `dab56a6`, server
-  routes `12ced92`, runs `86517f9`, adapter `8d89a11`, pause note `844eb24`.
+  in the log above before the pause now have these ids: claim `7d02483`, db `8035f82`, server
+  routes `163a7ae`, runs `b51b652`, adapter `a08212e`, pause note `1e283e6` (after the second
+  rebase onto `c2a77d1`).
 - Proposal 1 is wired (`e399ba8`). The fail-closed path for a tightened Full auto block is
   **removed**; the only start refusal left there is a sandbox temp folder that cannot be made
   (`full-auto-unavailable`, as before).
