@@ -185,6 +185,38 @@ and fix the three e2e specs.
   the owner prompts per mode, and the final merge. Write a research note
   `docs/research/wg-v-real-run-<date>.md`, as for RL-V.
 
+### Step 4b: the no-regression gate (owner request 2026-10-20: "make sure we don't break anything")
+
+All of these must pass before the release MR:
+
+1. **Golden traces:** the 267 v0.1.0 engine traces stay identical. They are in the orchestrator
+   suite, so `pnpm check` covers them.
+2. **Every merge:** the full `pnpm check` and the full e2e on free ports, with no exceptions.
+3. **Upgrade test (automated, WG-V):**
+   - a temp database in v0.1.0 shape: projects with a stored v1 workflow (every planner and
+     reviewer setting), the default workflow, finished v1 runs with snapshots, tickets with their
+     own run options, and plans;
+   - the new server must load it all;
+   - each project's `GET /workflow-graph` must answer `stored: 'v1'` or `'default'` with zero error
+     issues;
+   - old run pages (`/api/runs/:id`, `/workflow-graph` migrated) must load;
+   - a new ticket must start (fake adapter).
+4. **The owner's data, on a copy. The owner consented in chat on 2026-10-20.**
+   - Take the copy with SQLite's online backup (`.backup`) of `~/.agent-control-plane/acp.sqlite`
+     into the scratchpad.
+   - Start the new build on it with `ACP_DATA_DIR=<copy>`, free ports, and `ACP_CLAUDE_DIR` set to an
+     empty temp folder, so nothing under `~/.claude` is read.
+   - Check that every project's workflow graph loads with no errors, and that tickets, runs and run
+     pages answer 200.
+   - Report only counts and pass/fail. No ticket text, plans or names go into the output or the
+     repo.
+   - Start no runs. Delete the copy afterwards.
+   - Run it after WG-C and WG-D merge.
+5. **Rollback:** v0.1.0 (`main`) still opens the same copied data after the new build used it (no
+   migration means nothing changed shape).
+6. **Real runs,** consented each time (Step 4).
+7. **Owner testing:** the owner tests the release branch on separate ports before merging the MR.
+
 ### Step 5: release 0.2.0
 
 1. **README:**

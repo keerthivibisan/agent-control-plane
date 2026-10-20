@@ -120,3 +120,7 @@ plan-approval` without a planner;
   - Coordinator check: 3,940 tests; full e2e 65/65 (ports 7931/7941).
   - To check in the real app before release: the Start dialog screenshots open with a large blank
     band at the top (possibly the screenshot crop).
+- 2026-10-20 **No-regression gate added** (owner: "make sure we don't break anything"); see
+  RESUME.md Step 4b. The owner **consented** to testing the new build on a copy of their data
+  (online backup, other ports, empty Claude dir, counts only, copy deleted after), to run after
+  WG-C and WG-D merge.
