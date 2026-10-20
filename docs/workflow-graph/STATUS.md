@@ -6,15 +6,15 @@ Coordinator-owned. **Paused 2026-10-18: resume from [RESUME.md](RESUME.md).** Pl
 `feature/workflow-graph` (from `main` `b6a1f27`) and are merged back with
 `--ff-only` after review.
 
-| WP   | Title                                                                   | After     | Status                      | Branch            | Merged    |
-| ---- | ----------------------------------------------------------------------- | --------- | --------------------------- | ----------------- | --------- |
-| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                    | wp/wg-0-contracts | `5f6c1e8` |
-| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                    | wp/wg-a-core      | `1da44e6` |
-| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                    | wp/wg-b-engine    | `eb8276a` |
-| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **paused**                  | wp/wg-c-server    |           |
-| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**                    | wp/wg-e-live      | `059820b` |
-| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                 | wp/wg-v-verify    |           |
+| WP   | Title                                                                   | After     | Status                          | Branch            | Merged    |
+| ---- | ----------------------------------------------------------------------- | --------- | ------------------------------- | ----------------- | --------- |
+| WG-0 | ADR-0023, graph contract, DTOs, `tightenMode`, docs                     | —         | **done**                        | wp/wg-0-contracts | `5f6c1e8` |
+| WG-A | Core: validate, `canConnect`, compile, migrate-v1, templates; generator | WG-0      | **done**                        | wp/wg-a-core      | `1da44e6` |
+| WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                        | wp/wg-b-engine    | `eb8276a` |
+| WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **done**                        | wp/wg-c-server    | `4742d8d` |
+| WG-D | Web: graph editor, wizard template step                                 | WG-A      | **in progress** (rebase on C+E) | wp/wg-d-editor    |           |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**                        | wp/wg-e-live      | `059820b` |
+| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                     | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
 
@@ -124,3 +124,18 @@ plan-approval` without a planner;
   RESUME.md Step 4b. The owner **consented** to testing the new build on a copy of their data
   (online backup, other ports, empty Claude dir, counts only, copy deleted after), to run after
   WG-C and WG-D merge.
+- 2026-10-20 WG-C merged (`4742d8d`).
+  - **db:** stores v1 or v2 workflows; the run snapshot gains `graph` and `graphContext`.
+  - **Routes:** `/workflow-graph` (GET, PUT with 422, `/validate`) and the run graph route.
+  - **Runs:** graph runs with ticket and run ceilings, and `approvalPolicy.mode` is the tightened
+    mode. A mode applies per agent at the gate, the allowlist and launch. A tightened Full auto
+    block keeps the sandbox in `default`, so the fail-closed path is gone.
+  - **Tests:** the API fuzz (50 valid graphs, over 250 mutants); scenarios a, b and c to the
+    owner's merge; a mixed-mode run; restart.
+  - **Coordinator review:** the adapter prefers `sandbox` (the stricter choice) if both fields are
+    ever set; read-only roles and follow-ups get neither.
+  - **Coordinator fix (`4742d8d`):** 3 web e2e specs read the v1 live view and the v1 "used by",
+    and now read `live-block-<node>` and blocks. Clicks on agent buttons are scoped to the agent
+    tree, since the live graph has a button with the same name.
+  - Coordinator check: 4,001 tests; full e2e 65/65.
+- 2026-10-20 WG-D resumed: rebase on WG-C and WG-E, update the Workflow-page e2e steps.
