@@ -3197,6 +3197,8 @@ export const WORKFLOW_LIVE_COPY = {
     summaryNone: 'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
     noEffect: (mode: string, loosest: string) =>
       `No block in this workflow is set looser than ${loosest}, so “at most ${mode}” changes nothing.`,
+    noEffectTicket: (mode: string, ticket: string) =>
+      `This ticket is limited to at most ${ticket}, so “at most ${mode}” changes nothing for this run.`,
     ticketHint:
       'A limit for this ticket’s runs: blocks set to a stricter mode keep it, and it can’t loosen any block.',
     reviewerHint: {

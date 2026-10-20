@@ -18,7 +18,7 @@ import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { ChoiceCards, NumberChoice } from '../project-setup/fields';
 import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
-import { limitHasNoEffect, projectRunDefaults, startRequest, type StartChoice } from './logic';
+import { projectRunDefaults, runLimitNoEffect, startRequest, type StartChoice } from './logic';
 import { NoEffectNote, useBlockModes } from './RunOptions';
 
 const S = REVIEW_LOOP_COPY.start;
@@ -102,6 +102,8 @@ export function StartDialog({
         };
   const changed = Object.keys(request).length;
   const limit: ApprovalMode | null = mode === NO_LIMIT ? null : mode;
+  // Each block runs with the strictest of its own mode, the ticket's limit and this run's.
+  const noEffect = limit === null ? null : runLimitNoEffect(limit, blocks, own.approvalMode);
   // A server without graphs (no blocks known) still replaces the mode: keep its warnings.
   const wider =
     blocks === undefined &&
@@ -164,8 +166,8 @@ export function StartDialog({
               ]}
               onChange={setPickedMode}
             />
-            {limit !== null && limitHasNoEffect(limit, blocks) ? (
-              <NoEffectNote mode={limit} blocks={blocks} />
+            {limit !== null && noEffect !== null ? (
+              <NoEffectNote mode={limit} reason={noEffect} />
             ) : blocks === undefined && limit === 'full-auto' ? (
               <FullAutoWarning />
             ) : wider ? (

@@ -369,6 +369,29 @@ export function limitHasNoEffect(mode: ApprovalMode, blocks: BlockModes | undefi
   return blocks !== undefined && blocks.loosest !== null && !isModeWithin(mode, blocks.loosest);
 }
 
+/** Why a run's limit changes nothing: the ticket's own limit, or the blocks, is stricter. */
+export type NoEffectReason =
+  { by: 'ticket'; limit: ApprovalMode } | { by: 'blocks'; loosest: ApprovalMode };
+
+/**
+ * Each block runs with the strictest of its own mode, the ticket's limit and the run's limit
+ * (ADR-0023 refinement 5), so a run limit looser than the stricter of the ticket's limit and the
+ * loosest block changes nothing. The ticket is named when its limit is the stricter one (or the
+ * blocks are unknown).
+ */
+export function runLimitNoEffect(
+  mode: ApprovalMode,
+  blocks: BlockModes | undefined,
+  ticketLimit: ApprovalMode | undefined,
+): NoEffectReason | null {
+  const loosest = blocks?.loosest ?? undefined;
+  if (ticketLimit !== undefined && (loosest === undefined || isModeWithin(ticketLimit, loosest))) {
+    return isModeWithin(mode, ticketLimit) ? null : { by: 'ticket', limit: ticketLimit };
+  }
+  if (loosest === undefined) return null;
+  return isModeWithin(mode, loosest) ? null : { by: 'blocks', loosest };
+}
+
 /**
  * Distinct rounds of a change that this decider sent back for rework: `reviewer` is the review
  * agent's direct rework (ADR-0023 route "direct"), `lead` the lead's. A decider's note on a round

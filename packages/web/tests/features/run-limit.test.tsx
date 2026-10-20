@@ -17,6 +17,7 @@ import {
   limitHasNoEffect,
   loosestBlockMode,
   reworkRoundsBy,
+  runLimitNoEffect,
 } from '../../src/features/review-loop/logic';
 import { StartDialog } from '../../src/features/review-loop/StartDialog';
 import { TicketInfo } from '../../src/features/ticket/TicketInfo';
@@ -99,6 +100,49 @@ describe('the blocks’ modes (logic)', () => {
     // Unknown blocks or none that edit: never said.
     expect(limitHasNoEffect('full-auto', undefined)).toBe(false);
     expect(limitHasNoEffect('full-auto', { projectMode: 'manual', loosest: null })).toBe(false);
+  });
+});
+
+describe('a run limit and the ticket’s limit (both apply)', () => {
+  const blocks = { projectMode: 'auto-edits' as const, loosest: 'full-auto' as const };
+
+  it('names the stricter of the ticket’s limit and the loosest block', () => {
+    // The ticket's Manual is stricter than every block: a looser run limit changes nothing.
+    expect(runLimitNoEffect('auto', blocks, 'manual')).toEqual({ by: 'ticket', limit: 'manual' });
+    expect(runLimitNoEffect('manual', blocks, 'manual')).toBeNull();
+    // Without blocks known, the ticket's limit still decides.
+    expect(runLimitNoEffect('full-auto', undefined, 'auto-edits')).toEqual({
+      by: 'ticket',
+      limit: 'auto-edits',
+    });
+    // A ticket limit looser than every block: the blocks decide.
+    const careful = { projectMode: 'manual' as const, loosest: 'manual' as const };
+    expect(runLimitNoEffect('auto', careful, 'full-auto')).toEqual({
+      by: 'blocks',
+      loosest: 'manual',
+    });
+    expect(runLimitNoEffect('auto', undefined, undefined)).toBeNull();
+  });
+
+  it('the Start dialog says a run limit looser than the ticket’s changes nothing', async () => {
+    startDialog(
+      { [PROJECT_GRAPH_PATH]: projectGraphDto(directLoopGraph()) },
+      {
+        approvalMode: 'manual',
+      },
+    );
+    const dialog = await screen.findByTestId('start-dialog');
+    // The API helper is set to Full auto, so the blocks alone would allow Auto.
+    await within(dialog).findByLabelText(/^Manual · This ticket/);
+    fireEvent.click(within(dialog).getByLabelText(/^AutoLike/));
+    const note = within(dialog).getByTestId('mode-no-effect');
+    expect(note.dataset.by).toBe('ticket');
+    expect(note.textContent).toBe(
+      'This ticket is limited to at most Manual, so “at most Auto” changes nothing for this run.',
+    );
+    expect(within(dialog).queryByTestId('approvals-warning')).toBeNull();
+    fireEvent.click(within(dialog).getByLabelText(/^Manual · This ticket/));
+    expect(within(dialog).queryByTestId('mode-no-effect')).toBeNull();
   });
 });
 

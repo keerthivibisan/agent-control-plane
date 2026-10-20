@@ -27,11 +27,12 @@ import { useTicketAction } from '../ticket/actions';
 import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
 import {
   blockModesOf,
-  limitHasNoEffect,
   optionsBadge,
   projectRunDefaults,
+  runLimitNoEffect,
   runOptionsPatch,
   type BlockModes,
+  type NoEffectReason,
 } from './logic';
 
 /*
@@ -74,22 +75,21 @@ export function useProjectRunDefaults(projectId: string): RunDefaults | null {
   );
 }
 
-/** "No block is set looser than Auto edits, so at most Full auto changes nothing." */
-export function NoEffectNote({
-  mode,
-  blocks,
-}: {
-  mode: ApprovalMode;
-  blocks: BlockModes | undefined;
-}) {
-  if (blocks?.loosest === null || blocks?.loosest === undefined) return null;
+/**
+ * "No block is set looser than Auto edits, so at most Full auto changes nothing", or the same for
+ * a run limit looser than the ticket's own.
+ */
+export function NoEffectNote({ mode, reason }: { mode: ApprovalMode; reason: NoEffectReason }) {
   return (
     <p
       role="note"
       className="rounded-control border border-line bg-sunken px-3 py-2 text-caption text-dim"
       data-testid="mode-no-effect"
+      data-by={reason.by}
     >
-      {L.noEffect(M.word[mode], M.word[blocks.loosest])}
+      {reason.by === 'ticket'
+        ? L.noEffectTicket(M.word[mode], M.word[reason.limit])
+        : L.noEffect(M.word[mode], M.word[reason.loosest])}
     </p>
   );
 }
@@ -148,6 +148,11 @@ export function RunOptionsFields({
 }) {
   const set = (patch: TicketRunOptions) => onChange(compactRunOptions({ ...value, ...patch }));
   const blocks = defaults?.blocks;
+  // A ticket's own limit: only the blocks can make it change nothing.
+  const noEffect =
+    value.approvalMode === undefined
+      ? null
+      : runLimitNoEffect(value.approvalMode, blocks, undefined);
   // A server without graphs (no blocks known) still replaces the mode: keep its warnings.
   const wider =
     blocks === undefined &&
@@ -207,8 +212,8 @@ export function RunOptionsFields({
           </option>
         ))}
       </SelectField>
-      {value.approvalMode !== undefined && limitHasNoEffect(value.approvalMode, blocks) ? (
-        <NoEffectNote mode={value.approvalMode} blocks={blocks} />
+      {noEffect !== null && value.approvalMode !== undefined ? (
+        <NoEffectNote mode={value.approvalMode} reason={noEffect} />
       ) : blocks === undefined && value.approvalMode === 'full-auto' ? (
         <FullAutoWarning />
       ) : wider ? (
