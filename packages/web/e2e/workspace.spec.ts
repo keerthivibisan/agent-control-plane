@@ -145,44 +145,50 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await expect(page.getByTestId('skill-commit')).toContainText(/Committed [0-9a-f]{7} on main\./);
   await shoot(page, 'agent-committed');
 
-  // ---- Workflow: a separate planner, and the final code review with the skill and the file.
+  // ---- Workflow (WG-D's graph editor): a planner, and a final reviewer with the skill and the file.
   await nav.getByRole('link', { name: 'Workflow' }).click();
-  const panel = page.getByRole('complementary', { name: 'Stage settings' });
-  await page.getByTestId('wf-node-plan').click();
-  await panel.getByRole('checkbox', { name: 'Separate planner agent' }).check();
-  await expect(page.getByTestId('wf-node-plan')).toHaveAttribute('data-role', 'planner');
-  await page.getByTestId('wf-node-code-review').click();
-  await panel.getByRole('checkbox', { name: 'Run this stage' }).check();
-  await panel.getByRole('combobox', { name: 'Skill' }).selectOption('code-review');
+  await expect(page.getByTestId('graph-editor')).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Block settings' });
+  await page.getByRole('button', { name: 'Add Planner' }).click();
+  await expect(page.getByTestId('block-plan')).toHaveAttribute('data-kind', 'planner');
+  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'code-review');
+  await panel.getByTestId('skills-field').getByLabel('code-review').check();
   await panel.getByRole('combobox', { name: 'Agent file' }).selectOption('reviewer');
-  await panel.getByRole('button', { name: 'Save' }).click();
-  await expect(panel.getByTestId('saved')).toHaveText('Saved');
-  await expect(page.getByTestId('wf-node-code-review').getByTestId('node-agent')).toHaveText(
+  await expect(page.getByTestId('issues').getByTestId('issues-none')).toBeVisible();
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('saved')).toHaveText('Saved');
+  await expect(page.getByTestId('block-code-review').getByTestId('block-agent')).toHaveText(
     'reviewer',
   );
+  // The server now stores the graph (version 2).
+  const stored = (await (
+    await request.get(`/api/projects/${projectId}/workflow-graph`)
+  ).json()) as { stored: string };
+  expect(stored.stored).toBe('v2');
   // R-R visual: at 1440 × 900 the whole flow, Done included, is on screen, and the zoom controls
-  // stay clear of the Done node.
+  // stay clear of the Done block; Save stays on screen.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(page.getByTestId('wf-node-done')).toBeInViewport({ ratio: 1 });
-  const doneBox = await page.getByTestId('wf-node-done').boundingBox();
+  await expect(page.getByTestId('block-done')).toBeInViewport({ ratio: 1 });
+  const doneBox = await page.getByTestId('block-done').boundingBox();
   const controlsBox = await page.locator('.react-flow__controls').boundingBox();
-  if (doneBox === null || controlsBox === null) throw new Error('no Done node or controls');
+  if (doneBox === null || controlsBox === null) throw new Error('no Done block or controls');
   const apart =
     controlsBox.x + controlsBox.width <= doneBox.x ||
     doneBox.x + doneBox.width <= controlsBox.x ||
     controlsBox.y + controlsBox.height <= doneBox.y ||
     doneBox.y + doneBox.height <= controlsBox.y;
   expect(apart).toBe(true);
-  await expect(panel.getByRole('button', { name: 'Save' })).toBeInViewport();
+  await expect(page.getByTestId('save-workflow')).toBeInViewport();
   await page.setViewportSize({ width: 1280, height: 720 });
   await shoot(page, 'workflow-saved', false);
-  // The agent file now says which stage uses it.
+  // The agent file now says which block uses it.
   await nav.getByRole('link', { name: 'Skills & Agents' }).click();
   await page.getByRole('tab', { name: 'Agents' }).click();
   await expect(
     page.getByTestId('agent-card-reviewer').getByTestId('agent-used-by').getByRole('link'),
-  ).toHaveText(['Final code review']);
+  ).toHaveText(['Code reviewer']);
 
   // ---- Board: a new ticket, moved to Ready and started.
   await nav.getByRole('link', { name: 'Board' }).click();

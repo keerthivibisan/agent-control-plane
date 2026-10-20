@@ -128,6 +128,12 @@ export default defineConfig({
       testMatch: 'workspace.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${WORKSPACE_PORT}` },
     },
+    // WG-D: the Workflow page's graph editor against the real routes, on the workspace server.
+    {
+      name: 'workflow-live',
+      testMatch: 'workflow-live.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${WORKSPACE_PORT}` },
+    },
     // --- end R-V
     // --- RL-V: the review loop's owner flow on the real routes, agents scripted by the driver.
     {

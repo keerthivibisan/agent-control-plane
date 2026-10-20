@@ -96,6 +96,8 @@ export function refusalMessage(error: ApiError): string {
     if (error.status === 403 || error.code?.startsWith('csrf') === true) return R.csrf;
     if (error.status === 404 || error.code === 'not_found') return R.notFound;
     if (error.status === 409 || error.code === 'conflict') return R.conflict;
+    // The workflow graph's refusal (WG-C): the server's own plain summary of its problems.
+    if (error.status === 422 || error.code === 'workflow_invalid') return error.message;
     if (error.status === 400 || error.code === 'invalid_request') {
       return `${R.invalid} ${error.message}`;
     }

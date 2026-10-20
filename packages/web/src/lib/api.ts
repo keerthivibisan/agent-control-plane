@@ -52,11 +52,7 @@ import {
 // Project Tokens page (redesign R-F).
 import { ProjectTokensDtoSchema } from '@acp/core/api';
 // Workflow page (redesign R-B).
-import {
-  AgentDefinitionSummaryDtoSchema,
-  ProjectWorkflowDtoSchema,
-  UpdateWorkflowRequestSchema,
-} from '@acp/core/api';
+import { AgentDefinitionSummaryDtoSchema, ProjectWorkflowDtoSchema } from '@acp/core/api';
 // Skills page (redesign, R-D).
 import {
   SkillCommitResultDtoSchema,
@@ -74,10 +70,7 @@ import {
 // Ticket page live workflow and the harness history (redesign, R-H).
 import { RunWorkflowDtoSchema } from '@acp/core/api';
 // Live run graph and the blocks' modes for the run options (WG-E, ADR-0023).
-import {
-  RunWorkflowGraphDtoSchema,
-  WorkflowGraphDtoSchema as BlockModesGraphDtoSchema,
-} from '@acp/core/api';
+import { RunWorkflowGraphDtoSchema } from '@acp/core/api';
 // Review loop: Start overrides and the ticket branch (RL-D, ADR-0021).
 import {
   StartTicketRequestSchema,
@@ -837,12 +830,10 @@ export const tokensSchemas = {
 
 // --- Workflow page (redesign R-B, wp/r-b-workflow) ----------------------------------------------
 //
-// Served by R-G (docs/redesign/wp/R-G.md): GET/PUT /api/projects/:id/workflow → ProjectWorkflowDto.
-// Limits and the allowlist are saved through PUT …/setup (`updateProjectSetup` above). The agent
-// files list, GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's; until it is
-// served the route answers 404 and the page hides the list.
-
-export type UpdateWorkflowRequest = ReturnType<typeof UpdateWorkflowRequestSchema.parse>;
+// Served by R-G (docs/redesign/wp/R-G.md): GET /api/projects/:id/workflow → ProjectWorkflowDto,
+// still read by the ticket page's version 1 view and Skills & Agents; the Workflow page edits the
+// graph (below) since WG-D, so its version 1 PUT client is gone. The agent files list,
+// GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's.
 
 export const workflowPaths = {
   workflow: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow`,
@@ -853,28 +844,6 @@ export const workflowSchemas = {
   workflow: ProjectWorkflowDtoSchema,
   agents: AgentDefinitionSummaryDtoSchema.array(),
 } as const;
-
-/** The cached workflow and setup of one project: both carry the limits, so a save refetches both. */
-export function isWorkflowPath(projectId: string): (key: string) => boolean {
-  const workflow = workflowPaths.workflow(projectId);
-  const setup = projectSetupPaths.setup(projectId);
-  return (key) => key.startsWith(workflow) || key.startsWith(setup);
-}
-
-/** PUT /api/projects/:id/workflow: the whole stage configuration (the server sets the rest). */
-export async function updateWorkflow(
-  client: ApiClient,
-  projectId: string,
-  input: UpdateWorkflowRequest,
-) {
-  const path = workflowPaths.workflow(projectId);
-  return controlPut(
-    client,
-    path,
-    checked(UpdateWorkflowRequestSchema, input, path),
-    workflowSchemas.workflow,
-  );
-}
 
 // --- Workflow graph (WG-D, wp/wg-d-editor; ADR-0023) ---------------------------------------------
 //
@@ -1106,13 +1075,10 @@ export const runWorkflowSchemas = {
 // the project's graph (GET /api/projects/:id/workflow-graph, the editor's path) only for the
 // blocks' own approval modes and "Used by"; without it they say nothing about the blocks.
 
-export const blockModesPaths = {
-  graph: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph`,
-} as const;
+// The same path and schema as the editor's (`workflowGraphPaths`), so they share one cache entry.
+export const blockModesPaths = { graph: workflowGraphPaths.graph } as const;
 
-export const blockModesSchemas = {
-  graph: BlockModesGraphDtoSchema,
-} as const;
+export const blockModesSchemas = { graph: workflowGraphSchemas.graph } as const;
 
 /** 404 or 409: the server has no graph for this run or project (a server from before ADR-0023). */
 export function isGraphUnavailable(error: ApiError | null): boolean {

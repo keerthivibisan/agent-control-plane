@@ -208,18 +208,19 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   });
   expect(committed.ok(), await committed.text()).toBe(true);
 
-  // ---- Workflow: the review stage's defaults; the final code review on.
+  // ---- Workflow (WG-D's graph editor): the change reviewer's defaults; a final reviewer added.
   const nav = page.getByRole('navigation', { name: 'Main' });
   await nav.getByRole('link', { name: 'Workflow' }).click();
   await expect(page).toHaveURL(new RegExp(`#/p/${projectId}/workflow`));
-  const panel = page.getByRole('complementary', { name: 'Stage settings' });
-  await page.getByRole('button', { name: 'Change Review & merge' }).click();
-  await expect(panel.getByTestId('review-fields')).toBeVisible();
-  await expect(panel.getByRole('radio', { name: /^Review agent/ })).toBeChecked();
-  await page.getByTestId('wf-node-code-review').click();
-  await panel.getByRole('checkbox', { name: 'Run this stage' }).check();
-  await panel.getByRole('button', { name: 'Save' }).click();
-  await expect(panel.getByTestId('saved')).toHaveText('Saved');
+  const panel = page.getByRole('complementary', { name: 'Block settings' });
+  await page.getByTestId('block-review').click();
+  await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
+  await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
+  await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
+  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await expect(page.getByTestId('block-code-review')).toBeVisible();
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('saved')).toHaveText('Saved');
 
   // ---- Board: a new ticket, Ready, Start.
   await nav.getByRole('link', { name: 'Board' }).click();

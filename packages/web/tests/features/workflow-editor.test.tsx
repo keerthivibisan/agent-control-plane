@@ -412,5 +412,8 @@ describe('refusalMessage', () => {
       refusalMessage(new ApiError({ kind: 'unreachable', path: '/x', message: 'x' })),
     ).toContain('isn’t reachable');
     expect(refusalMessage(http(500, 'internal'))).toBe('The changes couldn’t be saved.');
+    expect(refusalMessage(http(422, 'workflow_invalid', 'It has 1 problem.'))).toBe(
+      'It has 1 problem.',
+    );
   });
 });

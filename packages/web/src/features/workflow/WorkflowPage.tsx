@@ -196,7 +196,10 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
                 >
                   <AlertIcon size={15} className="mt-0.5 shrink-0" />
                   <span className="min-w-0">
-                    {S.refused} {refused.issues === null ? refusalMessage(refused.error) : null}
+                    {S.refused}{' '}
+                    {refused.issues === null || refused.issues.length === 0
+                      ? refusalMessage(refused.error)
+                      : null}
                   </span>
                 </p>
                 <Details>
