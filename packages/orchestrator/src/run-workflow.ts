@@ -324,7 +324,11 @@ export function deriveRunWorkflowGraph(
             agentRunIds: ids(own),
           };
         }
-        const own = ofNode('reviewer', node.id).filter((a) => isChangeReviewer(a));
+        // A reloaded run's change reviewers have no `reviewsAgentRunId` (it lives with the live run
+        // only), so their recorded stage says which node they reviewed for.
+        const own = ofNode('reviewer', node.id).filter(
+          (a) => isChangeReviewer(a) || a.stage === node.id,
+        );
         return { nodeId: node.id, state: changeReviewerState(state, own), agentRunIds: ids(own) };
       }
       case 'tester': {
