@@ -5,13 +5,55 @@
 > paths. Scope: [README.md](../README.md), WG-V row and the "WG-0 refinements";
 > [RESUME.md](../RESUME.md) Step 4 and Step 4b (the no-regression gate).
 
-| Field   | Value                                            |
-| ------- | ------------------------------------------------ |
-| Status  | in-progress                                      |
-| Owner   | WG-V agent, part 1 (Claude Code)                 |
-| Branch  | `wp/wg-v-verify` (from `feature/workflow-graph`) |
-| Started | 2026-10-20                                       |
-| Updated | 2026-10-20                                       |
+| Field   | Value                                    |
+| ------- | ---------------------------------------- |
+| Status  | paused                                   |
+| Owner   | WG-V agent, part 1 (Claude Code)         |
+| Branch  | `wp/wg-v-finish` (from `wp/wg-v-verify`) |
+| Started | 2026-10-20                               |
+| Updated | 2026-10-20                               |
+
+## Resume here (paused by the owner, 2026-10-20)
+
+- **Branch:** `wp/wg-v-finish`, made from `wp/wg-v-verify` and already rebased onto
+  `release/0.2.0` (`e76cfff`). Worktree:
+  `/Users/grootan/Desktop/agent-control-plane/.claude/worktrees/agent-a28663b1c2345cdce`.
+- **Uncommitted, because they have not passed the full `pnpm check` yet** (all under
+  `packages/server/tests/verification/workflow-graph/`):
+  - `data-copy-check.ts` and `data-copy-check.test.ts`: copied unchanged from the old `wg-v`
+    worktree. The test passes (2/2, about 24 s) and the server typecheck passes.
+  - `v010-readers.ts` (modified): `tableDigests` now streams rows (`iterate()`, in rowid order)
+    instead of putting a whole table into one JSON string, so the owner's copy with large
+    observed-session tables cannot run out of memory.
+  - `real-run/scenarios.ts`, `real-run/flow.ts`, `real-run/drive.ts`, `real-run/drive.test.ts`
+    (new, task 3): written, and the server typecheck passes; **not run yet**.
+- **Next step:**
+  1. `pnpm --filter @acp/server exec vitest run tests/verification/workflow-graph/real-run`;
+     fix whatever fails.
+  2. `npm_config_workspace_concurrency=1 pnpm check` (Prettier will likely reformat the new
+     files).
+  3. Commit task 2 (`data-copy-check*`, `v010-readers.ts`) and task 3 separately.
+  4. Write the real-run commands and estimates below, then do task 4.
+- **Decisions so far:**
+  - **Data-copy check:** "a non-empty `ACP_CLAUDE_DIR`" is read as a folder that has
+    contents. Unset means an empty temp folder is made; an existing empty folder is accepted.
+  - **The driver has two parts:** `flow.ts` (`driveScenario`, called by the test directly) and
+    `drive.ts` (the command line: `--scenario a|b|c|mixed`, `--dry-run`, or `ACP_REAL_RUN=1`; it
+    refuses both at once, neither, or a real run in CI).
+  - **A dry run still uses the real Claude Code adapter's options:** each start is also handed
+    to the adapter with a stub SDK `query` that records the options and ends at once, so the
+    `permissionMode` and sandbox are the adapter's own. A real run keeps the real home folder
+    only for Full auto's deny-read list.
+  - **The scenarios:**
+    - (a) `lead-only`;
+    - (b) `todays-setup` with the pool set to Full auto and the run's ceiling at Auto edits.
+      This is where "a tightened Full auto block gets the sandbox" is asserted.
+    - (c) `reviewer-helper-loop` with a `review-tests` skill. The rework is scripted only in the
+      dry run.
+    - mixed: `lead-only`, with a Full auto pool, a Manual `frontend` helper, an Auto edits
+      tester (the project's mode) and the plan gate on auto.
+  - **How the owner answers approvals:** it allows only a Manual block's own edit tools
+    (summary without `..`) and denies everything else.
 
 Part 1 covers the server-side gate items: the upgrade test, the data-copy check script and the
 real-run driver (prepared, not run). The e2e per template and the removal of the version 1
