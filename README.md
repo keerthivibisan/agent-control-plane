@@ -104,7 +104,14 @@ timeout and safe restarts apply throughout.
 
 ## Quick start
 
-You need Node 22 and pnpm 10.26 ([BUILD.md](BUILD.md#prerequisites) has the details).
+One command on macOS or Linux. It checks Node 22 and pnpm 10.26 (installing them through nvm when
+needed), installs the dependencies, and starts the app:
+
+```bash
+./start.sh
+```
+
+Or by hand, with Node 22 and pnpm 10.26 ([BUILD.md](BUILD.md#prerequisites) has the details):
 
 ```bash
 pnpm install
@@ -115,7 +122,7 @@ pnpm dev
 ```
 
 Open **http://127.0.0.1:5173** and add your first project. To look around with sample data first,
-run `ACP_MODE=demo pnpm dev` instead. Agent runs need Claude Code signed in on this computer and
+run `./start.sh --demo` (or `ACP_MODE=demo pnpm dev`) instead. Agent runs need Claude Code signed in on this computer and
 use your own Claude account.
 
 [START.md](START.md) covers the built app, configuration, where data lives, hooks and your first

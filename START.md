@@ -5,6 +5,26 @@ source, see [BUILD.md](BUILD.md); you need its prerequisites (Node 22, pnpm 10.2
 
 ## Quick start
 
+On macOS or Linux, one script does it all:
+
+```bash
+./start.sh
+```
+
+`./start.sh --demo` starts the same app with sample data.
+
+The script:
+
+1. switches to Node 22.21.1 with nvm (installing it if needed), or checks your Node is 22.12 or a
+   later 22.x;
+2. installs pnpm 10.26.1 for that Node if an older pnpm is found;
+3. warns when the build tools for the SQLite driver or Claude Code are missing;
+4. installs the locked dependencies;
+5. stops if port 7420 or 5173 is already in use;
+6. runs `pnpm dev`.
+
+By hand, the same is:
+
 ```bash
 pnpm install
 ```
