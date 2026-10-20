@@ -143,9 +143,19 @@ See [security.md](security.md).
   seal, integrate, compare-and-swap advance, the owner's single `--ff-only` merge; git argument
   arrays only, serialized per worktree and per repository) and runs the harness checks per commit
   (`board/checks.ts`). The approval gate applies the run's snapshotted mode (Manual, Auto edits,
-  Auto) to helpers and the tester; the lead never approves. Routes: `GET`/`POST
+  Auto, Full auto; per workflow block since ADR-0023) to helpers and the tester; the lead never
+  approves. Routes: `GET`/`POST
 /api/runs/:id/ticket-branch` (CSRF on POST), `POST /api/runs/:id/review` for the owner's change
   decisions. Flow: [orchestration-lifecycle.md](orchestration-lifecycle.md) §0.1.
+- **Editable workflow graphs (ADR-0023) [server, db and adapter implemented, WG-C; editor and live
+  view: WG-D, WG-E]:** core validates and compiles a graph (`validateWorkflowGraph`,
+  `compileWorkflow`); the engine runs the compiled program. `project_workflow` holds a version 2
+  graph or a version 1 workflow (migrated on read; no SQL migration), and a run snapshots its graph
+  and compile context in `orchestration_runs.limits`. Routes (thin, CSRF on mutations):
+  `GET`/`PUT /api/projects/:id/workflow-graph`, `POST /api/projects/:id/workflow-graph/validate`,
+  `GET /api/runs/:id/workflow-graph`; the version 1 `/api/projects/:id/workflow` answers 409 for a
+  graph project. Approval modes, the Full auto gate and the launch (auto mode and sandbox, or the
+  sandbox alone) are decided per agent from its block; see [security.md](security.md) §4.
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by

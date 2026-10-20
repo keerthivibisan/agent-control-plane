@@ -13,7 +13,15 @@ import { FULL_AUTO_DENIED_MESSAGE } from '../../src/control/full-auto.js';
 import { expectError } from '../control/helpers.js';
 import { setupBoard } from './helpers.js';
 import { FILES, run, type Board } from './loop-helpers.js';
-import { LEAD, POOL, poolMode, projectMode, putGraph, withHelper } from './graph-helpers.js';
+import {
+  LEAD,
+  POOL,
+  pendingApprovals,
+  poolMode,
+  projectMode,
+  putGraph,
+  withHelper,
+} from './graph-helpers.js';
 
 /*
  * Ticket runs on workflow graphs through the routes (ADR-0023, WG-C): the run start validates,
@@ -215,9 +223,7 @@ describe('approvals per agent (ADR-0023 §5)', () => {
     // The Manual helper: even an edit in its own worktree waits for the owner.
     const frontEdit = { file_path: `${s.worktree(x.runId, front.id)}/b.ts` };
     const asked = front.ask('Edit', 'Edit b.ts', frontEdit);
-    await s.settle();
-    const detail = await run(s, x.runId);
-    const pending = detail.approvals.filter((a) => a.status === 'pending');
+    const pending = await pendingApprovals(s, x.runId);
     expect(pending.map((a) => a.agentRunId)).toEqual([front.id]);
     const res = await s.post(`/api/approvals/${pending[0]?.id ?? ''}`, { decision: 'approve' });
     expect(res.status).toBe(200);
@@ -234,8 +240,7 @@ describe('approvals per agent (ADR-0023 §5)', () => {
     const asked = pool.ask('Edit', 'Edit a.ts', {
       file_path: `${s.worktree(x.runId, pool.id)}/a.ts`,
     });
-    await s.settle();
-    expect((await run(s, x.runId)).approvals.map((a) => a.status)).toEqual(['pending']);
+    expect((await pendingApprovals(s, x.runId)).map((a) => a.agentRunId)).toEqual([pool.id]);
     await s.post(`/api/runs/${x.runId}/stop`);
     await s.settle();
     expect((await asked).allow).toBe(false);
@@ -277,8 +282,7 @@ describe('approvals per agent (ADR-0023 §5)', () => {
     const edit = { file_path: `${s.worktree(x.runId, pool.id)}/a.ts` };
     expect(await pool.ask('Edit', 'Edit a.ts', edit)).toEqual({ allow: true });
     const curl = pool.ask('Bash', 'Bash curl', { command: 'curl https://example.test' });
-    await s.settle();
-    const pending = (await run(s, x.runId)).approvals.filter((a) => a.status === 'pending');
+    const pending = await pendingApprovals(s, x.runId);
     expect(pending.map((a) => a.agentRunId)).toEqual([pool.id]);
     await s.post(`/api/approvals/${pending[0]?.id ?? ''}`, { decision: 'deny' });
     expect((await curl).allow).toBe(false);

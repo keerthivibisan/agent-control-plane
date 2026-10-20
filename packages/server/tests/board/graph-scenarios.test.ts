@@ -15,6 +15,7 @@ import { FILES, reviewers, run, type Board } from './loop-helpers.js';
 import {
   LEAD,
   POOL,
+  pendingApprovals,
   planAuto,
   poolMode,
   projectMode,
@@ -238,8 +239,7 @@ describe('a mixed-mode run through the server (ADR-0023 §5)', () => {
     const asked = front.ask('Edit', 'Edit b.ts', {
       file_path: `${s.worktree(runId, front.id)}/b.ts`,
     });
-    await s.settle();
-    const pending = (await run(s, runId)).approvals.filter((a) => a.status === 'pending');
+    const pending = await pendingApprovals(s, runId);
     expect(pending.map((a) => a.agentRunId)).toEqual([front.id]);
     await s.post(`/api/approvals/${pending[0]?.id ?? ''}`, { decision: 'deny' });
     expect((await asked).allow).toBe(false);
@@ -260,8 +260,7 @@ describe('a mixed-mode run through the server (ADR-0023 §5)', () => {
     // Outside the Auto edits rules a tester's command waits for the owner (never the Full auto
     // "deny without asking"); the owner denies it.
     const curl = tester.ask('Bash', 'Bash curl', { command: 'curl https://example.test' });
-    await s.settle();
-    const waiting = (await run(s, runId)).approvals.filter((a) => a.status === 'pending');
+    const waiting = await pendingApprovals(s, runId);
     expect(waiting.map((a) => a.agentRunId)).toEqual([tester.id]);
     await s.post(`/api/approvals/${waiting[0]?.id ?? ''}`, { decision: 'deny' });
     expect(await curl).not.toEqual({ allow: false, message: FULL_AUTO_DENIED_MESSAGE });

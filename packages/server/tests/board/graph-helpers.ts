@@ -133,3 +133,22 @@ export function withTester(graph: WorkflowGraph, mode: ApprovalMode | null): Wor
     ],
   };
 }
+
+/**
+ * The run's pending approvals once one is there. A request reaches the engine only after the
+ * gate's allowlist check resolves paths on disk, which `settle` does not wait for, so this polls
+ * (at most about 5 s) instead of reading once.
+ */
+export async function pendingApprovals(s: Board, runId: string) {
+  for (let i = 0; i < 100; i++) {
+    await s.settle();
+    const res = await s.get(`/api/runs/${runId}`);
+    const approvals = (
+      res.body as { approvals: { id: string; agentRunId: string; status: string }[] }
+    ).approvals;
+    const pending = approvals.filter((a) => a.status === 'pending');
+    if (pending.length > 0) return pending;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return [];
+}

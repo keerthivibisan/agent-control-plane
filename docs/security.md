@@ -98,4 +98,33 @@
   (ADR-0015); never worker conversation content. Logs never include chat text.
 - Later (P3-G): validation command allowlist with timeouts; bounded retries.
 
+### Approval modes per workflow block (ADR-0023) [implemented in the server, db and adapter, WG-C]
+
+- **Validated graphs only.** A project's workflow graph is saved (`PUT
+/api/projects/:id/workflow-graph`) only when `validateWorkflowGraph` finds no error (422
+  `workflow_invalid` otherwise), and a ticket run starts only on a graph that validates and
+  compiles (409 `workflow_invalid`, no run created). The validator is the same pure function the
+  editor uses. A version 1 workflow is migrated on read; a version 1 write never replaces a stored
+  graph (409 `workflow_is_graph`).
+- **A mode per editing block, ceilings only tighten.** Each helper, named helper and tester block
+  has its own approval mode (or the project's). The ticket's and the one-run override's modes are
+  ceilings: the block runs with the strictest of them (`tightenMode`); a ticket can no longer
+  choose a looser mode than the project's. The run's own snapshotted mode is the project's mode
+  tightened by the same ceilings, so the engine's fallback is never looser.
+- **Per agent at the gate.** The gate, the allowlist and the engine's re-check use the asking
+  agent's own mode (`effectiveMode`). Full auto's "deny without asking" applies only to a helper or
+  tester whose block runs Full auto. The lead, the planner and reviewers are never covered by any
+  mode, and the lead never approves a tool request.
+- **Per agent at launch.** A helper or tester whose block runs Full auto gets Claude Code's auto
+  mode plus the OS sandbox (`ManagedAgentSpec.fullAuto`, ADR-0022). A block configured as Full auto
+  that a ticket or run tightened keeps the same sandbox, deny rules and temp folder with
+  `permissionMode: 'default'` (`ManagedAgentSpec.sandbox`), so the gate decides by the tightened
+  mode: tightening never removes a protection. Everyone else, and the lead, planner and reviewers
+  always, run in `default` with no sandbox. Never `allowedTools`, never `bypassPermissions`. A
+  sandbox that cannot start ends the agent with a failure, never unprotected.
+- **Plan-first** stays: the plan is approved without the owner only when the plan block's
+  automatic switch is on and no ticket or run mode is stricter than Full auto.
+- **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
+  program and relaunches nothing (ADR-0013 §7).
+
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).
