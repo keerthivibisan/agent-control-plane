@@ -6,11 +6,11 @@
 
 | Field   | Value                                          |
 | ------- | ---------------------------------------------- |
-| Status  | paused                                         |
+| Status  | review                                         |
 | Owner   | WG-E agent (Claude Code)                       |
 | Branch  | `wp/wg-e-live` (from `feature/workflow-graph`) |
 | Started | 2026-10-18                                     |
-| Updated | 2026-10-18                                     |
+| Updated | 2026-10-20                                     |
 
 ## Tasks
 
@@ -27,7 +27,7 @@
 - [x] 6. Skills & Agents "Used by": `usedByNodes` labels, else the version 1 stages
 - [x] 7. Copy in plain words (own section in `lib/copy.ts`)
 - [x] 8. vitest and e2e (mocked routes; scenario (c) fixture; screenshots)
-- [ ] 9. Status `review`, `pnpm check`, full e2e, completion report
+- [x] 9. Status `review`, `pnpm check`, full e2e, completion report
 
 ## Work log (append-only; newest last)
 
@@ -37,24 +37,9 @@
 | 2026-10-18 | Live run graph with the version 1 fallback, run options as a limit, direct rework on change cards, Used by blocks; vitest | (this)  | see commit                                           |
 
 | 2026-10-18 | e2e for the live graph and the run limit; wider live blocks; DESIGN.md | 1fa20b1 | format ✓ lint ✓ typecheck ✓ test 3937/3937 ✓ build ✓; e2e 65/65 |
-| 2026-10-18 | Paused by the owner; resume notes | (this) | format ✓ |
-
-## Resume here (paused 2026-10-18)
-
-- **Half-done:** nothing in code. Tasks 1–8 are committed (`56b2619`, `1fa20b1`), `pnpm check`
-  passes (3,937 tests), and the full e2e suite passed 65/65 (ticket project 14/14 after the last
-  width change).
-- **Uncommitted files:** none.
-- **Next concrete step (task 9):** set status `review`, add the AGENTS.md §9 completion report to
-  this file (numbers above; screenshots in the worktree's `.acp-data/screens/`,
-  `ticket-live-graph-*`, `ticket-live-graph-page-*`, `ticket-start-limit-*`), rerun `pnpm check`,
-  and hand back to the coordinator.
-- **Open questions for the coordinator / WG-C:** (1) the run's limits must be only the ticket's
-  and run's modes when set, never the project's mode, so "No limit" means each block's own mode;
-  (2) whether both the ticket's and the run's limits apply (then a run limit looser than the
-  ticket's changes nothing); (3) the CHANGELOG line for refinement 14 is left to the release.
-- **Depends on WG-C:** `GET /api/runs/:id/workflow-graph`, `GET /api/projects/:id/workflow-graph`,
-  `SkillSummaryDto.usedByNodes`; until served, the ticket page shows the version 1 view.
+| 2026-10-18 | Paused by the owner; resume notes | 694768e | format ✓ |
+| 2026-10-20 | Resumed; rebased on `feature/workflow-graph` (`58050e5`); the no-effect note covers a run limit looser than the ticket's | 9894b9d | format ✓ lint ✓ typecheck ✓ test 3940/3940 ✓ build ✓ |
+| 2026-10-20 | Status `review`, completion report | (this) | format ✓; e2e ticket 14 + review-loop 3 + skills 4 = 21/21 |
 
 ## Decisions and findings
 
@@ -112,6 +97,8 @@
 - **Reviewer and rounds:** kept, with hints that "Lead reviews" sends every change to the lead for
   this run or ticket, that "Review agent" follows the workflow, and that rework rounds replace
   every rework link's limit (unchanged, each link keeps its own).
+- **Ticket limit in the Start dialog:** a run limit looser than the ticket's own also changes
+  nothing and says so (see the limits under "Depends on WG-C").
 - **New ticket dialog:** gets the note without a change to `features/board/**`:
   `useProjectRunDefaults` now also returns the blocks' modes.
 
@@ -130,10 +117,12 @@
 - `GET /api/runs/:id/workflow-graph` (until it is served, every ticket page shows the version 1
   view), `GET /api/projects/:id/workflow-graph` (the no-effect note and agent "Used by"), and
   `SkillSummaryDto.usedByNodes`. Everything is tested on mocked responses only.
-- **Assumption to confirm with WG-C:** the run's limits are the ticket's and the run's modes only
-  when set (refinement 5), never the project's mode, so that "No limit" means each block's own
-  mode. If WG-C applies both the ticket's and the run's limits, a run limit looser than the
-  ticket's changes nothing too; the dialog then still says only what the blocks allow.
+- **Limits (confirmed by the coordinator, 2026-10-20):** the limits are only the ticket's and
+  the run's modes, each when set, never the project's mode (WG-C builds `approvalCeilings` that
+  way), so "No limit" means each block's own mode. Both apply: a block runs with the strictest of
+  its own mode, the ticket's limit and the run's limit. `runLimitNoEffect` therefore names the
+  stricter cause of a limit that changes nothing: the ticket's own limit ("This ticket is limited
+  to at most Manual, so “at most Auto” changes nothing for this run.") or the loosest block.
 
 ### Proposals (not made)
 
@@ -143,3 +132,61 @@
   and `layout.ts` (both are mirrored here because WG-D was unmerged).
 - CHANGELOG (refinement 14, release): "a ticket or run mode is now a limit; it can't loosen a
   block". Not edited here (release notes).
+
+## Completion report — WG-E
+
+1. **Summary:** the ticket page draws the run's own workflow graph (states, agents, each editing
+   block's mode for the run and "Sandboxed", review counts, rework counts per link with the review
+   agent's direct rework, the held final stage), with the version 1 view on a 404 or 409; run
+   options read as a limit ("at most", "No limit", a note when a limit changes nothing because of
+   the blocks or the ticket's own limit); change cards name the review agent's direct rework; Skills
+   & Agents "Used by" names blocks.
+2. **Files:**
+   - created: `packages/web/src/features/ticket/{live-graph.ts,LiveGraphNodes.tsx,LiveRunGraph.tsx,live-frame.tsx,live-parts.tsx}`,
+     `features/skills/used-by.ts`, `e2e/live-graph-fixtures.ts`,
+     `tests/features/{live-graph,run-limit,used-by-blocks}.test.tsx`;
+   - modified: `features/ticket/LiveWorkflow.tsx`, `features/review-loop/{StartDialog,RunOptions,ChangeCard}.tsx`,
+     `features/review-loop/logic.ts`, `features/skills/{bits,SkillList,SkillEditor,AgentList,AgentEditor,SkillsPage,editor-parts}.tsx`,
+     `lib/api.ts` and `lib/copy.ts` (add-only), `DESIGN.md`, `e2e/{ticket,review-loop,review-loop-live}.spec.ts`,
+     `tests/features/{review-loop-board,review-loop-ticket,ticket-options}.test.tsx`, this file;
+   - deleted: none.
+3. **Commands (2026-10-20, after the rebase on `58050e5`):** `pnpm check`: format ✓, lint ✓,
+   typecheck ✓, test 3,940 passed (core 403, adapters/claude-code 348, adapters/demo 12, db 195,
+   orchestrator 1,763, web 738, server 481), build ✓ (run one package at a time,
+   `npm_config_workspace_concurrency=1`, because parallel agents load the machine; earlier full runs
+   timed out in server and adapter suites that pass alone). e2e on ports 7831/7841:
+   `--project=ticket --project=review-loop --project=skills` 21/21 (14 + 3 + 4). The whole e2e suite
+   passed 65/65 on 2026-10-18 before the block-width change and the rebase.
+4. **Acceptance criteria:**
+   - live run graph replaces the version 1 view, read-only, square blocks, positions or layout: met
+     (live-graph.test, e2e "the run's own graph");
+   - node states, agents with selection: met (vitest "every state", agent and block clicks; e2e);
+   - editing blocks' mode after tightening and "Sandboxed": met (vitest, e2e);
+   - review counts, rework counts on rework links, direct rework visible as such: met;
+   - refreshes on the same events and invalidation: met (the path is under `/api/runs`, refetched by
+     every notice and by `isTicketPagePath` after ticket actions);
+   - fallback on 404 and 409: met (vitest both codes; e2e without the route);
+   - run options as a limit in the Start dialog, the ticket's options and the New ticket dialog, the
+     no-effect note (blocks and ticket), reviewer and rounds explained: met (run-limit.test, updated
+     RL tests, e2e "the Start dialog");
+   - change cards: review agent as the decider, route (c)'s rounds: met;
+   - Used by with and without `usedByNodes`: met (used-by-blocks.test);
+   - plain copy, no internal terms: met (`WORKFLOW_LIVE_COPY`).
+5. **Assumptions:** under "Decisions and findings" (No limit as a choice, block sizes and layout
+   mirrored from WG-D, agent files' Used by from the project graph, warnings only without graphs).
+6. **Contract or shared-file changes:** none made, none required. Optional:
+   `AgentDefinitionSummaryDto.usedByNodes?`.
+7. **Known gaps / follow-ups:**
+   - **Depends on WG-C:** `GET /api/runs/:id/workflow-graph`, `GET /api/projects/:id/workflow-graph`,
+     `usedByNodes`; until served, ticket pages show the version 1 view and the run options show no
+     block note. Tested on mocked responses only.
+   - After WG-D merges: share its `editor/nodes.tsx` and `layout.ts` with the live graph, and
+     `blockModesPaths.graph` with its `workflowGraphPaths.graph` (the same path).
+   - Mode hints (for example Full auto's) still describe the mode itself, not the limit.
+   - CHANGELOG line for refinement 14 left to the release.
+8. **Next:** WG-C serves the endpoints; then WG-V runs the live graph against the real server for
+   each template and scenario.
+
+Screenshots (git-ignored): `/Users/grootan/Desktop/acp-wg-e/.acp-data/screens/`
+`ticket-live-graph-{1440,1024}-{light,dark}.png`, `ticket-live-graph-page-*`,
+`ticket-start-limit-{light,dark}.png`.
