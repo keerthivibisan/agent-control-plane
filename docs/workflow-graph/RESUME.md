@@ -71,10 +71,35 @@ The owner still merges the ticket branch into `main` once. Templates ("Lead only
 
 ## 4. What is left, in order
 
-1. **Finish WG-V part 1** on `wp/wg-v-finish`: the data-copy check script, the real-run driver
-   (`--dry-run` on the fake adapter, tested), `pnpm check`, full e2e. Resume it with an agent
-   using `isolation: "worktree"` that switches to `wp/wg-v-finish`, or with SendMessage if the
-   paused agent is still reachable.
+1. **Finish WG-V part 1** on `wp/wg-v-finish`, in worktree
+   `<repo>/.claude/worktrees/agent-a28663b1c2345cdce`. The last commit is `a3a6632` (its progress
+   file: paused). On top of `release/0.2.0` it has engine fix F1 and the upgrade test.
+   - **Uncommitted, not yet through `pnpm check`,** all in
+     `packages/server/tests/verification/workflow-graph/`:
+     - `data-copy-check.ts` and its test (the test passes 2/2);
+     - `v010-readers.ts`, which now reads rows one at a time so a large data copy can't run out of
+       memory;
+     - `real-run/scenarios.ts`, `flow.ts`, `drive.ts` and `drive.test.ts`: the real-run driver; it
+       typechecks but has not been run yet.
+   - **Next:**
+     1. run `pnpm --filter @acp/server exec vitest run
+tests/verification/workflow-graph/real-run` (four `--dry-run` scenarios plus the refusal
+        checks) and fix what fails;
+     2. run `npm_config_workspace_concurrency=1 pnpm check`, then commit task 2 and task 3
+        separately;
+     3. add the real-run commands, durations and token estimates to WG-V.md (RL-V used about
+        54–65k budget tokens for a two-helper run);
+     4. rebase if needed, run the full e2e (ports 7731/7741, 71 tests), set status `review` and
+        write the report.
+   - **Its decisions:**
+     - scenario (b) uses a Full auto pool tightened to Auto edits, which is where "a tightened
+       block keeps the sandbox" is checked;
+     - in the mixed scenario, the owner allows only the Manual helper's own edits;
+     - a dry run sends each agent start through the real adapter with a stub, so the reported
+       permission mode and sandbox are the adapter's own.
+   - **To resume:** start an agent with `isolation: "worktree"` that runs `git switch
+wp/wg-v-finish` (first remove or reuse the paused worktree, since a branch can only be checked
+     out once), or reuse the paused worktree directly. Agents must not use `cd`.
 2. **Coordinator:** review, then merge into `release/0.2.0` (`--ff-only` in `wg-coord`).
 3. **Run the data-copy check** (the owner consented): Step 4b item 4 below, using the exact command
    in WG-V.md.
