@@ -150,3 +150,16 @@ plan-approval` without a planner;
     repo). The UI is checked in the browser in WG-V.
 - 2026-10-20 WG-V part 1 running in `../acp-wg-v`: the upgrade test, the data-copy check script,
   and the real-run driver (prepared, with a fake-adapter dry run).
+- 2026-10-20 **WG-V part 1 stopped by the owner** mid-work. State in `../acp-wg-v` (`wp/wg-v-verify`):
+  - committed: only the claim (`ff3531d`);
+  - written, not committed: `packages/server/tests/verification/workflow-graph/`
+    (`upgrade-from-0.1.0.test.ts`, `v010-fixture.ts`, `v010-readers.ts`, `harness.ts`,
+    `owner.ts`, `autopilot.ts`);
+  - **a real bug the upgrade test found**, with its fix and regression test uncommitted. A run
+    reloaded from the database (after a restart, or an old v0.1.0 run's page) has no
+    `reviewsAgentRunId` on its change reviewers, so `deriveRunWorkflowGraph` showed the review
+    block as "skipped" with no agent. Fix: `run-workflow.ts` also matches a reviewer by its stored
+    `stage`. The test is `orchestrator/tests/graph-correctness/live-state-reload.test.ts`, which
+    compares the reloaded and live graph views at every idle step of every golden case.
+  - **To resume:** run that test and the check, commit the fix and the upgrade test, then the
+    data-copy script and the real-run driver (RESUME.md Step 4b).
