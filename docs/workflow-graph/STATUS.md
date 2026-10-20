@@ -104,3 +104,11 @@ plan-approval` without a planner;
     proposal;
   - WG-E: `d539e7d`, clean, only the review hand-off left; its 2 questions are answered in
     RESUME.md.
+- 2026-10-20 **Resumed by the owner.**
+  - `start.sh` added (`176ddd3`): one command to set up Node 22 and pnpm 10.26 and start the app;
+    README and START.md lead with it.
+  - Coordinator contract (`1a341dc`): `ManagedAgentSpec.sandbox?`, accepting WG-C proposal 1, so a
+    tightened Full auto block keeps the sandbox with `default`.
+  - WG-C resumed: wire `sandbox`, fix the mixed-mode scenario test, docs, review.
+  - WG-E resumed: its 2 questions answered, then task 9.
+  - Next: merge WG-C, then WG-E, then rebase WG-D (3 e2e specs), then WG-V.
