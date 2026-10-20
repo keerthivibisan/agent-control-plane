@@ -119,6 +119,55 @@ describe('a Full auto node tightened by a ticket keeps the sandbox in default mo
   const tightened: LaunchProtection = { autoMode: false, paths: PATHS };
 
   for (const kind of ['worker', 'tester'] as const) {
+    it(`${kind} with spec.sandbox through the adapter: the OS sandbox, permissionMode default`, async () => {
+      const s = spec(`${kind}-1`, kind, { sandbox: PATHS });
+      const { query, calls } = fakeQuery(async function* (ctx) {
+        await ctx.nextInput();
+        yield init();
+        yield result();
+        await idle(ctx);
+      });
+      const events = await collect(
+        createManagedClaudeCode({ query, env: ENV }).start(s, callbacks).events,
+      );
+      const o = calls[0]?.options;
+      expect(o?.permissionMode).toBe('default');
+      expect(o?.sandbox).toEqual(fullAutoSandbox(s.cwd, PATHS));
+      expect(o?.disallowedTools).toEqual(fullAutoDenyRules(s.cwd, PATHS));
+      expect(o?.env).toEqual({ ...ENV, TMPDIR: TMP });
+      noSecrets(o);
+      // A default-mode session is what it asked for: it runs (no auto-mode check applies).
+      expect(events.map((e) => e.type)).toEqual(['started', 'finished']);
+    });
+  }
+
+  it('a sandbox that cannot start fails it closed with sandbox-unavailable', async () => {
+    const errorResult = {
+      ...(result({
+        subtype: 'error_during_execution',
+        is_error: true,
+        total_cost_usd: 0,
+      }) as object),
+      errors: ['Sandbox dependencies are missing: install bubblewrap'],
+    };
+    const { query } = fakeQuery(async function* (ctx) {
+      await ctx.nextInput();
+      yield errorResult;
+      await idle(ctx);
+    });
+    const s = spec('worker-1', 'worker', { sandbox: PATHS });
+    const events = await collect(
+      createManagedClaudeCode({ query, env: ENV }).start(s, callbacks).events,
+    );
+    expect(events.at(-1)).toEqual({
+      type: 'finished',
+      outcome: 'error',
+      reportedCostUsd: null,
+      failure: 'sandbox-unavailable',
+    });
+  });
+
+  for (const kind of ['worker', 'tester'] as const) {
     it(`${kind}: the same sandbox, deny rules and TMPDIR, with permissionMode default`, () => {
       const s = spec(`${kind}-1`, kind);
       const o = buildOptions(s, callbacks, new AbortController(), ENV, tightened);
@@ -184,13 +233,46 @@ describe('the lead, the planner and reviewers never get auto mode or the sandbox
     expect(o).not.toHaveProperty('sandbox');
   });
 
-  it('the spec asks for Full auto only through fullAuto, for a worker or the tester', () => {
+  it('the spec asks through fullAuto or sandbox, for a worker or the tester only', () => {
     expect(launchProtectionOf(spec('w', 'worker', { fullAuto: PATHS }))).toEqual({
       autoMode: true,
       paths: PATHS,
     });
+    expect(launchProtectionOf(spec('t', 'tester', { sandbox: PATHS }))).toEqual({
+      autoMode: false,
+      paths: PATHS,
+    });
+    // Never sent together; if they were, the stricter launch (no auto mode) wins.
+    expect(launchProtectionOf(spec('w', 'worker', { fullAuto: PATHS, sandbox: PATHS }))).toEqual({
+      autoMode: false,
+      paths: PATHS,
+    });
     expect(launchProtectionOf(spec('w', 'worker'))).toBeNull();
-    expect(launchProtectionOf(spec('l', 'lead', { fullAuto: PATHS }))).toBeNull();
-    expect(launchProtectionOf(spec('r', 'reviewer', { fullAuto: PATHS }))).toBeNull();
+    for (const kind of ['lead', 'planner', 'reviewer'] as const) {
+      expect(launchProtectionOf(spec(kind, kind, { fullAuto: PATHS }))).toBeNull();
+      expect(launchProtectionOf(spec(kind, kind, { sandbox: PATHS }))).toBeNull();
+    }
+    expect(
+      launchProtectionOf(
+        spec('w', 'worker', { sandbox: PATHS, followUp: { resumeSessionId: 's' } }),
+      ),
+    ).toBeNull();
   });
+
+  for (const kind of ['lead', 'planner', 'reviewer'] as const) {
+    it(`${kind}: a sandbox in its spec is ignored through the adapter (default, no sandbox)`, async () => {
+      const { query, calls } = fakeQuery(async function* (ctx) {
+        await idle(ctx);
+        yield* [];
+      });
+      const handle = createManagedClaudeCode({ query, env: ENV }).start(
+        spec(`${kind}-1`, kind, { sandbox: PATHS }),
+        callbacks,
+      );
+      handle.abort();
+      await collect(handle.events);
+      expect(calls[0]?.options.permissionMode).toBe('default');
+      expect(calls[0]?.options).not.toHaveProperty('sandbox');
+    });
+  }
 });

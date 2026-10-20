@@ -48,13 +48,18 @@ export interface LaunchProtection {
 }
 
 /**
- * The protection `ManagedAgentSpec` asks for. Today the spec can say only Full auto (`fullAuto`,
- * auto mode plus the sandbox); the sandbox without auto mode needs an additive contract field
- * (proposed in docs/workflow-graph/wp/WG-C.md), which the server does not send until then.
+ * The protection `ManagedAgentSpec` asks for, for a worker or the tester (never a follow-up):
+ * `fullAuto` gives auto mode plus the sandbox; `sandbox` (a Full auto block a ticket or run
+ * tightened) gives the sandbox with the session in `default`. The two are never sent together; if
+ * they were, the stricter one (`sandbox`, no auto mode) wins, so a mistake can never loosen an
+ * agent.
  */
 export function launchProtectionOf(spec: ManagedAgentSpec): LaunchProtection | null {
-  const fullAuto = fullAutoOf(spec);
-  return fullAuto === null ? null : { autoMode: true, paths: fullAuto };
+  if (spec.followUp !== undefined || (spec.kind !== 'worker' && spec.kind !== 'tester')) {
+    return null;
+  }
+  if (spec.sandbox !== undefined) return { autoMode: false, paths: spec.sandbox };
+  return spec.fullAuto === undefined ? null : { autoMode: true, paths: spec.fullAuto };
 }
 
 /** Folders inside the worktree that commands and edits must not touch (ADR-0021's edit rule). */

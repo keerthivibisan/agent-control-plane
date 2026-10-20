@@ -428,8 +428,17 @@ interface LaunchInput {
   rework?: { resumeSessionId: string | null } | undefined;
   /** ADR-0021: what a reviewer reviews. */
   reviewScope?: 'change' | 'final' | undefined;
-  /** ADR-0022: a Full auto helper's or tester's sandbox paths. */
-  fullAuto?: FullAutoSpec | undefined;
+  /**
+   * ADR-0022, ADR-0023 §5: a helper's or tester's sandbox paths, with auto mode (its block runs
+   * Full auto) or without (a Full auto block a ticket or run tightened).
+   */
+  protection?: AgentProtection | undefined;
+}
+
+/** How a helper or tester is protected at launch (`ManagedAgentSpec.fullAuto` or `.sandbox`). */
+interface AgentProtection {
+  autoMode: boolean;
+  paths: FullAutoSpec;
 }
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
@@ -1013,11 +1022,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const plugin = await pluginFor(live, project.rootPath, effect);
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
-        const fullAuto = await fullAutoFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId);
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
-        if (fullAuto === null) {
+        if (protection === null) {
           live.pendingSends.delete(agentRunId);
           endWithError(live, agentRunId);
           return;
@@ -1030,7 +1039,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           plugin,
           agentFile,
           canStartHelpers,
-          fullAuto,
+          protection,
         });
       })(),
     );
@@ -1089,10 +1098,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
-        const fullAuto = await fullAutoFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId);
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
-        if (fullAuto === null) {
+        if (protection === null) {
           live.pendingSends.delete(agentRunId);
           endWithError(live, agentRunId);
           return;
@@ -1107,7 +1116,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           plugin,
           agentFile,
           rework: effect.rework,
-          fullAuto,
+          protection,
         });
       })(),
     );
@@ -1347,32 +1356,22 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   }
 
   /**
-   * ADR-0022, ADR-0023 §5: the sandbox paths of a helper or tester whose node runs Full auto in
-   * this run (`agentLaunchMode`), or undefined when it does not. Null when it must not start: the
-   * paths could not be prepared, or its node is configured as Full auto but a ticket or run
-   * tightened it, which needs the sandbox without auto mode, a launch `ManagedAgentSpec` cannot
-   * express yet (contract proposal in docs/workflow-graph/wp/WG-C.md). The agent then fails,
-   * never unprotected and never looser than its mode.
+   * ADR-0022, ADR-0023 §5: how a helper or tester is protected (`agentLaunchMode`): auto mode plus
+   * the OS sandbox when its block runs Full auto in this run; the sandbox alone, in `default`,
+   * when its block is configured as Full auto but a ticket or run tightened it. Undefined when
+   * neither applies. Null when the sandbox paths could not be prepared: the agent then fails,
+   * never unprotected.
    */
-  async function fullAutoFor(
+  async function protectionFor(
     live: LiveRun,
     agentRunId: string,
-  ): Promise<FullAutoSpec | null | undefined> {
+  ): Promise<AgentProtection | null | undefined> {
     const agent = live.state.agents.find((a) => a.id === agentRunId);
     if (agent === undefined || !hasReviewableChange(agent.kind)) return undefined;
     const launch = agentLaunchMode(live.state, agent);
     if (!launch.sandbox) return undefined;
-    if (!launch.autoMode) {
-      countDiagnostic('sandbox-without-auto-mode-unsupported');
-      logger.log('warn', 'agent start refused', {
-        runId: live.state.run.id,
-        agentRunId,
-        code: 'sandbox-without-auto-mode',
-      });
-      return null;
-    }
     try {
-      return await fullAutoPaths.specFor(live.state.run.id);
+      return { autoMode: launch.autoMode, paths: await fullAutoPaths.specFor(live.state.run.id) };
     } catch (error) {
       countDiagnostic('full-auto-unavailable');
       logger.log('warn', 'full auto sandbox folder failed', {
@@ -1511,9 +1510,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
-    // ADR-0022: only helpers and the tester run in Full auto; the adapter ignores it for others.
-    if (input.fullAuto !== undefined && hasReviewableChange(kind)) {
-      spec.fullAuto = { tempDir: input.fullAuto.tempDir, denyRead: [...input.fullAuto.denyRead] };
+    // ADR-0022, ADR-0023 §5: only helpers and the tester are protected; the adapter ignores it
+    // for others. Full auto (auto mode plus the sandbox) or the sandbox alone, never both.
+    const protection = input.protection;
+    if (protection !== undefined && hasReviewableChange(kind)) {
+      const paths = { tempDir: protection.paths.tempDir, denyRead: [...protection.paths.denyRead] };
+      if (protection.autoMode) spec.fullAuto = paths;
+      else spec.sandbox = paths;
     }
     let handle: ManagedAgentHandle;
     try {

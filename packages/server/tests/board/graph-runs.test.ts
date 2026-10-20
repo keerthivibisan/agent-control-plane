@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   defaultProjectWorkflow,
@@ -245,13 +247,14 @@ describe('approvals per agent (ADR-0023 §5)', () => {
     await putGraph(s, workflowTemplate('todays-setup'));
     const x = await started(s);
     expect(x.lead.spec.fullAuto).toBeUndefined();
+    expect(x.lead.spec.sandbox).toBeUndefined();
     expect(await x.lead.ask('Edit', 'Edit x.ts', { file_path: `${s.repo}/x.ts` })).toMatchObject({
       allow: false,
     });
     expect((await run(s, x.runId)).approvals).toEqual([]);
   });
 
-  it('a Full auto node tightened by the ticket fails closed until the launch can keep its sandbox without auto mode', async () => {
+  it('a Full auto block tightened by the ticket keeps the OS sandbox in default mode; the gate asks by the tightened mode', async () => {
     const s = await setupBoard({ files: FILES });
     await projectMode(s, 'full-auto');
     await putGraph(
@@ -264,18 +267,27 @@ describe('approvals per agent (ADR-0023 §5)', () => {
     );
     const x = await started(s, { approvalMode: 'auto-edits' });
     await approvePlan(s, x);
-    // The pool's configured mode is the project's Full auto; the ticket tightened it.
-    expect(await x.lead.callLead('start_agent', { role: 'Builder', task: 'Do it' })).toContain(
-      'Started agent',
-    );
+    // The pool's configured mode is the project's Full auto; the ticket tightened it to Auto edits.
+    const pool = await helper(s, x, { role: 'Builder' });
+    expect(pool.spec.fullAuto).toBeUndefined();
+    expect(pool.spec.sandbox?.tempDir).toBe(realpathSync(join(s.dataDir, 'sandbox-tmp', x.runId)));
+    expect(pool.spec.sandbox?.denyRead).toContain(join(s.homeDir, '.ssh'));
+    // Auto edits rules: its own edit runs; a command outside them waits for the owner (never the
+    // Full auto "deny without asking").
+    const edit = { file_path: `${s.worktree(x.runId, pool.id)}/a.ts` };
+    expect(await pool.ask('Edit', 'Edit a.ts', edit)).toEqual({ allow: true });
+    const curl = pool.ask('Bash', 'Bash curl', { command: 'curl https://example.test' });
     await s.settle();
-    const detail = await run(s, x.runId);
-    const pooled = detail.agents.find((a) => a.role === 'Builder');
-    expect(pooled?.status).toBe('FAILED');
-    expect(s.fake.workers()).toEqual([]);
-    expect(s.control.counters().diagnostics['sandbox-without-auto-mode-unsupported']).toBe(1);
-    // A node that was never Full auto starts as usual, with no sandbox.
+    const pending = (await run(s, x.runId)).approvals.filter((a) => a.status === 'pending');
+    expect(pending.map((a) => a.agentRunId)).toEqual([pool.id]);
+    await s.post(`/api/approvals/${pending[0]?.id ?? ''}`, { decision: 'deny' });
+    expect((await curl).allow).toBe(false);
+    // A block that was never Full auto starts as usual, with neither.
     const front = await helper(s, x, { role: 'Page', helper: 'frontend' });
     expect(front.spec.fullAuto).toBeUndefined();
+    expect(front.spec.sandbox).toBeUndefined();
+    // The lead never gets either.
+    expect(x.lead.spec.fullAuto).toBeUndefined();
+    expect(x.lead.spec.sandbox).toBeUndefined();
   });
 });
