@@ -13,7 +13,7 @@ Coordinator-owned. **Paused 2026-10-18: resume from [RESUME.md](RESUME.md).** Pl
 | WG-B | Engine: program-driven stages, routes a/b/c, per-node modes; simulator  | WG-A      | **done**                    | wp/wg-b-engine    | `eb8276a` |
 | WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **paused**                  | wp/wg-c-server    |           |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | **review** (holds for WG-C) | wp/wg-d-editor    |           |
-| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **paused**                  | wp/wg-e-live      |           |
+| WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**                    | wp/wg-e-live      | `059820b` |
 | WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | not started                 | wp/wg-v-verify    |           |
 
 ## Owner decisions (2026-10-17)
@@ -112,3 +112,11 @@ plan-approval` without a planner;
   - WG-C resumed: wire `sandbox`, fix the mixed-mode scenario test, docs, review.
   - WG-E resumed: its 2 questions answered, then task 9.
   - Next: merge WG-C, then WG-E, then rebase WG-D (3 e2e specs), then WG-V.
+- 2026-10-20 WG-E merged (`059820b`).
+  - It adds the live run graph on the ticket page (block states, agents, per-run mode, the
+    "Sandboxed" marker, direct rework), run options as "at most" with "No limit" and a no-effect
+    note, the review agent as the decider on change cards, and "Used by" naming blocks. It falls
+    back to the v1 view on 404/409.
+  - Coordinator check: 3,940 tests; full e2e 65/65 (ports 7931/7941).
+  - To check in the real app before release: the Start dialog screenshots open with a large blank
+    band at the top (possibly the screenshot crop).
