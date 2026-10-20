@@ -225,7 +225,10 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   });
   const card = page.getByTestId('plan-card');
   await expect(card).toContainText('Add the field and check the code at checkout');
-  await expect(page.getByTestId('live-plan')).toHaveAttribute('data-state', 'needs-you');
+  await expect(page.getByTestId('live-block-plan-approval')).toHaveAttribute(
+    'data-state',
+    'needs-you',
+  );
   // R-R visual: the planner holds the chat, and the side panel says so.
   const planPanel = page.getByTestId('side-panel');
   await expect(
@@ -264,7 +267,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   const helper = await agentOf(request, (a) => a.kind === 'worker');
   await act(request, helper.id, 'started');
   await expect(page.getByRole('article', { name: 'Builder' })).toBeVisible();
-  await expect(page.getByTestId('live-helpers')).toHaveAttribute('data-state', 'active');
+  await expect(page.getByTestId('live-block-helpers')).toHaveAttribute('data-state', 'active');
   await shoot(page, 'working');
   await act(request, helper.id, 'write', {
     path: 'discount.ts',
@@ -302,7 +305,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   expect(reviewer.profile).toBe('reviewer');
   expect(reviewer.skills).toEqual(['acp-skills:code-review']);
   await act(request, reviewer.id, 'started');
-  await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'active');
+  await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'active');
   await act(request, reviewer.id, 'call-lead', {
     name: 'post_review',
     input: { text: 'The discount field has no limit on its length.' },
@@ -311,11 +314,11 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await expect(comment).toContainText('The discount field has no limit on its length.');
   await expect(comment.getByTestId('comment-author')).toHaveText('Reviewer');
   await act(request, reviewer.id, 'finish');
-  await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'done');
   await expect(page.getByRole('button', { name: 'About status Done' })).toBeVisible();
   // R-R visual: the run completed, so the Done node is lit, and the lead the engine closed when
   // the review started reads "Finished" (its status stays CANCELLED).
-  await expect(page.getByTestId('live-done')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
   const leadCard = page.getByRole('article', { name: 'Lead' });
   await expect(leadCard.locator('[data-status="CANCELLED"]')).toHaveText('Finished');
   // The helper's branch is the engine's UUID branch, shown short with the full one as its title.
@@ -326,7 +329,11 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
 
   // ---- Follow-up: the ended lead answers a question; the page updates with no reload.
   expect(page.url()).toBe(ticketUrl);
-  await page.getByRole('button', { name: 'Show the Lead in the side panel' }).click();
+  // The agent tree's card; the live graph has a button with the same name on the block.
+  await page
+    .getByRole('button', { name: 'Show the Lead in the side panel' })
+    .and(page.locator(':not([data-testid="live-agent"])'))
+    .click();
   await side.getByRole('tab', { name: 'Chat' }).click();
   const box = side.getByRole('textbox', { name: 'Message to the lead agent' });
   await expect(side.getByTestId('chat-notice')).toContainText('The lead has finished.');
