@@ -163,3 +163,13 @@ plan-approval` without a planner;
     compares the reloaded and live graph views at every idle step of every golden case.
   - **To resume:** run that test and the check, commit the fix and the upgrade test, then the
     data-copy script and the real-run driver (RESUME.md Step 4b).
+- 2026-10-20 **Owner decision: all v0.2.0 work lives on `release/0.2.0`**, and `main` is never
+  touched.
+  - `release/0.2.0` was fast-forwarded to all the work (`bfe2c3b`). The merged
+    `feature/workflow-graph` branch is deleted.
+  - `wp/wg-*` branches now merge straight into `release/0.2.0`, and the owner raises the PR to
+    `main` in GitHub.
+  - Worktrees moved **inside the repo**, to `.claude/worktrees/` (git-ignored), as in v0.1.0:
+    `wg-coord` has `release/0.2.0` checked out, and `wg-v` has WG-V. Worktrees beside the repo
+    made every agent action count as outside the session, which caused the permission prompts and
+    blocked reads. The finished `acp-wg-a`…`e` worktrees were removed.

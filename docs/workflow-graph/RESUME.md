@@ -24,9 +24,12 @@ The owner still merges the ticket branch into `main` once. Templates ("Lead only
 - **Never touch `main`**: no commit, merge, reset or checkout of it, and no git write commands in
   the owner's checkout `~/Desktop/agent-control-plane` (it stays on `main` and runs the released
   app on ports 7420 and 5173).
-- Flow: `wp/wg-*` → `feature/workflow-graph` → `release/0.2.0` (from `main` `b6a1f27`) → **MR in
-  GitHub** to `main`, which the owner raises and merges there.
-- Merge only in the coordinator worktree `~/Desktop/acp-wg-coord` (it has `feature/workflow-graph`
+- Flow: `wp/wg-*` → `release/0.2.0` (all v0.2.0 work is here; `feature/workflow-graph` was
+  folded in and deleted on 2026-10-20) → **PR in GitHub** to `main`, which the owner raises and
+  merges there.
+- Worktrees live **inside the repo** under `.claude/worktrees/` (git-ignored), never beside it:
+  outside the session folder, every agent action needs approval.
+- Merge only in the coordinator worktree `<repo>/.claude/worktrees/wg-coord` (it has `release/0.2.0`
   checked out), always with `git -C <path> merge --ff-only <branch>`. Never chain a `cd` after a
   step that can fail, and never put `reset --hard` in a fallback (that caused the 2026-10-18
   incident where local `main` moved; the owner reset it).
@@ -34,18 +37,18 @@ The owner still merges the ticket branch into `main` once. Templates ("Lead only
 
 ## 3. Where everything is
 
-| What                                                   | Where                                                | State                                                            |
-| ------------------------------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------- |
-| Integration branch for this feature                    | `feature/workflow-graph` in `~/Desktop/acp-wg-coord` | head `d38ce0e`+ (see `git log`); `pnpm check` green, 3,909 tests |
-| Release branch                                         | `release/0.2.0`                                      | at `b6a1f27` (= `main`); the feature merges here at the end      |
-| WG-0 contract, ADR-0023                                | merged                                               | done                                                             |
-| WG-A core logic (validate, compile, …)                 | merged; worktree `~/Desktop/acp-wg-a` can be removed | done                                                             |
-| WG-B engine and simulator                              | merged; worktree `~/Desktop/acp-wg-b` can be removed | done                                                             |
-| Docs (README, BUILD.md, START.md, ADR-0001 TypeScript) | merged                                               | done                                                             |
-| **WG-C** server, db, adapter                           | `wp/wg-c-server` in `~/Desktop/acp-wg-c`             | **paused**: see §4                                               |
-| **WG-D** graph editor (web)                            | `wp/wg-d-editor` in `~/Desktop/acp-wg-d` (`cf2424f`) | **review, held**: see §4                                         |
-| **WG-E** live run graph (web)                          | `wp/wg-e-live` in `~/Desktop/acp-wg-e`               | **paused**: see §4                                               |
-| WG-V verification and real runs                        | not started                                          | after C, D and E                                                 |
+| What                                                   | Where                                                  | State                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------- |
+| Integration branch (all v0.2.0 work)                   | `release/0.2.0` in `<repo>/.claude/worktrees/wg-coord` | WG-0, A, B, C, D, E and docs merged; 4,009 tests, e2e 71/71 |
+| Release branch                                         | `release/0.2.0`                                        | at `b6a1f27` (= `main`); the feature merges here at the end |
+| WG-0 contract, ADR-0023                                | merged                                                 | done                                                        |
+| WG-A core logic (validate, compile, …)                 | merged; worktree `~/Desktop/acp-wg-a` can be removed   | done                                                        |
+| WG-B engine and simulator                              | merged; worktree `~/Desktop/acp-wg-b` can be removed   | done                                                        |
+| Docs (README, BUILD.md, START.md, ADR-0001 TypeScript) | merged                                                 | done                                                        |
+| **WG-C** server, db, adapter                           | `wp/wg-c-server` in `~/Desktop/acp-wg-c`               | **paused**: see §4                                          |
+| **WG-D** graph editor (web)                            | `wp/wg-d-editor` in `~/Desktop/acp-wg-d` (`cf2424f`)   | **review, held**: see §4                                    |
+| **WG-E** live run graph (web)                          | `wp/wg-e-live` in `~/Desktop/acp-wg-e`                 | **paused**: see §4                                          |
+| WG-V verification and real runs                        | not started                                            | after C, D and E                                            |
 
 Each WP's own progress file is `docs/workflow-graph/wp/WG-<X>.md` **on its branch** (the copy on
 the feature branch is older until it merges). Its "Resume here" section is the agent's own
@@ -231,7 +234,7 @@ test:e2e -c e2e/readme-screenshots.config.ts`) so the Workflow shot shows the ed
    looser mode than its block.
 4. **Versions:** bump them in the package manifests (coordinator) and set the `[0.2.0]` date and
    compare links.
-5. **Merge:** merge `feature/workflow-graph` into `release/0.2.0` (`--ff-only`, in a worktree, never
+5. **Merge:** the work is already on `release/0.2.0` (in a worktree, never
    in the owner's checkout).
 6. **For the owner:**
    - push `release/0.2.0` and open the MR to `main` in GitHub (the owner pushes, or asks the
