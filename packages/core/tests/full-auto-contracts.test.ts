@@ -99,4 +99,17 @@ describe('the managed contract for Full auto (types only)', () => {
     expect(spec.fullAuto?.denyRead).toEqual(['/home/u/.ssh']);
     expect(finished).toMatchObject({ failure: 'auto-mode-unavailable' });
   });
+
+  it('a tightened Full auto block asks for the sandbox alone (ADR-0023 §5)', () => {
+    const spec: ManagedAgentSpec = {
+      agentRunId: 'a2',
+      kind: 'tester',
+      cwd: '/data/worktrees/r1/a2',
+      prompt: 'Write the tests',
+      model: null,
+      sandbox: { tempDir: '/data/sandbox-tmp/r1', denyRead: ['/home/u/.aws'] },
+    };
+    expect(spec.fullAuto).toBeUndefined();
+    expect(spec.sandbox?.tempDir).toBe('/data/sandbox-tmp/r1');
+  });
 });
