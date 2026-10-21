@@ -95,7 +95,9 @@
   into a clean base branch.
 - **Requests:** local-only guard plus a CSRF token (`X-ACP-CSRF`) on mutating control-panel routes.
 - **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
-  (ADR-0015); never worker conversation content. Logs never include chat text.
+  (ADR-0015); never worker conversation content. Logs never include chat text. Later phases add
+  the owner-facing ticket text of ADR-0016, ADR-0019 and ADR-0021 (plans, review findings, the
+  lead's change notes) and, with ADR-0024, the run summary comments (below).
 - Later (P3-G): validation command allowlist with timeouts; bounded retries.
 
 ### Approval modes per workflow block (ADR-0023) [implemented in the server, db and adapter, WG-C]
@@ -126,5 +128,27 @@
   automatic switch is on and no ticket or run mode is stricter than Full auto.
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
+
+### Session names and run summaries (ADR-0024) [implemented in the server and adapter, v0.3.0 S-A]
+
+- **Session titles.** Every agent the app starts gets a title built from app data only: the
+  ticket key and its workflow block's label (`WEB-12 · Frontend helper`, a change reviewer
+  `WEB-12 · Change reviewer → Frontend helper`), or `Run · <role>` without a ticket, at most 120
+  characters. No prompt, ticket, task, chat or lead-chosen role text goes into it. The adapter
+  passes it to the Agent SDK's `title` option, and Claude Code writes it into its own session
+  record; the app never writes under `~/.claude`. A resumed session (a follow-up, a rework turn)
+  gets none and keeps its own.
+- **`SessionSummaryDto.managed`** carries ids, the ticket key, the role kind and the same label.
+- **Run summary comments (author `app`).** Stored as ticket comments, like the plan and the review
+  findings (ADR-0016, ADR-0021). The facts are composed from records only: block labels, counts
+  (steps, files, lines added and removed, rework rounds, budget tokens), states and decisions,
+  branch names, and the names of the project's harness checks with their results. They never hold
+  prompts, replies, tasks, plan text, findings, file names, diffs or tool output.
+- **The lead's handover note** (`request_review.summary`, review-loop runs only) is the one free
+  text in a summary: owner-facing text the lead writes for the ticket, redacted (rule 4) and capped
+  at 1,500 characters by the engine, then stored after the facts as `Lead's note:`. Legacy runs
+  ignore it. Logs say only that a summary was stored, its trigger, and whether a note was there.
+- **The merge line** (`Merged acp/<KEY> into <base> at <short commit>.`) holds branch names and a
+  commit id only.
 
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).

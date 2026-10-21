@@ -156,6 +156,15 @@ See [security.md](security.md).
   `GET /api/runs/:id/workflow-graph`; the version 1 `/api/projects/:id/workflow` answers 409 for a
   graph project. Approval modes, the Full auto gate and the launch (auto mode and sandbox, or the
   sandbox alone) are decided per agent from its block; see [security.md](security.md) §4.
+- **Session names and run summaries (ADR-0024) [server and adapter implemented, v0.3.0 S-A]:**
+  `control/session-names.ts` names every agent the app starts from app data only (the ticket key
+  and the workflow block's label, or the role word) and `launch()` passes it as
+  `ManagedAgentSpec.title`; the adapter gives it to the SDK's `title` option when a session starts
+  (never on a resume). The session services fill `SessionSummaryDto.managed` from
+  `agent_run_sessions` (`services/managed-sessions.ts`). `control/run-summary.ts` composes the run
+  summary ticket comment (author `app`) from the records after the transition that calls for it
+  (the engine's `handover-summary` effect, or a run that ends without one) and adds the merge line
+  after the owner's merge. No migration.
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by

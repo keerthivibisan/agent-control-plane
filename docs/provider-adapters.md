@@ -463,6 +463,13 @@ against the fake `query` only.
     reading content), that the stream carries only new messages, and the exact failure shape for
     a missing session.
 
+- **Session title** (`spec.title`, ADR-0024 §1, v0.3.0 S-A) **[implemented; fake-query tests]**:
+  passed as `Options.title` when a session starts; left out when the options `resume` a session
+  (a follow-up, or a rework turn resuming the helper's session) and when it is blank. The
+  0.3.296 declaration reads: a custom session title that "skips automatic title generation" and
+  "has no effect on the persisted title when resuming an existing session". Whether Claude Code
+  shows it in its own lists is checked by S-V with a consented real run.
+
 ### 11.2 SDK facts from the 0.3.296 declarations (unverified at runtime)
 
 - **Streamed assistant frames share `message.id`.** The CLI emits one assistant message per finished
