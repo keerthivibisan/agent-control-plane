@@ -1,8 +1,8 @@
 # Architecture
 
-> Status: **Phase 0 complete.** Only `@acp/core` contracts (v1) are implemented. Everything else in this
-> document is the agreed design that Phase 1 work packages implement. Sections are marked
-> **[implemented]** or **[planned]**.
+> Status: **implemented through v0.1.0**, with v0.2.0's editable workflow graphs in preparation
+> (ADR-0023). This document began as the agreed design for Phase 1; where a section says
+> **[planned]**, it is not built yet. The current feature list is in the README and CHANGELOG.
 
 ## 1. Shape: a modular monolith (ADR-0002)
 

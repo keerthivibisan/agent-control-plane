@@ -72,7 +72,8 @@ _The screenshots show sample data only: the built-in demo and synthetic tickets,
 **A workspace for each project**
 
 - **Board** of tickets, from Backlog to Done.
-- **Workflow:** the stages a ticket goes through, each with its own model, skill and agent file.
+- **Workflow:** draw the agents that work on a ticket and how they review each other's changes
+  (see below).
 - **Skills & Agents:** edit the project's `.claude/skills` and `.claude/agents` files and commit
   them.
 - **Harness:** the checks a change must pass before it is merged.
@@ -100,7 +101,21 @@ _The screenshots show sample data only: the built-in demo and synthetic tickets,
 **Guardrails:** every role has a fixed set of tools; budgets per agent, Stop and Stop all, a run
 timeout and safe restarts apply throughout.
 
-<!-- v0.2.0: workflow graph section added at release -->
+**Your own workflow for each project**
+
+- Draw how a ticket flows on the Workflow page: add blocks (a planner, named helpers such as
+  "Frontend helper", a helper pool, change and final reviewers, a tester) and link them. Start from
+  a template ("Lead only", "Today's setup", "Reviewer ↔ helper loop") or build your own.
+- Three ways to review a change: the lead reviews and merges; a review agent checks it and the
+  lead decides; or the review agent sends it back to the helper until it is right, then the lead
+  merges.
+- Each helper block has its own model, skills, agent file and approval mode. A ticket's or a
+  run's mode is a limit: it can make a block more careful, never less.
+- Links that make no sense are refused, a problems list says what to fix, and no workflow can
+  switch off a safety rule: only helpers and testers edit, only the lead merges into the ticket
+  branch after the required checks, and only you merge into main.
+- The ticket page draws the run's workflow live: each block's state, its agents and the mode it
+  runs with.
 
 ## Quick start
 
@@ -175,7 +190,7 @@ Details: [docs/security.md](docs/security.md). Report vulnerabilities as describ
 
 ## Roadmap
 
-Next up: editable workflow graphs, usage reliability and a pricing table, harness experiments that
+Next up: usage reliability and a pricing table, harness experiments that
 compare agent setups, a Codex adapter, and recommendations backed by evidence. See
 [docs/roadmap.md](docs/roadmap.md) and [CHANGELOG.md](CHANGELOG.md).
 
