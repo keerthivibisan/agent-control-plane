@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-171717">
+  <img alt="Version 0.2.0" src="https://img.shields.io/badge/version-0.2.0-171717">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-171717">
   <img alt="Node 22" src="https://img.shields.io/badge/node-22-171717">
 </p>
@@ -26,9 +26,9 @@ its helpers, their reviews and the checks until you merge the result once.
 Everything runs on your computer. The server listens on `127.0.0.1` only, there is no telemetry, and
 your conversations with Claude Code are not stored.
 
-> **Status: v0.1.0 (preview).** Features and data formats may still change before 1.0.0. Claude Code
+> **Status: v0.2.0 (preview).** Features and data formats may still change before 1.0.0. Claude Code
 > is the first supported agent; Codex support is planned. The latest real runs against Claude Code
-> passed on 2026-10-17 ([report](docs/research/rl-v-real-run-2026-10-17.md)).
+> passed on 2026-10-21 ([report](docs/research/wg-v-real-run-2026-10-21.md)).
 
 ## What it does
 
@@ -41,11 +41,11 @@ its state, its checks and the reviewer's findings.
 
 ![A ticket page during a run: the agent tree, a change sent back for rework, and the change list](docs/images/ticket-run.png)
 
-| The workflow of a project                                                                                              | Sessions and the agent tree                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| ![The workflow: plan, approve, orchestrate, helpers, review, code review, unit tests, merge](docs/images/workflow.png) | ![The sessions of a sample project with the helper agents one session started](docs/images/sessions.png) |
-| **Tokens: new work and cache reuse**                                                                                   | **Skills and agent files**                                                                               |
-| ![Token usage over three weeks, by day](docs/images/tokens.png)                                                        | ![The Skills & Agents page with three skills](docs/images/skills.png)                                    |
+| Your own workflow, as a graph                                                                                                                                                            | Sessions and the agent tree                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ![The workflow editor: a planner, the lead, a named Frontend helper, the helper pool with a change reviewer that sends changes back, a tester, and your merge](docs/images/workflow.png) | ![The sessions of a sample project with the helper agents one session started](docs/images/sessions.png) |
+| **Tokens: new work and cache reuse**                                                                                                                                                     | **Skills and agent files**                                                                               |
+| ![Token usage over three weeks, by day](docs/images/tokens.png)                                                                                                                          | ![The Skills & Agents page with three skills](docs/images/skills.png)                                    |
 
 <details>
 <summary>Dark theme</summary>

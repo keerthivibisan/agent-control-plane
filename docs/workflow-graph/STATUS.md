@@ -237,3 +237,14 @@ plan-approval` without a planner;
   longer calls them for graph projects; they stay for v1 and default projects, older clients and
   the live view's fallback, and the upgrade test covers them. Removal is deferred to a later
   release.
+- 2026-10-21 **Release 0.2.0 prepared on `release/0.2.0`.**
+  - Versions are 0.2.0 in all 8 package manifests (the lockfile is unchanged).
+  - CHANGELOG `[0.2.0] - 2026-10-21` with its compare links; the README version, status and
+    real-run link.
+  - The README screenshots were re-taken. The Workflow shot is the graph editor; the screenshot
+    spec now serves `/workflow-graph`.
+  - Release notes are in `.acp-data/release-notes-v0.2.0.md` and the PR text in
+    `.acp-data/pr-v0.2.0.md` (both git-ignored, in the coordinator worktree).
+  - Final check: 4,598 tests; e2e 72/72.
+  - **Next, for the owner:** push `release/0.2.0`, open the PR to `main` in GitHub, run CI on the
+    branch by hand, merge, then tag `v0.2.0` on `main` with the GitHub release.

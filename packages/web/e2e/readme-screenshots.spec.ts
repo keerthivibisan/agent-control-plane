@@ -8,7 +8,14 @@ import {
   loopWorkingScenario,
 } from './review-loop-fixtures.js';
 import { fixtureProject } from './ticket-fixtures.js';
-import { WF_CSRF, agentFilesFixture, workflowFixture, setupFixture } from './workflow-fixtures.js';
+import {
+  WF_CSRF,
+  agentFilesFixture,
+  customGraph,
+  graphDto,
+  setupFixture,
+  workflowFixture,
+} from './workflow-fixtures.js';
 
 /*
  * The README screenshots, saved to docs/images/. Runs only with ACP_README_SHOTS set and the
@@ -191,6 +198,20 @@ async function withWorkflow(page: Page): Promise<void> {
   );
   await page.route(`**/api/projects/${PROJECT_ID}/agents`, (route) =>
     route.fulfill({ json: agentFilesFixture() }),
+  );
+  // ADR-0023: the Workflow page is the graph editor, so it reads the project's graph. The
+  // hand-built sample graph (planner, a named helper, the pool with a change reviewer that sends
+  // changes back, a tester) with every skill and agent file it names, so it shows no warnings.
+  await page.route(`**/api/projects/${PROJECT_ID}/workflow-graph`, (route) =>
+    route.fulfill({
+      json: graphDto({
+        graph: customGraph(),
+        stored: 'v2',
+        skills: ['code-review', 'plan-tickets', 'release-notes', 'unit-tests'],
+        agents: ['db-migrator', 'docs-writer', 'test-writer'],
+        updatedAt: '2026-10-21T09:00:00.000Z',
+      }),
+    }),
   );
 }
 
@@ -375,7 +396,7 @@ test('readme: the workflow', async ({ page }) => {
   await withWorkflow(page);
   await page.goto(`/#/p/${PROJECT_ID}/workflow`);
   await expect(h1(page)).toContainText('Workflow');
-  await expect(page.getByTestId('wf-node-plan')).toBeVisible();
+  await expect(page.getByTestId('block-helper-1')).toBeVisible();
   await shoot(page, 'workflow');
 });
 

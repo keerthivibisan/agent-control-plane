@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
 Your own workflow for each project. Draw which agents work on a ticket and how they review each
 other's changes, give each helper its own approval mode, and follow the run on a live graph. Your
 current workflow is converted for you when the app starts, and nothing in your data changes
@@ -241,6 +243,7 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/keerthivibisan/agent-control-plane/releases/tag/v0.0.1
