@@ -49,3 +49,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     SDK `getSessionInfo` scoped to each session's own folder.
   - The ticket got the reviewer's findings, a clear run summary with the lead's four-sentence note,
     and the merge line. See `docs/research/s-v-real-run-2026-10-21.md`. The temp data was deleted.
+- 2026-10-21 S-A2 merged (`f147276`).
+  - At handover the summary's branch line reads "waiting for your merge", never "open".
+  - The merge line gains the tip checks, and says "merged anyway, with a reason" without the
+    reason text. The web parses the commit apart from the detail.
+  - Coordinator check: 4,683 tests; e2e 75/75.
