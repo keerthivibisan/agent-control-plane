@@ -43,3 +43,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-21 **The owner consented to one real run** after S-A merges, to confirm the session titles
   (via the SDK's `getSessionInfo` for that run's own sessions only) and to review the real ticket
   comments.
+- 2026-10-21 **Real run passed** (scenario b, about 37k budget tokens).
+  - Claude Code recorded each session's title as its custom title, with no AI title:
+    `WGVB-1 · Lead`, `WGVB-1 · Helpers`, `WGVB-1 · Change reviewer → Helpers`. The check used the
+    SDK `getSessionInfo` scoped to each session's own folder.
+  - The ticket got the reviewer's findings, a clear run summary with the lead's four-sentence note,
+    and the merge line. See `docs/research/s-v-real-run-2026-10-21.md`. The temp data was deleted.
