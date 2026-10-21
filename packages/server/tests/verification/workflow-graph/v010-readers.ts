@@ -136,8 +136,12 @@ const zero = (): Record<V010Column, number> =>
 function reasonOf(error: unknown): string {
   if (error instanceof z.ZodError) {
     const issue = error.issues[0];
-    return issue === undefined ? 'invalid' : `${issue.code}@${issue.path.slice(0, 2).join('.')}`;
+    // Schema paths only, with array positions blanked; never a value. The data-copy check prints
+    // these for the owner's copy.
+    const path = issue?.path.slice(0, 2).map((p) => (typeof p === 'number' ? '#' : String(p)));
+    return issue === undefined ? 'invalid' : `${issue.code}@${(path ?? []).join('.')}`;
   }
+  // The frozen snapshot parser's own fixed messages (`fail(...)` above), never a value.
   return error instanceof Error ? error.message : 'invalid';
 }
 
@@ -315,14 +319,24 @@ export function tableDigests(path: string): Record<string, { rows: number; diges
       .all() as string[];
     const out: Record<string, { rows: number; digest: string }> = {};
     for (const t of tables) {
-      const rows = c.prepare(`SELECT * FROM "${t}"`).all();
-      // A cheap, stable digest (FNV-1a over the JSON); never printed with any row content.
+      // A cheap, stable digest (FNV-1a over each row's JSON, in rowid order where there is one);
+      // never printed with any row content. Rows are streamed: the owner's copy may hold large
+      // tables (the observed sessions and events) that would not fit in one JSON string.
       let h = 0x811c9dc5;
-      for (const ch of JSON.stringify(rows)) {
-        h ^= ch.charCodeAt(0);
-        h = Math.imul(h, 0x01000193) >>> 0;
+      let rows = 0;
+      const withoutRowid = /\bWITHOUT\s+ROWID\b/i.test(
+        (c.prepare('SELECT sql FROM sqlite_master WHERE name = ?').pluck().get(t) as
+          string | null) ?? '',
+      );
+      const order = withoutRowid ? '' : ' ORDER BY rowid';
+      for (const row of c.prepare(`SELECT * FROM "${t}"${order}`).iterate()) {
+        rows++;
+        for (const ch of JSON.stringify(row)) {
+          h ^= ch.charCodeAt(0);
+          h = Math.imul(h, 0x01000193) >>> 0;
+        }
       }
-      out[t] = { rows: rows.length, digest: h.toString(16) };
+      out[t] = { rows, digest: h.toString(16) };
     }
     return out;
   } finally {
