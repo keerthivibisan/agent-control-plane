@@ -140,6 +140,7 @@ import {
 } from './review-loop.js';
 import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
+import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
 
@@ -1474,6 +1475,30 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return live.setup;
   }
 
+  /** The run's ticket key (`WEB-12`), or null for a run without a ticket. */
+  function ticketKeyOf(state: RunState): string | null {
+    if (state.integration !== undefined) return state.integration.ticketKey;
+    const ticketId = state.run.ticketId;
+    if (ticketId === null) return null;
+    return store.workspaceRepos.tickets.getById(ticketId)?.key ?? null;
+  }
+
+  /** ADR-0024 §1: the session title of an agent the app starts. */
+  function sessionTitle(live: LiveRun, agentRunId: string): string | undefined {
+    try {
+      return agentName({ state: live.state, agentRunId, ticketKey: ticketKeyOf(live.state) })
+        ?.title;
+    } catch (error) {
+      // A name is never worth a failed start: Claude Code titles the session as before.
+      logger.log('warn', 'session title unavailable', {
+        runId: live.state.run.id,
+        agentRunId,
+        ...errorFields(error),
+      });
+      return undefined;
+    }
+  }
+
   function launch(live: LiveRun, input: LaunchInput): void {
     const runId = live.state.run.id;
     const { agentRunId, kind, setup } = input;
@@ -1496,6 +1521,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
+    // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
+    const title = sessionTitle(live, agentRunId);
+    if (title !== undefined) spec.title = title;
     if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers) {
       // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
       // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's

@@ -1,6 +1,7 @@
 import type { ObservationAdapter, SessionStatusThresholds } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import type { AcpDatabase, Queries, Repositories } from '@acp/db';
+import { createManagedSessionNames } from './managed-sessions.js';
 import { createProjectsService, type ProjectsService } from './projects.js';
 import { createSessionsService, type SessionsService } from './sessions.js';
 import {
@@ -45,6 +46,7 @@ export function createServices(deps: ServicesDeps): Services {
     queries,
     now: deps.now,
     thresholds: deps.thresholds,
+    managed: createManagedSessionNames({ db, now: deps.now }),
   });
   return {
     sessions,

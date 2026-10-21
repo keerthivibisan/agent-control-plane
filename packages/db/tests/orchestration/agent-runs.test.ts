@@ -193,6 +193,40 @@ describe('agent run sessions repository (P3-C)', () => {
     ).toEqual([lead.id]);
   });
 
+  it('lists the links of many provider sessions at once (ADR-0024 §2)', () => {
+    const store = setupOrchestration();
+    const { lead, workers } = runWithAgents(store, 2);
+    const link = (agentRunId: string, providerSessionId: string) =>
+      store.orch.agentRunSessions.link({
+        agentRunId,
+        provider: 'claude-code',
+        providerSessionId,
+        relation: 'primary',
+      });
+    link(lead.id, 'sess-a');
+    link(workers[0]?.id ?? '', 'sess-b');
+    link(workers[1]?.id ?? '', 'sess-c');
+    const found = store.orch.agentRunSessions.listForProviderSessions('claude-code', [
+      'sess-c',
+      'sess-a',
+      'sess-a',
+      'unknown',
+      '',
+    ]);
+    expect(found.map((l) => [l.agentRunId, l.providerSessionId])).toEqual([
+      [lead.id, 'sess-a'],
+      [workers[1]?.id, 'sess-c'],
+    ]);
+    expect(store.orch.agentRunSessions.listForProviderSessions('claude-code', [])).toEqual([]);
+    // Many ids at once stay under SQLite's parameter limit.
+    const many = Array.from({ length: 1000 }, (_, i) => `sess-x${i}`).concat('sess-b');
+    expect(
+      store.orch.agentRunSessions
+        .listForProviderSessions('claude-code', many)
+        .map((l) => l.agentRunId),
+    ).toEqual([workers[0]?.id]);
+  });
+
   it('allows one primary session per agent and rejects relation changes and unknown agents', () => {
     const store = setupOrchestration();
     const { lead } = runWithAgents(store, 0);
