@@ -3,12 +3,12 @@
 Coordinator-owned. Plan: [README.md](README.md). Decision:
 [ADR-0024](../decisions/0024-session-names-and-run-summaries.md).
 
-| WP  | Title                                      | After    | Status          | Branch        | Merged    |
-| --- | ------------------------------------------ | -------- | --------------- | ------------- | --------- |
-| S-0 | ADR-0024, contract, docs                   | —        | **done**        | release/0.3.0 | `e9f2d0c` |
-| S-A | Titles, managed session DTO, run summaries | S-0      | **in progress** |               |           |
-| S-B | Web: session names, run summary card       | S-0      | **done**        |               |           |
-| S-V | Verification, real run, release prep       | S-A, S-B | not started     |               |           |
+| WP  | Title                                      | After    | Status      | Branch        | Merged    |
+| --- | ------------------------------------------ | -------- | ----------- | ------------- | --------- |
+| S-0 | ADR-0024, contract, docs                   | —        | **done**    | release/0.3.0 | `e9f2d0c` |
+| S-A | Titles, managed session DTO, run summaries | S-0      | **done**    |               |           |
+| S-B | Web: session names, run summary card       | S-0      | **done**    |               |           |
+| S-V | Verification, real run, release prep       | S-A, S-B | not started |               |           |
 
 ## Log
 
@@ -26,3 +26,20 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - **Proposal accepted, for S-A:** add `managed`, `firstSeenAt`, `gitBranch` and `agentType` to
     `ProjectTokensDto.bySession`, so the Tokens and cost lists can use the same names (today they
     show "Session 1a2b3c4d").
+- 2026-10-21 S-A merged (`7c4f5f4`).
+  - **Titles:** every managed agent is titled at launch via the SDK `title` option
+    (`WEB-12 · Frontend helper`, `… · Change reviewer → Frontend helper`, `Run · Lead`); follow-ups
+    keep theirs.
+  - `SessionSummaryDto.managed` is filled, and the Tokens rows carry the naming fields.
+  - `request_review.summary`, the lead's note.
+  - **The run summary comment:** facts from records plus the note, `(updated)` on a later handover,
+    facts only on fail or stop, and the merge line after the owner's merge.
+  - **Golden traces:** 255 snapshots changed only by the new `handover-summary` effect and the
+    longer lead prompts (about 160 characters); checked by the coordinator, with no decision or
+    state change.
+  - Coordinator check: 4,679 tests; e2e 75/75.
+  - **Known gap:** the summary at handover often has no tip checks yet, because they start after
+    REVIEW.
+- 2026-10-21 **The owner consented to one real run** after S-A merges, to confirm the session titles
+  (via the SDK's `getSessionInfo` for that run's own sessions only) and to review the real ticket
+  comments.
