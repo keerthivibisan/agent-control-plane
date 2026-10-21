@@ -196,3 +196,17 @@ plan-approval` without a planner;
     the project defaults go blank. The e2e never opened them on a v2 project.
   - **Owner test (port 7520, on an online-backup copy of the owner's data):** all 5 projects loaded
     with 0 errors (1 v1, 4 default); no runs were started; the copy is deleted.
+- 2026-10-21 **Data-copy check passed** (Step 4b item 4, owner consent 2026-10-20).
+  - **Setup:** a `sqlite3 -readonly .backup` copy of the owner's database (integrity ok,
+    migration 7); `data-copy-check.ts` on port 7781 with an empty Claude dir.
+  - **Result:** `ok: true`.
+    - 5 projects, 3 tickets and 6 runs; workflows stored as default 4 and v1 1.
+    - 0 error and 0 warning issues; every GET answered 200 and parsed.
+    - 0 agent starts, 0 tables changed; the repositories read every row.
+    - v0.1.0's readers read every row before and after.
+- 2026-10-21 **Rollback check passed** (Step 4b item 5).
+  - **Setup:** the v0.1.0 server (the owner's checkout, run read-only via pnpm, no git change) on
+    the same copy after the check, port 7782.
+  - **Result:** 37/37 read calls answered 200 (projects, workflow, setup, board, tickets, runs,
+    run workflow).
+  - The copy was deleted afterwards. Only counts were recorded.
