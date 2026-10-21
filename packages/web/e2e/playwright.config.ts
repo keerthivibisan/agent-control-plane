@@ -116,6 +116,12 @@ export default defineConfig({
       testMatch: 'review-loop.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
+    {
+      // v0.3.0 S-B (ADR-0024): session names and the run summary card, routes from fixtures.
+      name: 'session-names',
+      testMatch: 'session-names.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
     // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).
     {
       name: 'pages',

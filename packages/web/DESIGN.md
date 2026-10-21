@@ -352,6 +352,34 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   every editing block shows a neutral note that it changes nothing. The old widening warnings
   stay only for a server without graphs.
 
+## Session names and run summaries (ADR-0024, WP S-B)
+
+- **One naming rule** (`src/lib/session-name.ts` `nameSession`, pure, tested per case), used by
+  every view that lists or draws sessions: the Sessions list, a session's page, the family tree
+  (and so the agent trees' helper lists), the relationships diagram, the timeline, the
+  relationships picker, related sessions and All projects. In order:
+  1. **started by the app** (`SessionSummaryDto.managed`): `WEB-12 · Frontend helper`, or the label
+     alone for a run without a ticket, with a quiet "Started by Agent Control Plane" tag (`Badge`);
+     on the session's page the tag is followed by "Open WEB-12" (or "Open the run"), a link to
+     `#/control/:runId`, which opens the run's ticket or run page;
+  2. **Claude Code's title**;
+  3. **a helper agent** (agent type or agent id): "Helper agent: Explore", with its description as
+     a quieter second line (also under a title);
+  4. **otherwise** "Session on main · Oct 21, 9:00 AM", or "Session started Oct 21, 9:00 AM"
+     without a branch. Never "Untitled".
+
+  The short id stays where it was. In the diagram the tag or the helper's task shares the id's
+  line, so a node keeps its height. Lists that know only an id and a title (Tokens by session, the
+  cost list) read "Session 1a2b3c4d" without a title.
+
+- **Run summary** (ticket comments by author `app`): a card of its own in the comments (`sunken`
+  header with the "Run summary" title, the run number and an "Agent Control Plane" tag; the body on
+  `panel`). The server's plain text is read loosely (`features/ticket/run-summary.ts`): a short
+  line ending with a colon is a heading, `- ` lines are a list (two spaces of indent per level),
+  anything else is shown as written with its line breaks. The note after your merge ("Merged
+  acp/WEB-12 into main at 4f2a9c1") is a small line with a merge icon instead of a card. Your, the
+  lead's and the reviewer's comments are unchanged.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |
