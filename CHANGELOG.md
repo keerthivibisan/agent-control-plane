@@ -58,6 +58,11 @@ that, going back is not supported, because 0.1.0 cannot read the new workflows a
 - "Used by" on the Skills & Agents page names the workflow blocks that use a skill or agent file.
 - The README is now a proper front page, with screenshots of sample data.
 
+### Fixed
+
+- A tall dialog, such as "Start with options…" in a shorter window, could open scrolled down to
+  its Start button, hiding its title and first choices. It now opens at the top.
+
 ### Security
 
 - A helper set to Full auto keeps the operating-system sandbox when a ticket or run makes it
