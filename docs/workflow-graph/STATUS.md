@@ -210,3 +210,13 @@ plan-approval` without a planner;
   - **Result:** 37/37 read calls answered 200 (projects, workflow, setup, board, tickets, runs,
     run workflow).
   - The copy was deleted afterwards. Only counts were recorded.
+- 2026-10-21 WG-F merged (`5486d77`).
+  - **Bug 1:** the run options lost the project defaults for graph projects. Core
+    `graphRunDefaults` is now shared by the server and the web, and the Start dialog, run options,
+    New ticket, badge and Skills read `/workflow-graph`, with no v1 request for graph projects.
+  - **Bug 2:** the blank band was real. The Start dialog's autofocus scrolled it on open, and it
+    now focuses with `preventScroll`.
+  - **Bug 3:** the demo-mode 404s are the same in v0.1.0, so nothing changed.
+  - Coordinator check, with WG-V merged too: 4,582 tests; full e2e 72/72.
+- 2026-10-21 **The owner consented in chat to all four real runs** (a, b, c, mixed), to run after
+  the fixes (WG-F and F3) merge.
