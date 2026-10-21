@@ -49,6 +49,7 @@ const facts = (extra: Partial<RunSummaryFacts> = {}): RunSummaryFacts => ({
     branch: 'acp/WEB-12',
     baseBranch: 'main',
     state: 'open',
+    awaitingMerge: true,
     merged: 1,
     tipChecks: { passed: 2, failed: [], notRun: [] },
   },
@@ -76,7 +77,7 @@ describe('composeRunSummary', () => {
         '- Frontend helper: merged; 3 files, +42 -5 lines; checks passed (2); 2 rework rounds (lead 1, reviewer 1).',
         '- Helpers: discarded; 1 file; checks: 1 of 3 passed; failed: Unit tests; not run: Lint.',
         '',
-        'Ticket branch acp/WEB-12 (from main): open; 1 change merged; tip checks passed (2).',
+        'Ticket branch acp/WEB-12 (from main): 1 change merged; waiting for your merge; checks passed on the tip (2).',
         '',
         'Budget tokens: lead 12,400; helpers 48,000 (2 agents); reviewers 9,100 (2 agents).',
         '',
@@ -144,10 +145,54 @@ describe('recognising the app’s comments', () => {
     expect(RUN_SUMMARY_HEADING).toBe('Run summary');
   });
 
-  it('writes the merge line with a short commit', () => {
-    expect(mergeLine('acp/WEB-12', 'main', 'abcdef0123456789abcdef0123456789abcdef01')).toBe(
-      'Merged acp/WEB-12 into main at abcdef0.',
+  it('writes the merge line with a short commit, and the tip checks when known', () => {
+    const sha = 'abcdef0123456789abcdef0123456789abcdef01';
+    expect(mergeLine('acp/WEB-12', 'main', sha)).toBe('Merged acp/WEB-12 into main at abcdef0.');
+    expect(
+      mergeLine('acp/WEB-12', 'main', sha, { tipChecks: { passed: 2, failed: [], notRun: [] } }),
+    ).toBe('Merged acp/WEB-12 into main at abcdef0; checks passed on the tip (2).');
+    // Merge anyway says so, never with the owner's reason.
+    expect(
+      mergeLine('acp/WEB-12', 'main', sha, {
+        tipChecks: { passed: 1, failed: ['Unit tests'], notRun: [] },
+        anyway: true,
+      }),
+    ).toBe(
+      'Merged acp/WEB-12 into main at abcdef0 (merged anyway, with a reason); checks on the tip: 1 of 2 passed; failed: Unit tests.',
     );
+  });
+
+  it('says where the ticket branch stands, never just "open"', () => {
+    const tb = (state: 'open' | 'merged' | 'discarded', awaitingMerge: boolean) =>
+      composeRunSummary(
+        facts({
+          ticketBranch: {
+            branch: 'acp/WEB-12',
+            baseBranch: 'main',
+            state,
+            awaitingMerge,
+            merged: 2,
+            tipChecks: null,
+          },
+        }),
+      )
+        .split('\n')
+        .find((l) => l.startsWith('Ticket branch'));
+    expect(tb('open', true)).toBe(
+      'Ticket branch acp/WEB-12 (from main): 2 changes merged; waiting for your merge.',
+    );
+    expect(tb('open', false)).toBe(
+      'Ticket branch acp/WEB-12 (from main): 2 changes merged; not merged.',
+    );
+    expect(tb('merged', false)).toBe(
+      'Ticket branch acp/WEB-12 (from main): 2 changes merged; merged into main.',
+    );
+    expect(tb('discarded', false)).toBe(
+      'Ticket branch acp/WEB-12 (from main): 2 changes merged; discarded.',
+    );
+    for (const state of ['open', 'merged', 'discarded'] as const) {
+      expect(tb(state, state === 'open')).not.toMatch(/: open\b|; open\b/);
+    }
   });
 });
 

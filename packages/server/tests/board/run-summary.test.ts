@@ -86,7 +86,7 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     );
     const branch = loopRepos.ticketBranches.getByRun(runId);
     expect(body).toContain(
-      `Ticket branch ${branch?.branch ?? ''} (from ${branch?.baseBranch ?? ''}): open; 1 change merged`,
+      `Ticket branch ${branch?.branch ?? ''} (from ${branch?.baseBranch ?? ''}): 1 change merged; waiting for your merge`,
     );
     const agents = orch.agentRuns.listForRun(runId);
     const leadRow = agents.find((a) => a.kind === 'lead');
@@ -110,7 +110,8 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     const app = await appComments(s, ticket.id);
     expect(app.map((c) => c.body)).toEqual([
       body,
-      `Merged acp/WEBAPP-1 into main at ${tip.slice(0, 7)}.`,
+      // The tip's checks ran (the owner's merge needs them): their result is in the line.
+      `Merged acp/WEBAPP-1 into main at ${tip.slice(0, 7)}; checks passed on the tip (1).`,
     ]);
     expect(app[1]).toMatchObject({ runId, author: 'app' });
   }, 60_000);
@@ -149,9 +150,44 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     // `fixed.txt` was already on the ticket branch: the second change is `b.txt` alone.
     expect(updated).toContain('- Helpers: merged; 2 files, +2 -0 lines; checks passed (1).');
     expect(updated).toContain('- Helpers 2: merged; 1 file, +2 -0 lines; checks passed (1).');
-    expect(updated).toContain('open; 2 changes merged');
+    expect(updated).toContain('2 changes merged; waiting for your merge');
     expect(updated.endsWith("Lead's note:\nAdded the print view too.")).toBe(true);
   }, 90_000);
+});
+
+describe('the merge line after the owner merges anyway', () => {
+  it('says so, with the failed tip checks, and never the owner’s reason', async () => {
+    const REASON = 'MERGE-REASON-7Z known flaky';
+    const s = await setupBoard({ files: FILES });
+    // The lead reviews changes itself; no `fixed.txt`, so the required check fails.
+    const { ticket, runId, lead } = await approved(s, { reviewer: 'lead' });
+    const worker = await helperDone(s, lead, runId, { 'src/x.ts': 'export {};\n' });
+    await lead.callLead('ask_owner', { agentId: worker.id, question: 'Merge anyway? Synthetic.' });
+    await s.settle();
+    const change = await s.post(`/api/runs/${runId}/review`, {
+      agentRunId: worker.id,
+      action: 'merge-anyway',
+      reason: REASON,
+    });
+    expect(change.status).toBe(200);
+    await lead.callLead('request_review', {});
+    await s.settle();
+    expect((await run(s, runId)).status).toBe('REVIEW');
+    const [summary] = await summaries(s, ticket.id);
+    expect(summary?.body).toContain('1 change merged; waiting for your merge');
+    const url = `/api/runs/${runId}/ticket-branch`;
+    const tip = createReviewLoopRepositories(s.db).ticketBranches.getByRun(runId)?.headCommit ?? '';
+    expect((await s.post(url, { action: 'merge' })).status).toBe(409);
+    expect((await s.post(url, { action: 'merge-anyway', reason: REASON })).status).toBe(200);
+    const app = await appComments(s, ticket.id);
+    expect(app.at(-1)?.body).toBe(
+      `Merged acp/WEBAPP-1 into main at ${tip.slice(0, 7)} (merged anyway, with a reason); checks on the tip: 0 of 1 passed; failed: Unit tests.`,
+    );
+    for (const c of app) expect(c.body).not.toContain('MERGE-REASON-7Z');
+    // The reason stays the owner's own comment.
+    const owner = (await s.detail(ticket.id)).comments.filter((c) => c.author === 'owner');
+    expect(owner.some((c) => c.body.includes(REASON))).toBe(true);
+  }, 60_000);
 });
 
 describe('a facts-only summary when a run ends without a handover', () => {

@@ -57,9 +57,27 @@ export function isRunSummaryComment(comment: Pick<TicketComment, 'author' | 'bod
   return first === RUN_SUMMARY_HEADING || first === RUN_SUMMARY_UPDATED_HEADING;
 }
 
-/** The `app` line after the owner's single merge of the ticket branch (ADR-0024 §3). */
-export function mergeLine(branch: string, baseBranch: string, commit: string): string {
-  return `Merged ${branch} into ${baseBranch} at ${commit.slice(0, 7)}.`;
+export interface MergeLineOptions {
+  /** The required checks on the merged tip, when known (`tally` of its latest results). */
+  tipChecks?: CheckTally | null;
+  /** The owner merged past a failed required check, giving a reason (never quoted here). */
+  anyway?: boolean;
+}
+
+/**
+ * The `app` line after the owner's single merge of the ticket branch (ADR-0024 §3), with the
+ * tip's checks when known: `Merged acp/WEB-12 into main at abc1234; checks passed on the tip (2).`
+ * A merge past a failed check says so, without the owner's reason (that is the owner's comment).
+ */
+export function mergeLine(
+  branch: string,
+  baseBranch: string,
+  commit: string,
+  options: MergeLineOptions = {},
+): string {
+  const anyway = options.anyway === true ? ' (merged anyway, with a reason)' : '';
+  const tip = options.tipChecks ?? null;
+  return `Merged ${branch} into ${baseBranch} at ${commit.slice(0, 7)}${anyway}${tip === null ? '' : `; ${tipChecksText(tip)}`}.`;
 }
 
 // ------------------------------------------------------------------ facts
@@ -97,6 +115,8 @@ export interface RunSummaryFacts {
     branch: string;
     baseBranch: string;
     state: 'open' | 'merged' | 'discarded';
+    /** Open and the owner's merge comes next (a handover, or a lead that ended in review). */
+    awaitingMerge: boolean;
     merged: number;
     tipChecks: CheckTally | null;
   } | null;
@@ -121,7 +141,8 @@ function num(n: number): string {
   return n.toLocaleString('en-US');
 }
 
-function tally(runs: readonly CheckRun[]): CheckTally | null {
+/** The latest result per check id, counted (null when no check ran). */
+export function tally(runs: readonly CheckRun[]): CheckTally | null {
   // The latest result per check id.
   const latest = new Map<string, CheckRun>();
   for (const run of runs) latest.set(run.checkId, run);
@@ -149,6 +170,13 @@ function checksText(t: CheckTally): string {
   if (t.failed.length > 0) parts.push(`failed: ${names(t.failed)}`);
   if (t.notRun.length > 0) parts.push(`not run: ${names(t.notRun)}`);
   return parts.join('; ');
+}
+
+/** The ticket branch tip's checks: `checks passed on the tip (2)`, or the counts and names. */
+function tipChecksText(t: CheckTally): string {
+  const total = t.passed + t.failed.length + t.notRun.length;
+  if (t.passed === total) return `checks passed on the tip (${total})`;
+  return checksText(t).replace(/^checks: /, 'checks on the tip: ');
 }
 
 function changeLine(c: ChangeFact): string {
@@ -191,11 +219,19 @@ export function composeRunSummary(facts: RunSummaryFacts, updated = false): stri
   const branch = facts.ticketBranch;
   const tail: string[] = [];
   if (branch !== null) {
+    const where =
+      branch.state === 'merged'
+        ? `merged into ${branch.baseBranch}`
+        : branch.state === 'discarded'
+          ? 'discarded'
+          : branch.awaitingMerge
+            ? 'waiting for your merge'
+            : 'not merged';
     const parts = [
-      `Ticket branch ${branch.branch} (from ${branch.baseBranch}): ${branch.state}`,
-      `${plural(branch.merged, 'change')} merged`,
+      `Ticket branch ${branch.branch} (from ${branch.baseBranch}): ${plural(branch.merged, 'change')} merged`,
+      where,
     ];
-    if (branch.tipChecks !== null) parts.push(`tip ${checksText(branch.tipChecks)}`);
+    if (branch.tipChecks !== null) parts.push(tipChecksText(branch.tipChecks));
     tail.push(`${parts.join('; ')}.`);
   }
   const tokens = facts.tokens
@@ -374,6 +410,10 @@ export function gatherRunFacts(input: FactsInput): RunSummaryFacts {
           branch: row.branch,
           baseBranch: row.baseBranch,
           state: row.state,
+          awaitingMerge:
+            row.state === 'open' &&
+            (input.trigger.kind === 'handover' ||
+              (input.trigger.kind === 'ended' && input.trigger.outcome === 'lead-ended')),
           merged: agents.filter(
             (a) => store.loopRepos.workspaceChanges.getByAgentRun(a.id)?.changeState === 'merged',
           ).length,
