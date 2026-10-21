@@ -26,6 +26,7 @@ import { errorFields, type Logger } from '../logger.js';
 import { WorkspaceError, type Workspace, type WorkspaceManager } from '../workspace/index.js';
 import { refusalError, workspaceError } from './errors.js';
 import { toTicketBranchDto } from './review-loop-dto.js';
+import { mergeLine } from './run-summary.js';
 import type { RunStore } from './store.js';
 
 /**
@@ -515,6 +516,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     body: unknown,
     notes: {
       ownerComment: (text: string) => void;
+      /** ADR-0024 §3: the app's own line after the owner's merge (author `app`). */
+      appComment?: (text: string) => void;
     },
   ): Promise<void> {
     const input = TicketBranchActionRequestSchema.parse(body);
@@ -610,6 +613,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
           }
           const merged = await ctx.workspaces.mergeTicketBranch(ref, row.headCommit);
           loop.ticketBranches.markMerged(runId, merged.commit);
+          // Before the run completes, so the board's notice for it already shows the line.
+          notes.appComment?.(mergeLine(row.branch, row.baseBranch, merged.commit));
           const r = ctx.apply(live, (s, c) => recordTicketBranchDecision(s, 'merged', c));
           if (!r.ok) throw refusalError(r.refusal);
           if (input.action === 'merge-anyway') {

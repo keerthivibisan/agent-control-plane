@@ -11,6 +11,7 @@ export type {
   CreateOptions,
   CreatedTicketBranch,
   IntegrateResult,
+  LineCounts,
   SealResult,
   TicketBranchRef,
   TicketBranchReview,

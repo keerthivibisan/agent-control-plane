@@ -4,7 +4,7 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { TicketBranchNameSchema, ticketBranchName } from '@acp/core';
 import { z } from 'zod';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
-import { changedFiles, type ChangedFile } from './diff.js';
+import { changedFiles, parseNumstat, type ChangedFile } from './diff.js';
 import { GitCommandError, WorkspaceError } from './errors.js';
 import { createGitRunner, type GitRunner } from './git.js';
 import { assertSafeId, branchFor, isSafeId } from './ids.js';
@@ -238,6 +238,24 @@ export interface WorkspaceManager {
   removeCheckout(checkout: CommitCheckout): Promise<void>;
   /** On start: removes every temporary commit checkout (none survives a restart). */
   cleanupCheckouts(): Promise<number>;
+  /**
+   * ADR-0024 §3, the run summary: the files and lines one sealed change brought, read from the
+   * project's repository (no worktree needed). When `headCommit` is the merge the review loop made
+   * of the ticket tip into the helper's branch, the change is what that merge adds to the tip (its
+   * second parent); otherwise it is `baseCommit..headCommit`. Line counts leave binary files out
+   * (null when every changed file is binary). Null when git cannot tell (a commit is gone).
+   */
+  lineCounts(
+    projectRoot: string,
+    baseCommit: string,
+    headCommit: string,
+  ): Promise<LineCounts | null>;
+}
+
+export interface LineCounts {
+  files: number;
+  additions: number | null;
+  deletions: number | null;
 }
 
 export interface WorkspaceManagerDeps {
@@ -711,6 +729,37 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
         const changedFiles = names.split('\0').filter((n) => n !== '').length;
         return { changed: changedFiles > 0, headCommit, changedFiles };
       });
+    },
+
+    async lineCounts(projectRoot, baseCommit, headCommit) {
+      if (!FULL_COMMIT.test(baseCommit) || !FULL_COMMIT.test(headCommit)) return null;
+      try {
+        const { repoRoot } = await repoOf(projectRoot);
+        const parents = (await out(['rev-list', '--parents', '-n', '1', headCommit], repoRoot))
+          .trim()
+          .split(' ');
+        const tip = parents.length === 3 ? parents[2] : undefined;
+        const fromTip =
+          tip !== undefined &&
+          (await test(['merge-base', '--is-ancestor', baseCommit, tip], repoRoot));
+        const from = fromTip && tip !== undefined ? tip : baseCommit;
+        const numstat = await out(
+          [...DIFF_BASE, '-z', '--numstat', from, headCommit, '--'],
+          repoRoot,
+        );
+        const counts = [...parseNumstat(numstat).values()];
+        const text = counts.filter((c) => c.additions !== null && c.deletions !== null);
+        const sum = (pick: (c: (typeof counts)[number]) => number | null) =>
+          text.length === 0 ? null : text.reduce((n, c) => n + (pick(c) ?? 0), 0);
+        return {
+          files: counts.length,
+          additions: sum((c) => c.additions),
+          deletions: sum((c) => c.deletions),
+        };
+      } catch {
+        // A commit the summary names is gone (or the project moved): the lines are unknown.
+        return null;
+      }
     },
 
     async integrate(ws, ticketTip) {

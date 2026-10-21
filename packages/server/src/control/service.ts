@@ -105,6 +105,7 @@ import { errorFields, type Logger } from '../logger.js';
 import {
   WorkspaceError,
   type GitRunner,
+  type LineCounts,
   type Workspace,
   type WorkspaceManager,
 } from '../workspace/index.js';
@@ -140,6 +141,7 @@ import {
 } from './review-loop.js';
 import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
+import { createRunSummaries, endTrigger } from './run-summary.js';
 import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
@@ -521,6 +523,57 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     countDiagnostic: (code) => countDiagnostic(code),
   });
 
+  /** ADR-0024 §3: the run summary comments, composed from the app's own records. */
+  const summaries = createRunSummaries({
+    store,
+    logger,
+    publish: deps.publish,
+    lastEventId: () => deps.repos.events.maxId() ?? 0,
+    lineCounts: (live) => lineCountsOf(live as LiveRun),
+    track,
+    countDiagnostic: (code) => countDiagnostic(code),
+  });
+
+  /**
+   * The files and lines of each change, where git can tell (ADR-0024 §3): a loop change from its
+   * sealed commit in the project's repository (its worktree may be gone), a legacy change from
+   * its worktree while it is still there. Never rejects; an unknown count is left out.
+   */
+  async function lineCountsOf(live: LiveRun): Promise<Map<string, LineCounts>> {
+    const out = new Map<string, LineCounts>();
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    if (project === undefined) return out;
+    const loopRun = live.state.integration !== undefined;
+    for (const row of store.repos.workspaces.listForRun(live.state.run.id)) {
+      try {
+        if (loopRun) {
+          const head = store.loopRepos.workspaceChanges.getByAgentRun(row.agentRunId)?.headCommit;
+          if (head === undefined || head === null || row.baseCommit === null) continue;
+          const counts = await deps.workspaces.lineCounts(project.rootPath, row.baseCommit, head);
+          if (counts !== null) out.set(row.agentRunId, counts);
+        } else if (row.state === 'active') {
+          const ws = await workspaceFor(live, row);
+          const { files } = await deps.workspaces.changes(ws, { maxDiffBytes: 1 });
+          const text = files.filter((f) => f.additions !== null && f.deletions !== null);
+          const sum = (pick: (f: (typeof files)[number]) => number | null) =>
+            text.length === 0 ? null : text.reduce((n, f) => n + (pick(f) ?? 0), 0);
+          out.set(row.agentRunId, {
+            files: files.length,
+            additions: sum((f) => f.additions),
+            deletions: sum((f) => f.deletions),
+          });
+        }
+      } catch (error) {
+        logger.log('info', 'change line counts unavailable', {
+          runId: live.state.run.id,
+          agentRunId: row.agentRunId,
+          ...errorFields(error),
+        });
+      }
+    }
+    return out;
+  }
+
   function track<T>(promise: Promise<T>): void {
     const p = promise.catch((error: unknown) => {
       logger.log('error', 'control task failed', errorFields(error));
@@ -736,6 +789,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'remove-review-checkout':
           removeReviewCheckout(live, effect.agentRunId);
           break;
+        case 'handover-summary':
+          // ADR-0024 §3: composed from the records once this transition is committed.
+          summaries.schedule(live, { kind: 'handover', note: effect.note });
+          break;
         case 'plan-submitted':
         case 'plan-decided':
           // The plan is in the state and stored with it; the board layer publishes the notice.
@@ -789,6 +846,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (status !== prev.run.status) {
       logger.log('info', 'run status changed', { runId: live.state.run.id, status });
     }
+    // ADR-0024 §3: a facts-only summary when a run ends without a handover (or a legacy run
+    // reaches review). The handover's own comes from its effect.
+    const ended = endTrigger(prev, live.state);
+    if (ended !== null) summaries.schedule(live, ended);
     const before = new Map(prev.agents.map((a) => [a.id, a]));
     for (const agent of live.state.agents) {
       const was = before.get(agent.id);
@@ -2038,6 +2099,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       store.commit(state, result.state, []);
       live.state = result.state;
       live.cancellingSince = null;
+      // A run that was being stopped finishes stopping here (ADR-0013 §7): its facts-only
+      // summary, unless it already has one (`endTrigger` is null for NEEDS_REVIEW).
+      const ended = endTrigger(state, result.state);
+      if (ended !== null) summaries.schedule(live, ended);
       logger.log('info', 'run recovered after restart', {
         runId: run.id,
         status: result.state.run.status,
@@ -2409,6 +2474,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             });
           } catch (error) {
             logger.log('error', 'owner comment not stored', { runId, ...errorFields(error) });
+          }
+        },
+        appComment: (text) => {
+          // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
+          const ticketId = live.state.run.ticketId;
+          if (ticketId === null) return;
+          try {
+            store.workspaceRepos.comments.insert({ ticketId, runId, author: 'app', body: text });
+          } catch (error) {
+            logger.log('error', 'app comment not stored', { runId, ...errorFields(error) });
           }
         },
       });

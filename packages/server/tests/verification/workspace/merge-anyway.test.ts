@@ -76,7 +76,8 @@ describe('P4-H merge anyway', () => {
     expectError(await review({ action: 'merge-anyway', reason: '' }), 400, 'invalid_request');
     expectError(await review({ action: 'merge-anyway', reason: '   ' }), 400, 'invalid_request');
     expect(showFile(repo, 'main', 'health.txt')).toBeNull();
-    expect(d.comments).toEqual([]);
+    // ADR-0024: the app's run summary may be there too; the owner has written nothing yet.
+    expect(d.comments.filter((c) => c.author !== 'app')).toEqual([]);
 
     const merged = ReviewDtoSchema.parse(
       expectStatus(await review({ action: 'merge-anyway', reason: REASON }), 200),
@@ -85,10 +86,11 @@ describe('P4-H merge anyway', () => {
     expect(showFile(repo, 'main', 'health.txt')).toBe('ok\n');
     d = await waitForTicket(b, ticket.id, (x) => x.ticket.stage === 'DONE', 'the ticket done');
     expect(d.ticket.status).toBe('DONE');
-    expect(d.comments).toHaveLength(1);
-    expect(d.comments[0]).toMatchObject({ author: 'owner', runId, planId: null });
-    expect(d.comments[0]?.body).toContain('Unit tests');
-    expect(d.comments[0]?.body).toContain(`Reason: ${REASON}`);
+    const owner = d.comments.filter((c) => c.author !== 'app');
+    expect(owner).toHaveLength(1);
+    expect(owner[0]).toMatchObject({ author: 'owner', runId, planId: null });
+    expect(owner[0]?.body).toContain('Unit tests');
+    expect(owner[0]?.body).toContain(`Reason: ${REASON}`);
     // The event is logged without the owner's text.
     expect(logLines(b.logs, 'merged anyway')).toHaveLength(1);
     expect(b.logs.filter((l) => l.includes('P4H-REASON'))).toEqual([]);
