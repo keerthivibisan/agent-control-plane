@@ -102,6 +102,26 @@ describe('ticket comments by the app', () => {
     expect(line.textContent).toContain('Agent Control Plane');
   });
 
+  it('shows the tip checks after the commit in the merge note', () => {
+    const list = renderComments([
+      comment({
+        id: 'c-merge',
+        author: 'app',
+        body: 'Merged acp/WEB-12 into main at 1a2b3c4; checks passed on the tip (2).',
+      }),
+    ]);
+    const line = within(list).getByTestId('merge-line');
+    expect([...line.querySelectorAll('code')].map((c) => c.textContent)).toEqual([
+      'acp/WEB-12',
+      'main',
+      '1a2b3c4',
+    ]);
+    expect(within(line).getByTestId('merge-detail').textContent).toBe(
+      '; checks passed on the tip (2)',
+    );
+    expect(line.textContent).toContain('1a2b3c4; checks passed on the tip (2)');
+  });
+
   it('shows a summary without a run, and a summary of plain text, as a card too', () => {
     const list = renderComments([
       comment({ id: 'c-1', author: 'app', runId: null, body: 'Stopped before the handover.' }),

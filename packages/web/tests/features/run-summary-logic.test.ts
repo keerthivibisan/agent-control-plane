@@ -89,6 +89,26 @@ describe('parseMergeLine', () => {
     });
   });
 
+  it('keeps what the server adds after the commit: the tip checks, a merge anyway', () => {
+    expect(
+      parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4; checks passed on the tip (2).'),
+    ).toEqual({
+      branch: 'acp/WEB-12',
+      into: 'main',
+      at: '1a2b3c4',
+      detail: '; checks passed on the tip (2)',
+    });
+    expect(
+      parseMergeLine(
+        'Merged acp/WEB-12 into main at 1a2b3c4 (merged anyway, with a reason); checks on the tip: 1 of 2 passed; failed: Unit tests.',
+      ),
+    ).toMatchObject({
+      at: '1a2b3c4',
+      detail:
+        ' (merged anyway, with a reason); checks on the tip: 1 of 2 passed; failed: Unit tests',
+    });
+  });
+
   it('is not a merge note when it has more lines or another shape', () => {
     expect(parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4\nMore')).toBeNull();
     expect(parseMergeLine('Run summary\n- Merged 2 changes')).toBeNull();

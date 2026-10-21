@@ -89,6 +89,7 @@ export function MergeLine({ comment, note }: { comment: TicketCommentDto; note: 
         {C.merge.merged} <code className="font-mono text-ink">{note.branch}</code> {C.merge.into}{' '}
         <code className="font-mono text-ink">{note.into}</code> {C.merge.at}{' '}
         <code className="font-mono text-ink">{note.at}</code>
+        {note.detail !== undefined && <span data-testid="merge-detail">{note.detail}</span>}
       </span>
       <span aria-hidden="true">·</span>
       <RelativeTime iso={comment.createdAt} />

@@ -64,14 +64,28 @@ export interface MergeNote {
   branch: string;
   into: string;
   at: string;
+  /**
+   * What the server adds after the commit (S-A2): the tip's checks and whether the owner merged
+   * anyway, as written right after the commit, e.g. `; checks passed on the tip (2)`. Absent when
+   * there is nothing after the commit.
+   */
+  detail?: string;
 }
 
+/** A commit id, then optionally the server's detail after it. */
+const MERGE_LINE_DETAIL = /^Merged (\S+) into (\S+) at ([0-9a-f]{7,64})\b(.*?)\.?$/;
 const MERGE_LINE = /^Merged (\S+) into (\S+) at (\S.*?)\.?$/;
 
 /** The merge note's parts, or null when the comment is anything else (a run summary). */
 export function parseMergeLine(body: string): MergeNote | null {
   const text = body.trim();
   if (text.includes('\n') || text.length > 300) return null;
+  const d = MERGE_LINE_DETAIL.exec(text);
+  if (d?.[1] !== undefined && d[2] !== undefined && d[3] !== undefined) {
+    // Kept as written right after the commit: `; checks …` or ` (merged anyway, …); checks …`.
+    const detail = (d[4] ?? '').trimEnd();
+    return { branch: d[1], into: d[2], at: d[3], ...(detail.trim().length > 0 && { detail }) };
+  }
   const m = MERGE_LINE.exec(text);
   if (!m || m[1] === undefined || m[2] === undefined || m[3] === undefined) return null;
   return { branch: m[1], into: m[2], at: m[3] };
