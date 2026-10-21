@@ -25,10 +25,10 @@
 
 ## Work log
 
-| Date       | What                                                       | Commit    | Checks                                                |
-| ---------- | ---------------------------------------------------------- | --------- | ----------------------------------------------------- |
-| 2026-10-21 | Naming function, every view, run summary card, unit tests  | `7add220` | format ✓ lint ✓ typecheck ✓ test 4633/4633 ✓ build ✓  |
-| 2026-10-21 | e2e (mocked routes), screenshots, DESIGN.md, status review | (next)    | see the commit; full web e2e green on ports 7631/7641 |
+| Date       | What                                                       | Commit    | Checks                                                  |
+| ---------- | ---------------------------------------------------------- | --------- | ------------------------------------------------------- |
+| 2026-10-21 | Naming function, every view, run summary card, unit tests  | `7add220` | format ✓ lint ✓ typecheck ✓ test 4633/4633 ✓ build ✓    |
+| 2026-10-21 | e2e (mocked routes), screenshots, DESIGN.md, status review | `57b3648` | check ✓ 4633/4633; full web e2e 75/75 (ports 7631/7641) |
 
 ## Decisions and findings
 
