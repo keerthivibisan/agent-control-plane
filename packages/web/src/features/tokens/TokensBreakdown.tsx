@@ -7,14 +7,10 @@ import { EstimatedCost } from '../../components/EstimatedCost';
 import { InfoTip } from '../../components/InfoTip';
 import { ProvenanceBadge } from '../../components/ProvenanceBadge';
 import { TokensIcon } from '../../components/icons';
-import {
-  NOT_REPORTED,
-  TOKENS_COPY,
-  UNTITLED_SESSION,
-  type TokensBreakdownWord,
-} from '../../lib/copy';
+import { NOT_REPORTED, TOKENS_COPY, type TokensBreakdownWord } from '../../lib/copy';
 import { formatCount, shortId } from '../../lib/format';
 import { href, navigate } from '../../lib/router';
+import { sessionNameFromTitle } from '../../lib/session-name';
 import { Figure, NEW_WORK_TYPES, Share, TOTAL_TYPES } from './figures';
 import { Segmented } from '../../components/Segmented';
 import { tokensHref, type TokensParams } from './tokens-params';
@@ -152,7 +148,7 @@ function sessionRows(data: ProjectTokensDto): Row[] {
     name: (
       <span className="flex min-w-0 flex-col">
         <a href={href.session(s.sessionId)} className="truncate font-medium">
-          {s.title ?? UNTITLED_SESSION}
+          {sessionNameFromTitle(s.sessionId, s.title)}
         </a>
         <span className="font-mono text-caption text-dim">{shortId(s.sessionId)}</span>
       </span>

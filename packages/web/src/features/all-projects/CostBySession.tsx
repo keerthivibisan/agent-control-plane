@@ -6,8 +6,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { EstimatedCost } from '../../components/EstimatedCost';
 import { RelativeTime } from '../../components/RelativeTime';
 import { EMPTY, GLOSSARY, NOT_REPORTED, OVERVIEW_COPY, TECH_LABELS } from '../../lib/copy';
-import { idPrefix } from '../../lib/format';
 import { href } from '../../lib/router';
+import { sessionNameFromTitle } from '../../lib/session-name';
 
 type Snapshot = OverviewDto['latestSnapshots'][number];
 
@@ -67,7 +67,7 @@ export function CostBySession({ snapshots }: { snapshots: OverviewDto['latestSna
                     href={href.session(s.sessionId)}
                     className="block truncate font-medium text-ink no-underline hover:text-accent hover:underline"
                   >
-                    {s.title ?? OVERVIEW_COPY.sessionById(idPrefix(s.sessionId))}
+                    {sessionNameFromTitle(s.sessionId, s.title)}
                   </a>
                   <div className="text-caption text-dim">
                     {OVERVIEW_COPY.costs.asOf} <RelativeTime iso={s.occurredAt} />

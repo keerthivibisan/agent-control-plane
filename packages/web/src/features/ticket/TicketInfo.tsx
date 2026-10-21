@@ -7,11 +7,12 @@ import { inputClass, labelClass } from '../../components/Input';
 import { Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { addTicketComment, updateTicket } from '../../lib/api';
-import { RUN_STATUS_COPY, TICKET_COPY } from '../../lib/copy';
+import { RUN_STATUS_COPY, RUN_SUMMARY_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError, StatusWord } from '../control/bits';
 import { TicketRunOptionsSection } from '../review-loop/RunOptions';
 import { useTicketAction } from './actions';
 import { EarlierPlans } from './PlanReview';
+import { AppComment } from './RunSummary';
 import { COMMENTS_ID, runNumber } from './ticket-state';
 
 const C = TICKET_COPY;
@@ -118,6 +119,18 @@ function Comments({ detail }: { detail: TicketDetailDto }) {
       ) : (
         <ol className="flex flex-col gap-3">
           {sorted.map((c) => {
+            if (c.author === 'app') {
+              // Written by the app itself: the run summary card, or the line after a merge.
+              const n = c.runId ? runNumber(detail.runs, c.runId) : null;
+              return (
+                <li key={c.id} className="flex flex-col" data-author={c.author}>
+                  <AppComment
+                    comment={c}
+                    runLabel={n === null ? null : RUN_SUMMARY_COPY.ofRun(n)}
+                  />
+                </li>
+              );
+            }
             const version = c.planId ? versionOf.get(c.planId) : undefined;
             const reviewer = c.author === 'reviewer';
             return (

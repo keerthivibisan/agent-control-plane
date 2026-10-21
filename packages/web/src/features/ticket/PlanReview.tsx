@@ -7,7 +7,7 @@ import { inputClass } from '../../components/Input';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decidePlan } from '../../lib/api';
-import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, TICKET_COPY } from '../../lib/copy';
+import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, RUN_SUMMARY_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from './actions';
 import { commentsOnPlan } from './ticket-state';
@@ -80,7 +80,9 @@ function PlanComments({ comments }: { comments: readonly TicketCommentDto[] }) {
               ? C.yourComment
               : c.author === 'reviewer'
                 ? TICKET_COPY.comments.reviewer
-                : TICKET_COPY.comments.lead}
+                : c.author === 'app'
+                  ? RUN_SUMMARY_COPY.author
+                  : TICKET_COPY.comments.lead}
           </span>
           <p className="whitespace-pre-wrap">{c.body}</p>
         </li>

@@ -7,7 +7,8 @@ import { GLOSSARY, SESSIONS_COPY } from '../../lib/copy';
 import { idPrefix } from '../../lib/format';
 import { href } from '../../lib/router';
 import { NODE_WIDTH, type SessionNode } from './graph';
-import { sessionName, TokenSummary } from './session-bits';
+import { nameSession } from '../../lib/session-name';
+import { SessionNameExtra, TokenSummary } from './session-bits';
 
 const COPY = SESSIONS_COPY.relate;
 
@@ -20,6 +21,7 @@ export const GraphActions = createContext<{ toggle: (id: string) => void }>({ to
 export function SessionNodeView({ data }: NodeProps<SessionNode>) {
   const { toggle } = useContext(GraphActions);
   const s = data.session;
+  const naming = nameSession(s);
   const hasLinks = data.childEdgeCount > 0;
   return (
     <div
@@ -42,13 +44,17 @@ export function SessionNodeView({ data }: NodeProps<SessionNode>) {
         <a
           href={href.session(s.id)}
           className="nodrag min-w-0 flex-1 truncate font-medium"
-          title={s.description ?? sessionName(s)}
+          title={naming.name}
         >
-          {sessionName(s)}
+          {naming.name}
         </a>
         <StatusBadge status={s.status} withTip={false} />
       </div>
-      <div className="mt-0.5 font-mono text-caption text-dim">{idPrefix(s.id)}</div>
+      {/* The marker or a helper's task shares the id's line, so a node keeps its height. */}
+      <div className="mt-0.5 flex min-w-0 items-center gap-2">
+        <span className="shrink-0 font-mono text-caption text-dim">{idPrefix(s.id)}</span>
+        <SessionNameExtra naming={naming} inline />
+      </div>
       <div className="mt-2 text-caption">
         <TokenSummary usage={s.directUsage} withCache={false} />
       </div>

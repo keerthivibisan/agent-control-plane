@@ -451,7 +451,6 @@ export const OVERVIEW_COPY = {
   },
   sessions: (n: number) => countOf(n, 'session', 'sessions'),
   folders: (n: number) => countOf(n, 'folder', 'folders'),
-  untitled: 'Untitled session',
   noProject: 'No project',
   lastActivity: 'Last activity',
   noActivity: 'No activity yet',
@@ -679,9 +678,6 @@ export const HEALTH_COPY = {
 } as const;
 // --- Sessions list and session detail (phase 2, wp/ui-sessions) ---------------------------------
 // Wording for `#/sessions` and `#/sessions/:id`. Add-only: other screens add their own sections.
-
-/** What an untitled session is called. Never left blank. */
-export const UNTITLED_SESSION = 'Untitled session';
 
 /** "Helper agent: Explore", or "Helper agent" when Claude Code did not report a type. */
 export function helperAgentLabel(agentType: string | null): string {
@@ -3584,4 +3580,33 @@ export const WORKFLOW_GRAPH_COPY = {
     buildOwnHint: 'Starts from today’s setup. Change it on the Workflow page after setup.',
     failed: 'The workflow wasn’t saved. Try again, or set it up later on the Workflow page.',
   },
+} as const;
+
+// --- Session names and run summaries (v0.3.0, S-B; ADR-0024) ------------------------------------
+// How the app names a session (lib/session-name.ts) and shows the comments it writes itself.
+
+export const SESSION_NAME_COPY = {
+  /** The marker on a session Agent Control Plane started for a ticket or a run. */
+  startedByApp: 'Started by Agent Control Plane',
+  startedByAppTip:
+    'Agent Control Plane started this session for a ticket or a run. It is named after the ticket and the agent’s part in the workflow.',
+  /** Link after the marker on the session's own page. */
+  openTicket: (key: string) => `Open ${key}`,
+  openRun: 'Open the run',
+  /** A session without a name, on a known branch: "Session on main · Oct 21, 9:00 AM". */
+  onBranch: (branch: string, started: string) => `Session on ${branch} · ${started}`,
+  /** A session without a name or a branch: "Session started Oct 21, 9:00 AM". */
+  started: (started: string) => `Session started ${started}`,
+} as const;
+
+export const RUN_SUMMARY_COPY = {
+  /** Who wrote it: the app itself, from what it recorded during the run. */
+  author: 'Agent Control Plane',
+  authorTip:
+    'Written by Agent Control Plane from what it recorded during the run, with the lead agent’s note when it left one.',
+  title: 'Run summary',
+  /** "Run 2", when the comment belongs to a run of this ticket. */
+  ofRun: (n: number) => `Run ${formatCount(n)}`,
+  /** The words around the parts of "Merged acp/WEB-12 into main at 1a2b3c4". */
+  merge: { merged: 'Merged', into: 'into', at: 'at' },
 } as const;

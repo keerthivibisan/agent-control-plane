@@ -9,7 +9,8 @@ import { schemas, paths } from '../../lib/api';
 import { GLOSSARY, helperAgentsText, SESSIONS_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 import { groupSessions, type GroupedRow } from './grouping';
-import { isHelperAgent, sessionName, TokenSummary } from './session-bits';
+import { nameSession } from '../../lib/session-name';
+import { isHelperAgent, SessionNameExtra, TokenSummary } from './session-bits';
 import { useApiQueries } from './use-api-queries';
 
 const COPY = SESSIONS_COPY.table;
@@ -32,7 +33,7 @@ function usePageEdges(sessions: readonly SessionSummaryDto[]): SessionEdgeDto[] 
  */
 function SessionCell({ row, projectName }: { row: GroupedRow; projectName: string | null }) {
   const s = row.session;
-  const helper = isHelperAgent(s);
+  const naming = nameSession(s);
   return (
     <div
       className="flex min-w-0 items-start gap-2"
@@ -48,8 +49,9 @@ function SessionCell({ row, projectName }: { row: GroupedRow; projectName: strin
           href={href.session(s.id)}
           className="block truncate font-medium"
           data-testid="session-name"
+          data-name-kind={naming.kind}
         >
-          {sessionName(s)}
+          {naming.name}
         </a>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-dim">
           <ShortId id={s.id} label="session id" />
@@ -70,11 +72,7 @@ function SessionCell({ row, projectName }: { row: GroupedRow; projectName: strin
             </span>
           ) : null}
         </div>
-        {helper && s.description ? (
-          <div className="mt-0.5 max-w-80 truncate text-caption text-dim" title={s.description}>
-            {s.description}
-          </div>
-        ) : null}
+        <SessionNameExtra naming={naming} />
       </div>
     </div>
   );

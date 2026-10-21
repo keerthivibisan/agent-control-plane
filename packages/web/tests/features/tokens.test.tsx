@@ -162,7 +162,8 @@ describe('TokensPage (R-F)', () => {
       '#/sessions/sess-aaaaaaaa-1',
     );
     expect(row('sess-aaaaaaaa-1').textContent).toContain('~$1.25');
-    expect(row('sess-bbbbbbbb-2').textContent).toContain('Untitled session');
+    // Only the id is known for an untitled session here: it is named by it, never "Untitled".
+    expect(within(row('sess-bbbbbbbb-2')).getByRole('link').textContent).toBe('Session sess-bbb');
     // No snapshot and a snapshot without a cost both read "Not reported", never $0.
     for (const id of ['sess-bbbbbbbb-2', 'sess-cccccccc-3']) {
       const cost = within(row(id)).getByTestId('cost');

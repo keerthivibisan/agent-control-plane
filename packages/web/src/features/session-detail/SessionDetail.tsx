@@ -7,11 +7,12 @@ import { RelativeTime } from '../../components/RelativeTime';
 import { ShortId } from '../../components/ShortId';
 import { StatusBadge } from '../../components/StatusBadge';
 import { paths, schemas } from '../../lib/api';
-import { PAGES, SESSION_DETAIL_COPY, SESSIONS_COPY } from '../../lib/copy';
+import { PAGES, SESSION_DETAIL_COPY, SESSION_NAME_COPY, SESSIONS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
+import { nameSession, type SessionName } from '../../lib/session-name';
 import { relationshipsHref } from '../sessions/explorer-params';
-import { sessionName } from '../sessions/session-bits';
+import { StartedByApp } from '../sessions/session-bits';
 import { ActivityFeed } from './ActivityFeed';
 import { CostCard } from './CostCard';
 import { FamilyCard, RelatedSessionsCard } from './RelatedCards';
@@ -69,15 +70,48 @@ function Facts({ s }: { s: SessionDetailDto }) {
   );
 }
 
+/**
+ * Under the title, when there is something to say about the name: the marker of a session the
+ * app started, with a link to its ticket (or its run, without one), or a helper agent's task.
+ */
+function NameLine({ naming }: { naming: SessionName }) {
+  const m = naming.managed;
+  if (m !== null) {
+    return (
+      <span className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption">
+        <StartedByApp />
+        {/* `#/control/:runId` opens the run's ticket, or its run page when it has none. */}
+        <a href={href.control(m.runId)} data-testid="managed-link">
+          {m.ticketKey !== null
+            ? SESSION_NAME_COPY.openTicket(m.ticketKey)
+            : SESSION_NAME_COPY.openRun}
+        </a>
+      </span>
+    );
+  }
+  if (naming.detail === null) return null;
+  return (
+    <span className="mb-1 block text-ink" data-testid="session-detail-text">
+      {naming.detail}
+    </span>
+  );
+}
+
 function Loaded({ s }: { s: SessionDetailDto }) {
   // One request feeds the helper list and the names of related sessions.
   const tree = useApiQuery(paths.sessionTree(s.id), schemas.sessionTree);
+  const naming = nameSession(s);
   return (
     <div>
       <PageHeader
         eyebrow={<a href={href.sessions()}>← {COPY.back}</a>}
-        title={sessionName(s)}
-        description={PAGES.session.description}
+        title={<span data-name-kind={naming.kind}>{naming.name}</span>}
+        description={
+          <>
+            <NameLine naming={naming} />
+            {PAGES.session.description}
+          </>
+        }
         actions={<ButtonLink href={relationshipsHref(s.id)}>{COPY.seeRelations}</ButtonLink>}
       />
       <Facts s={s} />

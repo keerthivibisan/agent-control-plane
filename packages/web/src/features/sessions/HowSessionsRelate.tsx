@@ -8,7 +8,8 @@ import { idPrefix } from '../../lib/format';
 import { navigate } from '../../lib/router';
 import { ConcurrencyTimeline } from './ConcurrencyTimeline';
 import { explorerHref, type ExplorerParams, type RelateView } from './explorer-params';
-import { isHelperAgent, sessionName } from './session-bits';
+import { sessionName } from '../../lib/session-name';
+import { isHelperAgent } from './session-bits';
 import { SessionFamily } from './FamilyTree';
 import { FamilyLegend, SessionGraph } from './SessionGraph';
 
