@@ -71,3 +71,14 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     with the real data. Backup before 0.3.0:
     `~/.agent-control-plane/backups/acp-before-0.3.0-20261021-232251.sqlite`. The local `main` is
     still `b6a1f27`; the owner can `git pull --ff-only` to reach `79c312a`.
+- 2026-10-21 **S-C paused** (`99c366a` on `wp/s-c-human-comment`, worktree
+  `.claude/worktrees/agent-a0f8d98453fef2751`).
+  - All the work is written but uncommitted (17 files): it waits for one green
+    `npm_config_workspace_concurrency=1 pnpm check`; two lint errors were fixed after the last
+    check.
+  - Its focused tests pass. The golden traces changed only in the lead prompt hashes (255
+    snapshots).
+  - **To review on resume:** the lead prompt line grew from 165 to 611 characters (about 110
+    tokens each time it is sent). Trim it toward about 300 characters, since the owner asked not to
+    spend more tokens.
+  - **Next:** the check, four commits, the full e2e, review, merge, then restart the owner's app.
