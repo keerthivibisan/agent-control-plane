@@ -54,3 +54,20 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - The merge line gains the tip checks, and says "merged anyway, with a reason" without the
     reason text. The web parses the commit apart from the detail.
   - Coordinator check: 4,683 tests; e2e 75/75.
+- 2026-10-21 **Owner feedback on the run summary:** it reads like a per-step report, and should read
+  like a human comment ("we explored this, added this feature and tested this").
+  - **S-C started** (`wp/s-c-human-comment`): the lead's note becomes the comment, in past tense
+    (explored → built → tested → left), with a short example in the prompt.
+  - The facts move under a collapsed "Details" section, worded as plain sentences.
+  - A run without a note gets one plain sentence.
+- 2026-10-21 **Paused by the owner.** To resume:
+  1. finish S-C (see its `wp/S-C.md` "Resume here" on its branch);
+  2. merge it, then restart the owner's app;
+  3. ask the owner for the rest of their 0.3.0 plans ("I have few more plan for the 0.3.0
+     release");
+  4. rebase `release/0.3.0` onto `main` (0.2.0 is merged in GitHub: `origin/main` `79c312a`);
+  5. release prep.
+  - **Owner's app:** runs `release/0.3.0` from `.claude/worktrees/v3-coord` (`pnpm dev`, 5173/7420)
+    with the real data. Backup before 0.3.0:
+    `~/.agent-control-plane/backups/acp-before-0.3.0-20261021-232251.sqlite`. The local `main` is
+    still `b6a1f27`; the owner can `git pull --ff-only` to reach `79c312a`.
