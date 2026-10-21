@@ -1,22 +1,18 @@
 import {
   HARNESS_TICKET_TEMPLATE,
-  MAX_REWORK_ROUNDS,
   TICKET_STAGES,
   WorkflowGraphInvalidError,
   approvalsOf,
   compactRunOptions,
   compileWorkflow,
   resolveRunOptions,
-  reviewStageOf,
   ticketStage,
   tightenMode,
   validateWorkflowGraph,
-  type ApprovalMode,
   type CheckRun,
   type CompileContext,
   type ProjectAgentSetup,
   type RunBudget,
-  type RunOptions,
   type RunStatus,
   type Ticket,
   type TicketRunOptions,
@@ -83,7 +79,7 @@ import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
 import { ensureSetup, legacyAllowlistOf } from './setup.js';
-import { effectiveWorkflow, type EffectiveWorkflow } from '../workflow/graph.js';
+import { effectiveWorkflow, projectRunDefaults } from '../workflow/graph.js';
 
 /**
  * The project's workflow graph cannot run (ADR-0023 §3): the run is not created. The message is
@@ -389,34 +385,6 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   }
 
   // ------------------------------------------------------------------ run start (ADR-0023)
-
-  /**
-   * The project-level review settings `resolveRunOptions` starts from: a version 1 workflow's
-   * review stage, as before; for a graph, what its routes amount to (a change reviewer or the
-   * lead, and the most rounds any route allows). Graph runs take their routes from the graph, so
-   * these only fill the run's review-loop record and its "from the project" source.
-   */
-  function projectReviewDefaults(
-    workflow: EffectiveWorkflow,
-    approvalMode: ApprovalMode,
-  ): RunOptions {
-    if (workflow.v1 !== undefined) {
-      const review = reviewStageOf(workflow.v1);
-      return { approvalMode, reviewer: review.reviewer, maxReworkRounds: review.maxReworkRounds };
-    }
-    const reviewers = workflow.graph.nodes.some(
-      (n) => n.type === 'reviewer' && n.scope === 'change',
-    );
-    const rounds = workflow.graph.edges.reduce(
-      (max, e) => (e.type === 'rework' ? Math.max(max, e.maxRounds) : max),
-      0,
-    );
-    return {
-      approvalMode,
-      reviewer: reviewers ? ('agent' as const) : ('lead' as const),
-      maxReworkRounds: Math.min(rounds, MAX_REWORK_ROUNDS),
-    };
-  }
 
   /**
    * Validates the graph as the editor and the PUT do, then compiles it with the run's context;
@@ -801,7 +769,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       // project's settings, for the reviewer and the rounds. The command allowlist is always the
       // project's.
       const effective = resolveRunOptions(
-        projectReviewDefaults(workflow, projectApprovals.mode),
+        projectRunDefaults(workflow, projectApprovals.mode),
         ticket.runOptions,
         runOptions,
       );

@@ -9,8 +9,9 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
  *
  * Covered: a default project, a version 1 project and a version 2 project load; a graph saves and
  * is stored as version 2 (the version 1 route then answers 409); a 422 lists the server's issues;
- * the new-project wizard's template choice is saved. With ACP_SCREENSHOT_DIR set, it saves light
- * and dark screenshots at 1440 and 1024 pixels wide.
+ * the new-project wizard's template choice is saved; WG-F: the run options read a saved graph's
+ * defaults. With ACP_SCREENSHOT_DIR set, it saves light and dark screenshots at 1440 and 1024
+ * pixels wide.
  */
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
@@ -248,4 +249,108 @@ test('the new-project wizard saves the chosen template as the project’s graph'
   await expect(page.getByTestId('issues-none')).toBeVisible();
   await expect(page.getByText('Rework ×2').first()).toBeVisible();
   await shoot(page, 'wizard-template');
+});
+
+/*
+ * WG-F: once a project stores a graph, the version 1 `GET /workflow` answers 409; the run options
+ * read the project's defaults from the graph instead. The owner saves "Lead only" with 4 rework
+ * rounds in the editor; the New ticket dialog, the ticket's Run options and "Start with options…"
+ * show the lead and 4 rounds as the project's settings, and nothing asks the version 1 route.
+ * Start is never clicked (Cancel only), so no agent runs.
+ */
+test('run options read the defaults of a graph saved in the editor', async ({ page, request }) => {
+  const projectId = await newProject(request, 'echo');
+  const v1Requests: string[] = [];
+  page.on('request', (req) => {
+    if (new URL(req.url()).pathname === `/api/projects/${projectId}/workflow`) {
+      v1Requests.push(req.url());
+    }
+  });
+
+  // ---- The editor: "Lead only", its lead → helpers rework link set to 4 rounds, saved.
+  await openWorkflow(page, projectId);
+  const picker = page.getByRole('dialog', { name: 'Start from a template' });
+  await page.getByTestId('open-templates').click();
+  await picker.getByLabel(/^Lead only/).check();
+  await picker.getByRole('button', { name: 'Use this template' }).click();
+  await expect(picker).toHaveCount(0);
+  await block(page, 'orchestrate').click();
+  await panel(page)
+    .getByRole('button', {
+      name: 'Remove link Sends the change back for rework: from Lead to Helpers',
+    })
+    .click();
+  await addLink(page, 'helpers', 'rework');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
+  await panel(page).getByRole('radio', { name: '4 rework rounds' }).check({ force: true });
+  await expect(page.getByTestId('issues-none')).toBeVisible();
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('saved')).toHaveText('Saved');
+  const saved = await graphOf(request, projectId);
+  expect(saved.stored).toBe('v2');
+  expect(saved.graph.nodes.some((n) => n.type === 'reviewer')).toBe(false);
+  expect(saved.graph.edges).toContainEqual(
+    expect.objectContaining({ type: 'rework', from: 'orchestrate', to: 'helpers', maxRounds: 4 }),
+  );
+  expect((await request.get(`/api/projects/${projectId}/workflow`)).status()).toBe(409);
+
+  // ---- New ticket: "Project default" names the graph's values.
+  await page.goto(`/#/p/${projectId}/board`);
+  await page.getByRole('button', { name: 'New ticket' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await dialog.getByLabel('Title').fill('Tidy the readme');
+  await dialog.getByText('More options').click();
+  await expect(dialog.getByLabel('Who reviews each change').locator('option').first()).toHaveText(
+    'Project default (Lead)',
+  );
+  await expect(dialog.getByLabel('Rework rounds').locator('option').first()).toHaveText(
+    'Project default (4 rework rounds)',
+  );
+  await dialog.getByRole('button', { name: 'Create ticket' }).click();
+  const created = page.getByRole('status').filter({ hasText: /^Created [A-Z]+-1 in Backlog\./ });
+  await expect(created).toBeVisible();
+  const key = /Created ([A-Z]+-1)/.exec((await created.textContent()) ?? '')?.[1] ?? '';
+  expect(key).not.toBe('');
+
+  // ---- Start with options…: the project's settings, then Cancel.
+  const move = async (item: string) => {
+    await page.getByRole('button', { name: `Move ${key}` }).click();
+    await page.getByRole('menuitem', { name: item }).click();
+  };
+  await move('Move to Ready');
+  await expect(
+    page.getByRole('status').filter({ hasText: `Moved ${key} to Ready.` }),
+  ).toBeVisible();
+  await move('Start with options…');
+  const start = page.getByTestId('start-dialog');
+  await expect(start.getByRole('radio', { name: /^The lead · Project setting/ })).toBeChecked();
+  await expect(start.getByRole('radio', { name: /^Review agent/ })).not.toBeChecked();
+  await expect(start).toContainText('Project setting: 4.');
+  await expect(start.getByRole('radio', { name: '4 rework rounds' })).toBeChecked();
+  await expect(start.getByTestId('start-dialog-summary')).toHaveText(
+    'Same as the project’s settings.',
+  );
+  await expect(start.getByText(/settings couldn’t be loaded/)).toHaveCount(0);
+  if (SHOTS !== undefined) {
+    await start.screenshot({ path: `${SHOTS}/workflow-live-start-defaults.png` });
+  }
+  await start.getByRole('button', { name: 'Cancel' }).first().click();
+  await expect(start).toHaveCount(0);
+
+  // ---- The ticket page's Run options.
+  await page.getByRole('link', { name: /Tidy the readme/ }).click();
+  await expect(page).toHaveURL(/#\/p\/[^/]+\/tickets\/[^/]+$/);
+  const options = page.getByTestId('ticket-run-options');
+  await expect(options.getByTestId('run-option-reviewer')).toHaveText('Project default (Lead)');
+  await expect(options.getByTestId('run-option-rounds')).toHaveText(
+    'Project default (4 rework rounds)',
+  );
+
+  // Nothing asked the version 1 route, which answers 409 for this project; nothing started.
+  expect(v1Requests).toEqual([]);
+  const ticketId = /tickets\/([^/]+)$/.exec(page.url())?.[1] ?? '';
+  const detail = (await (await request.get(`/api/tickets/${ticketId}`)).json()) as {
+    currentRun: unknown;
+  };
+  expect(detail.currentRun).toBeNull();
 });

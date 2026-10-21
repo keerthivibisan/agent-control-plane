@@ -10,6 +10,7 @@ export {
 } from './validate.js';
 export { WorkflowGraphInvalidError, compileWorkflow } from './compile.js';
 export { migrateWorkflowV1 } from './migrate.js';
+export { graphRunDefaults, type GraphRunDefaults } from './run-defaults.js';
 export {
   WORKFLOW_TEMPLATES,
   workflowTemplate,

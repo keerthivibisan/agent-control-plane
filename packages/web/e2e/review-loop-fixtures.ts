@@ -6,7 +6,13 @@
  * findings, paths, commits and the diff are invented. Never import this from src/.
  */
 
-import { CSRF, PROJECT_ID, projectWorkflow } from './ticket-fixtures.js';
+import {
+  CSRF,
+  PROJECT_GRAPH_PATH,
+  PROJECT_ID,
+  projectGraph,
+  projectWorkflow,
+} from './ticket-fixtures.js';
 
 export { CSRF, PROJECT_ID };
 export const LOOP_TICKET_ID = 't-21';
@@ -31,6 +37,7 @@ export const LOOP_RUN_WORKFLOW_PATH = `${LOOP_RUN_PATH}/workflow`;
 export const LOOP_REVIEW_PATH = `${LOOP_RUN_PATH}/review`;
 export const LOOP_BRANCH_PATH = `${LOOP_RUN_PATH}/ticket-branch`;
 export const LOOP_PROJECT_WORKFLOW_PATH = `/api/projects/${PROJECT_ID}/workflow`;
+export const LOOP_PROJECT_GRAPH_PATH = PROJECT_GRAPH_PATH;
 
 const BASE = '3f9c2a1b7d4e5f60718293a4b5c6d7e8f9012345';
 const TIP_1 = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -443,6 +450,7 @@ function scenario(
       [LOOP_RUN_PATH]: detail['currentRun'] as Json,
       [LOOP_RUN_WORKFLOW_PATH]: workflow,
       [LOOP_PROJECT_WORKFLOW_PATH]: projectWorkflow(),
+      [LOOP_PROJECT_GRAPH_PATH]: projectGraph(),
       [LOOP_REVIEW_PATH]: review([
         [L_API, 'API builder', API_FILES],
         [L_UI, 'Search UI', UI_FILES],

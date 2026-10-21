@@ -291,8 +291,14 @@ export function LiveWorkflowV1({
   onSelectAgent,
 }: LiveWorkflowProps) {
   const runWorkflow = useApiQuery(runWorkflowPaths.workflow(run.id), runWorkflowSchemas.workflow);
-  const project = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
   const rw = runWorkflow.data;
+  // The project's version 1 workflow, asked only once the run's version 1 route has answered: a
+  // server with graphs answers the run's graph first, so this view (and this request, which 409s
+  // for a project that stores a graph) is reached only on a server from before ADR-0023 (WG-F).
+  const project = useApiQuery(
+    rw === undefined ? null : workflowPaths.workflow(projectId),
+    workflowSchemas.workflow,
+  );
   const pw = project.data;
   const graph = useMemo(
     () => (rw === undefined || pw === undefined ? null : liveGraph(run, pw, rw)),

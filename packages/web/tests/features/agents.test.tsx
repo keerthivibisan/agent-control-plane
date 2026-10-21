@@ -1,13 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { WorkflowStageId } from '@acp/core';
+import { migrateWorkflowV1, type ProjectWorkflow, type WorkflowStageId } from '@acp/core';
 import type { AgentDefinitionDetailDto, AgentDefinitionSummaryDto } from '@acp/core/api';
 import { App } from '../../src/app/App';
 import { AGENT_TEMPLATES } from '../../src/features/skills/agent-templates';
 import { SkillsPage } from '../../src/features/skills/SkillsPage';
 import { createApiClient, type FetchLike } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
-import { agentWorkflowDto } from '../../e2e/workflow-fixtures';
+import { agentWorkflowDto, graphDto } from '../../e2e/workflow-fixtures';
 import { CSRF } from '../fixtures/control';
 import { project } from '../fixtures/dto';
 import { SKILLS_PROJECT_ID, agentDetail, commitResult } from '../fixtures/skills';
@@ -16,14 +16,21 @@ import { fakeServer, jsonResponse, renderWithApi } from '../helpers';
 const P = `/api/projects/${SKILLS_PROJECT_ID}`;
 const AG = `${P}/agents`;
 
+/** `GET …/workflow-graph` for a version 1 project: its workflow migrated, as the server serves it. */
+function migratedGraphDto(dto: Record<string, unknown>): unknown {
+  const workflow = dto['workflow'] as ProjectWorkflow;
+  return graphDto({ graph: migrateWorkflowV1(workflow, { projectMode: 'auto-edits' }) });
+}
+
 /**
- * A fake agents server that keeps state like the real one (writes, deletes, commits). `workflow`
- * answers `GET …/workflow` (left out: the page doesn't know which stages use a file);
+ * A fake agents server that keeps state like the real one (writes, deletes, commits). `graph`
+ * answers `GET …/workflow-graph` (left out: the page doesn't know which blocks use a file; WG-F:
+ * the version 1 `GET …/workflow` is never asked);
  * `deleteRefusal` makes every DELETE answer that 409, as the server does for a file in use.
  */
 function server(
   initial: AgentDefinitionDetailDto[] = [],
-  options: { workflow?: unknown; deleteRefusal?: { code: string; message: string } } = {},
+  options: { graph?: unknown; deleteRefusal?: { code: string; message: string } } = {},
 ) {
   const agents = new Map(initial.map((a) => [a.name, a]));
   const summary = (d: AgentDefinitionDetailDto): AgentDefinitionSummaryDto => {
@@ -34,7 +41,7 @@ function server(
     '/api/control/token': { token: CSRF },
     '/api/projects': [project({ id: SKILLS_PROJECT_ID, name: 'web-app' })],
     [`${P}/skills`]: [],
-    ...(options.workflow !== undefined && { [`${P}/workflow`]: options.workflow }),
+    ...(options.graph !== undefined && { [`${P}/workflow-graph`]: options.graph }),
     [AG]: () => jsonResponse(200, [...agents.values()].map(summary)),
     [`POST ${AG}`]: (body: unknown) => {
       const created = agentDetail({
@@ -303,8 +310,10 @@ describe('Agents tab', () => {
     });
   });
 
-  it('disables Delete with an explanation while a stage uses the agent file', async () => {
-    const s = server([agentDetail({ name: 'db-migrator' })], { workflow: agentWorkflowDto() });
+  it('disables Delete with an explanation while a block uses the agent file', async () => {
+    const s = server([agentDetail({ name: 'db-migrator' })], {
+      graph: migratedGraphDto(agentWorkflowDto()),
+    });
     openAgents(s);
     fireEvent.click(await screen.findByRole('button', { name: 'Open agent db-migrator' }));
     const editor = await screen.findByTestId('agent-editor');
@@ -315,7 +324,7 @@ describe('Agents tab', () => {
       ).toBe(true),
     );
     expect(del.textContent).toContain(
-      'Used by Helpers. Remove it from those stages on the Workflow page',
+      'Used by Helpers. Remove it from those blocks on the Workflow page',
     );
     expect(within(editor).getByTestId('skill-status').textContent).toContain('Helpers');
     expect(mutations(s)).toEqual([]);

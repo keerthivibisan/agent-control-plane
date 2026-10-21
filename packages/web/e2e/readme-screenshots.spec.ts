@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+  LOOP_PROJECT_GRAPH_PATH,
   LOOP_PROJECT_WORKFLOW_PATH,
   LOOP_TICKET_ID,
   PROJECT_ID,
@@ -156,6 +157,9 @@ async function withLoopRun(page: Page): Promise<void> {
   const scenario = loopWorkingScenario();
   await page.route(`**${LOOP_PROJECT_WORKFLOW_PATH}`, (route) =>
     route.fulfill({ json: scenario.routes[LOOP_PROJECT_WORKFLOW_PATH] }),
+  );
+  await page.route(`**${LOOP_PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: scenario.routes[LOOP_PROJECT_GRAPH_PATH] }),
   );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const body = scenario.routes[new URL(route.request().url()).pathname];

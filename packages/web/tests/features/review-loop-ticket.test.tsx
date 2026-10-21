@@ -711,12 +711,14 @@ describe('the Start dialog (ticket page Re-run)', () => {
     await waitFor(() => expect(screen.queryByTestId('start-dialog')).toBeNull());
   });
 
-  it('sends only the overrides; widening the mode shows the warning', async () => {
+  it('sends only the overrides; a limit looser than every block says it changes nothing', async () => {
     const s = render(loopDoneScenario());
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run WEB-21 with options' }));
     const dialog = await screen.findByTestId('start-dialog');
     fireEvent.click(await within(dialog).findByLabelText(/^AutoLike/));
-    expect(within(dialog).getByTestId('approvals-warning')).toBeTruthy();
+    // ADR-0023: the blocks are known from the project's graph, and a limit only tightens them.
+    expect(within(dialog).getByTestId('mode-no-effect')).toBeTruthy();
+    expect(within(dialog).queryByTestId('approvals-warning')).toBeNull();
     fireEvent.click(within(dialog).getByLabelText(/^The lead/));
     fireEvent.click(within(dialog).getByRole('radio', { name: 'No rework: merge or discard' }));
     expect(within(dialog).getByTestId('start-dialog-summary').textContent).toBe(

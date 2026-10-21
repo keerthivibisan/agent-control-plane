@@ -6,10 +6,10 @@ import {
   MAX_COMMAND_PATTERNS,
   RUN_OPTION_KEYS,
   approvalsOf,
+  graphRunDefaults,
   isEditorNode,
   isModeWithin,
   isSafeCommandToken,
-  reviewStageOf,
   ticketOptionsDiffer,
   type ApprovalMode,
   type ChangeReviewerMode,
@@ -24,7 +24,6 @@ import {
 import type {
   ChangeReviewDto,
   CheckRunDto,
-  ProjectWorkflowDto,
   RunDetailDto,
   StartTicketRequest,
   TicketBranchDto,
@@ -278,16 +277,14 @@ export function shortCommit(commit: string): string {
 
 // ---------------------------------------------------------------- ticket run options (RL-H)
 
-/** The project's run settings a ticket's "Project default" follows. */
-export function projectRunDefaults(
-  dto: Pick<ProjectWorkflowDto, 'setup' | 'workflow'>,
-): RunOptions {
-  const review = reviewStageOf(dto.workflow);
-  return {
-    approvalMode: approvalsOf(dto.setup).mode,
-    reviewer: review.reviewer,
-    maxReworkRounds: review.maxReworkRounds,
-  };
+/**
+ * The project's run settings a ticket's "Project default" follows: its approval mode, and what its
+ * graph amounts to (`graphRunDefaults`, the same core function the server's run start uses). The
+ * graph comes from `GET /workflow-graph`, which answers for every project, stored as a graph or
+ * not (WG-F: the version 1 `GET /workflow` answers 409 once a project stores a graph).
+ */
+export function projectRunDefaults(dto: Pick<WorkflowGraphDto, 'setup' | 'graph'>): RunOptions {
+  return { approvalMode: approvalsOf(dto.setup).mode, ...graphRunDefaults(dto.graph) };
 }
 
 /**

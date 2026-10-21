@@ -13,18 +13,12 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { hintClass, inputClass, labelClass } from '../../components/Input';
-import {
-  blockModesPaths,
-  blockModesSchemas,
-  updateTicket,
-  workflowPaths,
-  workflowSchemas,
-} from '../../lib/api';
+import { updateTicket, workflowGraphPaths, workflowGraphSchemas } from '../../lib/api';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
-import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
+import { FullAutoWarning } from './ApprovalsEditor';
 import {
   blockModesOf,
   optionsBadge,
@@ -46,16 +40,27 @@ const M = REVIEW_LOOP_COPY.modes;
 const R = REVIEW_LOOP_COPY.review;
 const L = WORKFLOW_LIVE_COPY.ceiling;
 const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
-const MODE_RANK = { manual: 0, 'auto-edits': 1, auto: 2, 'full-auto': 3 } as const;
 /** The select value meaning "Project default" (nothing stored). */
 const DEFAULT = '';
 
 /**
+ * The project's workflow graph (`GET /workflow-graph`, the editor's cached query), which answers
+ * for every project: a stored graph, or the version 1 or default workflow migrated. The run
+ * options read the project's defaults and the blocks' own modes from it (WG-F). `null` skips it.
+ */
+export function useProjectGraph(projectId: string | null) {
+  return useApiQuery(
+    projectId === null ? null : workflowGraphPaths.graph(projectId),
+    workflowGraphSchemas.graph,
+  );
+}
+
+/**
  * The project's editing blocks' own modes (ADR-0023), from its workflow graph. Undefined while it
- * loads, and for a server without graphs (404): the screens then say nothing about the blocks.
+ * loads, and when it can't be read: the screens then say nothing about the blocks.
  */
 export function useBlockModes(projectId: string): BlockModes | undefined {
-  const q = useApiQuery(blockModesPaths.graph(projectId), blockModesSchemas.graph);
+  const q = useProjectGraph(projectId);
   return useMemo(() => (q.data === undefined ? undefined : blockModesOf(q.data)), [q.data]);
 }
 
@@ -63,15 +68,15 @@ export function useBlockModes(projectId: string): BlockModes | undefined {
 export type RunDefaults = RunOptions & { blocks?: BlockModes | undefined };
 
 /**
- * The project's settings that "Project default" follows, from the cached workflow query. Null
- * while loading or when it can't be read: the screens then say "Project default" without a value.
+ * The project's settings that "Project default" follows, from its cached graph query. Null while
+ * loading or when it can't be read: the screens then say "Project default" without a value.
  */
 export function useProjectRunDefaults(projectId: string): RunDefaults | null {
-  const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
-  const blocks = useBlockModes(projectId);
+  const q = useProjectGraph(projectId);
   return useMemo(
-    () => (q.data === undefined ? null : { ...projectRunDefaults(q.data), blocks }),
-    [q.data, blocks],
+    () =>
+      q.data === undefined ? null : { ...projectRunDefaults(q.data), blocks: blockModesOf(q.data) },
+    [q.data],
   );
 }
 
@@ -153,12 +158,6 @@ export function RunOptionsFields({
     value.approvalMode === undefined
       ? null
       : runLimitNoEffect(value.approvalMode, blocks, undefined);
-  // A server without graphs (no blocks known) still replaces the mode: keep its warnings.
-  const wider =
-    blocks === undefined &&
-    value.approvalMode !== undefined &&
-    defaults !== null &&
-    MODE_RANK[value.approvalMode] > MODE_RANK[defaults.approvalMode];
   const review = (
     <div className="grid gap-4 sm:grid-cols-2">
       <SelectField
@@ -215,9 +214,8 @@ export function RunOptionsFields({
       {noEffect !== null && value.approvalMode !== undefined ? (
         <NoEffectNote mode={value.approvalMode} reason={noEffect} />
       ) : blocks === undefined && value.approvalMode === 'full-auto' ? (
+        // The graph could not be read, so the blocks are unknown: keep Full auto's warning.
         <FullAutoWarning />
-      ) : wider ? (
-        <AutoRunWarning />
       ) : null}
       {collapse ? (
         <Details summary={C.more} testId="run-options-more" defaultOpen={hasReviewOptions(value)}>
@@ -345,10 +343,7 @@ export function RunOptionsBadge({
   ticket: Pick<TicketDto, 'projectId' | 'runOptions'>;
 }) {
   const own = compactRunOptions(ticket.runOptions);
-  const q = useApiQuery(
-    Object.keys(own).length > 0 ? workflowPaths.workflow(ticket.projectId) : null,
-    workflowSchemas.workflow,
-  );
+  const q = useProjectGraph(Object.keys(own).length > 0 ? ticket.projectId : null);
   // Nothing while the project's settings load, so a chip never flashes; if they can't be read,
   // every option the ticket sets shows.
   if (q.data === undefined && q.error === null) return null;

@@ -831,8 +831,9 @@ export const tokensSchemas = {
 // --- Workflow page (redesign R-B, wp/r-b-workflow) ----------------------------------------------
 //
 // Served by R-G (docs/redesign/wp/R-G.md): GET /api/projects/:id/workflow → ProjectWorkflowDto,
-// still read by the ticket page's version 1 view and Skills & Agents; the Workflow page edits the
-// graph (below) since WG-D, so its version 1 PUT client is gone. The agent files list,
+// read only by the ticket page's version 1 view, for a server from before graphs. It answers 409
+// `workflow_is_graph` once a project stores a graph, so everything else (the Workflow page, the run
+// options, Skills & Agents) reads the graph below since WG-D and WG-F. The agent files list,
 // GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's.
 
 export const workflowPaths = {
@@ -864,12 +865,15 @@ export const workflowGraphSchemas = {
   validate: ValidateWorkflowGraphResultDtoSchema,
 } as const;
 
-/** The cached graph, workflow and setup of one project: the graph's DTO carries the setup too. */
+/**
+ * The cached graph and setup of one project: the graph's DTO carries the setup too, and the run
+ * options read the project's defaults from it (WG-F). The version 1 workflow is not among them: only
+ * the ticket page's version 1 view, for a server from before graphs, still reads it.
+ */
 export function isWorkflowGraphPath(projectId: string): (key: string) => boolean {
   const graph = workflowGraphPaths.graph(projectId);
-  const workflow = workflowPaths.workflow(projectId);
   const setup = projectSetupPaths.setup(projectId);
-  return (key) => key.startsWith(graph) || key.startsWith(workflow) || key.startsWith(setup);
+  return (key) => key.startsWith(graph) || key.startsWith(setup);
 }
 
 /** PUT /api/projects/:id/workflow-graph: the whole graph (422 `workflow_invalid` on an error). */
@@ -1071,14 +1075,10 @@ export const runWorkflowSchemas = {
 //
 // Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9). GET /api/runs/:id/workflow-graph
 // (`runWorkflowPaths.graph` above) answers the run's snapshot graph; a server from before it
-// answers 404 (or 409), and the ticket page then keeps the version 1 view. The run options read
-// the project's graph (GET /api/projects/:id/workflow-graph, the editor's path) only for the
-// blocks' own approval modes and "Used by"; without it they say nothing about the blocks.
-
-// The same path and schema as the editor's (`workflowGraphPaths`), so they share one cache entry.
-export const blockModesPaths = { graph: workflowGraphPaths.graph } as const;
-
-export const blockModesSchemas = { graph: workflowGraphSchemas.graph } as const;
+// answers 404 (or 409), and the ticket page then keeps the version 1 view. The run options, the
+// Start dialog, the board badge and "Used by" read the project's graph with the editor's path and
+// schema (`workflowGraphPaths`), so they share one cache entry: the project's defaults, the
+// blocks' own approval modes and the blocks that use a file (WG-F).
 
 /** 404 or 409: the server has no graph for this run or project (a server from before ADR-0023). */
 export function isGraphUnavailable(error: ApiError | null): boolean {

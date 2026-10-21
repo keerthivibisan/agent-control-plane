@@ -21,6 +21,7 @@ import {
   L_LEAD,
   L_REV2,
   L_UI,
+  LOOP_PROJECT_WORKFLOW_PATH,
   LOOP_RUN_PATH,
   LOOP_TICKET_ID,
   LOOP_TICKET_PATH,
@@ -322,6 +323,23 @@ describe('the live graph on the ticket page', () => {
     expect(await screen.findByTestId('wf-node-review')).toBeTruthy();
     expect(screen.getByTestId('live-review').dataset.state).toBe('active');
     expect(screen.queryByTestId('live-run-graph')).toBeNull();
+  });
+
+  it('asks the project’s version 1 workflow only once the run’s version 1 route answers (WG-F)', async () => {
+    // A server with graphs answers the run's graph or 404s both run routes (unknown run): the
+    // project's version 1 route, which 409s for a project that stores a graph, is never asked.
+    const notFound = () =>
+      jsonResponse(404, { error: { code: 'not_found', message: 'no run', requestId: 'r' } });
+    const s = render(directLoopScenario(), {
+      [LIVE_GRAPH_PATH]: notFound,
+      [`${LOOP_RUN_PATH}/workflow`]: notFound,
+    });
+    await screen.findByTestId('agent-canvas');
+    await waitFor(() =>
+      expect(s.calls.some((c) => c.path === `${LOOP_RUN_PATH}/workflow`)).toBe(true),
+    );
+    expect(screen.queryByTestId('live-workflow')).toBeNull();
+    expect(s.calls.some((c) => c.path === LOOP_PROJECT_WORKFLOW_PATH)).toBe(false);
   });
 
   it('shows nothing on another error rather than the wrong graph', async () => {

@@ -1,11 +1,13 @@
 import {
   WORKFLOW_STAGES,
+  graphRunDefaults,
   isAgentNode,
   migrateWorkflowV1,
   stagesUsingAgent,
   stagesUsingSkill,
   type ApprovalMode,
   type ProjectWorkflow,
+  type RunOptions,
   type SkillName,
   type WorkflowGraph,
   type WorkflowStageId,
@@ -40,6 +42,22 @@ export function effectiveWorkflow(
     v1: stored.workflow,
     updatedAt: stored.kind === 'v1' ? stored.workflow.updatedAt : null,
   };
+}
+
+/**
+ * The project-level run options `resolveRunOptions` starts from: the project's approval mode, and
+ * what its effective graph amounts to (`graphRunDefaults`: a change reviewer or the lead, and the
+ * most rounds any route allows). The web's "Project default" reads the same graph from
+ * `GET /workflow-graph` and the same core function, so the two cannot disagree (WG-F). For a
+ * version 1 or default workflow the graph is its migration, whose answer equals
+ * `reviewStageOf(v1)` (tested for every version 1 combination). Graph runs take their routes from
+ * the graph, so these only fill the run's review-loop record and its "from the project" source.
+ */
+export function projectRunDefaults(
+  workflow: Pick<EffectiveWorkflow, 'graph'>,
+  approvalMode: ApprovalMode,
+): RunOptions {
+  return { approvalMode, ...graphRunDefaults(workflow.graph) };
 }
 
 /** What a skill or agent file is: an agent node's `skills` entry, or its `agent`. */

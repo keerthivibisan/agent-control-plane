@@ -10,7 +10,7 @@ import {
   projectGraphDto,
 } from '../../e2e/live-graph-fixtures';
 import { LOOP_TICKET_ID } from '../../e2e/review-loop-fixtures';
-import { projectWorkflow } from '../../e2e/ticket-fixtures';
+import { projectGraph } from '../../e2e/ticket-fixtures';
 import { roundSentence } from '../../src/features/review-loop/ChangeCard';
 import {
   blockModesOf,
@@ -48,17 +48,20 @@ beforeAll(() => {
 
 afterEach(() => window.localStorage.clear());
 
-const WORKFLOW = `/api/projects/${PROJECT_ID}/workflow`;
-
-function server(routes: RouteTable = {}) {
+function server(routes: RouteTable = {}, { graph = true } = {}) {
   return fakeServer({
     '/api/control/token': { token: CSRF },
-    [WORKFLOW]: projectWorkflow(),
+    // WG-F: the run options read the project's graph; the version 1 workflow is never asked.
+    ...(graph ? { [PROJECT_GRAPH_PATH]: projectGraph() } : {}),
     ...routes,
   });
 }
 
-function startDialog(routes: RouteTable = {}, ticketOptions?: { approvalMode: 'manual' }) {
+function startDialog(
+  routes: RouteTable = {},
+  ticketOptions?: { approvalMode: 'manual' },
+  opts: { graph?: boolean } = {},
+) {
   const started: unknown[] = [];
   renderWithApi(
     <StartDialog
@@ -71,7 +74,7 @@ function startDialog(routes: RouteTable = {}, ticketOptions?: { approvalMode: 'm
       onStart={(r) => started.push(r)}
       onClose={() => {}}
     />,
-    server(routes),
+    server(routes, opts),
   );
   return started;
 }
@@ -194,12 +197,13 @@ describe('Start dialog: the mode is a limit', () => {
     expect(within(dialog).queryByTestId('mode-no-effect')).toBeNull();
   });
 
-  it('a server without graphs keeps the old warnings', async () => {
-    startDialog();
+  it('without the project’s graph it says the settings couldn’t be loaded; Start sends nothing', async () => {
+    const started = startDialog({}, undefined, { graph: false });
     const dialog = await screen.findByTestId('start-dialog');
-    fireEvent.click(await within(dialog).findByLabelText(/^Full auto/));
-    expect(within(dialog).getByTestId('full-auto-warning')).toBeTruthy();
-    expect(within(dialog).queryByTestId('mode-no-effect')).toBeNull();
+    await within(dialog).findByText(/^The project’s settings couldn’t be loaded/);
+    expect(within(dialog).queryByLabelText(/^Full auto/)).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
+    expect(started).toEqual([{}]);
   });
 
   it('explains Lead reviews and the rework rounds as overrides of the workflow', async () => {

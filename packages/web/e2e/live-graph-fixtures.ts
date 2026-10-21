@@ -17,16 +17,15 @@ import {
   LOOP_RUN_ID,
   LOOP_RUN_PATH,
   LOOP_TICKET_PATH,
-  PROJECT_ID,
   loopWorkingScenario,
   type LoopScenario,
 } from './review-loop-fixtures.js';
-import { projectWorkflow } from './ticket-fixtures.js';
+import { PROJECT_GRAPH_PATH, projectWorkflow } from './ticket-fixtures.js';
 
 type Json = Record<string, unknown>;
 
 export const LIVE_GRAPH_PATH = `${LOOP_RUN_PATH}/workflow-graph`;
-export const PROJECT_GRAPH_PATH = `/api/projects/${PROJECT_ID}/workflow-graph`;
+export { PROJECT_GRAPH_PATH };
 
 const agentConfig = (over: Json = {}): Json => ({ model: null, skills: [], agent: null, ...over });
 const flow = (from: string, to: string): Json => ({

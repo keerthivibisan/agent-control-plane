@@ -65,6 +65,10 @@ async function serve(page: Page, sc: TicketScenario): Promise<{ posts: () => str
   await page.route(`**${PROJECT_WORKFLOW_PATH}`, (route) =>
     route.fulfill({ json: sc.routes[PROJECT_WORKFLOW_PATH] }),
   );
+  // WG-F: the ticket's run options read the project's graph.
+  await page.route(`**${PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: sc.routes[PROJECT_GRAPH_PATH] }),
+  );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') {

@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { projectWorkflow } from '../../e2e/ticket-fixtures';
+import { projectGraph } from '../../e2e/ticket-fixtures';
 import { BoardPage } from '../../src/features/board/BoardPage';
 import {
   CSRF,
@@ -23,7 +23,8 @@ function server(routes: RouteTable = {}) {
     '/api/projects': [webProject, apiProject],
     '/api/control/token': { token: CSRF },
     [BOARD]: board(),
-    [`/api/projects/${PROJECT_ID}/workflow`]: projectWorkflow(),
+    // WG-F: the dialog reads the project's graph, never the version 1 workflow.
+    [`/api/projects/${PROJECT_ID}/workflow-graph`]: projectGraph(),
     [`POST ${START}`]: ticketDetail(
       ticketDto({ id: 't-13', key: 'WEB-13', status: 'ACTIVE', stage: 'PLANNING' }),
     ),
@@ -57,6 +58,7 @@ describe('board: Start with options', () => {
     fireEvent.click(within(dialog).getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement);
     await waitFor(() => expect(screen.queryByTestId('start-dialog')).toBeNull());
     expect(s.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(s.calls.some((c) => c.path === `/api/projects/${PROJECT_ID}/workflow`)).toBe(false);
   });
 
   it('starts with the overrides and says so on the board', async () => {
@@ -75,17 +77,15 @@ describe('board: Start with options', () => {
     expect((await screen.findByTestId('board-feedback')).textContent).toContain('WEB-13');
   });
 
-  it('Full auto shows its honest warning and starts with it (ADR-0022)', async () => {
+  it('a Full auto limit says it changes nothing and starts with it (ADR-0023)', async () => {
     const s = server();
     renderWithApi(<BoardPage projectId={PROJECT_ID} />, s);
     const dialog = await openStartOptions();
-    expect(within(dialog).queryByTestId('full-auto-warning')).toBeNull();
+    expect(within(dialog).queryByTestId('mode-no-effect')).toBeNull();
     fireEvent.click(await within(dialog).findByLabelText(/^Full auto/));
-    const warning = within(dialog).getByTestId('full-auto-warning');
-    expect(warning.textContent).toContain(
-      'Claude Code’s auto mode reviews risky actions with a second model and commands run in the operating-system sandbox; it can still make mistakes — you review everything once in the final merge.',
-    );
-    // Its own warning replaces the Auto edits/Auto one.
+    // Every block runs at the project's Auto edits, and a limit can only tighten a block.
+    expect(within(dialog).getByTestId('mode-no-effect')).toBeTruthy();
+    expect(within(dialog).queryByTestId('full-auto-warning')).toBeNull();
     expect(within(dialog).queryByTestId('approvals-warning')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start' }));
     await waitFor(() => expect(s.calls.filter((c) => c.method === 'POST')).toHaveLength(1));

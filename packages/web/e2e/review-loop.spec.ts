@@ -5,6 +5,7 @@ import {
   LOOP_BRANCH,
   LOOP_BRANCH_PATH,
   LOOP_KEY,
+  LOOP_PROJECT_GRAPH_PATH,
   LOOP_PROJECT_WORKFLOW_PATH,
   LOOP_REVIEW_PATH,
   LOOP_RUN_PATH,
@@ -92,6 +93,10 @@ async function serveLoop(page: Page, start: Stage): Promise<Loop> {
   });
   await page.route(`**${LOOP_PROJECT_WORKFLOW_PATH}`, (route) =>
     route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_WORKFLOW_PATH] }),
+  );
+  // WG-F: the run options and the Start dialog read the project's graph.
+  await page.route(`**${LOOP_PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_GRAPH_PATH] }),
   );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const req = route.request();

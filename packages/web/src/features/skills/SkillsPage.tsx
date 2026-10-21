@@ -1,4 +1,4 @@
-import { stagesUsingAgent, type WorkflowStageId } from '@acp/core';
+import type { WorkflowStageId } from '@acp/core';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { NodeUseDto, SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
@@ -10,16 +10,14 @@ import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import {
   agentsPaths,
   agentsSchemas,
-  blockModesPaths,
-  blockModesSchemas,
   commitAgent,
   commitSkill,
   isAgentsPath,
   isSkillsPath,
   skillsPaths,
   skillsSchemas,
-  workflowPaths,
-  workflowSchemas,
+  workflowGraphPaths,
+  workflowGraphSchemas,
   type ApiClient,
   type ApiError,
 } from '../../lib/api';
@@ -35,7 +33,7 @@ import { RefusalNotice } from './bits';
 import { SkillEditor } from './SkillEditor';
 import { SkillList } from './SkillList';
 import type { SkillTemplate } from './templates';
-import { nodesUsingAgent } from './used-by';
+import { nodesUsingAgent, stagesOfNodes } from './used-by';
 
 const C = SKILLS_COPY;
 const A = AGENTS_COPY;
@@ -284,21 +282,20 @@ function AgentsTab({ projectId }: { projectId: string }) {
   const list = useApiQuery(agentsPaths.list(projectId), agentsSchemas.list);
   const names = (list.data ?? []).map((a) => a.name);
   const toList = () => setView({ kind: 'list' });
-  // Which stages use each file (R-I): from the saved workflow; left out while it isn't known.
-  const saved = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow).data;
-  // ADR-0023: the blocks that use each file, from the project's graph once the server has one.
-  const graph = useApiQuery(blockModesPaths.graph(projectId), blockModesSchemas.graph).data;
+  // ADR-0023: the blocks that use each file, from the project's graph, which answers for every
+  // project (WG-F: the version 1 workflow route 409s once a graph is stored); left out while it
+  // isn't known.
+  const graph = useApiQuery(workflowGraphPaths.graph(projectId), workflowGraphSchemas.graph).data;
   const usage = useMemo<AgentUsage | undefined>(
     () =>
-      saved === undefined && graph === undefined
+      graph === undefined
         ? undefined
         : {
-            usedBy: (name) => (saved === undefined ? [] : stagesUsingAgent(saved.workflow, name)),
-            usedByNodes:
-              graph === undefined ? undefined : (name) => nodesUsingAgent(graph.graph, name),
+            usedBy: (name) => stagesOfNodes(nodesUsingAgent(graph.graph, name)),
+            usedByNodes: (name) => nodesUsingAgent(graph.graph, name),
             href: href.projectPage(projectId, 'workflow'),
           },
-    [saved, graph, projectId],
+    [graph, projectId],
   );
 
   if (view.kind === 'new' || view.kind === 'edit') {

@@ -1,4 +1,4 @@
-import { defaultProjectWorkflow, type ProjectWorkflow } from '@acp/core';
+import { defaultProjectWorkflow, migrateWorkflowV1, type ProjectWorkflow } from '@acp/core';
 import {
   AgentDefinitionSummaryDtoSchema,
   ProjectWorkflowDtoSchema,
@@ -17,6 +17,7 @@ import {
   agentFilesFixture,
   agentWorkflowDto,
   defaultWorkflowDto,
+  graphDto,
 } from '../../e2e/workflow-fixtures';
 import { SkillsPage } from '../../src/features/skills/SkillsPage';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
@@ -60,6 +61,10 @@ const WORKFLOW = `${BASE}/workflow`;
 const AGENTS = `${BASE}/agents`;
 const files = () => AgentDefinitionSummaryDtoSchema.array().parse(agentFilesFixture());
 const parse = (dto: unknown): ProjectWorkflowDto => ProjectWorkflowDtoSchema.parse(dto);
+const GRAPH = `${BASE}/workflow-graph`;
+/** `GET …/workflow-graph` for a version 1 project: its workflow migrated, as the server serves it. */
+const migrated = (dto: unknown) =>
+  graphDto({ graph: migrateWorkflowV1(parse(dto).workflow, { projectMode: 'auto-edits' }) });
 
 const setup: SetupShape = {
   maxConcurrentHelpers: 2,
@@ -153,29 +158,31 @@ describe('agent files in the graph model', () => {
 // --- Skills & Agents page ----------------------------------------------------------------------
 
 describe('Skills & Agents: Used by on agent cards (R-I)', () => {
-  it('shows which stages use each file, linking to the Workflow page', async () => {
+  it('shows which blocks use each file, linking to the Workflow page', async () => {
+    // WG-F: from the project's graph; the version 1 workflow (409 for a graph) is never asked.
     const s = fakeServer({
       [`${BASE}/skills`]: [],
       [AGENTS]: files(),
-      [WORKFLOW]: parse(agentWorkflowDto()),
+      [GRAPH]: migrated(agentWorkflowDto()),
     });
     renderWithApi(<SkillsPage projectId={WF_PROJECT_ID} tab="agents" />, s);
     const card = await screen.findByTestId('agent-card-docs-writer');
     const used = await within(card).findByTestId('agent-used-by');
-    const link = within(used).getByRole('link', { name: 'Open Unit tests on the Workflow page' });
+    const link = within(used).getByRole('link', { name: 'Open Tester on the Workflow page' });
     expect(link.getAttribute('href')).toBe(`#/p/${WF_PROJECT_ID}/workflow`);
     expect(
       within(
         within(screen.getByTestId('agent-card-db-migrator')).getByTestId('agent-used-by'),
       ).getByRole('link').textContent,
     ).toBe('Helpers');
+    expect(s.calls.some((c) => c.path === WORKFLOW)).toBe(false);
   });
 
-  it('a file no stage uses says so; without the workflow the row is left out', async () => {
+  it('a file no block uses says so; without the graph the row is left out', async () => {
     const s = fakeServer({
       [`${BASE}/skills`]: [],
       [AGENTS]: files(),
-      [WORKFLOW]: parse(defaultWorkflowDto()),
+      [GRAPH]: migrated(defaultWorkflowDto()),
     });
     const { unmount } = renderWithApi(<SkillsPage projectId={WF_PROJECT_ID} tab="agents" />, s);
     const card = await screen.findByTestId('agent-card-docs-writer');
@@ -187,7 +194,8 @@ describe('Skills & Agents: Used by on agent cards (R-I)', () => {
     const without = fakeServer({ [`${BASE}/skills`]: [], [AGENTS]: files() });
     renderWithApi(<SkillsPage projectId={WF_PROJECT_ID} tab="agents" />, without);
     const again = await screen.findByTestId('agent-card-docs-writer');
-    await waitFor(() => expect(without.calls.some((c) => c.path === WORKFLOW)).toBe(true));
+    await waitFor(() => expect(without.calls.some((c) => c.path === GRAPH)).toBe(true));
+    expect(without.calls.some((c) => c.path === WORKFLOW)).toBe(false);
     expect(within(again).queryByTestId('agent-used-by')).toBeNull();
   });
 });

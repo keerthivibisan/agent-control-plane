@@ -12,14 +12,12 @@ import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { LoadingBlock } from '../../components/Skeleton';
-import { workflowPaths, workflowSchemas, type ApiError } from '../../lib/api';
+import type { ApiError } from '../../lib/api';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
-import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { ChoiceCards, NumberChoice } from '../project-setup/fields';
-import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
 import { projectRunDefaults, runLimitNoEffect, startRequest, type StartChoice } from './logic';
-import { NoEffectNote, useBlockModes } from './RunOptions';
+import { NoEffectNote, useBlockModes, useProjectGraph } from './RunOptions';
 
 const S = REVIEW_LOOP_COPY.start;
 const M = REVIEW_LOOP_COPY.modes;
@@ -30,12 +28,6 @@ const L = WORKFLOW_LIVE_COPY.ceiling;
 const NO_LIMIT = 'no-limit' as const;
 type ModeChoice = ApprovalMode | typeof NO_LIMIT;
 const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
-const MODE_RANK: Readonly<Record<ApprovalMode, number>> = {
-  manual: 0,
-  'auto-edits': 1,
-  auto: 2,
-  'full-auto': 3,
-};
 
 /**
  * "Auto edits (recommended) · Project setting": the project's own choice is marked, and the
@@ -77,7 +69,8 @@ export function StartDialog({
   onStart: (request: StartTicketRequest) => void;
   onClose: () => void;
 }) {
-  const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
+  // WG-F: the project's graph answers for every project (the version 1 route 409s for a graph).
+  const q = useProjectGraph(projectId);
   const blocks = useBlockModes(projectId);
   const [picked, setPicked] = useState<Partial<StartChoice>>({});
   const [pickedMode, setPickedMode] = useState<ModeChoice | null>(null);
@@ -104,12 +97,6 @@ export function StartDialog({
   const limit: ApprovalMode | null = mode === NO_LIMIT ? null : mode;
   // Each block runs with the strictest of its own mode, the ticket's limit and this run's.
   const noEffect = limit === null ? null : runLimitNoEffect(limit, blocks, own.approvalMode);
-  // A server without graphs (no blocks known) still replaces the mode: keep its warnings.
-  const wider =
-    blocks === undefined &&
-    limit !== null &&
-    defaults !== null &&
-    MODE_RANK[limit] > MODE_RANK[defaults.approvalMode];
 
   return (
     <Dialog
@@ -166,12 +153,10 @@ export function StartDialog({
               ]}
               onChange={setPickedMode}
             />
+            {/* The options show only with the graph read, so the blocks are known: a limit can
+                only tighten them (ADR-0023), and one that changes nothing says so. */}
             {limit !== null && noEffect !== null ? (
               <NoEffectNote mode={limit} reason={noEffect} />
-            ) : blocks === undefined && limit === 'full-auto' ? (
-              <FullAutoWarning />
-            ) : wider ? (
-              <AutoRunWarning />
             ) : null}
             <ChoiceCards<ChangeReviewerMode>
               legend={S.reviewer}
