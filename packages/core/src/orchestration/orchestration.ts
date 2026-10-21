@@ -183,6 +183,9 @@ export const AgentRunSchema = z.object({
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
 
+/** Most characters in a managed session's title (`ManagedAgentSpec.title`, ADR-0024). */
+export const MAX_SESSION_TITLE = 120;
+
 /** Inputs of the lead agent's tools (ADR-0012). The engine validates every call (ADR-0013). */
 export const LeadToolInputs = {
   start_agent: z.object({

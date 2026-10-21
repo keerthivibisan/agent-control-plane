@@ -94,7 +94,12 @@ export const TicketSchema = z.object({
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 
-export const TicketCommentAuthorSchema = z.enum(['owner', 'lead', 'reviewer']);
+/**
+ * Who wrote a ticket comment. `app` (ADR-0024): Agent Control Plane itself, for the run summary it
+ * composes from data it already records (the plan, each change, checks, the ticket branch, tokens)
+ * and for the line it adds after the owner's merge. Never conversation content.
+ */
+export const TicketCommentAuthorSchema = z.enum(['owner', 'lead', 'reviewer', 'app']);
 export const TicketCommentSchema = z.object({
   id: z.string().min(1),
   ticketId: z.string().min(1),

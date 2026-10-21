@@ -29,3 +29,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0021](0021-approval-modes-review-loop-ticket-branch.md) | Approval modes, the review loop and the ticket branch      | accepted |
 | [0022](0022-full-auto-mode.md)                           | Full auto mode                                             | accepted |
 | [0023](0023-editable-workflow-graphs.md)                 | Editable workflow graphs                                   | accepted |
+| [0024](0024-session-names-and-run-summaries.md)          | Session names and run summary comments                     | accepted |
