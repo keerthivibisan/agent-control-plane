@@ -179,6 +179,38 @@ describe('TokensPage (R-F)', () => {
     expect(within(table).getAllByRole('row')).toHaveLength(4);
   });
 
+  it('names sessions as the session list does when the server sends the fields (ADR-0024)', async () => {
+    const base = projectTokens();
+    const [first, second] = base.bySession;
+    if (first === undefined || second === undefined) throw new Error('fixture');
+    const data = {
+      ...base,
+      bySession: [
+        {
+          ...first,
+          title: null,
+          firstSeenAt: '2026-10-16T09:00:00.000Z',
+          gitBranch: null,
+          agentType: null,
+          managed: {
+            runId: 'r-1',
+            agentRunId: 'a-1',
+            ticketKey: 'WEB-12',
+            kind: 'worker' as const,
+            label: 'Frontend helper',
+          },
+        },
+        { ...second, firstSeenAt: '2026-10-16T09:00:00.000Z', gitBranch: 'main', agentType: null },
+      ],
+    };
+    renderPage('', { [PATH]: data });
+    const table = await screen.findByRole('table', { name: 'Tokens by session' });
+    const link = (id: string) =>
+      within(table.querySelector(`[data-row="${id}"]`) as HTMLElement).getByRole('link');
+    expect(link('sess-aaaaaaaa-1').textContent).toBe('WEB-12 · Frontend helper');
+    expect(link('sess-bbbbbbbb-2').textContent).toMatch(/^Session on main · /);
+  });
+
   it('switches breakdowns through the address', async () => {
     renderPage();
     await screen.findByRole('table', { name: 'Tokens by session' });

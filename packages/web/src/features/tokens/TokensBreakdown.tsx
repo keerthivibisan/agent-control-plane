@@ -10,7 +10,7 @@ import { TokensIcon } from '../../components/icons';
 import { NOT_REPORTED, TOKENS_COPY, type TokensBreakdownWord } from '../../lib/copy';
 import { formatCount, shortId } from '../../lib/format';
 import { href, navigate } from '../../lib/router';
-import { sessionNameFromTitle } from '../../lib/session-name';
+import { nameSession, sessionNameFromTitle } from '../../lib/session-name';
 import { Figure, NEW_WORK_TYPES, Share, TOTAL_TYPES } from './figures';
 import { Segmented } from '../../components/Segmented';
 import { tokensHref, type TokensParams } from './tokens-params';
@@ -148,7 +148,18 @@ function sessionRows(data: ProjectTokensDto): Row[] {
     name: (
       <span className="flex min-w-0 flex-col">
         <a href={href.session(s.sessionId)} className="truncate font-medium">
-          {sessionNameFromTitle(s.sessionId, s.title)}
+          {/* ADR-0024 §2: the session list's names; older servers send the title only. */}
+          {s.firstSeenAt === undefined
+            ? sessionNameFromTitle(s.sessionId, s.title)
+            : nameSession({
+                title: s.title,
+                agentType: s.agentType ?? null,
+                providerAgentId: null,
+                description: null,
+                gitBranch: s.gitBranch ?? null,
+                firstSeenAt: s.firstSeenAt,
+                managed: s.managed,
+              }).name}
         </a>
         <span className="font-mono text-caption text-dim">{shortId(s.sessionId)}</span>
       </span>

@@ -1,8 +1,9 @@
 import { addUsageTotals, IsoTimestampSchema, tokenHeadline } from '@acp/core';
 import type { ProjectTokensDto, ReportedCostUsdDto, TokenHeadlineDto } from '@acp/core/api';
-import { createTokenQueries, type AcpDatabase, type TokenRow } from '@acp/db';
+import { createRepositories, createTokenQueries, type AcpDatabase, type TokenRow } from '@acp/db';
 import { z } from 'zod';
 import { badRequest, notFound } from '../errors.js';
+import { createManagedSessionNames } from '../services/managed-sessions.js';
 import { toUsageTotalsDto } from '../services/mappers.js';
 
 /** `?from&to`: ISO-8601 timestamps, `from` inclusive and `to` exclusive, `from` before `to`. */
@@ -49,8 +50,12 @@ function costDto(snapshot: { reportedCostUsd: number | null } | null): ReportedC
  * The project Tokens page (docs/redesign/README.md §4.5): the db query does the accounting
  * (direct usage only, usage-accounting §6); this maps it to `ProjectTokensDto`, adding provenance.
  */
-export function createTokensService(deps: { db: AcpDatabase }): TokensService {
+export function createTokensService(deps: { db: AcpDatabase; now?: () => Date }): TokensService {
   const queries = createTokenQueries(deps.db);
+  const now = deps.now ?? (() => new Date());
+  const repos = createRepositories(deps.db, { now });
+  // ADR-0024 §2: the session list's names, for this page's per-session rows.
+  const names = createManagedSessionNames({ db: deps.db, now });
   return {
     project(projectId, query) {
       const parsed = TokensQuerySchema.safeParse(query);
@@ -77,6 +82,11 @@ export function createTokensService(deps: { db: AcpDatabase }): TokensService {
         models.set(key, { totals, headline: tokenHeadline(totals.tokens) });
       }
 
+      const rows = new Map(
+        repos.sessions.getByIds(t.bySession.map((s) => s.sessionId)).map((r) => [r.id, r]),
+      );
+      const managed = names.of([...rows.values()]);
+
       return {
         projectId: t.projectId,
         range: t.range,
@@ -86,12 +96,22 @@ export function createTokensService(deps: { db: AcpDatabase }): TokensService {
         totals: toUsageTotalsDto(t.totals),
         headline: headlineDto(t.headline),
         byDay: t.byDay.map((d) => ({ day: d.day, ...rowDto(d) })),
-        bySession: t.bySession.map((s) => ({
-          sessionId: s.sessionId,
-          title: s.title === '' ? null : s.title,
-          latestEstimatedCost: costDto(s.latestSnapshot),
-          ...rowDto(s),
-        })),
+        bySession: t.bySession.map((s) => {
+          const row = rows.get(s.sessionId);
+          const app = managed.get(s.sessionId);
+          return {
+            sessionId: s.sessionId,
+            title: s.title === '' ? null : s.title,
+            latestEstimatedCost: costDto(s.latestSnapshot),
+            ...(app !== undefined && { managed: app }),
+            ...(row !== undefined && {
+              firstSeenAt: row.firstSeenAt,
+              gitBranch: row.gitBranch,
+              agentType: row.agentType,
+            }),
+            ...rowDto(s),
+          };
+        }),
         byTicket: t.byTicket.map((r) => ({
           ticketId: r.ticketId,
           key: r.key,
