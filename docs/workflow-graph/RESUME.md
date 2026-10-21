@@ -1,5 +1,19 @@
 # Resume here: v0.2.0 editable workflow graphs
 
+> **2026-10-21: RELEASE READY.** `release/0.2.0` at `8d66d45` (`chore(release): v0.2.0`) holds
+> everything.
+>
+> - **Checks:** 4,598 tests and e2e 72/72.
+> - **Verification:** the data-copy and rollback checks and the four real runs all passed.
+> - **The owner's remaining steps:**
+>   1. push `release/0.2.0`;
+>   2. open the PR to `main` in GitHub, using the text in
+>      `<repo>/.claude/worktrees/wg-coord/.acp-data/pr-v0.2.0.md`;
+>   3. run CI on the branch by hand;
+>   4. merge;
+>   5. create the GitHub release with tag `v0.2.0` on `main` (notes in `.acp-data/release-notes-v0.2.0.md`).
+> - **Everything below is history.**
+
 > Paused by the owner on 2026-10-20 (evening). This page is self-contained: read it first, then
 > [STATUS.md](STATUS.md) (the log), [README.md](README.md) (the plan, with its binding "WG-0
 > refinements" at the end) and [ADR-0023](../decisions/0023-editable-workflow-graphs.md). The rules
