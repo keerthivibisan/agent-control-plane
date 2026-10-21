@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HANDOVER_NOTE_LINE,
   VIEW_CHANGE_MAX_BYTES,
   agentEvent,
   beginChangeMerge,
@@ -134,6 +135,8 @@ describe('plan approval and the ticket branch', () => {
     expect(text).toContain('request_review once every change is decided');
     // RL-F: a lead that just ended its turn here waited for the run timeout.
     expect(text).toContain('nothing goes on until you call it');
+    // ADR-0024 §3: the lead is asked for a short handover note.
+    expect(text).toContain(HANDOVER_NOTE_LINE);
   });
 
   it('separate planner mode: the branch comes before the lead starts', () => {

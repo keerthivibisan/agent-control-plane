@@ -378,11 +378,19 @@ function startLine(maxConcurrentHelpers: number, loop: boolean, fullAuto = false
     `Start the helpers the plan needs with start_agent (at most ${maxConcurrentHelpers} at once).`,
     'When a helper finishes, its change is reviewed and you get a message. Decide each change with merge_change (into the ticket branch), request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows a change.',
     'Call request_review once every change is decided (merged, discarded or with no changes): that hands the work over, and nothing goes on until you call it, so do not just end your turn and wait. If work is still missing, start helpers for it first. The owner then merges the ticket branch once.',
+    HANDOVER_NOTE_LINE,
     fullAuto ? FULL_AUTO_LEAD_LINE : null,
   ]
     .filter((l) => l !== null)
     .join(' ');
 }
+
+/**
+ * ADR-0024 §3: what the lead's `request_review.summary` should say. Short on purpose: the brief
+ * is sent on every review-loop run. The app adds the facts (plan, changes, checks, tokens) itself.
+ */
+export const HANDOVER_NOTE_LINE =
+  'Pass request_review a summary for the owner: 3 to 6 short plain sentences on what was done and what they should know (follow-ups, risks, anything not done), no code.';
 
 /**
  * What a Full auto lead is told (ADR-0022): the owner is not asked during the run, so it decides

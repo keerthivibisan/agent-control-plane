@@ -431,7 +431,7 @@ export function requestTicketChanges(
       [
         `The owner asked for changes before merging ${branchLabel(d)}:`,
         text,
-        'Start helpers for the changes with start_agent, decide their changes as before, then call request_review again.',
+        'Start helpers for the changes with start_agent, decide their changes as before, then call request_review again with an updated summary.',
       ].join('\n\n'),
     );
     return done;

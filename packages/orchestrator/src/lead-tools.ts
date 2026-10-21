@@ -347,7 +347,7 @@ export function leadToolCall(
       const parsed = LeadToolInputs.request_review.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
       return withReply(
-        requestReview(state, ctx),
+        requestReview(state, ctx, { summary: parsed.data.summary }),
         loop
           ? 'Handed over. The final review and tests, if the project runs them, work on the ticket branch and their findings come to you. Then the owner merges the ticket branch.'
           : 'The owner can now review the changes.',

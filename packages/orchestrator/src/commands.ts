@@ -9,6 +9,7 @@ import {
   TokenCountsSchema,
   WorkflowGraphInvalidError,
   WorkflowGraphSchema,
+  redact,
 } from '@acp/core';
 import type {
   AllowRule,
@@ -877,11 +878,37 @@ export function completeCancellation(state: RunState, ctx: EngineContext): Engin
   });
 }
 
+/** The longest handover note kept (`LeadToolInputs.request_review.summary`, ADR-0024 §3). */
+export const HANDOVER_NOTE_MAX_CHARS = 1500;
+
+/**
+ * The lead's handover note as stored: redacted, then capped (redaction can lengthen the text, so
+ * the cap comes after it). Null for a missing or blank note.
+ */
+export function cleanHandoverNote(text: string | undefined): string | null {
+  if (text === undefined) return null;
+  const body = redact(text).trim();
+  if (body === '') return null;
+  return body.length <= HANDOVER_NOTE_MAX_CHARS
+    ? body
+    : `${body.slice(0, HANDOVER_NOTE_MAX_CHARS - 1).trimEnd()}…`;
+}
+
+export interface RequestReviewOptions {
+  /** The lead's `request_review.summary` (ADR-0024 §3); used by review-loop runs only. */
+  summary?: string | undefined;
+}
+
 /**
  * Moves the run to REVIEW (the lead's `request_review`, or the owner). Refused while workers are
- * live. A run with nothing to review goes straight on to COMPLETED.
+ * live. A run with nothing to review goes straight on to COMPLETED. A review-loop handover emits
+ * `handover-summary` with the lead's note (ADR-0024 §3); legacy runs are unchanged.
  */
-export function requestReview(state: RunState, ctx: EngineContext): EngineResult {
+export function requestReview(
+  state: RunState,
+  ctx: EngineContext,
+  options: RequestReviewOptions = {},
+): EngineResult {
   return applyCommand(state, ctx, (d) => {
     const runRefusal = checkRunActive(d.run.status);
     if (runRefusal !== null) return runRefusal;
@@ -903,6 +930,7 @@ export function requestReview(state: RunState, ctx: EngineContext): EngineResult
         return refusal('changes-undecided', `Decide every change first:\n${waiting.join('\n')}`);
       }
       loop.handedOver = true;
+      d.effects.push({ type: 'handover-summary', note: cleanHandoverNote(options.summary) });
       // `reconcile` starts the next stage, or moves the run to REVIEW for the owner's merge.
       return done;
     }

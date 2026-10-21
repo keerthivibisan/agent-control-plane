@@ -275,7 +275,9 @@ export interface EngineContext {
 /**
  * What the server must do after persisting the new state, in this order. The engine never performs
  * I/O itself. Effects carry ids and engine-generated text only, except `send-to-agent`/`start-agent`
- * (the owner's chat, a lead's message or task for a worker) and `chat-message` (ADR-0015).
+ * (the owner's chat, a lead's message or task for a worker), `chat-message` (ADR-0015) and the
+ * owner-facing notes kept as ticket comments (`review-comment`, `change-comment`,
+ * `handover-summary`).
  */
 export type EngineEffect =
   | {
@@ -437,6 +439,13 @@ export type EngineEffect =
     }
   /** End the follow-up turn under way (budget reached, the owner's Stop, Stop all). */
   | { type: 'abort-follow-up'; agentRunId: string }
+  /**
+   * ADR-0024 §3: the lead handed a review-loop run over (`request_review`). The server composes
+   * the run summary comment (author `app`) from its own records, then adds `note`: the lead's
+   * `request_review.summary`, redacted and capped at 1,500 characters, or null without one.
+   * Legacy runs never emit it (their facts summary follows the run's move to REVIEW).
+   */
+  | { type: 'handover-summary'; note: string | null }
   /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */

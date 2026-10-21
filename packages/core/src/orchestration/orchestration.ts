@@ -207,7 +207,15 @@ export const LeadToolInputs = {
    * the review loop (ADR-0021 §3): every change is decided, so the final stages and the owner's
    * single merge of the ticket branch follow.
    */
-  request_review: z.object({}),
+  request_review: z.object({
+    /**
+     * ADR-0024 §3: the lead's note for the owner, 3 to 6 short plain sentences on what was done and
+     * what the owner should know (follow-ups, risks, what was not done), no code. Review-loop runs
+     * keep it in the run summary comment (author `app`) after the facts the app records itself.
+     * Optional: without it the summary has the facts only.
+     */
+    summary: z.string().trim().min(1).max(1500).optional(),
+  }),
   /** Plan-first (ADR-0016): the lead's proposed plan; helpers can't start until it is approved. */
   submit_plan: z.object({
     summary: z.string().trim().min(1).max(2000),

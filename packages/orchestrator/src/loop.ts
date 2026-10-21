@@ -273,9 +273,9 @@ function handoverPromptText(d: Draft, changes: readonly EngineAgent[]): string {
   const branch = branchLabel(d);
   const decided = `Every change is decided (${merged} merged into ${branch}, ${count('discarded')} discarded, ${count('no-changes')} with no changes) and no helper is working.`;
   if (merged > 0) {
-    return `${decided} Hand over with request_review, or start helpers with start_agent for work that is still missing.`;
+    return `${decided} Hand over with request_review (with your summary), or start helpers with start_agent for work that is still missing.`;
   }
-  return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review.`;
+  return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review (with your summary).`;
 }
 
 /** Changes waiting for a reviewer, oldest first (ties: the agent's creation order). */

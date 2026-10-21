@@ -15,7 +15,7 @@ exports[`template traces > lead-only approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -39,10 +39,11 @@ exports[`template traces > lead-only approve 1`] = `
 #11 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #12 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #13 owner "merge ticket branch" -> ok
@@ -70,7 +71,7 @@ exports[`template traces > lead-only failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -116,10 +117,11 @@ exports[`template traces > lead-only failed-check 1`] = `
 #17 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #18 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #19 owner "merge ticket branch" -> ok
@@ -147,7 +149,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -187,10 +189,11 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
 #15 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #16 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #17 owner "merge ticket branch" -> ok
@@ -220,7 +223,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -249,10 +252,11 @@ exports[`template traces > lead-only with a planner approve 1`] = `
 #12 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #13 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #14 owner "merge ticket branch" -> ok
@@ -283,7 +287,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -334,10 +338,11 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
 #18 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #19 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #20 owner "merge ticket branch" -> ok
@@ -368,7 +373,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -413,10 +418,11 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
 #16 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #17 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #18 owner "merge ticket branch" -> ok
@@ -445,7 +451,7 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -483,10 +489,11 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
 #14 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #15 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #16 owner "merge ticket branch" -> ok
@@ -515,7 +522,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -558,10 +565,11 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
   > change-round agentRunId=W1 decidedBy="lead" decision="discard" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > change-comment agentRunId=W1 author="lead" body="Not needed." kind="discard" round=0
   > discard-change agentRunId=W1
-  > send-to-agent agentRunId=L text="Every change is decided (0 merged into a…"#e61f7a60/295
+  > send-to-agent agentRunId=L text="Every change is decided (0 merged into a…"#65d6e486/315
   ~ W1 CANCELLED review=discarded change=discarded/r0/approve/checks:failed
 #16 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #17 owner "merge ticket branch" -> ok
@@ -590,7 +598,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -654,10 +662,11 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
 #20 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #21 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #22 owner "merge ticket branch" -> ok
@@ -689,7 +698,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -732,10 +741,11 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
 #15 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #16 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #17 owner "merge ticket branch" -> ok
@@ -767,7 +777,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -815,10 +825,11 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   > change-round agentRunId=W1 decidedBy="lead" decision="discard" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > change-comment agentRunId=W1 author="lead" body="Not needed." kind="discard" round=0
   > discard-change agentRunId=W1
-  > send-to-agent agentRunId=L text="Every change is decided (0 merged into a…"#e61f7a60/295
+  > send-to-agent agentRunId=L text="Every change is decided (0 merged into a…"#65d6e486/315
   ~ W1 CANCELLED review=discarded change=discarded/r0/approve/checks:failed
 #17 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #18 owner "merge ticket branch" -> ok
@@ -850,7 +861,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -919,10 +930,11 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
 #21 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #22 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #23 owner "merge ticket branch" -> ok
@@ -953,7 +965,7 @@ exports[`template traces > todays-setup approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -991,10 +1003,11 @@ exports[`template traces > todays-setup approve 1`] = `
 #14 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #15 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #16 owner "merge ticket branch" -> ok
@@ -1023,7 +1036,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1097,10 +1110,11 @@ exports[`template traces > todays-setup failed-check 1`] = `
 #23 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #25 owner "merge ticket branch" -> ok
@@ -1130,7 +1144,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1198,10 +1212,11 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
 #21 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #22 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #23 owner "merge ticket branch" -> ok
@@ -1233,7 +1248,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1276,10 +1291,11 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
 #15 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #16 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #17 owner "merge ticket branch" -> ok
@@ -1311,7 +1327,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1390,10 +1406,11 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
 #24 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #26 owner "merge ticket branch" -> ok
@@ -1426,7 +1443,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#70238b5a/959 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1499,10 +1516,11 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
 #22 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#d4ac0a21/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c3303363/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #24 owner "merge ticket branch" -> ok

@@ -1000,7 +1000,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=0c25a006647ab9c0/6366
+"digest=fd1ab7a7d2698439/6397
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1012,7 +1012,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=168a243a8b01b590/6852
+"digest=9410ae8916fa627f/6883
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1024,7 +1024,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=a35ecefabd0cc084/6391
+"digest=9ecc1f7da6bc4ab3/6422
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1036,7 +1036,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=a93a279ae8cef6b0/6741
+"digest=86154847ba4da409/6772
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1048,7 +1048,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=7df706dcdce3ca3a/6389
+"digest=e13a2dfba482d5e5/6420
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1060,7 +1060,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=5117f4edf21d64c7/6370
+"digest=80676dd8f354fcba/6401
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1072,7 +1072,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut approve 1`] = `
-"digest=2ec9d2d0e7eaa43a/8509
+"digest=b1971a2bfdfc205d/8540
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1086,7 +1086,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=732165b779e43fb9/8995
+"digest=8f93754e3edd3378/9026
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1100,7 +1100,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut discard 1`] = `
-"digest=391602fabf474a14/8534
+"digest=2b7749ff4406a0e5/8565
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1114,7 +1114,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=39d4f7fec7bd88ec/8884
+"digest=adcb05d542c5604f/8915
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1128,7 +1128,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=3fea9c1cc232cc3a/8532
+"digest=ac73a57dbe6ee4d7/8563
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1142,7 +1142,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=ce80a1a797d3db29/8513
+"digest=a672ee843175cba6/8544
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1156,7 +1156,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut approve 1`] = `
-"digest=94f95838505e646a/5540
+"digest=952365518dddeaab/5571
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1167,7 +1167,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=787911a5bc811313/6026
+"digest=30746696631f9354/6057
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1178,7 +1178,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut discard 1`] = `
-"digest=48bea60a6df8a1ac/5565
+"digest=f4d149a5aebe0823/5596
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1189,7 +1189,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=2f5ba3dec8e60e38/5915
+"digest=1750b9f332ce18b1/5946
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1200,7 +1200,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=1086537469a9d84a/5563
+"digest=eaaddf7b116f49dd/5594
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1211,7 +1211,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=c82295ed4cc2ce47/5544
+"digest=df4ec49824af30a2/5575
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1222,7 +1222,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut approve 1`] = `
-"digest=81be37eb6e648489/7683
+"digest=52108540ff207076/7714
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1235,7 +1235,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut ask-owner 1`] = `
-"digest=975f6e3b014b3f21/8169
+"digest=dc91884a4aa6bc30/8200
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1248,7 +1248,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut discard 1`] = `
-"digest=1dbe50634bfeb341/7708
+"digest=9d8c2e1e68e41fd0/7739
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1261,7 +1261,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=f18c1f1128dcc2f7/8058
+"digest=d04b3afacf337c6c/8089
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1274,7 +1274,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut failing-helper 1`] = `
-"digest=050d1b197adfe8a3/7706
+"digest=a154b938cee67de6/7737
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1287,7 +1287,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=4fb1e4382fd76aa6/7687
+"digest=0106c0b397a18479/7718
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1314,7 +1314,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r1/no-cr/ut run-reviewer-l
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1375,10 +1375,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r1/no-cr/ut run-reviewer-l
 #21 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #22 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#718e226e/598 role="Tester"
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
   ~ handedOver=true
@@ -1413,7 +1414,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=0c25a006647ab9c0/6366
+"digest=fd1ab7a7d2698439/6397
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1425,7 +1426,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=168a243a8b01b590/6852
+"digest=9410ae8916fa627f/6883
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1437,7 +1438,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=a35ecefabd0cc084/6391
+"digest=9ecc1f7da6bc4ab3/6422
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1449,7 +1450,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=d5a48f899e43832f/8707
+"digest=1f32af9476da95a2/8738
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1462,7 +1463,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=7df706dcdce3ca3a/6389
+"digest=e13a2dfba482d5e5/6420
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1474,7 +1475,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=de57e07c202355de/8391
+"digest=08dc2b0f632841e9/8422
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1501,7 +1502,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1574,10 +1575,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -1657,7 +1659,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1781,7 +1783,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1843,7 +1845,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1952,10 +1954,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #37 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #38 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2035,7 +2038,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -2152,10 +2155,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #39 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #40 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2231,7 +2235,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-full
   = "Plan v1 submitted and approved automatic…"#044dcf2d/164
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="Plan v1 was approved automatically (Full…"#d5dc4151/908
+  > send-to-agent agentRunId=L text="Plan v1 was approved automatically (Full…"#a5b506cb/1074
   ~ run RUNNING
   ~ plan1 approved by=auto
 #4 server "ticket branch created" -> ok
@@ -2318,10 +2322,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-full
 #32 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #33 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2401,7 +2406,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-manu
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -2534,10 +2539,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-manu
 #43 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #44 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2617,7 +2623,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -2696,10 +2702,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner 1`] = `
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="owner" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > send-to-agent agentRunId=L text="The owner decided: Merged Store into acp/WEB-12."
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2779,7 +2786,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner-rework 
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -2888,10 +2895,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner-rework 
 #31 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #32 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -2972,7 +2980,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut conflict 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -3080,10 +3088,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut conflict 1`] = `
 #32 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r1/approve
 #33 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -3164,7 +3173,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut discard 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -3236,10 +3245,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut discard 1`] = `
 #22 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -3319,7 +3329,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failed-check 1`] 
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -3428,10 +3438,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failed-check 1`] 
 #32 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #33 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -3512,7 +3523,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failing-helper 1`
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -3584,10 +3595,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failing-helper 1`
 #22 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -3667,7 +3679,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut no-changes 1`] = 
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -3718,10 +3730,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut no-changes 1`] = 
 #18 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#a1d9776e/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#0465cbb4/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #19 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#49cc3252/759 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -3786,7 +3799,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=a631093edc0ace40/10078
+"digest=877d1e7d173aed0f/10109
 outcome=ended steps=50
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3800,7 +3813,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=d83f798dfdf63017/10292
+"digest=275e319a3b9e99b4/10323
 outcome=ended steps=52
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3814,7 +3827,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=642cfe885c33f2aa/9223
+"digest=ecb39a684ff387ae/9255
 outcome=ended steps=45
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3828,7 +3841,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=61194babf0266c35/10720
+"digest=4b88a908220b03d2/10751
 outcome=ended steps=56
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3866,7 +3879,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut plan-changes 1`] 
 #6 owner "plan approve" -> ok
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v2. Start the he…"#e7ceec7c/630
+  > send-to-agent agentRunId=L text="The owner approved plan v2. Start the he…"#f9c7e212/796
   ~ run RUNNING
   ~ plan2 approved
 #7 server "ticket branch created" -> ok
@@ -3939,10 +3952,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut plan-changes 1`] 
 #25 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #26 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#90f19297/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -4022,7 +4036,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut rework-then-appro
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -4125,10 +4139,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut rework-then-appro
 #30 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #31 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -4209,7 +4224,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich approve 1`] 
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -4282,10 +4297,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich approve 1`] 
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -4365,7 +4381,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich rework-then-
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -4468,10 +4484,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich rework-then-
 #30 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #31 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -4538,7 +4555,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=94f95838505e646a/5540
+"digest=952365518dddeaab/5571
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4549,7 +4566,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=787911a5bc811313/6026
+"digest=30746696631f9354/6057
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4560,7 +4577,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut discard 1`] = `
-"digest=48bea60a6df8a1ac/5565
+"digest=f4d149a5aebe0823/5596
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4571,7 +4588,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=59c90d73a85182e5/7881
+"digest=8e65475e6a122a48/7912
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4583,7 +4600,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=1086537469a9d84a/5563
+"digest=eaaddf7b116f49dd/5594
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4594,7 +4611,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=d2a5e98c35586ec6/7565
+"digest=9dfba907fc7163b9/7596
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4606,7 +4623,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=81be37eb6e648489/7683
+"digest=52108540ff207076/7714
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4619,7 +4636,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut ask-owner 1`] = `
-"digest=975f6e3b014b3f21/8169
+"digest=dc91884a4aa6bc30/8200
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4632,7 +4649,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut discard 1`] = `
-"digest=1dbe50634bfeb341/7708
+"digest=9d8c2e1e68e41fd0/7739
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4645,7 +4662,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=7abe5be6620a140c/10024
+"digest=c1d612c51357cccb/10055
 outcome=ended steps=42
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4659,7 +4676,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut failing-helper 1`] = `
-"digest=050d1b197adfe8a3/7706
+"digest=a154b938cee67de6/7737
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4672,7 +4689,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=82b578831b88c829/9708
+"digest=9b3d5b9eb89d77f4/9739
 outcome=ended steps=40
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4686,7 +4703,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=6e836f8f81b65d51/4429
+"digest=558b141e7151d3a0/4460
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4696,7 +4713,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=1a1449c538cc1137/4902
+"digest=1f76883e2d1bc120/4933
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4706,7 +4723,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=3f3d3e9b4db59221/4454
+"digest=ca22b6665bbc5b48/4485
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4716,7 +4733,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=6e728139ef0dd02b/4797
+"digest=7b7b06a4567cd252/4828
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4726,7 +4743,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=04884419bd327bdb/4452
+"digest=7d599f9020884bce/4483
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4736,7 +4753,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=6e836f8f81b65d51/4429
+"digest=558b141e7151d3a0/4460
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4746,7 +4763,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut approve 1`] = `
-"digest=10807e551ad767bb/5591
+"digest=4c5e245060e7953e/5622
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4757,7 +4774,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=17d474062286abc4/6064
+"digest=78c58331f0b22d7f/6095
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4768,7 +4785,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut discard 1`] = `
-"digest=212a1c3f92172df1/5616
+"digest=e67419565c73535c/5647
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4779,7 +4796,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=d0988e73f0e639bd/5959
+"digest=2eeb4ba2f3b05f28/5990
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4790,7 +4807,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=1e7b7f7945117b7f/5614
+"digest=f16da5f4a4eb930e/5645
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4801,7 +4818,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=10807e551ad767bb/5591
+"digest=4c5e245060e7953e/5622
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4812,7 +4829,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut approve 1`] = `
-"digest=8d82a2e49a6cb1ba/3603
+"digest=2a48c6592db8124f/3634
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4821,7 +4838,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=c8752202240baa88/4076
+"digest=5bcaa86d9f84ae73/4107
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4830,7 +4847,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut discard 1`] = `
-"digest=950749fbd92496ad/3628
+"digest=3f3ac1cefd7acce4/3659
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4839,7 +4856,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=bb498595f924f667/3971
+"digest=67c368c0381ccf6e/4002
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4848,7 +4865,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=e30429958768423b/3626
+"digest=f217761c189bb146/3657
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4857,7 +4874,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=8d82a2e49a6cb1ba/3603
+"digest=2a48c6592db8124f/3634
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4866,7 +4883,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut approve 1`] = `
-"digest=fe9b5d5c6c14ac9e/4765
+"digest=95600ba9e533289b/4796
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4876,7 +4893,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut ask-owner 1`] = `
-"digest=66842bdce0c59312/5238
+"digest=9e6d53776ab434dd/5269
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4886,7 +4903,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut discard 1`] = `
-"digest=16dfb88a34b1f8f4/4790
+"digest=f95d1a578274007d/4821
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4896,7 +4913,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=c5593ccc6937d53a/5133
+"digest=c5445a61ecf3e70b/5164
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4906,7 +4923,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut failing-helper 1`] = `
-"digest=4ec53fecea8510ca/4788
+"digest=4a1b43a583f9c7bf/4819
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4916,7 +4933,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=fe9b5d5c6c14ac9e/4765
+"digest=95600ba9e533289b/4796
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4940,7 +4957,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r1/no-cr/ut run-reviewer-ag
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5043,10 +5060,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r1/no-cr/ut run-reviewer-ag
 #30 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #31 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#718e226e/598 role="Tester"
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
   ~ handedOver=true
@@ -5099,7 +5117,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=6e836f8f81b65d51/4429
+"digest=558b141e7151d3a0/4460
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5109,7 +5127,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=1a1449c538cc1137/4902
+"digest=1f76883e2d1bc120/4933
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5119,7 +5137,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=3f3d3e9b4db59221/4454
+"digest=ca22b6665bbc5b48/4485
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5129,7 +5147,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=5988c118e6c2d91a/5803
+"digest=a65eb96f2092b4b9/5834
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5139,7 +5157,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=04884419bd327bdb/4452
+"digest=7d599f9020884bce/4483
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5149,7 +5167,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=4d6f99a2ea4133dc/5488
+"digest=40c0c7e7ea2d45a1/5519
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5173,7 +5191,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5218,10 +5236,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut approve 1`] = `
 #17 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #18 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5284,7 +5303,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5335,10 +5354,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner 1`] = `
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="owner" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > send-to-agent agentRunId=L text="The owner decided: Merged Store into acp/WEB-12."
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #19 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5401,7 +5421,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner-rework 1
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5468,10 +5488,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner-rework 1
 #22 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5534,7 +5555,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut conflict 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5600,10 +5621,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut conflict 1`] = `
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r1
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5666,7 +5688,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut discard 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5710,10 +5732,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut discard 1`] = `
 #16 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #17 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5776,7 +5799,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failed-check 1`] =
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5843,10 +5866,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failed-check 1`] =
 #23 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -5909,7 +5933,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failing-helper 1`]
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -5953,10 +5977,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failing-helper 1`]
 #16 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #17 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6019,7 +6044,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut no-changes 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -6056,10 +6081,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut no-changes 1`] = `
 #15 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#a1d9776e/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#0465cbb4/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #16 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#49cc3252/759 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6132,7 +6158,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut plan-changes 1`] =
 #6 owner "plan approve" -> ok
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v2. Start the he…"#e7ceec7c/630
+  > send-to-agent agentRunId=L text="The owner approved plan v2. Start the he…"#f9c7e212/796
   ~ run RUNNING
   ~ plan2 approved
 #7 server "ticket branch created" -> ok
@@ -6177,10 +6203,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut plan-changes 1`] =
 #19 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #20 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#90f19297/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6243,7 +6270,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut rework-then-approv
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -6304,10 +6331,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut rework-then-approv
 #21 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #22 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6370,7 +6398,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich approve 1`] =
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -6415,10 +6443,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich approve 1`] =
 #17 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #18 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6481,7 +6510,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich rework-then-a
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -6542,10 +6571,11 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich rework-then-a
 #21 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #22 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -6594,7 +6624,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut approve 1`] = `
-"digest=8d82a2e49a6cb1ba/3603
+"digest=2a48c6592db8124f/3634
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6603,7 +6633,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=c8752202240baa88/4076
+"digest=5bcaa86d9f84ae73/4107
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6612,7 +6642,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut discard 1`] = `
-"digest=950749fbd92496ad/3628
+"digest=3f3ac1cefd7acce4/3659
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6621,7 +6651,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=869cba2a1aa4ceec/4977
+"digest=e3378135c087b707/5008
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6630,7 +6660,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=e30429958768423b/3626
+"digest=f217761c189bb146/3657
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6639,7 +6669,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=74146e9ed5c21fd4/4662
+"digest=0773d1ef5f1ad355/4693
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6648,7 +6678,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut approve 1`] = `
-"digest=fe9b5d5c6c14ac9e/4765
+"digest=95600ba9e533289b/4796
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6658,7 +6688,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut ask-owner 1`] = `
-"digest=66842bdce0c59312/5238
+"digest=9e6d53776ab434dd/5269
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6668,7 +6698,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut discard 1`] = `
-"digest=16dfb88a34b1f8f4/4790
+"digest=f95d1a578274007d/4821
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6678,7 +6708,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=6f8f0c6375b8ab3d/6139
+"digest=7780db583b2187b2/6170
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6688,7 +6718,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut failing-helper 1`] = `
-"digest=4ec53fecea8510ca/4788
+"digest=4a1b43a583f9c7bf/4819
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6698,7 +6728,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=e375245551a544a7/5824
+"digest=fdb3513c8b1b39fe/5855
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6722,7 +6752,7 @@ exports[`golden v1 traces > loop no-workflow approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2fb65979/630
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -6795,10 +6825,11 @@ exports[`golden v1 traces > loop no-workflow approve 1`] = `
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   ~ run REVIEW
   ~ handedOver=true
 #25 owner "merge ticket branch" -> ok
@@ -6815,7 +6846,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=b2f6f4997a83cf4b/6648
+"digest=51f74640c7f0ebc2/6679
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6828,7 +6859,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=637c6dbe80505494/7134
+"digest=e8fc2b4fd0874735/7165
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6841,7 +6872,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=0262e5f222c87398/6673
+"digest=2a9d80c3a61430a5/6704
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6854,7 +6885,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=a7a0db247df64272/7023
+"digest=5849d0332d6f7cdd/7054
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6867,7 +6898,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=a2e195506509e812/6671
+"digest=0f3170a5c54b6853/6702
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6880,7 +6911,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=4f7bac0ce76450c6/6652
+"digest=cd3e0f857a73d2a7/6683
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6893,7 +6924,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut approve 1`] = `
-"digest=1050f9eac4292c50/8791
+"digest=f9cce74dde26b823/8822
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6908,7 +6939,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=193d11d6f2578af4/9277
+"digest=96f35b814638f9e7/9308
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6923,7 +6954,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut discard 1`] = `
-"digest=42684e2f05435f61/8816
+"digest=78524e94d4c928d2/8847
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6938,7 +6969,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=96945d0dc1a5f7f7/9166
+"digest=c879394c7e0247d2/9197
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6953,7 +6984,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=2c7bb7692b7d80cf/8814
+"digest=301ee8d22ed6f784/8845
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6968,7 +6999,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=382c1bd5506f1c23/8795
+"digest=8b8e7fee862f247c/8826
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6983,7 +7014,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut approve 1`] = `
-"digest=ff67f28211619234/5822
+"digest=6ae8518f20b59699/5853
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6995,7 +7026,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=9b7a6b5e24a6aae8/6308
+"digest=e63b32c794258009/6339
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7007,7 +7038,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut discard 1`] = `
-"digest=5436c9d1291e80cb/5847
+"digest=4407cbc474ec2e9a/5878
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7019,7 +7050,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=4c31ea33d7ebca19/6197
+"digest=ee51fd8456d8209e/6228
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7031,7 +7062,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=a87be2f369076ab1/5845
+"digest=a6df6e9a55edadd4/5876
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7043,7 +7074,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=bb5c75c3a8e02e45/5826
+"digest=ba329e2a96b74a1c/5857
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7055,7 +7086,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut approve 1`] = `
-"digest=f8195c660f0e55a8/7965
+"digest=70dc7fb596526a57/7996
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7069,7 +7100,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut ask-owner 1`] = `
-"digest=fae4b36ff32b5765/8451
+"digest=9f3e5a6c7da23de2/8482
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7083,7 +7114,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut discard 1`] = `
-"digest=0a4c39a1084a95e3/7990
+"digest=4dc4c30283fbc5c0/8021
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7097,7 +7128,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=e0b1ba3fe92d97f5/8340
+"digest=d535760e4effb0f8/8371
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7111,7 +7142,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut failing-helper 1`] = `
-"digest=1a1226fbd7287001/7988
+"digest=a3e385c046a65232/8019
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7125,7 +7156,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=4241e66793ef6cd1/7969
+"digest=9a2b0e40110aecfa/8000
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7139,7 +7170,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=b2f6f4997a83cf4b/6648
+"digest=51f74640c7f0ebc2/6679
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7152,7 +7183,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=637c6dbe80505494/7134
+"digest=e8fc2b4fd0874735/7165
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7165,7 +7196,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=0262e5f222c87398/6673
+"digest=2a9d80c3a61430a5/6704
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7178,7 +7209,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=2dcc90862b79e310/8989
+"digest=13efcb93771ac22d/9020
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7192,7 +7223,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=a2e195506509e812/6671
+"digest=0f3170a5c54b6853/6702
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7205,7 +7236,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=8832640513ccb41f/8673
+"digest=36a47e6ab2e40c7c/8704
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7235,7 +7266,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7313,10 +7344,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve 1`] = `
 #24 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -7399,7 +7431,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto 1`
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7513,10 +7545,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto 1`
 #38 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #39 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -7599,7 +7632,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto-ed
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7721,10 +7754,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto-ed
 #40 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #41 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -7803,7 +7837,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-full-au
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#384a44de/1302 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#009ae98c/1468 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7895,10 +7929,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-full-au
 #33 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #34 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -7981,7 +8016,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-manual 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8119,10 +8154,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-manual 
 #44 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #45 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -8205,7 +8241,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8289,10 +8325,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner 1`] = `
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="owner" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > send-to-agent agentRunId=L text="The owner decided: Merged Store into acp/WEB-12."
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #26 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -8375,7 +8412,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner-rework 1`]
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8489,10 +8526,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner-rework 1`]
 #32 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #33 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -8576,7 +8614,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut conflict 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8689,10 +8727,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut conflict 1`] = `
 #33 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r1/approve
 #34 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -8776,7 +8815,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut discard 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8853,10 +8892,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut discard 1`] = `
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -8939,7 +8979,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9053,10 +9093,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failed-check 1`] = `
 #33 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #34 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -9140,7 +9181,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failing-helper 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9217,10 +9258,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failing-helper 1`] =
 #23 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -9303,7 +9345,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut no-changes 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9359,10 +9401,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut no-changes 1`] = `
 #19 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#a1d9776e/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#0465cbb4/225
   ~ W1 SUCCEEDED review=merged change=merged/r0/approve
 #20 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#49cc3252/759 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -9428,7 +9471,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=0289ab0c040e0682/10360
+"digest=5a777c951faa7033/10391
 outcome=ended steps=51
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9443,7 +9486,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=2fa857c1c655abc3/10574
+"digest=9051d39a5f4a9484/10605
 outcome=ended steps=53
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9458,7 +9501,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=c1c400e6a2c676b0/9505
+"digest=a648fb3dc91c1eab/9536
 outcome=ended steps=46
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9473,7 +9516,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=42d55e4d093edb9f/11002
+"digest=9038c3b2ad1630b4/11033
 outcome=ended steps=57
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9514,7 +9557,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut plan-changes 1`] = `
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#79853243/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#ada5ddfd/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9592,10 +9635,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut plan-changes 1`] = `
 #26 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #27 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#90f19297/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -9678,7 +9722,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut rework-then-approve 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9786,10 +9830,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut rework-then-approve 
 #31 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #32 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -9873,7 +9918,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#27ff8b97/1063 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9b0eea79/1229 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9951,10 +9996,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich approve 1`] = `
 #24 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0/approve
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -10037,7 +10083,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich rework-then-app
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#27ff8b97/1063 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9b0eea79/1229 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10145,10 +10191,11 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich rework-then-app
 #31 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="agent" reviewerAgentRunId=CR3 round=1 verdict="approve"
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1/approve
 #32 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -10216,7 +10263,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=ff67f28211619234/5822
+"digest=6ae8518f20b59699/5853
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10228,7 +10275,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=9b7a6b5e24a6aae8/6308
+"digest=e63b32c794258009/6339
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10240,7 +10287,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut discard 1`] = `
-"digest=5436c9d1291e80cb/5847
+"digest=4407cbc474ec2e9a/5878
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10252,7 +10299,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=4b9e0a1f6ac1c999/8163
+"digest=c31790fe84f8d9b0/8194
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10265,7 +10312,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=a87be2f369076ab1/5845
+"digest=a6df6e9a55edadd4/5876
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10277,7 +10324,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=bb94637641caf54c/7847
+"digest=ee935ed56743b8c3/7878
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10290,7 +10337,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=f8195c660f0e55a8/7965
+"digest=70dc7fb596526a57/7996
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10304,7 +10351,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut ask-owner 1`] = `
-"digest=fae4b36ff32b5765/8451
+"digest=9f3e5a6c7da23de2/8482
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10318,7 +10365,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut discard 1`] = `
-"digest=0a4c39a1084a95e3/7990
+"digest=4dc4c30283fbc5c0/8021
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10332,7 +10379,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=6fd4a517a75c0825/10306
+"digest=a3925a7808e5fc06/10337
 outcome=ended steps=43
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10347,7 +10394,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut failing-helper 1`] = `
-"digest=1a1226fbd7287001/7988
+"digest=a3e385c046a65232/8019
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10361,7 +10408,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=4fd2d0ca00c43054/9990
+"digest=35a867f709cbe111/10021
 outcome=ended steps=41
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10376,7 +10423,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=3ec15f680357ff06/4711
+"digest=66cfa3735d62bd29/4742
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10387,7 +10434,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=6ffbb4e10df09faf/5184
+"digest=ede8dccc2c2d8832/5215
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10398,7 +10445,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=f11071c7e5e4eb35/4736
+"digest=14ddee8a8ac8cc6c/4767
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10409,7 +10456,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=ade93b256283b333/5079
+"digest=69c052b68b8a30c8/5110
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10420,7 +10467,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=a4c47f0d7a17f5a7/4734
+"digest=970e8c6c7269863a/4765
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10431,7 +10478,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=3ec15f680357ff06/4711
+"digest=66cfa3735d62bd29/4742
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10442,7 +10489,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut approve 1`] = `
-"digest=77f3d5bfbab56e91/5873
+"digest=f9f38bd8bf171122/5904
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10454,7 +10501,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=60eedb91fded8fcf/6346
+"digest=72208b186f2892de/6377
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10466,7 +10513,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut discard 1`] = `
-"digest=6269745057910246/5898
+"digest=925e0c89af3bd01b/5929
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10478,7 +10525,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=79da8c6ccdd5c826/6241
+"digest=b77f2677595f1535/6272
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10490,7 +10537,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=04e435ee0e077ab0/5896
+"digest=548f901b719705f9/5927
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10502,7 +10549,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=77f3d5bfbab56e91/5873
+"digest=f9f38bd8bf171122/5904
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10514,7 +10561,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut approve 1`] = `
-"digest=8abc364fda89c239/3885
+"digest=b339306035422f62/3916
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10524,7 +10571,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=5fb18b650d180ab3/4358
+"digest=2eace388a47ce266/4389
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10534,7 +10581,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut discard 1`] = `
-"digest=06bb9a01ea389c9f/3910
+"digest=9e505004dea5054e/3941
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10544,7 +10591,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=3517db0a32dca84c/4253
+"digest=2ef4c1bdfe675013/4284
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10554,7 +10601,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=746a801725e47ca1/3908
+"digest=77fcc54e6ab916b4/3939
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10564,7 +10611,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=8abc364fda89c239/3885
+"digest=b339306035422f62/3916
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10574,7 +10621,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut approve 1`] = `
-"digest=eedc0ddddabc7587/5047
+"digest=720e0556c760cd28/5078
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10585,7 +10632,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut ask-owner 1`] = `
-"digest=d74dca80f0ee7f7e/5520
+"digest=33ab45514a060c0f/5551
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10596,7 +10643,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut discard 1`] = `
-"digest=02ebac6256725800/5072
+"digest=08dcc377118d1731/5103
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10607,7 +10654,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=eaf1eefcbd181ab2/5415
+"digest=6fa5bcb77c643339/5446
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10618,7 +10665,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut failing-helper 1`] = `
-"digest=f43d44b884e8d102/5070
+"digest=9582d731d900fe27/5101
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10629,7 +10676,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=eedc0ddddabc7587/5047
+"digest=720e0556c760cd28/5078
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10640,7 +10687,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=3ec15f680357ff06/4711
+"digest=66cfa3735d62bd29/4742
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10651,7 +10698,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=6ffbb4e10df09faf/5184
+"digest=ede8dccc2c2d8832/5215
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10662,7 +10709,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=f11071c7e5e4eb35/4736
+"digest=14ddee8a8ac8cc6c/4767
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10673,7 +10720,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=2bccd17d1ee4c93f/6085
+"digest=bbd7119ef8f420f0/6116
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10684,7 +10731,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=a4c47f0d7a17f5a7/4734
+"digest=970e8c6c7269863a/4765
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10695,7 +10742,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=a117e977b53b3e85/5770
+"digest=f6d34b2218f7ebf0/5801
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10722,7 +10769,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10772,10 +10819,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut approve 1`] = `
 #18 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #19 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -10841,7 +10889,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10897,10 +10945,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner 1`] = `
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="owner" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > send-to-agent agentRunId=L text="The owner decided: Merged Store into acp/WEB-12."
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #20 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -10966,7 +11015,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner-rework 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11038,10 +11087,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner-rework 1`] 
 #23 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #24 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11107,7 +11157,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut conflict 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11178,10 +11228,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut conflict 1`] = `
 #24 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r1
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11247,7 +11298,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut discard 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11296,10 +11347,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut discard 1`] = `
 #17 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #18 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11365,7 +11417,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11437,10 +11489,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failed-check 1`] = `
 #24 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #25 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11506,7 +11559,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failing-helper 1`] = 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11555,10 +11608,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failing-helper 1`] = 
 #17 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#3107e26c/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#c62751fe/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #18 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#e8fc1fce/753 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11624,7 +11678,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut no-changes 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11666,10 +11720,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut no-changes 1`] = `
 #16 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#a1d9776e/205
+  > send-to-agent agentRunId=L text="Every change is decided (1 merged into a…"#0465cbb4/225
   ~ W1 SUCCEEDED review=merged change=merged/r0
 #17 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#49cc3252/759 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11745,7 +11800,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut plan-changes 1`] = `
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#79853243/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#ada5ddfd/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11795,10 +11850,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut plan-changes 1`] = `
 #20 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #21 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#90f19297/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11864,7 +11920,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut rework-then-approve 1
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#d4c22d3a/1008 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9a291488/1174 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11930,10 +11986,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut rework-then-approve 1
 #22 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agentRunId=FR1 kind="reviewer" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#442848d4/779 reviewScope="final" role="Reviewer"
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -11999,7 +12056,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#27ff8b97/1063 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9b0eea79/1229 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12049,10 +12106,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich approve 1`] = `
 #18 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W2 SUCCEEDED review=merged change=merged/r0
 #19 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -12118,7 +12176,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich rework-then-appr
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#27ff8b97/1063 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9b0eea79/1229 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12184,10 +12242,11 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich rework-then-appr
 #22 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="lead" decision="merge" reviewer="lead" reviewerAgentRunId=null round=1 verdict=null
-  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#294fa632/205
+  > send-to-agent agentRunId=L text="Every change is decided (2 merged into a…"#e80fdf00/225
   ~ W1 SUCCEEDED review=merged change=merged/r1
 #23 lead "request_review {}" -> ok
   = "Handed over. The final review and tests,…"#0f6444b2/165
+  > handover-summary note=null
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
   > start-agent agent="agent-code-review" agentRunId=FR1 kind="reviewer" model="model-code-review" prompt="Final code review for \\"WEB-12 Dark mode\\"…"#1e6fe235/834 reviewScope="final" role="Reviewer" skills=["skill-code-review"]
   ~ +FR1 reviewer role="Reviewer" stage=code-review STARTING
@@ -12237,7 +12296,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut approve 1`] = `
-"digest=8abc364fda89c239/3885
+"digest=b339306035422f62/3916
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12247,7 +12306,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=5fb18b650d180ab3/4358
+"digest=2eace388a47ce266/4389
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12257,7 +12316,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut discard 1`] = `
-"digest=06bb9a01ea389c9f/3910
+"digest=9e505004dea5054e/3941
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12267,7 +12326,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=b6445b1a7310531c/5259
+"digest=f95466b529551f9f/5290
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12277,7 +12336,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=746a801725e47ca1/3908
+"digest=77fcc54e6ab916b4/3939
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12287,7 +12346,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=653ebeee458f1808/4944
+"digest=6d44740b44e2cb05/4975
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12297,7 +12356,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut approve 1`] = `
-"digest=eedc0ddddabc7587/5047
+"digest=720e0556c760cd28/5078
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12308,7 +12367,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut ask-owner 1`] = `
-"digest=d74dca80f0ee7f7e/5520
+"digest=33ab45514a060c0f/5551
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12319,7 +12378,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut discard 1`] = `
-"digest=02ebac6256725800/5072
+"digest=08dcc377118d1731/5103
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12330,7 +12389,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=9e38accdcf408a37/6421
+"digest=2bc319b6acbf9f20/6452
 outcome=ended steps=31
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12341,7 +12400,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut failing-helper 1`] = `
-"digest=f43d44b884e8d102/5070
+"digest=9582d731d900fe27/5101
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12352,7 +12411,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=c244b14460ea98f6/6106
+"digest=2ad324998dbda4eb/6137
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED

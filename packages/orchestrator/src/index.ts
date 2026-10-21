@@ -17,6 +17,7 @@ export * from './allowlist.js';
 export {
   FULL_AUTO_LEAD_LINE,
   FULL_AUTO_PLAN_LINE,
+  HANDOVER_NOTE_LINE,
   LEAD_ROLE,
   approvedPlan,
   decidePlan,
@@ -34,7 +35,9 @@ export { SUMMARY_MAX_CHARS, cleanSummary, formatTokens } from './draft.js';
 export {
   FULL_AUTO_FAILURE_ACTIVITY,
   agentEvent,
+  HANDOVER_NOTE_MAX_CHARS,
   cancelRun,
+  cleanHandoverNote,
   completeCancellation,
   createRun,
   decideApproval,
@@ -55,6 +58,7 @@ export type {
   ApprovalDecisionOptions,
   CreateRunInput,
   RequestPermissionOptions,
+  RequestReviewOptions,
 } from './commands.js';
 export {
   FOLLOW_UP_PREFACE,
@@ -102,10 +106,12 @@ export {
   helperNodeLines,
   helperNodeOf,
   programFullAuto,
+  programNode,
   programOf,
   resolveHelper,
   reviewRouteOf,
   runGraphOf,
+  testerNodeOf,
 } from './program.js';
 export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';
 export { helperBriefLines } from './briefs.js';
