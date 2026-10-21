@@ -220,3 +220,13 @@ plan-approval` without a planner;
   - Coordinator check, with WG-V merged too: 4,582 tests; full e2e 72/72.
 - 2026-10-21 **The owner consented in chat to all four real runs** (a, b, c, mixed), to run after
   the fixes (WG-F and F3) merge.
+- 2026-10-21 WG-F3 merged (`5a30cec`).
+  - A check stopped by a shutdown is stored as `interrupted` (a Zod enum value, no migration), and
+    both merge gates count it as not run and start the checks again; v0.1.0's shutdown rows are
+    matched by their exact note.
+  - A change left "checks running" by a shutdown is reset on restart (engine).
+  - Real failures, errors, timeouts and skips still block.
+  - Coordinator check: 4,598 tests; e2e 72/72.
+  - CHANGELOG: a Fixed line, and the rollback note now also covers stopping the app during
+    checks, since 0.1.0 can't read `interrupted`.
+- 2026-10-21 Next: the four consented real runs (a, b, c, mixed) on `release/0.2.0`.
