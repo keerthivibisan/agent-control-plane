@@ -204,6 +204,21 @@ describe('Dialog', () => {
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
+  it('focuses [data-autofocus] without scrolling, so a tall dialog opens at its title (WG-F)', async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      render(<DialogHarness />);
+      fireEvent.click(screen.getByRole('button', { name: 'New ticket' }));
+      const dialog = await screen.findByRole('dialog', { name: 'New ticket' });
+      const labels = within(dialog).getByRole('textbox', { name: 'Labels' });
+      await waitFor(() => expect(document.activeElement).toBe(labels));
+      const call = focus.mock.calls.find((_, i) => focus.mock.contexts[i] === labels);
+      expect(call?.[0]).toEqual({ preventScroll: true });
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
   it('closes on Escape and from the close button', async () => {
     render(<DialogHarness withDescription={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'New ticket' }));

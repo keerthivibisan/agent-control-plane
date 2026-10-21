@@ -439,6 +439,18 @@ test('the Start dialog: the approval mode is a limit', async ({ page }) => {
   const dialog = page.getByTestId('start-dialog');
   await expect(dialog.getByText('Approval mode: at most')).toBeVisible();
   await expect(dialog.getByRole('radio', { name: /^No limit/ })).toBeChecked();
+  // WG-F: the dialog is taller than this 720-pixel window and focuses Re-run at its foot. It
+  // opens at its top: the title and the first choice are in view, near the top of the window.
+  await expect(dialog.getByRole('button', { name: 'Re-run', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('heading', { name: `Re-run ${LOOP_KEY}` })).toBeInViewport();
+  const firstChoice = (await dialog.getByRole('radio', { name: /^No limit/ }).boundingBox())?.y;
+  expect(firstChoice).toBeGreaterThanOrEqual(0);
+  expect(firstChoice).toBeLessThan(260);
+  if (SHOTS !== undefined) {
+    // The window as the owner sees the dialog open (after its fade-in).
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${SHOTS}/ticket-start-open-light.png` });
+  }
   await expect(dialog.getByTestId('mode-limit-summary')).toHaveText(
     'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
   );
@@ -455,12 +467,18 @@ test('the Start dialog: the approval mode is a limit', async ({ page }) => {
   await expect(dialog.getByTestId('mode-no-effect')).toHaveCount(0);
   await expect(dialog.getByText(/^Lead reviews: every change goes to the lead/)).toBeVisible();
   if (SHOTS !== undefined) {
+    // A picture of the whole dialog: in a window as tall as it, scrolled to its top. (In a
+    // shorter window, the part the clicks above scrolled out of the overlay comes out blank.)
+    const size = page.viewportSize() ?? { width: 1280, height: 720 };
+    await page.setViewportSize({ width: size.width, height: 1100 });
+    await page.getByTestId('start-dialog').evaluate((d) => d.parentElement?.scrollTo(0, 0));
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.waitForTimeout(400);
       await dialog.screenshot({ path: `${SHOTS}/ticket-start-limit-${scheme}.png` });
     }
     await page.emulateMedia({ colorScheme: 'light' });
+    await page.setViewportSize(size);
   }
   await dialog.getByRole('button', { name: 'Re-run', exact: true }).click();
   await expect(dialog).toHaveCount(0);
