@@ -230,3 +230,10 @@ plan-approval` without a planner;
   - CHANGELOG: a Fixed line, and the rollback note now also covers stopping the app during
     checks, since 0.1.0 can't read `interrupted`.
 - 2026-10-21 Next: the four consented real runs (a, b, c, mixed) on `release/0.2.0`.
+- 2026-10-21 **Real runs passed** (owner consent 2026-10-21): scenarios a, b, c and mixed, all
+  assertions true, about 105k budget tokens. See `docs/research/wg-v-real-run-2026-10-21.md`. In c
+  the real reviewer approved at once, so direct rework is proven by the simulator and the dry run.
+- 2026-10-21 **Decision: keep the v1 workflow endpoints and DTOs in 0.2.0.** The v0.2.0 web no
+  longer calls them for graph projects; they stay for v1 and default projects, older clients and
+  the live view's fallback, and the upgrade test covers them. Removal is deferred to a later
+  release.
