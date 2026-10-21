@@ -9,8 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Your own workflow for each project. Draw which agents work on a ticket and how they review each
 other's changes, give each helper its own approval mode, and follow the run on a live graph. Your
-current workflow is converted for you, nothing in your data changes shape, and you can go back to
-0.1.0 at any time.
+current workflow is converted for you when the app starts, and nothing in your data changes
+shape. Until you save a workflow or start a ticket on 0.2.0 you can still go back to 0.1.0; after
+that, going back is not supported, because 0.1.0 cannot read the new workflows and runs.
 
 ### Added
 

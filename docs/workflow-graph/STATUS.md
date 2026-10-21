@@ -14,7 +14,7 @@ Coordinator-owned. **Paused 2026-10-18: resume from [RESUME.md](RESUME.md).** Pl
 | WG-C | Server, db and adapter; API fuzz                                        | WG-B      | **done**        | wp/wg-c-server    | `4742d8d` |
 | WG-D | Web: graph editor, wizard template step                                 | WG-A      | **done**        | wp/wg-d-editor    | `f2a1211` |
 | WG-E | Web: live run graph, run options "at most", copy                        | WG-C DTOs | **done**        | wp/wg-e-live      | `059820b` |
-| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | **in progress** | wp/wg-v-verify    |           |
+| WG-V | Verification: e2e per template; consented real runs a, b, c, mixed      | all       | **part 1 done** | wp/wg-v-finish    | `6ad572f` |
 
 ## Owner decisions (2026-10-17)
 
@@ -173,3 +173,26 @@ plan-approval` without a planner;
     `wg-coord` has `release/0.2.0` checked out, and `wg-v` has WG-V. Worktrees beside the repo
     made every agent action count as outside the session, which caused the permission prompts and
     blocked reads. The finished `acp-wg-a`…`e` worktrees were removed.
+- 2026-10-21 WG-V part 1 merged (`6ad572f`, branch `wp/wg-v-finish`).
+  - **Engine fix F1:** a reloaded run's graph keeps its change reviewers; before, it showed
+    "skipped".
+  - **Upgrade test from v0.1.0.**
+  - **Data-copy check script:** read-only, aggregate output, refuses the live data folder and the
+    owner's ports.
+  - **Real-run driver:** four scenarios, with a fake-adapter dry run tested in CI.
+  - Coordinator check: 4,556 tests; e2e 71/71.
+  - **Decisions:**
+    - **R1, rollback to v0.1.0 after using 0.2.0:** v0.1.0 can't read runs started on 0.2.0 or
+      workflows saved as graphs. Decision: option (a), say so in the 0.2.0 notes (CHANGELOG
+      corrected). No 0.1.1 unless the owner asks.
+    - **F3, pre-existing:** a check stopped by a shutdown is stored as `error` and blocks the
+      owner's merge after a restart. Decision: fix in 0.2.0 (the gate treats it as missing and
+      runs it again), after WG-F.
+    - **F4:** a flaky timeout under heavy load; noted, not reproduced.
+- 2026-10-21 Coordinator browser check of the built release (demo data, port 7961): the editor,
+  the auto-wired planner, and the live problems list for an unlinked named helper all work.
+  - **Found (WG-F, running):** after a project's workflow is saved as a graph, the Start dialog,
+    the ticket run options and the board badge read the v1 `GET /workflow`, which answers 409, so
+    the project defaults go blank. The e2e never opened them on a v2 project.
+  - **Owner test (port 7520, on an online-backup copy of the owner's data):** all 5 projects loaded
+    with 0 errors (1 v1, 4 default); no runs were started; the copy is deleted.
