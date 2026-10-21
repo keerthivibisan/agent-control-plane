@@ -1,9 +1,9 @@
 import type { WorkflowStageId } from '@acp/core';
-import type { AgentDefinitionSummaryDto } from '@acp/core/api';
+import type { AgentDefinitionSummaryDto, NodeUseDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { RelativeTime } from '../../components/RelativeTime';
-import { AGENTS_COPY, SKILLS_COPY, STAGE_AGENT_COPY } from '../../lib/copy';
+import { AGENTS_COPY, SKILLS_COPY, STAGE_AGENT_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { AgentFileIcon } from '../workflow/icons';
 import { CardRow, FileCard, FileGrid, ProblemList, StageChips, UncommittedBadge } from './bits';
 import { AGENT_TEMPLATES, type AgentTemplate } from './agent-templates';
@@ -44,6 +44,8 @@ export function ToolChips({ tools }: { tools: readonly string[] | null }) {
 /** Which workflow stages use each agent file (R-I), and where to change that. */
 export interface AgentUsage {
   usedBy: (name: string) => readonly WorkflowStageId[];
+  /** ADR-0023: the workflow blocks that use the file, once the project's graph is known. */
+  usedByNodes?: ((name: string) => readonly NodeUseDto[]) | undefined;
   /** The Workflow page. */
   href: string;
 }
@@ -97,8 +99,13 @@ function AgentCard({
             <dd className="min-w-0" data-testid="agent-used-by">
               <StageChips
                 stages={usage.usedBy(agent.name)}
+                nodes={usage.usedByNodes?.(agent.name)}
                 link={usage.href}
-                linkLabel={STAGE_AGENT_COPY.openStage}
+                linkLabel={
+                  usage.usedByNodes !== undefined
+                    ? WORKFLOW_LIVE_COPY.usedBy.openBlock
+                    : STAGE_AGENT_COPY.openStage
+                }
               />
             </dd>
           </>

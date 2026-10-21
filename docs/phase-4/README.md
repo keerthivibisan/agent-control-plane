@@ -272,7 +272,9 @@ NEEDS_YOU | IN_REVIEW | DONE | CANCELLED`.
   sentences) and `checks[]` (`id`, `name`, `required`).
 - **`CheckRunSchema`**:
   - `id`, `runId`, `agentRunId | null` (null = the main branch), `checkId`;
-  - `status` (`passed | failed | timed-out | error | skipped`), `exitCode`, `durationMs`;
+  - `status` (`passed | failed | timed-out | error | skipped | interrupted`), `exitCode`,
+    `durationMs`. `interrupted` (v0.2.0, WG-F3): the app stopped while the check ran or before it
+    started; the merge gates count it as not run and start the checks again;
   - `outputTail` (≤ 16 KiB, redacted, stored per ADR-0017), `startedAt`.
 - **Run changes:**
   - `OrchestrationRun` gains `ticketId | null`;

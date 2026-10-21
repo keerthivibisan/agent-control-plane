@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { WorkflowStageId } from '@acp/core';
-import type { AgentDefinitionDetailDto } from '@acp/core/api';
+import type { AgentDefinitionDetailDto, NodeUseDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { inputClass } from '../../components/Input';
@@ -187,6 +187,7 @@ export function AgentEditor({
   onCancel,
   onDeleted,
   usedBy,
+  usedByNodes,
 }: {
   projectId: string;
   detail?: AgentDefinitionDetailDto;
@@ -200,6 +201,8 @@ export function AgentEditor({
    * as for skills. Undefined while the workflow isn't known: the server still refuses.
    */
   usedBy?: readonly WorkflowStageId[] | undefined;
+  /** ADR-0023: the workflow blocks that use this file, once the project's graph is known. */
+  usedByNodes?: readonly NodeUseDto[] | undefined;
 }) {
   const isNew = detail === undefined;
   const initial: AgentForm = detail
@@ -362,6 +365,7 @@ export function AgentEditor({
           file={detail}
           dirty={dirty}
           {...(usedBy !== undefined && { usedBy })}
+          usedByNodes={usedByNodes}
           commitFn={commitAgent}
           deleteFn={deleteAgent}
           scope={isAgentsPath}

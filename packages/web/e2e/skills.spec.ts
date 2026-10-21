@@ -262,7 +262,7 @@ test('agents: the tab, the list, an agent with tools, and a new one from a templ
 
 // --- Agent files on stages (redesign R-I, wp/r-i-web) -------------------------------------------
 
-test('agents: "Used by" shows the stages using each file and links to the Workflow page', async ({
+test('agents: "Used by" shows the blocks using each file and links to the Workflow page', async ({
   page,
   request,
 }) => {
@@ -278,14 +278,24 @@ test('agents: "Used by" shows the stages using each file and links to the Workfl
     stages['plan'] = { ...stages['plan'], agent: 'reviewer' };
     await route.fulfill({ json: real });
   });
+  // ADR-0023: with the graph endpoints served, "Used by" names the workflow's blocks.
+  await page.route(`**/api/projects/${project.id}/workflow-graph`, async (route) => {
+    const real = (await (await route.fetch()).json()) as {
+      graph: { nodes: { id: string; agent?: string | null }[] };
+    };
+    for (const node of real.graph.nodes) {
+      if (node.id === 'orchestrate' || node.id === 'review') node.agent = 'reviewer';
+    }
+    await route.fulfill({ json: real });
+  });
   await page.goto(`/#/p/${project.id}/skills?tab=agents`);
   const used = page.getByTestId('agent-card-reviewer').getByTestId('agent-used-by');
-  await expect(used.getByRole('link')).toHaveText(['Plan', 'Final code review']);
+  await expect(used.getByRole('link')).toHaveText(['Lead', 'Change reviewer']);
   await expect(page.getByTestId('agent-card-chores').getByTestId('agent-used-by')).toHaveText(
     'Not used by any stage',
   );
   await shoot(page, 'agents-used-by');
-  await used.getByRole('link', { name: 'Open Final code review on the Workflow page' }).click();
+  await used.getByRole('link', { name: 'Open Change reviewer on the Workflow page' }).click();
   await expect(page).toHaveURL(new RegExp(`#/p/${project.id}/workflow$`));
   // R-V: let the Workflow page finish loading, and drop the routes, so no handler is still in
   // `route.fetch()` when the test ends ("Response has been disposed", seen once under load).

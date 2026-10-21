@@ -10,7 +10,7 @@ export type {
   ReadContextOptions,
 } from './context.js';
 export { OutputTail, stripTerminalCodes } from './output.js';
-export { createCheckRunner } from './runner.js';
+export { ChecksShutdown, createCheckRunner } from './runner.js';
 export type {
   CheckRunner,
   CheckRunnerDeps,

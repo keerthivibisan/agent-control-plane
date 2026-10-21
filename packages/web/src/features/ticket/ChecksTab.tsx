@@ -1,3 +1,4 @@
+import { checkRunWasInterrupted } from '@acp/core';
 import type { AgentRunDto, CheckRunDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
@@ -28,11 +29,13 @@ const MARK: Record<ControlStatusCopy['tone'], { sign: string; className: string 
 };
 
 /** A check outcome as mark + word (never color alone). */
-export function CheckStatus({ check }: { check: Pick<CheckRunDto, 'status'> }) {
-  const s = CHECK_STATUS_COPY[check.status];
+export function CheckStatus({ check }: { check: Pick<CheckRunDto, 'status' | 'outputTail'> }) {
+  // WG-F3: a row from before it that the app's shutdown stopped reads as stopped, not "Couldn't run".
+  const status = checkRunWasInterrupted(check) ? 'interrupted' : check.status;
+  const s = CHECK_STATUS_COPY[status];
   const m = MARK[s.tone];
   return (
-    <span className="inline-flex items-center gap-1.5" data-check-status={check.status}>
+    <span className="inline-flex items-center gap-1.5" data-check-status={status}>
       <span
         aria-hidden="true"
         className={`inline-flex size-[1.125rem] items-center justify-center rounded-full text-micro font-semibold ${m.className}`}

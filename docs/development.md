@@ -25,13 +25,16 @@ pnpm install
 
 | Command                             | Does                                                                      | Current scope |
 | ----------------------------------- | ------------------------------------------------------------------------- | ------------- |
-| `pnpm test`                         | `vitest run` in every package that defines `test`                         | `@acp/core`   |
-| `pnpm typecheck`                    | `tsc --noEmit` per package                                                | `@acp/core`   |
+| `pnpm test`                         | `vitest run` in every package that defines `test`                         | every package |
+| `pnpm typecheck`                    | `tsc --noEmit` per package                                                | every package |
 | `pnpm lint`                         | ESLint (type-aware, plus boundary rules) on the whole repo, zero warnings | whole repo    |
 | `pnpm format` / `pnpm format:check` | Prettier                                                                  | whole repo    |
-| `pnpm build`                        | builds each package with a `build` script                                 | `@acp/core`   |
+| `pnpm build`                        | builds each package with a `build` script                                 | every package |
 | `pnpm check`                        | runs all of the above in order (the same as CI)                           |               |
 | `pnpm dev`                          | the server (127.0.0.1:7420) and the web UI (127.0.0.1:5173) in watch mode | server, web   |
+
+Building and verifying from source, including the browser e2e suite, is in [BUILD.md](../BUILD.md);
+running the app is in [START.md](../START.md).
 
 Package scripts are added by the work package that lands the package's first source file. **A package
 without source has no `test`, `typecheck`, or `build` script**, so root commands report only what really
@@ -89,7 +92,7 @@ Scripts: `"build": "tsc -p tsconfig.build.json"`, `"typecheck": "tsc -p tsconfig
 Only the coordinator adds or upgrades dependencies, because it changes the shared lockfile
 (AGENTS.md §5).
 
-## 5. Runtime configuration (planned, P1-D)
+## 5. Runtime configuration
 
 | Env                                           | Default                                | Meaning                                         |
 | --------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
@@ -100,6 +103,7 @@ Only the coordinator adds or upgrades dependencies, because it changes the share
 | `ACP_POLL_INTERVAL_MS`                        | `5000`                                 | transcript scan interval                        |
 | `ACP_ACTIVE_WINDOW_MS` / `ACP_STALE_AFTER_MS` | `120000` / `1800000`                   | status thresholds                               |
 | `ACP_MANAGED`                                 | on in live mode, off in demo mode      | `off` turns managed agents (Agent SDK) off      |
+| `ACP_RUN_TIMEOUT_MS`                          | `7200000`                              | a working managed run is stopped after this     |
 
 ## 6. Testing rules
 

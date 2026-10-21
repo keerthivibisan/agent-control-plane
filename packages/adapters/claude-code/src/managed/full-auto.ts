@@ -31,6 +31,37 @@ export function fullAutoOf(spec: ManagedAgentSpec): FullAutoSpec | null {
   return spec.kind === 'worker' || spec.kind === 'tester' ? spec.fullAuto : null;
 }
 
+/**
+ * How one agent's process is protected (ADR-0022, ADR-0023 §5), per agent, never per run:
+ * - `autoMode: true`: Claude Code's auto mode plus the OS sandbox (a node whose mode for the run is
+ *   Full auto);
+ * - `autoMode: false`: the same OS sandbox, deny rules and temp folder, but `permissionMode:
+ *   'default'`, so our gate still decides every request by the agent's (tightened) mode: a node
+ *   configured as Full auto that a ticket or run tightened keeps its sandbox, since tightening
+ *   never removes a protection.
+ * Only a worker or the tester is ever protected this way; the lead, the planner, reviewers and
+ * follow-up turns always keep `default` with no sandbox.
+ */
+export interface LaunchProtection {
+  autoMode: boolean;
+  paths: FullAutoSpec;
+}
+
+/**
+ * The protection `ManagedAgentSpec` asks for, for a worker or the tester (never a follow-up):
+ * `fullAuto` gives auto mode plus the sandbox; `sandbox` (a Full auto block a ticket or run
+ * tightened) gives the sandbox with the session in `default`. The two are never sent together; if
+ * they were, the stricter one (`sandbox`, no auto mode) wins, so a mistake can never loosen an
+ * agent.
+ */
+export function launchProtectionOf(spec: ManagedAgentSpec): LaunchProtection | null {
+  if (spec.followUp !== undefined || (spec.kind !== 'worker' && spec.kind !== 'tester')) {
+    return null;
+  }
+  if (spec.sandbox !== undefined) return { autoMode: false, paths: spec.sandbox };
+  return spec.fullAuto === undefined ? null : { autoMode: true, paths: spec.fullAuto };
+}
+
 /** Folders inside the worktree that commands and edits must not touch (ADR-0021's edit rule). */
 const PROTECTED_DIRS: readonly string[] = ['.git', '.claude'];
 
@@ -87,24 +118,37 @@ export function fullAutoDenyRules(cwd: string, fullAuto: FullAutoSpec): string[]
 }
 
 /**
- * Applies Full auto to the options of a worker or tester (ADR-0022): auto mode, the sandbox, the
- * file-tool deny rules, and `TMPDIR` pointing at the run's temp folder (writable in the sandbox).
- * Never `bypassPermissions`, never `allowedTools`; `canUseTool` stays, and the server denies
- * whatever still reaches it without asking the owner.
+ * Applies a worker's or tester's protection to its options (ADR-0022, ADR-0023 §5): the sandbox,
+ * the file-tool deny rules and `TMPDIR` pointing at the run's temp folder (writable in the
+ * sandbox), plus auto mode only when `autoMode`; otherwise the session stays in `default`. Never
+ * `bypassPermissions`, never `allowedTools`; `canUseTool` stays. In auto mode the server denies
+ * whatever still reaches it without asking the owner; in `default` the server's gate decides as
+ * for any agent of that mode.
  */
+export function applyProtection(
+  options: Options,
+  spec: ManagedAgentSpec,
+  protection: LaunchProtection,
+  env: Readonly<Record<string, string>> | undefined,
+): void {
+  const paths = protection.paths;
+  options.permissionMode = protection.autoMode ? 'auto' : 'default';
+  options.sandbox = fullAutoSandbox(spec.cwd, paths);
+  options.disallowedTools = [
+    ...(options.disallowedTools ?? []),
+    ...fullAutoDenyRules(spec.cwd, paths),
+  ];
+  options.env = { ...(env ?? inheritedEnv()), TMPDIR: paths.tempDir };
+}
+
+/** Full auto (ADR-0022): auto mode plus the sandbox. */
 export function applyFullAuto(
   options: Options,
   spec: ManagedAgentSpec,
   fullAuto: FullAutoSpec,
   env: Readonly<Record<string, string>> | undefined,
 ): void {
-  options.permissionMode = 'auto';
-  options.sandbox = fullAutoSandbox(spec.cwd, fullAuto);
-  options.disallowedTools = [
-    ...(options.disallowedTools ?? []),
-    ...fullAutoDenyRules(spec.cwd, fullAuto),
-  ];
-  options.env = { ...(env ?? inheritedEnv()), TMPDIR: fullAuto.tempDir };
+  applyProtection(options, spec, { autoMode: true, paths: fullAuto }, env);
 }
 
 /** The process environment as the SDK would inherit it, without unset entries. */

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CheckRunSchema,
+  CheckRunStatusSchema,
   HARD_MAX_DEPTH,
+  LEGACY_STOPPED_CHECK_NOTES,
   HARD_MAX_HELPERS,
   HARNESS_TICKET_TEMPLATE,
   HarnessManifestSchema,
@@ -11,6 +14,7 @@ import {
   TICKET_STAGES,
   TicketPlanSchema,
   TicketSchema,
+  checkRunWasInterrupted,
   ticketStage,
   type RunStatus,
 } from '../src/index.js';
@@ -219,5 +223,57 @@ describe('tickets, plans and requests (ADR-0016)', () => {
     expect(HARNESS_TICKET_TEMPLATE.type).toBe('harness');
     expect(HARNESS_TICKET_TEMPLATE.description).toContain('.acp/harness.json');
     expect(BoardDtoSchema.shape.columns).toBeDefined();
+  });
+});
+
+describe('check runs the app stopped (WG-F3)', () => {
+  const row = (status: string, outputTail: string) =>
+    CheckRunSchema.parse({
+      id: 'c1',
+      runId: 'r1',
+      agentRunId: null,
+      projectId: 'p1',
+      checkId: 'test',
+      name: 'Unit tests',
+      required: true,
+      status,
+      exitCode: null,
+      durationMs: 5,
+      outputTail,
+      startedAt: T,
+    });
+
+  it('stores `interrupted` as a status of its own', () => {
+    expect(CheckRunStatusSchema.options).toContain('interrupted');
+    expect(checkRunWasInterrupted(row('interrupted', ''))).toBe(true);
+  });
+
+  it('reads the exact v0.1.0 shutdown notes as interrupted, and nothing else', () => {
+    expect(
+      checkRunWasInterrupted(row('error', `ran 3 tests\n[${LEGACY_STOPPED_CHECK_NOTES.error}]`)),
+    ).toBe(true);
+    expect(
+      checkRunWasInterrupted(row('skipped', `\n[${LEGACY_STOPPED_CHECK_NOTES.skipped}]`)),
+    ).toBe(true);
+    // A real error, a time-out, a failure or a stopped run's skip is a result, as before.
+    expect(
+      checkRunWasInterrupted(row('error', "\n[The command 'pnpm' was not found on PATH.]")),
+    ).toBe(false);
+    expect(
+      checkRunWasInterrupted(row('error', '\n[Stopped before it finished: the run was stopped.]')),
+    ).toBe(false);
+    expect(checkRunWasInterrupted(row('skipped', '\n[Not run: the run was stopped.]'))).toBe(false);
+    expect(checkRunWasInterrupted(row('failed', `\n[${LEGACY_STOPPED_CHECK_NOTES.error}]`))).toBe(
+      false,
+    );
+    expect(
+      checkRunWasInterrupted(row('timed-out', `\n[${LEGACY_STOPPED_CHECK_NOTES.error}]`)),
+    ).toBe(false);
+    // The note must be the runner's last line, not text the command printed earlier.
+    expect(
+      checkRunWasInterrupted(
+        row('error', `[${LEGACY_STOPPED_CHECK_NOTES.error}]\n[The command was not found.]`),
+      ),
+    ).toBe(false);
   });
 });

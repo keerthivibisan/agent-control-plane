@@ -20,7 +20,12 @@ export function createRedesignRepositories(
   };
 }
 
-export type { ProjectWorkflowInput, ProjectWorkflowRepository } from './workflow.js';
+export { WorkflowStoredAsGraphError } from './workflow.js';
+export type {
+  ProjectWorkflowInput,
+  ProjectWorkflowRepository,
+  StoredProjectWorkflow,
+} from './workflow.js';
 export { APPROVAL_DECIDERS, StoredRunLimitsSchema, StoredRunSnapshotParser } from './run-audit.js';
 export type {
   ApprovalDecider,

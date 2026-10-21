@@ -208,18 +208,19 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   });
   expect(committed.ok(), await committed.text()).toBe(true);
 
-  // ---- Workflow: the review stage's defaults; the final code review on.
+  // ---- Workflow (WG-D's graph editor): the change reviewer's defaults; a final reviewer added.
   const nav = page.getByRole('navigation', { name: 'Main' });
   await nav.getByRole('link', { name: 'Workflow' }).click();
   await expect(page).toHaveURL(new RegExp(`#/p/${projectId}/workflow`));
-  const panel = page.getByRole('complementary', { name: 'Stage settings' });
-  await page.getByRole('button', { name: 'Change Review & merge' }).click();
-  await expect(panel.getByTestId('review-fields')).toBeVisible();
-  await expect(panel.getByRole('radio', { name: /^Review agent/ })).toBeChecked();
-  await page.getByTestId('wf-node-code-review').click();
-  await panel.getByRole('checkbox', { name: 'Run this stage' }).check();
-  await panel.getByRole('button', { name: 'Save' }).click();
-  await expect(panel.getByTestId('saved')).toHaveText('Saved');
+  const panel = page.getByRole('complementary', { name: 'Block settings' });
+  await page.getByTestId('block-review').click();
+  await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
+  await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
+  await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
+  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await expect(page.getByTestId('block-code-review')).toBeVisible();
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('saved')).toHaveText('Saved');
 
   // ---- Board: a new ticket, Ready, Start.
   await nav.getByRole('link', { name: 'Board' }).click();
@@ -423,7 +424,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
 
   const need = page.getByTestId('changes-need-you');
   await expect(need).toContainText('1 change needs your decision');
-  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'waiting');
+  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'waiting');
   await need.getByRole('button', { name: 'Open' }).click();
   const side = page.getByTestId('side-panel');
   const docsCard = side.getByTestId('change-card');
@@ -465,7 +466,11 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   );
 
   // The auto-recorded approvals show their rule.
-  await page.getByRole('button', { name: 'Show the API builder in the side panel' }).click();
+  // The agent tree's card; the live graph has a button with the same name on the block.
+  await page
+    .getByRole('button', { name: 'Show the API builder in the side panel' })
+    .and(page.locator(':not([data-testid="live-agent"])'))
+    .click();
   await side.getByRole('tab', { name: /Approvals/ }).click();
   const history = side.getByTestId('approval-history');
   await expect(history).toContainText('Approved automatically: edit in its own copy');
@@ -483,7 +488,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
     (a) => a.kind === 'reviewer' && a.reviewScope === 'final',
   );
   await act(request, finalReviewer.id, 'started');
-  await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'active');
+  await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'active');
   await lead(request, finalReviewer.id, 'post_review', { text: FINAL_REVIEW });
   await act(request, finalReviewer.id, 'finish');
   await waitRun((r) => r.status === 'REVIEW');
@@ -491,7 +496,10 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   // ---- The owner's single merge: the combined diff, the checks on the tip, Merge into main.
   const branchCard = page.getByTestId('ticket-branch');
   await expect(branchCard.getByRole('button', { name: 'Merge into main' })).toBeVisible();
-  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'needs-you');
+  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute(
+    'data-state',
+    'needs-you',
+  );
   await expect(branchCard.getByTestId('branch-checks')).toContainText('Passed');
   await expect(branchCard).toContainText('discount-api.ts');
   await expect(branchCard).toContainText('discount-field.ts');
@@ -505,8 +513,8 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await branchCard.getByRole('button', { name: 'Merge', exact: true }).click();
   await expect(branchCard.getByTestId('branch-state')).toHaveText('Merged into main');
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
-  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'done');
-  await expect(page.getByTestId('live-done')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('review-counts')).toHaveText('3 merged');
   await expect(overview.getByTestId('change-state')).toHaveText([
     'Merged into acp/SHOP-1',
@@ -664,7 +672,11 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   });
   expect(denied.pending).toBeUndefined();
   expect(denied.decision).toMatchObject({ allow: false });
-  await page.getByRole('button', { name: 'Show the Cart builder in the side panel' }).click();
+  // The agent tree's card; the live graph has a button with the same name on the block.
+  await page
+    .getByRole('button', { name: 'Show the Cart builder in the side panel' })
+    .and(page.locator(':not([data-testid="live-agent"])'))
+    .click();
   const side = page.getByTestId('side-panel');
   await side.getByRole('tab', { name: /Approvals/ }).click();
   await expect(side.getByTestId('full-auto-approvals-note')).toContainText(
@@ -760,8 +772,9 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   await page.getByRole('button', { name: 'New ticket' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'New ticket' });
   await dialog.getByLabel('Title').fill('Rename the notes folder');
-  const mode = dialog.getByLabel('Approvals');
-  await expect(mode.locator('option').first()).toHaveText('Project default (Full auto)');
+  // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+  const mode = dialog.getByLabel('Approval mode: at most');
+  await expect(mode.locator('option').first()).toHaveText('No limit: each block’s own mode');
   await mode.selectOption('manual');
   await dialog.getByRole('button', { name: 'Create ticket' }).click();
   await expect(
@@ -805,9 +818,13 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   const options = page.getByTestId('ticket-run-options');
   await expect(options.getByTestId('run-option-mode')).toHaveText('Manual · This ticket');
   await options.getByRole('button', { name: 'Change run options' }).click();
-  await options.getByLabel('Approvals').selectOption({ label: 'Project default (Full auto)' });
+  await options
+    .getByLabel('Approval mode: at most')
+    .selectOption({ label: 'No limit: each block’s own mode' });
   await options.getByRole('button', { name: 'Save' }).click();
-  await expect(options.getByTestId('run-option-mode')).toHaveText('Project default (Full auto)');
+  await expect(options.getByTestId('run-option-mode')).toHaveText(
+    'No limit: each block’s own mode',
+  );
   expect((await ticketOf()).ticket.runOptions).toBeUndefined();
   // The started run keeps its own snapshot.
   expect((await ticketOf()).currentRun?.approvalMode).toBe('manual');

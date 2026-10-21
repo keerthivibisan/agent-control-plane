@@ -169,6 +169,7 @@ export function SkillEditor({
           file={detail}
           dirty={dirty}
           usedBy={detail.usedBy}
+          usedByNodes={detail.usedByNodes}
           commitFn={commitSkill}
           deleteFn={deleteSkill}
           copy={{

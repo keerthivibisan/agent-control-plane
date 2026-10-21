@@ -1,11 +1,16 @@
-import type { CheckRun } from '@acp/core';
+import { checkRunWasInterrupted, type CheckRun } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import type { Repositories, ReviewLoopRepositories, WorkspaceRepositories } from '@acp/db';
 import { isActiveAgentStatus, isLiveAgentStatus } from '@acp/orchestrator';
 import { hasReviewableChange } from '../control/roles.js';
 import type { ControlService, ReviewGate } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
-import { HarnessError, type CheckRunner, type MainChecks } from '../harness/index.js';
+import {
+  ChecksShutdown,
+  HarnessError,
+  type CheckRunner,
+  type MainChecks,
+} from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
 import type { WorkspaceManager } from '../workspace/index.js';
 import { harnessError } from './errors.js';
@@ -20,7 +25,8 @@ import type { ProjectHarness } from './harness.js';
  *   manifest is code under review and must not choose what runs (P4-C handoff).
  * - One shared runner for the whole server, so checks run one at a time across runs.
  * - Each result is stored (`check_runs`) as it finishes, and a notice is published.
- * - Stopping a run stops its running check and skips the rest.
+ * - Stopping a run stops its running check and skips the rest. Stopping the app does too, but
+ *   stores them as `interrupted` (no result), so the merge gates run them again (WG-F3).
  */
 
 export interface CheckService {
@@ -314,7 +320,9 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     const failedRequired: string[] = [];
     for (const check of required) {
       const result = latest.get(check.id);
-      if (result === undefined) missing.push(check.name);
+      // WG-F3: a check the app's shutdown stopped has no result on this commit, like one that
+      // never ran, so the merge starts the checks again instead of refusing it as failed.
+      if (result === undefined || checkRunWasInterrupted(result)) missing.push(check.name);
       // Fail closed: failed, timed out, errored or skipped are not a pass.
       else if (result.status !== 'passed') failedRequired.push(check.name);
     }
@@ -406,8 +414,10 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
 
     gate(_runId, agentRunId) {
       const latest = deps.workspace.checkRuns.latestForAgentRun(agentRunId);
-      // Fail closed: a required check that did not pass (failed, timed out, errored or skipped
-      // because the run was stopped) blocks a plain merge.
+      // Fail closed: a required check that did not pass (failed, timed out, errored, skipped
+      // because the run was stopped, or interrupted by a shutdown) blocks a plain merge. This
+      // legacy gate (runs from before ADR-0021) has no "not run yet" state to start them again;
+      // the owner runs the checks again from the ticket page, or merges anyway.
       const failedRequired = latest
         .filter((r) => r.required && r.status !== 'passed')
         .map((r) => r.name);
@@ -425,7 +435,8 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
 
     async close() {
       closed = true;
-      for (const c of controllers.values()) c.abort();
+      // The reason marks what the checks stop with as `interrupted`, not failed (WG-F3).
+      for (const c of controllers.values()) c.abort(new ChecksShutdown());
       controllers.clear();
       while (tasks.size > 0) await Promise.allSettled([...tasks]);
     },

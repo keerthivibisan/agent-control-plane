@@ -1,18 +1,20 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expectFocusRing } from './focus-ring.js';
 import { fixtureProject } from './ticket-fixtures.js';
 import {
   WF_CSRF,
   WF_PROJECT_ID,
   agentFilesFixture,
-  agentWorkflowDto,
-  defaultWorkflowDto,
-  fullWorkflowDto,
+  customGraphDto,
+  graphDto,
+  workflowInvalidError,
 } from './workflow-fixtures.js';
 
 /*
- * Redesign R-B: the Workflow page in the browser, on the demo server's built UI. The workflow,
- * setup, CSRF token and agent-file routes are answered from synthetic fixtures (page.route), so the
- * graph, the stage panel and the saves can be checked without managed agents. With
+ * WG-D: the Workflow page's graph editor in the browser, on the demo server's built UI. The
+ * workflow-graph, validate, setup, CSRF token and agent-file routes are answered from synthetic
+ * fixtures (page.route) until WG-C serves them, so the canvas, the palette, the links (dragged
+ * with the mouse), the problems and the saves can be checked without managed agents. With
  * ACP_SCREENSHOT_DIR set, it saves light and dark screenshots at 1440 and 1024 pixels wide.
  */
 
@@ -24,42 +26,61 @@ test.afterEach(async ({ page }) => {
 });
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
 
-interface Served {
-  puts: { path: string; body: unknown }[];
+type Json = Record<string, unknown>;
+interface GraphJson {
+  version: number;
+  template: string;
+  nodes: (Json & { id: string; type: string; label: string })[];
+  edges: (Json & { id: string; type: string; from: string; to: string })[];
+  legacyV1?: unknown;
 }
 
-async function serve(page: Page, initial: Record<string, unknown>, agents = true): Promise<Served> {
-  const served: Served = { puts: [] };
+interface Served {
+  puts: { path: string; body: Json }[];
+  validates: number;
+}
+
+async function serve(page: Page, initial: Json, opts: { refuse?: boolean } = {}): Promise<Served> {
+  const served: Served = { puts: [], validates: 0 };
   let current = structuredClone(initial);
   await page.route(/\/api\/projects$/, async (route) => {
     const real = (await (await route.fetch()).json()) as unknown[];
     await route.fulfill({ json: [...real, fixtureProject()] });
   });
   await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: WF_CSRF } }));
-  await page.route(`**${BASE}/agents`, (route) =>
-    agents
-      ? route.fulfill({ json: agentFilesFixture() })
-      : route.fulfill({
-          status: 404,
-          json: { error: { code: 'not_found', message: 'no route', requestId: 'e2e' } },
-        }),
-  );
-  await page.route(`**${BASE}/workflow`, async (route) => {
+  await page.route(`**${BASE}/agents`, (route) => route.fulfill({ json: agentFilesFixture() }));
+  await page.route(`**${BASE}/workflow-graph/validate`, async (route) => {
+    served.validates += 1;
+    await route.fulfill({
+      json: {
+        ok: false,
+        issues: [
+          {
+            code: 'no-review-route',
+            severity: 'error',
+            message: '"Helpers" has no review link (from the server).',
+            nodeId: 'helpers',
+          },
+        ],
+      },
+    });
+  });
+  await page.route(`**${BASE}/workflow-graph`, async (route) => {
     const req = route.request();
     if (req.method() === 'PUT') {
       expect(req.headers()['x-acp-csrf']).toBe(WF_CSRF);
-      const body = req.postDataJSON() as Record<string, unknown>;
-      served.puts.push({ path: 'workflow', body });
-      current = {
-        ...current,
-        workflow: { ...(current['workflow'] as object), ...body },
-      };
+      const body = req.postDataJSON() as Json;
+      served.puts.push({ path: 'workflow-graph', body });
+      if (opts.refuse === true) {
+        await route.fulfill({ status: 422, json: workflowInvalidError() });
+        return;
+      }
+      current = { ...current, graph: body['graph'], stored: 'v2' };
     }
     await route.fulfill({ json: current });
   });
   await page.route(`**${BASE}/setup`, async (route) => {
-    const req = route.request();
-    const body = req.postDataJSON() as Record<string, unknown>;
+    const body = route.request().postDataJSON() as Json;
     served.puts.push({ path: 'setup', body });
     const setup = { ...(current['setup'] as object), ...body };
     current = { ...current, setup };
@@ -78,39 +99,73 @@ async function shoot(page: Page, name: string): Promise<void> {
       await page.evaluate(() => window.scrollTo(0, 0));
       // The viewport, not fullPage: a full-page capture tears at the sticky top bar.
       await page.screenshot({ path: `${SHOTS}/workflow-${name}-${width}-${scheme}.png` });
-      // Below 1360px the panel sits under the graph; capture it too when a stage is open.
-      if (width === 1024 && (await panel(page).getAttribute('data-stage')) !== null) {
+      // Below 1360px the panel sits under the canvas; capture it too when a block is open.
+      if (
+        width === 1024 &&
+        (await panel(page)
+          .getByTestId(/^(node|edge)-panel$/)
+          .count()) > 0
+      ) {
         await panel(page).scrollIntoViewIfNeeded();
         await page.waitForTimeout(200);
         await page.screenshot({ path: `${SHOTS}/workflow-${name}-panel-${width}-${scheme}.png` });
       }
     }
   }
+  await page.setViewportSize({ width: 1440, height: 1240 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.evaluate(() => window.scrollTo(0, 0));
 }
 
-const node = (page: Page, id: string) => page.getByTestId(`wf-node-${id}`);
-const panel = (page: Page) => page.getByRole('complementary', { name: 'Stage settings' });
+const block = (page: Page, id: string) => page.getByTestId(`block-${id}`);
+const panel = (page: Page) => page.getByRole('complementary', { name: 'Block settings' });
+const issues = (page: Page) => page.getByTestId('issues');
+const issueCodes = (page: Page) =>
+  issues(page)
+    .getByTestId('issue')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('data-code')));
 
-test('the default workflow: one lead plans and orchestrates; optional stages are off', async ({
-  page,
-}) => {
-  await serve(page, defaultWorkflowDto(), false);
+async function centre(locator: Locator): Promise<{ x: number; y: number }> {
+  await locator.scrollIntoViewIfNeeded();
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('handle not on screen');
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** Drags a link with the mouse, from a block's out handle to another block's in handle. */
+async function drag(page: Page, from: string, to: string): Promise<void> {
+  const source = await centre(page.getByTestId(`handle-out-${from}`));
+  const target = await centre(page.getByTestId(`handle-in-${to}`));
+  await page.mouse.move(source.x, source.y);
+  await page.mouse.down();
+  await page.mouse.move((source.x + target.x) / 2, (source.y + target.y) / 2, { steps: 6 });
+  await page.mouse.move(target.x, target.y, { steps: 6 });
+  await page.mouse.up();
+}
+
+async function open(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1440, height: 1240 });
   await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
   await expect(page.getByRole('heading', { level: 1, name: /Workflow/ })).toBeVisible();
+  await expect(page.getByTestId('graph-editor')).toBeVisible();
+}
+
+test('opens the migrated workflow: every block on the canvas, no problems', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
   await expect(
     page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workflow' }),
   ).toHaveAttribute('aria-current', 'page');
-  await expect(node(page, 'plan')).toBeVisible();
-  await expect(node(page, 'plan')).toHaveAttribute('data-role', 'lead');
-  await expect(node(page, 'plan').getByTestId('same-agent')).toBeVisible();
-  await expect(node(page, 'code-review')).toHaveAttribute('data-enabled', 'false');
-  await expect(page.getByTestId(/^wf-helper-/)).toHaveCount(3);
-  // The agent files route isn't served yet (404): the list is hidden, not an error.
-  await expect(page.getByTestId('agent-files')).toHaveCount(0);
-  // Every node of the graph is inside the canvas (fit to the width, nothing cut off).
-  const canvas = await page.getByTestId('workflow-graph').boundingBox();
-  for (const id of ['ticket', 'approve', 'done', 'unit-tests']) {
-    const box = await node(page, id).boundingBox();
+  for (const id of ['ticket', 'orchestrate', 'plan-approval', 'helpers', 'review', 'done']) {
+    await expect(block(page, id)).toBeVisible();
+  }
+  await expect(block(page, 'orchestrate')).toHaveAttribute('data-kind', 'lead');
+  await expect(issues(page).getByTestId('issues-none')).toBeVisible();
+  await expect(page.getByTestId('save-workflow')).toBeDisabled();
+  // Every block is inside the canvas (fit to the view, nothing cut off).
+  const canvas = await page.getByTestId('graph-editor').boundingBox();
+  for (const id of ['ticket', 'owner-merge', 'done', 'helpers']) {
+    const box = await block(page, id).boundingBox();
     expect(box).not.toBeNull();
     if (canvas && box) {
       expect(box.x).toBeGreaterThanOrEqual(canvas.x - 1);
@@ -121,108 +176,190 @@ test('the default workflow: one lead plans and orchestrates; optional stages are
   await shoot(page, 'default');
 });
 
-test('turning on the final code review saves the workflow', async ({ page }) => {
-  const served = await serve(page, defaultWorkflowDto());
-  await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
-  await node(page, 'code-review').click();
-  await expect(panel(page)).toHaveAttribute('data-stage', 'code-review');
-  await panel(page).getByRole('checkbox', { name: 'Run this stage' }).check();
-  await expect(node(page, 'code-review')).toHaveAttribute('data-enabled', 'true');
-  await panel(page).getByRole('combobox', { name: 'Skill' }).selectOption('code-review');
-  await panel(page).getByRole('button', { name: 'Save' }).click();
-  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
-  expect(served.puts).toHaveLength(1);
-  expect(served.puts[0]).toMatchObject({
-    path: 'workflow',
-    body: { stages: { 'code-review': { enabled: true, skill: 'code-review' } } },
-  });
-});
-
-test('everything on: separate planner, four helpers at depth 2, a missing skill', async ({
-  page,
-}) => {
-  const served = await serve(page, fullWorkflowDto());
-  await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
-  await expect(node(page, 'plan')).toHaveAttribute('data-role', 'planner');
-  await expect(node(page, 'plan').getByTestId('same-agent')).toHaveCount(0);
-  await expect(page.getByTestId(/^wf-helper-/)).toHaveCount(4);
-  await expect(node(page, 'helpers').getByTestId('node-skill')).toHaveAttribute(
-    'data-skill',
-    'missing',
-  );
-  await expect(page.getByTestId('agent-files')).toBeVisible();
-  await page.getByTestId('wf-helper-2').click();
-  await expect(panel(page)).toHaveAttribute('data-stage', 'helpers');
-  await expect(panel(page).getByTestId('skill-missing')).toBeVisible();
-  await shoot(page, 'full-helpers');
-
-  await panel(page).getByRole('radio', { name: '2 helpers' }).check({ force: true });
-  await expect(page.getByTestId(/^wf-helper-/)).toHaveCount(2);
-  await panel(page).getByRole('button', { name: 'Save' }).click();
-  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
-  expect(served.puts.map((p) => p.path)).toEqual(['setup']);
-  expect(served.puts[0]?.body).toMatchObject({ maxConcurrentHelpers: 2, projectKey: 'WEB' });
-
-  await node(page, 'review').click();
-  await expect(panel(page).getByRole('link', { name: 'Open the Harness page' })).toBeVisible();
-  await shoot(page, 'full-review');
-});
-
-// --- Agent files on stages (redesign R-I, wp/r-i-web) -------------------------------------------
-
-test('agent files: chips on the nodes, a missing file, the picker and its save', async ({
-  page,
-}) => {
-  const served = await serve(page, agentWorkflowDto());
-  await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
-  await expect(page.getByTestId('agent-files')).toBeVisible();
-  const helpersAgent = node(page, 'helpers').getByTestId('node-agent');
-  await expect(helpersAgent).toHaveText('db-migrator');
-  await expect(helpersAgent).toHaveAttribute('data-agent', 'set');
-  await expect(node(page, 'unit-tests').getByTestId('node-model')).toContainText(
-    'claude-haiku-4 (agent file)',
-  );
-  const missing = node(page, 'code-review').getByTestId('node-agent');
-  await expect(missing).toHaveAttribute('data-agent', 'missing');
-  await expect(missing).toContainText('test-writer');
-  // Both chips fit inside the node, side by side.
-  for (const id of ['helpers', 'code-review']) {
-    const box = await node(page, id).boundingBox();
-    for (const chip of ['node-agent', 'node-skill']) {
-      const c = await node(page, id).getByTestId(chip).boundingBox();
-      expect(box && c && c.x + c.width <= box.x + box.width + 1).toBe(true);
-    }
+test('picks each template; restores the earlier setup', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  const picker = page.getByRole('dialog', { name: 'Start from a template' });
+  const cases: [RegExp, boolean, string[], string[]][] = [
+    // [template, planner, blocks that must be there, blocks that must not]
+    [/^Lead only/, false, ['orchestrate', 'helpers'], ['review', 'plan']],
+    [/^Today’s setup/, true, ['plan', 'review'], []],
+    [/^Reviewer ↔ helper loop/, false, ['review'], ['plan']],
+  ];
+  for (const [name, planner, present, absent] of cases) {
+    await page.getByTestId('open-templates').click();
+    await picker.getByLabel(name).check();
+    const box = picker.getByRole('checkbox', { name: 'Add a planner' });
+    if ((await box.isChecked()) !== planner) await box.click();
+    await picker.getByRole('button', { name: 'Use this template' }).click();
+    // After the first template there is unsaved work: confirm the replacement.
+    const replace = picker.getByRole('button', { name: 'Replace' });
+    if (await replace.isVisible().catch(() => false)) await replace.click();
+    await expect(picker).toHaveCount(0);
+    for (const id of present) await expect(block(page, id)).toBeVisible();
+    for (const id of absent) await expect(block(page, id)).toHaveCount(0);
+    await expect(issues(page).getByTestId('issues-none')).toBeVisible();
   }
-  await expect(
-    page.getByTestId('agent-file-docs-writer').getByTestId('agent-used-by'),
-  ).toHaveAttribute('data-used', 'unit-tests');
+  // The loop template: the reviewer reworks the helper directly ("Rework ×2" on the canvas).
+  await expect(page.getByText('Rework ×2').first()).toBeVisible();
+  await shoot(page, 'template-loop');
 
-  await node(page, 'code-review').click();
-  await expect(panel(page).getByTestId('agent-missing')).toContainText(
-    'Agent file not found — the agent starts without it.',
-  );
-  await shoot(page, 'agent-missing');
+  await page.getByTestId('open-templates').click();
+  await expect(picker.getByText(/The reviewer sends changes back to the helper/)).toBeVisible();
+  await picker.getByRole('button', { name: 'Restore my earlier setup' }).click();
+  await picker.getByRole('button', { name: 'Replace' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(block(page, 'review')).toBeVisible();
+  await expect(page.getByTestId('unsaved')).toHaveCount(0);
+});
 
-  const picker = panel(page).getByRole('combobox', { name: 'Agent file' });
-  await picker.selectOption('docs-writer');
-  await expect(panel(page).getByTestId('agent-missing')).toHaveCount(0);
-  await expect(panel(page).getByRole('textbox', { name: 'Model' })).toHaveAttribute(
-    'placeholder',
-    'From agent file: claude-haiku-4',
+test('a named helper from the palette, linked by dragging; a refused drag; fix and save', async ({
+  page,
+}) => {
+  const served = await serve(page, graphDto());
+  await open(page);
+  await page.getByRole('button', { name: 'Add Named helper' }).click();
+  await expect(block(page, 'helper-1')).toBeVisible();
+  await expect(panel(page).getByTestId('node-panel')).toHaveAttribute('data-node', 'helper-1');
+  expect(await issueCodes(page)).toEqual(
+    expect.arrayContaining(['no-review-route', 'not-assigned']),
   );
-  await expect(missing).toHaveAttribute('data-agent', 'set');
-  await shoot(page, 'agent-picked');
-  await panel(page).getByRole('button', { name: 'Save' }).click();
-  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
-  expect(served.puts[0]).toMatchObject({
-    path: 'workflow',
-    body: { stages: { 'code-review': { enabled: true, agent: 'docs-writer' } } },
+  await expect(page.getByTestId('save-workflow')).toBeDisabled();
+  await expect(page.getByTestId('save-blocked')).toHaveText('Fix the problems to save.');
+  await panel(page).getByRole('textbox', { name: 'Name' }).fill('Frontend helper');
+  await expect(block(page, 'helper-1').getByTestId('block-label')).toHaveText('Frontend helper');
+
+  // An invalid drag: a helper can't send anything to the Checks block. Refused, in plain words.
+  await drag(page, 'helper-1', 'checks');
+  await expect(page.getByTestId('link-refused')).toContainText('That link isn’t allowed');
+  await expect(page.getByTestId('link-refused')).toContainText(
+    'cannot send its change for review to "Checks"',
+  );
+  await shoot(page, 'refused');
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(page.getByTestId('link-refused')).toHaveCount(0);
+
+  // The lead → helper fits two kinds (assigns, rework): the owner picks assigns.
+  await drag(page, 'orchestrate', 'helper-1');
+  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
+  await expect(choice).toBeVisible();
+  await choice.getByRole('button', { name: /^Assigns work/ }).click();
+  await expect(choice).toHaveCount(0);
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
+  await expect.poll(() => issueCodes(page)).not.toContain('not-assigned');
+
+  // helper → change reviewer fits only "review": made at once.
+  await drag(page, 'helper-1', 'review');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
+  await expect(issues(page).getByTestId('issues-none')).toBeVisible();
+  await shoot(page, 'named-helper');
+
+  // A rework link straight from the reviewer, with its rounds set in the link panel.
+  await drag(page, 'review', 'helper-1');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
+  await panel(page).getByRole('radio', { name: 'No rework' }).check({ force: true });
+
+  await expect(page.getByTestId('save-workflow')).toBeEnabled();
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('saved')).toHaveText('Saved');
+  expect(served.puts).toHaveLength(1);
+  const graph = served.puts[0]?.body['graph'] as GraphJson;
+  // The PUT body is a whole version 2 graph with the helper wired as drawn. (The browser checked
+  // it with core's validator before Save was enabled; workflow-editor.test.tsx re-validates a PUT
+  // body with core too.)
+  expect(graph.version).toBe(2);
+  expect(graph.template).toBe('custom');
+  expect(graph.legacyV1).toBeDefined();
+  for (const x of [...graph.nodes, ...graph.edges]) expect(x.id).toMatch(/^[a-z][a-z0-9-]{0,39}$/);
+  expect(graph.nodes.find((n) => n.id === 'helper-1')).toMatchObject({
+    type: 'helper',
+    label: 'Frontend helper',
+    approvalMode: null,
+    maxInstances: 1,
   });
+  const edges = graph.edges.map((e) => `${e.type}:${e.from}>${e.to}`);
+  expect(edges).toEqual(
+    expect.arrayContaining([
+      'assigns:orchestrate>helper-1',
+      'review:helper-1>review',
+      'rework:review>helper-1',
+    ]),
+  );
+  expect(graph.edges.filter((e) => e.type === 'review' && e.from === 'helper-1')).toHaveLength(1);
+  expect(graph.edges.find((e) => e.id === 'rework-review-helper-1')).toMatchObject({
+    maxRounds: 0,
+  });
+});
 
-  await picker.selectOption({ label: 'None' });
-  await panel(page).getByRole('button', { name: 'Save' }).click();
-  await expect(panel(page).getByTestId('saved')).toHaveText('Saved');
-  const cleared = served.puts[1]?.body as { stages: Record<string, Record<string, unknown>> };
-  expect(cleared.stages['code-review']).not.toHaveProperty('agent');
-  expect(cleared.stages['helpers']).toMatchObject({ agent: 'db-migrator' });
+test('the block panel: modes on editing blocks only, missing files flagged, keyboard', async ({
+  page,
+}) => {
+  await serve(page, customGraphDto());
+  await open(page);
+  await expect(page.getByRole('button', { name: 'Add Planner' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await block(page, 'orchestrate').click();
+  await expect(panel(page).getByTestId('no-mode')).toBeVisible();
+  await expect(panel(page).getByTestId('mode-field')).toHaveCount(0);
+  await block(page, 'helper-1').click();
+  await expect(panel(page).getByTestId('mode-field')).toBeVisible();
+  await expect(panel(page).getByTestId('skill-missing')).toContainText('release-notes');
+  await expect(panel(page).getByTestId('agent-missing')).toBeVisible();
+  await panel(page)
+    .getByLabel(/^Full auto/)
+    .check();
+  await expect(panel(page).getByTestId('full-auto-warning')).toBeVisible();
+  await expect(block(page, 'helper-1').getByTestId('block-mode')).toHaveText('Mode: Full auto');
+  await shoot(page, 'node-panel');
+
+  // Keyboard: the palette's buttons show the focus ring, and a focused block nudges with arrows.
+  await page.getByRole('button', { name: 'Add Planner' }).focus();
+  await page.keyboard.press('Tab');
+  await expectFocusRing(page, 'Add Named helper');
+  await page.locator('.react-flow__node[data-id="helpers"]').click();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('unsaved')).toBeVisible();
+
+  // Delete removes the selected block (the final chain joins around the tester)…
+  await block(page, 'unit-tests').click();
+  await page.keyboard.press('Delete');
+  await expect(block(page, 'unit-tests')).toHaveCount(0);
+  await expect(issues(page)).toHaveAttribute('data-errors', '0');
+  // …but never the lead or a step every workflow has.
+  await block(page, 'orchestrate').click();
+  await page.keyboard.press('Delete');
+  await expect(block(page, 'orchestrate')).toBeVisible();
+  await expect(panel(page).getByTestId('block-fixed')).toBeVisible();
+});
+
+test('a refused save shows the server’s issues', async ({ page }) => {
+  const served = await serve(page, graphDto(), { refuse: true });
+  await open(page);
+  await block(page, 'helpers').click();
+  await panel(page).getByRole('textbox', { name: 'Name' }).fill('Workers');
+  await page.getByTestId('save-workflow').click();
+  await expect(page.getByTestId('server-issues')).toContainText('(from the server)');
+  await expect(page.getByTestId('save-refusal')).toContainText('The workflow wasn’t saved.');
+  expect(served.validates).toBe(1);
+  await shoot(page, 'refused-save');
+});
+
+test('project defaults: helper limits and the approval mode save through …/setup', async ({
+  page,
+}) => {
+  const served = await serve(page, graphDto());
+  await open(page);
+  const defaults = page.getByTestId('project-defaults');
+  await defaults.scrollIntoViewIfNeeded();
+  await defaults.getByRole('radio', { name: '2 helpers' }).check({ force: true });
+  await defaults.getByLabel(/^Manual/).check();
+  await defaults.getByRole('button', { name: 'Save project defaults' }).click();
+  await expect(defaults.getByTestId('defaults-saved')).toBeVisible();
+  expect(served.puts.map((p) => p.path)).toEqual(['setup']);
+  expect(served.puts[0]?.body).toMatchObject({
+    maxConcurrentHelpers: 2,
+    approvals: { mode: 'manual' },
+  });
 });

@@ -52,11 +52,7 @@ import {
 // Project Tokens page (redesign R-F).
 import { ProjectTokensDtoSchema } from '@acp/core/api';
 // Workflow page (redesign R-B).
-import {
-  AgentDefinitionSummaryDtoSchema,
-  ProjectWorkflowDtoSchema,
-  UpdateWorkflowRequestSchema,
-} from '@acp/core/api';
+import { AgentDefinitionSummaryDtoSchema, ProjectWorkflowDtoSchema } from '@acp/core/api';
 // Skills page (redesign, R-D).
 import {
   SkillCommitResultDtoSchema,
@@ -73,11 +69,19 @@ import {
 } from '@acp/core/api';
 // Ticket page live workflow and the harness history (redesign, R-H).
 import { RunWorkflowDtoSchema } from '@acp/core/api';
+// Live run graph and the blocks' modes for the run options (WG-E, ADR-0023).
+import { RunWorkflowGraphDtoSchema } from '@acp/core/api';
 // Review loop: Start overrides and the ticket branch (RL-D, ADR-0021).
 import {
   StartTicketRequestSchema,
   TicketBranchActionRequestSchema,
   TicketBranchReviewDtoSchema,
+} from '@acp/core/api';
+// Workflow graph editor (WG-D, ADR-0023).
+import {
+  UpdateWorkflowGraphRequestSchema,
+  ValidateWorkflowGraphResultDtoSchema,
+  WorkflowGraphDtoSchema,
 } from '@acp/core/api';
 
 /**
@@ -826,12 +830,11 @@ export const tokensSchemas = {
 
 // --- Workflow page (redesign R-B, wp/r-b-workflow) ----------------------------------------------
 //
-// Served by R-G (docs/redesign/wp/R-G.md): GET/PUT /api/projects/:id/workflow → ProjectWorkflowDto.
-// Limits and the allowlist are saved through PUT …/setup (`updateProjectSetup` above). The agent
-// files list, GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's; until it is
-// served the route answers 404 and the page hides the list.
-
-export type UpdateWorkflowRequest = ReturnType<typeof UpdateWorkflowRequestSchema.parse>;
+// Served by R-G (docs/redesign/wp/R-G.md): GET /api/projects/:id/workflow → ProjectWorkflowDto,
+// read only by the ticket page's version 1 view, for a server from before graphs. It answers 409
+// `workflow_is_graph` once a project stores a graph, so everything else (the Workflow page, the run
+// options, Skills & Agents) reads the graph below since WG-D and WG-F. The agent files list,
+// GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's.
 
 export const workflowPaths = {
   workflow: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow`,
@@ -843,25 +846,63 @@ export const workflowSchemas = {
   agents: AgentDefinitionSummaryDtoSchema.array(),
 } as const;
 
-/** The cached workflow and setup of one project: both carry the limits, so a save refetches both. */
-export function isWorkflowPath(projectId: string): (key: string) => boolean {
-  const workflow = workflowPaths.workflow(projectId);
+// --- Workflow graph (WG-D, wp/wg-d-editor; ADR-0023) ---------------------------------------------
+//
+// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9): GET/PUT
+// /api/projects/:id/workflow-graph → WorkflowGraphDto, POST …/workflow-graph/validate →
+// ValidateWorkflowGraphResultDto. A PUT of a graph with an error answers 422 `workflow_invalid`.
+// The project's limits and approvals still save through PUT …/setup.
+
+export type UpdateWorkflowGraphRequest = ReturnType<typeof UpdateWorkflowGraphRequestSchema.parse>;
+
+export const workflowGraphPaths = {
+  graph: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph`,
+  validate: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow-graph/validate`,
+} as const;
+
+export const workflowGraphSchemas = {
+  graph: WorkflowGraphDtoSchema,
+  validate: ValidateWorkflowGraphResultDtoSchema,
+} as const;
+
+/**
+ * The cached graph and setup of one project: the graph's DTO carries the setup too, and the run
+ * options read the project's defaults from it (WG-F). The version 1 workflow is not among them: only
+ * the ticket page's version 1 view, for a server from before graphs, still reads it.
+ */
+export function isWorkflowGraphPath(projectId: string): (key: string) => boolean {
+  const graph = workflowGraphPaths.graph(projectId);
   const setup = projectSetupPaths.setup(projectId);
-  return (key) => key.startsWith(workflow) || key.startsWith(setup);
+  return (key) => key.startsWith(graph) || key.startsWith(setup);
 }
 
-/** PUT /api/projects/:id/workflow: the whole stage configuration (the server sets the rest). */
-export async function updateWorkflow(
+/** PUT /api/projects/:id/workflow-graph: the whole graph (422 `workflow_invalid` on an error). */
+export async function updateWorkflowGraph(
   client: ApiClient,
   projectId: string,
-  input: UpdateWorkflowRequest,
+  input: UpdateWorkflowGraphRequest,
 ) {
-  const path = workflowPaths.workflow(projectId);
+  const path = workflowGraphPaths.graph(projectId);
   return controlPut(
     client,
     path,
-    checked(UpdateWorkflowRequestSchema, input, path),
-    workflowSchemas.workflow,
+    checked(UpdateWorkflowGraphRequestSchema, input, path),
+    workflowGraphSchemas.graph,
+  );
+}
+
+/** POST …/workflow-graph/validate: the server's issues for a graph, without saving it. */
+export async function validateWorkflowGraphOnServer(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateWorkflowGraphRequest,
+) {
+  const path = workflowGraphPaths.validate(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(UpdateWorkflowGraphRequestSchema, input, path),
+    workflowGraphSchemas.validate,
   );
 }
 
@@ -1021,11 +1062,28 @@ export function commitAgent(client: ApiClient, projectId: string, name: string) 
 export const runWorkflowPaths = {
   workflow: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow`,
   continue: (runId: string) => `${API_BASE}/runs/${enc(runId)}/continue`,
+  /** WG-E: the run's snapshot graph and each block's live state (`RunWorkflowGraphDto`). */
+  graph: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow-graph`,
 } as const;
 
 export const runWorkflowSchemas = {
   workflow: RunWorkflowDtoSchema,
+  graph: RunWorkflowGraphDtoSchema,
 } as const;
+
+// --- Live run graph and the blocks' modes (WG-E, wp/wg-e-live; ADR-0023) ------------------------
+//
+// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9). GET /api/runs/:id/workflow-graph
+// (`runWorkflowPaths.graph` above) answers the run's snapshot graph; a server from before it
+// answers 404 (or 409), and the ticket page then keeps the version 1 view. The run options, the
+// Start dialog, the board badge and "Used by" read the project's graph with the editor's path and
+// schema (`workflowGraphPaths`), so they share one cache entry: the project's defaults, the
+// blocks' own approval modes and the blocks that use a file (WG-F).
+
+/** 404 or 409: the server has no graph for this run or project (a server from before ADR-0023). */
+export function isGraphUnavailable(error: ApiError | null): boolean {
+  return error !== null && error.kind === 'http' && (error.status === 404 || error.status === 409);
+}
 
 /** Continue: starts the post-merge stage a restart held (`code-review` or `unit-tests`). */
 export function continueRun(client: ApiClient, runId: string) {

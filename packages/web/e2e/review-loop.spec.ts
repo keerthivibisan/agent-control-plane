@@ -5,6 +5,7 @@ import {
   LOOP_BRANCH,
   LOOP_BRANCH_PATH,
   LOOP_KEY,
+  LOOP_PROJECT_GRAPH_PATH,
   LOOP_PROJECT_WORKFLOW_PATH,
   LOOP_REVIEW_PATH,
   LOOP_RUN_PATH,
@@ -18,7 +19,7 @@ import {
   type LoopScenario,
 } from './review-loop-fixtures.js';
 import { fixtureProject } from './ticket-fixtures.js';
-import { defaultWorkflowDto, WF_PROJECT_ID } from './workflow-fixtures.js';
+import { graphDto, WF_PROJECT_ID } from './workflow-fixtures.js';
 
 /*
  * RL-D (ADR-0021): the review loop in the browser, on the demo server's built UI, with the ticket,
@@ -92,6 +93,10 @@ async function serveLoop(page: Page, start: Stage): Promise<Loop> {
   });
   await page.route(`**${LOOP_PROJECT_WORKFLOW_PATH}`, (route) =>
     route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_WORKFLOW_PATH] }),
+  );
+  // WG-F: the run options and the Start dialog read the project's graph.
+  await page.route(`**${LOOP_PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_GRAPH_PATH] }),
   );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const req = route.request();
@@ -203,7 +208,8 @@ test('the Start dialog: Re-run with this run’s own settings', async ({ page })
   await page.goto(`/${TICKET_HASH}`);
   await page.getByRole('button', { name: `Re-run ${LOOP_KEY} with options` }).click();
   const dialog = page.getByTestId('start-dialog');
-  await expect(dialog.getByRole('radio', { name: /Auto edits.*Project setting/ })).toBeChecked();
+  // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+  await expect(dialog.getByRole('radio', { name: /^No limit/ })).toBeChecked();
   await dialog.getByText('Manual', { exact: true }).click();
   await dialog.getByText('The lead', { exact: true }).click();
   await expect(dialog.getByTestId('start-dialog-summary')).toHaveText(
@@ -217,19 +223,22 @@ test('the Start dialog: Re-run with this run’s own settings', async ({ page })
   ]);
 });
 
-test('the Workflow page: approvals with Auto’s command list, and the review stage', async ({
+test('the Workflow page: approvals with Auto’s command list, and the change reviewer block', async ({
   page,
 }) => {
+  // WG-D: the approvals are in the Project defaults card, and the review stage is the change
+  // reviewer block with its links. Like the rest of this file, the routes are fixtures on the demo
+  // server (its project p-web exists only in them).
   const puts: unknown[] = [];
   const BASE = `/api/projects/${WF_PROJECT_ID}`;
-  let current = defaultWorkflowDto();
+  let current = graphDto();
   await page.route(/\/api\/projects$/, async (route) => {
     const real = (await (await route.fetch()).json()) as unknown[];
     await route.fulfill({ json: [...real, fixtureProject()] });
   });
   await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: CSRF } }));
   await page.route(`**${BASE}/agents`, (route) => route.fulfill({ json: [] }));
-  await page.route(`**${BASE}/workflow`, (route) => route.fulfill({ json: current }));
+  await page.route(`**${BASE}/workflow-graph`, (route) => route.fulfill({ json: current }));
   await page.route(`**${BASE}/setup`, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
     puts.push(body);
@@ -238,9 +247,8 @@ test('the Workflow page: approvals with Auto’s command list, and the review st
     await route.fulfill({ json: setup });
   });
   await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
-  await page.getByRole('button', { name: 'Change Helpers' }).click();
-  const panel = page.getByRole('complementary', { name: 'Stage settings' });
-  const editor = panel.getByTestId('approvals-editor');
+  const defaults = page.getByTestId('project-defaults');
+  const editor = defaults.getByTestId('approvals-editor');
   await editor.getByText('Auto', { exact: true }).click();
   await expect(editor.getByTestId('approvals-warning')).toBeVisible();
   const command = editor.getByRole('textbox', { name: 'Command' });
@@ -257,10 +265,10 @@ test('the Workflow page: approvals with Auto’s command list, and the review st
   await command.fill('make lint; rm -rf .');
   await command.press('Enter');
   await expect(editor.getByTestId('command-row')).toHaveCount(2);
-  await expect(page.getByTestId('wf-node-owner-merge')).toBeVisible();
-  await shootPart(page, 'approvals-editor', 'stage-panel');
-  await panel.getByRole('button', { name: 'Save' }).click();
-  await expect(panel.getByTestId('saved')).toBeVisible();
+  await expect(page.getByTestId('block-owner-merge')).toBeVisible();
+  await shootPart(page, 'approvals-editor', 'project-defaults');
+  await defaults.getByRole('button', { name: 'Save project defaults' }).click();
+  await expect(defaults.getByTestId('defaults-saved')).toBeVisible();
   expect(puts[0]).not.toHaveProperty('allowlist');
   expect(puts[0]).toMatchObject({
     approvals: {
@@ -272,8 +280,13 @@ test('the Workflow page: approvals with Auto’s command list, and the review st
     },
   });
 
-  await page.getByRole('button', { name: 'Change Review & merge' }).click();
-  await expect(panel.getByTestId('review-fields')).toBeVisible();
-  await shootPart(page, 'review-stage', 'stage-panel');
+  // The change reviewer: a read-only block (no approval mode) that sends findings to the lead.
+  await page.getByTestId('block-review').click();
+  const panel = page.getByRole('complementary', { name: 'Block settings' });
+  await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
+  await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
+  await expect(panel.getByTestId('no-mode')).toBeVisible();
+  await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
+  await shootPart(page, 'review-stage', 'block-panel');
   await shoot(page, 'workflow', false);
 });

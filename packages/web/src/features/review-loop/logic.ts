@@ -6,8 +6,11 @@ import {
   MAX_COMMAND_PATTERNS,
   RUN_OPTION_KEYS,
   approvalsOf,
+  checkRunWasInterrupted,
+  graphRunDefaults,
+  isEditorNode,
+  isModeWithin,
   isSafeCommandToken,
-  reviewStageOf,
   ticketOptionsDiffer,
   type ApprovalMode,
   type ChangeReviewerMode,
@@ -17,15 +20,16 @@ import {
   type ProjectApprovals,
   type RunOptions,
   type TicketRunOptions,
+  type WorkflowGraph,
 } from '@acp/core';
 import type {
   ChangeReviewDto,
   CheckRunDto,
-  ProjectWorkflowDto,
   RunDetailDto,
   StartTicketRequest,
   TicketBranchDto,
   TicketRunOptionsPatch,
+  WorkflowGraphDto,
 } from '@acp/core/api';
 import type { PillTone } from '../../components/Pill';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
@@ -205,13 +209,21 @@ export function latestChecks(checks: readonly CheckRunDto[]): CheckRunDto[] {
 export type ChecksSummary =
   | { kind: 'none' }
   | { kind: 'passed'; passed: number; total: number }
-  | { kind: 'failed'; failing: CheckRunDto[] };
+  | { kind: 'failed'; failing: CheckRunDto[] }
+  /** WG-F3: a required check has no result because the app stopped; the merge runs it again. */
+  | { kind: 'stopped'; stopped: CheckRunDto[] };
 
+/**
+ * The commit's checks as the server's merge gate counts them (ADR-0021): a required check that
+ * failed blocks; one the app's shutdown stopped is not run yet, as the gate counts it (WG-F3).
+ */
 export function checksSummary(checks: readonly CheckRunDto[]): ChecksSummary {
   const latest = latestChecks(checks);
   if (latest.length === 0) return { kind: 'none' };
-  const failing = latest.filter((c) => c.required && isFailing(c));
+  const failing = latest.filter((c) => c.required && !checkRunWasInterrupted(c) && isFailing(c));
   if (failing.length > 0) return { kind: 'failed', failing };
+  const stopped = latest.filter((c) => c.required && checkRunWasInterrupted(c));
+  if (stopped.length > 0) return { kind: 'stopped', stopped };
   return {
     kind: 'passed',
     passed: latest.filter((c) => c.status === 'passed').length,
@@ -274,16 +286,14 @@ export function shortCommit(commit: string): string {
 
 // ---------------------------------------------------------------- ticket run options (RL-H)
 
-/** The project's run settings a ticket's "Project default" follows. */
-export function projectRunDefaults(
-  dto: Pick<ProjectWorkflowDto, 'setup' | 'workflow'>,
-): RunOptions {
-  const review = reviewStageOf(dto.workflow);
-  return {
-    approvalMode: approvalsOf(dto.setup).mode,
-    reviewer: review.reviewer,
-    maxReworkRounds: review.maxReworkRounds,
-  };
+/**
+ * The project's run settings a ticket's "Project default" follows: its approval mode, and what its
+ * graph amounts to (`graphRunDefaults`, the same core function the server's run start uses). The
+ * graph comes from `GET /workflow-graph`, which answers for every project, stored as a graph or
+ * not (WG-F: the version 1 `GET /workflow` answers 409 once a project stores a graph).
+ */
+export function projectRunDefaults(dto: Pick<WorkflowGraphDto, 'setup' | 'graph'>): RunOptions {
+  return { approvalMode: approvalsOf(dto.setup).mode, ...graphRunDefaults(dto.graph) };
 }
 
 /**
@@ -323,4 +333,83 @@ export function optionsBadge(
     return [];
   });
   return parts.length === 0 ? null : parts.join(' · ');
+}
+
+// ---------------------------------------------------------------- run options as a limit (WG-E)
+
+/**
+ * What the run options need to know about the project's workflow (ADR-0023): each editing block
+ * runs with its own mode (or the project's), and a ticket's or run's mode is only a limit on it.
+ */
+export interface BlockModes {
+  /** The project's mode, which blocks set to "Project default" use. */
+  projectMode: ApprovalMode;
+  /** The loosest mode any editing block runs with; null when the workflow has none. */
+  loosest: ApprovalMode | null;
+}
+
+/** The loosest mode of the graph's editing blocks: each block's own, else the project's. */
+export function loosestBlockMode(
+  graph: Pick<WorkflowGraph, 'nodes'>,
+  projectMode: ApprovalMode,
+): ApprovalMode | null {
+  let loosest: ApprovalMode | null = null;
+  for (const node of graph.nodes) {
+    if (!isEditorNode(node)) continue;
+    const mode = node.approvalMode ?? projectMode;
+    if (loosest === null || !isModeWithin(mode, loosest)) loosest = mode;
+  }
+  return loosest;
+}
+
+export function blockModesOf(dto: Pick<WorkflowGraphDto, 'graph' | 'setup'>): BlockModes {
+  const projectMode = approvalsOf(dto.setup).mode;
+  return { projectMode, loosest: loosestBlockMode(dto.graph, projectMode) };
+}
+
+/**
+ * True when a limit of `mode` changes nothing: it is looser than every editing block, so no block
+ * runs differently. Unknown blocks (a server without graphs) never say so.
+ */
+export function limitHasNoEffect(mode: ApprovalMode, blocks: BlockModes | undefined): boolean {
+  return blocks !== undefined && blocks.loosest !== null && !isModeWithin(mode, blocks.loosest);
+}
+
+/** Why a run's limit changes nothing: the ticket's own limit, or the blocks, is stricter. */
+export type NoEffectReason =
+  { by: 'ticket'; limit: ApprovalMode } | { by: 'blocks'; loosest: ApprovalMode };
+
+/**
+ * Each block runs with the strictest of its own mode, the ticket's limit and the run's limit
+ * (ADR-0023 refinement 5), so a run limit looser than the stricter of the ticket's limit and the
+ * loosest block changes nothing. The ticket is named when its limit is the stricter one (or the
+ * blocks are unknown).
+ */
+export function runLimitNoEffect(
+  mode: ApprovalMode,
+  blocks: BlockModes | undefined,
+  ticketLimit: ApprovalMode | undefined,
+): NoEffectReason | null {
+  const loosest = blocks?.loosest ?? undefined;
+  if (ticketLimit !== undefined && (loosest === undefined || isModeWithin(ticketLimit, loosest))) {
+    return isModeWithin(mode, ticketLimit) ? null : { by: 'ticket', limit: ticketLimit };
+  }
+  if (loosest === undefined) return null;
+  return isModeWithin(mode, loosest) ? null : { by: 'blocks', loosest };
+}
+
+/**
+ * Distinct rounds of a change that this decider sent back for rework: `reviewer` is the review
+ * agent's direct rework (ADR-0023 route "direct"), `lead` the lead's. A decider's note on a round
+ * is a second row with the same decision, so rounds are counted once.
+ */
+export function reworkRoundsBy(
+  change: Pick<ChangeReviewDto, 'reviews'>,
+  decider: 'reviewer' | 'lead',
+): number {
+  return new Set(
+    change.reviews
+      .filter((r) => r.decision === 'rework' && r.decidedBy === decider)
+      .map((r) => r.round),
+  ).size;
 }

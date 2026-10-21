@@ -6,7 +6,13 @@
  * findings, paths, commits and the diff are invented. Never import this from src/.
  */
 
-import { CSRF, PROJECT_ID, projectWorkflow } from './ticket-fixtures.js';
+import {
+  CSRF,
+  PROJECT_GRAPH_PATH,
+  PROJECT_ID,
+  projectGraph,
+  projectWorkflow,
+} from './ticket-fixtures.js';
 
 export { CSRF, PROJECT_ID };
 export const LOOP_TICKET_ID = 't-21';
@@ -31,6 +37,7 @@ export const LOOP_RUN_WORKFLOW_PATH = `${LOOP_RUN_PATH}/workflow`;
 export const LOOP_REVIEW_PATH = `${LOOP_RUN_PATH}/review`;
 export const LOOP_BRANCH_PATH = `${LOOP_RUN_PATH}/ticket-branch`;
 export const LOOP_PROJECT_WORKFLOW_PATH = `/api/projects/${PROJECT_ID}/workflow`;
+export const LOOP_PROJECT_GRAPH_PATH = PROJECT_GRAPH_PATH;
 
 const BASE = '3f9c2a1b7d4e5f60718293a4b5c6d7e8f9012345';
 const TIP_1 = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
@@ -443,6 +450,7 @@ function scenario(
       [LOOP_RUN_PATH]: detail['currentRun'] as Json,
       [LOOP_RUN_WORKFLOW_PATH]: workflow,
       [LOOP_PROJECT_WORKFLOW_PATH]: projectWorkflow(),
+      [LOOP_PROJECT_GRAPH_PATH]: projectGraph(),
       [LOOP_REVIEW_PATH]: review([
         [L_API, 'API builder', API_FILES],
         [L_UI, 'Search UI', UI_FILES],
@@ -567,22 +575,48 @@ export function loopNeedsYouScenario(): LoopScenario {
 }
 
 /** The ticket branch's combined change, `GET /runs/:id/ticket-branch`. */
-export function ticketBranchReview(o: { failing?: boolean; baseMoved?: boolean } = {}): Json {
+export interface BranchReviewOptions {
+  failing?: boolean;
+  baseMoved?: boolean;
+  /**
+   * WG-F3: the app stopped while the tip's Unit tests ran: stored `interrupted` (0.2.0), or as
+   * v0.1.0 stored it (`error` with the shutdown note).
+   */
+  stopped?: 'interrupted' | 'legacy';
+}
+
+function tipUnitTests(o: BranchReviewOptions): Json {
+  if (o.stopped === 'interrupted') {
+    return check(null, 'test', 'Unit tests', 'interrupted', TIP_1, {
+      startedAt: T(40),
+      exitCode: null,
+      outputTail:
+        'RUN  src/search\n[Stopped when the app stopped, so there is no result. It runs again.]',
+    });
+  }
+  if (o.stopped === 'legacy') {
+    return check(null, 'test', 'Unit tests', 'error', TIP_1, {
+      startedAt: T(40),
+      exitCode: null,
+      outputTail: 'RUN  src/search\n[Stopped before it finished: the checks were stopped.]',
+    });
+  }
+  return check(null, 'test', 'Unit tests', o.failing === true ? 'failed' : 'passed', TIP_1, {
+    startedAt: T(40),
+    ...(o.failing === true
+      ? { outputTail: 'FAIL src/search/api.test.ts > caps the page size' }
+      : {}),
+  });
+}
+
+export function ticketBranchReview(o: BranchReviewOptions = {}): Json {
   return {
     runId: LOOP_RUN_ID,
     ticketBranch: ticketBranch('open'),
     files: API_FILES,
     diff: LOOP_DIFF,
     diffTruncated: false,
-    checks: [
-      check(null, 'test', 'Unit tests', o.failing === true ? 'failed' : 'passed', TIP_1, {
-        startedAt: T(40),
-        ...(o.failing === true
-          ? { outputTail: 'FAIL src/search/api.test.ts > caps the page size' }
-          : {}),
-      }),
-      check(null, 'build', 'Build', 'passed', TIP_1, { startedAt: T(40) }),
-    ],
+    checks: [tipUnitTests(o), check(null, 'build', 'Build', 'passed', TIP_1, { startedAt: T(40) })],
     baseMoved: o.baseMoved === true,
   };
 }
@@ -591,9 +625,7 @@ export function ticketBranchReview(o: { failing?: boolean; baseMoved?: boolean }
  * Ready for your merge: the Search UI's change was discarded, the API builder's is on the ticket
  * branch, and the run waits for the owner's one merge into main.
  */
-export function loopReviewScenario(
-  o: { failing?: boolean; baseMoved?: boolean } = {},
-): LoopScenario {
+export function loopReviewScenario(o: BranchReviewOptions = {}): LoopScenario {
   const agents = [
     lead('RUNNING', 'Used tool: mcp__acp__request_review'),
     api('SUCCEEDED', 'Finished its turn', { endedAt: T(36) }),

@@ -1,11 +1,21 @@
-import type { PlanStep, ProjectWorkflow, Ticket, TicketPlan, TicketPlanDecider } from '@acp/core';
+import type {
+  PlanStep,
+  ProjectWorkflow,
+  Ticket,
+  TicketPlan,
+  TicketPlanDecider,
+  WorkflowNodeId,
+  WorkflowProgram,
+} from '@acp/core';
+import { helperBriefLines } from './briefs.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
 import { runLimits } from './limits.js';
 import { isAgentOverBudget } from './policy.js';
-import { isSeparatePlanner, launchFields } from './stages.js';
+import { hasNamedHelpers, programFullAuto, resolveHelper } from './program.js';
+import { isSeparatePlanner, launchFieldsFor } from './stages.js';
 import type { EngineContext, EngineResult, RunLimits, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
@@ -57,7 +67,7 @@ export { approvedPlan, pendingPlan } from './plan-read.js';
 export function submitPlan(
   state: RunState,
   callerAgentRunId: string,
-  input: { summary: string; steps: readonly PlanStep[] },
+  input: { summary: string; steps: readonly (PlanStep & { helper?: string | undefined })[] },
   ctx: EngineContext,
 ): EngineResult<string> {
   return applyCommand(state, ctx, (d) => {
@@ -93,6 +103,19 @@ export function submitPlan(
         `Step "${coordinatorStep.title}" is given to "${coordinatorStep.role.trim()}". The lead and the planner only coordinate and cannot edit files: give every step the helper role that will do it, then submit the plan again.`,
       );
     }
+    // ADR-0023 §7: every step must go to a helper node of the workflow.
+    const program = d.program();
+    const stepHelpers: WorkflowNodeId[] = [];
+    for (const step of input.steps) {
+      const resolved = resolveHelper(program, { helper: step.helper, role: step.role });
+      if (!resolved.ok) {
+        return refusal(
+          'invalid-input',
+          `Step "${step.title}" has no helper node to do it. ${resolved.message}\nFix the step, then submit the plan again.`,
+        );
+      }
+      stepHelpers.push(resolved.node.id);
+    }
     // Defensive: a leftover proposal would make two plans wait at once.
     for (const p of d.plans) {
       if (p.status === 'proposed') {
@@ -114,10 +137,14 @@ export function submitPlan(
       decidedAt: null,
     };
     d.plans.push(plan);
+    if (hasNamedHelpers(program)) {
+      d.planStepHelpers = { ...(d.planStepHelpers ?? {}), [plan.id]: stepHelpers };
+    }
     d.setRunStatus('PLAN_REVIEW');
-    // ADR-0022: Full auto approves the plan at once; the owner sees only the final merge. If it
-    // cannot be approved now (the author is over budget), it waits for the owner as usual.
-    if (isFullAuto(d) && approvalRefusal(d) === null) {
+    // ADR-0022, ADR-0023 §6: the plan gate's switch (with no stricter ticket or run mode)
+    // approves the plan at once. If it cannot be approved now (the author is over budget), it
+    // waits for the owner as usual.
+    if (program.planAutoApprove && approvalRefusal(d) === null) {
       approvePlan(d, plan, '', 'auto');
       return {
         value: isSeparatePlanner(d)
@@ -242,7 +269,8 @@ function approvePlan(d: Draft, plan: TicketPlan, note: string, by: TicketPlanDec
   if (d.integration !== undefined) {
     d.effects.push({ type: 'create-ticket-branch', ticketKey: d.integration.ticketKey });
   }
-  const fullAuto = isFullAuto(d);
+  const program = d.program();
+  const fullAuto = d.approvalPolicy !== undefined && programFullAuto(program);
   if (separate && lead !== undefined) {
     // The planner's work is done (it is read-only, so it never waits for a tool decision).
     if (author !== undefined) {
@@ -256,10 +284,13 @@ function approvePlan(d: Draft, plan: TicketPlan, note: string, by: TicketPlanDec
       agentRunId: lead.id,
       kind: 'lead',
       role: lead.role,
-      ...launchFields(
-        approvedPlanBrief(brief, plan, note, limits, loop, fullAuto),
-        d.workflow,
-        'lead',
+      ...launchFieldsFor(
+        program,
+        program.lead.id,
+        approvedPlanBrief(brief, plan, note, limits, loop, fullAuto, {
+          program,
+          stepHelpers: d.planStepHelpers?.[plan.id],
+        }),
       ),
     });
     return;
@@ -368,17 +399,27 @@ function approvedPlanBrief(
   limits: RunLimits,
   loop: boolean,
   fullAuto: boolean,
+  nodes: { program: WorkflowProgram; stepHelpers: readonly WorkflowNodeId[] | undefined },
 ): string {
+  // ADR-0023 §7: with named helpers each step names the helper node it was given to.
+  const named = hasNamedHelpers(nodes.program);
+  const nodeOf = (i: number): string => {
+    const id = nodes.stepHelpers?.[i];
+    const node = nodes.program.helpers.find((h) => h.id === id);
+    return named && node !== undefined ? ` \u2192 helper "${node.id}"` : '';
+  };
+  const helperLines = helperBriefLines(nodes.program, 'lead');
   return [
     brief,
     `The approved plan (v${plan.version}${plan.decidedBy === 'auto' ? ', approved automatically (Full auto)' : ''}): ${plan.summary}`,
     plan.steps
       .map((s, i) => {
         const detail = s.detail.trim();
-        return `${i + 1}. ${s.title} (${s.role})${detail.length > 0 ? `: ${detail}` : ''}`;
+        return `${i + 1}. ${s.title} (${s.role}${nodeOf(i)})${detail.length > 0 ? `: ${detail}` : ''}`;
       })
       .join('\n'),
     note.length > 0 ? `Owner's note: ${note}` : null,
+    helperLines.length > 0 ? helperLines.join('\n') : null,
     startLine(limits.maxConcurrentHelpers, loop, fullAuto),
   ]
     .filter((l) => l !== null)

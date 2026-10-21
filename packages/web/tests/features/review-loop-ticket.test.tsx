@@ -6,7 +6,7 @@ import {
   TicketBranchReviewDtoSchema,
   TicketDetailDtoSchema,
 } from '@acp/core/api';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderUi, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CSRF,
@@ -26,12 +26,14 @@ import {
   loopNeedsYouScenario,
   loopReviewScenario,
   loopWorkingScenario,
+  ticketBranchReview,
   type LoopScenario,
 } from '../../e2e/review-loop-fixtures';
 import { inReviewScenario, TICKET_ID } from '../../e2e/ticket-fixtures';
-import { roundSentence } from '../../src/features/review-loop/ChangeCard';
+import { ChangeChecks, roundSentence } from '../../src/features/review-loop/ChangeCard';
 import {
   canRecheckChange,
+  checksSummary,
   isReviewLoopRun,
   ownerMayDecide,
   runMaxRounds,
@@ -522,6 +524,59 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(mutations(s)[1]?.body).toEqual({ action: 'discard' });
   });
 
+  // WG-F3: a check the app's shutdown stopped is not a failure; the server runs it again on merge.
+  for (const stopped of ['interrupted', 'legacy'] as const) {
+    it(`a tip check the app stopped (${stopped}) reads as stopped and leaves Merge`, async () => {
+      const s = render(loopReviewScenario({ stopped }));
+      const card = await screen.findByTestId('ticket-branch');
+      const row = within(await within(card).findByTestId('branch-checks')).getByTestId(
+        'check-test',
+      );
+      expect(row.querySelector('[data-check-status]')?.getAttribute('data-check-status')).toBe(
+        'interrupted',
+      );
+      expect(within(row).getByText('Stopped')).toBeTruthy();
+      expect(within(card).queryByTestId('branch-blocked')).toBeNull();
+      expect(within(card).getByTestId('branch-checks-stopped').textContent).toContain(
+        'They run again when you merge.',
+      );
+      expect(within(card).queryByRole('button', { name: 'Merge anyway…' })).toBeNull();
+      fireEvent.click(within(card).getByRole('button', { name: 'Merge into main' }));
+      fireEvent.click(within(card).getByRole('button', { name: 'Merge' }));
+      await waitFor(() => expect(mutations(s)).toHaveLength(1));
+      expect(mutations(s)[0]?.body).toEqual({ action: 'merge' });
+    });
+  }
+
+  it('a change whose check the app stopped says the checks run again, not failed', () => {
+    const checks = TicketBranchReviewDtoSchema.parse(
+      ticketBranchReview({ stopped: 'interrupted' }),
+    ).checks;
+    const { getByTestId } = renderUi(<ChangeChecks change={{ checks }} />);
+    expect(getByTestId('change-checks').dataset.checks).toBe('stopped');
+    expect(getByTestId('change-checks').textContent).toBe(
+      'Checks stopped when the app stopped; they run again',
+    );
+  });
+
+  it('counts a stopped required check as not run, a real failure as failed', () => {
+    const tip = (o: Parameters<typeof ticketBranchReview>[0]) =>
+      TicketBranchReviewDtoSchema.parse(ticketBranchReview(o)).checks;
+    expect(checksSummary(tip({ stopped: 'interrupted' }))).toMatchObject({
+      kind: 'stopped',
+      stopped: [{ checkId: 'test' }],
+    });
+    expect(checksSummary(tip({ stopped: 'legacy' })).kind).toBe('stopped');
+    expect(checksSummary(tip({ failing: true })).kind).toBe('failed');
+    // An `error` without the shutdown note is a real failure, as before.
+    const broken = tip({ stopped: 'legacy' }).map((c) =>
+      c.checkId === 'test'
+        ? { ...c, outputTail: "[The command 'pnpm' was not found on PATH.]" }
+        : c,
+    );
+    expect(checksSummary(broken).kind).toBe('failed');
+  });
+
   it('a failed check on the tip blocks Merge: merge anyway needs a reason', async () => {
     const s = render(loopReviewScenario({ failing: true }));
     const card = await screen.findByTestId('ticket-branch');
@@ -684,10 +739,12 @@ describe('the Start dialog (ticket page Re-run)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run WEB-21 with options' }));
     const dialog = await screen.findByTestId('start-dialog');
     expect(within(dialog).getByRole('heading', { name: 'Re-run WEB-21' })).toBeTruthy();
-    const mode = await within(dialog).findByLabelText<HTMLInputElement>(
-      /Auto edits \(recommended\) · Project setting/,
-    );
+    // WG-E (ADR-0023): the mode is a limit; without one, each block keeps its own mode.
+    const mode = await within(dialog).findByLabelText<HTMLInputElement>(/^No limit/);
     expect(mode.checked).toBe(true);
+    expect(within(dialog).getByTestId('mode-limit-summary').textContent).toBe(
+      'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
+    );
     expect(
       within(dialog).getByLabelText<HTMLInputElement>(
         /Review agent \(recommended\) · Project setting/,
@@ -709,12 +766,14 @@ describe('the Start dialog (ticket page Re-run)', () => {
     await waitFor(() => expect(screen.queryByTestId('start-dialog')).toBeNull());
   });
 
-  it('sends only the overrides; widening the mode shows the warning', async () => {
+  it('sends only the overrides; a limit looser than every block says it changes nothing', async () => {
     const s = render(loopDoneScenario());
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run WEB-21 with options' }));
     const dialog = await screen.findByTestId('start-dialog');
     fireEvent.click(await within(dialog).findByLabelText(/^AutoLike/));
-    expect(within(dialog).getByTestId('approvals-warning')).toBeTruthy();
+    // ADR-0023: the blocks are known from the project's graph, and a limit only tightens them.
+    expect(within(dialog).getByTestId('mode-no-effect')).toBeTruthy();
+    expect(within(dialog).queryByTestId('approvals-warning')).toBeNull();
     fireEvent.click(within(dialog).getByLabelText(/^The lead/));
     fireEvent.click(within(dialog).getByRole('radio', { name: 'No rework: merge or discard' }));
     expect(within(dialog).getByTestId('start-dialog-summary').textContent).toBe(

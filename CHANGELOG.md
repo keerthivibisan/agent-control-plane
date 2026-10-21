@@ -7,6 +7,76 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-21
+
+Your own workflow for each project. Draw which agents work on a ticket and how they review each
+other's changes, give each helper its own approval mode, and follow the run on a live graph. Your
+current workflow is converted for you when the app starts, and nothing in your data changes
+shape. Until you save a workflow, start a ticket or stop the app while checks run on 0.2.0, you can
+still go back to 0.1.0; after that, going back is not supported, because 0.1.0 cannot read what
+0.2.0 saved.
+
+### Added
+
+- Workflow editor
+  - Draw how a ticket flows on the Workflow page: add blocks from a palette (a planner, named
+    helpers, a helper pool, change and final reviewers, a tester) and link them.
+  - Links that make no sense are refused with the reason. A problems list explains what to fix in
+    plain words, and Save stays off until the workflow can run.
+  - Three ways to review a change:
+    - the lead reviews and merges;
+    - a review agent checks it and the lead decides;
+    - the review agent sends it back to the helper until it is right, then the lead merges.
+  - Start from a template ("Lead only", "Today's setup", "Reviewer ↔ helper loop") or build your
+    own. "Restore my earlier setup" brings back the workflow you had before.
+  - New projects pick a template when you create them.
+- Named helpers
+  - Give a helper a name and a purpose, for example "Frontend helper". Each has its own model,
+    skills, agent file and approval mode, and a limit on how many may work at once.
+  - Plan steps go to the helper they name. A step that no helper can take is refused, and the
+    refusal lists the helpers you have.
+- An approval mode for each helper
+  - Each block that edits files has its own approval mode, or follows the project's.
+  - The plan approval block has its own switch for approving plans automatically.
+- A live workflow on the ticket page
+  - The ticket page draws the run's own workflow. Each block shows its state, its agents, the mode
+    it runs with in this run and, when it applies, that its commands are sandboxed.
+  - Rework links show how often a change went back, including when the review agent sent it back
+    itself.
+- Starting the app
+  - `./start.sh` checks Node and pnpm, installs what is missing, and starts the app.
+    `./start.sh --demo` starts it with sample data.
+  - `BUILD.md` and `START.md` explain how to build, check and run the app.
+
+### Changed
+
+- A ticket's or a run's approval mode is now a limit ("at most …")
+  - It can make a helper more careful, never less. The new "No limit" choice keeps each helper's
+    own mode.
+  - Before, a ticket could choose a looser mode than the project's, for example Full auto in an
+    Auto edits project. Now set the loosest mode you want on the helper's block in the workflow.
+  - A note says when a limit changes nothing.
+- "Lead reviews" on a ticket or run sends every change to the lead, whatever the workflow's links
+  say. Rework rounds on a ticket or run replace the workflow's limits for that run.
+- "Used by" on the Skills & Agents page names the workflow blocks that use a skill or agent file.
+- The README is now a proper front page, with screenshots of sample data.
+
+### Fixed
+
+- Stopping the app while checks ran, for example to upgrade, left the merge refused as "checks
+  failed". Those checks now show as Stopped and run again when you merge, including checks that
+  0.1.0 stopped this way.
+- A tall dialog, such as "Start with options…" in a shorter window, could open scrolled down to
+  its Start button, hiding its title and first choices. It now opens at the top.
+
+### Security
+
+- A helper set to Full auto keeps the operating-system sandbox when a ticket or run makes it
+  stricter; its requests then ask as the stricter mode says.
+- No workflow can switch off a safety rule. Only helpers and testers edit, each in their own copy
+  of the project; only the lead merges into the ticket branch, after the required checks; and only
+  you merge into main.
+
 ## [0.1.0] - 2026-10-17
 
 A new look and a review loop. The app has a new identity and works on small screens. Ticket runs now
@@ -173,6 +243,7 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/keerthivibisan/agent-control-plane/releases/tag/v0.0.1

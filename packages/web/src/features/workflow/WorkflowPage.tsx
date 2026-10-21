@@ -1,286 +1,324 @@
-import type { WorkflowStageId } from '@acp/core';
-import type { ProjectWorkflowDto } from '@acp/core/api';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { approvalsOf, type WorkflowGraph } from '@acp/core';
+import type { WorkflowGraphDto } from '@acp/core/api';
+import { useCallback, useMemo, useReducer, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { AlertIcon, CheckIcon, CloseIcon } from '../../components/icons';
+import { AlertIcon, CheckIcon } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
-  isWorkflowPath,
-  updateProjectSetup,
-  updateWorkflow,
+  isWorkflowGraphPath,
+  workflowGraphPaths,
+  workflowGraphSchemas,
   workflowPaths,
   workflowSchemas,
   type ApiError,
 } from '../../lib/api';
-import { REVIEW_LOOP_COPY, WORKFLOW_COPY } from '../../lib/copy';
-import { useApiQuery } from '../../lib/query';
-import { useSetupAction } from '../project-setup/actions';
-import { AgentFiles } from './AgentFiles';
-import {
-  limitsDraft,
-  refusalMessage,
-  sameLimits,
-  sameWorkflow,
-  setupRequest,
-  setupView,
-  workflowDraft,
-  workflowRequest,
-  workflowView,
-  type DraftErrors,
-  type LimitsDraft,
-  type WorkflowDraft,
-} from './draft';
-import { AGENT_STAGES, buildWorkflowGraph } from './graph';
+import { WORKFLOW_COPY, WORKFLOW_GRAPH_COPY } from '../../lib/copy';
+import { useApiQuery, useQueryStore } from '../../lib/query';
+import { refusalMessage } from './draft';
+import { EdgePanel } from './editor/EdgePanel';
+import type { BlockContext } from './editor/flow';
+import { GraphEditor, LinkSample, type FocusRequest } from './editor/GraphEditor';
+import { editorIssues, hasErrors } from './editor/issues';
+import { IssuesList, type EditorIssue } from './editor/IssuesList';
+import { NodePanel, type NodePanelContext } from './editor/NodePanel';
+import { Palette } from './editor/Palette';
+import { saveWorkflowGraph } from './editor/save';
+import { editorReducer, initialEditorState, sameGraph, type Selection } from './editor/state';
+import { TemplatePicker } from './editor/TemplatePicker';
+import { useUnsavedGuard } from './editor/useUnsavedGuard';
 import { PickStageIcon } from './icons';
-import { StageFields, StageHeading } from './StagePanel';
-import { WorkflowGraph, WorkflowLegend } from './WorkflowGraph';
+import { ProjectDefaults } from './ProjectDefaults';
 
-const C = WORKFLOW_COPY;
-const P = WORKFLOW_COPY.panel;
+const G = WORKFLOW_GRAPH_COPY;
+const S = WORKFLOW_GRAPH_COPY.save;
 
-function Refusal({
-  error,
-  part,
-  note,
-}: {
+/** The last save the server refused: its error, and its issues for the graph that was sent. */
+interface Refused {
   error: ApiError;
-  part: string;
-  note?: string | undefined;
-}) {
+  graph: WorkflowGraph;
+  issues: EditorIssue[] | null;
+}
+
+function Legend() {
   return (
-    <div className="flex flex-col gap-1.5" data-testid="save-refusal">
-      <p
-        role="alert"
-        className="flex items-start gap-2 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
-      >
-        <AlertIcon size={15} className="mt-0.5 shrink-0" />
-        <span className="min-w-0">
-          {part} {refusalMessage(error)}
-          {note ? <span className="mt-1 block text-caption text-dim">{note}</span> : null}
-        </span>
-      </p>
-      <Details>
-        <ErrorNotice error={error} />
-      </Details>
-    </div>
+    <ul
+      className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-dim"
+      aria-label={G.legend.label}
+      data-testid="workflow-legend"
+    >
+      {(['flow', 'assigns', 'review', 'findings', 'rework', 'merge'] as const).map((t) => (
+        <li key={t} className="flex items-center gap-2">
+          <LinkSample type={t} />
+          {G.edges[t]}
+        </li>
+      ))}
+      <li className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="inline-block h-3.5 w-5 shrink-0 rounded-[2px] border border-line-strong bg-panel"
+        />
+        {G.legend.agent}
+      </li>
+      <li className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="inline-block h-3.5 w-5 shrink-0 rounded-[2px] border border-line-strong bg-sunken"
+        />
+        {G.legend.you}
+      </li>
+    </ul>
   );
 }
 
 /**
- * The editor: drafts of the stage settings and of the helper limits, the graph built from those
- * drafts (so a change shows at once), and the panel of the selected stage. Like the settings page,
- * the drafts start from the saved values; after a save the refetched values equal the drafts, so
- * "unsaved changes" clears without resetting what is typed.
+ * The editor: the graph being edited (a reducer over the saved graph), the problems checked live
+ * with core's validator, the selected block's or link's settings, and Save. Like the settings
+ * page, the editor starts from the saved graph, and after a save the refetched graph equals it,
+ * so "Unsaved changes" clears without resetting the canvas.
  */
-function WorkflowEditor({ projectId, dto }: { projectId: string; dto: ProjectWorkflowDto }) {
-  const savedWorkflow = useMemo(() => workflowDraft(dto.workflow), [dto.workflow]);
-  const savedLimits = useMemo(() => limitsDraft(dto.setup), [dto.setup]);
-  const [workflow, setWorkflow] = useState<WorkflowDraft>(savedWorkflow);
-  const [limits, setLimits] = useState<LimitsDraft>(savedLimits);
-  const [selected, setSelected] = useState<WorkflowStageId | null>(null);
-  const [errors, setErrors] = useState<DraftErrors>({});
-  const [justSaved, setJustSaved] = useState(false);
-  /** The last save stored the stage settings but the limits were refused. */
-  const [partial, setPartial] = useState(false);
-  const invalidate = useMemo(() => isWorkflowPath(projectId), [projectId]);
-  const saveWorkflow = useSetupAction(updateWorkflow, invalidate);
-  const saveSetup = useSetupAction(updateProjectSetup, invalidate);
-  const panelRef = useRef<HTMLElement>(null);
-  // The project's agent files (R-D's route): offered per stage, and a named file that is gone is
-  // flagged. Undefined while loading or not served, so nothing is flagged without a list.
+function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGraphDto }) {
+  const store = useQueryStore();
+  const [state, dispatch] = useReducer(editorReducer, dto.graph, initialEditorState);
+  const [templates, setTemplates] = useState(false);
+  const [focus, setFocus] = useState<FocusRequest | null>(null);
+  const [pending, setPending] = useState(false);
+  const [refused, setRefused] = useState<Refused | null>(null);
+  /** The graph the last save stored, until the refetch brings it back as `dto.graph`. */
+  const [stored, setStored] = useState<WorkflowGraph | null>(null);
   const agentFiles = useApiQuery(workflowPaths.agents(projectId), workflowSchemas.agents).data;
 
-  const workflowDirty = !sameWorkflow(workflow, savedWorkflow);
-  const limitsDirty = !sameLimits(limits, savedLimits);
-  const dirty = workflowDirty || limitsDirty;
-  const pending = saveWorkflow.pending || saveSetup.pending;
-
-  const view = useMemo(() => workflowView(workflow), [workflow]);
-  const drafted = useMemo(() => ({ ...dto.workflow, ...view }), [dto.workflow, view]);
-  const graph = useMemo(
+  const graph = state.graph;
+  const projectMode = approvalsOf(dto.setup).mode;
+  const helperLimit = dto.setup.maxConcurrentHelpers;
+  const issues = useMemo(
     () =>
-      buildWorkflowGraph(view, setupView(dto.setup, limits), dto.skills, C.edges, agentFiles, {
-        reviewer: workflow.review.reviewer,
-        maxReworkRounds: workflow.review.maxReworkRounds,
-        reworkLabel: REVIEW_LOOP_COPY.graph.reworkUpTo(workflow.review.maxReworkRounds),
+      editorIssues(graph, {
+        skills: dto.skills,
+        agents: dto.agents,
+        maxConcurrentHelpers: helperLimit,
+        projectMode,
       }),
-    [view, limits, dto.setup, dto.skills, agentFiles, workflow.review],
+    [graph, dto.skills, dto.agents, helperLimit, projectMode],
+  );
+  const blocked = hasErrors(issues);
+  const dirty = !sameGraph(graph, dto.graph) && !(stored !== null && sameGraph(graph, stored));
+  useUnsavedGuard(dirty, S.leave);
+
+  const agentModels = useMemo(
+    () =>
+      agentFiles === undefined ? undefined : new Map(agentFiles.map((f) => [f.name, f.model])),
+    [agentFiles],
+  );
+  const context: BlockContext & NodePanelContext = useMemo(
+    () => ({
+      projectId,
+      skills: dto.skills,
+      agents: dto.agents,
+      agentModels,
+      projectModel: dto.setup.model,
+      projectMode,
+      helperLimit,
+    }),
+    [projectId, dto.skills, dto.agents, agentModels, dto.setup.model, projectMode, helperLimit],
   );
 
-  const select = useCallback((stage: WorkflowStageId) => setSelected(stage), []);
-
-  // Below the wide layout the panel sits under the graph: bring it into view when a stage opens.
-  useEffect(() => {
-    const el = panelRef.current;
-    if (selected === null || el === null || typeof el.scrollIntoView !== 'function') return;
-    if (el.getBoundingClientRect().top > window.innerHeight - 120) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [selected]);
-
-  const changeWorkflow = (next: WorkflowDraft) => {
-    setJustSaved(false);
-    setWorkflow(next);
-  };
-  const changeLimits = (patch: Partial<LimitsDraft>) => {
-    setJustSaved(false);
-    setLimits((l) => ({ ...l, ...patch }));
-  };
+  const focusOn = useCallback((selection: NonNullable<Selection>) => {
+    dispatch({ type: 'select', selection });
+    setFocus((f) => ({ selection, nonce: (f?.nonce ?? 0) + 1 }));
+  }, []);
 
   const save = async () => {
-    const wf = workflowRequest(workflow);
-    const lim = setupRequest(dto.setup, limits);
-    const found: DraftErrors = { ...(wf.ok ? {} : wf.errors), ...(lim.ok ? {} : lim.errors) };
-    if (!wf.ok || !lim.ok) {
-      setErrors(found);
-      const first =
-        found.budget !== undefined
-          ? 'helpers'
-          : (AGENT_STAGES.find((s) => found[s]) ??
-            (found.review !== undefined ? 'review' : undefined));
-      if (first !== undefined) setSelected(first);
-      return;
-    }
-    setErrors({});
-    setPartial(false);
-    // Stage settings first: a refused limits save then leaves only the limits to retry.
-    if (workflowDirty && (await saveWorkflow.run(projectId, wf.request)) === null) return;
-    if (limitsDirty && (await saveSetup.run(projectId, lim.request)) === null) {
-      setPartial(workflowDirty);
-      return;
-    }
-    setJustSaved(true);
+    if (blocked || pending) return;
+    setPending(true);
+    setRefused(null);
+    const sent = graph;
+    const result = await saveWorkflowGraph(store.client, projectId, sent);
+    setPending(false);
+    if (result.ok) setStored(sent);
+    else setRefused({ error: result.error, graph: sent, issues: result.issues });
+    store.invalidate(isWorkflowGraphPath(projectId));
   };
 
-  const discard = () => {
-    setWorkflow(savedWorkflow);
-    setLimits(savedLimits);
-    setErrors({});
-  };
+  const selection = state.selection;
+  const node =
+    selection?.kind === 'node' ? graph.nodes.find((n) => n.id === selection.id) : undefined;
+  const edge =
+    selection?.kind === 'edge' ? graph.edges.find((e) => e.id === selection.id) : undefined;
+  const close = () => dispatch({ type: 'select', selection: null });
+  // A refusal is about the graph that was sent; any change after it may have fixed it.
+  const serverIssues = refused !== null && refused.graph === graph ? refused.issues : null;
+  const justSaved = !dirty && stored !== null && sameGraph(graph, stored);
 
   return (
-    <div className="grid grid-cols-1 items-start gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_23rem]">
-      {/* The flow sentence is the title's ⓘ, so the graph starts higher on the page. */}
-      <Card title={C.graphTitle} tip={C.flowSentence} padded={false} testId="workflow-card">
-        <div className="mt-1 border-t border-line">
-          <WorkflowGraph graph={graph} selected={selected} onSelect={select} />
-        </div>
-        <div className="border-t border-line px-5 py-3.5">
-          <WorkflowLegend />
-        </div>
-      </Card>
-      <div className="flex min-w-0 flex-col gap-6">
-        <aside
-          ref={panelRef}
-          aria-label={P.label}
-          data-testid="stage-panel"
-          data-stage={selected ?? undefined}
-          className="scroll-mt-24 rounded-card border border-line bg-panel shadow-card"
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 items-start gap-6 min-[1360px]:grid-cols-[minmax(0,1fr)_24rem]">
+        <Card
+          title={G.canvasTitle}
+          tip={G.canvasHint}
+          padded={false}
+          testId="workflow-card"
+          actions={
+            <Button size="sm" onClick={() => setTemplates(true)} data-testid="open-templates">
+              {G.templates.button}
+            </Button>
+          }
         >
-          {selected === null ? (
-            <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-              <span
-                aria-hidden="true"
-                className="flex size-9 items-center justify-center rounded-control border border-line bg-sunken text-dim"
-              >
-                <PickStageIcon size={17} />
-              </span>
-              <p className="max-w-60 text-dim">{P.empty}</p>
-            </div>
-          ) : (
-            // Each stage's settings fade in, so switching stages reads as a change. Opacity only:
-            // a moving panel would shift its fields under a click right after the stage opens. A
-            // CSS animation (index.css), so reduced motion stops it and it costs no JS.
-            <div key={selected} className="animate-fade-in">
-              <div className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-4">
-                <StageHeading stage={selected} workflow={workflow} />
-                <button
-                  type="button"
-                  onClick={() => setSelected(null)}
-                  aria-label={P.close}
-                  title={P.close}
-                  className="-mt-1 -mr-1.5 ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
+          <div className="mt-1 border-t border-line px-5 py-3">
+            <Palette graph={graph} dispatch={dispatch} />
+          </div>
+          <div className="border-t border-line">
+            <GraphEditor
+              graph={graph}
+              selection={selection}
+              issues={issues}
+              context={context}
+              refusal={state.refusal}
+              dispatch={dispatch}
+              focus={focus}
+            />
+          </div>
+          <div className="border-t border-line px-5 py-3.5">
+            <Legend />
+          </div>
+          <div
+            className="sticky bottom-0 flex flex-col gap-3 rounded-b-card border-t border-line bg-panel/90 px-5 py-3.5 backdrop-blur-md"
+            data-testid="save-bar"
+          >
+            {refused !== null ? (
+              <div className="flex flex-col gap-1.5" data-testid="save-refusal">
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-danger"
                 >
-                  <CloseIcon size={16} />
-                </button>
-              </div>
-              <div className="px-5 pt-5 pb-6">
-                <StageFields
-                  projectId={projectId}
-                  stage={selected}
-                  workflow={workflow}
-                  limits={limits}
-                  setup={dto.setup}
-                  skills={dto.skills}
-                  agentFiles={agentFiles}
-                  errors={errors}
-                  onWorkflow={changeWorkflow}
-                  onLimits={changeLimits}
-                />
-              </div>
-            </div>
-          )}
-          {dirty || justSaved || saveWorkflow.error || saveSetup.error ? (
-            <div className="sticky bottom-0 flex flex-col gap-3 rounded-b-card border-t border-line bg-panel/90 px-5 py-3.5 backdrop-blur-md">
-              {saveWorkflow.error ? (
-                <Refusal error={saveWorkflow.error} part={C.refusals.workflow} />
-              ) : null}
-              {saveSetup.error ? (
-                <Refusal
-                  error={saveSetup.error}
-                  part={C.refusals.limits}
-                  note={partial ? C.refusals.workflowSavedFirst : undefined}
-                />
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2">
-                <Button variant="primary" onClick={() => void save()} disabled={!dirty || pending}>
-                  {pending ? P.saving : P.save}
-                </Button>
-                {dirty ? (
-                  <>
-                    <Button variant="quiet" onClick={discard} disabled={pending}>
-                      {P.discard}
-                    </Button>
-                    <span
-                      className="ml-auto inline-flex items-center gap-1.5 text-caption text-dim"
-                      data-testid="unsaved"
-                    >
-                      <span aria-hidden="true" className="size-1.5 rounded-full bg-warning" />
-                      {P.unsaved}
-                    </span>
-                  </>
-                ) : justSaved ? (
-                  <span
-                    role="status"
-                    data-testid="saved"
-                    className="inline-flex items-center gap-1.5 text-caption font-medium text-success"
-                  >
-                    <CheckIcon size={15} />
-                    {P.saved}
+                  <AlertIcon size={15} className="mt-0.5 shrink-0" />
+                  <span className="min-w-0">
+                    {S.refused}{' '}
+                    {refused.issues === null || refused.issues.length === 0
+                      ? refusalMessage(refused.error)
+                      : null}
                   </span>
-                ) : null}
+                </p>
+                <Details>
+                  <ErrorNotice error={refused.error} />
+                </Details>
               </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="primary"
+                onClick={() => void save()}
+                disabled={!dirty || blocked || pending}
+                aria-describedby={blocked ? 'workflow-save-blocked' : undefined}
+                data-testid="save-workflow"
+              >
+                {pending ? S.saving : S.save}
+              </Button>
+              {dirty ? (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setRefused(null);
+                    dispatch({ type: 'replace', graph: dto.graph });
+                  }}
+                  disabled={pending}
+                >
+                  {S.discard}
+                </Button>
+              ) : null}
+              {blocked ? (
+                <span
+                  id="workflow-save-blocked"
+                  className="text-caption text-danger"
+                  data-testid="save-blocked"
+                >
+                  {S.blocked}
+                </span>
+              ) : null}
+              {dirty ? (
+                <span
+                  className="ml-auto inline-flex items-center gap-1.5 text-caption text-dim"
+                  data-testid="unsaved"
+                >
+                  <span aria-hidden="true" className="size-1.5 rounded-full bg-warning" />
+                  {S.unsaved}
+                </span>
+              ) : justSaved ? (
+                <span
+                  role="status"
+                  data-testid="saved"
+                  className="ml-auto inline-flex items-center gap-1.5 text-caption font-medium text-success"
+                >
+                  <CheckIcon size={15} />
+                  {S.saved}
+                </span>
+              ) : null}
             </div>
-          ) : null}
-        </aside>
-        {/* "Used by" follows the draft, like the graph. */}
-        <AgentFiles projectId={projectId} workflow={drafted} onSelect={select} />
+          </div>
+        </Card>
+        <div className="flex min-w-0 flex-col gap-6">
+          <aside
+            aria-label={G.panel.label}
+            data-testid="block-panel"
+            className="rounded-card border border-line bg-panel shadow-card"
+          >
+            {node !== undefined ? (
+              <div key={node.id} className="animate-fade-in">
+                <NodePanel
+                  node={node}
+                  graph={graph}
+                  ctx={context}
+                  dispatch={dispatch}
+                  onClose={close}
+                />
+              </div>
+            ) : edge !== undefined ? (
+              <div key={edge.id} className="animate-fade-in">
+                <EdgePanel edge={edge} graph={graph} dispatch={dispatch} onClose={close} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 items-center justify-center rounded-control border border-line bg-sunken text-dim"
+                >
+                  <PickStageIcon size={17} />
+                </span>
+                <p className="max-w-60 text-dim">{G.panel.empty}</p>
+              </div>
+            )}
+          </aside>
+          <IssuesList issues={issues} serverIssues={serverIssues} onFocus={focusOn} />
+        </div>
       </div>
+      <ProjectDefaults projectId={projectId} setup={dto.setup} />
+      {templates ? (
+        <TemplatePicker
+          graph={graph}
+          dirty={dirty}
+          projectMode={projectMode}
+          onClose={() => setTemplates(false)}
+          onApply={(next) => {
+            setTemplates(false);
+            setRefused(null);
+            dispatch({ type: 'replace', graph: next });
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** `#/p/:projectId/workflow`: how agents work on a ticket (docs/redesign/README.md §4.2). */
+/** `#/p/:projectId/workflow`: the project's workflow as an editable graph (ADR-0023). */
 export function WorkflowPage({ projectId }: { projectId: string }) {
-  const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
+  const q = useApiQuery(workflowGraphPaths.graph(projectId), workflowGraphSchemas.graph);
   return (
     <div className="flex flex-col">
-      <PageHeader title={C.title} tip={C.tip} description={C.description} />
-      <QueryView query={q} loading={C.loading}>
+      <PageHeader title={WORKFLOW_COPY.title} tip={G.tip} description={G.description} />
+      <QueryView query={q} loading={G.loading}>
         {(dto) => <WorkflowEditor projectId={projectId} dto={dto} />}
       </QueryView>
     </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { WorkflowStageId } from '@acp/core';
+import type { NodeUseDto } from '@acp/core/api';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { AlertIcon, CheckIcon } from '../../components/icons';
 import { Tooltip } from '../../components/Tooltip';
@@ -31,33 +32,45 @@ const CHIP =
 
 /**
  * "Used by" as stage chips, or a quiet line when no stage uses the file. With `link` (R-I), each
- * chip is a link to the Workflow page, where the mapping is changed.
+ * chip is a link to the Workflow page, where the mapping is changed. With `nodes` (ADR-0023, a
+ * server with workflow graphs), the chips name the workflow's blocks instead of the stages.
  */
 export function StageChips({
   stages,
+  nodes,
   link,
   linkLabel,
 }: {
   stages: readonly WorkflowStageId[];
+  nodes?: readonly NodeUseDto[] | undefined;
   link?: string | undefined;
   linkLabel?: ((stage: string) => string) | undefined;
 }) {
-  if (stages.length === 0) return <span className="text-caption text-dim">{C.card.notUsed}</span>;
+  const chips =
+    nodes !== undefined
+      ? nodes.map((n) => ({ key: n.nodeId, text: n.label }))
+      : stages.map((s) => ({ key: s, text: C.stages[s] }));
+  if (chips.length === 0) return <span className="text-caption text-dim">{C.card.notUsed}</span>;
   return (
-    <ul className="flex flex-wrap gap-1" aria-label={C.card.usedBy}>
-      {stages.map((s) =>
+    <ul
+      className="flex flex-wrap gap-1"
+      aria-label={C.card.usedBy}
+      data-testid="used-by"
+      data-by={nodes !== undefined ? 'blocks' : 'stages'}
+    >
+      {chips.map((c) =>
         link === undefined ? (
-          <li key={s} className={CHIP}>
-            {C.stages[s]}
+          <li key={c.key} className={CHIP}>
+            {c.text}
           </li>
         ) : (
-          <li key={s}>
+          <li key={c.key}>
             <a
               href={link}
-              aria-label={linkLabel?.(C.stages[s])}
+              aria-label={linkLabel?.(c.text)}
               className={`${CHIP} relative z-10 no-underline transition-colors hover:border-accent/50`}
             >
-              {C.stages[s]}
+              {c.text}
             </a>
           </li>
         ),

@@ -327,6 +327,99 @@ export function projectWorkflow(o: { separate?: boolean; postMerge?: boolean } =
   };
 }
 
+/** `GET /api/projects/:id/workflow-graph` (ADR-0023): the graph, how it is stored, and the setup. */
+export const PROJECT_GRAPH_PATH = `/api/projects/${PROJECT_ID}/workflow-graph`;
+
+/**
+ * `GET /api/projects/:id/workflow-graph` for the same project: `projectWorkflow(o)` migrated, as
+ * the server serves a version 1 project (`stored: 'v1'`). The graph is exactly what core's
+ * `migrateWorkflowV1` gives in this Auto edits project (tests/features/ticket-options.test.tsx
+ * checks that). With `stored: 'v2'` it is the same graph saved in the editor.
+ */
+export function projectGraph(
+  o: { separate?: boolean; postMerge?: boolean; stored?: 'v1' | 'v2' } = {},
+): Json {
+  const pw = projectWorkflow(o);
+  const wf = pw['workflow'] as Json;
+  const separate = o.separate === true;
+  const postMerge = o.postMerge === true;
+  const agent = (over: Json): Json => ({ model: null, skills: [], agent: null, ...over });
+  const edge = (type: string, from: string, to: string, over: Json = {}): Json => ({
+    type,
+    id: `${type}-${from}-${to}`,
+    from,
+    to,
+    ...over,
+  });
+  const reviewed = postMerge ? ['helpers', 'unit-tests'] : ['helpers'];
+  const finalChain = postMerge
+    ? ['ticket-merge', 'code-review', 'unit-tests', 'owner-merge']
+    : ['ticket-merge', 'owner-merge'];
+  const graph: Json = {
+    version: 2,
+    template: 'custom',
+    nodes: [
+      { type: 'ticket', id: 'ticket', label: 'Ticket' },
+      ...(separate
+        ? [agent({ type: 'planner', id: 'plan', label: 'Planner', skills: ['plan-tickets'] })]
+        : []),
+      { type: 'plan-approval', id: 'plan-approval', label: 'Plan approval', auto: false },
+      agent({ type: 'lead', id: 'orchestrate', label: 'Lead' }),
+      agent({
+        type: 'helper-pool',
+        id: 'helpers',
+        label: 'Helpers',
+        approvalMode: null,
+        canStartHelpers: true,
+      }),
+      agent({ type: 'reviewer', id: 'review', label: 'Change reviewer', scope: 'change' }),
+      { type: 'checks', id: 'checks', label: 'Checks' },
+      { type: 'ticket-merge', id: 'ticket-merge', label: 'Ticket branch' },
+      ...(postMerge
+        ? [
+            agent({
+              type: 'reviewer',
+              id: 'code-review',
+              label: 'Code reviewer',
+              scope: 'final',
+              skills: ['code-review'],
+            }),
+            agent({ type: 'tester', id: 'unit-tests', label: 'Tester', approvalMode: null }),
+          ]
+        : []),
+      { type: 'owner-merge', id: 'owner-merge', label: 'Your merge' },
+      { type: 'done', id: 'done', label: 'Done' },
+    ],
+    edges: [
+      ...(separate
+        ? [
+            edge('flow', 'ticket', 'plan'),
+            edge('flow', 'plan', 'plan-approval'),
+            edge('flow', 'plan-approval', 'orchestrate'),
+          ]
+        : [edge('flow', 'ticket', 'orchestrate'), edge('flow', 'orchestrate', 'plan-approval')]),
+      edge('assigns', 'orchestrate', 'helpers'),
+      ...reviewed.map((id) => edge('review', id, 'review')),
+      edge('findings', 'review', 'orchestrate'),
+      ...reviewed.map((id) => edge('rework', 'orchestrate', id, { maxRounds: 2 })),
+      edge('merge', 'orchestrate', 'checks'),
+      edge('flow', 'checks', 'ticket-merge'),
+      ...finalChain.slice(1).map((to, i) => edge('flow', finalChain[i] ?? '', to)),
+      edge('flow', 'owner-merge', 'done'),
+    ],
+    legacyV1: { plannerMode: wf['plannerMode'], stages: wf['stages'] },
+  };
+  return {
+    graph,
+    stored: o.stored ?? 'v1',
+    issues: [],
+    setup: pw['setup'],
+    skills: pw['skills'],
+    agents: [],
+    updatedAt: o.stored === 'v2' ? '2026-10-14T08:00:00.000Z' : wf['updatedAt'],
+  };
+}
+
 /** `GET /api/runs/:id/workflow`: every stage in workflow order, with its state and agents. */
 export function runWorkflow(
   states: Record<StageId, StageState>,
@@ -357,6 +450,7 @@ function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): Tick
       [runPath]: detail['currentRun'] as Json,
       '/api/control/token': { token: CSRF },
       [PROJECT_WORKFLOW_PATH]: projectWorkflow(),
+      [PROJECT_GRAPH_PATH]: projectGraph(),
       ...extra,
     },
   };
@@ -710,6 +804,7 @@ export function stagesScenario(): TicketScenario {
     },
     {
       [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [PROJECT_GRAPH_PATH]: projectGraph({ separate: true, postMerge: true }),
       [RUN_WORKFLOW_PATH]: runWorkflow(
         {
           plan: 'done',
@@ -746,6 +841,7 @@ export function plannerReviewScenario(): TicketScenario {
     },
     {
       [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true }),
+      [PROJECT_GRAPH_PATH]: projectGraph({ separate: true }),
       [RUN_WORKFLOW_PATH]: runWorkflow(
         {
           plan: 'needs-you',
@@ -851,6 +947,7 @@ export function reviewedScenario(): TicketScenario {
         agents: [...MERGED_REVIEWS, agentReview(TESTER, 'Tester', 'pending', TEST_FILES)],
       },
       [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [PROJECT_GRAPH_PATH]: projectGraph({ separate: true, postMerge: true }),
       [RUN_WORKFLOW_PATH]: runWorkflow(
         {
           plan: 'done',
@@ -905,6 +1002,7 @@ export function heldScenario(): TicketScenario {
     {
       [`${runPath}/review`]: { runId: RUN_ID, agents: MERGED_REVIEWS },
       [PROJECT_WORKFLOW_PATH]: projectWorkflow({ separate: true, postMerge: true }),
+      [PROJECT_GRAPH_PATH]: projectGraph({ separate: true, postMerge: true }),
       [RUN_WORKFLOW_PATH]: runWorkflow(
         {
           plan: 'done',

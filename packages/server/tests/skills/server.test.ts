@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { defaultProjectWorkflow } from '@acp/core';
+import { defaultProjectWorkflow, workflowTemplate } from '@acp/core';
 import { CSRF_HEADER, SkillDetailDtoSchema, SkillSummaryDtoSchema } from '@acp/core/api';
 import { silentLogger } from '../../src/logger.js';
 import { createFakeManagedAdapter } from '../control/fake-adapter.js';
@@ -89,6 +89,20 @@ describe('skills through startServer', () => {
       expect(((await b.get(agents)).body as { name: string }[]).map((a) => a.name)).toEqual([
         'reviewer',
       ]);
+
+      // ADR-0023: once a graph is saved, "used by" and the guards follow its nodes.
+      const graph = workflowTemplate('lead-only');
+      const lead = graph.nodes.find((n) => n.type === 'lead');
+      if (lead?.type !== 'lead') throw new Error('no lead');
+      lead.skills = ['code-review'];
+      lead.agent = 'reviewer';
+      const put = await send('PUT', `/api/projects/${project.id}/workflow-graph`, { graph });
+      expect(put.status).toBe(200);
+      const afterGraph = SkillSummaryDtoSchema.array().parse((await b.get(base)).body);
+      expect(afterGraph.map((s) => [s.name, s.usedBy, s.usedByNodes])).toEqual([
+        ['code-review', ['orchestrate'], [{ nodeId: 'orchestrate', label: lead.label }]],
+      ]);
+      expect((await send('DELETE', `${agents}/reviewer`)).status).toBe(409);
     } finally {
       await b.server.close();
     }

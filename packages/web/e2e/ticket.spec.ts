@@ -22,6 +22,19 @@ import {
   workingScenario,
   type TicketScenario,
 } from './ticket-fixtures.js';
+import {
+  LIVE_GRAPH_PATH,
+  PROJECT_GRAPH_PATH,
+  carefulGraph,
+  directLoopScenario,
+  projectGraphDto,
+} from './live-graph-fixtures.js';
+import {
+  LOOP_KEY,
+  LOOP_TICKET_ID,
+  LOOP_TICKET_PATH,
+  loopDoneScenario,
+} from './review-loop-fixtures.js';
 
 /*
  * P4-G: the ticket page in the browser, on the built UI served by the demo server, with the
@@ -51,6 +64,10 @@ async function serve(page: Page, sc: TicketScenario): Promise<{ posts: () => str
   // The project's workflow for the live graph (redesign R-H).
   await page.route(`**${PROJECT_WORKFLOW_PATH}`, (route) =>
     route.fulfill({ json: sc.routes[PROJECT_WORKFLOW_PATH] }),
+  );
+  // WG-F: the ticket's run options read the project's graph.
+  await page.route(`**${PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: sc.routes[PROJECT_GRAPH_PATH] }),
   );
   await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
     const url = new URL(route.request().url());
@@ -309,4 +326,163 @@ test('a follow-up the server refuses shows its reason, and the box stays usable'
   expect(calls).toBe(1);
   await expect(box).toBeEnabled();
   await shoot(page, 'follow-up-refused');
+});
+
+// --- WG-E (ADR-0023): the run's own workflow graph, and run options as a limit -----------------
+
+/** Serves a review-loop ticket's routes (GET from the table; a POST answers the ticket). */
+async function serveRoutes(
+  page: Page,
+  routes: Record<string, unknown>,
+): Promise<{ posts: () => { path: string; body: unknown }[] }> {
+  const posts: { path: string; body: unknown }[] = [];
+  await withFixtureProject(page);
+  await page.route(/\/api\/(tickets|runs|control|projects\/[^/]+\/workflow)/, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET') {
+      expect(await route.request().headerValue('x-acp-csrf')).toBe(CSRF);
+      posts.push({ path: url.pathname, body: route.request().postDataJSON() as unknown });
+      await route.fulfill({ json: routes[LOOP_TICKET_PATH] });
+      return;
+    }
+    const body = routes[url.pathname];
+    if (body === undefined) {
+      await route.fulfill({
+        status: 404,
+        json: { error: { code: 'not_found', message: 'no fixture', requestId: 'e2e' } },
+      });
+      return;
+    }
+    await route.fulfill({ json: body });
+  });
+  return { posts: () => [...posts] };
+}
+
+const LOOP_HASH = `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`;
+
+/** The live graph card in both themes and widths, as a picture of the card itself. */
+async function shootGraph(page: Page, name: string): Promise<void> {
+  if (SHOTS === undefined) return;
+  for (const width of [1440, 1024]) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: 1400 });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(500);
+      const card = page.getByTestId('live-workflow');
+      await card.scrollIntoViewIfNeeded();
+      await card.screenshot({ path: `${SHOTS}/ticket-${name}-${width}-${scheme}.png` });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+}
+
+test('the run’s own graph: states, modes, the sandbox and the review agent’s direct rework', async ({
+  page,
+}) => {
+  await serveRoutes(page, directLoopScenario().routes);
+  await page.goto(`/${LOOP_HASH}`);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Saved searches');
+  const graph = page.getByTestId('live-run-graph');
+  await expect(graph).toBeVisible();
+  await expect(page.getByTestId('wf-node-review')).toHaveCount(0);
+  const block = (id: string) => page.getByTestId(`live-block-${id}`);
+  await expect(block('orchestrate')).toHaveAttribute('data-state', 'active');
+  await expect(block('plan-approval')).toHaveAttribute('data-state', 'done');
+  await expect(block('code-review')).toHaveAttribute('data-state', 'waiting');
+  // The Full auto helper runs as Auto edits in this run and keeps the sandbox.
+  await expect(block('api-helper').getByTestId('live-mode')).toHaveText('Mode: Auto edits');
+  await expect(block('api-helper').getByTestId('live-sandbox')).toHaveText('Sandboxed');
+  await expect(block('helpers').getByTestId('live-sandbox')).toHaveCount(0);
+  await expect(block('review').getByTestId('live-direct')).toBeVisible();
+  // The review agent's direct rework, on its own link, apart from the lead's.
+  await expect(graph.getByText('Direct rework ×1')).toBeVisible();
+  await expect(graph.getByText('Rework', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('review-counts')).toHaveText('1 in review · 1 in rework');
+  await shootGraph(page, 'live-graph');
+  await shoot(page, 'live-graph-page');
+
+  // An agent on a block shows itself in the side panel.
+  await block('api-helper')
+    .getByRole('button', { name: 'Show the API helper in the side panel' })
+    .click();
+  await expect(
+    page.getByTestId('side-panel').getByRole('heading', { name: 'API helper' }),
+  ).toBeVisible();
+  // Its change: the review agent decided the rework itself.
+  await page.getByTestId('changes-overview').getByRole('button', { name: 'Open' }).first().click();
+  const card = page.getByTestId('side-panel').getByTestId('change-card');
+  await expect(card.getByTestId('change-direct-rounds')).toContainText(
+    'Review agent: 1 direct rework round',
+  );
+  await expect(card.getByTestId('change-history')).toContainText(
+    'Review agent sent it back to the helper for rework',
+  );
+});
+
+test('a server without run graphs keeps the version 1 workflow', async ({ page }) => {
+  const routes = { ...directLoopScenario().routes };
+  delete routes[LIVE_GRAPH_PATH];
+  await serveRoutes(page, routes);
+  await page.goto(`/${LOOP_HASH}`);
+  await expect(page.getByTestId('wf-node-review')).toBeVisible();
+  await expect(page.getByTestId('live-run-graph')).toHaveCount(0);
+});
+
+test('the Start dialog: the approval mode is a limit', async ({ page }) => {
+  const server = await serveRoutes(page, {
+    ...loopDoneScenario().routes,
+    [PROJECT_GRAPH_PATH]: projectGraphDto(carefulGraph()),
+  });
+  await page.goto(`/${LOOP_HASH}`);
+  await page.getByRole('button', { name: `Re-run ${LOOP_KEY} with options` }).click();
+  const dialog = page.getByTestId('start-dialog');
+  await expect(dialog.getByText('Approval mode: at most')).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: /^No limit/ })).toBeChecked();
+  // WG-F: the dialog is taller than this 720-pixel window and focuses Re-run at its foot. It
+  // opens at its top: the title and the first choice are in view, near the top of the window.
+  await expect(dialog.getByRole('button', { name: 'Re-run', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('heading', { name: `Re-run ${LOOP_KEY}` })).toBeInViewport();
+  const firstChoice = (await dialog.getByRole('radio', { name: /^No limit/ }).boundingBox())?.y;
+  expect(firstChoice).toBeGreaterThanOrEqual(0);
+  expect(firstChoice).toBeLessThan(260);
+  if (SHOTS !== undefined) {
+    // The window as the owner sees the dialog open (after its fade-in).
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${SHOTS}/ticket-start-open-light.png` });
+  }
+  await expect(dialog.getByTestId('mode-limit-summary')).toHaveText(
+    'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
+  );
+  await expect(dialog.getByText(/Blocks set to Project default use Auto edits\./)).toBeVisible();
+  await dialog.getByText('Full auto', { exact: true }).click();
+  await expect(dialog.getByTestId('mode-no-effect')).toHaveText(
+    'No block in this workflow is set looser than Auto edits, so “at most Full auto” changes nothing.',
+  );
+  await expect(dialog.getByTestId('full-auto-warning')).toHaveCount(0);
+  await dialog.getByText('Manual', { exact: true }).click();
+  await expect(dialog.getByTestId('mode-limit-summary')).toHaveText(
+    'Approval mode: at most Manual — blocks set to a stricter mode keep it; this can’t loosen any block.',
+  );
+  await expect(dialog.getByTestId('mode-no-effect')).toHaveCount(0);
+  await expect(dialog.getByText(/^Lead reviews: every change goes to the lead/)).toBeVisible();
+  if (SHOTS !== undefined) {
+    // A picture of the whole dialog: in a window as tall as it, scrolled to its top. (In a
+    // shorter window, the part the clicks above scrolled out of the overlay comes out blank.)
+    const size = page.viewportSize() ?? { width: 1280, height: 720 };
+    await page.setViewportSize({ width: size.width, height: 1100 });
+    await page.getByTestId('start-dialog').evaluate((d) => d.parentElement?.scrollTo(0, 0));
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(400);
+      await dialog.screenshot({ path: `${SHOTS}/ticket-start-limit-${scheme}.png` });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.setViewportSize(size);
+  }
+  await dialog.getByRole('button', { name: 'Re-run', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(server.posts()).toEqual([
+    { path: `${LOOP_TICKET_PATH}/start`, body: { approvalMode: 'manual' } },
+  ]);
 });

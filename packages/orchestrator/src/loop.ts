@@ -12,12 +12,14 @@ import { cleanSummary } from './summary.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
+import { editingNodeOf, programOf, reviewRouteOf } from './program.js';
+import type { ProgramView } from './program.js';
 import {
   changeReviewerBrief,
-  changeReviewerLaunchFields,
   countsAsHelper,
   hasReviewableChange,
-  launchFields,
+  launchFieldsFor,
+  stageOf,
 } from './stages.js';
 import type { EngineAgent, EngineChange, RunIntegration, RunLimits } from './state.js';
 import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
@@ -40,9 +42,38 @@ export const VIEW_CHANGE_MAX_BYTES = 32 * 1024;
 const ROLE_MAX_CHARS = 60;
 
 /** The parts of a run the loop's reads need (`RunState` and `Draft` both fit). */
-interface LoopView {
+interface LoopView extends ProgramView {
   readonly agents: readonly EngineAgent[];
   readonly integration?: RunIntegration | undefined;
+}
+
+/**
+ * Rework rounds per decider (ADR-0023 §4): `change.round` counts every rework; the ones a change
+ * reviewer sent back itself (route "direct") are `reviewerRounds`, the rest the lead's and the
+ * owner's. The lead's limit is its route's `leadRounds`.
+ */
+export function leadRoundsUsed(change: Pick<EngineChange, 'round' | 'reviewerRounds'>): number {
+  return change.round - (change.reviewerRounds ?? 0);
+}
+
+/** How often the lead may send this agent's change back (its route's `leadRounds`). */
+export function leadRoundLimit(view: ProgramView, agent: EngineAgent): number {
+  return reviewRouteOf(programOf(view), agent).leadRounds;
+}
+
+/** Live helpers of an editing node (ADR-0023 §7), for its `maxInstances`. */
+function liveOfNode(view: LoopView, agent: EngineAgent): number {
+  const id = stageOf(agent);
+  return view.agents.filter(
+    (a) => a.kind === agent.kind && stageOf(a) === id && isActiveAgentStatus(a.status),
+  ).length;
+}
+
+/** The helper's node has room for one more live agent (testers: no per-node limit). */
+function nodeHasRoom(view: LoopView, agent: EngineAgent): boolean {
+  const node = editingNodeOf(programOf(view), agent);
+  if (node === undefined || node.type === 'tester') return true;
+  return liveOfNode(view, agent) < node.maxInstances;
 }
 
 export function isFinalChangeState(state: ChangeState): boolean {
@@ -64,8 +95,14 @@ export function branchLabel(view: LoopView): string {
   return view.integration?.ticketBranch ?? 'the ticket branch';
 }
 
-function freshChange(round: number, turnFailed: boolean): EngineChange {
+function freshChange(
+  round: number,
+  turnFailed: boolean,
+  reviewerRounds: number | undefined,
+): EngineChange {
   return {
+    // The rounds a change reviewer sent back stay counted for the whole change (ADR-0023 §4).
+    ...(reviewerRounds !== undefined ? { reviewerRounds } : {}),
     state: 'sealing',
     round,
     verdict: null,
@@ -121,7 +158,9 @@ export function emitRound(
 ): void {
   const change = agent.change;
   if (change === undefined) return;
-  const reviewer: ChangeReviewerKind = change.reviewer ?? decided?.by ?? 'owner';
+  // A change reviewer that decides (route "direct", ADR-0023 §4) reviewed the round as an agent.
+  const decider = decided?.by === 'reviewer' ? 'agent' : decided?.by;
+  const reviewer: ChangeReviewerKind = change.reviewer ?? decider ?? 'owner';
   d.effects.push({
     type: 'change-round',
     agentRunId: agent.id,
@@ -146,7 +185,7 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
   );
   agent.awaitingHelpers = false;
   d.setAgentStatus(agent, 'AWAITING_REVIEW');
-  agent.change = freshChange(agent.change?.round ?? 0, turnFailed);
+  agent.change = freshChange(agent.change?.round ?? 0, turnFailed, agent.change?.reviewerRounds);
   d.effects.push({ type: 'seal-change', agentRunId: agent.id });
 }
 
@@ -158,7 +197,7 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
  */
 export function stoppedWithoutReview(agent: EngineAgent): void {
   agent.change = {
-    ...freshChange(agent.change?.round ?? 0, false),
+    ...freshChange(agent.change?.round ?? 0, false, agent.change?.reviewerRounds),
     state: 'decision',
   };
 }
@@ -254,10 +293,13 @@ function assignReviewers(d: Draft): void {
   const integration = d.integration;
   if (integration === undefined) return;
   const { maxConcurrentHelpers } = runLimits(d);
+  const program = d.program();
   for (const helper of readyQueue(d)) {
     const change = helper.change;
     if (change === undefined) continue;
-    if (integration.reviewer === 'lead') {
+    // ADR-0023 §4: each change follows its node's review route.
+    const route = reviewRouteOf(program, helper);
+    if (route.by === 'lead') {
       if (!leadCanDecide(d)) {
         change.state = 'needs-owner';
         continue;
@@ -273,12 +315,18 @@ function assignReviewers(d: Draft): void {
       continue;
     }
     // A review agent counts as one helper (ADR-0021 §5); without a slot the change waits.
-    if (activeHelperCount(d) >= maxConcurrentHelpers) break;
-    startChangeReviewer(d, helper, change);
+    if (activeHelperCount(d) >= maxConcurrentHelpers) continue;
+    startChangeReviewer(d, helper, change, route.reviewer, route.then === 'direct');
   }
 }
 
-function startChangeReviewer(d: Draft, helper: EngineAgent, change: EngineChange): void {
+function startChangeReviewer(
+  d: Draft,
+  helper: EngineAgent,
+  change: EngineChange,
+  reviewerNode: string,
+  direct: boolean,
+): void {
   const role = `Review: ${helper.role}`.slice(0, ROLE_MAX_CHARS);
   const reviewer: EngineAgent = {
     id: d.freshId(),
@@ -297,7 +345,7 @@ function startChangeReviewer(d: Draft, helper: EngineAgent, change: EngineChange
     latestActivity: null,
     review: null,
     reportedCostUsd: null,
-    stage: 'review',
+    stage: reviewerNode,
     reviewsAgentRunId: helper.id,
     reviewPosts: 0,
   };
@@ -319,7 +367,11 @@ function startChangeReviewer(d: Draft, helper: EngineAgent, change: EngineChange
     agentRunId: reviewer.id,
     kind: 'reviewer',
     role,
-    ...changeReviewerLaunchFields(changeReviewerBrief(d, helper, change.round), d.workflow),
+    ...launchFieldsFor(
+      d.program(),
+      reviewerNode,
+      changeReviewerBrief(d, helper, change.round, direct),
+    ),
     reviewScope: 'change',
   });
 }
@@ -387,6 +439,11 @@ export function checkChange(
   if (integration === undefined) {
     return refusal('legacy-review', 'This run has no review loop; the owner reviews each change.');
   }
+  // ADR-0023 §4: a change reviewer decides only through its own `submit_review` (route
+  // "direct"); it never merges, discards or asks the owner through these commands.
+  if (by === 'reviewer') {
+    return refusal('not-lead', 'A change reviewer can only submit its review (submit_review).');
+  }
   const statusRefusal = decisionRunStatus(d, by);
   if (statusRefusal !== null) return statusRefusal;
   const agent = d.agents.find((a) => a.id === agentRunId);
@@ -433,10 +490,11 @@ export function checkChange(
           `${agent.role} has stopped, so it cannot rework; merge or discard its work.`,
         );
       }
-      if (by === 'lead' && change.round >= integration.maxReworkRounds) {
+      const leadLimit = leadRoundLimit(d, agent);
+      if (by === 'lead' && leadRoundsUsed(change) >= leadLimit) {
         return refusal(
           'rework-limit',
-          `${agent.role}'s change already had ${change.round} of ${integration.maxReworkRounds} rework rounds. Merge it, discard it, or ask the owner (who can allow another round).`,
+          `${agent.role}'s change already had ${leadRoundsUsed(change)} of ${leadLimit} rework rounds. Merge it, discard it, or ask the owner (who can allow another round).`,
         );
       }
       if (by === 'lead' && isOverBudget(agent.budgetTokensUsed, agent.budgetLimit)) {
@@ -446,7 +504,7 @@ export function checkChange(
         );
       }
       const { maxConcurrentHelpers } = runLimits(d);
-      if (activeHelperCount(d) >= maxConcurrentHelpers) {
+      if (activeHelperCount(d) >= maxConcurrentHelpers || !nodeHasRoom(d, agent)) {
         return refusal(
           'too-many-agents',
           `At most ${maxConcurrentHelpers} agents can work at once; wait for one to finish, then ask again.`,
@@ -486,11 +544,11 @@ function reworkPrompt(
   by: ChangeDecider,
   comments: string,
   branch: string,
-  max: number,
+  roundText: string,
 ): string {
-  const who = by === 'owner' ? 'The owner' : 'The lead';
+  const who = by === 'owner' ? 'The owner' : by === 'reviewer' ? 'The review agent' : 'The lead';
   return [
-    `${who} reviewed your change and asks for rework (round ${change.round}${by === 'lead' ? ` of ${max}` : ''}):`,
+    `${who} reviewed your change and asks for rework (${roundText}):`,
     comments,
     change.conflictFiles.length > 0
       ? `Your change also conflicts with ${branch} in: ${change.conflictFiles.join(', ')}. Bring those files in line with ${branch}.`
@@ -541,7 +599,7 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       change.state = 'discarded';
       agent.review = 'discarded';
       emitRound(d, agent, { decision: 'discard', by: input.by });
-      if (reason.length > 0) {
+      if (reason.length > 0 && input.by !== 'reviewer') {
         d.effects.push({
           type: 'change-comment',
           agentRunId: agent.id,
@@ -562,7 +620,7 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       const question = note(input.comments);
       change.state = 'needs-owner';
       emitRound(d, agent, { decision: 'ask-owner', by: input.by });
-      if (question.length > 0) {
+      if (question.length > 0 && input.by !== 'reviewer') {
         d.effects.push({
           type: 'change-comment',
           agentRunId: agent.id,
@@ -578,19 +636,24 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
     case 'rework': {
       const comments = note(input.comments);
       emitRound(d, agent, { decision: 'rework', by: input.by });
-      d.effects.push({
-        type: 'change-comment',
-        agentRunId: agent.id,
-        round: change.round,
-        author: input.by,
-        kind: 'rework',
-        body: comments,
-      });
+      // A change reviewer's rework comments are its findings, already stored as its
+      // `review-comment` on this round (ADR-0023 §4, route "direct").
+      if (input.by !== 'reviewer') {
+        d.effects.push({
+          type: 'change-comment',
+          agentRunId: agent.id,
+          round: change.round,
+          author: input.by,
+          kind: 'rework',
+          body: comments,
+        });
+      }
       // The owner's rework is the owner's authorization to spend more: like a budget raise.
       if (byOwner && isOverBudget(agent.budgetTokensUsed, agent.budgetLimit)) {
         agent.budgetLimit = agent.budgetTokensUsed + d.run.budget.maxTokensPerAgent;
       }
       change.round += 1;
+      if (input.by === 'reviewer') change.reviewerRounds = (change.reviewerRounds ?? 0) + 1;
       change.state = 'rework';
       change.verdict = null;
       change.reviewer = null;
@@ -598,8 +661,14 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       change.readyAt = null;
       change.checks = null;
       change.merging = false;
-      const max = d.integration?.maxReworkRounds ?? 0;
-      const prompt = reworkPrompt(agent, change, input.by, comments, branch, max);
+      const route = reviewRouteOf(d.program(), agent);
+      const roundText =
+        input.by === 'lead'
+          ? `round ${leadRoundsUsed(change)} of ${route.leadRounds}`
+          : input.by === 'reviewer' && route.by === 'agent' && route.then === 'direct'
+            ? `round ${change.reviewerRounds ?? 0} of ${route.reviewerRounds}`
+            : `round ${change.round}`;
+      const prompt = reworkPrompt(agent, change, input.by, comments, branch, roundText);
       change.conflictFiles = [];
       d.setAgentStatus(agent, 'STARTING');
       // Same helper, same worktree, same budget; a rework turn never starts helpers (ADR-0021 §3).
@@ -608,12 +677,19 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
         agentRunId: agent.id,
         kind: agent.kind,
         role: agent.role,
-        ...launchFields(prompt, d.workflow, agent.kind),
+        ...launchFieldsFor(d.program(), stageOf(agent), prompt),
         rework: { resumeSessionId: agent.sessionId },
+        ...d.launchModeFields(agent),
       });
       const done = `Asked ${role} to rework its change (round ${change.round}).`;
       if (byOwner) notifyLead(d, `The owner decided: ${done}`);
-      else leadActivity(d, done.replace(/\.$/, ''));
+      else if (input.by === 'reviewer') {
+        // ADR-0023 §4, route "direct": the lead is told each round (no findings, no content).
+        notifyLead(
+          d,
+          `The review agent sent ${role}'s change (agentId ${agent.id}) back to it for rework (${roundText}). You get the change once the review agent approves it or its rounds run out.`,
+        );
+      } else leadActivity(d, done.replace(/\.$/, ''));
       return `${done} Its change is reviewed again when it finishes.`;
     }
   }
@@ -677,7 +753,7 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
   if (change === undefined || integration === undefined) return `${agent.role} has no change yet.`;
   const lines = [
     `Change of ${agent.role} (agentId ${agent.id}): it ${STATE_WORDS[change.state]}.`,
-    `Rework rounds used: ${change.round} of ${integration.maxReworkRounds}.`,
+    `Rework rounds used: ${leadRoundsUsed(change)} of ${leadRoundLimit(view, agent)}.`,
   ];
   if (agent.task !== null) lines.push(`Task: ${agent.task}`);
   if (change.headCommit !== null) {

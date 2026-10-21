@@ -1413,6 +1413,11 @@ export const CHECK_STATUS_COPY: Readonly<Record<CheckRunStatus, ControlStatusCop
     tone: 'problem',
   },
   skipped: { word: 'Skipped', tip: 'This check was not run.', tone: 'stopped' },
+  interrupted: {
+    word: 'Stopped',
+    tip: 'The app stopped before this check finished, so it has no result. The checks run again before a merge.',
+    tone: 'stopped',
+  },
 };
 
 /** "12.4 KB": file sizes in the context picker (1 KB = 1,024 bytes, like the 32 KB limit). */
@@ -2962,6 +2967,7 @@ export const REVIEW_LOOP_COPY = {
       n === null ? 'Files not reported' : countOf(n, 'changed file', 'changed files'),
     checks: {
       none: 'No checks on this commit yet',
+      stopped: 'Checks stopped when the app stopped; they run again',
       passed: (passed: number, total: number) =>
         `${formatCount(passed)} of ${formatCount(total)} checks passed`,
       failed: (n: number) => `${countOf(n, 'required check', 'required checks')} failed`,
@@ -2993,6 +2999,7 @@ export const REVIEW_LOOP_COPY = {
     decider: {
       lead: 'Lead',
       owner: 'You',
+      reviewer: 'Review agent',
     } satisfies Record<ChangeDecider, string>,
     commentGone: 'The comment is no longer on the ticket.',
     owner: {
@@ -3051,6 +3058,8 @@ export const REVIEW_LOOP_COPY = {
     diff: 'The combined change, line by line',
     checksTitle: 'Checks on the tip',
     checksNone: 'No checks have run on the tip yet.',
+    checksStopped:
+      'The app stopped before the checks on the tip finished. They run again when you merge.',
     blocked: (names: string) =>
       `A required check failed on the tip (${names}). Ask for changes, or merge anyway with a reason.`,
     baseMoved: (base: string) =>
@@ -3101,6 +3110,142 @@ export const REVIEW_LOOP_COPY = {
   },
 } as const;
 
+// --- Live run graph and run options as a limit (WG-E, wp/wg-e-live; ADR-0023) --------------------
+//
+// Add-only. The ticket page's live graph of the run's own workflow, the run options read as a
+// limit ("at most"), the change cards' direct rework by the review agent, and "Used by" blocks on
+// Skills & Agents. Plain owner words: blocks and links, never nodes, edges or engines.
+
+/** What a block is called by its kind on the live graph; a reviewer's word depends on its scope. */
+type LiveBlockKind =
+  | 'planner'
+  | 'lead'
+  | 'helper-pool'
+  | 'helper'
+  | 'reviewer-change'
+  | 'reviewer-final'
+  | 'tester'
+  | 'ticket'
+  | 'plan-approval'
+  | 'checks'
+  | 'ticket-merge'
+  | 'owner-merge'
+  | 'done';
+
+export const WORKFLOW_LIVE_COPY = {
+  graph: {
+    description: 'Where this run is: each block of the workflow it started with, live.',
+    tip: 'The blocks and links are this run’s workflow as it was when the run started, with the models, skills and approval modes it runs with. Click a block, or an agent on it, to show that agent in the side panel.',
+    label: 'This run’s workflow',
+    kinds: {
+      planner: 'Planner',
+      lead: 'Lead',
+      'helper-pool': 'Helper pool',
+      helper: 'Named helper',
+      'reviewer-change': 'Change reviewer',
+      'reviewer-final': 'Final reviewer',
+      tester: 'Tester',
+      ticket: 'Ticket',
+      'plan-approval': 'You',
+      checks: 'Checks',
+      'ticket-merge': 'Ticket branch',
+      'owner-merge': 'You',
+      done: 'Done',
+    } satisfies Record<LiveBlockKind, string>,
+    gateTitle: {
+      'plan-approval': 'Approve the plan',
+      'owner-merge': 'Merge into main',
+    },
+    planAuto: 'Approved automatically',
+    planAsks: 'You approve the plan',
+    readOnly: 'Read-only',
+    ownCopy: 'Own copy',
+    model: 'Model',
+    projectModel: 'Project default',
+    fileOrProjectModel: 'Agent file’s or project default',
+    noSkills: 'No skills',
+    mode: (mode: string) => `Mode: ${mode}`,
+    modeTip:
+      'The approval mode this block runs with in this run. A ticket or run setting can only make it more careful.',
+    sandboxed: 'Sandboxed',
+    sandboxTip:
+      'This block is set to Full auto, so its commands run in the operating-system sandbox, also when this run is more careful.',
+    direct: 'Sends changes back to the helper itself',
+    directTip:
+      'This review agent sends each change it reviews straight back to its helper for rework, telling the lead each round. Approved changes, or changes out of rounds, go to the lead, who merges.',
+    agentsLabel: (block: string) => `Agents of ${block}`,
+    agentsMore: (n: number) => `+${formatCount(n)}`,
+    agentsMoreTip: (n: number) =>
+      `${countOf(n, 'more agent', 'more agents')}. Click the block to show the one working now, or see them all under Agents.`,
+    selectAgent: (role: string) => `Show the ${role} in the side panel`,
+    rework: (n: number) => (n > 0 ? `Rework ×${formatCount(n)}` : 'Rework'),
+    directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
+    links: {
+      flow: 'Next step',
+      assigns: 'Assigns work',
+      review: 'Sends its change for review',
+      findings: 'Sends its findings',
+      rework: 'Sends the change back for rework',
+      merge: 'Merges through',
+    },
+    linkName: (kind: string, from: string, to: string) => `${kind}: from ${from} to ${to}`,
+    changes: 'Changes',
+  },
+  ceiling: {
+    /** The Start dialog's and the ticket's mode choice: a limit, never a loosening. */
+    legend: 'Approval mode: at most',
+    /** The ticket's Run options row. */
+    rowLabel: 'Approvals, at most',
+    noLimit: 'No limit',
+    noLimitHint: (projectMode: string) =>
+      `Each block runs with the mode set on the Workflow page. Blocks set to Project default use ${projectMode}.`,
+    noLimitOption: 'No limit: each block’s own mode',
+    summary: (mode: string) =>
+      `Approval mode: at most ${mode} — blocks set to a stricter mode keep it; this can’t loosen any block.`,
+    summaryNone: 'Approval mode: no limit — each block keeps the mode set on the Workflow page.',
+    noEffect: (mode: string, loosest: string) =>
+      `No block in this workflow is set looser than ${loosest}, so “at most ${mode}” changes nothing.`,
+    noEffectTicket: (mode: string, ticket: string) =>
+      `This ticket is limited to at most ${ticket}, so “at most ${mode}” changes nothing for this run.`,
+    ticketHint:
+      'A limit for this ticket’s runs: blocks set to a stricter mode keep it, and it can’t loosen any block.',
+    reviewerHint: {
+      agent: 'Each change follows the workflow’s review links.',
+      lead: 'Lead reviews: every change goes to the lead for this run, whatever the workflow’s review links say.',
+    },
+    ticketReviewerHint:
+      'Lead reviews sends every change to the lead on this ticket’s runs, whatever the workflow’s review links say. Review agent follows the workflow.',
+    roundsHint:
+      'Replaces every rework limit in the workflow for this run. Unchanged, each rework link keeps its own limit.',
+    ticketRoundsHint:
+      'Replaces every rework limit in the workflow on this ticket’s runs. Project default keeps each rework link’s own limit.',
+  },
+  changes: {
+    /** A round the review agent sent straight back to the helper (review route "direct"). */
+    directRework: 'Review agent sent it back to the helper for rework',
+    directRounds: (reviewer: number, lead: number) =>
+      [
+        `Review agent: ${countOf(reviewer, 'direct rework round', 'direct rework rounds')}`,
+        ...(lead > 0 ? [`lead: ${countOf(lead, 'rework round', 'rework rounds')}`] : []),
+      ].join(' · '),
+    directRoundsTip:
+      'In this workflow the review agent sends changes back to the helper itself, and the lead merges once the review agent approves (or its rounds run out).',
+    directBadge: (n: number) => `Direct rework ×${formatCount(n)}`,
+  },
+  usedBy: {
+    /** "Used by" names the workflow's blocks once the server sends them. */
+    inUse: (blocks: string) =>
+      `Used by ${blocks}. Remove it from those blocks on the Workflow page before deleting it.`,
+    openBlock: (block: string) => `Open ${block} on the Workflow page`,
+  },
+} as const;
+
+/** "Frontend helper, Helpers and Change reviewer": block labels in a sentence. */
+export function blockList(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1] ?? ''}`;
+}
+
 /**
  * A ticket's own run options (RL-H): the New ticket dialog, the ticket page's Run options, the
  * board card's badge and the Start dialog's markers. "Project default" follows the project's
@@ -3144,5 +3289,299 @@ export const TICKET_OPTIONS_COPY = {
     unchanged: 'Same as this ticket’s settings.',
     changed: (n: number) =>
       `${countOf(n, 'choice differs', 'choices differ')} from this ticket’s settings, for this run only.`,
+  },
+} as const;
+
+// --- Workflow graph editor (WG-D, wp/wg-d-editor; ADR-0023) --------------------------------------
+//
+// Add-only. The Workflow page's editor (blocks, links, templates, problems) and the new-project
+// wizard's template choice. Plain owner words: blocks and links, never nodes, edges or engines.
+
+import type { WorkflowEdgeType, WorkflowNodeType, WorkflowTemplateId } from '@acp/core';
+
+/** The six blocks the owner can add from the palette. */
+export type PaletteItemKey =
+  'planner' | 'helper' | 'helper-pool' | 'change-reviewer' | 'final-reviewer' | 'tester';
+
+/** What a block is called by its kind; a reviewer's word depends on its scope. */
+type BlockKindKey = Exclude<WorkflowNodeType, 'reviewer'> | 'reviewer-change' | 'reviewer-final';
+
+export const WORKFLOW_GRAPH_COPY = {
+  description:
+    'The agents that work on a ticket and how they connect. Add blocks, link them, save.',
+  tip: 'Each block is an agent or a step. What a block may do is fixed by its kind: only helpers and the tester change files, each in its own copy of the project, and only the lead merges a change, after the checks. You merge the ticket into main once, at the end. Ticket and run settings can only make an agent more careful, never less.',
+  canvasTitle: 'How a ticket flows',
+  canvasLabel: 'Workflow editor',
+  canvasHint:
+    'Drag a block to move it. Drag from the dot on a block’s right edge to another block’s left edge to link them. Select a block or link and press Delete to remove it.',
+  loading: 'Loading the workflow…',
+  kinds: {
+    planner: 'Planner',
+    lead: 'Lead',
+    'helper-pool': 'Helper pool',
+    helper: 'Named helper',
+    'reviewer-change': 'Change reviewer',
+    'reviewer-final': 'Final reviewer',
+    tester: 'Tester',
+    ticket: 'Ticket',
+    'plan-approval': 'You',
+    checks: 'Checks',
+    'ticket-merge': 'Ticket branch',
+    'owner-merge': 'You',
+    done: 'Done',
+  } satisfies Record<BlockKindKey, string>,
+  kindText: {
+    planner: 'Reads the ticket and the project and writes the plan. It never changes a file.',
+    lead: 'Runs the ticket: starts helpers for the plan’s steps and merges each reviewed change into the ticket branch. It never changes a file itself.',
+    'helper-pool':
+      'Helpers the lead starts for any step no named helper takes, each in its own copy of the project.',
+    helper:
+      'A helper with its own name, for example “Frontend helper”. Plan steps can name it, and it works in its own copy of the project.',
+    'reviewer-change':
+      'Reads each change it is sent and passes its findings to the lead. It never changes a file.',
+    'reviewer-final':
+      'Reads the merged ticket branch at the end and posts its findings as ticket comments. It never changes a file.',
+    tester:
+      'Writes unit tests for the merged work in its own copy. Its change is reviewed like any other.',
+    ticket: 'Where every ticket starts.',
+    'plan-approval': 'You approve the plan before any helper starts, or ask for changes.',
+    checks:
+      'The project’s required checks. A change reaches the ticket branch only after they pass.',
+    'ticket-merge': 'Every change is decided and the ticket branch holds the merged work.',
+    'owner-merge': 'You merge the ticket branch into main, once, for the whole ticket.',
+    done: 'The ticket is finished.',
+  } satisfies Record<BlockKindKey, string>,
+  gateTitle: {
+    'plan-approval': 'Approve the plan',
+    'owner-merge': 'Merge into main',
+  },
+  readOnly: 'Read-only',
+  ownCopy: 'Own copy',
+  model: 'Model',
+  projectModel: 'Project default',
+  projectModelNamed: (model: string) => `${model} (default)`,
+  fileModel: (model: string) => `${model} (agent file)`,
+  noSkills: 'No skills',
+  skillMissing: (name: string) => `${name} (not in the project)`,
+  agentMissing: (name: string) => `${name} (not found)`,
+  modeBadge: (mode: string) => `Mode: ${mode}`,
+  modeDefaultBadge: (mode: string | null) =>
+    mode === null ? 'Mode: project default' : `Mode: ${mode} (default)`,
+  instances: (n: number) => `Up to ${formatCount(n)} at once`,
+  poolInstances: (n: number) => `Up to ${formatCount(n)} at once (project limit)`,
+  planAuto: 'Approved automatically',
+  planAsks: 'You approve each plan',
+  blockProblems: (n: number) => countOf(n, 'problem'),
+  blockWarnings: (n: number) => countOf(n, 'warning'),
+  selectBlock: (label: string) => `Select ${label}`,
+  palette: {
+    label: 'Add a block',
+    items: {
+      planner: 'Planner',
+      helper: 'Named helper',
+      'helper-pool': 'Helper pool',
+      'change-reviewer': 'Change reviewer',
+      'final-reviewer': 'Final reviewer',
+      tester: 'Tester',
+    } satisfies Record<PaletteItemKey, string>,
+    hints: {
+      planner: 'A read-only planner writes the plan; the lead starts once you approve it.',
+      helper: 'A helper with its own name, agent file, skills, model and approval mode.',
+      'helper-pool': 'Generic helpers for any step no named helper takes.',
+      'change-reviewer': 'Reads each change it is sent and passes its findings to the lead.',
+      'final-reviewer': 'Reads the merged ticket branch at the end. Added just before your merge.',
+      tester: 'Writes unit tests for the merged work. Added just before your merge.',
+    } satisfies Record<PaletteItemKey, string>,
+    add: (item: string) => `Add ${item}`,
+    full: (item: string, max: number) =>
+      max === 1
+        ? `The workflow already has a ${item}; it can have only one.`
+        : `The workflow already has ${formatCount(max)} of this block, the most it can have.`,
+    tooManyBlocks: (max: number) =>
+      `The workflow already has ${formatCount(max)} blocks, the most it can have.`,
+  },
+  newLabels: {
+    planner: 'Planner',
+    helper: (n: number) => `Helper ${formatCount(n)}`,
+    'helper-pool': 'Helpers',
+    'change-reviewer': 'Change reviewer',
+    'final-reviewer': 'Code reviewer',
+    tester: 'Tester',
+  },
+  edges: {
+    flow: 'Next step',
+    assigns: 'Assigns work',
+    review: 'Sends its change for review',
+    findings: 'Sends its findings',
+    rework: 'Sends the change back for rework',
+    merge: 'Merges through',
+  } satisfies Record<WorkflowEdgeType, string>,
+  edgeText: {
+    flow: 'The order of the steps: the plan, then after the ticket merge the final reviewers and testers, then your merge.',
+    assigns: 'The lead may start helpers of this block for the plan’s steps.',
+    review: 'Who first reviews this block’s change: a change reviewer or the lead.',
+    findings: 'The change reviewer passes its verdict and findings to the lead, who decides.',
+    rework:
+      'This reviewer or the lead may send the change back to its author, up to a number of rounds. A change reviewer that does this works with the helper directly and keeps the lead informed.',
+    merge: 'The lead merges each change through the required checks.',
+  } satisfies Record<WorkflowEdgeType, string>,
+  edgeName: (type: string, from: string, to: string) => `${type}: from ${from} to ${to}`,
+  rework: (n: number) => `Rework ×${formatCount(n)}`,
+  chooseEdge: {
+    title: 'What does this link do?',
+    description: (from: string, to: string) => `From “${from}” to “${to}”. Choose one.`,
+    cancel: 'Cancel',
+  },
+  refused: {
+    title: 'That link isn’t allowed',
+    dismiss: 'Dismiss',
+  },
+  panel: {
+    label: 'Block settings',
+    empty: 'Select a block or a link to change it.',
+    close: 'Close settings',
+    name: 'Name',
+    nameHint: 'What the board and the ticket page call this block.',
+    helperNameHint:
+      'Plan steps name this helper, so give it a clear role, for example “Frontend helper”.',
+    nameRequired: 'Give the block a name.',
+    nameTooLong: (max: number) => `Use at most ${formatCount(max)} characters.`,
+    descriptionTooLong: (max: number) => `Use at most ${formatCount(max)} characters.`,
+    shapeProblem: (label: string) =>
+      `“${label}” has a setting that can’t be saved. Check its settings.`,
+    nameProblem: (label: string) => `A block needs a name of 1 to 40 characters (“${label}”).`,
+    modelHint: 'Leave empty to use the agent file’s model, else the project default.',
+    modelDefault: 'Claude Code’s default',
+    modelFromFile: (model: string) => `From agent file: ${model}`,
+    modelTooLong: 'Use a shorter model name (at most 100 characters).',
+    skills: 'Skills',
+    skillsHint: (max: number) => `Up to ${formatCount(max)} of the project’s skills.`,
+    skillsNone: 'The project has no skills yet.',
+    skillsFull: (max: number) => `${formatCount(max)} skills chosen, the most a block can use.`,
+    skillMissingTip: (name: string) =>
+      `The skill “${name}” is no longer in this project. The agent starts without it.`,
+    removeSkill: (name: string) => `Remove ${name}`,
+    manage: 'Open Skills & Agents',
+    agentFile: 'Agent file',
+    agentFileNone: 'None',
+    agentFileHint:
+      'Its instructions are added to this agent, and its model is used when the block has none. Its tools can only narrow what this kind of block may do.',
+    agentFileMissing: 'Agent file not found: the agent starts without it.',
+    mode: 'Approval mode',
+    modeProjectDefault: (mode: string | null) =>
+      mode === null ? 'Project default' : `Project default (${mode})`,
+    modeProjectDefaultHint: 'Uses the project’s approval mode, set under Project defaults below.',
+    modeCareful:
+      'Ticket and run settings can only make this block more careful, never less. A block set to Full auto keeps the sandbox for its commands even then.',
+    readOnlyMode:
+      'This block never changes a file, so it never asks for approvals: it has no approval mode.',
+    description: 'What this helper is for',
+    descriptionHint: 'The lead and the planner read this when they hand out the plan’s steps.',
+    maxInstances: 'Helpers of this block at once',
+    maxInstancesHint: (limit: number) =>
+      `The project’s helper limit (${formatCount(limit)}) still applies on top.`,
+    maxInstancesValue: (n: number) => countOf(n, 'helper', 'helpers'),
+    canStartHelpers: 'May start its own helpers',
+    canStartHelpersHint:
+      'Helpers from this block may start helpers of their own, within the project’s helper depth.',
+    scope: 'What it reviews',
+    scopes: {
+      change: 'Each change',
+      final: 'The merged ticket, at the end',
+    },
+    scopeHints: {
+      change: 'Reads each change it is sent and passes its findings to the lead before it merges.',
+      final: 'Reads the merged ticket branch once and posts its findings as ticket comments.',
+    },
+    planAuto: 'Approve plans automatically',
+    planAutoHint:
+      'The plan is approved without asking you, but only when the ticket or run is set to Full auto: a more careful ticket or run still asks you.',
+    remove: 'Remove block',
+    fixed: 'Every workflow has this block, so it can’t be removed.',
+    links: 'Links from this block',
+    noLinks: 'No links from this block yet.',
+    addLink: 'Add a link',
+    linkTo: 'To',
+    linkType: 'Kind of link',
+    linkToNone: 'No block can be linked from here.',
+    linkAdd: 'Add link',
+    removeLink: (name: string) => `Remove link ${name}`,
+  },
+  edgePanel: {
+    label: 'Link settings',
+    rounds: 'Rework rounds',
+    roundsHint:
+      'How often the change can be sent back. 0: it can only be merged or discarded. Ticket and run settings can change this for one run.',
+    roundsValue: (n: number) =>
+      n === 0 ? 'No rework' : countOf(n, 'rework round', 'rework rounds'),
+    remove: 'Remove link',
+  },
+  issues: {
+    title: 'Problems',
+    tip: 'The workflow is checked as you change it. Problems must be fixed before you can save; warnings are for your information.',
+    none: 'No problems. The workflow can be saved.',
+    summary: (errors: number, warnings: number) =>
+      [
+        errors > 0 ? countOf(errors, 'problem to fix', 'problems to fix') : null,
+        warnings > 0 ? countOf(warnings, 'warning') : null,
+      ]
+        .filter((p) => p !== null)
+        .join(' · '),
+    error: 'Problem',
+    warning: 'Warning',
+    show: 'Show',
+    server: 'The server refused the workflow:',
+  },
+  templates: {
+    button: 'Templates…',
+    title: 'Start from a template',
+    description:
+      'Replaces the blocks and links in the editor. Nothing is saved until you press Save.',
+    legend: 'Template',
+    styles: {
+      'lead-only': 'The lead reviews and merges.',
+      'todays-setup': 'A reviewer checks, the lead decides.',
+      'reviewer-helper-loop':
+        'The reviewer sends changes back to the helper, then the lead merges.',
+    } satisfies Record<WorkflowTemplateId, string>,
+    planner: 'Add a planner',
+    plannerHint:
+      'A read-only planner writes the plan, and the lead starts once you approve it. Off: the lead writes the plan itself.',
+    use: 'Use this template',
+    restoreTitle: 'Restore my earlier setup',
+    restoreText:
+      'Rebuilds the workflow from the settings this project had before workflows could be drawn.',
+    restore: 'Restore my earlier setup',
+    confirm: 'This replaces your unsaved changes in the editor.',
+    replace: 'Replace',
+    cancel: 'Cancel',
+  },
+  save: {
+    save: 'Save',
+    saving: 'Saving…',
+    discard: 'Discard changes',
+    unsaved: 'Unsaved changes',
+    saved: 'Saved',
+    blocked: 'Fix the problems to save.',
+    leave: 'You have unsaved changes to the workflow. Leave without saving them?',
+    refused: 'The workflow wasn’t saved.',
+  },
+  defaults: {
+    title: 'Project defaults',
+    description: 'Limits and approvals for every helper and tester in this project.',
+    tip: 'Shared with Settings. A block set to “Project default” uses this approval mode.',
+    saveTitle: 'Save project defaults',
+  },
+  legend: {
+    label: 'Legend',
+    agent: 'An agent',
+    you: 'You or a step',
+  },
+  wizard: {
+    legend: 'How changes are reviewed',
+    hint: 'You can change the workflow on the Workflow page at any time.',
+    buildOwn: 'Build my own',
+    buildOwnHint: 'Starts from today’s setup. Change it on the Workflow page after setup.',
+    failed: 'The workflow wasn’t saved. Try again, or set it up later on the Workflow page.',
   },
 } as const;

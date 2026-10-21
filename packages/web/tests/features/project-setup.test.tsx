@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { WorkflowGraphSchema, validateWorkflowGraph } from '@acp/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NewProjectWizard } from '../../src/features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../../src/features/project-setup/ProjectSettings';
@@ -137,6 +138,72 @@ describe('New project wizard (#/projects/new)', () => {
     expect(s.calls.filter((c) => c.path === '/api/projects' && c.method === 'POST')).toHaveLength(
       1,
     );
+  });
+
+  it('WG-D: the workflow choice in step 2 is saved as the project’s graph on finish', async () => {
+    let refuse = true;
+    const s = server({
+      'POST /api/projects': (body: unknown) =>
+        jsonResponse(201, project({ id: PROJECT_ID, ...(body as object) })),
+      [`PUT ${P}/workflow-graph`]: (body: unknown) =>
+        refuse
+          ? jsonResponse(500, { error: { code: 'internal', message: 'disk full', requestId: 'r' } })
+          : jsonResponse(200, {
+              graph: (body as { graph: unknown }).graph,
+              stored: 'v2',
+              issues: [],
+              setup: setup(),
+              skills: [],
+              agents: [],
+              updatedAt: '2026-10-13T10:00:00.000Z',
+            }),
+    });
+    renderWithApi(<NewProjectWizard />, s);
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'web-app' } });
+    fireEvent.change(screen.getByLabelText('Folder path'), { target: { value: '/work/web-app' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add project' }));
+
+    // Step 2: the three templates with their review styles, "Build my own", the planner switch.
+    const agents = await step('agents');
+    await within(agents).findByLabelText('Ticket prefix');
+    const choice = within(agents).getByTestId('wizard-workflow');
+    expect(within(choice).getByLabelText<HTMLInputElement>(/^Today’s setup/).checked).toBe(true);
+    expect(within(choice).getByText(/The lead reviews and merges/)).toBeTruthy();
+    expect(within(choice).getByText(/A reviewer checks, the lead decides/)).toBeTruthy();
+    expect(
+      within(choice).getByText(
+        /The reviewer sends changes back to the helper, then the lead merges/,
+      ),
+    ).toBeTruthy();
+    expect(within(choice).getByLabelText(/^Build my own/)).toBeTruthy();
+    fireEvent.click(within(choice).getByLabelText(/^Reviewer ↔ helper loop/));
+    fireEvent.click(within(choice).getByLabelText('Add a planner'));
+    next();
+    const allow = await step('allowlist');
+    fireEvent.click(within(allow).getByLabelText(/^Full auto/));
+    next();
+    await step('context');
+    next();
+    await step('harness');
+    expect(s.calls.some((c) => c.path === `${P}/workflow-graph`)).toBe(false);
+
+    // A refused save keeps you here and says so; the next try saves and opens the board.
+    fireEvent.click(screen.getByRole('button', { name: 'Finish and open the board' }));
+    expect(await screen.findByText(/The workflow wasn’t saved/)).toBeTruthy();
+    expect(window.location.hash).not.toBe(`#/p/${PROJECT_ID}/board`);
+    refuse = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Finish and open the board' }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/board`));
+    const put = s.calls
+      .filter((c) => c.method === 'PUT' && c.path === `${P}/workflow-graph`)
+      .at(-1);
+    const graph = WorkflowGraphSchema.parse((put?.body as { graph: unknown }).graph);
+    expect(graph.template).toBe('reviewer-helper-loop');
+    expect(graph.nodes.some((n) => n.type === 'planner')).toBe(true);
+    // A Full auto project: the plan step approves automatically, as before graphs.
+    expect(graph.nodes.find((n) => n.type === 'plan-approval')).toMatchObject({ auto: true });
+    expect(validateWorkflowGraph(graph, { projectMode: 'full-auto' })).toEqual([]);
+    expect(s.csrf.at(-1)).toBe(CSRF);
   });
 
   it('creates a new repository, with sentence validation before calling the server', async () => {

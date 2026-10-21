@@ -155,15 +155,17 @@ describe('ticket run options (RL-H)', () => {
     });
   });
 
-  it("the one-run override wins over the ticket's options", async () => {
+  it("the one-run override wins over the ticket's reviewer and rounds; both modes only tighten", async () => {
     const s = await setupBoard({ files: FILES });
     await projectDefaults(s, 'full-auto', { reviewer: 'agent', maxReworkRounds: 2 });
     const t = await s.createTicket('Careful', {
       runOptions: { approvalMode: 'manual', reviewer: 'lead', maxReworkRounds: 1 },
     });
+    // ADR-0023 §5: the ticket's Manual and the run's Auto edits are both ceilings; the stricter
+    // one holds (before graphs the run's override replaced the ticket's mode).
     const detail = await startRun(s, t, { approvalMode: 'auto-edits', maxReworkRounds: 3 });
     expect(detail).toMatchObject({
-      approvalMode: 'auto-edits',
+      approvalMode: 'manual',
       reviewer: 'lead',
       maxReworkRounds: 3,
     });
@@ -172,6 +174,17 @@ describe('ticket run options (RL-H)', () => {
       approvalMode: 'manual',
       reviewer: 'lead',
       maxReworkRounds: 1,
+    });
+  });
+
+  it('a ticket or run mode looser than the project never loosens it (ADR-0023 §5)', async () => {
+    const s = await setupBoard({ files: FILES });
+    await projectDefaults(s, 'auto-edits', { reviewer: 'agent', maxReworkRounds: 2 });
+    const loose = await s.createTicket('Loose', { runOptions: { approvalMode: 'full-auto' } });
+    expect(await startRun(s, loose)).toMatchObject({ approvalMode: 'auto-edits' });
+    const once = await s.createTicket('Once');
+    expect(await startRun(s, once, { approvalMode: 'auto' })).toMatchObject({
+      approvalMode: 'auto-edits',
     });
   });
 

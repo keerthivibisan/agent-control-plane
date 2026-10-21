@@ -83,7 +83,8 @@ describe('checks and the merge gate', () => {
   });
 
   it('blocks on a failed, timed-out or unrunnable required check, never on an optional one', () => {
-    for (const status of ['failed', 'timed-out', 'error'] as const) {
+    // A legacy run's gate has no "not run yet": a check the app's shutdown stopped blocks (WG-F3).
+    for (const status of ['failed', 'timed-out', 'error', 'interrupted'] as const) {
       const gate = mergeGate([check({ id: 'x', checkId: 'build', status })]);
       expect(gate.kind).toBe('blocked');
     }

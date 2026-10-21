@@ -1,11 +1,15 @@
 import type {
   AgentRunStatus,
+  CompileContext,
   OrchestrationRun,
   PermissionDecision,
   ProjectApprovals,
   ProjectWorkflow,
   RunStatus,
   TicketPlan,
+  WorkflowGraph,
+  WorkflowNodeId,
+  WorkflowProgram,
 } from '@acp/core';
 import { agentBudgetUsage, budgetOvershoot, isOverBudget } from './budget.js';
 import type { UsageLedger } from './budget.js';
@@ -26,16 +30,17 @@ import {
 } from './loop.js';
 import { agentDepth, childrenOf, descendantsOf } from './tree.js';
 import {
+  finalStageRole,
   hasReviewableChange,
   isSeparatePlanner,
   isStageAgent,
+  launchFieldsFor,
   nextStage,
-  launchFields,
   reviewerBrief,
   testerBrief,
   TESTER_TASK,
 } from './stages.js';
-import type { PostMergeStage } from './stages.js';
+import { agentLaunchMode, finalStageNode, programOf } from './program.js';
 import type {
   ApprovalDecider,
   EngineAgent,
@@ -81,6 +86,11 @@ export class Draft {
   handoverPrompted: boolean;
   /** The run's approval policy (`RunState.approvalPolicy`, ADR-0021). */
   readonly approvalPolicy: ProjectApprovals | undefined;
+  /** The run's graph snapshot and its compile context (`RunState.graph`, ADR-0023). */
+  readonly graph: WorkflowGraph | undefined;
+  readonly graphContext: CompileContext | undefined;
+  /** Helper nodes of each submitted plan's steps (`RunState.planStepHelpers`). */
+  planStepHelpers: Record<string, readonly WorkflowNodeId[]> | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -111,12 +121,34 @@ export class Draft {
     this.integration = state.integration === undefined ? undefined : { ...state.integration };
     this.handoverPrompted = state.handoverPrompted === true;
     this.approvalPolicy = state.approvalPolicy;
+    this.graph = state.graph;
+    this.graphContext = state.graphContext;
+    this.planStepHelpers =
+      state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.nowIso = ctx.now.toISOString();
   }
 
   get now(): string {
     return this.nowIso;
+  }
+
+  /** The run's compiled workflow program (ADR-0023; memoized per snapshot). */
+  program(): WorkflowProgram {
+    return programOf(this);
+  }
+
+  /**
+   * ADR-0023 §5: a graph run's `start-agent` fields for a helper or tester (auto mode, sandbox).
+   * Version 1 runs get none: their Full auto stays run-level, as before.
+   */
+  launchModeFields(agent: EngineAgent): { autoMode?: true; sandbox?: true } {
+    if (this.graph === undefined) return {};
+    const launch = agentLaunchMode(this, agent);
+    return {
+      ...(launch.autoMode ? { autoMode: true as const } : {}),
+      ...(launch.sandbox ? { sandbox: true as const } : {}),
+    };
   }
 
   agent(id: string): EngineAgent | undefined {
@@ -465,20 +497,22 @@ export class Draft {
    * ADR-0021 (loop runs): the lead stays live; the reviewer reads a detached checkout of the
    * ticket branch tip (`reviewScope: 'final'`) and the tester's worktree starts from that tip.
    */
-  private startStage(stage: PostMergeStage): void {
+  private startStage(stage: WorkflowNodeId): void {
+    const node = finalStageNode(this.program(), stage);
+    if (node === undefined) return;
     // A reviewer that just ended gives back its checkout before the next stage starts.
     this.flushCheckoutRemovals();
     const lead = this.lead();
     const loop = this.integration;
     if (lead !== undefined && loop === undefined) this.endAgent(lead, 'CANCELLED', true);
     const branch = loop?.ticketBranch ?? null;
-    const kind = stage === 'code-review' ? 'reviewer' : 'tester';
+    const kind = node.kind === 'reviewer' ? 'reviewer' : 'tester';
     const agent: EngineAgent = {
       id: this.freshId(),
       runId: this.run.id,
       parentAgentRunId: null,
       kind,
-      role: kind === 'reviewer' ? 'Reviewer' : 'Tester',
+      role: finalStageRole(node),
       task: kind === 'tester' ? TESTER_TASK : null,
       status: 'QUEUED',
       sessionId: null,
@@ -489,7 +523,7 @@ export class Draft {
       latestActivity: null,
       review: null,
       reportedCostUsd: null,
-      stage,
+      stage: node.id,
     };
     if (kind === 'reviewer') agent.reviewPosts = 0;
     this.agents.push(agent);
@@ -515,8 +549,9 @@ export class Draft {
       agentRunId: agent.id,
       kind,
       role: agent.role,
-      ...launchFields(brief, this.workflow, kind),
+      ...launchFieldsFor(this.program(), node.id, brief),
       ...loopFields,
+      ...(kind === 'tester' ? this.launchModeFields(agent) : {}),
     });
   }
 
@@ -544,6 +579,9 @@ export class Draft {
     if (this.integration !== undefined) state.integration = this.integration;
     if (this.handoverPrompted) state.handoverPrompted = true;
     if (this.approvalPolicy !== undefined) state.approvalPolicy = this.approvalPolicy;
+    if (this.graph !== undefined) state.graph = this.graph;
+    if (this.graphContext !== undefined) state.graphContext = this.graphContext;
+    if (this.planStepHelpers !== undefined) state.planStepHelpers = this.planStepHelpers;
     return state;
   }
 

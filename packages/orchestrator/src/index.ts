@@ -87,11 +87,28 @@ export {
   activeHelperCount,
   changeSummary,
   isFinalChangeState,
+  leadRoundLimit,
+  leadRoundsUsed,
   undecidedChanges,
   viewChangeReply,
 } from './loop.js';
 export type { ChangeAction, DecisionInput } from './loop.js';
-export { deriveRunWorkflow } from './run-workflow.js';
+export { deriveRunWorkflow, deriveRunWorkflowGraph } from './run-workflow.js';
+export {
+  agentLaunchMode,
+  agentNodeId,
+  editingNodeOf,
+  effectiveMode,
+  helperNodeLines,
+  helperNodeOf,
+  programFullAuto,
+  programOf,
+  resolveHelper,
+  reviewRouteOf,
+  runGraphOf,
+} from './program.js';
+export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';
+export { helperBriefLines } from './briefs.js';
 export {
   MAX_REVIEW_POSTS,
   REVIEW_POST_MAX_CHARS,
@@ -100,8 +117,11 @@ export {
   TESTER_TASK,
   changeReviewerBrief,
   changeReviewerLaunchFields,
+  finalStageRole,
+  hasFinalStages,
   isChangeReviewer,
   isStageAgent,
+  launchFieldsFor,
   nextStage,
   planningAgent,
   pluginSkillName,

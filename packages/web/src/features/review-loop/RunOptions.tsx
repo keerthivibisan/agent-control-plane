@@ -4,21 +4,30 @@ import {
   ChangeReviewerModeSchema,
   MAX_REWORK_ROUNDS,
   compactRunOptions,
+  type ApprovalMode,
   type RunOptions,
   type TicketRunOptions,
 } from '@acp/core';
 import type { TicketDto } from '@acp/core/api';
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
 import { hintClass, inputClass, labelClass } from '../../components/Input';
-import { updateTicket, workflowPaths, workflowSchemas } from '../../lib/api';
-import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY } from '../../lib/copy';
+import { updateTicket, workflowGraphPaths, workflowGraphSchemas } from '../../lib/api';
+import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
-import { AutoRunWarning, FullAutoWarning } from './ApprovalsEditor';
-import { optionsBadge, projectRunDefaults, runOptionsPatch } from './logic';
+import { FullAutoWarning } from './ApprovalsEditor';
+import {
+  blockModesOf,
+  optionsBadge,
+  projectRunDefaults,
+  runLimitNoEffect,
+  runOptionsPatch,
+  type BlockModes,
+  type NoEffectReason,
+} from './logic';
 
 /*
  * A ticket's own run options (RL-H): its approval mode, reviewer and rework rounds, each
@@ -29,18 +38,65 @@ import { optionsBadge, projectRunDefaults, runOptionsPatch } from './logic';
 const C = TICKET_OPTIONS_COPY;
 const M = REVIEW_LOOP_COPY.modes;
 const R = REVIEW_LOOP_COPY.review;
+const L = WORKFLOW_LIVE_COPY.ceiling;
 const ROUNDS: readonly number[] = Array.from({ length: MAX_REWORK_ROUNDS + 1 }, (_, i) => i);
-const MODE_RANK = { manual: 0, 'auto-edits': 1, auto: 2, 'full-auto': 3 } as const;
 /** The select value meaning "Project default" (nothing stored). */
 const DEFAULT = '';
 
 /**
- * The project's settings that "Project default" follows, from the cached workflow query. Null
- * while loading or when it can't be read: the screens then say "Project default" without a value.
+ * The project's workflow graph (`GET /workflow-graph`, the editor's cached query), which answers
+ * for every project: a stored graph, or the version 1 or default workflow migrated. The run
+ * options read the project's defaults and the blocks' own modes from it (WG-F). `null` skips it.
  */
-export function useProjectRunDefaults(projectId: string): RunOptions | null {
-  const q = useApiQuery(workflowPaths.workflow(projectId), workflowSchemas.workflow);
-  return q.data === undefined ? null : projectRunDefaults(q.data);
+export function useProjectGraph(projectId: string | null) {
+  return useApiQuery(
+    projectId === null ? null : workflowGraphPaths.graph(projectId),
+    workflowGraphSchemas.graph,
+  );
+}
+
+/**
+ * The project's editing blocks' own modes (ADR-0023), from its workflow graph. Undefined while it
+ * loads, and when it can't be read: the screens then say nothing about the blocks.
+ */
+export function useBlockModes(projectId: string): BlockModes | undefined {
+  const q = useProjectGraph(projectId);
+  return useMemo(() => (q.data === undefined ? undefined : blockModesOf(q.data)), [q.data]);
+}
+
+/** The project's run settings, and what its blocks' own modes are once known (ADR-0023). */
+export type RunDefaults = RunOptions & { blocks?: BlockModes | undefined };
+
+/**
+ * The project's settings that "Project default" follows, from its cached graph query. Null while
+ * loading or when it can't be read: the screens then say "Project default" without a value.
+ */
+export function useProjectRunDefaults(projectId: string): RunDefaults | null {
+  const q = useProjectGraph(projectId);
+  return useMemo(
+    () =>
+      q.data === undefined ? null : { ...projectRunDefaults(q.data), blocks: blockModesOf(q.data) },
+    [q.data],
+  );
+}
+
+/**
+ * "No block is set looser than Auto edits, so at most Full auto changes nothing", or the same for
+ * a run limit looser than the ticket's own.
+ */
+export function NoEffectNote({ mode, reason }: { mode: ApprovalMode; reason: NoEffectReason }) {
+  return (
+    <p
+      role="note"
+      className="rounded-control border border-line bg-sunken px-3 py-2 text-caption text-dim"
+      data-testid="mode-no-effect"
+      data-by={reason.by}
+    >
+      {reason.by === 'ticket'
+        ? L.noEffectTicket(M.word[mode], M.word[reason.limit])
+        : L.noEffect(M.word[mode], M.word[reason.loosest])}
+    </p>
+  );
 }
 
 function SelectField({
@@ -92,19 +148,21 @@ export function RunOptionsFields({
 }: {
   value: TicketRunOptions;
   onChange: (next: TicketRunOptions) => void;
-  defaults: RunOptions | null;
+  defaults: RunDefaults | null;
   collapse?: boolean;
 }) {
   const set = (patch: TicketRunOptions) => onChange(compactRunOptions({ ...value, ...patch }));
-  const effectiveMode = value.approvalMode ?? defaults?.approvalMode;
-  const wider =
-    value.approvalMode !== undefined &&
-    defaults !== null &&
-    MODE_RANK[value.approvalMode] > MODE_RANK[defaults.approvalMode];
+  const blocks = defaults?.blocks;
+  // A ticket's own limit: only the blocks can make it change nothing.
+  const noEffect =
+    value.approvalMode === undefined
+      ? null
+      : runLimitNoEffect(value.approvalMode, blocks, undefined);
   const review = (
     <div className="grid gap-4 sm:grid-cols-2">
       <SelectField
         label={C.reviewer}
+        hint={L.ticketReviewerHint}
         value={value.reviewer ?? DEFAULT}
         onChange={(v) =>
           set({ reviewer: v === DEFAULT ? undefined : ChangeReviewerModeSchema.parse(v) })
@@ -121,6 +179,7 @@ export function RunOptionsFields({
       </SelectField>
       <SelectField
         label={C.rounds}
+        hint={L.ticketRoundsHint}
         value={value.maxReworkRounds === undefined ? DEFAULT : String(value.maxReworkRounds)}
         onChange={(v) => set({ maxReworkRounds: v === DEFAULT ? undefined : Number(v) })}
       >
@@ -138,26 +197,25 @@ export function RunOptionsFields({
   return (
     <div className="flex flex-col gap-3" data-testid="run-options-fields">
       <SelectField
-        label={C.mode}
-        hint={C.modeHint}
+        label={L.legend}
+        hint={L.ticketHint}
         value={value.approvalMode ?? DEFAULT}
         onChange={(v) =>
           set({ approvalMode: v === DEFAULT ? undefined : ApprovalModeSchema.parse(v) })
         }
       >
-        <option value={DEFAULT}>
-          {C.projectDefault(defaults === null ? null : M.word[defaults.approvalMode])}
-        </option>
+        <option value={DEFAULT}>{L.noLimitOption}</option>
         {APPROVAL_MODES.map((m) => (
           <option key={m} value={m}>
             {M.word[m]}
           </option>
         ))}
       </SelectField>
-      {value.approvalMode !== undefined && effectiveMode === 'full-auto' ? (
+      {noEffect !== null && value.approvalMode !== undefined ? (
+        <NoEffectNote mode={value.approvalMode} reason={noEffect} />
+      ) : blocks === undefined && value.approvalMode === 'full-auto' ? (
+        // The graph could not be read, so the blocks are unknown: keep Full auto's warning.
         <FullAutoWarning />
-      ) : wider ? (
-        <AutoRunWarning />
       ) : null}
       {collapse ? (
         <Details summary={C.more} testId="run-options-more" defaultOpen={hasReviewOptions(value)}>
@@ -224,12 +282,13 @@ export function TicketRunOptionsSection({
       <p className="text-caption text-dim">{S.note}</p>
       {draft === null ? (
         <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
-          <dt className="text-dim">{C.mode}</dt>
+          <dt className="text-dim">{L.rowLabel}</dt>
           <dd data-testid="run-option-mode">
-            <OptionValue
-              own={own.approvalMode === undefined ? undefined : M.word[own.approvalMode]}
-              word={defaults === null ? null : M.word[defaults.approvalMode]}
-            />
+            {own.approvalMode === undefined ? (
+              <span className="text-dim">{L.noLimitOption}</span>
+            ) : (
+              <OptionValue own={M.word[own.approvalMode]} word={null} />
+            )}
           </dd>
           <dt className="text-dim">{C.reviewer}</dt>
           <dd data-testid="run-option-reviewer">
@@ -284,10 +343,7 @@ export function RunOptionsBadge({
   ticket: Pick<TicketDto, 'projectId' | 'runOptions'>;
 }) {
   const own = compactRunOptions(ticket.runOptions);
-  const q = useApiQuery(
-    Object.keys(own).length > 0 ? workflowPaths.workflow(ticket.projectId) : null,
-    workflowSchemas.workflow,
-  );
+  const q = useProjectGraph(Object.keys(own).length > 0 ? ticket.projectId : null);
   // Nothing while the project's settings load, so a chip never flashes; if they can't be read,
   // every option the ticket sets shows.
   if (q.data === undefined && q.error === null) return null;

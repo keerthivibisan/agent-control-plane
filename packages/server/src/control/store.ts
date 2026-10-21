@@ -26,7 +26,7 @@ import {
   type EngineEffect,
   type RunState,
 } from '@acp/orchestrator';
-import type { OrchestrationRun, TicketPlan } from '@acp/core';
+import type { OrchestrationRun, PlanStep, TicketPlan, WorkflowNodeId } from '@acp/core';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -133,7 +133,8 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       state.stagesHeld !== true &&
       state.integration === undefined &&
       state.approvalPolicy === undefined &&
-      autoApprovedPlanOf(state) === undefined
+      autoApprovedPlanOf(state) === undefined &&
+      state.graph === undefined
     ) {
       return null;
     }
@@ -151,6 +152,11 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     // ADR-0022: which plan Full auto approved (the plans table has no decider column).
     const autoPlan = autoApprovedPlanOf(state);
     if (autoPlan !== undefined) snapshot.autoApprovedPlanId = autoPlan;
+    // ADR-0023: the graph and its compile context, so a restart compiles the same program.
+    if (state.graph !== undefined && state.graphContext !== undefined) {
+      snapshot.graph = state.graph;
+      snapshot.graphContext = state.graphContext;
+    }
     return snapshot;
   }
 
@@ -317,7 +323,11 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
    * database never holds two proposed plans for a run. The engine numbers versions the same way
    * the repository does; a mismatch means memory and database disagree, and the commit fails.
    */
-  function syncPlans(prev: readonly TicketPlan[], next: readonly TicketPlan[]): void {
+  function syncPlans(
+    prev: readonly TicketPlan[],
+    next: readonly TicketPlan[],
+    stepHelpers: RunState['planStepHelpers'],
+  ): void {
     const before = new Map(prev.map((p) => [p.id, p]));
     for (const plan of next) {
       const old = before.get(plan.id);
@@ -336,7 +346,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           ticketId: plan.ticketId,
           runId: plan.runId,
           summary: plan.summary,
-          steps: [...plan.steps],
+          steps: withStepHelpers(plan.steps, stepHelpers?.[plan.id]),
         }),
       );
       if (stored.version !== plan.version) {
@@ -488,7 +498,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         for (const approval of next.approvals) {
           syncApproval(prevApprovals.get(approval.id), approval);
         }
-        syncPlans(prev?.plans ?? [], next.plans ?? []);
+        syncPlans(prev?.plans ?? [], next.plans ?? [], next.planStepHelpers);
         applyDataEffects(next, effects);
       });
     },
@@ -553,9 +563,15 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         if (snapshot.stagesHeld === true) state.stagesHeld = true;
         if (snapshot.approvals !== undefined) state.approvalPolicy = snapshot.approvals;
         if (snapshot.integration !== undefined) state.integration = { ...snapshot.integration };
+        if (snapshot.graph !== undefined && snapshot.graphContext !== undefined) {
+          state.graph = snapshot.graph;
+          state.graphContext = snapshot.graphContext;
+        }
       }
       if (run.ticketId !== null) {
         state.plans = withPlanDeciders(workspaceRepos.plans.listForRun(runId), snapshot);
+        const stepHelpers = stepHelpersOf(state.plans);
+        if (stepHelpers !== undefined) state.planStepHelpers = stepHelpers;
       }
       return state;
     },
@@ -577,4 +593,33 @@ export function withPlanDeciders(
 ): TicketPlan[] {
   const auto = snapshot?.autoApprovedPlanId;
   return plans.map((p) => (auto !== undefined && p.id === auto ? { ...p, decidedBy: 'auto' } : p));
+}
+
+/**
+ * ADR-0023 §7: a plan's steps as stored, each with the helper node the engine resolved for it at
+ * submit (`RunState.planStepHelpers`, in step order), so the node survives a restart. Steps keep
+ * no helper when the engine kept none (version 1 runs and graphs without named helpers).
+ */
+function withStepHelpers(
+  steps: readonly PlanStep[],
+  helpers: readonly WorkflowNodeId[] | undefined,
+): PlanStep[] {
+  return steps.map((step, i) => {
+    const helper = helpers?.[i];
+    return helper === undefined ? { ...step } : { ...step, helper };
+  });
+}
+
+/** The engine's per-plan step nodes, from plans whose every step has a stored helper node. */
+function stepHelpersOf(
+  plans: readonly TicketPlan[],
+): Record<string, readonly WorkflowNodeId[]> | undefined {
+  const out: Record<string, readonly WorkflowNodeId[]> = {};
+  for (const plan of plans) {
+    const helpers = plan.steps.map((s) => s.helper);
+    if (helpers.length > 0 && helpers.every((h): h is WorkflowNodeId => h !== undefined)) {
+      out[plan.id] = helpers;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }

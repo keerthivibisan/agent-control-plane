@@ -80,6 +80,15 @@ export interface ManagedAgentSpec {
    * lead, planner and reviewers, which always keep the default mode.
    */
   fullAuto?: FullAutoSpec;
+  /**
+   * ADR-0023 §5, for a `worker` or `tester` only: its workflow block is configured as Full auto but
+   * a ticket or run tightened it. The same operating-system sandbox, deny rules and temp folder as
+   * `fullAuto`, while the session stays in `permissionMode: 'default'`, so the server's gate
+   * decides every request by the tightened mode: tightening never removes a protection. Never set
+   * together with `fullAuto`. If the sandbox cannot start, the agent ends with `finished.failure`.
+   * Ignored for the lead, planner and reviewers, and for follow-ups.
+   */
+  sandbox?: FullAutoSpec;
 }
 
 /** The sandbox paths of a Full auto agent (`ManagedAgentSpec.fullAuto`, ADR-0022). */

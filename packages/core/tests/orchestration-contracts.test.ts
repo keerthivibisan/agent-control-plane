@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AgentRunSchema,
+  ChangeDeciderSchema,
   DEFAULT_AGENT_BUDGET_TOKENS,
   LEAD_TOOL_NAMES,
   LeadToolInputs,
@@ -67,6 +68,26 @@ describe('lead tools', () => {
     expect(
       LeadToolInputs.message_agent.safeParse({ agentId: 'a', text: 'x'.repeat(4001) }).success,
     ).toBe(false);
+  });
+
+  it('start_agent and plan steps may name a helper node (ADR-0023 §7)', () => {
+    const start = LeadToolInputs.start_agent;
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: 'frontend' }).success).toBe(true);
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: 'Frontend' }).success).toBe(false);
+    expect(start.safeParse({ role: 'UI', task: 'x', helper: '' }).success).toBe(false);
+    const step = { title: 'Toggle', role: 'UI', detail: '' };
+    const plan = LeadToolInputs.submit_plan;
+    expect(plan.safeParse({ summary: 's', steps: [step] }).success).toBe(true);
+    expect(plan.safeParse({ summary: 's', steps: [{ ...step, helper: 'frontend' }] }).success).toBe(
+      true,
+    );
+    expect(plan.safeParse({ summary: 's', steps: [{ ...step, helper: '1x' }] }).success).toBe(
+      false,
+    );
+  });
+
+  it('a change reviewer can be the decider of a round (ADR-0023 §4, route direct)', () => {
+    expect(ChangeDeciderSchema.options).toEqual(['lead', 'owner', 'reviewer']);
   });
 
   it('post_review takes plain text up to the ticket comment limit (decision B)', () => {

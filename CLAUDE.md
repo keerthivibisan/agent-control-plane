@@ -11,7 +11,8 @@ This file adds Claude Code-specific working notes.
 0. If `HANDOFF.md` exists, read it first. It records the latest state, the unmerged branches, and
    ready-to-paste prompts for the remaining work.
 1. Run `git status` and `git log --oneline -5`. Know your branch and what changed.
-2. Open `docs/implementation-plan.md` and read the **Status** table.
+2. Find the current plan: AGENTS.md §1 names the active series and its STATUS file (for v0.2.0,
+   `docs/workflow-graph/STATUS.md`). Older phases use `docs/implementation-plan.md`.
    - If the user named a work package (WP), work only on that WP.
    - If they didn't, ask which WP to take. Don't pick one silently.
 3. Read the spec sections your WP cites before writing code. For a new WP, enter plan mode first and
@@ -30,7 +31,10 @@ pnpm check
 ```
 
 `pnpm check` runs format:check, lint, typecheck, test, and build. To work on a single package, use
-`pnpm --filter @acp/<name> test` (or `typecheck`/`build`). `pnpm dev` does not exist until P1-D7.
+`pnpm --filter @acp/<name> test` (or `typecheck`/`build`). `pnpm dev` runs the app (START.md); never
+use its ports 7420 and 5173 while the owner's app runs there, and never run git write commands in
+the owner's checkout. Agents and the coordinator never touch `main` (the owner merges into it by MR
+in GitHub).
 
 ## Working style for this repo
 

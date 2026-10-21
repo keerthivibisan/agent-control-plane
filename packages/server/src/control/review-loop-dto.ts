@@ -40,6 +40,8 @@ export interface ChangeDtoInput {
   checks: readonly CheckRun[];
   /** The run's snapshotted limit (the owner can grant more; `reworkRounds` may pass it). */
   maxReworkRounds: number;
+  /** ADR-0023: one change's own limit (its node's review route); `maxReworkRounds` otherwise. */
+  maxRoundsOf?: (agentRunId: string) => number;
 }
 
 /** The latest result per check id, in check-id order. */
@@ -61,7 +63,7 @@ export function toChangeReviewDtos(input: ChangeDtoInput): ChangeReviewDto[] {
       role: agent.role,
       state: change.state,
       reworkRounds: change.round,
-      maxReworkRounds: input.maxReworkRounds,
+      maxReworkRounds: input.maxRoundsOf?.(agent.id) ?? input.maxReworkRounds,
       headCommit: head,
       changedFiles: change.changedFiles,
       conflictFiles: change.conflictFiles.slice(0, 100),

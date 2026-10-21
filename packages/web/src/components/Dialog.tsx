@@ -71,7 +71,10 @@ export function Dialog({
               const target = panelRef.current?.querySelector<HTMLElement>('[data-autofocus]');
               if (target) {
                 e.preventDefault();
-                target.focus();
+                // Without preventScroll, a target at the foot of a dialog taller than the window
+                // (the Start dialog's Start button) scrolls the overlay down on open, so the title
+                // and the first choices start hidden above the top (WG-F).
+                target.focus({ preventScroll: true });
               }
             }}
             onCloseAutoFocus={(e) => {

@@ -5,15 +5,14 @@ import {
   MAX_COMMAND_PATTERNS,
   type CommandPattern,
 } from '@acp/core';
-import { ProjectWorkflowDtoSchema, type ProjectWorkflowDto } from '@acp/core/api';
+import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   WF_CSRF,
   WF_PROJECT_ID,
-  defaultWorkflowDto,
+  graphDto,
   setupFixture,
-  workflowFixture,
   SKILLS,
 } from '../../e2e/workflow-fixtures';
 import { setupRequest, limitsDraft } from '../../src/features/workflow/draft';
@@ -23,8 +22,9 @@ import { allowlistFor, checkCommand, startRequest } from '../../src/features/rev
 import { fakeServer, jsonResponse, renderWithApi } from '../helpers';
 
 /*
- * RL-D (ADR-0021): the Workflow page's Approvals editor and review stage, the graph's review-loop
- * additions, and the pure rules behind them. Fixtures are synthetic.
+ * RL-D (ADR-0021): the Workflow page's Approvals editor (in its Project defaults card since WG-D),
+ * the version 1 graph's review-loop additions (the ticket page's live graph), and the pure rules
+ * behind them. Fixtures are synthetic.
  */
 
 beforeAll(() => {
@@ -47,19 +47,15 @@ beforeAll(() => {
 });
 
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
-const WORKFLOW = `${BASE}/workflow`;
+const GRAPH = `${BASE}/workflow-graph`;
 const SETUP = `${BASE}/setup`;
 
-function render(initial: unknown = defaultWorkflowDto()) {
-  let current = ProjectWorkflowDtoSchema.parse(initial);
+/** The Workflow page on the graph DTO; the approvals live in its Project defaults card (WG-D). */
+function render(initial: unknown = graphDto({ setup: setupFixture() })) {
+  let current = WorkflowGraphDtoSchema.parse(initial);
   const s = fakeServer({
     '/api/control/token': { token: WF_CSRF },
-    [WORKFLOW]: () => jsonResponse(200, current),
-    [`PUT ${WORKFLOW}`]: (body: unknown) => {
-      const b = body as Pick<ProjectWorkflowDto['workflow'], 'plannerMode' | 'stages'>;
-      current = { ...current, workflow: { ...current.workflow, ...b } };
-      return jsonResponse(200, current);
-    },
+    [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${SETUP}`]: (body: unknown) => {
       current = { ...current, setup: { ...current.setup, ...(body as object) } };
       return jsonResponse(200, current.setup);
@@ -69,10 +65,12 @@ function render(initial: unknown = defaultWorkflowDto()) {
   return s;
 }
 
-const panel = () => screen.getByRole('complementary', { name: 'Stage settings' });
-const open = async (stage: string) => {
-  fireEvent.click(await screen.findByRole('button', { name: `Change ${stage}`, hidden: true }));
+const panel = () => screen.getByTestId('project-defaults');
+const open = async () => {
+  await screen.findByTestId('project-defaults');
 };
+const saveDefaults = () =>
+  fireEvent.click(within(panel()).getByRole('button', { name: 'Save project defaults' }));
 const puts = (s: ReturnType<typeof render>, path: string) =>
   s.calls.filter((c) => c.method === 'PUT' && c.path === path);
 
@@ -215,10 +213,10 @@ describe('startRequest: only what differs from the project', () => {
   });
 });
 
-describe('Workflow page: Approvals (Helpers panel)', () => {
+describe('Workflow page: Approvals (Project defaults)', () => {
   it('replaces the pre-approved actions with the four modes and their sentences', async () => {
     render();
-    await open('Helpers');
+    await open();
     const editor = within(panel()).getByTestId('approvals-editor');
     expect(within(panel()).queryByText('Pre-approved actions')).toBeNull();
     expect(within(panel()).getByRole('heading', { name: 'Approvals' })).toBeTruthy();
@@ -234,7 +232,7 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
 
   it('Auto edits shows the plain warning; Auto adds the command list', async () => {
     render();
-    await open('Helpers');
+    await open();
     const editor = within(panel()).getByTestId('approvals-editor');
     fireEvent.click(within(editor).getByLabelText(/^Auto edits/));
     expect(within(editor).getByTestId('approvals-warning').textContent).toContain(
@@ -248,7 +246,7 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
 
   it('Full auto shows its own honest warning, no command list, and saves the mode (ADR-0022)', async () => {
     const s = render();
-    await open('Helpers');
+    await open();
     const editor = within(panel()).getByTestId('approvals-editor');
     fireEvent.click(within(editor).getByLabelText(/^Full auto/));
     expect(within(editor).getByText(/Nothing asks you during the run/)).toBeTruthy();
@@ -257,14 +255,14 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
     );
     expect(within(editor).queryByTestId('approvals-warning')).toBeNull();
     expect(within(editor).queryByTestId('command-list')).toBeNull();
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await within(panel()).findByTestId('saved');
+    saveDefaults();
+    await within(panel()).findByTestId('defaults-saved');
     expect(puts(s, SETUP)[0]?.body).toMatchObject({ approvals: { mode: 'full-auto' } });
   });
 
   it('refuses a command inline, adds valid ones, removes one, and saves the approvals', async () => {
     const s = render();
-    await open('Helpers');
+    await open();
     const editor = within(panel()).getByTestId('approvals-editor');
     fireEvent.click(within(editor).getByLabelText(/^AutoLike Auto edits/));
     const input = within(editor).getByRole('textbox', { name: 'Command' });
@@ -305,9 +303,9 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
     fireEvent.click(within(list).getByRole('button', { name: 'Remove make lint' }));
     expect(within(list).getAllByTestId('command-row')).toHaveLength(2);
 
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await within(panel()).findByTestId('saved');
-    expect(puts(s, WORKFLOW)).toHaveLength(0);
+    saveDefaults();
+    await within(panel()).findByTestId('defaults-saved');
+    expect(puts(s, GRAPH)).toHaveLength(0);
     // RL-V: no legacy allowlist with the approvals (the server keeps it in step).
     expect(puts(s, SETUP)[0]?.body).not.toHaveProperty('allowlist');
     expect(puts(s, SETUP)[0]?.body).toMatchObject({
@@ -323,110 +321,21 @@ describe('Workflow page: Approvals (Helpers panel)', () => {
 
   it('Manual saves with nothing pre-approved; a kept list says it is unused', async () => {
     const s = render({
-      ...defaultWorkflowDto(),
+      ...graphDto(),
       setup: setupFixture({
         approvals: { mode: 'auto', commands: [{ argv: ['npm', 'test'], match: 'exact' }] },
       }),
     });
-    await open('Helpers');
+    await open();
     const editor = within(panel()).getByTestId('approvals-editor');
     fireEvent.click(within(editor).getByLabelText(/^Manual/));
     expect(within(editor).getByText('Kept for Auto mode; not used in this mode.')).toBeTruthy();
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await within(panel()).findByTestId('saved');
+    saveDefaults();
+    await within(panel()).findByTestId('defaults-saved');
     expect(puts(s, SETUP)[0]?.body).not.toHaveProperty('allowlist');
     expect(puts(s, SETUP)[0]?.body).toMatchObject({
       approvals: { mode: 'manual', commands: [{ argv: ['npm', 'test'], match: 'exact' }] },
     });
-  });
-});
-
-describe('Workflow page: the review stage', () => {
-  it('shows the reviewer, rework rounds and the review agent’s fields, with the defaults', async () => {
-    render();
-    await open('Review & merge');
-    const fields = within(panel()).getByTestId('review-fields');
-    expect(
-      within(fields).getByLabelText<HTMLInputElement>(/Review agent \(recommended\)/).checked,
-    ).toBe(true);
-    expect(
-      within(fields).getByRole<HTMLInputElement>('radio', { name: '2 rework rounds' }).checked,
-    ).toBe(true);
-    expect(within(fields).getByTestId('review-agent-fields')).toBeTruthy();
-    expect(within(fields).getByRole('combobox', { name: 'Skill' })).toBeTruthy();
-    // The required checks stay on, as before.
-    const box = within(fields).getByRole<HTMLInputElement>('checkbox', {
-      name: 'Required checks must pass',
-    });
-    expect(box.checked && box.disabled).toBe(true);
-    expect(within(panel()).getByText(/merges it into the ticket branch/)).toBeTruthy();
-  });
-
-  it('saves the lead as reviewer with 3 rounds; the review agent fields go away', async () => {
-    const s = render();
-    await open('Review & merge');
-    const fields = within(panel()).getByTestId('review-fields');
-    fireEvent.click(within(fields).getByLabelText(/^The lead/));
-    expect(within(fields).queryByTestId('review-agent-fields')).toBeNull();
-    expect(within(fields).getByText(/no review agent runs/)).toBeTruthy();
-    fireEvent.click(within(fields).getByRole('radio', { name: '3 rework rounds' }));
-    // The graph follows the draft.
-    expect(screen.getByTestId('wf-node-review').getAttribute('data-reviewer')).toBe('lead');
-    expect(
-      within(screen.getByTestId('wf-node-review')).getByText('Up to 3 rework rounds'),
-    ).toBeTruthy();
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await within(panel()).findByTestId('saved');
-    expect(puts(s, SETUP)).toHaveLength(0);
-    expect((puts(s, WORKFLOW)[0]?.body as ProjectWorkflowDto['workflow']).stages.review).toEqual({
-      requireChecks: true,
-      reviewer: 'lead',
-      maxReworkRounds: 3,
-    });
-  });
-
-  it('saves the review agent’s model and skill; an untouched review stage saves as before', async () => {
-    const s = render();
-    await open('Plan');
-    fireEvent.change(within(panel()).getByRole('combobox', { name: 'Skill' }), {
-      target: { value: 'plan-tickets' },
-    });
-    await open('Review & merge');
-    fireEvent.change(within(panel()).getByRole('textbox', { name: /Model/ }), {
-      target: { value: 'claude-sonnet-4' },
-    });
-    fireEvent.change(within(panel()).getByRole('combobox', { name: 'Skill' }), {
-      target: { value: 'code-review' },
-    });
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }));
-    await within(panel()).findByTestId('saved');
-    const body = puts(s, WORKFLOW)[0]?.body as ProjectWorkflowDto['workflow'];
-    expect(body.stages.review).toEqual({
-      requireChecks: true,
-      model: 'claude-sonnet-4',
-      skill: 'code-review',
-    });
-  });
-
-  it('a stored review stage loads into the panel', async () => {
-    render({
-      ...defaultWorkflowDto(),
-      workflow: {
-        ...workflowFixture(),
-        stages: {
-          ...(workflowFixture().stages as object),
-          review: { requireChecks: true, reviewer: 'lead', maxReworkRounds: 0 },
-        },
-      },
-    });
-    await open('Review & merge');
-    const fields = within(panel()).getByTestId('review-fields');
-    expect(within(fields).getByLabelText<HTMLInputElement>(/^The lead/).checked).toBe(true);
-    expect(
-      within(fields).getByRole<HTMLInputElement>('radio', { name: 'No rework: merge or discard' })
-        .checked,
-    ).toBe(true);
-    expect(within(screen.getByTestId('wf-node-review')).getByText('No rework rounds')).toBeTruthy();
   });
 });
 

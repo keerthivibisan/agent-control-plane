@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 import type { WorkflowStageId } from '@acp/core';
-import type { SkillCommitResultDto } from '@acp/core/api';
+import type { NodeUseDto, SkillCommitResultDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Dialog } from '../../components/Dialog';
@@ -8,7 +8,7 @@ import { CheckIcon, ChevronRightIcon, SparkIcon } from '../../components/icons';
 import { inputClass } from '../../components/Input';
 import { RelativeTime } from '../../components/RelativeTime';
 import type { ApiClient } from '../../lib/api';
-import { formatKiB, SKILLS_COPY, stageList } from '../../lib/copy';
+import { blockList, formatKiB, SKILLS_COPY, stageList, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { AgentFileIcon, CommitIcon, DeleteIcon, FileIcon } from '../workflow/icons';
 import { useSkillAction } from './actions';
 import { CardRow, ProblemList, RefusalNotice, StageChips, UncommittedBadge } from './bits';
@@ -164,6 +164,7 @@ export function FileSide({
   file,
   dirty,
   usedBy,
+  usedByNodes,
   details,
   commitFn,
   deleteFn,
@@ -175,6 +176,8 @@ export function FileSide({
   file: SideFile;
   dirty: boolean;
   usedBy?: readonly WorkflowStageId[];
+  /** ADR-0023: the workflow blocks that use the file, when the server says (else `usedBy`). */
+  usedByNodes?: readonly NodeUseDto[] | undefined;
   /** Extra `CardRow`s in the status card (an agent's model). */
   details?: ReactNode;
   commitFn: (client: ApiClient, projectId: string, name: string) => Promise<SkillCommitResultDto>;
@@ -187,7 +190,7 @@ export function FileSide({
   const remove = useSkillAction(projectId, deleteFn, scope);
   const [confirming, setConfirming] = useState(false);
   const [committed, setCommitted] = useState<SkillCommitResultDto | null>(null);
-  const inUse = (usedBy?.length ?? 0) > 0;
+  const inUse = usedByNodes !== undefined ? usedByNodes.length > 0 : (usedBy?.length ?? 0) > 0;
   const inUseId = useId();
 
   const doCommit = async () => {
@@ -213,9 +216,9 @@ export function FileSide({
             <span className="min-w-0">{file.path}</span>
           </p>
           <dl className="grid grid-cols-[6.25rem_minmax(0,1fr)] items-start gap-x-3 gap-y-3">
-            {usedBy !== undefined ? (
+            {usedBy !== undefined || usedByNodes !== undefined ? (
               <CardRow label={C.card.usedBy}>
-                <StageChips stages={usedBy} />
+                <StageChips stages={usedBy ?? []} nodes={usedByNodes} />
               </CardRow>
             ) : null}
             {details}
@@ -274,9 +277,11 @@ export function FileSide({
               {copy.deleteButton}
             </Button>
           </div>
-          {inUse && usedBy !== undefined ? (
+          {inUse && (usedByNodes !== undefined || usedBy !== undefined) ? (
             <p id={inUseId} className="text-caption text-dim">
-              {C.remove.inUse(stageList(usedBy))}
+              {usedByNodes !== undefined
+                ? WORKFLOW_LIVE_COPY.usedBy.inUse(blockList(usedByNodes.map((n) => n.label)))
+                : C.remove.inUse(stageList(usedBy ?? []))}
             </p>
           ) : null}
           {!confirming ? <RefusalNotice error={remove.error} refusals={copy.refusals} /> : null}
