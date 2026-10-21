@@ -176,6 +176,11 @@ export function buildOptions(
     options.resume = resume;
     options.forkSession = false;
   }
+  // ADR-0024 §1: the session's title, set at launch (it also skips Claude Code's automatic title
+  // request). Never for a session that is resumed (a follow-up, or a rework turn resuming the
+  // helper's session): it keeps its own title, and the SDK ignores the option there anyway.
+  const title = spec.title?.trim() ?? '';
+  if (title !== '' && options.resume === undefined) options.title = title;
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.
