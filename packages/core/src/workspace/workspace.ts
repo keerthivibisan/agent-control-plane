@@ -533,7 +533,19 @@ export const HarnessStatusSchema = z.object({
 });
 export type HarnessStatus = z.infer<typeof HarnessStatusSchema>;
 
-export const CheckRunStatusSchema = z.enum(['passed', 'failed', 'timed-out', 'error', 'skipped']);
+/**
+ * `interrupted` (WG-F3): the app stopped (shut down, for example to upgrade) while the check ran,
+ * or before it started. It is not a result: a merge gate counts it as never run and starts the
+ * checks again. `skipped` and `error` stay results that block, as before.
+ */
+export const CheckRunStatusSchema = z.enum([
+  'passed',
+  'failed',
+  'timed-out',
+  'error',
+  'skipped',
+  'interrupted',
+]);
 export type CheckRunStatus = z.infer<typeof CheckRunStatusSchema>;
 
 export const CheckRunSchema = z.object({
@@ -558,6 +570,29 @@ export const CheckRunSchema = z.object({
   commit: GitCommitSchema.nullable().optional(),
 });
 export type CheckRun = z.infer<typeof CheckRunSchema>;
+
+/**
+ * The notes v0.1.0 (and 0.2.0 before WG-F3) stored for a check the app's shutdown stopped, as
+ * status `error` (the running check) or `skipped` (the ones after it). A stopped run's checks got
+ * the same notes then; they now get their own ("the run was stopped"), so only rows from before
+ * WG-F3 carry these. The runner appends a note to the output as a last line `[note]`.
+ */
+export const LEGACY_STOPPED_CHECK_NOTES = {
+  error: 'Stopped before it finished: the checks were stopped.',
+  skipped: 'Not run: the checks were stopped.',
+} as const;
+
+/**
+ * Whether a stored check run has no result because the app stopped (WG-F3): status `interrupted`,
+ * or a row from before it with the legacy shutdown note (`LEGACY_STOPPED_CHECK_NOTES`). The merge
+ * gates treat such a check as not run on its commit, so the checks run again; a real failure,
+ * error, time-out or skip still blocks.
+ */
+export function checkRunWasInterrupted(run: Pick<CheckRun, 'status' | 'outputTail'>): boolean {
+  if (run.status === 'interrupted') return true;
+  if (run.status !== 'error' && run.status !== 'skipped') return false;
+  return run.outputTail.endsWith(`\n[${LEGACY_STOPPED_CHECK_NOTES[run.status]}]`);
+}
 
 // ---------------------------------------------------------------- stage
 

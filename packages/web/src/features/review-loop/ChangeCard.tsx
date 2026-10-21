@@ -79,6 +79,8 @@ export function ChangeChecks({ change }: { change: Pick<ChangeReviewDto, 'checks
           </span>
           {C.checks.failed(s.failing.length)}
         </span>
+      ) : s.kind === 'stopped' ? (
+        <span className="text-dim">{C.checks.stopped}</span>
       ) : s.kind === 'passed' ? (
         <span className={s.passed === s.total ? 'text-success' : 'text-dim'}>
           <span aria-hidden="true" className="mr-1 font-semibold">

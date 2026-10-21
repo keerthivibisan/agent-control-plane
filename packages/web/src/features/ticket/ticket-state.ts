@@ -27,8 +27,17 @@ import { isAgentLive as isLiveAgentStatus, type AgentNode } from '../control/run
  * refused action still shows the server's reason.
  */
 
-/** Check outcomes that block a plain Merge when the check is required (ADR-0017). */
-const FAILING: ReadonlySet<CheckRunStatus> = new Set(['failed', 'timed-out', 'error']);
+/**
+ * Check outcomes that block a plain Merge of a legacy run's change when the check is required
+ * (ADR-0017). A check the app's shutdown stopped blocks there too: that gate has no "not run yet"
+ * (WG-F3). The review loop's gates count it as not run instead (`checksSummary`).
+ */
+const FAILING: ReadonlySet<CheckRunStatus> = new Set([
+  'failed',
+  'timed-out',
+  'error',
+  'interrupted',
+]);
 
 export function isFailing(check: Pick<CheckRunDto, 'status'>): boolean {
   return FAILING.has(check.status);

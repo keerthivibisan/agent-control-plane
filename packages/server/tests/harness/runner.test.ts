@@ -4,11 +4,13 @@ import { join } from 'node:path';
 import {
   CheckRunSchema,
   MAX_CHECK_OUTPUT_BYTES,
+  checkRunWasInterrupted,
   type CheckRun,
   type HarnessCheck,
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import {
+  ChecksShutdown,
   createCheckRunner,
   type CheckSpawnFn,
   type CheckSpawnOptions,
@@ -342,8 +344,33 @@ describe('createCheckRunner', { timeout: 30_000 }, () => {
     });
     expectValid(results);
     expect(results[0]?.status).toBe('error');
-    expect(results[0]?.outputTail).toContain('Stopped before it finished');
+    expect(results[0]?.outputTail).toContain('Stopped before it finished: the run was stopped.');
     expect(results[1]).toMatchObject({ status: 'skipped', exitCode: null, durationMs: 0 });
+    // A stopped run's checks are results that block, never mistaken for the app stopping.
+    expect(results.map(checkRunWasInterrupted)).toEqual([false, false]);
+  }, 15_000);
+
+  it('stores the checks the app stopped as interrupted, not as an error (WG-F3)', async () => {
+    const root = checkout();
+    const controller = new AbortController();
+    const results = await createCheckRunner({ killGraceMs: 200 }).run({
+      ...base,
+      root,
+      checks: [
+        check('hang', ['node', 'scripts/hang.mjs'], { timeoutSec: 60 }),
+        check('pass', ['node', 'scripts/pass.mjs']),
+      ],
+      signal: (() => {
+        setTimeout(() => controller.abort(new ChecksShutdown()), 500);
+        return controller.signal;
+      })(),
+    });
+    expectValid(results);
+    expect(results[0]).toMatchObject({ status: 'interrupted', exitCode: null });
+    expect(results[0]?.outputTail).toContain('Stopped when the app stopped');
+    expect(results[1]).toMatchObject({ status: 'interrupted', exitCode: null, durationMs: 0 });
+    expect(results[1]?.outputTail).toContain('Not run: the app stopped.');
+    expect(results.map(checkRunWasInterrupted)).toEqual([true, true]);
   }, 15_000);
 });
 

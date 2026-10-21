@@ -5,7 +5,9 @@ import {
   beginChangeMerge,
   cancelRun,
   changeMergeBlocked,
+  checkChangeAction,
   checkTicketBranchAction,
+  checksFinished,
   completeCancellation,
   controlToolsFor,
   decideApproval,
@@ -23,6 +25,7 @@ import { LEAD, agentOf, event, makeCtx, ok, refused, statusOf, tokens } from './
 import {
   A,
   BRANCH,
+  COMMIT,
   RA,
   changeOf,
   effectsOf,
@@ -339,6 +342,28 @@ describe('Stop all and restart', () => {
     const d = ok(recordTicketBranchDecision(c, 'discarded', makeCtx(9200)));
     expect(d.state).toBe(c);
     expect(d.effects).toEqual([]);
+  });
+
+  it('restart: checks that were running have no result, so the owner may merge (WG-F3)', () => {
+    const begun = ok(leadTool(busy(), 'merge_change', { agentId: A }, 'm')).state;
+    const pending = ok(changeMergeBlocked(begun, A, { reason: 'checks-pending' }, makeCtx(7000)));
+    expect(changeOf(pending.state, A).checks).toBe('pending');
+    const r = ok(recoverAfterRestart(pending.state, makeCtx(20_000)));
+    expect(changeOf(r.state, A)).toMatchObject({ state: 'needs-owner', checks: null });
+    // The engine lets the owner's merge through; the server's gate starts the checks again.
+    expect(checkChangeAction(r.state, A, 'merge', 'owner')).toBeNull();
+    // A real failure from before the restart still blocks a plain merge.
+    const failed = ok(
+      checksFinished(
+        pending.state,
+        A,
+        { commit: COMMIT, requiredPassed: false, failed: ['lint'] },
+        makeCtx(8000),
+      ),
+    ).state;
+    const again = ok(recoverAfterRestart(failed, makeCtx(20_000))).state;
+    expect(changeOf(again, A).checks).toBe('failed');
+    expect(checkChangeAction(again, A, 'merge', 'owner')).toMatchObject({ code: 'checks-failed' });
   });
 
   it('restart: nothing relaunches; waiting helpers and reviewers need review; changes need the owner', () => {

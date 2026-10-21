@@ -78,6 +78,21 @@ export interface CheckRunner {
   run(input: RunChecksInput): Promise<CheckRun[]>;
 }
 
+/**
+ * The abort reason the check service passes when the app shuts down (WG-F3). Checks it stops are
+ * stored as `interrupted`, not as a result: the merge gates run them again after the restart. Any
+ * other abort (the run was stopped) keeps its results, `error` and `skipped`, which block.
+ */
+export class ChecksShutdown extends Error {
+  constructor() {
+    super('The app is shutting down');
+    this.name = 'ChecksShutdown';
+  }
+}
+
+const byShutdown = (signal: AbortSignal | undefined): boolean =>
+  signal?.reason instanceof ChecksShutdown;
+
 const DEFAULT_KILL_GRACE_MS = 5000;
 const BARE_COMMAND = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -116,7 +131,9 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
       };
       let result: CheckRun;
       if (input.signal?.aborted === true) {
-        result = finished(base, 'skipped', null, 0, 'Not run: the checks were stopped.');
+        result = byShutdown(input.signal)
+          ? finished(base, 'interrupted', null, 0, 'Not run: the app stopped. It runs again.')
+          : finished(base, 'skipped', null, 0, 'Not run: the run was stopped.');
       } else if (root === null) {
         result = finished(base, 'error', null, 0, rootProblem ?? 'No checkout.');
       } else {
@@ -196,9 +213,12 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
         } else if (stoppedBy === 'timeout') {
           status = 'timed-out';
           notes.push(`Stopped after ${check.timeoutSec} s: the time limit was reached.`);
+        } else if (stoppedBy === 'abort' && byShutdown(signal)) {
+          status = 'interrupted';
+          notes.push('Stopped when the app stopped, so there is no result. It runs again.');
         } else if (stoppedBy === 'abort') {
           status = 'error';
-          notes.push('Stopped before it finished: the checks were stopped.');
+          notes.push('Stopped before it finished: the run was stopped.');
         } else if (code === 0) {
           status = 'passed';
           exitCode = 0;

@@ -6,6 +6,7 @@ import {
   MAX_COMMAND_PATTERNS,
   RUN_OPTION_KEYS,
   approvalsOf,
+  checkRunWasInterrupted,
   graphRunDefaults,
   isEditorNode,
   isModeWithin,
@@ -208,13 +209,21 @@ export function latestChecks(checks: readonly CheckRunDto[]): CheckRunDto[] {
 export type ChecksSummary =
   | { kind: 'none' }
   | { kind: 'passed'; passed: number; total: number }
-  | { kind: 'failed'; failing: CheckRunDto[] };
+  | { kind: 'failed'; failing: CheckRunDto[] }
+  /** WG-F3: a required check has no result because the app stopped; the merge runs it again. */
+  | { kind: 'stopped'; stopped: CheckRunDto[] };
 
+/**
+ * The commit's checks as the server's merge gate counts them (ADR-0021): a required check that
+ * failed blocks; one the app's shutdown stopped is not run yet, as the gate counts it (WG-F3).
+ */
 export function checksSummary(checks: readonly CheckRunDto[]): ChecksSummary {
   const latest = latestChecks(checks);
   if (latest.length === 0) return { kind: 'none' };
-  const failing = latest.filter((c) => c.required && isFailing(c));
+  const failing = latest.filter((c) => c.required && !checkRunWasInterrupted(c) && isFailing(c));
   if (failing.length > 0) return { kind: 'failed', failing };
+  const stopped = latest.filter((c) => c.required && checkRunWasInterrupted(c));
+  if (stopped.length > 0) return { kind: 'stopped', stopped };
   return {
     kind: 'passed',
     passed: latest.filter((c) => c.status === 'passed').length,

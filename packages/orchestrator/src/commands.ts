@@ -970,6 +970,10 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
         if (change === undefined || isFinalChangeState(change.state)) continue;
         change.state = 'needs-owner';
         change.merging = false;
+        // WG-F3: no check survives a restart, and the shutdown stored the running ones as
+        // interrupted (not run). "Running" would refuse every merge with nothing running, so the
+        // change has no result yet: the next merge starts its checks again.
+        if (change.checks === 'pending') change.checks = null;
       }
     }
     if (cancelling) d.setRunStatus('CANCELLED');

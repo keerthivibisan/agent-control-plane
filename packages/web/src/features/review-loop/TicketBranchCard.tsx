@@ -89,6 +89,10 @@ function Actions({
         >
           {B.blocked(checks.failing.map((c) => c.name).join(', '))}
         </p>
+      ) : checks.kind === 'stopped' ? (
+        <p role="note" className="text-caption text-dim" data-testid="branch-checks-stopped">
+          {B.checksStopped}
+        </p>
       ) : null}
       {review?.baseMoved === true ? (
         <div

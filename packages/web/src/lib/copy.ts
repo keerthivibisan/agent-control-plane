@@ -1413,6 +1413,11 @@ export const CHECK_STATUS_COPY: Readonly<Record<CheckRunStatus, ControlStatusCop
     tone: 'problem',
   },
   skipped: { word: 'Skipped', tip: 'This check was not run.', tone: 'stopped' },
+  interrupted: {
+    word: 'Stopped',
+    tip: 'The app stopped before this check finished, so it has no result. The checks run again before a merge.',
+    tone: 'stopped',
+  },
 };
 
 /** "12.4 KB": file sizes in the context picker (1 KB = 1,024 bytes, like the 32 KB limit). */
@@ -2962,6 +2967,7 @@ export const REVIEW_LOOP_COPY = {
       n === null ? 'Files not reported' : countOf(n, 'changed file', 'changed files'),
     checks: {
       none: 'No checks on this commit yet',
+      stopped: 'Checks stopped when the app stopped; they run again',
       passed: (passed: number, total: number) =>
         `${formatCount(passed)} of ${formatCount(total)} checks passed`,
       failed: (n: number) => `${countOf(n, 'required check', 'required checks')} failed`,
@@ -3052,6 +3058,8 @@ export const REVIEW_LOOP_COPY = {
     diff: 'The combined change, line by line',
     checksTitle: 'Checks on the tip',
     checksNone: 'No checks have run on the tip yet.',
+    checksStopped:
+      'The app stopped before the checks on the tip finished. They run again when you merge.',
     blocked: (names: string) =>
       `A required check failed on the tip (${names}). Ask for changes, or merge anyway with a reason.`,
     baseMoved: (base: string) =>
