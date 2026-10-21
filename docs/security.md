@@ -148,7 +148,9 @@
   text in a summary: owner-facing text the lead writes for the ticket, redacted (rule 4) and capped
   at 1,500 characters by the engine, then stored after the facts as `Lead's note:`. Legacy runs
   ignore it. Logs say only that a summary was stored, its trigger, and whether a note was there.
-- **The merge line** (`Merged acp/<KEY> into <base> at <short commit>.`) holds branch names and a
-  commit id only.
+- **The merge line** (`Merged acp/<KEY> into <base> at <short commit>; checks passed on the tip
+(2).`) holds branch names, a commit id and the tip checks' results and names only. After a merge
+  past a failed check it says `(merged anyway, with a reason)`; the owner's reason stays the
+  owner's own comment and is never repeated in it.
 
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).

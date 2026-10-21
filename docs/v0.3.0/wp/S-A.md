@@ -2,10 +2,10 @@
 
 > Progress file for S-A. Only its agent edits it. Plan: [../README.md](../README.md).
 
-| Field  | Value                                  |
-| ------ | -------------------------------------- |
-| Status | review                                 |
-| Branch | `wp/s-a-server` (rebased on `9a95746`) |
+| Field  | Value                                                                             |
+| ------ | --------------------------------------------------------------------------------- |
+| Status | review                                                                            |
+| Branch | `wp/s-a-server` (merged at `7c4f5f4`); follow-up `wp/s-a2-wording` from `2fa3c90` |
 
 ## Tasks
 
@@ -19,18 +19,22 @@
 - [x] Docs: `security.md`, `architecture.md`, `provider-adapters.md` §11.1.
 - [x] Added by the coordinator: `ProjectTokensDto.bySession` gains `managed?`, `firstSeenAt?`,
       `gitBranch?`, `agentType?`; the server fills them; the Tokens list uses `nameSession`.
+- [x] S-A2 (after the real run): the ticket branch line says "waiting for your merge" (never
+      "open"); the merge line gains the tip checks and "(merged anyway, with a reason)".
 
 ## Work log
 
-| Date       | What                                                   | Commit    | Checks                                                          |
-| ---------- | ------------------------------------------------------ | --------- | --------------------------------------------------------------- |
-| 2026-10-21 | Engine: handover note, effect, brief and prompts       | `97592eb` | format ✓ lint ✓ typecheck ✓ test 4609/4609 ✓ build ✓            |
-| 2026-10-21 | Adapter: SDK `title` option                            | `e0d8231` | format ✓ lint ✓ typecheck ✓ test 4627/4627 ✓ build ✓            |
-| 2026-10-21 | Server: titles at launch, `managed` on session DTOs    | `692d7ff` | format ✓ lint ✓ typecheck ✓ test 4627/4627 ✓ build ✓            |
-| 2026-10-21 | Server: run summary comments and the merge line        | `0a6c684` | format ✓ lint ✓ typecheck ✓ test 4645/4645 ✓ build ✓            |
-| 2026-10-21 | Docs                                                   | `af32944` | as above                                                        |
-| 2026-10-21 | Rebased on `release/0.3.0` `9a95746` (S-B merged)      | —         | —                                                               |
-| 2026-10-21 | Tokens rows' naming fields (core, server, minimal web) | `02314d0` | format ✓ lint ✓ typecheck ✓ test 4679/4679 ✓ build ✓; e2e 75/75 |
+| Date       | What                                                     | Commit    | Checks                                                          |
+| ---------- | -------------------------------------------------------- | --------- | --------------------------------------------------------------- |
+| 2026-10-21 | Engine: handover note, effect, brief and prompts         | `97592eb` | format ✓ lint ✓ typecheck ✓ test 4609/4609 ✓ build ✓            |
+| 2026-10-21 | Adapter: SDK `title` option                              | `e0d8231` | format ✓ lint ✓ typecheck ✓ test 4627/4627 ✓ build ✓            |
+| 2026-10-21 | Server: titles at launch, `managed` on session DTOs      | `692d7ff` | format ✓ lint ✓ typecheck ✓ test 4627/4627 ✓ build ✓            |
+| 2026-10-21 | Server: run summary comments and the merge line          | `0a6c684` | format ✓ lint ✓ typecheck ✓ test 4645/4645 ✓ build ✓            |
+| 2026-10-21 | Docs                                                     | `af32944` | as above                                                        |
+| 2026-10-21 | Rebased on `release/0.3.0` `9a95746` (S-B merged)        | —         | —                                                               |
+| 2026-10-21 | Tokens rows' naming fields (core, server, minimal web)   | `02314d0` | format ✓ lint ✓ typecheck ✓ test 4679/4679 ✓ build ✓; e2e 75/75 |
+| 2026-10-21 | S-A2: ticket branch and merge line wording (server)      | `592533b` | format ✓ lint ✓ typecheck ✓ test 4683/4683 ✓ build ✓; e2e 75/75 |
+| 2026-10-21 | S-A2: merge note shows the detail after the commit (web) | `056367c` | as above                                                        |
 
 Server tests that time out at 5 s under load (another agent working in parallel) passed on
 rerun, alone and in a second full check: `verification/control/restart.test.ts`, and earlier
@@ -79,9 +83,17 @@ rerun, alone and in a second full check: `verification/control/restart.test.ts`,
   (second parent); a legacy change from its worktree while it exists. Binary files count as files,
   not lines. Unknown when git cannot tell.
 - **Tip checks** run after the move to REVIEW, so a summary written at the handover often shows
-  the ticket branch without them; the owner sees them on the ticket branch card.
+  the ticket branch without them; the owner sees them on the ticket branch card and in the merge
+  line.
+- **Ticket branch wording (S-A2).** Never just "open": `1 change merged; waiting for your merge`
+  at a handover (and when the lead ended in review), `not merged` when the run failed or was
+  stopped, `merged into <base>` or `discarded` once settled.
 - **Merge line.** Written before the run completes, so the board's notice already carries it:
-  `Merged acp/<KEY> into <base branch> at <7-character commit>.`
+  `Merged acp/<KEY> into <base branch> at <7-character commit>; checks passed on the tip (2).`,
+  with the tip checks when any ran (`checks on the tip: 0 of 1 passed; failed: Unit tests`), and
+  `(merged anyway, with a reason)` after a merge past a failed check, never the reason itself.
+  The web's merge-line parser keeps what follows the commit as `detail` and shows it after the
+  commit (minimal web edit in `features/ticket/run-summary.ts` and `RunSummary.tsx`).
 - **Overview cost list** reads `OverviewDto.latestSnapshots`, which has none of the new fields, so
   only the Tokens list switched to `nameSession`.
 - **Untrusted content.** No instructions aimed at agents were found in the files read.
@@ -98,7 +110,7 @@ Changes (2):
 - Frontend helper: merged; 3 files, +42 -5 lines; checks passed (2); 2 rework rounds (lead 1, reviewer 1).
 - Helpers: discarded; 1 file; checks: 1 of 3 passed; failed: Unit tests; not run: Lint.
 
-Ticket branch acp/WEB-12 (from main): open; 1 change merged; tip checks passed (2).
+Ticket branch acp/WEB-12 (from main): 1 change merged; waiting for your merge; checks passed on the tip (2).
 
 Budget tokens: lead 12,400; helpers 48,000 (2 agents); reviewers 9,100 (2 agents).
 
