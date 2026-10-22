@@ -187,3 +187,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - **C-0 done** (`cc6d7eb`): ADR-0026 accepted; contracts for comment kinds, attachments and the
     activity timeline. Full check: 4,961 tests.
   - C-A (server, db, engine, adapter) and C-B (web) started in parallel.
+- 2026-10-22 **C-S merged** (`8f2738a`): body text 15px, a 56px header (logo and "ACP" on the left,
+  the search centred, the project switcher and theme on the right), a 256px sidebar with a chevron
+  toggle at its top (‹ open, › rail; ⌘B kept). Coordinator check: 4,962 tests; e2e 94/94. The
+  owner's app was restarted on it.
