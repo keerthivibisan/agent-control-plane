@@ -30,3 +30,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0022](0022-full-auto-mode.md)                           | Full auto mode                                             | accepted |
 | [0023](0023-editable-workflow-graphs.md)                 | Editable workflow graphs                                   | accepted |
 | [0024](0024-session-names-and-run-summaries.md)          | Session names and run summary comments                     | accepted |
+| [0025](0025-code-hosting-and-branching.md)               | Code hosting (GitHub) and branching strategies             | accepted |

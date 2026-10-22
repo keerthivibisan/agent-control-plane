@@ -64,3 +64,48 @@ No migration (ADR-0024 §4).
 - **Names in the app:** the Sessions page shows the managed label for app sessions and the
   fallbacks for untitled ones.
 - **Checks:** `pnpm check` and the full e2e stay green.
+
+## Part 2: GitHub and branching strategies (G series, ADR-0025)
+
+These are owner decisions from 2026-10-22:
+
+- use the `gh` CLI login (the app never holds a token);
+- only the owner's button pushes or opens a pull request;
+- the final step is to merge locally **or** push and open a pull request, chosen per ticket;
+- syntax highlighting is allowed (Shiki 4.5.0, added in G-0).
+
+### Contract (G-0, done)
+
+- **`workspace/branching.ts`:**
+  - `GitBranchNameSchema` and `isSafeBranchName`;
+  - `BranchStrategySchema`, with presets `github-flow`, `git-flow` and `custom`, from
+    `branchStrategyPreset()`;
+  - `BranchTemplateSchema` (`{key}` required, plus `{slug}` and `{type}`);
+  - `renderTicketBranchName()` and `branchSlug()`;
+  - `TicketBranchPrefsSchema` (`name?`, `target?`) and its patch.
+- **`TicketBranchNameSchema`** is now any safe branch name. The old `acp/<KEY>` names still parse.
+- **Additive fields:** `ProjectAgentSetup.branching?`, `Ticket.branch?`, create and update ticket
+  requests `branch`, `UpdateProjectSetupRequest.branching` (null removes it), and
+  `TicketBranchDto.pullRequest?`.
+- **`api/code-host.ts`:** `CodeHostStatusDto`, `PullRequestDto` and `OpenPullRequestRequest`.
+
+### Work packages
+
+| WP  | What                                                                                                                                                                                                                                                                                                                                                                                    | Owned paths                                                    | After |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----- |
+| G-0 | ADR-0025, the AGENTS.md rule 8 amendment, the contract, Shiki                                                                                                                                                                                                                                                                                                                           | core contract, docs, `packages/web/package.json`, the lockfile | —     |
+| G-A | Server and db: migration 0008 (ticket `branch_prefs`; `ticket_branches` rebuilt without the `acp/*` check, plus the pull request columns); strategy and ticket settings read and write; branch naming at plan approval from the target; merge into the target; the `CodeHost` service with `gh` (status, push, create, view); endpoints; tests with a local bare remote and a fake `gh` | `packages/{server,db,orchestrator}/**`, the new migration      | G-0   |
+| G-B | Web: the branching strategy in project settings (presets, template preview); the ticket's branch name and target in New ticket and the ticket page; code host status; the final-step card (merge locally, or Push & open PR, with the link, state and Refresh)                                                                                                                          | `packages/web/**` (not the diff viewer)                        | G-0   |
+| G-C | Web: the shared diff viewer (file list, unified or split, Shiki, word-level changes, collapsing, large-diff guard) in the change cards and the ticket branch card                                                                                                                                                                                                                       | `packages/web/src/components/diff/**` and where it is used     | G-0   |
+| G-V | e2e on the real server; one consented real push and pull request to a throwaway GitHub repo of the owner's; docs; CHANGELOG                                                                                                                                                                                                                                                             | `e2e/**`, docs                                                 | all   |
+
+### Rules for G-A
+
+- **Commands:** never a shell. `git` and `gh` as argument arrays with a time limit,
+  `GIT_TERMINAL_PROMPT=0` and `GH_PROMPT_DISABLED=1`.
+- **Output:** `gh auth status` and `gh --version` are judged by exit code only. Output is never
+  logged; errors map to plain codes.
+- **Network in tests:** none. Push to a local bare repository; `gh` is a fake executable, or an
+  injected runner, in tests.
+- **Migration:** additive. The coordinator backs up the owner's live database before the first
+  start on a build with migration 0008.

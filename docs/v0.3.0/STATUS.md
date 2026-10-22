@@ -89,3 +89,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - The lead prompt line is 297 characters (165 before), about 30 more input tokens per run.
   - Golden traces: only the prompt hashes changed.
   - Coordinator check: 4,701 tests; e2e 76/76.
+- 2026-10-22 **The owner approved part 2 (G series):** GitHub through `gh`, branching strategies,
+  the ticket's branch name and target, Push & open PR, and the diff view. G-0 is done: ADR-0025,
+  the AGENTS.md rule 8 amendment, the contract, and Shiki 4.5.0. G-A, G-B and G-C started.
