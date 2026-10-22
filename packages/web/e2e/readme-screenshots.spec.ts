@@ -217,7 +217,7 @@ test('readme: the board', async ({ page, request }) => {
 test('readme: a ticket with a live run and its review loop', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page);
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
   await expect(h1(page)).toContainText('Saved searches');
   const overview = page.getByTestId('changes-overview');
   await expect(overview).toBeVisible();

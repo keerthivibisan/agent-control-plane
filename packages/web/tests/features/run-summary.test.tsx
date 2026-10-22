@@ -4,7 +4,7 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 import { TicketDetailDtoSchema, type TicketCommentDto } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
-import { TicketInfo } from '../../src/features/ticket/TicketInfo';
+import { Timeline } from '../../src/features/ticket/Conversation';
 import { ticketDetail, ticketDto } from '../fixtures/board';
 import { runSummary } from '../fixtures/control';
 import { fakeServer, renderWithApi } from '../helpers';
@@ -74,7 +74,7 @@ function renderComments(comments: TicketCommentDto[]) {
     comments,
   });
   renderWithApi(
-    <TicketInfo detail={detail} shownRunId="run-2" onShowRun={() => {}} />,
+    <Timeline detail={detail} shownRunId="run-2" onShowRun={() => {}} />,
     fakeServer({}),
   );
   return screen.getByTestId('comments');

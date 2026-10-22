@@ -96,9 +96,14 @@ async function serve(page: Page, sc: TicketScenario): Promise<{ posts: () => str
 /** Redesign (R-A): the ticket page lives under its project. */
 const TICKET_HASH = `#/p/${PROJECT_ID}/tickets/${TICKET_ID}`;
 
-async function open(page: Page, sc: TicketScenario): Promise<{ posts: () => string[] }> {
+/** Opens the ticket, on a tab when given (v0.3.0 D-B: the address's `?tab=`). */
+async function open(
+  page: Page,
+  sc: TicketScenario,
+  tab?: 'agents' | 'files' | 'checks',
+): Promise<{ posts: () => string[] }> {
   const server = await serve(page, sc);
-  await page.goto(`/${TICKET_HASH}`);
+  await page.goto(`/${TICKET_HASH}${tab ? `?tab=${tab}` : ''}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
   return server;
 }
@@ -128,7 +133,9 @@ test('an old #/tickets/:id link opens the ticket under its project', async ({ pa
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
 });
 
-test('plan review: the plan card replaces the tree', async ({ page }) => {
+test('plan review: the plan card comes first on Conversation; the tree is on Agents', async ({
+  page,
+}) => {
   await open(page, planReviewScenario());
   const card = page.getByTestId('plan-card');
   await expect(card).toContainText('Version 2');
@@ -138,10 +145,9 @@ test('plan review: the plan card replaces the tree', async ({ page }) => {
 });
 
 test('working: depth-2 helpers nest under their parent; an approval waits', async ({ page }) => {
-  await open(page, workingScenario());
+  await open(page, workingScenario(), 'agents');
   const nested = page.getByRole('list', { name: 'Started by Theme store' });
   await expect(nested.getByRole('article', { name: 'Migration helper' })).toBeVisible();
-  await expect(page.getByTestId('approvals')).toContainText('Edit src/theme/store.ts');
   // Three helpers fit next to the side panel at 1440 without a sideways scroll.
   await page.setViewportSize({ width: 1440, height: 900 });
   const scroller = page.getByTestId('agent-canvas').locator('.overflow-x-auto');
@@ -154,6 +160,9 @@ test('working: depth-2 helpers nest under their parent; an approval waits', asyn
     .click();
   await page.getByRole('tab', { name: /Approvals/ }).click();
   await shoot(page, 'working-helper');
+  // What waits for you is first on Conversation.
+  await page.getByRole('tab', { name: /Conversation/ }).click();
+  await expect(page.getByTestId('approvals')).toContainText('Edit src/theme/store.ts');
 });
 
 test('in review: a failed required check blocks Merge', async ({ page }) => {
@@ -179,7 +188,7 @@ test('in review: a failed required check blocks Merge', async ({ page }) => {
 // --- Redesign R-H: the live workflow, the new roles, reviewer comments and Continue -----------
 
 test('plan review: the live workflow shows the plan waiting for you', async ({ page }) => {
-  await open(page, planReviewScenario());
+  await open(page, planReviewScenario(), 'agents');
   const graph = page.getByTestId('live-workflow');
   await expect(graph.getByTestId('live-plan')).toHaveAttribute('data-state', 'needs-you');
   await expect(graph.getByTestId('live-approve')).toHaveAttribute('data-state', 'needs-you');
@@ -189,7 +198,7 @@ test('plan review: the live workflow shows the plan waiting for you', async ({ p
 test('working with stages: a separate planner, helpers at work, review stages waiting', async ({
   page,
 }) => {
-  await open(page, stagesScenario());
+  await open(page, stagesScenario(), 'agents');
   const graph = page.getByTestId('live-workflow');
   await expect(graph.getByTestId('wf-node-plan')).toHaveAttribute('data-role', 'planner');
   await expect(graph.getByTestId('live-helpers')).toHaveAttribute('data-state', 'active');
@@ -204,20 +213,21 @@ test('working with stages: a separate planner, helpers at work, review stages wa
 });
 
 test('in review with stages: reviewer findings and the tester’s change', async ({ page }) => {
-  await open(page, reviewedScenario());
+  await open(page, reviewedScenario(), 'agents');
   await expect(page.getByTestId('live-code-review')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('live-unit-tests')).toHaveAttribute('data-state', 'needs-you');
   await expect(page.getByTestId('held-stage')).toHaveCount(0);
-  const reviewer = page.getByTestId('comments').locator('[data-author="reviewer"]');
-  await expect(reviewer.getByTestId('comment-author')).toHaveText('Reviewer');
   await expect(page.getByTestId(`agent-${TESTER}`).getByTestId('agent-term')).toHaveText(
     'Tester agent',
   );
+  await page.getByTestId('reviewer-findings-link').click();
+  const reviewer = page.getByTestId('comments').locator('[data-author="reviewer"]');
+  await expect(reviewer.getByTestId('comment-author')).toHaveText('Reviewer');
   await shoot(page, 'reviewed');
 });
 
 test('a held stage: Continue starts it', async ({ page }) => {
-  const server = await open(page, heldScenario());
+  const server = await open(page, heldScenario(), 'agents');
   const held = page.getByTestId('held-stage');
   await expect(held).toContainText('Final code review is waiting for you');
   await shoot(page, 'held');
@@ -263,7 +273,7 @@ test('a done run: the ended lead answers a follow-up message', async ({ page }) 
     phase = 'running';
     await route.fulfill({ status: 201, json: followUpOwnerMessage(question) });
   });
-  await page.goto(`/${TICKET_HASH}`);
+  await page.goto(`/${TICKET_HASH}?tab=agents`);
   const panel = page.getByTestId('side-panel');
   await expect(panel.getByRole('heading', { name: 'Lead', exact: true })).toBeVisible();
   await expect(panel.getByTestId('chat-notice')).toContainText('The lead has finished.');
@@ -288,7 +298,7 @@ test('a done run: the ended lead answers a follow-up message', async ({ page }) 
 });
 
 test('a done run whose conversation is gone says why it can’t be continued', async ({ page }) => {
-  await open(page, followUpScenario({ state: 'unavailable', reason: 'session-gone' }));
+  await open(page, followUpScenario({ state: 'unavailable', reason: 'session-gone' }), 'agents');
   const panel = page.getByTestId('side-panel');
   await expect(panel.getByText(/no longer has this conversation/)).toBeVisible();
   await expect(panel.getByRole('textbox')).toHaveCount(0);
@@ -314,7 +324,7 @@ test('a follow-up the server refuses shows its reason, and the box stays usable'
       json: { error: { code: 'follow_up_running', message: reason, requestId: 'e2e' } },
     });
   });
-  await page.goto(`/${TICKET_HASH}`);
+  await page.goto(`/${TICKET_HASH}?tab=agents`);
   const panel = page.getByTestId('side-panel');
   const box = panel.getByRole('textbox', { name: 'Message to the lead agent' });
   await box.fill('Is it done?');
@@ -381,7 +391,7 @@ test('the run’s own graph: states, modes, the sandbox and the review agent’s
   page,
 }) => {
   await serveRoutes(page, directLoopScenario().routes);
-  await page.goto(`/${LOOP_HASH}`);
+  await page.goto(`/${LOOP_HASH}?tab=agents`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Saved searches');
   const graph = page.getByTestId('live-run-graph');
   await expect(graph).toBeVisible();
@@ -410,7 +420,8 @@ test('the run’s own graph: states, modes, the sandbox and the review agent’s
     page.getByTestId('side-panel').getByRole('heading', { name: 'API helper' }),
   ).toBeVisible();
   // Its change: the review agent decided the rework itself.
-  await page.getByTestId('changes-overview').getByRole('button', { name: 'Open' }).first().click();
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByTestId('changes-overview').getByRole('button', { name: /^Open/ }).first().click();
   const card = page.getByTestId('side-panel').getByTestId('change-card');
   await expect(card.getByTestId('change-direct-rounds')).toContainText(
     'Review agent: 1 direct rework round',
@@ -424,7 +435,7 @@ test('a server without run graphs keeps the version 1 workflow', async ({ page }
   const routes = { ...directLoopScenario().routes };
   delete routes[LIVE_GRAPH_PATH];
   await serveRoutes(page, routes);
-  await page.goto(`/${LOOP_HASH}`);
+  await page.goto(`/${LOOP_HASH}?tab=agents`);
   await expect(page.getByTestId('wf-node-review')).toBeVisible();
   await expect(page.getByTestId('live-run-graph')).toHaveCount(0);
 });

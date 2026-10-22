@@ -7,7 +7,7 @@ import type {
   TicketCommentDto,
 } from '@acp/core/api';
 import { motion } from 'motion/react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ButtonLink } from '../../components/Button';
 import { EstimatedCost } from '../../components/EstimatedCost';
 import { enter, fade } from '../../components/motion';
@@ -324,6 +324,9 @@ export function SidePanel({
   review,
   checks,
   comments = [],
+  draft: liftedDraft,
+  onDraft: onLiftedDraft,
+  chatInput: liftedInput,
 }: {
   run: RunDetailDto;
   agent: AgentRunDto;
@@ -333,11 +336,18 @@ export function SidePanel({
   checks: readonly CheckRunDto[];
   /** The ticket's comments: a change card shows the reviewer's findings kept there. */
   comments?: readonly TicketCommentDto[];
+  /** The chat's unsent text, when the page keeps it (it survives a visit to another tab). */
+  draft?: string;
+  onDraft?: (text: string) => void;
+  chatInput?: RefObject<HTMLTextAreaElement | null>;
 }) {
   const tabs = tabsFor(agent);
   const active = tabs.includes(tab) ? tab : (tabs[0] ?? 'activity');
-  const [draft, setDraft] = useState('');
-  const chatInput = useRef<HTMLTextAreaElement | null>(null);
+  const [ownDraft, setOwnDraft] = useState('');
+  const ownInput = useRef<HTMLTextAreaElement | null>(null);
+  const draft = liftedDraft ?? ownDraft;
+  const setDraft = onLiftedDraft ?? setOwnDraft;
+  const chatInput = liftedInput ?? ownInput;
   const approvals = run.approvals.filter((a) => a.agentRunId === agent.id);
   const waiting = approvals.filter((a) => a.status === 'pending').length;
   // A loop run's change is checked again on its sealed commit until it is decided (RL-V); a

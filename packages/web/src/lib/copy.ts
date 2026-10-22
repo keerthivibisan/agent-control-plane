@@ -1763,7 +1763,7 @@ export const TICKET_COPY = {
     helperNone: 'No helpers yet',
     helpersWorking: (n: number) => `${formatCount(n)} working`,
     reviewerComments: (n: number) =>
-      `${formatCount(n)} ${n === 1 ? 'finding' : 'findings'} from the reviewer in the comments below`,
+      `${formatCount(n)} ${n === 1 ? 'finding' : 'findings'} from the reviewer in the conversation`,
     held: {
       title: (stage: string) => `${stage} is waiting for you`,
       text: (stage: string) =>
@@ -1944,6 +1944,114 @@ export const TICKET_COPY = {
     run: (n: number) => `Run ${formatCount(n)}`,
     show: 'Show',
     showing: 'Shown above',
+  },
+} as const;
+
+// --- The ticket page as a pull request page (v0.3.0 D-B) ---------------------------------------
+// Add-only. The header, the four tabs, the timeline, the final-step box and the sidebar. The
+// words inside each part (plan, comments, checks, branch, pull request) stay in their own sections.
+
+export const TICKET_PAGE_COPY = {
+  tabs: {
+    label: 'Ticket sections',
+    conversation: 'Conversation',
+    agents: 'Agents',
+    files: 'Files changed',
+    checks: 'Checks',
+    /** The count after a tab's name, for screen readers: "Files changed, 4". */
+    count: (n: number) => formatCount(n),
+  },
+  header: {
+    edit: 'Edit',
+    editLabel: 'Edit the title',
+    titleLabel: 'Title',
+    save: 'Save',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    failed: 'The title wasn’t saved.',
+    /** "feature/WEB-21-saved-searches → main". */
+    into: 'into',
+    branchLabel: 'Branch',
+    targetLabel: 'Target',
+    plannedTip:
+      'The name this ticket’s branch will get. The run creates the branch when it starts; change it in Branch on the right.',
+    agents: (n: number) => countOf(n, 'agent', 'agents'),
+    /** The final step's main action in the header goes down to the final-step box. */
+    goTo: (action: string) => `${action}: go to the final step`,
+    needsYouTip: 'Show what waits for you',
+  },
+  conversation: {
+    needsYou: 'Waiting for you',
+    timeline: 'Timeline',
+    description: 'Description',
+    created: 'Created',
+    editLabel: 'Edit the description',
+    runStarted: (n: number) => `Run ${formatCount(n)} started`,
+    showRun: 'Show this run',
+    shownRun: 'Shown on this page',
+    plan: (v: number) => `Plan version ${formatCount(v)}`,
+    showPlan: 'Show the plan',
+  },
+  finalStep: {
+    title: 'Final step',
+    waiting: 'The agents are still working',
+    ready: (target: string) => `Ready to merge into ${target}`,
+    blocked: 'A required check failed on the tip',
+    baseMoved: (target: string) => `${target} moved since this branch started`,
+    prOpen: (n: number) => `Pull request #${n} is open on GitHub`,
+    stopped: 'This run has stopped',
+    merged: 'The ticket’s work is merged',
+    discarded: 'The ticket branch was discarded',
+    checks: (passed: number, total: number) =>
+      `${formatCount(passed)} of ${formatCount(total)} ${total === 1 ? 'check' : 'checks'} passed on the tip`,
+    checksFailed: (n: number) =>
+      `${countOf(n, 'required check', 'required checks')} failed on the tip`,
+    checksStopped: 'The checks on the tip didn’t finish',
+    checksNone: 'No checks have run on the tip yet',
+    prNote: 'Its link, state and Refresh are in Pull request on the right.',
+  },
+  sidebar: {
+    label: 'About this ticket',
+    pullRequest: 'Pull request',
+    noPullRequest: 'None yet. You can open one in the final step.',
+    labels: 'Labels',
+    noLabels: 'None',
+    type: 'Type',
+    priority: 'Priority',
+    thisRun: 'This run',
+    noRun: 'Not started yet.',
+    runOf: (n: number, total: number) => `Run ${formatCount(n)} of ${formatCount(total)}`,
+    started: 'Started',
+    budget: 'Budget tokens used',
+    budgetTip:
+      'Budget tokens are the app’s own count of what this run’s agents used, against each agent’s limit. Every agent counts once.',
+    approvals: 'Approvals',
+    sessions: 'Sessions',
+    noSessions: 'No Claude Code sessions yet.',
+    sessionOf: (role: string) => `${role}’s session`,
+    details: 'Details',
+  },
+  files: {
+    branchTitle: 'Ticket branch',
+    reviewAll: 'Review all files',
+    reviewAllTip: 'Opens every file of the ticket branch on one page, with comments on lines.',
+    changesTitle: 'Changes in this run',
+    changesNone: 'No changes yet. Each helper’s change shows here once it has one.',
+    filesChanged: 'Files changed',
+    filesChangedFor: (role: string) => `Files changed by the ${role}`,
+    open: 'Open',
+    openFor: (role: string) => `Open the ${role}’s change`,
+    noRun: 'Nothing has changed yet. Changes show here once a run has them.',
+    helpersTitle: 'Changes of each helper',
+  },
+  checks: {
+    tipTitle: 'Checks on the tip',
+    changesTitle: 'Checks on each change',
+    noRun: 'No checks yet. They run on each change and on the ticket branch.',
+    none: 'No agent in this run changes files, so no checks run.',
+  },
+  agents: {
+    noRun: 'No agents yet. They appear here once the run starts.',
   },
 } as const;
 
@@ -3421,7 +3529,7 @@ export const TICKET_BRANCH_COPY = {
   failed: 'The branch settings weren’t saved.',
   /** Once the run has created the branch. */
   created: 'The run created this branch. Its name and target stay as they are for this run.',
-  actualBranch: 'Branch',
+  actualBranch: 'Name',
   actualTarget: 'Target',
 } as const;
 

@@ -196,7 +196,8 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
   baseURL,
 }) => {
   const urls = await serve(page, withDiffs(loopWorkingScenario()));
-  await page.goto(`/${TICKET_HASH}`);
+  // v0.3.0 D-B: the changes are listed on Files changed.
+  await page.goto(`/${TICKET_HASH}?tab=files`);
   await page
     .getByTestId('changes-overview')
     .getByTestId('change-row')
@@ -283,6 +284,10 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
 
   await page.reload();
   await page
+    .getByRole('tablist', { name: 'Ticket sections' })
+    .getByRole('tab', { name: /Files changed/ })
+    .click();
+  await page
     .getByTestId('changes-overview')
     .getByTestId('change-row')
     .first()
@@ -309,8 +314,8 @@ test('the ticket branch’s combined diff: the large-diff guard and the server�
 }) => {
   await page.addInitScript(() => window.localStorage.setItem('acp.diff.view', 'unified'));
   await serve(page, withDiffs(loopReviewScenario()));
-  await page.goto(`/${TICKET_HASH}`);
-  const branch = page.getByTestId('ticket-branch');
+  await page.goto(`/${TICKET_HASH}?tab=files`);
+  const branch = page.getByTestId('branch-files');
   await branch.getByTestId('branch-diff').locator('summary').click();
   const viewer = branch.getByTestId('diff-viewer');
   await expect(viewer.getByTestId('diff-truncated')).toHaveText(
@@ -321,7 +326,7 @@ test('the ticket branch’s combined diff: the large-diff guard and the server�
   await expect(big).toHaveAttribute('data-shown', 'false');
   await expect(viewer.locator('[data-path="src/search/SearchBox.tsx"]')).toContainText('Cut');
   await expect(viewer.getByTestId('diff-missing')).toContainText('src/search/useSearch.ts');
-  await shootPart(page, 'branch', 'ticket-branch');
+  await shootPart(page, 'branch', 'branch-files');
   await big.getByRole('button', { name: 'Show this file' }).click();
   await expect(big.locator('tr[data-kind="add"]')).toHaveCount(450);
   await expect(viewer.getByTestId('diff-large')).toHaveCount(0);

@@ -193,6 +193,12 @@ export function agentBranch(
 /** The id of the ticket's comments block, so "N findings in the comments below" can scroll to it. */
 export const COMMENTS_ID = 'ticket-comments';
 
+/** The Conversation tab's "Waiting for you" part, for the header's "N requests wait for you". */
+export const NEEDS_YOU_ID = 'ticket-needs-you';
+
+/** The Conversation tab's final-step box, for the final step's main action in the header. */
+export const FINAL_STEP_ID = 'ticket-final-step';
+
 /** Roles that work in their own git worktree: helpers and the tester. The rest only read. */
 export function hasWorktree(kind: AgentRoleKind): boolean {
   return kind === 'worker' || kind === 'tester';

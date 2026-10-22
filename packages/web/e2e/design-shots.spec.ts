@@ -98,9 +98,10 @@ test('design: the board, and the sidebar expanded and collapsed', async ({ page,
 test('design: a ticket with a run', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page);
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  // v0.3.0 D-B: the agents are on the ticket page's Agents tab.
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=agents`);
   await expect(h1(page)).toContainText('Saved searches');
-  await expect(page.getByTestId('changes-overview')).toBeVisible();
+  await expect(page.getByTestId('agent-canvas')).toBeVisible();
   await shoot(page, 'ticket-run', undefined, 1000);
   await shoot(page, 'ticket-run-agents', page.getByTestId('agent-canvas'), 1000);
 });
@@ -108,8 +109,8 @@ test('design: a ticket with a run', async ({ page }) => {
 test('design: the ticket branch diff, side by side', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page, loopReviewScenario());
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
-  const branch = page.getByTestId('ticket-branch');
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
+  const branch = page.getByTestId('branch-files');
   await branch.getByTestId('branch-diff').locator('summary').click();
   const viewer = branch.getByTestId('diff-viewer');
   await viewer.getByRole('button', { name: 'Side by side' }).click();

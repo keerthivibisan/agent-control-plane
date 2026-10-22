@@ -94,7 +94,12 @@ type Server = ReturnType<typeof server>;
 
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
 
-function renderTicket(s: Server) {
+/**
+ * The page on one of its tabs (v0.3.0 D-B): the tab is the address's `?tab=`, Conversation when
+ * none is given.
+ */
+function renderTicket(s: Server, tab?: 'agents' | 'files' | 'checks') {
+  window.location.hash = `#/p/${PROJECT_ID}/tickets/${TICKET_ID}${tab ? `?tab=${tab}` : ''}`;
   return renderWithApi(<TicketPage id={TICKET_ID} />, s);
 }
 
@@ -171,9 +176,10 @@ describe('ticket page: routes', () => {
 });
 
 describe('ticket page: plan review', () => {
-  it('shows the plan instead of the tree, with its steps and version', async () => {
+  it('shows the plan first on Conversation, with its steps and version', async () => {
     renderTicket(server(planReviewScenario()));
     const card = await screen.findByTestId('plan-card');
+    // The agents are on their own tab (v0.3.0 D-B).
     expect(screen.queryByTestId('agent-canvas')).toBeNull();
     expect(within(card).getByText('Version 2')).toBeTruthy();
     expect(within(card).getByText('3 helper agents planned')).toBeTruthy();
@@ -182,11 +188,17 @@ describe('ticket page: plan review', () => {
     expect(within(steps as HTMLElement).getAllByRole('listitem')).toHaveLength(3);
     expect(within(steps as HTMLElement).getByText('Settings toggle')).toBeTruthy();
     expect(screen.getByTestId('ticket-stage').textContent).toContain('Plan review');
-    // Version 1 and the comment that sent it back stay, collapsed.
-    const earlier = within(card).getByTestId('earlier-plans');
-    expect(earlier.hasAttribute('open')).toBe(false);
-    expect(within(earlier).getByText('Earlier versions (1)')).toBeTruthy();
-    expect(within(earlier).getByText(/Keep the old settings page/)).toBeTruthy();
+    // Version 1 is in the timeline below, collapsed, followed by the comment that sent it back;
+    // the version waiting for you is not repeated there.
+    const timeline = screen.getByTestId('comments');
+    const plans = within(timeline).getAllByTestId('timeline-plan');
+    expect(plans.map((p) => p.textContent)).toEqual([expect.stringContaining('Plan version 1')]);
+    expect(plans[0]?.querySelector('details')?.hasAttribute('open')).toBe(false);
+    const items = [...timeline.querySelectorAll('ol > li')].map((li) => li.textContent ?? '');
+    const v1 = items.findIndex((t) => t.includes('Plan version 1'));
+    const comment = items.findIndex((t) => t.includes('Keep the old settings page'));
+    expect(v1).toBeGreaterThan(-1);
+    expect(comment).toBeGreaterThan(v1);
   });
 
   it('approves the plan with the CSRF header', async () => {
@@ -242,7 +254,7 @@ describe('ticket page: plan review', () => {
 
 describe('ticket page: agents working', () => {
   it('draws the tree from parentAgentRunId, with depth-2 helpers under their parent', async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     const canvas = await screen.findByTestId('agent-canvas');
     const underLead = within(canvas).getByRole('list', { name: 'Started by Lead' });
     expect(within(underLead).getByTestId(`agent-${UI}`)).toBeTruthy();
@@ -264,7 +276,7 @@ describe('ticket page: agents working', () => {
   });
 
   it("shows each helper's branch from the start, else the review's, else no branch yet", async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     const canvas = await screen.findByTestId('agent-canvas');
     // The agent reports its own branch while it works, before any review exists for it.
     const ui = within(canvas).getByTestId(`agent-${UI}`);
@@ -284,16 +296,16 @@ describe('ticket page: agents working', () => {
     ).toBeNull();
   });
 
-  it('lists what waits for the owner above the tree, and in the summary', async () => {
+  it('lists what waits for the owner first on Conversation, in the header and the sidebar', async () => {
     renderTicket(server(workingScenario()));
     const approvals = await screen.findByTestId('approvals');
     expect(within(approvals).getByText('Edit src/theme/store.ts')).toBeTruthy();
     expect(screen.getByTestId('ticket-summary').textContent).toContain('1 request waits for you');
-    expect(screen.getByTestId('ticket-summary').textContent).toContain('92,700 budget tokens used');
+    expect(screen.getByTestId('run-budget').textContent).toContain('92,700 budget tokens used');
   });
 
   it('opens the lead in the side panel with the chat; helpers have no chat tab', async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     const panel = await screen.findByTestId('side-panel');
     expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
     expect(within(panel).getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected')).toBe(
@@ -311,7 +323,7 @@ describe('ticket page: agents working', () => {
   });
 
   it('moves between tabs with the arrow keys', async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     const panel = await screen.findByTestId('side-panel');
     const chat = within(panel).getByRole('tab', { name: 'Chat' });
     // The shared Tabs (Radix) move focus, and with it the selection, on the next tick.
@@ -331,7 +343,7 @@ describe('ticket page: agents working', () => {
   });
 
   it("shows a helper's own branch in the Details tab before any review exists", async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     await screen.findByTestId('side-panel');
     fireEvent.click(screen.getByRole('button', { name: 'Show the Settings UI in the side panel' }));
     const panel = screen.getByTestId('side-panel');
@@ -355,7 +367,7 @@ describe('ticket page: agents working', () => {
           }),
         ),
     });
-    renderTicket(s);
+    renderTicket(s, 'agents');
     const helper = await screen.findByTestId(`agent-${MIGRATION}`);
     fireEvent.change(within(helper).getByLabelText('Message to the Migration helper'), {
       target: { value: 'Keep the old flag readable. ' },
@@ -378,7 +390,7 @@ describe('ticket page: agents working', () => {
   });
 
   it('offers no prompt box on a helper that has stopped', async () => {
-    renderTicket(server(workingScenario()));
+    renderTicket(server(workingScenario()), 'agents');
     const tokens = await screen.findByTestId(`agent-${TOKENS}`);
     expect(within(tokens).queryByRole('textbox')).toBeNull();
     expect(within(tokens).queryByRole('button', { name: 'Stop' })).toBeNull();
@@ -440,7 +452,7 @@ describe('ticket page: in review', () => {
     const s = server(inReviewScenario(), {
       [`POST ${RUN}/review`]: () => jsonResponse(200, inReviewScenario().routes[`${RUN}/review`]),
     });
-    renderTicket(s);
+    renderTicket(s, 'agents');
     fireEvent.click(
       await screen.findByRole('button', { name: 'Show the Theme store in the side panel' }),
     );
@@ -493,14 +505,20 @@ describe('ticket page: history and quick actions', () => {
       '/api/runs/run-1/checks': [],
     });
     renderTicket(s);
-    const runs = await screen.findByTestId('run-history');
-    expect(within(runs).getByText('Run 2')).toBeTruthy();
-    expect(within(runs).getByText('Shown above')).toBeTruthy();
-    expect(screen.getByTestId('comments').textContent).toContain('on plan version 1');
-    fireEvent.click(within(runs).getByRole('button', { name: 'Show' }));
+    // v0.3.0 D-B: each run is a line in the timeline, oldest first.
+    const timeline = await screen.findByTestId('comments');
+    const runs = within(timeline).getAllByTestId('timeline-run');
+    expect(runs.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Run 1 started'),
+      expect.stringContaining('Run 2 started'),
+    ]);
+    expect(runs[1]?.textContent).toContain('Shown on this page');
+    expect(timeline.textContent).toContain('on plan version 1');
+    fireEvent.click(within(runs[0] as HTMLElement).getByRole('button', { name: 'Show this run' }));
     expect(
       await screen.findByText('You are looking at an earlier run of this ticket.'),
     ).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Agents/ }));
     expect(await screen.findByText(/No agents yet/)).toBeTruthy();
   });
 
@@ -535,9 +553,10 @@ describe('ticket page: history and quick actions', () => {
       [`PATCH ${TICKET}`]: () => jsonResponse(200, workingScenario().routes[TICKET]),
     });
     renderTicket(s);
+    // The description is the timeline's first box (v0.3.0 D-B); its Edit sends only it.
     const info = await screen.findByTestId('ticket-info');
-    fireEvent.click(within(info).getByRole('button', { name: 'Edit' }));
-    fireEvent.change(within(info).getByLabelText('Description'), {
+    fireEvent.click(within(info).getByRole('button', { name: 'Edit the description' }));
+    fireEvent.change(within(info).getByRole('textbox'), {
       target: { value: 'Shorter.' },
     });
     fireEvent.click(within(info).getByRole('button', { name: 'Save' }));
@@ -545,7 +564,31 @@ describe('ticket page: history and quick actions', () => {
     expect(mutations(s)[0]).toMatchObject({
       method: 'PATCH',
       path: TICKET,
-      body: { title: 'Dark mode toggle', description: 'Shorter.' },
+      body: { description: 'Shorter.' },
+    });
+    expect(s.csrf).toEqual([CSRF]);
+  });
+
+  it('edits the title in the header with PATCH', async () => {
+    const s = server(workingScenario(), {
+      [`PATCH ${TICKET}`]: () => jsonResponse(200, workingScenario().routes[TICKET]),
+    });
+    renderTicket(s);
+    const header = await screen.findByTestId('ticket-header');
+    fireEvent.click(within(header).getByRole('button', { name: 'Edit the title' }));
+    const field = within(header).getByLabelText<HTMLInputElement>('Title');
+    expect(field.value).toBe('Dark mode toggle');
+    fireEvent.change(field, { target: { value: '  ' } });
+    expect(within(header).getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(
+      true,
+    );
+    fireEvent.change(field, { target: { value: ' Dark mode switch ' } });
+    fireEvent.click(within(header).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mutations(s)).toHaveLength(1));
+    expect(mutations(s)[0]).toMatchObject({
+      method: 'PATCH',
+      path: TICKET,
+      body: { title: 'Dark mode switch' },
     });
     expect(s.csrf).toEqual([CSRF]);
   });
@@ -567,7 +610,7 @@ describe('ticket page: live workflow (redesign R-H)', () => {
   const stageOf = (stage: string) => screen.getByTestId(`live-${stage}`);
 
   it('shows the run’s stages with their states, reusing the Workflow page’s nodes', async () => {
-    renderTicket(server(planReviewScenario()));
+    renderTicket(server(planReviewScenario()), 'agents');
     const card = await graph();
     expect(within(card).getByRole('heading', { name: 'Workflow' })).toBeTruthy();
     expect(stageOf('plan').dataset.state).toBe('needs-you');
@@ -583,7 +626,7 @@ describe('ticket page: live workflow (redesign R-H)', () => {
   });
 
   it('a separate planner and the post-merge stages show as such while helpers work', async () => {
-    renderTicket(server(stagesScenario()));
+    renderTicket(server(stagesScenario()), 'agents');
     await graph();
     expect(screen.getByTestId('wf-node-plan').dataset.role).toBe('planner');
     expect(stageOf('plan').dataset.state).toBe('done');
@@ -598,13 +641,13 @@ describe('ticket page: live workflow (redesign R-H)', () => {
   it('hides the graph when the run has no workflow (an older run or managed agents off)', async () => {
     const sc = workingScenario();
     delete sc.routes[RUN_WORKFLOW_PATH];
-    renderTicket(server(sc));
+    renderTicket(server(sc), 'agents');
     await screen.findByTestId('agent-canvas');
     expect(screen.queryByTestId('live-workflow')).toBeNull();
   });
 
   it('clicking a stage shows its agent in the side panel', async () => {
-    renderTicket(server(stagesScenario()));
+    renderTicket(server(stagesScenario()), 'agents');
     await graph();
     fireEvent.click(screen.getByTestId('wf-node-plan'));
     const panel = screen.getByTestId('side-panel');
@@ -615,7 +658,7 @@ describe('ticket page: live workflow (redesign R-H)', () => {
     const s = server(heldScenario(), {
       [`POST /api/runs/${RUN_ID}/continue`]: heldScenario().routes[RUN] as object,
     });
-    renderTicket(s);
+    renderTicket(s, 'agents');
     const held = await screen.findByTestId('held-stage');
     expect(held.dataset.stage).toBe('code-review');
     expect(held.textContent).toContain('Final code review is waiting for you');
@@ -636,6 +679,7 @@ describe('ticket page: live workflow (redesign R-H)', () => {
           error: { code: 'run_not_active', message: 'Nothing waits', requestId: 'r-c' },
         }),
       }),
+      'agents',
     );
     const held = await screen.findByTestId('held-stage');
     fireEvent.click(within(held).getByRole('button', { name: 'Continue' }));
@@ -643,18 +687,19 @@ describe('ticket page: live workflow (redesign R-H)', () => {
   });
 
   it('offers no Continue when the tester’s own change waits for review', async () => {
-    renderTicket(server(reviewedScenario()));
+    renderTicket(server(reviewedScenario()), 'agents');
     await graph();
     expect(stageOf('unit-tests').dataset.state).toBe('needs-you');
     expect(screen.queryByTestId('held-stage')).toBeNull();
-    // The tester's change is in the review list like a helper's.
+    // The tester's change is in the review list like a helper's (on Conversation).
+    fireEvent.click(screen.getByRole('tab', { name: /Conversation/ }));
     expect(within(screen.getByTestId('review-list')).getByText('Tester')).toBeTruthy();
   });
 });
 
 describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', () => {
   it('labels planner, reviewer and tester cards; only the tester has a branch', async () => {
-    renderTicket(server(reviewedScenario()));
+    renderTicket(server(reviewedScenario()), 'agents');
     const term = (id: string) =>
       within(screen.getByTestId(`agent-${id}`)).getByTestId('agent-term').textContent;
     await screen.findByTestId('agent-canvas');
@@ -687,13 +732,19 @@ describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', ()
     expect(reviewer.textContent).toContain('a selector would avoid re-renders');
     const owner = comments.querySelector<HTMLElement>('[data-author="owner"]');
     expect(owner && within(owner).getByTestId('comment-author').textContent).toBe('You');
-    expect((await screen.findByTestId('reviewer-findings-link')).textContent).toBe(
-      '1 finding from the reviewer in the comments below',
+    // The graph is on Agents; its link goes back to the Conversation tab.
+    fireEvent.click(screen.getByRole('tab', { name: /Agents/ }));
+    const link = await screen.findByTestId('reviewer-findings-link');
+    expect(link.textContent).toBe('1 finding from the reviewer in the conversation');
+    fireEvent.click(link);
+    expect(screen.getByRole('tab', { name: /Conversation/ }).getAttribute('aria-selected')).toBe(
+      'true',
     );
+    expect(screen.getByTestId('comments')).toBeTruthy();
   });
 
   it('names the planner and the lead in the chat from when the planner ended (decision C)', async () => {
-    renderTicket(server(stagesScenario()));
+    renderTicket(server(stagesScenario()), 'agents');
     const panel = await screen.findByTestId('side-panel');
     // The run is past planning: the panel opens on the lead, the agent the chat reaches now.
     expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
@@ -711,7 +762,7 @@ describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', ()
   });
 
   it('closes the chat once the agent it reaches has stopped, though the run is in review', async () => {
-    renderTicket(server(heldScenario()));
+    renderTicket(server(heldScenario()), 'agents');
     const panel = await screen.findByTestId('side-panel');
     expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
     expect(within(panel).queryByRole('textbox')).toBeNull();
@@ -740,7 +791,7 @@ describe('ticket page: R-R visual fixes', () => {
       .textContent;
 
   it('names the planner in the chat while the planner holds it', async () => {
-    renderTicket(server(plannerReviewScenario()));
+    renderTicket(server(plannerReviewScenario()), 'agents');
     const panel = await screen.findByTestId('side-panel');
     expect(within(panel).getByRole('heading', { name: 'Planner' })).toBeTruthy();
     const chat = within(panel).getByTestId('chat');
@@ -758,7 +809,7 @@ describe('ticket page: R-R visual fixes', () => {
   });
 
   it('a lead the engine closed for the next stage reads "Finished", with its status kept', async () => {
-    renderTicket(server(reviewedScenario()));
+    renderTicket(server(reviewedScenario()), 'agents');
     await screen.findByTestId('agent-canvas');
     expect(status(LEAD)).toBe('Finished');
     expect(
@@ -776,19 +827,19 @@ describe('ticket page: R-R visual fixes', () => {
     const run = sc.routes[RUN] as { agents: { id: string; endedAt: string | null }[] };
     // Stopped earlier, on its own: not the instant the reviewer started.
     for (const a of run.agents) if (a.id === LEAD) a.endedAt = '2026-10-15T09:40:00.000Z';
-    renderTicket(server(sc));
+    renderTicket(server(sc), 'agents');
     await screen.findByTestId('agent-canvas');
     expect(status(LEAD)).toBe('Stopped');
   });
 
   it('lights the Done node once the run completed, and only then', async () => {
-    const { unmount } = renderTicket(server(doneScenario()));
+    const { unmount } = renderTicket(server(doneScenario()), 'agents');
     await graph();
     const done = await screen.findByTestId('live-done');
     expect(done.dataset.state).toBe('done');
     expect(screen.getByTestId('live-ticket').dataset.state).toBeUndefined();
     unmount();
-    renderTicket(server(reviewedScenario()));
+    renderTicket(server(reviewedScenario()), 'agents');
     await graph();
     expect((await screen.findByTestId('live-done')).dataset.state).toBeUndefined();
   });
@@ -821,10 +872,9 @@ describe('ticket page: look (UI refresh U-D)', () => {
 
   it('shows the type, priority and labels as tags, urgency in the tone as well as the word', async () => {
     renderTicket(server(workingScenario()));
-    const heading = await screen.findByRole('heading', { level: 1 });
-    const header = heading.closest('header');
-    expect(header).not.toBeNull();
-    const tags = [...(header?.querySelectorAll('[data-tone]') ?? [])].map((t) => [
+    // In the sidebar's Labels since v0.3.0 D-B.
+    const header = await screen.findByTestId('ticket-labels');
+    const tags = [...header.querySelectorAll('[data-tone]')].map((t) => [
       t.textContent,
       t.getAttribute('data-tone'),
     ]);

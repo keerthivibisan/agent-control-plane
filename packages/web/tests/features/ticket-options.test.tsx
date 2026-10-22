@@ -14,7 +14,7 @@ import {
   runOptionsPatch,
 } from '../../src/features/review-loop/logic';
 import { StartDialog } from '../../src/features/review-loop/StartDialog';
-import { TicketInfo } from '../../src/features/ticket/TicketInfo';
+import { TicketSidebar } from '../../src/features/ticket/Sidebar';
 import { ProjectWorkflowDtoSchema, WorkflowGraphDtoSchema } from '@acp/core/api';
 import {
   CSRF,
@@ -249,7 +249,7 @@ describe('ticket page: Run options (RL-H)', () => {
 
   it('shows each option, the ticket’s own or the project default', async () => {
     renderWithApi(
-      <TicketInfo detail={ticketDetail(ticket)} shownRunId={null} onShowRun={() => {}} />,
+      <TicketSidebar detail={ticketDetail(ticket)} run={undefined} isCurrent />,
       server(),
     );
     const section = screen.getByTestId('ticket-run-options');
@@ -268,35 +268,35 @@ describe('ticket page: Run options (RL-H)', () => {
     const s = server({
       [`PATCH /api/tickets/${ticket.id}`]: ticketDetail({ ...ticket, runOptions: undefined }),
     });
-    renderWithApi(
-      <TicketInfo detail={ticketDetail(ticket)} shownRunId={null} onShowRun={() => {}} />,
-      s,
-    );
+    renderWithApi(<TicketSidebar detail={ticketDetail(ticket)} run={undefined} isCurrent />, s);
     const section = screen.getByTestId('ticket-run-options');
     fireEvent.click(within(section).getByRole('button', { name: 'Change run options' }));
-    const mode = within(section).getByLabelText<HTMLSelectElement>('Approval mode: at most');
+    const form = screen.getByTestId('ticket-run-options-dialog');
+    const mode = within(form).getByLabelText<HTMLSelectElement>('Approval mode: at most');
     expect(mode.value).toBe('manual');
     fireEvent.change(mode, { target: { value: '' } });
-    fireEvent.change(within(section).getByLabelText('Rework rounds'), { target: { value: '3' } });
-    fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    fireEvent.change(within(form).getByLabelText('Rework rounds'), { target: { value: '3' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(posts(s)).toHaveLength(1));
     expect(posts(s)[0]).toMatchObject({
       method: 'PATCH',
       path: `/api/tickets/${ticket.id}`,
       body: { runOptions: { approvalMode: null, reviewer: null, maxReworkRounds: 3 } },
     });
-    await waitFor(() => expect(within(section).queryByRole('button', { name: 'Save' })).toBeNull());
+    await waitFor(() => expect(screen.queryByTestId('ticket-run-options-dialog')).toBeNull());
   });
 
   it('Cancel sends nothing', () => {
     const s = server();
-    renderWithApi(
-      <TicketInfo detail={ticketDetail(ticket)} shownRunId={null} onShowRun={() => {}} />,
-      s,
-    );
+    renderWithApi(<TicketSidebar detail={ticketDetail(ticket)} run={undefined} isCurrent />, s);
     const section = screen.getByTestId('ticket-run-options');
     fireEvent.click(within(section).getByRole('button', { name: 'Change run options' }));
-    fireEvent.click(within(section).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(
+      within(screen.getByTestId('ticket-run-options-dialog')).getByRole('button', {
+        name: 'Cancel',
+      }),
+    );
+    expect(screen.queryByTestId('ticket-run-options-dialog')).toBeNull();
     expect(within(section).getByTestId('run-option-mode').textContent).toBe('Manual · This ticket');
     expect(posts(s)).toHaveLength(0);
   });
@@ -397,10 +397,7 @@ describe('a project saved as a graph (stored v2, WG-F)', () => {
   it('the ticket page’s run options show the project’s values', async () => {
     const s = saved();
     const ticket = ticketDto({ id: 't-23', key: 'WEB-23' });
-    renderWithApi(
-      <TicketInfo detail={ticketDetail(ticket)} shownRunId={null} onShowRun={() => {}} />,
-      s,
-    );
+    renderWithApi(<TicketSidebar detail={ticketDetail(ticket)} run={undefined} isCurrent />, s);
     const section = screen.getByTestId('ticket-run-options');
     await waitFor(() =>
       expect(within(section).getByTestId('run-option-reviewer').textContent).toBe(

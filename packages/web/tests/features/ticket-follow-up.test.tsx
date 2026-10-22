@@ -76,6 +76,8 @@ type Server = ReturnType<typeof server>;
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
 
 async function openPanel(s: Server) {
+  // The agents are on the Agents tab (v0.3.0 D-B).
+  window.location.hash = '#?tab=agents';
   renderWithApi(<TicketPage id={TICKET_ID} />, s);
   const panel = await screen.findByTestId('side-panel');
   expect(within(panel).getByRole('heading', { name: 'Lead' })).toBeTruthy();
@@ -279,6 +281,8 @@ describe('ticket page: the chat after the lead ends (R-J)', () => {
       [`POST /api/runs/${OLD_RUN_ID}/chat`]: () =>
         jsonResponse(201, { ...followUpOwnerMessage('Why did this run fail?'), runId: OLD_RUN_ID }),
     });
+    // The agents are on the Agents tab (v0.3.0 D-B).
+    window.location.hash = '#?tab=agents';
     renderWithApi(<TicketPage id={TICKET_ID} />, s);
     fireEvent.change(await screen.findByRole('combobox', { name: 'Run' }), {
       target: { value: OLD_RUN_ID },

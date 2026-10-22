@@ -291,7 +291,7 @@ test('the final step: Push & open PR, then the pull request open, Refresh, merge
   const { posts } = await serveFinalStep(page);
   await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
   const card = page.getByTestId('ticket-branch');
-  await expect(card.getByTestId('branch-name')).toHaveText(GH_BRANCH);
+  await expect(page.getByTestId('pr-line-branch')).toHaveText(GH_BRANCH);
   await expect(card.getByRole('button', { name: 'Merge into main' })).toBeVisible();
   const push = card.getByRole('button', { name: 'Push & open PR' });
   await expect(push).toBeEnabled();
@@ -311,7 +311,7 @@ test('the final step: Push & open PR, then the pull request open, Refresh, merge
   await confirm.getByRole('button', { name: 'Push & open PR' }).click();
 
   // Open on GitHub: the number links out in a new tab; the local merge waits.
-  const pr = card.getByTestId('pull-request');
+  const pr = page.getByTestId('sidebar-pull-request').getByTestId('pull-request');
   await expect(pr.getByTestId('pr-state')).toHaveText('Open');
   const link = pr.getByRole('link', { name: /Pull request #42/ });
   await expect(link).toHaveAttribute('href', GH_PR_URL);
@@ -323,7 +323,9 @@ test('the final step: Push & open PR, then the pull request open, Refresh, merge
   // Refresh reads it again: merged on GitHub, the ticket is done.
   await pr.getByRole('button', { name: 'Refresh' }).click();
   await expect(card.getByTestId('branch-state')).toHaveText('Merged into main on GitHub');
-  await expect(card.getByTestId('pull-request').getByTestId('pr-state')).toHaveText('Merged');
+  await expect(
+    page.getByTestId('sidebar-pull-request').getByTestId('pull-request').getByTestId('pr-state'),
+  ).toHaveText('Merged');
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
   await shootPart(page, 'card-merged', 'ticket-branch');
 
@@ -351,7 +353,7 @@ test('G-D: the pull request is read once per visit; Refresh stays the owner’s'
 }) => {
   const { posts } = await serveFinalStep(page, { start: 'open', push: 'open', refresh: 'open' });
   await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
-  const pr = page.getByTestId('ticket-branch').getByTestId('pull-request');
+  const pr = page.getByTestId('sidebar-pull-request').getByTestId('pull-request');
   await expect(pr.getByTestId('pr-state')).toHaveText('Open');
   await expect.poll(() => posts.length).toBe(1);
   await expect(pr.getByTestId('pr-checked')).toContainText('Checked');
@@ -376,7 +378,9 @@ test('G-D: Push new commits when the branch moved on since the last push', async
   });
   await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
   const card = page.getByTestId('ticket-branch');
-  await expect(card.getByTestId('pull-request').getByTestId('pr-state')).toHaveText('Open');
+  await expect(
+    page.getByTestId('sidebar-pull-request').getByTestId('pull-request').getByTestId('pr-state'),
+  ).toHaveText('Open');
   const push = card.getByRole('button', { name: 'Push new commits' });
   await expect(push).toBeEnabled();
   await expect(card.getByRole('button', { name: 'Merge into main' })).toHaveCount(0);
@@ -390,7 +394,9 @@ test('G-D: Push new commits when the branch moved on since the last push', async
   await confirm.getByRole('button', { name: 'Push new commits' }).click();
   // Up to date: nothing more to push.
   await expect(card.getByRole('button', { name: 'Push new commits' })).toHaveCount(0);
-  await expect(card.getByTestId('pull-request').getByTestId('pr-state')).toHaveText('Open');
+  await expect(
+    page.getByTestId('sidebar-pull-request').getByTestId('pull-request').getByTestId('pr-state'),
+  ).toHaveText('Open');
   expect(posts).toEqual([
     { path: PR_REFRESH_PATH, body: {} },
     { path: PR_PATH, body: {} },

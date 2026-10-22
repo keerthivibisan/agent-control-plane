@@ -1,16 +1,14 @@
-import type { TicketCommentDto, TicketPlanDto } from '@acp/core/api';
+import type { TicketPlanDto } from '@acp/core/api';
 import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { Details } from '../../components/Details';
 import { inputClass } from '../../components/Input';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { decidePlan } from '../../lib/api';
-import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, RUN_SUMMARY_COPY, TICKET_COPY } from '../../lib/copy';
+import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from './actions';
-import { commentsOnPlan } from './ticket-state';
 
 const C = TICKET_COPY.plan;
 const MAX_COMMENT = 8000;
@@ -51,73 +49,21 @@ export function PlanBody({ plan }: { plan: TicketPlanDto }) {
   );
 }
 
+/** Where a plan version stands, in words ("Approved automatically (Full auto)" for Full auto). */
+export function planStatusWord(plan: Pick<TicketPlanDto, 'status' | 'decidedBy'>): string {
+  return plan.status === 'approved' && plan.decidedBy === 'auto'
+    ? REVIEW_LOOP_COPY.fullAuto.planApproved
+    : PLAN_STATUS_COPY[plan.status];
+}
+
 function PlanMeta({ plan }: { plan: TicketPlanDto }) {
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-dim tabular-nums">
       <span className="font-medium text-ink">{C.version(plan.version)}</span>
       <span>{C.helpers(plan.plannedHelpers)}</span>
-      <span data-plan-status={plan.status}>
-        {plan.status === 'approved' && plan.decidedBy === 'auto'
-          ? REVIEW_LOOP_COPY.fullAuto.planApproved
-          : PLAN_STATUS_COPY[plan.status]}
-      </span>
+      <span data-plan-status={plan.status}>{planStatusWord(plan)}</span>
       <RelativeTime iso={plan.decidedAt ?? plan.createdAt} />
     </span>
-  );
-}
-
-function PlanComments({ comments }: { comments: readonly TicketCommentDto[] }) {
-  if (comments.length === 0) return null;
-  return (
-    <ul className="flex flex-col gap-2">
-      {comments.map((c) => (
-        <li
-          key={c.id}
-          className="rounded-control border border-l-2 border-warning/25 border-l-warning bg-warning-soft px-3 py-2"
-        >
-          <span className="text-caption font-medium">
-            {c.author === 'owner'
-              ? C.yourComment
-              : c.author === 'reviewer'
-                ? TICKET_COPY.comments.reviewer
-                : c.author === 'app'
-                  ? RUN_SUMMARY_COPY.author
-                  : TICKET_COPY.comments.lead}
-          </span>
-          <p className="whitespace-pre-wrap">{c.body}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** Earlier versions of a plan, collapsed, each with the comment that sent it back. */
-export function EarlierPlans({
-  plans,
-  comments,
-  label,
-}: {
-  plans: readonly TicketPlanDto[];
-  comments: readonly TicketCommentDto[];
-  /** Summary text instead of "Earlier versions (n)". */
-  label?: string;
-}) {
-  if (plans.length === 0) return null;
-  return (
-    <Details
-      summary={label ? `${label} (${plans.length})` : C.earlier(plans.length)}
-      testId="earlier-plans"
-    >
-      <div className="flex flex-col gap-5">
-        {plans.map((p) => (
-          <section key={p.id} aria-label={C.version(p.version)} className="flex flex-col gap-3">
-            <PlanMeta plan={p} />
-            <PlanBody plan={p} />
-            <PlanComments comments={commentsOnPlan(comments, p.id)} />
-          </section>
-        ))}
-      </div>
-    </Details>
   );
 }
 
@@ -125,17 +71,7 @@ export function EarlierPlans({
  * The plan-review state (README §5.3): the lead's newest plan with Approve, or Request changes with
  * a required comment that goes to the lead, which then writes the next version.
  */
-export function PlanCard({
-  ticketId,
-  plan,
-  earlier,
-  comments,
-}: {
-  ticketId: string;
-  plan: TicketPlanDto;
-  earlier: readonly TicketPlanDto[];
-  comments: readonly TicketCommentDto[];
-}) {
+export function PlanCard({ ticketId, plan }: { ticketId: string; plan: TicketPlanDto }) {
   const decide = useTicketAction(decidePlan);
   const [comment, setComment] = useState('');
   const [missing, setMissing] = useState(false);
@@ -204,7 +140,6 @@ export function PlanCard({
           </div>
           <ActionError error={decide.error} message={C.failed} />
         </div>
-        <EarlierPlans plans={earlier} comments={comments} />
       </div>
     </Card>
   );

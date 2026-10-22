@@ -398,12 +398,14 @@ describe('the ticket page: the ticket’s branch', () => {
       'Project default (main)',
     );
     fireEvent.click(within(section).getByRole('button', { name: TB.editLabel }));
-    const name = within(section).getByLabelText<HTMLInputElement>(TB.name);
+    // v0.3.0 D-B: the sidebar's Change edits in a dialog.
+    const dialog = screen.getByTestId('ticket-branch-dialog');
+    const name = within(dialog).getByLabelText<HTMLInputElement>(TB.name);
     expect(name.placeholder).toBe('feature/WEB-21-saved-searches');
     fireEvent.change(name, { target: { value: '-bad' } });
-    expect(within(section).getByRole('button', { name: TB.save })).toHaveProperty('disabled', true);
+    expect(within(dialog).getByRole('button', { name: TB.save })).toHaveProperty('disabled', true);
     fireEvent.change(name, { target: { value: 'spike/search' } });
-    fireEvent.click(within(section).getByRole('button', { name: TB.save }));
+    fireEvent.click(within(dialog).getByRole('button', { name: TB.save }));
     await waitFor(() => expect(mutations(s)).toHaveLength(1));
     expect(mutations(s)[0]).toMatchObject({
       method: 'PATCH',
@@ -419,8 +421,9 @@ describe('the ticket page: the ticket’s branch', () => {
       'develop · This ticket',
     );
     fireEvent.click(within(section).getByRole('button', { name: TB.editLabel }));
-    fireEvent.change(within(section).getByLabelText(TB.target), { target: { value: '' } });
-    fireEvent.click(within(section).getByRole('button', { name: TB.save }));
+    const dialog = screen.getByTestId('ticket-branch-dialog');
+    fireEvent.change(within(dialog).getByLabelText(TB.target), { target: { value: '' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: TB.save }));
     await waitFor(() => expect(mutations(s)).toHaveLength(1));
     expect(mutations(s)[0]?.body).toEqual({ branch: null });
   });
@@ -438,6 +441,8 @@ describe('the ticket branch card: the final step', () => {
   async function card() {
     return screen.findByTestId('ticket-branch');
   }
+  /** The pull request is in the Conversation tab's sidebar (v0.3.0 D-B). */
+  const side = () => screen.getByTestId('sidebar-pull-request');
 
   it('fixtures match the contract', () => {
     for (const sc of [
@@ -539,7 +544,7 @@ describe('the ticket branch card: the final step', () => {
   it('an open pull request: number and link in a new tab, its state, Checked, Refresh; no local merge', async () => {
     const s = renderTicket(ghReviewScenario(pullRequest('open')));
     const c = await card();
-    const pr = within(c).getByTestId('pull-request');
+    const pr = within(side()).getByTestId('pull-request');
     const link = within(pr).getByRole('link', { name: /Pull request #42/ });
     expect(link.getAttribute('href')).toBe(GH_PR_URL);
     expect(link.getAttribute('target')).toBe('_blank');
@@ -576,18 +581,20 @@ describe('the ticket branch card: the final step', () => {
             });
       },
     });
-    const c = await card();
-    const first = await within(c).findByTestId('pr-error');
+    await card();
+    const first = await within(side()).findByTestId('pr-error');
     expect(within(first).getAllByRole('alert')[0]?.textContent).toBe(PR.errors.timeout);
-    const refresh = within(c).getByRole('button', { name: PR.refresh });
+    const refresh = within(side()).getByRole('button', { name: PR.refresh });
     await waitFor(() => expect(refresh).toHaveProperty('disabled', false));
     fireEvent.click(refresh);
     await waitFor(() =>
-      expect(within(c).getByTestId('pr-error').getAttribute('data-code')).toBe('gh-not-logged-in'),
+      expect(within(side()).getByTestId('pr-error').getAttribute('data-code')).toBe(
+        'gh-not-logged-in',
+      ),
     );
-    expect(within(within(c).getByTestId('pr-error')).getAllByRole('alert')[0]?.textContent).toBe(
-      PR.errors['gh-not-logged-in'],
-    );
+    expect(
+      within(within(side()).getByTestId('pr-error')).getAllByRole('alert')[0]?.textContent,
+    ).toBe(PR.errors['gh-not-logged-in']);
     expect(mutations(s)).toHaveLength(2);
   });
 
@@ -595,7 +602,7 @@ describe('the ticket branch card: the final step', () => {
     renderTicket(ghMergedScenario());
     const c = await card();
     expect(within(c).getByTestId('branch-state').textContent).toBe('Merged into main on GitHub');
-    const pr = within(c).getByTestId('pull-request');
+    const pr = within(side()).getByTestId('pull-request');
     expect(within(pr).getByTestId('pr-state').textContent).toBe('Merged');
     expect(within(pr).getByTestId('pr-note').textContent).toBe(PR.mergedNote('main'));
     expect(within(pr).queryByRole('button', { name: PR.refresh })).toBeNull();
@@ -606,7 +613,7 @@ describe('the ticket branch card: the final step', () => {
   it('closed without merging: both final steps are offered again', async () => {
     renderTicket(ghReviewScenario(pullRequest('closed')));
     const c = await card();
-    const pr = within(c).getByTestId('pull-request');
+    const pr = within(side()).getByTestId('pull-request');
     expect(within(pr).getByTestId('pr-state').textContent).toBe('Closed');
     expect(within(pr).getByTestId('pr-note').textContent).toBe(PR.closedNote);
     expect(within(c).getByRole('button', { name: 'Merge into main' })).toBeTruthy();
@@ -617,8 +624,8 @@ describe('the ticket branch card: the final step', () => {
     renderTicket(
       ghReviewScenario(pullRequest('open', { url: 'http://github.com/acme/web-app/pull/42' })),
     );
-    const c = await card();
-    const pr = within(c).getByTestId('pull-request');
+    await card();
+    const pr = within(side()).getByTestId('pull-request');
     expect(within(pr).queryByRole('link')).toBeNull();
     expect(within(pr).getByText('Pull request #42')).toBeTruthy();
   });
@@ -759,7 +766,7 @@ describe('Push new commits to an open pull request (G-D)', () => {
     for (const sc of [ghOpenScenario(false), ghReviewScenario(pullRequest('open'))]) {
       const view = renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, ticketServer(sc));
       const c = await view.findByTestId('ticket-branch');
-      expect(within(c).getByTestId('pull-request')).toBeTruthy();
+      expect(view.getByTestId('pull-request')).toBeTruthy();
       expect(within(c).queryByRole('button', { name: PR.pushNew })).toBeNull();
       view.unmount();
     }

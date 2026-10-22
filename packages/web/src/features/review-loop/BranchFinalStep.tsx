@@ -206,6 +206,7 @@ export function BranchFinalStep({
   branch,
   review,
   ticket,
+  showPullRequest = true,
 }: {
   mode: TicketBranchMode;
   run: Pick<RunDetailDto, 'id'>;
@@ -213,11 +214,15 @@ export function BranchFinalStep({
   review: TicketBranchReviewDto | undefined;
   /** The run's ticket; null for a run without one (no pull request then). */
   ticket: FinalStepTicket | null;
+  /** False where the pull request is shown elsewhere (the ticket page's sidebar, v0.3.0 D-B). */
+  showPullRequest?: boolean;
 }) {
   const pr = branch.pullRequest ?? null;
   return (
     <>
-      {pr !== null ? <PullRequestInfo pr={pr} ticketId={ticket?.id ?? null} /> : null}
+      {pr !== null && showPullRequest ? (
+        <PullRequestInfo pr={pr} ticketId={ticket?.id ?? null} />
+      ) : null}
       {mode === 'merge' ? (
         <Actions run={run} branch={branch} review={review} ticket={ticket} />
       ) : null}

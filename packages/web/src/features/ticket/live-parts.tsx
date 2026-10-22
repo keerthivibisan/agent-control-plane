@@ -6,6 +6,7 @@ import { continueRun } from '../../lib/api';
 import { TICKET_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from './actions';
+import { useTicketNav } from './ticket-nav';
 import { COMMENTS_ID } from './ticket-state';
 
 const C = TICKET_COPY.workflow;
@@ -48,14 +49,22 @@ export function HeldNotice({
   );
 }
 
-/** Reviewer findings on this run: a button down to the comments (the hash is the app's route). */
+/**
+ * Reviewer findings on this run: a button to the comments (the hash is the app's route). On the
+ * ticket page they are on the Conversation tab (v0.3.0 D-B), which it opens first.
+ */
 export function ReviewerFindingsLink({ count }: { count: number }) {
+  const nav = useTicketNav();
   return (
     <button
       type="button"
       className="w-fit text-left text-accent hover:underline"
       data-testid="reviewer-findings-link"
-      onClick={() => document.getElementById(COMMENTS_ID)?.scrollIntoView?.({ behavior: 'smooth' })}
+      onClick={() =>
+        nav !== null
+          ? nav.goTo('conversation', COMMENTS_ID)
+          : document.getElementById(COMMENTS_ID)?.scrollIntoView?.({ behavior: 'smooth' })
+      }
     >
       {C.reviewerComments(count)}
     </button>

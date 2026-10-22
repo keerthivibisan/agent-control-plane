@@ -66,6 +66,8 @@ beforeAll(() => {
 
 function render(sc: LoopScenario, routes: RouteTable = {}) {
   const s = fakeServer({ ...sc.routes, '/api/control/token': { token: CSRF }, ...routes });
+  // The agents are on the Agents tab (v0.3.0 D-B).
+  window.location.hash = '#?tab=agents';
   renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
   return s;
 }

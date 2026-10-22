@@ -210,6 +210,8 @@ describe('ticket page: the live graph shows agent files (R-I)', () => {
     };
     pw.workflow.stages['helpers'] = { ...pw.workflow.stages['helpers'], agent: 'db-migrator' };
     const s = fakeServer({ ...sc.routes, [PROJECT_WORKFLOW_PATH]: pw });
+    // The agents are on the Agents tab (v0.3.0 D-B).
+    window.location.hash = '#?tab=agents';
     renderWithApi(<TicketPage id={TICKET_ID} />, s);
     await screen.findByTestId('live-workflow');
     const helpers = screen.getByTestId('live-helpers');

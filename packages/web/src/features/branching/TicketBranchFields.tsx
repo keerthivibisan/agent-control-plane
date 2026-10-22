@@ -2,6 +2,8 @@ import type { BranchStrategy } from '@acp/core';
 import type { TicketDetailDto } from '@acp/core/api';
 import { useState } from 'react';
 import { Button } from '../../components/Button';
+import { Dialog } from '../../components/Dialog';
+import { InfoTip } from '../../components/InfoTip';
 import { projectSetupPaths, projectSetupSchemas, updateTicket } from '../../lib/api';
 import { TICKET_BRANCH_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
@@ -100,10 +102,15 @@ function Value({ own, fallback }: { own: string | undefined; fallback: string | 
   return <span className="min-w-0 break-all text-dim">{C.projectDefault(fallback)}</span>;
 }
 
+/** A label over its value, as GitHub's pull request sidebar lists them. */
+const ROW = 'flex min-w-0 flex-col gap-0.5';
+const LABEL = 'text-caption text-dim';
+
 /**
- * The ticket page's Branch section: the ticket's own branch name and target, or what the
- * project gives, with Change. Once the current run has created its branch (and not discarded
- * it), the actual branch and target are shown instead, read-only.
+ * The ticket page's Branch section (in the sidebar since v0.3.0 D-B): the ticket's own branch
+ * name and target, or what the project gives, with Change, which edits them in a dialog. Once the
+ * current run has created its branch (and not discarded it), the actual branch and target are
+ * shown instead, read-only.
  */
 export function TicketBranchSection({
   detail,
@@ -120,12 +127,14 @@ export function TicketBranchSection({
   const fixed = created !== null && created.state !== 'discarded';
   const name = defaults === null ? null : projectBranchName(defaults.strategy, ticket);
   const target = targetWord(defaults);
+  const errors = draft === null ? {} : validateTicketBranch(draft);
 
   return (
     <div className="flex flex-col gap-2" data-testid="ticket-branch-settings">
-      <div className="flex min-h-7 items-center gap-2">
+      <div className="flex min-h-7 items-center gap-1">
         <h3 className={heading}>{C.title}</h3>
-        {!fixed && draft === null ? (
+        <InfoTip tip={fixed ? C.created : C.note} label={C.title} />
+        {!fixed ? (
           <Button
             variant="quiet"
             size="sm"
@@ -140,65 +149,83 @@ export function TicketBranchSection({
           </Button>
         ) : null}
       </div>
-      <p className="text-caption text-dim">{fixed ? C.created : C.note}</p>
       {fixed ? (
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
-          <dt className="text-dim">{C.actualBranch}</dt>
-          <dd
-            className="min-w-0 font-mono font-medium break-all"
-            data-testid="ticket-branch-actual"
-          >
-            {created.branch}
-          </dd>
-          <dt className="text-dim">{C.actualTarget}</dt>
-          <dd className="min-w-0 font-mono break-all" data-testid="ticket-branch-actual-target">
-            {created.baseBranch}
-          </dd>
-        </dl>
-      ) : draft === null ? (
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
-          <dt className="text-dim">{C.name}</dt>
-          <dd className="flex min-w-0" data-testid="ticket-branch-name">
-            <Value own={ticket.branch?.name} fallback={name} />
-          </dd>
-          <dt className="text-dim">{C.target}</dt>
-          <dd className="flex min-w-0" data-testid="ticket-branch-target">
-            <Value own={ticket.branch?.target} fallback={target} />
-          </dd>
+        <dl className="flex flex-col gap-2">
+          <div className={ROW}>
+            <dt className={LABEL}>{C.actualBranch}</dt>
+            <dd
+              className="min-w-0 font-mono font-medium break-all"
+              data-testid="ticket-branch-actual"
+            >
+              {created.branch}
+            </dd>
+          </div>
+          <div className={ROW}>
+            <dt className={LABEL}>{C.actualTarget}</dt>
+            <dd className="min-w-0 font-mono break-all" data-testid="ticket-branch-actual-target">
+              {created.baseBranch}
+            </dd>
+          </div>
         </dl>
       ) : (
-        <form
-          className="flex flex-col gap-3"
-          noValidate
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (hasTicketBranchErrors(validateTicketBranch(draft))) return;
-            void save.run(ticket.id, { branch: ticketBranchPatch(draft) }).then((done) => {
-              if (done !== null) setDraft(null);
-            });
-          }}
-        >
-          <TicketBranchInputs
-            draft={draft}
-            onChange={setDraft}
-            namePlaceholder={name}
-            targetPlaceholder={targetPlaceholder(defaults)}
-          />
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={save.pending || hasTicketBranchErrors(validateTicketBranch(draft))}
-            >
-              {save.pending ? C.saving : C.save}
-            </Button>
-            <Button onClick={() => setDraft(null)} disabled={save.pending}>
-              {C.cancel}
-            </Button>
+        <dl className="flex flex-col gap-2">
+          <div className={ROW}>
+            <dt className={LABEL}>{C.name}</dt>
+            <dd className="flex min-w-0" data-testid="ticket-branch-name">
+              <Value own={ticket.branch?.name} fallback={name} />
+            </dd>
           </div>
-          <ActionError error={save.error} message={C.failed} />
-        </form>
+          <div className={ROW}>
+            <dt className={LABEL}>{C.target}</dt>
+            <dd className="flex min-w-0" data-testid="ticket-branch-target">
+              <Value own={ticket.branch?.target} fallback={target} />
+            </dd>
+          </div>
+        </dl>
       )}
+      {draft !== null ? (
+        <Dialog
+          title={C.title}
+          description={C.note}
+          onClose={() => {
+            if (!save.pending) setDraft(null);
+          }}
+          testId="ticket-branch-dialog"
+          wide
+        >
+          <form
+            className="flex flex-col gap-4"
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (hasTicketBranchErrors(errors)) return;
+              void save.run(ticket.id, { branch: ticketBranchPatch(draft) }).then((done) => {
+                if (done !== null) setDraft(null);
+              });
+            }}
+          >
+            <TicketBranchInputs
+              draft={draft}
+              onChange={setDraft}
+              namePlaceholder={name}
+              targetPlaceholder={targetPlaceholder(defaults)}
+            />
+            <ActionError error={save.error} message={C.failed} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button onClick={() => setDraft(null)} disabled={save.pending}>
+                {C.cancel}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={save.pending || hasTicketBranchErrors(errors)}
+              >
+                {save.pending ? C.saving : C.save}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      ) : null}
     </div>
   );
 }
