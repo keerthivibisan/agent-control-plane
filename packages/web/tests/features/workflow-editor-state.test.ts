@@ -11,10 +11,12 @@ import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
 import { customGraph, customGraphDto, graphDto, migratedGraph } from '../../e2e/workflow-fixtures';
 import {
+  linkTargets,
   toFlowEdges,
   toFlowNodes,
   type BlockContext,
 } from '../../src/features/workflow/editor/flow';
+import { countConflicts, drawnLinks } from '../../src/features/workflow/editor/routing';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
 import { layoutGraph, sizeOf } from '../../src/features/workflow/editor/layout';
 import {
@@ -338,24 +340,95 @@ describe('issues, layout and the canvas mapping', () => {
     });
     const edges = toFlowEdges(g, issues, null);
     const rework = edges.find((e) => e.id === 'rework-review-helpers');
-    expect(rework).toMatchObject({ sourceHandle: 'out-bottom', targetHandle: 'in-bottom' });
+    // Rework loops underneath, leaving and entering on the sides that face each other.
+    expect(rework).toMatchObject({ sourceHandle: 's-bottom-15', targetHandle: 't-bottom-85' });
+    expect(rework?.data?.route.kind).toBe('loop-bottom');
     // Forward links: side to side to the right, bottom to top into the next row.
     expect(edges.find((e) => e.id === 'assigns-orchestrate-helper-1')).toMatchObject({
       sourceHandle: 'out',
       targetHandle: 'in',
     });
     expect(edges.find((e) => e.id === 'merge-orchestrate-checks')).toMatchObject({
-      sourceHandle: 'out-bottom',
-      targetHandle: 'in-top',
+      sourceHandle: 's-bottom-50',
+      targetHandle: 't-top-50',
     });
     expect(rework?.label).toBe('Rework ×2');
+    // Findings loop over the top into the lead, clear of its plan link at 50%.
     expect(edges.find((e) => e.id === 'findings-review-orchestrate')).toMatchObject({
-      sourceHandle: 'out-top',
-      targetHandle: 'in-top',
+      sourceHandle: 's-top-50',
+      targetHandle: 't-top-85',
     });
+    // The tester's review goes up to the lead in the gap between the rows, not across the
+    // helpers stacked in the middle row.
+    const up = edges.find((e) => e.id === 'review-unit-tests-orchestrate');
+    expect(up).toMatchObject({ sourceHandle: 's-top-30', targetHandle: 't-bottom-70' });
+    expect(up?.data?.route.kind).toBe('corridor');
     expect(edges.find((e) => e.id === 'merge-orchestrate-checks')?.ariaLabel).toBe(
       'Merges through: from Lead to Checks',
     );
+  });
+});
+
+describe('linking and drawing (v0.3.0 D-C)', () => {
+  const ctx: BlockContext = {
+    skills: undefined,
+    agents: undefined,
+    agentModels: undefined,
+    projectModel: null,
+    projectMode: 'auto-edits',
+    helperLimit: 3,
+  };
+
+  it('while a link is dragged, the blocks canConnect allows are valid targets, the rest not', () => {
+    const g = run(todays(), { type: 'add', item: 'helper' }).graph;
+    const targets = linkTargets(g, 'orchestrate');
+    expect(targets?.get('orchestrate')).toBe('source');
+    // A new helper can be assigned or reworked by the lead.
+    expect(targets?.get('helper-1')).toBe('valid');
+    // Already linked (merge, assigns and rework to the pool) or never allowed: invalid.
+    for (const id of ['checks', 'helpers', 'ticket', 'review', 'done']) {
+      expect(targets?.get(id)).toBe('invalid');
+    }
+    // Every valid target is one allowedEdgeTypes accepts, and nothing else.
+    for (const n of g.nodes) {
+      if (n.id === 'orchestrate') continue;
+      expect(targets?.get(n.id) === 'valid').toBe(
+        allowedEdgeTypes(g, 'orchestrate', n.id).length > 0,
+      );
+    }
+    expect(linkTargets(g, null)).toBeNull();
+    const nodes = toFlowNodes(g, [], null, ctx, undefined, 'orchestrate');
+    expect(nodes.find((n) => n.id === 'helper-1')?.data.linkTarget).toBe('valid');
+    expect(nodes.find((n) => n.id === 'ticket')?.data.linkTarget).toBe('invalid');
+    expect(toFlowNodes(g, [], null, ctx).every((n) => n.data.linkTarget === null)).toBe(true);
+  });
+
+  it('fades the links that don’t touch the selection, and all of them while dragging', () => {
+    const g = todays();
+    const selected = toFlowEdges(g, [], { kind: 'node', id: 'review' });
+    for (const e of selected) {
+      expect(e.data?.dim).toBe(e.source !== 'review' && e.target !== 'review');
+    }
+    const one = toFlowEdges(g, [], { kind: 'edge', id: 'merge-orchestrate-checks' });
+    expect(one.filter((e) => e.data?.dim === false).map((e) => e.id)).toEqual([
+      'merge-orchestrate-checks',
+    ]);
+    expect(toFlowEdges(g, [], null, undefined, true).every((e) => e.data?.dim)).toBe(true);
+    expect(toFlowEdges(g, [], null).some((e) => e.data?.dim)).toBe(false);
+  });
+
+  it('draws every template without links crossing, the dense hand-built graph with one', () => {
+    const templates = [
+      workflowTemplate('lead-only'),
+      todays(),
+      workflowTemplate('reviewer-helper-loop'),
+      workflowTemplate('todays-setup', { planner: true }),
+    ];
+    for (const g of templates) expect(countConflicts(drawnLinks(g, layoutGraph(g)))).toBe(0);
+    // Two helpers stacked, the lead assigning both and reworking the first: its rework loop has to
+    // cross the line to the second (there is no way round in rows).
+    const custom = parse(customGraph());
+    expect(countConflicts(drawnLinks(custom, layoutGraph(custom)))).toBeLessThanOrEqual(1);
   });
 });
 

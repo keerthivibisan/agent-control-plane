@@ -154,12 +154,16 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await nav.getByRole('link', { name: 'Workflow' }).click();
   await expect(page.getByTestId('graph-editor')).toBeVisible();
   const panel = page.getByRole('complementary', { name: 'Block settings' });
-  await page.getByRole('button', { name: 'Add Planner' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Planner/ }).click();
   await expect(page.getByTestId('block-plan')).toHaveAttribute('data-kind', 'planner');
-  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Final reviewer/ }).click();
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'code-review');
   await panel.getByTestId('skills-field').getByLabel('code-review').check();
   await panel.getByRole('combobox', { name: 'Agent file' }).selectOption('reviewer');
+  // A block or link is selected: the header's Problems button shows the list again.
+  await page.getByTestId('problems-button').click();
   await expect(page.getByTestId('issues').getByTestId('issues-none')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
@@ -177,7 +181,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.getByTestId('block-done')).toBeInViewport({ ratio: 1 });
   const doneBox = await page.getByTestId('block-done').boundingBox();
-  const controlsBox = await page.locator('.react-flow__controls').boundingBox();
+  const controlsBox = await page.getByTestId('zoom-controls').boundingBox();
   if (doneBox === null || controlsBox === null) throw new Error('no Done block or controls');
   const apart =
     controlsBox.x + controlsBox.width <= doneBox.x ||

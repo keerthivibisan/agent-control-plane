@@ -26,13 +26,16 @@ import {
 } from '../../project-setup/fields';
 import { FullAutoWarning } from '../../review-loop/ApprovalsEditor';
 import { RemoveIcon } from '../icons';
-import { LinkSample } from './GraphEditor';
-import { kindText, kindWord } from './nodes';
+import { LinkSample } from './edges';
+import { EDITOR_COPY } from './copy';
+import { IssueRow, type EditorIssue } from './IssuesList';
+import { RoleIcon, kindText, kindWord } from './nodes';
 import { allowedEdgeTypes, isRemovable, type EditorAction, type NodePatch } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
 const P = WORKFLOW_GRAPH_COPY.panel;
 const M = REVIEW_LOOP_COPY.modes;
+const E = EDITOR_COPY.issues;
 const MAX_MODEL = 100;
 const INSTANCE_CHOICES: readonly number[] = Array.from(
   { length: HARD_MAX_HELPERS },
@@ -69,8 +72,8 @@ function Callout({ testId, children }: { testId: string; children: ReactNode }) 
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="-mx-5 flex flex-col gap-4 border-t border-line px-5 pt-5">
-      <h4 className="text-title font-semibold">{title}</h4>
+    <section className="-mx-4 flex flex-col gap-4 border-t border-line px-4 pt-4">
+      <h4 className="font-semibold">{title}</h4>
       {children}
     </section>
   );
@@ -462,12 +465,15 @@ export function NodePanel({
   node,
   graph,
   ctx,
+  issues,
   dispatch,
   onClose,
 }: {
   node: WorkflowNode;
   graph: WorkflowGraph;
   ctx: NodePanelContext;
+  /** The problems that name this block. */
+  issues: readonly EditorIssue[];
   dispatch: Dispatch<EditorAction>;
   onClose: () => void;
 }) {
@@ -480,12 +486,18 @@ export function NodePanel({
       data-kind={node.type}
     >
       <PanelHeading
+        icon={<RoleIcon node={node} />}
         eyebrow={kindWord(node)}
-        title={node.label}
+        title={
+          node.type === 'plan-approval' || node.type === 'owner-merge'
+            ? G.gateTitle[node.type]
+            : node.label
+        }
         text={kindText(node)}
         onClose={onClose}
       />
-      <div className="flex flex-col gap-5 px-5 pt-5 pb-6">
+      <PanelIssues issues={issues} title={E.blockTitle} />
+      <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
         {'skills' in node ? (
           <AgentFields node={node} ctx={ctx} change={change} />
         ) : node.type === 'plan-approval' ? (
@@ -497,7 +509,7 @@ export function NodePanel({
           />
         ) : null}
         <LinksSection key={node.id} node={node} graph={graph} dispatch={dispatch} />
-        <div className="-mx-5 border-t border-line px-5 pt-5">
+        <div className="-mx-4 border-t border-line px-4 pt-4">
           {isRemovable(node) ? (
             <Button
               variant="danger"
@@ -517,36 +529,58 @@ export function NodePanel({
   );
 }
 
-/** The panel's heading: the kind, the name and one sentence, with a close button. */
+/** The panel's heading, GitHub's Box header: the kind, the name and a close button; one sentence. */
 export function PanelHeading({
+  icon,
   eyebrow,
   title,
   text,
   onClose,
 }: {
+  icon?: ReactNode;
   eyebrow: string;
   title: string;
   text: string;
   onClose: () => void;
 }) {
   return (
-    <div className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-4">
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-micro font-semibold tracking-[0.06em] text-dim uppercase">
-          {eyebrow}
-        </span>
-        <h3 className="truncate text-section font-semibold">{title.trim() === '' ? '—' : title}</h3>
-        <p className="text-dim">{text}</p>
+    <>
+      <div className="flex items-start gap-3 rounded-t-[calc(var(--radius-card)-1px)] border-b border-line bg-subtle px-4 py-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex items-center gap-1.5 text-caption text-dim">
+            {icon}
+            {eyebrow}
+          </span>
+          <h3 className="truncate text-title font-semibold">{title.trim() === '' ? '—' : title}</h3>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={P.close}
+          title={P.close}
+          className="-mr-1.5 ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
+        >
+          <RemoveIcon size={16} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label={P.close}
-        title={P.close}
-        className="-mt-1 -mr-1.5 ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
-      >
-        <RemoveIcon size={16} />
-      </button>
+      <p className="px-4 pt-3 text-caption text-dim">{text}</p>
+    </>
+  );
+}
+
+/** The problems that name the selected block or link, at the top of its panel. */
+export function PanelIssues({ issues, title }: { issues: readonly EditorIssue[]; title: string }) {
+  if (issues.length === 0) return null;
+  const errors = issues.filter((i) => i.severity === 'error');
+  const warnings = issues.filter((i) => i.severity === 'warning');
+  return (
+    <div className="mx-4 mt-3 rounded-control border border-line py-1" data-testid="panel-issues">
+      <p className="px-3 pt-1 text-caption font-semibold text-dim">{title}</p>
+      <ul className="flex flex-col px-1" aria-label={title}>
+        {[...errors, ...warnings].map((issue, i) => (
+          <IssueRow key={`${issue.code}-${i}`} issue={issue} />
+        ))}
+      </ul>
     </div>
   );
 }

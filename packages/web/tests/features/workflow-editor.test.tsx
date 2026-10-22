@@ -73,7 +73,24 @@ function render(initial: unknown = graphDto(), extra: RouteTable = {}) {
 
 const block = (id: string) => screen.getByTestId(`block-${id}`);
 const panel = () => screen.getByRole('complementary', { name: 'Block settings' });
-const issues = () => screen.getByTestId('issues');
+/** The problems list; it shows while nothing is selected (the header's Problems button). */
+const issues = () => {
+  if (screen.queryByTestId('issues') === null)
+    fireEvent.click(screen.getByTestId('problems-button'));
+  return screen.getByTestId('issues');
+};
+const problemsButton = () => screen.getByTestId('problems-button');
+/** The selected block's own problems, at the top of its panel. */
+const panelCodes = () =>
+  within(panel())
+    .queryAllByTestId('issue')
+    .map((i) => i.dataset.code);
+
+/** Adds a block with the Add block menu. */
+function addBlock(name: RegExp) {
+  fireEvent.click(screen.getByTestId('add-block'));
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+}
 const saveButton = () => screen.getByTestId('save-workflow');
 const puts = (s: ReturnType<typeof server>) =>
   s.calls.filter((c) => c.method === 'PUT' && c.path === GRAPH);
@@ -147,8 +164,8 @@ describe('Workflow page: the graph editor', () => {
     expect(within(panel()).getByTestId('full-auto-warning')).toBeTruthy();
     expect(within(block('helpers')).getByTestId('block-mode').textContent).toBe('Mode: Full auto');
     // The plan step still asks: a warning, not a problem, so Save stays possible.
-    expect(issues().dataset.warnings).toBe('1');
-    expect(issues().dataset.errors).toBe('0');
+    expect(problemsButton().dataset.warnings).toBe('1');
+    expect(problemsButton().dataset.errors).toBe('0');
     expect(saveButton().hasAttribute('disabled')).toBe(false);
     expect(screen.getByTestId('unsaved')).toBeTruthy();
   });
@@ -158,26 +175,27 @@ describe('Workflow page: the graph editor', () => {
     await select('helper-1');
     expect(within(panel()).getByTestId('skill-missing').textContent).toContain('release-notes');
     expect(within(panel()).getByTestId('agent-missing')).toBeTruthy();
-    expect(within(block('helper-1')).getByTestId('block-skill').dataset.skill).toBe('missing');
+    // The block shows a skills count and the agent file, flagged, instead of every chip.
+    expect(within(block('helper-1')).getByTestId('block-skills').dataset.missing).toBe('1');
+    expect(within(block('helper-1')).getByTestId('block-agent-chip').dataset.agent).toBe('missing');
     fireEvent.click(within(panel()).getByRole('button', { name: 'Remove release-notes' }));
     const skills = within(panel()).getByTestId('skills-field');
     for (const name of ['code-review', 'plan-tickets', 'unit-tests']) {
       fireEvent.click(within(skills).getByLabelText(name));
     }
     expect(within(skills).getByText(/3 skills chosen/)).toBeTruthy();
-    expect(within(block('helper-1')).getAllByTestId('block-skill')).toHaveLength(3);
+    expect(within(block('helper-1')).getByTestId('block-skills').dataset.count).toBe('3');
+    expect(within(block('helper-1')).getByTestId('block-skills').textContent).toBe('3 skills');
   });
 
-  it('palette: a named helper, linked from the lead and to a review; problems update; saves', async () => {
+  it('Add block: a named helper, linked from the lead and to a review; problems update; saves', async () => {
     const { server: s } = render();
     await screen.findByTestId('graph-editor');
-    fireEvent.click(screen.getByRole('button', { name: 'Add Named helper' }));
+    addBlock(/^Named helper/);
     await waitFor(() => expect(panel().querySelector('[data-node="helper-1"]')).not.toBeNull());
-    const codes = () =>
-      within(issues())
-        .queryAllByTestId('issue')
-        .map((i) => i.dataset.code);
-    expect(codes()).toEqual(expect.arrayContaining(['no-review-route', 'not-assigned']));
+    // The new block's own problems are at the top of its panel.
+    expect(panelCodes()).toEqual(expect.arrayContaining(['no-review-route', 'not-assigned']));
+    expect(Number(problemsButton().dataset.errors)).toBeGreaterThanOrEqual(2);
     expect(saveButton().hasAttribute('disabled')).toBe(true);
     expect(screen.getByTestId('save-blocked').textContent).toBe('Fix the problems to save.');
 
@@ -186,11 +204,13 @@ describe('Workflow page: the graph editor', () => {
       target: { value: 'Frontend helper' },
     });
     addLink('review', 'review');
-    await waitFor(() => expect(codes()).not.toContain('no-review-route'));
+    await select('helper-1');
+    expect(panelCodes()).not.toContain('no-review-route');
     // …and the lead assigns it work.
     await select('orchestrate');
     addLink('helper-1', 'assigns');
-    await waitFor(() => expect(within(issues()).getByTestId('issues-none')).toBeTruthy());
+    await waitFor(() => expect(problemsButton().dataset.errors).toBe('0'));
+    expect(within(issues()).getByTestId('issues-none')).toBeTruthy();
 
     fireEvent.click(saveButton());
     await screen.findByTestId('saved');
@@ -207,13 +227,17 @@ describe('Workflow page: the graph editor', () => {
     expect(screen.queryByTestId('unsaved')).toBeNull();
   });
 
-  it('a palette item at its limit stays focusable, says why, and adds nothing', async () => {
+  it('an Add block item at its limit stays listed, says why in plain sight, and adds nothing', async () => {
     render(customGraphDto());
     await screen.findByTestId('graph-editor');
-    const planner = screen.getByRole('button', { name: 'Add Planner' });
+    fireEvent.click(screen.getByTestId('add-block'));
+    const planner = screen.getByRole('menuitem', { name: /^Planner/ });
     expect(planner.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.focus(planner);
-    expect(screen.getByRole('tooltip').textContent).toContain('it can have only one');
+    expect(planner.textContent).toContain('it can have only one');
+    // The others say what they add.
+    expect(screen.getByRole('menuitem', { name: /^Tester/ }).textContent).toContain(
+      'Writes unit tests',
+    );
     fireEvent.click(planner);
     expect(screen.getAllByTestId('block-plan')).toHaveLength(1);
     expect(screen.queryByTestId('unsaved')).toBeNull();
@@ -222,7 +246,7 @@ describe('Workflow page: the graph editor', () => {
   it('a click on a problem selects its block and opens its settings', async () => {
     render();
     await screen.findByTestId('graph-editor');
-    fireEvent.click(screen.getByRole('button', { name: 'Add Tester' }));
+    addBlock(/^Tester/);
     const issue = await within(issues()).findByText(/"Tester" has no review link/);
     fireEvent.click(issue.closest('button') as HTMLElement);
     await waitFor(() => expect(panel().querySelector('[data-node="unit-tests"]')).not.toBeNull());
@@ -336,7 +360,7 @@ describe('Workflow page: the graph editor', () => {
     const name = within(panel()).getByRole('textbox', { name: 'Name' });
     fireEvent.change(name, { target: { value: '  ' } });
     expect(within(panel()).getByText('Give the block a name.')).toBeTruthy();
-    expect(within(issues()).getAllByTestId('issue')[0]?.dataset.code).toBe('shape');
+    expect(panelCodes()[0]).toBe('shape');
     expect(saveButton().hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(within(block('review')).getByTestId('block-label').textContent).toBe('Change reviewer');

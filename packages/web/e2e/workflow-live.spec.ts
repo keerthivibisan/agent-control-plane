@@ -103,11 +103,14 @@ test('a default project: the migrated workflow loads; a saved graph is stored as
   await shoot(page, 'default');
 
   // A named helper, linked from the lead and reviewed by the change reviewer.
-  await page.getByRole('button', { name: 'Add Named helper' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Named helper/ }).click();
   await panel(page).getByRole('textbox', { name: 'Name' }).fill('Frontend helper');
   await addLink(page, 'review', 'review');
   await block(page, 'orchestrate').click();
   await addLink(page, 'helper-1', 'assigns');
+  // A block or link is selected: the header's Problems button shows the list again.
+  await page.getByTestId('problems-button').click();
   await expect(page.getByTestId('issues-none')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
@@ -283,6 +286,8 @@ test('run options read the defaults of a graph saved in the editor', async ({ pa
   await addLink(page, 'helpers', 'rework');
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
   await panel(page).getByRole('radio', { name: '4 rework rounds' }).check({ force: true });
+  // A block or link is selected: the header's Problems button shows the list again.
+  await page.getByTestId('problems-button').click();
   await expect(page.getByTestId('issues-none')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');

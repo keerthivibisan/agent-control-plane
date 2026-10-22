@@ -222,7 +222,8 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
   await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
   await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
-  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Final reviewer/ }).click();
   await expect(page.getByTestId('block-code-review')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
