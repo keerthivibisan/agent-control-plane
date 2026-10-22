@@ -181,3 +181,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   (agents read them), helper and tester notes, the lead's whole-ticket summary, read-only merged
   diffs, and shell polish (sizes, chevron toggle, the header with "ACP" and centred search). Not
   started; waiting for the owner's go. To confirm: the header shows the logo plus "ACP".
+- 2026-10-22 **The owner approved part 4** ("ACP is fine, go ahead"): the header shows the logo plus
+  "ACP", with the full name as tooltip.
+  - C-S (shell) started on `wp/c-s-shell`.
+  - **C-0 done** (`cc6d7eb`): ADR-0026 accepted; contracts for comment kinds, attachments and the
+    activity timeline. Full check: 4,961 tests.
+  - C-A (server, db, engine, adapter) and C-B (web) started in parallel.

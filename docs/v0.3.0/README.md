@@ -127,7 +127,7 @@ Owner decisions, 2026-10-22: "everything is there but not clear"; the answers we
 | D-C | Workflow editor clarity in the new style: blocks, links, legend, panel                                                                                                                                                                                                                             | D-0   |
 | D-V | e2e, both themes, a final screenshot review with the owner                                                                                                                                                                                                                                         | all   |
 
-## Part 4: Comments, Conversation, attachments, shell polish (C series), PLANNED, not started
+## Part 4: Comments, Conversation, attachments, shell polish (C series), in progress
 
 These are the owner's decisions from 2026-10-22, to go into 0.3.0:
 
