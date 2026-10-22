@@ -22,7 +22,7 @@ import { COMMENTS_COPY } from '../activity/copy';
 import { RichText } from '../activity/RichText';
 import { BoxHeader, Marker, Row, Thread } from '../activity/timeline-parts';
 import { AttachButton, AttachmentList, DropZone, UploadList } from '../attachments/Attachments';
-import { useUploads } from '../attachments/use-uploads';
+import { useUploads, type Uploads } from '../attachments/use-uploads';
 import { Approvals } from '../control/Approvals';
 import { ActionError } from '../control/bits';
 import { NeedsYouChanges } from '../review-loop/ChangeCard';
@@ -399,10 +399,9 @@ function TicketSummary({
  * The comment box: text (safe formatting) and files, attached by the button or by dropping them
  * on the box. Files upload as soon as they are picked; the comment carries their ids.
  */
-function CommentForm({ ticketId, onTicket }: { ticketId: string; onTicket: number }) {
+function CommentForm({ ticketId, uploads }: { ticketId: string; uploads: Uploads }) {
   const add = useTicketAction(addTicketComment);
   const [body, setBody] = useState('');
-  const uploads = useUploads({ ticketId, onTicket, forComment: true });
   const id = useId();
   const hintId = useId();
   const tooLong = body.length > MAX_COMMENT;
@@ -511,6 +510,14 @@ export function CommentsTab({
 }) {
   const plan = run === undefined ? null : planUnderReview(run, detail.plans);
   const all = useTicketAttachments(detail.ticket.id);
+  // The comment box's files are on the ticket until the comment that carries them is posted;
+  // they show in the box, not among the ticket's own.
+  const pending = useUploads({
+    ticketId: detail.ticket.id,
+    onTicket: all.length,
+    forComment: true,
+  });
+  const pendingIds = new Set(pending.ids);
   const parts = commentsTabParts(detail.comments);
   const versionOf = new Map(detail.plans.map((p) => [p.id, p.version]));
   return (
@@ -529,7 +536,7 @@ export function CommentsTab({
           <Description
             key={detail.ticket.updatedAt}
             detail={detail}
-            attachments={all.filter((a) => a.commentId === null)}
+            attachments={all.filter((a) => a.commentId === null && !pendingIds.has(a.id))}
             onTicket={all.length}
           />
           {parts.summary !== null ? (
@@ -553,7 +560,7 @@ export function CommentsTab({
               <FinalStepBox run={run} ticket={detail.ticket} branchReview={branchReview} />
             </Row>
           ) : null}
-          <CommentForm ticketId={detail.ticket.id} onTicket={all.length} />
+          <CommentForm ticketId={detail.ticket.id} uploads={pending} />
         </Thread>
         <ActivityHint />
       </section>

@@ -150,3 +150,5 @@ export function useUploads({
   const busy = uploads.some((u) => u.status === 'uploading');
   return { uploads, ids, busy, add, remove, clear };
 }
+
+export type Uploads = ReturnType<typeof useUploads>;
