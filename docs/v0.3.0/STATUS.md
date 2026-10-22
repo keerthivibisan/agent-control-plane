@@ -229,3 +229,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   Files changed is stored as the owner's `review` and shows as "You reviewed"; every review's link is
   "Open Conversation". Also fixed a race in C-B's upload e2e (`7834326`, 25/25 repeated). Check:
   5,104 tests; e2e 100/101, then the fixed spec 25/25.
+- 2026-10-22 **C-V real run passed** (owner consent "yes, run the real test"): scenario b with one
+  attachment, about 42k budget tokens, 18/18 assertions (7 new: notes, the ticket summary, run facts
+  apart, the timeline, limits, attachments never committed). The helper's note and the lead's
+  summary read like a teammate's. See `docs/research/c-v-real-run-2026-10-22.md`; temp data deleted.
+  **Gap found:** the lead's read of its attachment copy asks the owner; recommended fix:
+  `ManagedAgentSpec.readOnlyDirs?` (C-A's proposal).
