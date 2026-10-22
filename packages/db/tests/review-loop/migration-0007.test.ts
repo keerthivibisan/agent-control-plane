@@ -37,7 +37,8 @@ const stored = (db: AcpDatabase, id: string) =>
 
 describe('migration 0007_ticket_run_options (RL-H)', () => {
   it('ships as version 7 after untouched 0001-0006', () => {
-    expect(SHIPPED.map((m) => [m.version, m.name])).toEqual([
+    // 0008 (ADR-0025) follows; the first seven stay as shipped.
+    expect(SHIPPED.slice(0, 7).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
       [3, 'workspace'],
@@ -115,7 +116,7 @@ describe('migration 0007_ticket_run_options (RL-H)', () => {
       const recorded = v7.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(recorded.map((r) => r.version).slice(0, 7)).toEqual([1, 2, 3, 4, 5, 6, 7]);
       // The 0001-0006 rows are unchanged, so their files were not edited.
       expect(recorded.slice(0, 6)).toEqual(before);
       expect(v7.connection.pragma('foreign_key_check')).toEqual([]);
@@ -123,7 +124,12 @@ describe('migration 0007_ticket_run_options (RL-H)', () => {
       // Old rows keep every value and gain a NULL run_options.
       const rowsAfter = v7.connection.prepare('SELECT * FROM tickets ORDER BY seq').all();
       expect(rowsAfter).toEqual(
-        (rowsBefore as Record<string, unknown>[]).map((r) => ({ ...r, run_options: null })),
+        // 0008 (ADR-0025) adds branch_prefs, NULL for these rows too.
+        (rowsBefore as Record<string, unknown>[]).map((r) => ({
+          ...r,
+          run_options: null,
+          branch_prefs: null,
+        })),
       );
 
       // They read back through the repository as before: no runOptions, so the project's apply.

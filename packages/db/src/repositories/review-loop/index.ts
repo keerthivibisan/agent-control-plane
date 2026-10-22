@@ -14,13 +14,18 @@ import {
   type TicketRunOptionsRepository,
 } from './ticket-options.js';
 import {
+  createTicketBranchPrefsRepository,
+  type TicketBranchPrefsRepository,
+} from './ticket-branch-prefs.js';
+import {
   createTicketBranchesRepository,
   type TicketBranchesRepository,
 } from './ticket-branches.js';
 
 /**
- * Review loop and ticket branch persistence (migration 0006, ADR-0021), and a ticket's own run
- * options (migration 0007, RL-H).
+ * Review loop and ticket branch persistence (migration 0006, ADR-0021), a ticket's own run
+ * options (migration 0007, RL-H), and its own branch settings and the ticket branch's pull request
+ * (migration 0008, ADR-0025).
  */
 export interface ReviewLoopRepositories {
   ticketBranches: TicketBranchesRepository;
@@ -33,6 +38,8 @@ export interface ReviewLoopRepositories {
   approvalRules: ApprovalRulesRepository;
   /** `tickets.run_options` (migration 0007, RL-H). */
   ticketRunOptions: TicketRunOptionsRepository;
+  /** `tickets.branch_prefs` (migration 0008, ADR-0025). */
+  ticketBranchPrefs: TicketBranchPrefsRepository;
 }
 
 export function createReviewLoopRepositories(
@@ -47,11 +54,13 @@ export function createReviewLoopRepositories(
     checkCommits: createCheckCommitsRepository(ctx),
     approvalRules: createApprovalRulesRepository(ctx),
     ticketRunOptions: createTicketRunOptionsRepository(ctx),
+    ticketBranchPrefs: createTicketBranchPrefsRepository(ctx),
   };
 }
 
 export type {
   TicketBranchInsertInput,
+  TicketBranchPullRequest,
   TicketBranchRow,
   TicketBranchesRepository,
 } from './ticket-branches.js';
@@ -69,3 +78,4 @@ export type {
   WorkspaceChangesRepository,
 } from './columns.js';
 export type { TicketRunOptionsRepository } from './ticket-options.js';
+export type { TicketBranchPrefsRepository } from './ticket-branch-prefs.js';
