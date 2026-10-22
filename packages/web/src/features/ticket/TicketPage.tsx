@@ -41,6 +41,10 @@ import {
 } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
+import {
+  PullRequestCheckProvider,
+  useCheckPullRequestOnView,
+} from '../branching/pull-request-check';
 import { Approvals } from '../control/Approvals';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { canChat, closedByEngine, hasReview } from '../control/run-state';
@@ -526,6 +530,8 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
   const action = startAction(detail);
   const note = lastRunNote(detail);
   const stage = TICKET_STAGE_COPY[ticket.stage];
+  // ADR-0025 §2: an open pull request is read again once when the page opens, never on a timer.
+  const prCheck = useCheckPullRequestOnView(ticket.id, detail.currentRun?.ticketBranch);
 
   const select = (agentId: string, nextTab?: PanelTab) => {
     setSelectedId(agentId);
@@ -538,94 +544,96 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
   };
 
   return (
-    <div>
-      <PageHeader
-        eyebrow={
-          <a href={href.board(ticket.projectId)} className="text-dim no-underline hover:text-ink">
-            ← {C.backToBoard}
-          </a>
-        }
-        title={
-          <span>
-            <span className="mr-2.5 font-mono font-medium text-dim">{ticket.key}</span>
-            {ticket.title}
-          </span>
-        }
-        description={
-          <span className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span
-              className="inline-flex h-6 items-center rounded-full border border-line bg-panel px-2.5 text-caption font-medium text-ink"
-              data-testid="ticket-stage"
-            >
-              <StatusWord status={stage} value={ticket.stage} />
+    <PullRequestCheckProvider value={prCheck}>
+      <div>
+        <PageHeader
+          eyebrow={
+            <a href={href.board(ticket.projectId)} className="text-dim no-underline hover:text-ink">
+              ← {C.backToBoard}
+            </a>
+          }
+          title={
+            <span>
+              <span className="mr-2.5 font-mono font-medium text-dim">{ticket.key}</span>
+              {ticket.title}
             </span>
-            <TypeBadge type={ticket.type} />
-            <Badge tone={PRIORITY_TONE[ticket.priority]}>{C.priority[ticket.priority]}</Badge>
-            {ticket.labels.map((l) => (
-              <Badge key={l}>{l}</Badge>
-            ))}
-          </span>
-        }
-        actions={
-          <>
-            {runId !== null ? <RunPicker detail={detail} runId={runId} onPick={showRun} /> : null}
-            {run !== undefined && isCurrent && canStopRun(run.status) ? (
-              <StopAll runId={run.id} />
-            ) : null}
-            {action !== null ? <StartButton ticket={ticket} kind={action} /> : null}
-            <ButtonLink href={href.board(ticket.projectId)} variant="quiet">
-              {C.openBoard}
-            </ButtonLink>
-          </>
-        }
-      />
-      <div className="-mt-2 mb-5 flex flex-col gap-3">
-        <Summary run={run} isCurrent={isCurrent} />
-        {note !== null ? (
-          <p
-            role="status"
-            className="flex items-center gap-2.5 rounded-card border border-danger/25 bg-danger-soft px-4 py-2.5 text-ink"
-          >
-            <AlertIcon size={16} className="text-danger" />
-            {C.lastRun[note]}
-          </p>
-        ) : null}
-        {!isCurrent ? (
-          <p
-            role="status"
-            className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-sunken px-4 py-2.5"
-          >
-            {C.runPicker.earlier}
-            <button
-              type="button"
-              className="font-medium text-accent hover:underline"
-              onClick={() => showRun(currentId ?? '')}
-            >
-              {C.runPicker.backToLatest}
-            </button>
-          </p>
-        ) : null}
-      </div>
-      {run !== undefined ? (
-        <RunView
-          key={run.id}
-          detail={detail}
-          run={run}
-          isCurrent={isCurrent}
-          selectedId={selectedId}
-          onSelect={select}
-          tab={tab}
-          onTab={setTab}
+          }
+          description={
+            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span
+                className="inline-flex h-6 items-center rounded-full border border-line bg-panel px-2.5 text-caption font-medium text-ink"
+                data-testid="ticket-stage"
+              >
+                <StatusWord status={stage} value={ticket.stage} />
+              </span>
+              <TypeBadge type={ticket.type} />
+              <Badge tone={PRIORITY_TONE[ticket.priority]}>{C.priority[ticket.priority]}</Badge>
+              {ticket.labels.map((l) => (
+                <Badge key={l}>{l}</Badge>
+              ))}
+            </span>
+          }
+          actions={
+            <>
+              {runId !== null ? <RunPicker detail={detail} runId={runId} onPick={showRun} /> : null}
+              {run !== undefined && isCurrent && canStopRun(run.status) ? (
+                <StopAll runId={run.id} />
+              ) : null}
+              {action !== null ? <StartButton ticket={ticket} kind={action} /> : null}
+              <ButtonLink href={href.board(ticket.projectId)} variant="quiet">
+                {C.openBoard}
+              </ButtonLink>
+            </>
+          }
         />
-      ) : runId !== null ? (
-        <QueryView query={runQuery} loading={CONTROL_COPY.loading}>
-          {() => null}
-        </QueryView>
-      ) : null}
-      <div className="mt-6">
-        <TicketInfo detail={detail} shownRunId={run?.id ?? null} onShowRun={showRun} />
+        <div className="-mt-2 mb-5 flex flex-col gap-3">
+          <Summary run={run} isCurrent={isCurrent} />
+          {note !== null ? (
+            <p
+              role="status"
+              className="flex items-center gap-2.5 rounded-card border border-danger/25 bg-danger-soft px-4 py-2.5 text-ink"
+            >
+              <AlertIcon size={16} className="text-danger" />
+              {C.lastRun[note]}
+            </p>
+          ) : null}
+          {!isCurrent ? (
+            <p
+              role="status"
+              className="flex flex-wrap items-center gap-3 rounded-card border border-line bg-sunken px-4 py-2.5"
+            >
+              {C.runPicker.earlier}
+              <button
+                type="button"
+                className="font-medium text-accent hover:underline"
+                onClick={() => showRun(currentId ?? '')}
+              >
+                {C.runPicker.backToLatest}
+              </button>
+            </p>
+          ) : null}
+        </div>
+        {run !== undefined ? (
+          <RunView
+            key={run.id}
+            detail={detail}
+            run={run}
+            isCurrent={isCurrent}
+            selectedId={selectedId}
+            onSelect={select}
+            tab={tab}
+            onTab={setTab}
+          />
+        ) : runId !== null ? (
+          <QueryView query={runQuery} loading={CONTROL_COPY.loading}>
+            {() => null}
+          </QueryView>
+        ) : null}
+        <div className="mt-6">
+          <TicketInfo detail={detail} shownRunId={run?.id ?? null} onShowRun={showRun} />
+        </div>
       </div>
-    </div>
+    </PullRequestCheckProvider>
   );
 }
 

@@ -15,9 +15,11 @@ import {
   PR_REFRESH_PATH,
   codeHost,
   ghMergedScenario,
+  ghOpenScenario,
   ghReviewScenario,
   githubFlowStrategy,
   pullRequest,
+  withPullRequestLines,
   type CodeHostKind,
 } from '../../e2e/github-fixtures';
 import {
@@ -443,6 +445,9 @@ describe('the ticket branch card: the final step', () => {
       ghReviewScenario(pullRequest('open')),
       ghReviewScenario(pullRequest('closed')),
       ghMergedScenario(),
+      ghOpenScenario(true),
+      ghOpenScenario(false),
+      withPullRequestLines(ghMergedScenario()),
     ]) {
       expect(TicketDetailDtoSchema.safeParse(sc.routes[LOOP_TICKET_PATH]).success).toBe(true);
       const run = (sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>)['currentRun'];
@@ -548,20 +553,42 @@ describe('the ticket branch card: the final step', () => {
     expect(within(c).getByRole('button', { name: 'Request changes…' })).toBeTruthy();
     expect(s.calls.some((call) => call.path === CODE_HOST_PATH)).toBe(false);
 
-    fireEvent.click(within(pr).getByRole('button', { name: PR.refresh }));
+    // G-D: opening the page read it once; Refresh reads it again.
     await waitFor(() => expect(mutations(s)).toHaveLength(1));
-    expect(mutations(s)[0]).toMatchObject({ method: 'POST', path: PR_REFRESH_PATH, body: {} });
+    const refresh = within(pr).getByRole('button', { name: PR.refresh });
+    await waitFor(() => expect(refresh).toHaveProperty('disabled', false));
+    fireEvent.click(refresh);
+    await waitFor(() => expect(mutations(s)).toHaveLength(2));
+    for (const m of mutations(s)) {
+      expect(m).toMatchObject({ method: 'POST', path: PR_REFRESH_PATH, body: {} });
+    }
   });
 
-  it('a failed Refresh says so in plain words', async () => {
-    renderTicket(ghReviewScenario(pullRequest('open')), {
-      [`POST ${PR_REFRESH_PATH}`]: () =>
-        jsonResponse(504, { error: { code: 'timeout', message: 'slow', requestId: 'r-3' } }),
+  it('a failed check on opening, then a failed Refresh, say so in plain words', async () => {
+    let answers = 0;
+    const s = renderTicket(ghReviewScenario(pullRequest('open')), {
+      [`POST ${PR_REFRESH_PATH}`]: () => {
+        answers += 1;
+        return answers === 1
+          ? jsonResponse(504, { error: { code: 'timeout', message: 'slow', requestId: 'r-3' } })
+          : jsonResponse(409, {
+              error: { code: 'gh-not-logged-in', message: 'auth', requestId: 'r-4' },
+            });
+      },
     });
     const c = await card();
-    fireEvent.click(within(c).getByRole('button', { name: PR.refresh }));
-    const error = await within(c).findByTestId('pr-error');
-    expect(within(error).getAllByRole('alert')[0]?.textContent).toBe(PR.errors.timeout);
+    const first = await within(c).findByTestId('pr-error');
+    expect(within(first).getAllByRole('alert')[0]?.textContent).toBe(PR.errors.timeout);
+    const refresh = within(c).getByRole('button', { name: PR.refresh });
+    await waitFor(() => expect(refresh).toHaveProperty('disabled', false));
+    fireEvent.click(refresh);
+    await waitFor(() =>
+      expect(within(c).getByTestId('pr-error').getAttribute('data-code')).toBe('gh-not-logged-in'),
+    );
+    expect(within(within(c).getByTestId('pr-error')).getAllByRole('alert')[0]?.textContent).toBe(
+      PR.errors['gh-not-logged-in'],
+    );
+    expect(mutations(s)).toHaveLength(2);
   });
 
   it('merged on GitHub: the card reads merged, the ticket is done, no Refresh', async () => {
@@ -595,6 +622,169 @@ describe('the ticket branch card: the final step', () => {
     expect(within(pr).queryByRole('link')).toBeNull();
     expect(within(pr).getByText('Pull request #42')).toBeTruthy();
   });
+});
+
+// --- G-D: reading an open pull request on opening, and Push new commits ------------------------
+
+const refreshes = (s: Server) => mutations(s).filter((m) => m.path === PR_REFRESH_PATH);
+
+describe('the ticket page reads an open pull request once when it opens (G-D)', () => {
+  it('asks once, with the CSRF token; refetches and stream notices never ask again', async () => {
+    const s = ticketServer(ghOpenScenario(false));
+    const { store } = renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
+    await screen.findByTestId('pull-request');
+    await waitFor(() => expect(refreshes(s)).toHaveLength(1));
+    expect(refreshes(s)[0]).toMatchObject({ method: 'POST', body: {} });
+    expect(s.csrf).toEqual([CSRF]);
+    // Stream notices refetch the ticket and the run; the pull request is still open.
+    for (let i = 0; i < 3; i += 1) {
+      store.invalidate(() => true);
+      await waitFor(() =>
+        expect(s.calls.filter((c) => c.path === LOOP_TICKET_PATH).length).toBeGreaterThan(i + 2),
+      );
+    }
+    await new Promise((r) => setTimeout(r, 50));
+    expect(refreshes(s)).toHaveLength(1);
+  });
+
+  it('a new visit asks again; a page without an open pull request never asks', async () => {
+    const s = ticketServer(ghOpenScenario(false));
+    const first = renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
+    await waitFor(() => expect(refreshes(s)).toHaveLength(1));
+    first.unmount();
+    renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
+    await waitFor(() => expect(refreshes(s)).toHaveLength(2));
+
+    for (const sc of [
+      ghReviewScenario(),
+      ghReviewScenario(pullRequest('closed')),
+      ghMergedScenario(),
+    ]) {
+      const other = ticketServer(sc);
+      const view = renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, other);
+      await view.findByTestId('ticket-branch');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(refreshes(other)).toHaveLength(0);
+      view.unmount();
+    }
+  });
+
+  it('a pull request opened during the visit is not read again on its own', async () => {
+    const before = ghReviewScenario();
+    const after = ghOpenScenario(false);
+    let opened = false;
+    const pick = (path: string) => () => jsonResponse(200, (opened ? after : before).routes[path]);
+    const branchOf = (sc: LoopScenario) =>
+      (
+        (sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>)['currentRun'] as Record<
+          string,
+          unknown
+        >
+      )['ticketBranch'];
+    const s = ticketServer(before, {
+      [LOOP_TICKET_PATH]: pick(LOOP_TICKET_PATH),
+      [LOOP_RUN_PATH]: pick(LOOP_RUN_PATH),
+      [`POST ${PR_PATH}`]: () => {
+        opened = true;
+        return jsonResponse(200, branchOf(after));
+      },
+    });
+    renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
+    const c = await screen.findByTestId('ticket-branch');
+    const push = within(c).getByRole('button', { name: PR.push });
+    await waitFor(() => expect(push).toHaveProperty('disabled', false));
+    fireEvent.click(push);
+    fireEvent.click(within(c).getByRole('button', { name: PR.confirmButton }));
+    await screen.findByTestId('pull-request');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mutations(s).map((m) => m.path)).toEqual([PR_PATH]);
+  });
+});
+
+describe('the pull request lines in the ticket’s comments (G-D)', () => {
+  it('shows the push, the push again and the merge on GitHub as small lines', async () => {
+    renderTicket(withPullRequestLines(ghMergedScenario()));
+    const comments = await screen.findByTestId('comments');
+    await waitFor(() => expect(within(comments).getAllByTestId('merge-line')).toHaveLength(3));
+    const lines = within(comments).getAllByTestId('merge-line');
+    expect(lines.map((l) => l.getAttribute('data-kind')).sort()).toEqual([
+      'pr-merged',
+      'pr-pushed',
+      'pr-pushed',
+    ]);
+    const merged = lines.find((l) => l.getAttribute('data-kind') === 'pr-merged');
+    expect(merged?.textContent).toContain('Merged via pull request #42 into main at 9c8b7a6');
+    expect([...(merged?.querySelectorAll('code') ?? [])].map((c) => c.textContent)).toEqual([
+      'main',
+      '9c8b7a6',
+    ]);
+  });
+});
+
+describe('Push new commits to an open pull request (G-D)', () => {
+  it('is offered when the branch moved on since the last push, and asks first', async () => {
+    const s = renderTicket(ghOpenScenario(true));
+    const c = await card();
+    await waitFor(() => expect(refreshes(s)).toHaveLength(1));
+    const button = within(c).getByRole('button', { name: PR.pushNew });
+    await waitFor(() => expect(button).toHaveProperty('disabled', false));
+    fireEvent.click(button);
+    const confirm = within(c).getByTestId('confirm');
+    expect(confirm.textContent).toContain(
+      `Push the new commits on ${GH_BRANCH} to the open pull request #42.`,
+    );
+    expect(mutations(s).filter((m) => m.path === PR_PATH)).toHaveLength(0);
+    fireEvent.click(within(confirm).getByRole('button', { name: PR.pushNew }));
+    await waitFor(() => expect(mutations(s).filter((m) => m.path === PR_PATH)).toHaveLength(1));
+    expect(mutations(s).find((m) => m.path === PR_PATH)).toMatchObject({
+      method: 'POST',
+      body: {},
+    });
+    expect(s.csrf.every((t) => t === CSRF)).toBe(true);
+    // The local merge stays hidden while the pull request is open.
+    expect(within(c).queryByRole('button', { name: 'Merge into main' })).toBeNull();
+    expect(within(c).getByRole('button', { name: 'Request changes…' })).toBeTruthy();
+  });
+
+  it('Cancel sends nothing', async () => {
+    const s = renderTicket(ghOpenScenario(true));
+    const c = await card();
+    fireEvent.click(await within(c).findByRole('button', { name: PR.pushNew }));
+    fireEvent.click(within(c).getByRole('button', { name: PR.cancel }));
+    expect(within(c).queryByTestId('confirm')).toBeNull();
+    expect(mutations(s).filter((m) => m.path === PR_PATH)).toHaveLength(0);
+  });
+
+  it('is not offered when the pull request has the tip, or the last push is unknown', async () => {
+    for (const sc of [ghOpenScenario(false), ghReviewScenario(pullRequest('open'))]) {
+      const view = renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, ticketServer(sc));
+      const c = await view.findByTestId('ticket-branch');
+      expect(within(c).getByTestId('pull-request')).toBeTruthy();
+      expect(within(c).queryByRole('button', { name: PR.pushNew })).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('a refused push says GitHub’s branch has commits the app won’t overwrite', async () => {
+    renderTicket(ghOpenScenario(true), {
+      [`POST ${PR_PATH}`]: () =>
+        jsonResponse(409, { error: { code: 'push-rejected', message: 'raw', requestId: 'r-5' } }),
+    });
+    const c = await card();
+    fireEvent.click(await within(c).findByRole('button', { name: PR.pushNew }));
+    fireEvent.click(
+      within(within(c).getByTestId('confirm')).getByRole('button', { name: PR.pushNew }),
+    );
+    const error = await within(within(c).getByTestId('push-new-commits')).findByTestId('pr-error');
+    expect(within(error).getAllByRole('alert')[0]?.textContent).toBe(PR.pushNewRejected);
+    expect(PR.pushNewRejected).toBe(
+      'The branch on GitHub has commits the app doesn’t have; it won’t overwrite them.',
+    );
+  });
+
+  async function card() {
+    return screen.findByTestId('ticket-branch');
+  }
 });
 
 describe('New project wizard: the optional branching strategy', () => {

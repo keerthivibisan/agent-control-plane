@@ -9,8 +9,9 @@ import { Pill, type PillTone } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { openPullRequest, refreshPullRequest, type ApiError } from '../../lib/api';
 import { PULL_REQUEST_COPY } from '../../lib/copy';
-import { alertClass } from '../control/bits';
+import { alertClass, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
+import { usePullRequestCheck } from './pull-request-check';
 import {
   MAX_PR_TITLE,
   canRefresh,
@@ -35,12 +36,15 @@ const STATE_TONE: Record<PullRequestDto['state'], PillTone> = {
 export function PullRequestError({
   error,
   fallback,
+  pushAgain = false,
 }: {
   error: ApiError | null;
   fallback: string;
+  /** A push to the open pull request, where a refusal has its own words. */
+  pushAgain?: boolean;
 }) {
   if (error === null) return null;
-  const text = pullRequestErrorText(error);
+  const text = pullRequestErrorText(error, { pushAgain });
   return (
     <div className="flex flex-col gap-1.5" data-testid="pr-error" data-code={error.code ?? ''}>
       <p role="alert" className={alertClass}>
@@ -76,6 +80,11 @@ export function PullRequestInfo({
   ticketId: string | null;
 }) {
   const refresh = useTicketAction(refreshPullRequest);
+  // The page's own check on opening (ADR-0025 §2); once the owner presses Refresh, theirs counts.
+  const onView = usePullRequestCheck();
+  const [refreshed, setRefreshed] = useState(false);
+  const pending = refresh.pending || (!refreshed && onView.pending);
+  const error = refreshed ? refresh.error : onView.error;
   const url = safeUrl(pr.url);
   const label = C.number(pr.number);
   return (
@@ -112,11 +121,14 @@ export function PullRequestInfo({
             size="sm"
             variant="quiet"
             className="ml-auto"
-            disabled={refresh.pending}
-            onClick={() => void refresh.run(ticketId)}
+            disabled={pending}
+            onClick={() => {
+              setRefreshed(true);
+              void refresh.run(ticketId);
+            }}
           >
             <RefreshIcon size={14} />
-            {refresh.pending ? C.refreshing : C.refresh}
+            {pending ? C.refreshing : C.refresh}
           </Button>
         ) : null}
       </div>
@@ -127,7 +139,44 @@ export function PullRequestInfo({
             ? C.mergedNote(pr.baseBranch)
             : C.closedNote}
       </p>
-      <PullRequestError error={refresh.error} fallback={C.refreshFailed} />
+      <PullRequestError error={error} fallback={C.refreshFailed} />
+    </div>
+  );
+}
+
+/**
+ * Push new commits (G-D): the ticket branch moved on since the app last pushed it (after Request
+ * changes, say) while its pull request is open. Asks first; the same POST as Push & open PR then
+ * pushes the branch (fast-forward only, never a force) and keeps the open pull request.
+ */
+export function PushNewCommits({
+  ticketId,
+  branch,
+  pr,
+  disabled = false,
+}: {
+  ticketId: string;
+  branch: string;
+  pr: Pick<PullRequestDto, 'number'>;
+  /** Another action is running. */
+  disabled?: boolean;
+}) {
+  const act = useTicketAction(openPullRequest);
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="push-new-commits">
+      <ConfirmAction
+        label={C.pushNew}
+        question={C.confirmPushNew(branch, pr.number)}
+        confirmLabel={C.pushNew}
+        cancelLabel={C.cancel}
+        pendingLabel={C.pushing}
+        pending={act.pending}
+        disabled={disabled}
+        danger={false}
+        primary
+        onConfirm={() => act.run(ticketId, {})}
+      />
+      <PullRequestError error={act.error} fallback={C.failed} pushAgain />
     </div>
   );
 }

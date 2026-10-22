@@ -8,10 +8,12 @@ import {
   PR_REFRESH_PATH,
   codeHost,
   createdTicket,
+  GH_APP_LINES,
   ghMergedScenario,
+  ghOpenScenario,
   ghReviewScenario,
   githubFlowStrategy,
-  pullRequest,
+  withPullRequestLines,
   type CodeHostKind,
 } from './github-fixtures.js';
 import {
@@ -220,16 +222,33 @@ test('New ticket: its own branch name and target under More options', async ({ p
   });
 });
 
-type Stage = 'review' | 'open' | 'merged';
+type Stage = 'review' | 'open' | 'behind' | 'merged';
 
-/** Serves the ticket in its final step; Push & open PR and Refresh move it on like the server. */
-async function serveFinalStep(page: Page): Promise<{ posts: { path: string; body: unknown }[] }> {
+interface FinalStepFlow {
+  /** Where the ticket starts. */
+  start: Stage;
+  /** Where Push & open PR (or Push new commits) takes it. */
+  push: Stage;
+  /** Where a refresh (the page's own on opening, or Refresh) takes it. */
+  refresh: Stage;
+}
+
+/**
+ * Serves the ticket in its final step; Push & open PR and Refresh move it on like the server
+ * (by default: pushed → open, refreshed → merged on GitHub).
+ */
+async function serveFinalStep(
+  page: Page,
+  flow: FinalStepFlow = { start: 'review', push: 'open', refresh: 'merged' },
+  decorate: (sc: LoopScenario) => LoopScenario = (sc) => sc,
+): Promise<{ posts: { path: string; body: unknown }[] }> {
   const scenarios: Record<Stage, LoopScenario> = {
-    review: ghReviewScenario(),
-    open: ghReviewScenario(pullRequest('open')),
-    merged: ghMergedScenario(),
+    review: decorate(ghReviewScenario()),
+    open: decorate(ghOpenScenario(false)),
+    behind: decorate(ghOpenScenario(true)),
+    merged: decorate(ghMergedScenario()),
   };
-  let stage: Stage = 'review';
+  let stage: Stage = flow.start;
   const posts: { path: string; body: unknown }[] = [];
   await withFixtureProject(page);
   await withSetup(page, setupFixture({ branching: githubFlowStrategy() }));
@@ -246,8 +265,8 @@ async function serveFinalStep(page: Page): Promise<{ posts: { path: string; body
     if (req.method() !== 'GET') {
       expect(req.headers()['x-acp-csrf']).toBe(CSRF);
       posts.push({ path: url.pathname, body: req.postDataJSON() as unknown });
-      if (url.pathname === PR_PATH) stage = 'open';
-      if (url.pathname === PR_REFRESH_PATH) stage = 'merged';
+      if (url.pathname === PR_PATH) stage = flow.push;
+      if (url.pathname === PR_REFRESH_PATH) stage = flow.refresh;
       const detail = scenarios[stage].routes[`/api/tickets/${LOOP_TICKET_ID}`] as Json;
       const run = detail['currentRun'] as Json;
       await route.fulfill({ json: run['ticketBranch'] });
@@ -312,4 +331,111 @@ test('the final step: Push & open PR, then the pull request open, Refresh, merge
     { path: PR_PATH, body: { title: 'WEB-21: Saved searches', draft: true } },
     { path: PR_REFRESH_PATH, body: {} },
   ]);
+});
+
+test('G-D: opening the ticket reads its open pull request once; merged there, the ticket is done', async ({
+  page,
+}) => {
+  const { posts } = await serveFinalStep(page, { start: 'open', push: 'open', refresh: 'merged' });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const card = page.getByTestId('ticket-branch');
+  await expect(card.getByTestId('branch-state')).toHaveText('Merged into main on GitHub');
+  await expect(page.getByTestId('ticket-stage')).toContainText('Done');
+  // Nothing else asks: not the refetches after it, not a wait.
+  await page.waitForTimeout(1500);
+  expect(posts).toEqual([{ path: PR_REFRESH_PATH, body: {} }]);
+});
+
+test('G-D: the pull request is read once per visit; Refresh stays the owner’s', async ({
+  page,
+}) => {
+  const { posts } = await serveFinalStep(page, { start: 'open', push: 'open', refresh: 'open' });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const pr = page.getByTestId('ticket-branch').getByTestId('pull-request');
+  await expect(pr.getByTestId('pr-state')).toHaveText('Open');
+  await expect.poll(() => posts.length).toBe(1);
+  await expect(pr.getByTestId('pr-checked')).toContainText('Checked');
+  await page.waitForTimeout(1500);
+  expect(posts).toHaveLength(1);
+  await pr.getByRole('button', { name: 'Refresh' }).click();
+  await expect.poll(() => posts.length).toBe(2);
+  // Opening the page again is a new visit.
+  await page.reload();
+  await expect(pr.getByTestId('pr-state')).toHaveText('Open');
+  await expect.poll(() => posts.length).toBe(3);
+  await page.waitForTimeout(1000);
+  expect(posts.every((p) => p.path === PR_REFRESH_PATH)).toBe(true);
+  expect(posts).toHaveLength(3);
+});
+
+test('G-D: Push new commits when the branch moved on since the last push', async ({ page }) => {
+  const { posts } = await serveFinalStep(page, {
+    start: 'behind',
+    push: 'open',
+    refresh: 'behind',
+  });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const card = page.getByTestId('ticket-branch');
+  await expect(card.getByTestId('pull-request').getByTestId('pr-state')).toHaveText('Open');
+  const push = card.getByRole('button', { name: 'Push new commits' });
+  await expect(push).toBeEnabled();
+  await expect(card.getByRole('button', { name: 'Merge into main' })).toHaveCount(0);
+  await shootPart(page, 'push-new', 'ticket-branch');
+  await push.click();
+  const confirm = card.getByTestId('confirm');
+  await expect(confirm).toContainText(
+    `Push the new commits on ${GH_BRANCH} to the open pull request #42.`,
+  );
+  await shootPart(page, 'push-new-confirm', 'ticket-branch');
+  await confirm.getByRole('button', { name: 'Push new commits' }).click();
+  // Up to date: nothing more to push.
+  await expect(card.getByRole('button', { name: 'Push new commits' })).toHaveCount(0);
+  await expect(card.getByTestId('pull-request').getByTestId('pr-state')).toHaveText('Open');
+  expect(posts).toEqual([
+    { path: PR_REFRESH_PATH, body: {} },
+    { path: PR_PATH, body: {} },
+  ]);
+});
+
+test('G-D: a refused push says GitHub’s branch has commits the app won’t overwrite', async ({
+  page,
+}) => {
+  await serveFinalStep(page, { start: 'behind', push: 'behind', refresh: 'behind' });
+  await page.route(`**${PR_PATH}`, (route) =>
+    route.fulfill({
+      status: 409,
+      json: { error: { code: 'push-rejected', message: 'raw', requestId: 'e2e' } },
+    }),
+  );
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const card = page.getByTestId('ticket-branch');
+  await card.getByRole('button', { name: 'Push new commits' }).click();
+  await card.getByTestId('confirm').getByRole('button', { name: 'Push new commits' }).click();
+  await expect(card.getByTestId('push-new-commits').getByRole('alert')).toHaveText(
+    'The branch on GitHub has commits the app doesn’t have; it won’t overwrite them.',
+  );
+  await shootPart(page, 'push-new-rejected', 'ticket-branch');
+});
+
+test('G-D: the pull request lines in the comments', async ({ page }) => {
+  await serveFinalStep(
+    page,
+    { start: 'merged', push: 'merged', refresh: 'merged' },
+    withPullRequestLines,
+  );
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const comments = page.getByTestId('comments');
+  const lines = comments.getByTestId('merge-line');
+  await expect(lines).toHaveCount(3);
+  await expect(comments.locator('[data-kind="pr-merged"]')).toContainText(
+    GH_APP_LINES.merged.replace(/\.$/, ''),
+  );
+  await expect(comments.locator('[data-kind="pr-pushed"]').first()).toContainText(
+    'Pushed feature/WEB-21-saved-searches and opened pull request #42 into main',
+  );
+  await expect(comments.locator('[data-kind="pr-pushed"]').nth(1)).toContainText(
+    'pull request #42 into main was already open',
+  );
+  await expect(comments.locator('[data-kind="pr-merged"] code')).toHaveText(['main', '9c8b7a6']);
+  await shootPart(page, 'pr-lines', 'comments');
 });

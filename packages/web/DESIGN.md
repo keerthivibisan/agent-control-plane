@@ -444,6 +444,22 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   error code (`gh-not-installed`, `gh-not-logged-in`, `no-github-remote`, `push-rejected`,
   `pr-exists-elsewhere`, `timeout`, `gh-failed`) reads as a sentence with what to do; the raw error
   stays under Details.
+- **G-D follow-ups:**
+  - **Read on opening** (`branching/pull-request-check.tsx`): when the ticket page opens and its
+    current branch has an open pull request, the page asks the server to read it once
+    (`POST …/pull-request/refresh`), decided on the page's first render: a pull request opened
+    later in the visit, stream notices, refetches and the answer itself never ask again. A new
+    visit (another ticket, a reload) asks again. While it runs, Refresh reads "Refreshing…"; a
+    failure shows on the pull request until the owner presses Refresh.
+  - **Push new commits:** while the pull request is open and the branch's tip differs from the
+    commit the app last pushed (`pullRequest.pushedCommit`; unknown never counts as new), the
+    primary action is "Push new commits", asking first ("Push the new commits on <branch> to the
+    open pull request #N."). It sends the same `POST …/pull-request` with `{}`. A refused push
+    reads "The branch on GitHub has commits the app doesn’t have; it won’t overwrite them."
+  - **The pull request lines** among the comments, small like the merge line (`data-kind`):
+    "Merged via pull request #N into <target> at <sha7>; <tip checks>" and "Pushed <branch> and
+    opened pull request #N into <target>" (or "…; pull request #N into <target> was already
+    open"). Branches and the commit are code; the number is plain text, not a link.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 

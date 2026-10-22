@@ -1,15 +1,21 @@
 import { BranchStrategySchema, branchStrategyPreset } from '@acp/core';
-import { CodeHostStatusDtoSchema, UpdateTicketRequestSchema } from '@acp/core/api';
+import {
+  CodeHostStatusDtoSchema,
+  PullRequestDtoSchema,
+  UpdateTicketRequestSchema,
+} from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
-import { codeHost } from '../../e2e/github-fixtures';
+import { codeHost, pullRequest } from '../../e2e/github-fixtures';
 import {
   canRefresh,
   codeHostReadiness,
   defaultPullRequestTitle,
+  hasNewCommits,
   pullRequestErrorText,
   pullRequestTitleError,
   pushBlockedReason,
 } from '../../src/features/branching/code-host';
+import { checkOnView } from '../../src/features/branching/pull-request-check';
 import {
   chooseStrategy,
   draftFromStrategy,
@@ -265,5 +271,54 @@ describe('GitHub: readiness, the push button and errors', () => {
     expect(canRefresh({ state: 'open' })).toBe(true);
     expect(canRefresh({ state: 'closed' })).toBe(true);
     expect(canRefresh({ state: 'merged' })).toBe(false);
+  });
+});
+
+describe('G-D: the open pull request', () => {
+  const head = 'a'.repeat(40);
+  const earlier = 'b'.repeat(40);
+  const pr = PullRequestDtoSchema.parse(pullRequest('open'));
+
+  it('has new commits only when it is open and was pushed at another commit than the tip', () => {
+    const open = (pushedCommit?: string | null) => ({
+      headCommit: head,
+      pullRequest: { state: 'open' as const, ...(pushedCommit !== undefined && { pushedCommit }) },
+    });
+    expect(hasNewCommits(open(earlier))).toBe(true);
+    expect(hasNewCommits(open(head))).toBe(false);
+    // Unknown is not "new": a server before pushedCommit, or a null.
+    expect(hasNewCommits(open())).toBe(false);
+    expect(hasNewCommits(open(null))).toBe(false);
+    for (const state of ['merged', 'closed'] as const) {
+      expect(
+        hasNewCommits({ headCommit: head, pullRequest: { state, pushedCommit: earlier } }),
+      ).toBe(false);
+    }
+    expect(hasNewCommits({ headCommit: head, pullRequest: null })).toBe(false);
+    expect(hasNewCommits({ headCommit: head })).toBe(false);
+  });
+
+  it('a refused push to the open pull request has its own words; other codes stay', () => {
+    const e = (code: string) =>
+      new ApiError({ kind: 'http', path: '/x', message: 'raw', status: 409, code });
+    expect(pullRequestErrorText(e('push-rejected'), { pushAgain: true })).toBe(
+      PULL_REQUEST_COPY.pushNewRejected,
+    );
+    expect(pullRequestErrorText(e('push-rejected'))).toBe(
+      PULL_REQUEST_COPY.errors['push-rejected'],
+    );
+    expect(pullRequestErrorText(e('timeout'), { pushAgain: true })).toBe(
+      PULL_REQUEST_COPY.errors.timeout,
+    );
+  });
+
+  it('is read on opening the page only while it is open', () => {
+    expect(checkOnView({ pullRequest: { ...pr, state: 'open' } })).toBe(true);
+    expect(checkOnView({ pullRequest: { ...pr, state: 'merged' } })).toBe(false);
+    expect(checkOnView({ pullRequest: { ...pr, state: 'closed' } })).toBe(false);
+    expect(checkOnView({ pullRequest: null })).toBe(false);
+    expect(checkOnView({})).toBe(false);
+    expect(checkOnView(null)).toBe(false);
+    expect(checkOnView(undefined)).toBe(false);
   });
 });

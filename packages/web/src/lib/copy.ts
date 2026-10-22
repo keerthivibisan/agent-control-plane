@@ -3466,6 +3466,12 @@ export const PULL_REQUEST_COPY = {
   } satisfies Record<PullRequestErrorCode, string>,
   failed: 'That didn’t work.',
   refreshFailed: 'The pull request couldn’t be checked.',
+  /** G-D: the ticket branch moved on since the last push while its pull request is open. */
+  pushNew: 'Push new commits',
+  confirmPushNew: (branch: string, n: number) =>
+    `Push the new commits on ${branch} to the open pull request #${n}.`,
+  pushNewRejected:
+    'The branch on GitHub has commits the app doesn’t have; it won’t overwrite them.',
 } as const;
 
 // --- Workflow graph editor (WG-D, wp/wg-d-editor; ADR-0023) --------------------------------------
@@ -3795,4 +3801,16 @@ export const RUN_SUMMARY_COPY = {
   ofRun: (n: number) => `Run ${formatCount(n)}`,
   /** The words around the parts of "Merged acp/WEB-12 into main at 1a2b3c4". */
   merge: { merged: 'Merged', into: 'into', at: 'at' },
+  /**
+   * The words around the pull request lines (G-D): "Merged via pull request #12 into develop at
+   * 1a2b3c4", "Pushed feature/WEB-12 and opened pull request #12 into develop", "Pushed
+   * feature/WEB-12; pull request #12 into develop was already open".
+   */
+  pullRequest: {
+    mergedVia: (n: number) => `Merged via pull request #${n} into`,
+    pushed: 'Pushed',
+    opened: (n: number) => `and opened pull request #${n} into`,
+    linked: (n: number) => `; pull request #${n} into`,
+    alreadyOpen: 'was already open',
+  },
 } as const;

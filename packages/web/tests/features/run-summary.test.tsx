@@ -219,6 +219,61 @@ describe('ticket comments by the app', () => {
     expect(line.textContent).toContain('1a2b3c4; checks passed on the tip (2)');
   });
 
+  it('shows a pull request merged on GitHub as a small line: the number as text, the commit as code', () => {
+    const list = renderComments([
+      comment({
+        id: 'c-pr-merged',
+        author: 'app',
+        body: 'Merged via pull request #12 into develop at abc1234; checks passed on the tip (2).',
+      }),
+    ]);
+    expect(within(list).queryByTestId('run-summary')).toBeNull();
+    const line = within(list).getByTestId('merge-line');
+    expect(line.getAttribute('data-kind')).toBe('pr-merged');
+    expect(line.textContent).toContain(
+      'Merged via pull request #12 into develop at abc1234; checks passed on the tip (2)',
+    );
+    expect([...line.querySelectorAll('code')].map((c) => c.textContent)).toEqual([
+      'develop',
+      'abc1234',
+    ]);
+    expect(within(line).getByTestId('merge-detail').textContent).toBe(
+      '; checks passed on the tip (2)',
+    );
+    expect(within(line).queryByRole('link')).toBeNull();
+  });
+
+  it('shows the push to a pull request as a small line, opened or already open', () => {
+    const list = renderComments([
+      comment({
+        id: 'c-pr-opened',
+        author: 'app',
+        body: 'Pushed feature/WEB-12 and opened pull request #12 into develop.',
+      }),
+      comment({
+        id: 'c-pr-again',
+        author: 'app',
+        body: 'Pushed feature/WEB-12; pull request #12 into develop was already open.',
+      }),
+    ]);
+    expect(within(list).queryByTestId('run-summary')).toBeNull();
+    const [opened, again] = within(list).getAllByTestId('merge-line');
+    expect(opened?.getAttribute('data-kind')).toBe('pr-pushed');
+    expect(opened?.textContent).toContain(
+      'Pushed feature/WEB-12 and opened pull request #12 into develop',
+    );
+    expect(again?.textContent).toContain(
+      'Pushed feature/WEB-12; pull request #12 into develop was already open',
+    );
+    for (const line of [opened, again]) {
+      expect([...(line?.querySelectorAll('code') ?? [])].map((c) => c.textContent)).toEqual([
+        'feature/WEB-12',
+        'develop',
+      ]);
+      expect(line?.textContent).toContain('Agent Control Plane');
+    }
+  });
+
   it('shows a summary without a run, and a summary of plain text, as a card too', () => {
     const list = renderComments([
       comment({ id: 'c-1', author: 'app', runId: null, body: 'Stopped before the handover.' }),

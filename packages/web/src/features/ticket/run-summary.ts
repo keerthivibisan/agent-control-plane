@@ -105,34 +105,69 @@ export function splitRunSummary(body: string): HumanRunSummary | null {
   };
 }
 
-/** The note after the owner's merge: "Merged acp/WEB-12 into main at 1a2b3c4". */
-export interface MergeNote {
-  branch: string;
-  into: string;
-  at: string;
-  /**
-   * What the server adds after the commit (S-A2): the tip's checks and whether the owner merged
-   * anyway, as written right after the commit, e.g. `; checks passed on the tip (2)`. Absent when
-   * there is nothing after the commit.
-   */
-  detail?: string;
-}
+/**
+ * The one-line notes the app writes about the ticket branch, shown small rather than as a card:
+ * - `merged`, after the owner's merge here: "Merged acp/WEB-12 into main at 1a2b3c4";
+ * - `pr-merged`, when GitHub reports the pull request merged (ADR-0025 §4): "Merged via pull
+ *   request #12 into develop at 1a2b3c4";
+ * - `pr-pushed`, after Push & open PR or a push to the open one: "Pushed feature/WEB-12 and opened
+ *   pull request #12 into develop." (`opened`) or "Pushed feature/WEB-12; pull request #12 into
+ *   develop was already open."
+ */
+export type MergeNote =
+  | {
+      kind: 'merged';
+      branch: string;
+      into: string;
+      at: string;
+      /**
+       * What the server adds after the commit (S-A2): the tip's checks and whether the owner
+       * merged anyway, as written right after the commit, e.g. `; checks passed on the tip (2)`.
+       * Absent when there is nothing after the commit.
+       */
+      detail?: string;
+    }
+  | { kind: 'pr-merged'; number: number; into: string; at: string; detail?: string }
+  | { kind: 'pr-pushed'; branch: string; number: number; into: string; opened: boolean };
 
 /** A commit id, then optionally the server's detail after it. */
 const MERGE_LINE_DETAIL = /^Merged (\S+) into (\S+) at ([0-9a-f]{7,64})\b(.*?)\.?$/;
 const MERGE_LINE = /^Merged (\S+) into (\S+) at (\S.*?)\.?$/;
+const PR_MERGED_LINE = /^Merged via pull request #(\d+) into (\S+) at ([0-9a-f]{7,64})\b(.*?)\.?$/;
+// Git refuses a branch name ending in ".", so a final "." is always the sentence's.
+const PR_OPENED_LINE = /^Pushed (\S+) and opened pull request #(\d+) into (\S+?)\.?$/;
+const PR_LINKED_LINE = /^Pushed (\S+); pull request #(\d+) into (\S+) was already open\.?$/;
 
-/** The merge note's parts, or null when the comment is anything else (a run summary). */
+/** Kept as written right after the commit: `; checks …` or ` (merged anyway, …); checks …`. */
+function detailOf(rest: string | undefined): { detail?: string } {
+  const detail = (rest ?? '').trimEnd();
+  return detail.trim().length > 0 ? { detail } : {};
+}
+
+/** The note's parts, or null when the comment is anything else (a run summary). */
 export function parseMergeLine(body: string): MergeNote | null {
   const text = body.trim();
   if (text.includes('\n') || text.length > 300) return null;
+  const pr = PR_MERGED_LINE.exec(text);
+  if (pr?.[1] !== undefined && pr[2] !== undefined && pr[3] !== undefined) {
+    return { kind: 'pr-merged', number: Number(pr[1]), into: pr[2], at: pr[3], ...detailOf(pr[4]) };
+  }
+  const opened = PR_OPENED_LINE.exec(text);
+  const pushed = opened ?? PR_LINKED_LINE.exec(text);
+  if (pushed?.[1] !== undefined && pushed[2] !== undefined && pushed[3] !== undefined) {
+    return {
+      kind: 'pr-pushed',
+      branch: pushed[1],
+      number: Number(pushed[2]),
+      into: pushed[3],
+      opened: opened !== null,
+    };
+  }
   const d = MERGE_LINE_DETAIL.exec(text);
   if (d?.[1] !== undefined && d[2] !== undefined && d[3] !== undefined) {
-    // Kept as written right after the commit: `; checks …` or ` (merged anyway, …); checks …`.
-    const detail = (d[4] ?? '').trimEnd();
-    return { branch: d[1], into: d[2], at: d[3], ...(detail.trim().length > 0 && { detail }) };
+    return { kind: 'merged', branch: d[1], into: d[2], at: d[3], ...detailOf(d[4]) };
   }
   const m = MERGE_LINE.exec(text);
   if (!m || m[1] === undefined || m[2] === undefined || m[3] === undefined) return null;
-  return { branch: m[1], into: m[2], at: m[3] };
+  return { kind: 'merged', branch: m[1], into: m[2], at: m[3] };
 }

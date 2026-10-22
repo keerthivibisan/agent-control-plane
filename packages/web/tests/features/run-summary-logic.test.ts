@@ -82,11 +82,13 @@ describe('parseRunSummary', () => {
 describe('parseMergeLine', () => {
   it('reads the note after the owner’s merge', () => {
     expect(parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4')).toEqual({
+      kind: 'merged',
       branch: 'acp/WEB-12',
       into: 'main',
       at: '1a2b3c4',
     });
     expect(parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4.\n')).toEqual({
+      kind: 'merged',
       branch: 'acp/WEB-12',
       into: 'main',
       at: '1a2b3c4',
@@ -97,6 +99,7 @@ describe('parseMergeLine', () => {
     expect(
       parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4; checks passed on the tip (2).'),
     ).toEqual({
+      kind: 'merged',
       branch: 'acp/WEB-12',
       into: 'main',
       at: '1a2b3c4',
@@ -113,10 +116,56 @@ describe('parseMergeLine', () => {
     });
   });
 
+  it('reads a pull request merged on GitHub, with or without the tip checks (G-D)', () => {
+    expect(
+      parseMergeLine(
+        'Merged via pull request #12 into develop at abc1234; checks passed on the tip (2).',
+      ),
+    ).toEqual({
+      kind: 'pr-merged',
+      number: 12,
+      into: 'develop',
+      at: 'abc1234',
+      detail: '; checks passed on the tip (2)',
+    });
+    expect(parseMergeLine('Merged via pull request #7 into release/2.0 at 0f1e2d3.')).toEqual({
+      kind: 'pr-merged',
+      number: 7,
+      into: 'release/2.0',
+      at: '0f1e2d3',
+    });
+  });
+
+  it('reads a push that opened a pull request, and one to a pull request already open (G-D)', () => {
+    expect(
+      parseMergeLine('Pushed feature/WEB-12-saved-searches and opened pull request #12 into main.'),
+    ).toEqual({
+      kind: 'pr-pushed',
+      branch: 'feature/WEB-12-saved-searches',
+      number: 12,
+      into: 'main',
+      opened: true,
+    });
+    expect(
+      parseMergeLine('Pushed fix/WEB-3.1; pull request #3 into release/2.0 was already open.'),
+    ).toEqual({
+      kind: 'pr-pushed',
+      branch: 'fix/WEB-3.1',
+      number: 3,
+      into: 'release/2.0',
+      opened: false,
+    });
+  });
+
   it('is not a merge note when it has more lines or another shape', () => {
     expect(parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4\nMore')).toBeNull();
     expect(parseMergeLine('Run summary\n- Merged 2 changes')).toBeNull();
     expect(parseMergeLine('Merged everything')).toBeNull();
+    expect(parseMergeLine('Merged via pull request #x into main at 1a2b3c4.')).toBeNull();
+    expect(parseMergeLine('Pushed feature/WEB-12 and opened it.')).toBeNull();
+    expect(
+      parseMergeLine('Pushed feature/WEB-12 and opened pull request #12 into main.\nMore'),
+    ).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import { MergeIcon, RunSummaryIcon } from '../../components/icons';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { RUN_SUMMARY_COPY } from '../../lib/copy';
+import { PullRequestIcon } from '../branching/icons';
 import {
   parseMergeLine,
   parseRunSummary,
@@ -107,21 +108,64 @@ export function RunSummaryCard({
   );
 }
 
-/** The one-line note after your merge: "Merged acp/WEB-12 into main at 1a2b3c4", small and quiet. */
+function Code({ children }: { children: string }) {
+  return <code className="font-mono text-ink">{children}</code>;
+}
+
+/** The sentence of a one-line note: branches and commits as code, a pull request's number as text. */
+function NoteText({ note }: { note: MergeNote }) {
+  const P = C.pullRequest;
+  const detail =
+    note.kind !== 'pr-pushed' && note.detail !== undefined ? (
+      <span data-testid="merge-detail">{note.detail}</span>
+    ) : null;
+  if (note.kind === 'pr-merged') {
+    return (
+      <span>
+        {P.mergedVia(note.number)} <Code>{note.into}</Code> {C.merge.at} <Code>{note.at}</Code>
+        {detail}
+      </span>
+    );
+  }
+  if (note.kind === 'pr-pushed') {
+    return note.opened ? (
+      <span>
+        {P.pushed} <Code>{note.branch}</Code> {P.opened(note.number)} <Code>{note.into}</Code>
+      </span>
+    ) : (
+      <span>
+        {P.pushed} <Code>{note.branch}</Code>
+        {P.linked(note.number)} <Code>{note.into}</Code> {P.alreadyOpen}
+      </span>
+    );
+  }
+  return (
+    <span>
+      {C.merge.merged} <Code>{note.branch}</Code> {C.merge.into} <Code>{note.into}</Code>{' '}
+      {C.merge.at} <Code>{note.at}</Code>
+      {detail}
+    </span>
+  );
+}
+
+/**
+ * A one-line note about the ticket branch, small and quiet: your merge ("Merged acp/WEB-12 into
+ * main at 1a2b3c4"), the pull request merged on GitHub, or the branch pushed to a pull request.
+ */
 export function MergeLine({ comment, note }: { comment: TicketCommentDto; note: MergeNote }) {
   return (
     <p
       className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-dim"
       data-testid="merge-line"
+      data-kind={note.kind}
     >
-      <MergeIcon size={14} className="text-success" />
+      {note.kind === 'pr-pushed' ? (
+        <PullRequestIcon size={14} className="text-accent" />
+      ) : (
+        <MergeIcon size={14} className="text-success" />
+      )}
       <span className="sr-only">{C.author}: </span>
-      <span>
-        {C.merge.merged} <code className="font-mono text-ink">{note.branch}</code> {C.merge.into}{' '}
-        <code className="font-mono text-ink">{note.into}</code> {C.merge.at}{' '}
-        <code className="font-mono text-ink">{note.at}</code>
-        {note.detail !== undefined && <span data-testid="merge-detail">{note.detail}</span>}
-      </span>
+      <NoteText note={note} />
       <span aria-hidden="true">·</span>
       <RelativeTime iso={comment.createdAt} />
     </p>

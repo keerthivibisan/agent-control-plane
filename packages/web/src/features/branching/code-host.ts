@@ -59,10 +59,33 @@ function isPullRequestErrorCode(code: string | null): code is PullRequestErrorCo
   return code !== null && ERROR_CODES.includes(code);
 }
 
-/** A failed push, pull request or refresh in plain words; null for an error without a known code. */
-export function pullRequestErrorText(error: ApiError): string | null {
+/**
+ * A failed push, pull request or refresh in plain words; null for an error without a known code.
+ * A push to an open pull request (`pushAgain`) words its refusal for that case: the app pushes
+ * only a fast-forward, so a refused push means GitHub's branch has commits the app lacks.
+ */
+export function pullRequestErrorText(
+  error: ApiError,
+  { pushAgain = false }: { pushAgain?: boolean } = {},
+): string | null {
   if (error.kind !== 'http' || !isPullRequestErrorCode(error.code)) return null;
+  if (pushAgain && error.code === 'push-rejected') return PULL_REQUEST_COPY.pushNewRejected;
   return PULL_REQUEST_COPY.errors[error.code];
+}
+
+/**
+ * Whether the ticket branch has commits its open pull request hasn't got: the branch's tip
+ * differs from the commit the app last pushed. Unknown (`pushedCommit` absent or null, from a
+ * server before it) is not "new": nothing is offered on a guess.
+ */
+export function hasNewCommits(branch: {
+  headCommit: string;
+  pullRequest?: Pick<PullRequestDto, 'state' | 'pushedCommit'> | null | undefined;
+}): boolean {
+  const pr = branch.pullRequest ?? null;
+  if (pr === null || pr.state !== 'open') return false;
+  const pushed = pr.pushedCommit ?? null;
+  return pushed !== null && pushed !== branch.headCommit;
 }
 
 /** Merged is final; an open one can be merged and a closed one reopened on GitHub. */

@@ -9,8 +9,8 @@ import { AlertIcon } from '../../components/icons';
 import { ticketBranchAction } from '../../lib/api';
 import { REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useCodeHost } from '../branching/CodeHostCard';
-import { pushBlockedReason } from '../branching/code-host';
-import { PullRequestInfo, PushAndOpenPr } from '../branching/PullRequest';
+import { hasNewCommits, pushBlockedReason } from '../branching/code-host';
+import { PullRequestInfo, PushAndOpenPr, PushNewCommits } from '../branching/PullRequest';
 import { ActionError, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
 import { checksSummary, type TicketBranchMode } from './logic';
@@ -52,7 +52,8 @@ function PushAction({
  * a failed required check, with a reason), or Push & open PR for a ticket; Request changes (a
  * comment for the lead; the run goes on); Discard; and Update from the target when it moved. Each
  * asks first; the server checks again. While a pull request is open on GitHub, the merge happens
- * there: only Request changes and Discard stay.
+ * there: only Request changes and Discard stay, with Push new commits when the branch moved on
+ * since the last push (G-D).
  */
 function Actions({
   run,
@@ -102,7 +103,16 @@ function Actions({
         </div>
       ) : null}
       <div className="flex flex-wrap items-start gap-2">
-        {prOpen ? null : checks.kind === 'failed' ? (
+        {prOpen ? (
+          ticket !== null && branch.pullRequest && hasNewCommits(branch) ? (
+            <PushNewCommits
+              ticketId={ticket.id}
+              branch={branch.branch}
+              pr={branch.pullRequest}
+              disabled={act.pending}
+            />
+          ) : null
+        ) : checks.kind === 'failed' ? (
           <ReasonForm
             openLabel={B.mergeAnyway}
             title={B.mergeAnywayTitle}

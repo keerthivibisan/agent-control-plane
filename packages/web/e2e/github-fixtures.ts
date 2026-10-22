@@ -116,6 +116,55 @@ export function ghMergedScenario(): LoopScenario {
   return sc;
 }
 
+/** A commit the app pushed before the ticket branch moved on (G-D, Push new commits). */
+export const GH_PUSHED_EARLIER = 'b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80';
+
+/** The ticket branch's tip in the review scenarios, as the app last pushed it when up to date. */
+export function ghHeadCommit(sc: LoopScenario): string {
+  const detail = sc.routes[LOOP_TICKET_PATH] as Json;
+  const run = detail['currentRun'] as Json;
+  return (run['ticketBranch'] as Json)['headCommit'] as string;
+}
+
+/**
+ * An open pull request (G-D): up to date with the ticket branch (`pushedCommit` is its tip), or
+ * behind it (`behind`: pushed at an earlier commit, so Push new commits is offered).
+ */
+export function ghOpenScenario(behind: boolean, over: Json = {}): LoopScenario {
+  const head = ghHeadCommit(ghReviewScenario());
+  return ghReviewScenario(
+    pullRequest('open', { pushedCommit: behind ? GH_PUSHED_EARLIER : head, ...over }),
+  );
+}
+
+/** The `app` one-line notes about the pull request (G-D), as the server writes them. */
+export const GH_APP_LINES = {
+  opened: `Pushed ${GH_BRANCH} and opened pull request #${GH_PR_NUMBER} into main.`,
+  again: `Pushed ${GH_BRANCH}; pull request #${GH_PR_NUMBER} into main was already open.`,
+  merged: `Merged via pull request #${GH_PR_NUMBER} into main at 9c8b7a6; checks passed on the tip (2).`,
+} as const;
+
+/** The scenario with the app's pull request lines added to the ticket's comments. */
+export function withPullRequestLines(sc: LoopScenario): LoopScenario {
+  const detail = sc.routes[LOOP_TICKET_PATH] as Json;
+  const line = (id: string, body: string, min: number): Json => ({
+    id,
+    ticketId: LOOP_TICKET_ID,
+    runId: (detail['currentRun'] as Json)['id'],
+    planId: null,
+    author: 'app',
+    body,
+    createdAt: T(min),
+  });
+  const comments = [
+    ...(detail['comments'] as Json[]),
+    line('c-app-pr-opened', GH_APP_LINES.opened, 50),
+    line('c-app-pr-again', GH_APP_LINES.again, 54),
+    line('c-app-pr-merged', GH_APP_LINES.merged, 58),
+  ];
+  return { routes: { ...sc.routes, [LOOP_TICKET_PATH]: { ...detail, comments } } };
+}
+
 /** `POST /api/projects/:id/tickets`'s answer for a created ticket (Backlog), with what was sent. */
 export function createdTicket(body: Json): Json {
   return {
