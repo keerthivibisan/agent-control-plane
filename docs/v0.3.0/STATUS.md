@@ -219,3 +219,13 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   line comments, Review changes), with a "Changes from" picker (all changes, or one helper's
   change). Old review-page links redirect into the tab. After a merge it is read-only with a
   "Merged" label. Also the breadcrumb "Board / <KEY>".
+- 2026-10-22 **C-D merged** (`d001c7a`): the ticket's Files changed tab is the GitHub review UI
+  (one file list, one diff), with a "Changes from" picker (all changes or one helper's change),
+  Open, Merged and Closed labels, read-only after a merge or discard, and the 410 state in the same
+  frame. Old review-page links redirect into the tab. The breadcrumb reads "Board / KEY". The stopped
+  first agent's WIP was continued and squashed. Coordinator check: 5,103 tests; e2e 101/101.
+- 2026-10-22 **Owner decision: reviews go to Conversation, not Comments** (coordinator, `fb31508`,
+  `ca22821`, `a9e1d3d`). `TicketCommentRequest.kind?` (`comment` | `review`); a Comment sent from
+  Files changed is stored as the owner's `review` and shows as "You reviewed"; every review's link is
+  "Open Conversation". Also fixed a race in C-B's upload e2e (`7834326`, 25/25 repeated). Check:
+  5,104 tests; e2e 100/101, then the fixed spec 25/25.
