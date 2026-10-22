@@ -145,11 +145,14 @@ export function RunOptionsFields({
   onChange,
   defaults,
   collapse = false,
+  more,
 }: {
   value: TicketRunOptions;
   onChange: (next: TicketRunOptions) => void;
   defaults: RunDefaults | null;
   collapse?: boolean;
+  /** More fields under "More options" with `collapse` (New ticket's branch, ADR-0025). */
+  more?: ReactNode;
 }) {
   const set = (patch: TicketRunOptions) => onChange(compactRunOptions({ ...value, ...patch }));
   const blocks = defaults?.blocks;
@@ -219,7 +222,10 @@ export function RunOptionsFields({
       ) : null}
       {collapse ? (
         <Details summary={C.more} testId="run-options-more" defaultOpen={hasReviewOptions(value)}>
-          {review}
+          <div className="flex flex-col gap-4">
+            {review}
+            {more}
+          </div>
         </Details>
       ) : (
         review

@@ -3033,8 +3033,9 @@ export const REVIEW_LOOP_COPY = {
   },
   branch: {
     title: 'Ticket branch',
-    tip: 'Every change the lead merges lands on this branch, never on main. You merge the branch into main once, at the end; main changes only on your click, as a clean fast-forward.',
-    description: 'Every merged change lands here. You merge it into main once.',
+    tip: 'Every change the lead merges lands on this branch, never on its target (main, for example). At the end you merge the branch into the target once, as a clean fast-forward, or push it and open a pull request on GitHub. The target changes only on your click.',
+    description:
+      'Every merged change lands here. At the end you merge it once, or open a pull request.',
     state: {
       open: 'Open',
       merged: 'Merged',
@@ -3286,6 +3287,188 @@ export const TICKET_OPTIONS_COPY = {
     changed: (n: number) =>
       `${countOf(n, 'choice differs', 'choices differ')} from this ticket’s settings, for this run only.`,
   },
+} as const;
+
+// --- Branching strategies and GitHub (G-B, wp/g-b-web; ADR-0025) --------------------------------
+//
+// Add-only. Project settings' Branches and GitHub cards, a ticket's own branch and target, and the
+// ticket branch card's final step (merge here, or Push & open PR). Plain owner words: the GitHub
+// CLI is named because the owner installs it; tokens, refs and remotes are not.
+
+import type { BranchStrategyPreset } from '@acp/core';
+import type { PullRequestState } from '@acp/core/api';
+
+/** A project's choice in Settings: a preset, or no strategy (the `acp/<KEY>` behaviour). */
+export type BranchingChoiceKey = BranchStrategyPreset | 'none';
+
+/** Why the app can't reach GitHub for a project, in the order the owner should fix it. */
+export type CodeHostProblemKey = 'no-remote' | 'no-cli' | 'not-logged-in';
+
+/** The server's error codes for Push & open PR and Refresh (ADR-0025). */
+export type PullRequestErrorCode =
+  | 'gh-not-installed'
+  | 'gh-not-logged-in'
+  | 'no-github-remote'
+  | 'push-rejected'
+  | 'pr-exists-elsewhere'
+  | 'timeout'
+  | 'gh-failed';
+
+export const BRANCHING_COPY = {
+  card: {
+    title: 'Branches',
+    description: 'How ticket branches are named, where they start and where the work goes back.',
+    tip: 'Each ticket’s work happens on its own branch, created from its target branch when you approve the plan. A change here applies to plans you approve from now on.',
+  },
+  choiceLabel: 'Branching strategy',
+  choices: {
+    'github-flow': {
+      word: 'GitHub flow',
+      text: 'Tickets branch from your main branch and go back to it, usually through a pull request.',
+    },
+    'git-flow': {
+      word: 'Git flow',
+      text: 'Tickets branch from develop and go back to develop. Releases are made from develop.',
+    },
+    custom: {
+      word: 'Custom',
+      text: 'Your own branches and your own branch names.',
+    },
+    none: {
+      word: 'None, keep acp/<KEY>',
+      text: 'As before: each ticket branches from the branch your project folder is on.',
+    },
+  } satisfies Record<BranchingChoiceKey, { word: string; text: string }>,
+  noneNote: (key: string) =>
+    `Ticket branches are named like acp/${key}-12. They start from the branch your project folder is on, and you merge them back into it.`,
+  baseBranch: 'Base branch',
+  baseBranchHint: 'The long-lived branch new work starts from, for example main or develop.',
+  targetBranch: 'Default target branch',
+  targetBranchHint:
+    'Where a ticket’s work is merged, or its pull request opened, unless the ticket says otherwise.',
+  template: 'Ticket branch name',
+  templateHint:
+    'Use {key} for the ticket number (required), {slug} for words from its title and {type} for its type’s word.',
+  locked: 'Set by the strategy. Choose Custom to change it.',
+  typeWords: 'Word for each ticket type',
+  typeWordsHint: 'What {type} becomes in a branch name.',
+  preview: 'Preview',
+  previewTip: 'Names for two example tickets. A name already taken gets -r1, -r2 and so on.',
+  previewUnavailable: 'Fix the name above to see a preview.',
+  /** The example tickets of the preview. */
+  sample: { feature: 'Add saved searches', bug: 'Login fails on Safari' },
+  errors: {
+    branch: 'Use letters, digits, “.”, “_”, “-” and “/”, for example main or release/2.0.',
+    branchMissing: 'Enter a branch name.',
+    templateMissing: 'Enter a name, for example {type}/{key}-{slug}.',
+    templateTooLong: 'Keep it under 120 characters.',
+    templateToken: (tokens: string) => `Only {key}, {slug} and {type} work here, not ${tokens}.`,
+    templateNeedsKey: 'Include {key}, so every ticket gets its own branch.',
+    templateInvalid:
+      'This doesn’t give a valid branch name. Around the tokens, use letters, digits, “.”, “_”, “-” and “/”.',
+    typeWord: 'Lowercase letters, digits and “-”, starting with a letter (up to 20).',
+  },
+  /** The new-project wizard's collapsed section. */
+  wizardSummary: 'Branching strategy (optional)',
+} as const;
+
+export const CODE_HOST_COPY = {
+  title: 'GitHub',
+  description: 'Push a ticket’s branch and open a pull request from the ticket.',
+  tip: 'The app uses your own GitHub CLI login (gh) and the project’s origin remote. It never stores a token, and it pushes or opens a pull request only when you click.',
+  checking: 'Checking GitHub…',
+  connected: (repo: string) => `Connected to GitHub: ${repo}`,
+  word: { connected: 'Connected', notConnected: 'Not connected' },
+  defaultBranch: 'Default branch on GitHub',
+  problems: {
+    'no-remote':
+      'This project has no GitHub remote. Add one named origin with the repository’s address, then check again.',
+    'no-cli':
+      'The GitHub CLI isn’t installed. Install the GitHub CLI (gh) and run gh auth login, then check again.',
+    'not-logged-in':
+      'The GitHub CLI isn’t signed in. Run gh auth login in a terminal, then check again.',
+  } satisfies Record<CodeHostProblemKey, string>,
+  recheck: 'Check again',
+  rechecking: 'Checking…',
+  loadFailed: 'GitHub couldn’t be checked.',
+} as const;
+
+export const TICKET_BRANCH_COPY = {
+  title: 'Branch',
+  note: 'Where this ticket’s work goes. Empty fields follow the project.',
+  name: 'Branch name',
+  nameHint: 'Leave empty for the name the project gives.',
+  target: 'Target branch',
+  targetHint: 'Where the work is merged or the pull request goes. Leave empty for the project’s.',
+  /** "Project default (feature/WEB-12-add-saved-searches)". */
+  projectDefault: (value: string | null) =>
+    value === null ? 'Project default' : `Project default (${value})`,
+  /** The target without a strategy: the branch the project folder is on. */
+  currentBranch: 'the project folder’s branch',
+  own: 'This ticket',
+  edit: 'Change',
+  editLabel: 'Change the branch settings',
+  save: 'Save',
+  saving: 'Saving…',
+  cancel: 'Cancel',
+  failed: 'The branch settings weren’t saved.',
+  /** Once the run has created the branch. */
+  created: 'The run created this branch. Its name and target stay as they are for this run.',
+  actualBranch: 'Branch',
+  actualTarget: 'Target',
+} as const;
+
+export const PULL_REQUEST_COPY = {
+  push: 'Push & open PR',
+  confirm: (branch: string, target: string) =>
+    `Push ${branch} to origin and open a pull request against ${target} on GitHub. The pull request description is this ticket’s run summary.`,
+  titleLabel: 'Pull request title',
+  titleMissing: 'Enter a title.',
+  titleTooLong: 'Keep it under 200 characters.',
+  draft: 'Open it as a draft',
+  draftHint: 'GitHub doesn’t ask for reviews until you mark it ready.',
+  confirmButton: 'Push & open PR',
+  pushing: 'Pushing…',
+  cancel: 'Cancel',
+  /** Why Push & open PR can't be used now; the button stays, disabled, with this under it. */
+  blocked: {
+    checking: 'Checking GitHub…',
+    'no-remote': 'Needs a GitHub remote: this project’s origin isn’t on GitHub.',
+    'no-cli': 'Needs the GitHub CLI: install gh, then run gh auth login.',
+    'not-logged-in': 'Needs you signed in to GitHub: run gh auth login in a terminal.',
+    unknown: 'GitHub couldn’t be checked, so pushing is off. Check it in the project’s settings.',
+  } satisfies Record<CodeHostProblemKey | 'checking' | 'unknown', string>,
+  number: (n: number) => `Pull request #${n}`,
+  newTab: '(opens in a new tab)',
+  state: { open: 'Open', merged: 'Merged', closed: 'Closed' } satisfies Record<
+    PullRequestState,
+    string
+  >,
+  checked: 'Checked',
+  refresh: 'Refresh',
+  refreshing: 'Refreshing…',
+  openNote: (target: string) =>
+    `Review and merge it on GitHub, then press Refresh. The ticket is done once it is merged into ${target}.`,
+  mergedNote: (target: string) => `Merged into ${target} on GitHub. The ticket is done.`,
+  closedNote:
+    'Closed on GitHub without merging. You can merge the branch here or open a new pull request.',
+  mergedOnGitHub: (target: string) => `Merged into ${target} on GitHub`,
+  errors: {
+    'gh-not-installed':
+      'The GitHub CLI isn’t installed. Install the GitHub CLI (gh) and run gh auth login, then try again.',
+    'gh-not-logged-in':
+      'The GitHub CLI isn’t signed in. Run gh auth login in a terminal, then try again.',
+    'no-github-remote': 'This project has no GitHub remote named origin. Add it, then try again.',
+    'push-rejected':
+      'GitHub refused the push, usually because the branch there has commits this one doesn’t. Look at the branch on GitHub, then try again.',
+    'pr-exists-elsewhere':
+      'This branch already has a pull request on GitHub against another branch. Close it there, then try again.',
+    timeout: 'GitHub didn’t answer in time. Check your internet connection, then try again.',
+    'gh-failed':
+      'The GitHub CLI reported a problem. Try again; if it keeps failing, run gh auth status in a terminal.',
+  } satisfies Record<PullRequestErrorCode, string>,
+  failed: 'That didn’t work.',
+  refreshFailed: 'The pull request couldn’t be checked.',
 } as const;
 
 // --- Workflow graph editor (WG-D, wp/wg-d-editor; ADR-0023) --------------------------------------

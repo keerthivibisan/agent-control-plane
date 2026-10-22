@@ -14,6 +14,20 @@ import { createTicket } from '../../lib/api';
 import { BOARD_COPY, TICKET_PRIORITY_COPY, TICKET_TYPE_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { RunOptionsFields, useProjectRunDefaults } from '../review-loop/RunOptions';
+import {
+  TicketBranchInputs,
+  targetPlaceholder,
+  useBranchDefaults,
+} from '../branching/TicketBranchFields';
+import {
+  EMPTY_TICKET_BRANCH,
+  hasTicketBranchErrors,
+  pendingTicketKey,
+  projectBranchName,
+  ticketBranchCreate,
+  validateTicketBranch,
+  type TicketBranchDraft,
+} from '../branching/ticket-branch';
 import { useBoardAction } from './actions';
 import { parseLabels } from './moves';
 
@@ -74,8 +88,8 @@ function Field({
 
 /**
  * "New ticket": title, type, priority, labels, description, and the ticket's own run options
- * (RL-H; "Project default" unless chosen, reviewer and rounds under "More options"). The ticket
- * lands in Backlog.
+ * (RL-H; "Project default" unless chosen, reviewer and rounds under "More options") and branch
+ * name and target (ADR-0025, also under "More options"). The ticket lands in Backlog.
  */
 export function NewTicketDialog({
   projectId,
@@ -94,6 +108,8 @@ export function NewTicketDialog({
   const [description, setDescription] = useState('');
   const [runOptions, setRunOptions] = useState<TicketRunOptions>({});
   const defaults = useProjectRunDefaults(projectId);
+  const [branch, setBranch] = useState<TicketBranchDraft>(EMPTY_TICKET_BRANCH);
+  const branchDefaults = useBranchDefaults(projectId);
   const [errors, setErrors] = useState<Errors>({});
   const ids = {
     title: useId(),
@@ -108,7 +124,8 @@ export function NewTicketDialog({
     const parsedLabels = parseLabels(labels);
     const next = validate(title, parsedLabels);
     setErrors(next);
-    if (next.title || next.labels) return;
+    if (next.title || next.labels || hasTicketBranchErrors(validateTicketBranch(branch))) return;
+    const branchPrefs = ticketBranchCreate(branch);
     const ticket = await create.run(projectId, {
       title: title.trim(),
       description,
@@ -117,6 +134,7 @@ export function NewTicketDialog({
       labels: parsedLabels,
       // Only what the owner chose: an empty choice follows the project.
       ...(Object.keys(runOptions).length > 0 && { runOptions }),
+      ...(branchPrefs !== undefined && { branch: branchPrefs }),
     });
     if (ticket !== null) onCreated(ticket);
   };
@@ -197,6 +215,22 @@ export function NewTicketDialog({
           onChange={setRunOptions}
           defaults={defaults}
           collapse
+          more={
+            <TicketBranchInputs
+              draft={branch}
+              onChange={setBranch}
+              namePlaceholder={
+                branchDefaults === null
+                  ? null
+                  : projectBranchName(branchDefaults.strategy, {
+                      key: pendingTicketKey(branchDefaults.projectKey),
+                      title,
+                      type,
+                    })
+              }
+              targetPlaceholder={targetPlaceholder(branchDefaults)}
+            />
+          }
         />
         <ActionError error={create.error} message={C.failed} />
         <div className="-mx-5 -mb-5 flex justify-end gap-2 rounded-b-card border-t border-line bg-sunken/60 px-5 py-3">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paths } from '../../src/lib/api';
+import { codeHostPaths, paths } from '../../src/lib/api';
 import { affectedBy } from '../../src/lib/invalidation';
 
 describe('stream invalidation', () => {
@@ -40,5 +40,18 @@ describe('stream invalidation', () => {
     });
     expect(changed(paths.health())).toBe(false);
     expect(changed(paths.candidates())).toBe(true);
+  });
+
+  it('never asks GitHub again for a notice (ADR-0025): only a screen or Check again does', () => {
+    const changed = affectedBy({
+      kind: 'projects-changed',
+      lastEventId: 5,
+      sessionIds: [],
+      projectIds: ['p-1'],
+    });
+    for (const match of [ingested, changed]) {
+      expect(match(codeHostPaths.status('p-1'))).toBe(false);
+      expect(match(codeHostPaths.status('p-1').replace('/code-host', '/setup'))).toBe(true);
+    }
   });
 });

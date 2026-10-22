@@ -10,6 +10,7 @@ import { addTicketComment, updateTicket } from '../../lib/api';
 import { RUN_STATUS_COPY, RUN_SUMMARY_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError, StatusWord } from '../control/bits';
 import { TicketRunOptionsSection } from '../review-loop/RunOptions';
+import { TicketBranchSection } from '../branching/TicketBranchFields';
 import { useTicketAction } from './actions';
 import { EarlierPlans } from './PlanReview';
 import { AppComment } from './RunSummary';
@@ -282,6 +283,11 @@ export function TicketInfo({
           <TicketRunOptionsSection
             key={detail.ticket.updatedAt}
             ticket={detail.ticket}
+            heading={HEADING}
+          />
+          <TicketBranchSection
+            key={`branch-${detail.ticket.updatedAt}`}
+            detail={detail}
             heading={HEADING}
           />
           <div className="flex flex-col gap-2" data-testid="plan-history">

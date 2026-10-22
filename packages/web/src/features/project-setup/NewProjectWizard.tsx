@@ -3,6 +3,7 @@ import type { ProjectDto } from '@acp/core/api';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { Details } from '../../components/Details';
 import { CheckIcon } from '../../components/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
@@ -15,6 +16,7 @@ import {
   updateWorkflowGraph,
 } from '../../lib/api';
 import {
+  BRANCHING_COPY,
   PROJECT_SETUP_COPY,
   REVIEW_LOOP_COPY,
   SETUP_COPY,
@@ -26,6 +28,15 @@ import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { HarnessCheckList, HarnessStatusView, HarnessTicketAction } from './HarnessPanel';
 import { ApprovalModeChoice, ModeWarning } from '../review-loop/ApprovalsEditor';
+import { BranchingFields } from '../branching/BranchingFields';
+import {
+  draftFromStrategy,
+  draftToStrategy,
+  hasBranchingErrors,
+  sameBranching,
+  validateBranching,
+  type BranchingDraft,
+} from '../branching/strategy-form';
 import { AgentFields, ContextPicker } from './SetupSections';
 import {
   draftFromSetup,
@@ -123,6 +134,8 @@ export function NewProjectWizard() {
   const [errors, setErrors] = useState<SetupErrors>({});
   /** WG-D: how changes are reviewed; saved as the project's workflow graph on finish. */
   const [workflow, setWorkflow] = useState<WorkflowChoice>(DEFAULT_WORKFLOW_CHOICE);
+  /** ADR-0025: the owner's branching strategy, if they open that section; saved with the setup. */
+  const [branchingEdit, setBranchingEdit] = useState<BranchingDraft | null>(null);
 
   const source = useSourceStep((p) => {
     setProject(p);
@@ -160,6 +173,9 @@ export function NewProjectWizard() {
   };
 
   const approvalMode = mode ?? setup.data?.approvals?.mode ?? DEFAULT_APPROVAL_MODE;
+  const savedBranching = draftFromStrategy(setup.data?.branching);
+  const branching = branchingEdit ?? savedBranching;
+  const branchErrors = validateBranching(branching);
 
   const key = STEPS[step] ?? 'source';
   const pending = source.pending || save.pending || saveGraph.pending;
@@ -174,7 +190,7 @@ export function NewProjectWizard() {
     if (key === 'agents') {
       const e = validateAgentFields(draft);
       setErrors(e);
-      if (Object.keys(e).length === 0) setStep(2);
+      if (Object.keys(e).length === 0 && !hasBranchingErrors(branchErrors)) setStep(2);
       return;
     }
     if (key === 'allowlist') {
@@ -192,9 +208,14 @@ export function NewProjectWizard() {
       setErrors({});
       // The mode, without the legacy allowlist (the server keeps that in step with the mode).
       const { allowlist: _legacy, ...request } = r.request;
+      // Sent only when the owner changed it: absent keeps what the project has.
+      const b = draftToStrategy(branching);
+      const branchingChange =
+        b.ok && !sameBranching(branching, savedBranching) ? { branching: b.branching } : {};
       const saved = await save.run(id, {
         ...request,
         approvals: { mode: approvalMode, commands: [...(setup.data?.approvals?.commands ?? [])] },
+        ...branchingChange,
       });
       if (saved !== null) setStep(4);
       return;
@@ -237,6 +258,18 @@ export function NewProjectWizard() {
       <div className="flex flex-col gap-8">
         <AgentFields draft={draft} errors={errors} onChange={change} />
         <WorkflowTemplateChoice value={workflow} onChange={setWorkflow} />
+        <Details
+          summary={BRANCHING_COPY.wizardSummary}
+          testId="wizard-branching"
+          defaultOpen={branching.choice !== 'none'}
+        >
+          <BranchingFields
+            draft={branching}
+            errors={branchErrors}
+            onChange={setBranchingEdit}
+            projectKey={draft.projectKey}
+          />
+        </Details>
       </div>
     );
   } else if (key === 'allowlist') {

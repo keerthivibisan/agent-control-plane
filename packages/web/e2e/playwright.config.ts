@@ -129,6 +129,12 @@ export default defineConfig({
       testMatch: 'diff-viewer.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
+    {
+      // v0.3.0 G-B (ADR-0025): branching strategies and GitHub, routes from fixtures.
+      name: 'github',
+      testMatch: 'github.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
     // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).
     {
       name: 'pages',

@@ -379,7 +379,9 @@ function RunView({
         // merges the ticket branch once.
         <>
           <NeedsYouChanges run={run} onOpen={(id) => onSelect(id, 'changes')} />
-          {run.ticketBranch ? <TicketBranchCard run={run} branch={run.ticketBranch} /> : null}
+          {run.ticketBranch ? (
+            <TicketBranchCard run={run} branch={run.ticketBranch} ticket={detail.ticket} />
+          ) : null}
         </>
       ) : (
         <ReviewList

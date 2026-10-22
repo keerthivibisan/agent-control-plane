@@ -83,6 +83,12 @@ import {
   ValidateWorkflowGraphResultDtoSchema,
   WorkflowGraphDtoSchema,
 } from '@acp/core/api';
+// Code hosting and branching (G-B, ADR-0025).
+import {
+  CodeHostStatusDtoSchema,
+  OpenPullRequestRequestSchema,
+  TicketBranchDtoSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -1128,4 +1134,45 @@ export async function ticketBranchAction(
     checked(TicketBranchActionRequestSchema, input, path),
     TicketBranchReviewDtoSchema,
   );
+}
+
+// --- Code hosting: GitHub status, Push & open PR (G-B, ADR-0025) ---------------------------------
+//
+// GET /api/projects/:id/code-host → CodeHostStatusDto (the server asks `gh` by exit code only).
+// POST /api/tickets/:id/branch/pull-request (CSRF; the owner's click only) with an
+// OpenPullRequestRequest pushes the ticket branch to origin and opens a pull request against its
+// target; POST …/pull-request/refresh reads the pull request's state again. Both answer with the
+// ticket branch, `pullRequest` filled in. Nothing here runs on a timer.
+
+export type OpenPullRequestRequest = ReturnType<typeof OpenPullRequestRequestSchema.parse>;
+
+export const codeHostPaths = {
+  status: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host`,
+  pullRequest: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request`,
+  refresh: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request/refresh`,
+} as const;
+
+export const codeHostSchemas = {
+  status: CodeHostStatusDtoSchema,
+  branch: TicketBranchDtoSchema,
+} as const;
+
+/** Push & open PR: only from the owner's confirmed click on the ticket branch card. */
+export async function openPullRequest(
+  client: ApiClient,
+  ticketId: string,
+  input: OpenPullRequestRequest,
+) {
+  const path = codeHostPaths.pullRequest(ticketId);
+  return controlPost(
+    client,
+    path,
+    checked(OpenPullRequestRequestSchema, input, path),
+    codeHostSchemas.branch,
+  );
+}
+
+/** Refresh: reads the pull request's state on GitHub again. */
+export function refreshPullRequest(client: ApiClient, ticketId: string) {
+  return controlPost(client, codeHostPaths.refresh(ticketId), {}, codeHostSchemas.branch);
 }

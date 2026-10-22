@@ -406,6 +406,42 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   acp/WEB-12 into main at 4f2a9c1") is a small line with a merge icon instead of a card. Your, the
   lead's and the reviewer's comments are unchanged.
 
+## Branching and GitHub (ADR-0025, WP G-B)
+
+- **Settings → Branches** (`features/branching/BranchingFields.tsx`, rules in `strategy-form.ts`):
+  the strategy as choice cards (GitHub flow, Git flow, Custom, "None, keep acp/<KEY>"); the base
+  and default target branches; the ticket branch name with its tokens (`{key}` required, `{slug}`,
+  `{type}`) and a word per ticket type; a live preview of two example names (`renderTicketBranchName`
+  on a feature and a bug of the project's key). GitHub flow and Git flow fill every field and keep
+  the name and words read-only (Custom frees them); the branches stay editable. Each field says what
+  is wrong in a sentence as it is typed, and Save waits for a fix. It saves with the rest of the
+  page: `branching` is sent only when it changed, `null` for None. The new-project wizard has the
+  same fields in a collapsed "Branching strategy (optional)" section of step 2.
+- **Settings → GitHub** (`CodeHostCard.tsx`): "Connected to GitHub: owner/repo" with a success pill,
+  or the first thing to fix in plain words (no GitHub remote, no GitHub CLI, not signed in) on a
+  `warning-soft` band, and "Check again". The status (`GET /projects/:id/code-host`) is read when a
+  screen that shows it opens and on Check again only: stream notices never refetch it
+  (`lib/invalidation.ts`), so the app never asks GitHub on a timer.
+- **A ticket's branch** (`TicketBranchFields.tsx`, `ticket-branch.ts`): in New ticket under "More
+  options" and as a "Branch" section on the ticket card. Placeholders show what an empty field
+  follows (the name the strategy gives, e.g. `fix/WEB-N-login-fails-on-safari`, and the default
+  target); empty fields read "Project default (…)". A change sends the PATCH's `branch` (each field
+  or `null`; `null` for both). Once the run has created its branch, the section shows the actual
+  branch and target read-only.
+- **The ticket branch card's final step** (`review-loop/BranchFinalStep.tsx`, kept apart from the
+  card's evidence so the diff section and the actions never share lines): "Merge into <target>"
+  (primary, as before) beside "Push & open PR" (secondary), which is disabled with its reason
+  underneath while GitHub isn't ready. Push & open PR asks first, in the shared confirmation look:
+  the sentence of what will happen, the title (`<KEY>: <title>`) and "Open it as a draft". After
+  it, the pull request sits above the actions on a `sunken` band: "Pull request #42" linking to
+  GitHub in a new tab (https links only), its state pill (Open accent, Merged success, Closed
+  neutral), "Checked <time>" and Refresh (until merged), and one line on what happens next. While
+  it is open the local merge is hidden (Request changes and Discard stay); closed brings both final
+  steps back; merged reads "Merged into <target> on GitHub" and the ticket is Done. Each server
+  error code (`gh-not-installed`, `gh-not-logged-in`, `no-github-remote`, `push-rejected`,
+  `pr-exists-elsewhere`, `timeout`, `gh-failed`) reads as a sentence with what to do; the raw error
+  stays under Details.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |
