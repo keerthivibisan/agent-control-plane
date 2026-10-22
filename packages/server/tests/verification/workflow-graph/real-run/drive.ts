@@ -48,6 +48,8 @@ if (!(SCENARIO_IDS as readonly string[]).includes(given)) {
 }
 const scenario = given as ScenarioId;
 const dryRun = process.argv.includes('--dry-run');
+// v0.3.0 C-V: attach a synthetic file and check notes, the summary and attachments (ADR-0026).
+const attach = process.argv.includes('--attach');
 const real = process.env['ACP_REAL_RUN'] === '1';
 if (dryRun && real) refuse('--dry-run and ACP_REAL_RUN=1 together: choose one');
 if (!dryRun && !real) {
@@ -78,6 +80,7 @@ try {
     scenario,
     dryRun,
     limitMs,
+    attach,
     keep,
     onKept: (dirs) => progress(`kept for inspection: ${dirs.join(', ')}`),
     progress,

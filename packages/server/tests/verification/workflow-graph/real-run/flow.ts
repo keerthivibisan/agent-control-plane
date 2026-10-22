@@ -11,8 +11,11 @@ import {
   type ManagedExecutionAdapter,
 } from '@acp/core';
 import {
+  CSRF_HEADER,
+  CsrfTokenDtoSchema,
   ProjectDtoSchema,
   RunDetailDtoSchema,
+  TicketActivityDtoSchema,
   RunWorkflowGraphDtoSchema,
   TicketDetailDtoSchema,
   TicketDtoSchema,
@@ -65,6 +68,12 @@ export interface DriveOptions {
   progress?: (line: string) => void;
   /** Ctrl-C: stops the run like the time limit does, then closes the server. */
   signal?: AbortSignal;
+  /**
+   * v0.3.0 C-V (ADR-0026): attach a small synthetic text file to the ticket before Start, and in
+   * a real run also assert the helpers' and testers' notes, the lead's ticket summary, the run
+   * facts, the timeline, and that the copies never reach a commit.
+   */
+  attach?: boolean;
 }
 
 export interface DriveResult {
@@ -138,9 +147,15 @@ interface StartRecord {
   gate: Record<string, number>;
   /** `system/permission_denied` by decision reason type (real runs only). */
   denials: Record<string, number>;
+  /** The brief lists the owner's attachments (ADR-0026 §4); the prompt itself is never kept. */
+  attachmentsListed: boolean;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+
+/** The synthetic attachment for `attach` (ADR-0026 §4). */
+const ATTACHMENT_TEXT =
+  '# Notes from the owner\n\nKeep the output format exactly as the README shows.\n';
 
 function count(into: Record<string, number>, key: string, by = 1): void {
   into[key] = (into[key] ?? 0) + by;
@@ -192,6 +207,7 @@ function observingAdapter(inner: ManagedQueryFn, starts: StartRecord[]): Managed
       results: [],
       gate: {},
       denials: {},
+      attachmentsListed: spec.prompt.includes('The owner attached'),
     };
     starts.push(record);
     const gate = o.canUseTool;
@@ -329,6 +345,20 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
     const ticket = TicketDtoSchema.parse(
       ok(await b.post(`${p}/tickets`, { ...sc.ticket, type: 'feature' }), 201, 'ticket'),
     );
+    if (options.attach === true) {
+      // The owner's attachment (synthetic), sent as the UI sends it: the raw bytes.
+      const token = CsrfTokenDtoSchema.parse(ok(await b.get('/api/control/token'))).token;
+      const res = await fetch(`${b.base}/api/tickets/${ticket.id}/attachments`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'text/markdown',
+          'x-attachment-name': encodeURIComponent('notes.md'),
+          [CSRF_HEADER]: token,
+        },
+        body: ATTACHMENT_TEXT,
+      });
+      if (res.status !== 201) throw new Error(`attachment: expected 201, got ${res.status}`);
+    }
     ok(await b.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' }), 200, 'ready');
     const startedTicket = TicketDetailDtoSchema.parse(
       ok(await b.post(`/api/tickets/${ticket.id}/start`, sc.start), 200, 'start'),
@@ -559,6 +589,48 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
       assertions['reviewerReworkedDirectly'] = (decidedBy['reviewer'] ?? 0) > 0;
     }
 
+    // ---- v0.3.0 C-V (ADR-0026): notes, the ticket summary, the timeline, attachments
+    const activity = TicketActivityDtoSchema.parse(
+      ok(await b.get(`/api/tickets/${ticket.id}/activity`)),
+    );
+    const byKind: Record<string, number> = {};
+    for (const c of tEnd.comments) count(byKind, `${c.author}:${c.kind ?? 'none'}`);
+    const activityTypes: Record<string, number> = {};
+    for (const item of activity.items) count(activityTypes, item.type);
+    const notes = tEnd.comments.filter((c) => c.kind === 'agent-note');
+    const summaries = tEnd.comments.filter((c) => c.kind === 'ticket-summary');
+    const facts = tEnd.comments.filter((c) => c.kind === 'run-facts');
+    const committedCopies = git(repo, 'log', '--all', '--name-only', '--format=').includes(
+      '.acp-attachments',
+    );
+    const part4 = {
+      attached: options.attach === true,
+      commentsByAuthorKind: byKind,
+      activityTypes,
+      agentNoteChars: notes.map((c) => c.body.length),
+      ticketSummaryChars: summaries.map((c) => c.body.length),
+      startsListingAttachments: agents.reduce<Record<string, number>>((acc, { s }) => {
+        if (s.attachmentsListed) count(acc, s.kind);
+        return acc;
+      }, {}),
+      attachmentsInAnyCommit: committedCopies,
+    };
+    if (options.attach === true && !options.dryRun) {
+      assertions['editorsAndLeadGotAttachments'] = agents
+        .filter(({ s }) => (editing(s.kind) || s.kind === 'lead') && !s.followUp)
+        .every(({ s }) => s.attachmentsListed);
+      assertions['everyEditorReportedWork'] = editors.every(({ s }) =>
+        notes.some((c) => c.agentRunId === s.agentRunId),
+      );
+      assertions['leadWroteTicketSummary'] = summaries.some((c) => c.author === 'lead');
+      assertions['runFactsApartFromSummary'] =
+        facts.length > 0 && facts.every((c) => !c.body.includes('From the lead'));
+      assertions['timelineHasNotes'] = (activityTypes['agent-note'] ?? 0) === notes.length;
+      assertions['attachmentsNeverCommitted'] = !committedCopies;
+      assertions['notesAndSummaryWithinLimits'] =
+        notes.every((c) => c.body.length <= 600) && summaries.every((c) => c.body.length <= 1500);
+    }
+
     const logText = logs.join('\n');
     const comments = tEnd.comments.map((c) => c.body).filter((x) => x.length >= 12);
     const summary: Record<string, unknown> = {
@@ -583,6 +655,7 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
         },
       },
       graphIssues,
+      part4,
       nodes: [...configured.entries()].map(([nodeId, mode]) => ({
         nodeId,
         configuredMode: mode,
