@@ -124,7 +124,9 @@ The database is SQLite through `better-sqlite3` (synchronous, in-process; ADR-00
 ## 7. Network posture
 
 - The server binds to `127.0.0.1` only.
-- There are no outbound network calls at runtime. Nothing is uploaded.
+- There are no outbound network calls at runtime except the SDK's `claude` (ADR-0012) and, on the
+  owner's request only, `git push` to the project's `origin` and the GitHub CLI `gh` with the
+  owner's own login (ADR-0025). Nothing runs on a timer, and nothing else is uploaded.
 - The hook receiver requires a per-install token header. Custom headers force a CORS preflight, which
   the server rejects for foreign origins, so browser pages cannot forge hook events.
 
@@ -139,7 +141,7 @@ See [security.md](security.md).
   diff, merge on owner approval; ADR-0013). Validation runner: later (P3-G).
 - **Review loop (ADR-0021) [implemented]:** the engine (`@acp/orchestrator`: `AWAITING_REVIEW`,
   change states, the lead's change tools, handover) decides; the server carries out its git effects
-  (`control/review-loop.ts` with `WorkspaceManager`: ticket branch `acp/<KEY>` at plan approval,
+  (`control/review-loop.ts` with `WorkspaceManager`: the ticket branch at plan approval,
   seal, integrate, compare-and-swap advance, the owner's single `--ff-only` merge; git argument
   arrays only, serialized per worktree and per repository) and runs the harness checks per commit
   (`board/checks.ts`). The approval gate applies the run's snapshotted mode (Manual, Auto edits,
@@ -167,6 +169,36 @@ See [security.md](security.md).
   after the owner's merge. Since v0.3.0 S-C the lead's note is the comment's main text and the
   facts follow under `Details:` as short sentences; the web folds them behind a "Details"
   disclosure. No migration.
+- **Branching strategies and GitHub (ADR-0025) [server and db implemented, v0.3.0 G-A]:**
+  - **Naming and the target:** `workspace/ticket-branch-plan.ts` (pure) names a ticket branch
+    from the ticket's own `branch.name`, else the project strategy's template
+    (`renderTicketBranchName`), else `acp/<KEY>`, adding `-r<n>` when taken; its target is the
+    ticket's `branch.target`, else the strategy's `defaultTargetBranch`, else the checked-out
+    branch. The board checks a plan with a target or an own name before the run starts
+    (`checkTicketBranchPlan`: the target must exist locally, never fetched; 409
+    `target_branch_missing`), and the review loop creates the branch at plan approval from the
+    target's tip. The engine accepts any safe name except `main`, `master` and other tickets'
+    `acp/…` names.
+  - **The guard:** the workspace manager acts only on the recorded branch and refuses the run's
+    target, `main`, `master`, the strategy's branches, `origin`'s known default branch and, for
+    changes, the checked-out branch (it replaced the temporary `acp/<KEY>`-only rule).
+  - **The local merge** goes into the target: a fast-forward of the clean checkout when the
+    target is checked out there, else a compare-and-swap of the target's ref, never touching a
+    working tree; refused when the target is checked out in another worktree.
+  - **`code-host/`:** a `CodeHostService` over one provider interface (`CodeHostCli`; GitHub's
+    `gh` now, GitLab's `glab` later): `status` (`origin` parsed to `owner/name`, `gh` by exit
+    code, the default branch from `gh repo view`), `push` (`git push --set-upstream`, never
+    forced), `openPullRequest` (link the open one for the same base, refuse one for another base,
+    else push and `gh pr create`) and `view`. A `CliRunner` (`execFile`, no shell, time limits, no
+    prompts, stderr dropped) is injected; tests use a fake `gh` and a local bare `origin`.
+  - **Routes** (thin, CSRF on POSTs): `GET /api/projects/:id/code-host`, `POST
+/api/tickets/:id/branch/pull-request` (Push & open PR, or push again and link) and `POST
+/api/tickets/:id/branch/pull-request/refresh`; a pull request GitHub reports merged marks the
+    ticket branch merged (`Merged via pull request #N into <target> at …`) and completes the run,
+    so the ticket is Done. `TicketBranchDto.pullRequest` is filled wherever the branch is
+    returned.
+  - **Storage:** migration 0008 (`tickets.branch_prefs`, `ticket_branches` rebuilt without the
+    `acp/*` check, the `pr_*` columns); the strategy stays in the project setup JSON.
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by

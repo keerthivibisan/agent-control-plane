@@ -154,4 +154,48 @@
   past a failed check it says `(merged anyway, with a reason)`; the owner's reason stays the
   owner's own comment and is never repeated in it.
 
+### Branching strategies and GitHub (ADR-0025) [implemented in the server and db, v0.3.0 G-A]
+
+- **Network.** The app reaches the network beyond the SDK's `claude` only on the owner's request,
+  and only the project's own `origin` (`git push`) and GitHub through the owner's `gh` login.
+  Nothing runs on a timer: a pull request's state is read when the owner opens the ticket or
+  clicks Refresh (the web calls the refresh route). The code host status route runs `gh` when the
+  owner views it.
+- **Commands.** Beside `git` and the SDK's `claude`, the server may run `gh` (ADR-0013 as amended):
+  `execFile` with argument arrays, never a shell; `--flag=value` for every text value (a title
+  starting with `--` stays a title); a time limit per command (10 s to 60 s; `git push` 120 s);
+  `GH_PROMPT_DISABLED=1`, `GIT_TERMINAL_PROMPT=0`, no pager, colour or update notices; inherited
+  `GIT_*` variables dropped. `git push` disables hooks (`core.hooksPath=/dev/null`, `--no-verify`)
+  and is never forced: `refs/heads/<b>:refs/heads/<b>` with `--set-upstream`. The pull request's
+  body goes through a temporary file (mode 600, removed after the call).
+- **The `gh` login.** The app never reads, stores or sends a token. `gh --version` and `gh auth
+status --hostname=github.com` are judged by their exit code only; their output is dropped
+  unread. Of `gh repo view`, `gh pr list` and `gh pr view` the app reads only the named JSON fields
+  (Zod-validated). The CLI's stderr is never kept, logged or returned; git's push stderr is not
+  logged either (only its exit code). Errors are seven plain codes with the app's own words:
+  `gh-not-installed`, `gh-not-logged-in`, `no-github-remote`, `push-rejected`,
+  `pr-exists-elsewhere`, `timeout`, `gh-failed`. A canary test checks no token-like output reaches
+  a response or a log line.
+- **The remote.** `origin`'s configured URL is parsed into the host and `owner/name`; the URL (which
+  may hold a user or a token) is never returned, stored or logged. Every `gh` call names the
+  repository as `--repo=owner/name`, so `gh` never picks another remote.
+- **What is published.** Only on the owner's Push & open PR click (CSRF), and only when the owner
+  could merge the run (REVIEW, every change decided, no agent working): the ticket branch the
+  database records for the run, at the tip the app recorded (refused if it moved outside the app),
+  and a pull request whose title is `<KEY>: <ticket title>` (or the owner's) and whose body is the
+  ticket's latest run summary comment (ADR-0024; the owner sees it on the ticket first) plus
+  "Opened from Agent Control Plane". Agents have no tool for any of it.
+- **The ticket-branch guard.** Every operation on a ticket branch (create, advance, update from the
+  target, merge, discard, push) acts only on the branch recorded for the run, and refuses a name
+  that is the run's target, `main`, `master`, a strategy branch (`develop` in Git flow), `origin`'s
+  default branch as the repository knows it (`refs/remotes/origin/HEAD`), or (when it would change
+  the branch) the project's checked-out branch. Names are checked with `GitBranchNameSchema`.
+- **The local merge into the target.** When the target is the checked-out branch, its tree must
+  be clean and it is fast-forwarded as before. When it is checked out nowhere, only its ref moves,
+  by compare-and-swap (`update-ref <new> <old>`), and no working tree is touched; checked out in
+  another worktree, the merge is refused. Never forced.
+- **Stored.** A ticket's own branch name and target, and per ticket branch the pull request's
+  provider, number, URL, state, check time and the last pushed commit (migration 0008). No token,
+  user or remote URL.
+
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).
