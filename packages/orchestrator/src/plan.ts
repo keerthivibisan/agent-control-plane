@@ -386,13 +386,14 @@ function startLine(maxConcurrentHelpers: number, loop: boolean, fullAuto = false
 }
 
 /**
- * ADR-0024 §3 (amended by v0.3.0 S-C): what the lead's `request_review.summary` should say. The
- * note is the main text of the run summary comment, so it reads like a teammate's ticket update,
- * not a log of phases. Kept to about 300 characters with a two-sentence example: the brief is
- * sent on every review-loop run. The app adds the facts (plan, changes, checks, tokens) itself.
+ * ADR-0024 §3 as amended by ADR-0026 §2: what the lead's `request_review.summary` should say. It
+ * is the lead's summary of the whole ticket on its Comments tab, updated by later runs, so it reads
+ * like a teammate's comment, not a log of phases. Kept to about 300 characters with a
+ * two-sentence example: the brief is sent on every review-loop run. The app adds the run's facts
+ * (plan, changes, checks, tokens) to the Conversation tab itself.
  */
 export const HANDOVER_NOTE_LINE =
-  'Pass request_review a summary for the owner like a teammate\'s ticket update: 3 to 6 short past-tense sentences on what was explored, then built, then tested, then anything left or risky. No code or step-by-step log. Example: "Added a dark mode switch to Settings. Tested it with three unit tests."';
+  'Pass request_review a summary of the whole ticket so far, like a teammate\'s comment: 3 to 6 short past-tense sentences on what was done, how it was tested, and anything left or risky. No code or step-by-step log. Example: "Added a dark mode switch to Settings. Tested it with three unit tests."';
 
 /**
  * What a Full auto lead is told (ADR-0022): the owner is not asked during the run, so it decides

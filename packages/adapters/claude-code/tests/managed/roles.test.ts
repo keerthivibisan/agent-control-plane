@@ -194,11 +194,12 @@ describe('reviewer (ADR-0019): read-only with post_review, ends after its turn',
 });
 
 describe('tester (ADR-0019): a normal worker', () => {
-  it('gets no control-plane tools and keeps the built-in tools, which ask the owner', async () => {
+  it('gets only its note tool and keeps the built-in tools, which ask the owner', async () => {
     const cb = callbacks();
     const options = optionsFor(spec('tester'), cb);
-    expect(servers.toolNames).toEqual([]);
-    expect(options.mcpServers).toEqual({});
+    // ADR-0026 §3: report_work is the tester's one control-plane tool.
+    expect(servers.toolNames).toEqual([['report_work']]);
+    expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options).not.toHaveProperty('disallowedTools');
     const use = canUseTool(options);
     await expect(
@@ -212,7 +213,7 @@ describe('tester (ADR-0019): a normal worker', () => {
 
   it('ignores canStartHelpers: a tester never starts helpers', () => {
     optionsFor(spec('tester', { canStartHelpers: true }));
-    expect(servers.toolNames).toEqual([]);
+    expect(servers.toolNames).toEqual([['report_work']]);
   });
 
   it('closes its input after the turn, like a worker', async () => {

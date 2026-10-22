@@ -8,6 +8,7 @@ import type {
   WorkflowProgram,
   WorkflowStageId,
 } from '@acp/core';
+import { AGENT_NOTE_LINE } from './agent-note.js';
 import { approvedPlan } from './plan-read.js';
 import { programNode, programOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -32,7 +33,7 @@ interface WorkflowView extends ProgramView {
   readonly workflow?: ProjectWorkflow | undefined;
 }
 interface BriefView extends AgentsView {
-  readonly run: Pick<OrchestrationRun, 'title'>;
+  readonly run: Pick<OrchestrationRun, 'title'> & { readonly ticketId?: string | null };
   readonly plans?: readonly TicketPlan[] | undefined;
   readonly integration?: RunIntegration | undefined;
 }
@@ -405,7 +406,11 @@ export function testerBrief(state: BriefView): string {
     (state.integration?.ticketBranch ?? null) === null
       ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
       : 'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes, after the project’s checks.',
-  ].join('\n\n');
+    // ADR-0026 §3: ticket runs only (the note is a ticket comment).
+    (state.run.ticketId ?? null) === null ? null : AGENT_NOTE_LINE,
+  ]
+    .filter((l) => l !== null)
+    .join('\n\n');
 }
 
 /** The longest helper task quoted in a change reviewer's brief. */

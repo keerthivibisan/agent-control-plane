@@ -15,13 +15,13 @@ exports[`template traces > lead-only approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -71,13 +71,13 @@ exports[`template traces > lead-only failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -99,7 +99,7 @@ exports[`template traces > lead-only failed-check 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #13 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -149,13 +149,13 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -171,7 +171,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #11 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -223,7 +223,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -234,7 +234,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -287,7 +287,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -298,7 +298,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -320,7 +320,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #14 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -373,7 +373,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -384,7 +384,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -400,7 +400,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #12 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -451,13 +451,13 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -522,13 +522,13 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -598,13 +598,13 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -626,7 +626,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy="reviewer" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#a533db69/244 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#2e97b5ce/383 rework={"resumeSessionId":"sess:W1"} role="Store"
   > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#0b61260f/163
   ~ W1 STARTING change=rework/r1
 #12 Review_Store "finish success" -> ok
@@ -698,7 +698,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -709,7 +709,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -777,7 +777,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -788,7 +788,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -861,7 +861,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -872,7 +872,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -894,7 +894,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy="reviewer" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#a533db69/244 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#2e97b5ce/383 rework={"resumeSessionId":"sess:W1"} role="Store"
   > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#0b61260f/163
   ~ W1 STARTING change=rework/r1
 #13 Review_Store "finish success" -> ok
@@ -965,13 +965,13 @@ exports[`template traces > todays-setup approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1036,13 +1036,13 @@ exports[`template traces > todays-setup failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1078,7 +1078,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #16 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1144,13 +1144,13 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#2d928f31/925
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1180,7 +1180,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #14 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1248,7 +1248,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1259,7 +1259,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1327,7 +1327,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1338,7 +1338,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1374,7 +1374,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="approve"
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #17 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1443,7 +1443,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1454,7 +1454,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
-  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store." role="Store"
+  > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. Before you finish, call…"#c3ed03b2/155 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"
@@ -1484,7 +1484,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   = "Asked Store to rework its change (round …"#0265c244/90
   > change-round agentRunId=W1 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-comment agentRunId=W1 author="lead" body="Fix the edge case." kind="rework" round=0
-  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#fd294c91/232 rework={"resumeSessionId":"sess:W1"} role="Store"
+  > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #15 Store "started" -> ok
   > link-session agentRunId=W1 providerSessionId="sess:W1"

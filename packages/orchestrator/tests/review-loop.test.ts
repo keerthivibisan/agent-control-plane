@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_NOTE_LINE,
   HANDOVER_NOTE_LINE,
   VIEW_CHANGE_MAX_BYTES,
   agentEvent,
@@ -658,7 +659,9 @@ describe('the lead’s decisions', () => {
     expect(agentOf(r.state, LEAD).latestActivity).toBe(
       'Asked API builder to rework its change (round 1)',
     );
-    expect(controlToolsFor(r.state, A)).toEqual([]);
+    expect(controlToolsFor(r.state, A)).toEqual(['report_work']);
+    // ADR-0026 §3: the rework turn asks for a new note (it replaces the earlier one).
+    expect(start?.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
     // Round 1: started, finished, sealed, reviewed again.
     let t = ok(
       event(r.state, A, { type: 'started', providerSessionId: `sess-${A}`, model: null }, 6000),

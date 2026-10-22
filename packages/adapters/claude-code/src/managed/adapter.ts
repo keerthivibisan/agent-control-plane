@@ -124,8 +124,9 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
  * SDK options for one agent (ADR-0012, ADR-0013, ADR-0019). Never `bypassPermissions`; no
  * settings files load; `strictMcpConfig` keeps every MCP server except ours out. Ours carries the
  * role's tools (`managedToolNames`): the lead's set, the planner's `submit_plan`, the reviewer's
- * `post_review`, or child management for a worker with `canStartHelpers`; other workers and the
- * tester get none. The built-in `tools` base set is the role's (`agentToolNames`, ADR-0019 §7).
+ * `post_review`, a worker's and the tester's `report_work` (ADR-0026 §3), plus child management
+ * for a worker with `canStartHelpers`; only when the server passes a handler (`leadTools`). The
+ * built-in `tools` base set is the role's (`agentToolNames`, ADR-0019 §7).
  * Exported for tests.
  */
 export function buildOptions(

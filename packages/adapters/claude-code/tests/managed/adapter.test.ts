@@ -158,7 +158,7 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     handle.abort();
   });
 
-  it('never gives a worker the lead tools, even when a handler is passed by mistake', async () => {
+  it('gives a worker only its note tool, even when a handler is passed by mistake', async () => {
     const { query, calls } = fakeQuery(async function* (ctx) {
       await ctx.nextInput();
       yield result();
@@ -168,7 +168,8 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
       callbacks(),
     );
     await collect(handle.events);
-    expect(calls[0]?.options.mcpServers).toEqual({});
+    // ADR-0026 §3: `report_work` is the worker's one control-plane tool.
+    expect(Object.keys(calls[0]?.options.mcpServers ?? {})).toEqual(['acp']);
   });
 
   it('uses the SDK query by default (mocked here)', () => {
@@ -235,7 +236,7 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.mcpServers?.['acp']).toMatchObject({ type: 'sdk', name: 'acp' });
     expect(servers.toolNames).toEqual([
-      ['start_agent', 'list_agents', 'message_agent', 'stop_agent', 'agent_status'],
+      ['start_agent', 'list_agents', 'message_agent', 'stop_agent', 'agent_status', 'report_work'],
     ]);
     expect(servers.toolNames[0]).not.toContain('submit_plan');
     expect(servers.toolNames[0]).not.toContain('request_review');
@@ -244,22 +245,25 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
   it("gives the lead every lead tool except the reviewers', including submit_plan", () => {
     servers.toolNames.length = 0;
     optionsFor(spec('lead'));
-    // ADR-0021: the change tools are the lead's; post_review and submit_review are reviewers'.
+    // ADR-0021: the change tools are the lead's; post_review and submit_review are reviewers';
+    // report_work is the helpers' and the tester's (ADR-0026 §3).
     expect(servers.toolNames).toEqual([
-      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && n !== 'submit_review'),
+      LEAD_TOOL_NAMES.filter(
+        (n) => n !== 'post_review' && n !== 'submit_review' && n !== 'report_work',
+      ),
     ]);
+    expect(servers.toolNames[0]).not.toContain('report_work');
     expect(servers.toolNames[0]).toContain('submit_plan');
     expect(servers.toolNames[0]).toContain('merge_change');
     expect(servers.toolNames[0]).not.toContain('post_review');
   });
 
-  it('gives no tools to a worker without canStartHelpers, or one with it but no handler', () => {
+  it('gives a worker without canStartHelpers its note tool only, and none without a handler', () => {
     servers.toolNames.length = 0;
     const handler = () => Promise.resolve('nope');
-    expect(optionsFor(spec('worker', { leadTools: handler })).mcpServers).toEqual({});
-    expect(
-      optionsFor(spec('worker', { canStartHelpers: false, leadTools: handler })).mcpServers,
-    ).toEqual({});
+    optionsFor(spec('worker', { canStartHelpers: false, leadTools: handler }));
+    expect(servers.toolNames).toEqual([['report_work']]);
+    servers.toolNames.length = 0;
     expect(optionsFor(spec('worker', { canStartHelpers: true })).mcpServers).toEqual({});
     expect(servers.toolNames).toEqual([]);
   });

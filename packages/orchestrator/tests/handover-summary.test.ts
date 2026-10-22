@@ -77,10 +77,12 @@ describe('the handover note', () => {
   });
 
   it('is asked for in the hand-over prompts', () => {
-    // v0.3.0 S-C: a teammate's ticket update, in order, past tense, with one short example.
-    expect(HANDOVER_NOTE_LINE).toContain("like a teammate's ticket update");
+    // ADR-0026 §2 (after v0.3.0 S-C): the whole ticket, like a teammate's comment, past tense,
+    // with one short example.
+    expect(HANDOVER_NOTE_LINE).toContain('a summary of the whole ticket so far');
+    expect(HANDOVER_NOTE_LINE).toContain("like a teammate's comment");
     expect(HANDOVER_NOTE_LINE).toContain('3 to 6 short past-tense sentences');
-    expect(HANDOVER_NOTE_LINE).toMatch(/explored, then built, then tested, then anything left/);
+    expect(HANDOVER_NOTE_LINE).toMatch(/what was done, how it was tested, and anything left/);
     expect(HANDOVER_NOTE_LINE).toContain('No code or step-by-step log.');
     expect(HANDOVER_NOTE_LINE).toContain('Example: "Added a dark mode switch to Settings.');
     // Small on purpose: it is sent on every review-loop run (the owner asked for about 300).

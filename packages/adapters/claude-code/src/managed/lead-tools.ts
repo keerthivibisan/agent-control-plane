@@ -41,6 +41,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   ask_owner: "Leave the decision about one helper's change to the owner, with your question.",
   submit_review:
     'Submit your review of this change: a verdict (approve or rework) and your findings as plain text. The lead decides what happens next.',
+  report_work:
+    'Report what you did, in 2 to 4 plain sentences (what changed, how you checked it). It becomes your note on the ticket; a later report replaces it.',
 };
 
 const REFUSED = 'The control plane could not run this tool';
@@ -150,13 +152,20 @@ export function leadToolDefinitions(
       i.submit_review.shape,
       run(handler, 'submit_review'),
     ),
+    report_work: tool(
+      'report_work',
+      d.report_work,
+      i.report_work.shape,
+      run(handler, 'report_work'),
+    ),
   };
   return LEAD_TOOL_NAMES.filter((name) => names.includes(name)).map((name) => all[name]);
 }
 
 /**
  * The in-process MCP server (`mcpServers.acp`) given to the lead with every tool, or to a depth-2
- * parent helper with `HELPER_PARENT_TOOL_NAMES`. Other workers get no server.
+ * parent helper with `HELPER_PARENT_TOOL_NAMES`, or to a worker or tester with `report_work`
+ * (ADR-0026 §3). An agent without a handler gets no server.
  */
 export function createLeadToolServer(
   handler: LeadToolHandler,

@@ -430,7 +430,7 @@ describe('depth 2', () => {
     expect(effectsOf(r.effects, 'seal-change').map((e) => e.agentRunId)).toEqual(['wc-1', 'wp-1']);
     // The lead decides both changes.
     expect(ok(leadTool(r.state, 'view_change', { agentId: 'wc-1' })).value).toContain('Child');
-    expect(controlToolsFor(r.state, 'wp-1')).toEqual([]);
+    expect(controlToolsFor(r.state, 'wp-1')).toEqual(['report_work']);
   });
 
   it('a parent’s rework turn cannot start helpers; stopping a parent keeps a waiting child', () => {
@@ -443,7 +443,7 @@ describe('depth 2', () => {
     );
     s = rework.state;
     expect(effectsOf(rework.effects, 'start-agent')[0]).not.toHaveProperty('canStartHelpers');
-    expect(controlToolsFor(s, 'wp-1')).toEqual([]);
+    expect(controlToolsFor(s, 'wp-1')).toEqual(['report_work']);
     expect(refused(leadTool(s, 'start_agent', { role: 'C', task: 'x' }, 'x', 'wp-1'))).toBe(
       'depth-exceeded',
     );

@@ -2049,7 +2049,9 @@ Merged work:
 
 You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.
 
-The owner reviews and merges your change like the helpers’ changes, after the project’s checks.",
+The owner reviews and merges your change like the helpers’ changes, after the project’s checks.
+
+Before you finish, call report_work with 2 to 4 plain sentences on what you did and how you checked it. The owner reads it on the ticket.",
           "role": "Tester",
           "type": "start-agent",
         },
@@ -2221,7 +2223,9 @@ The owner reviews and merges your change like the helpers’ changes, after the 
     "step": "reviewer-done",
   },
   {
-    "result": [],
+    "result": [
+      "report_work",
+    ],
     "step": "tools-tester",
   },
   {
@@ -2743,7 +2747,9 @@ Start the helpers the plan needs with start_agent (at most 2 at once), then call
         {
           "agentRunId": "wc-1",
           "kind": "worker",
-          "prompt": "Sub",
+          "prompt": "Sub
+
+Before you finish, call report_work with 2 to 4 plain sentences on what you did and how you checked it. The owner reads it on the ticket.",
           "role": "Child",
           "type": "start-agent",
         },

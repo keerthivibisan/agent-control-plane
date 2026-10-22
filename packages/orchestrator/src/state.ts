@@ -277,7 +277,7 @@ export interface EngineContext {
  * I/O itself. Effects carry ids and engine-generated text only, except `send-to-agent`/`start-agent`
  * (the owner's chat, a lead's message or task for a worker), `chat-message` (ADR-0015) and the
  * owner-facing notes kept as ticket comments (`review-comment`, `change-comment`,
- * `handover-summary`).
+ * `handover-summary`, `agent-note`).
  */
 export type EngineEffect =
   | {
@@ -446,6 +446,12 @@ export type EngineEffect =
    * Legacy runs never emit it (their facts summary follows the run's move to REVIEW).
    */
   | { type: 'handover-summary'; note: string | null }
+  /**
+   * ADR-0026 §3: a helper's or tester's `report_work` note, redacted and capped at
+   * `MAX_AGENT_NOTE_CHARS`. Stored with the transition as the agent run's one ticket comment of
+   * kind `agent-note` (a later note replaces it).
+   */
+  | { type: 'agent-note'; agentRunId: string; body: string }
   /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */

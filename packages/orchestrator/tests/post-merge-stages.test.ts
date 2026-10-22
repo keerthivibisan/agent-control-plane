@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_NOTE_LINE,
   MAX_REVIEW_POSTS,
   REVIEW_POST_MAX_CHARS,
   TESTER_TASK,
@@ -152,7 +153,9 @@ describe('unit tests stage', () => {
     const start = startOf(r.effects);
     expect(start).toMatchObject({ kind: 'tester', agentRunId: TESTER });
     expect(start.prompt.startsWith(TESTER_TASK)).toBe(true);
-    expect(controlToolsFor(r.state, TESTER)).toEqual([]);
+    // ADR-0026 §3: the tester's one tool is its note.
+    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work']);
+    expect(start.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
   });
 
   it('asks for edits like a helper, and its allowlist is the helpers', () => {

@@ -6,6 +6,7 @@ import type {
   ChangeState,
   OrchestrationRun,
 } from '@acp/core';
+import { AGENT_NOTE_LINE } from './agent-note.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import { cleanSummary } from './summary.js';
@@ -555,6 +556,8 @@ function reworkPrompt(
       : null,
     `Work in the same copy of the project as before. Your task was: ${agent.task ?? '(no task text)'}`,
     'When you are done, end your turn: your change is reviewed again.',
+    // ADR-0026 §3: loop runs are ticket runs; the new note replaces the earlier one.
+    AGENT_NOTE_LINE,
   ]
     .filter((l) => l !== null)
     .join('\n\n');

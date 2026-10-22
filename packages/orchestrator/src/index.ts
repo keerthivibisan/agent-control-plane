@@ -73,6 +73,8 @@ export {
 export type { FollowUpFacts } from './follow-up.js';
 export { CHILD_MANAGEMENT_TOOLS, controlToolsFor, leadToolCall } from './lead-tools.js';
 export { cleanReviewBody } from './review-tool.js';
+export { AGENT_NOTE_LINE, cleanAgentNote, withAgentNoteLine } from './agent-note.js';
+export { reportWork } from './report-tool.js';
 export {
   beginChangeMerge,
   changeMergeBlocked,

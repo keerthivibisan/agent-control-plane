@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
+import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
 
 /**
  * Managed orchestration domain (Phase 3; docs/orchestration-lifecycle.md, ADR-0012..0015).
@@ -213,10 +214,10 @@ export const LeadToolInputs = {
    */
   request_review: z.object({
     /**
-     * ADR-0024 §3: the lead's note for the owner, 3 to 6 short plain sentences on what was done and
-     * what the owner should know (follow-ups, risks, what was not done), no code. Review-loop runs
-     * keep it in the run summary comment (author `app`) after the facts the app records itself.
-     * Optional: without it the summary has the facts only.
+     * ADR-0024 §3 as amended by ADR-0026 §2: the lead's summary of the whole ticket so far, 3 to 6
+     * short past-tense sentences like a teammate's comment, no code. Review-loop runs keep it as
+     * the lead's `ticket-summary` comment (at most `MAX_TICKET_SUMMARY_CHARS`); the app's facts
+     * are a separate `run-facts` comment. Optional: without it there is no new summary.
      */
     summary: z.string().trim().min(1).max(1500).optional(),
   }),
@@ -274,6 +275,12 @@ export const LeadToolInputs = {
     verdict: ChangeVerdictSchema,
     findings: z.string().trim().min(1).max(8000),
   }),
+  /**
+   * ADR-0026 §3: a helper's or tester's "what I did" note, 2 to 4 plain sentences, stored as a
+   * ticket comment of kind `agent-note` with its agent run; a later call replaces it. Only `worker`
+   * and `tester` get this tool; the engine refuses it from anyone else.
+   */
+  report_work: z.object({ note: z.string().trim().min(1).max(MAX_AGENT_NOTE_CHARS) }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
@@ -316,6 +323,7 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   discard_change: "Discarded a helper's change",
   ask_owner: 'Asked the owner about a change',
   submit_review: 'Submitted a change review',
+  report_work: 'Reported its work',
 });
 
 function isLeadToolName(name: string): name is LeadToolName {

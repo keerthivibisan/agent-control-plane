@@ -32,13 +32,23 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 ];
 
 /**
+ * The helper's and tester's note tool (ADR-0026 §3): `report_work`, their "what I did" note on the
+ * ticket. The server gives them a handler only in a ticket run; the engine refuses it elsewhere.
+ */
+export const AGENT_NOTE_TOOL_NAMES: readonly LeadToolName[] = ['report_work'];
+
+/**
  * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
- * B) and `submit_review` (ADR-0021 §3). That includes the five change tools of the review loop
- * (`view_change`, `merge_change`, `request_rework`, `discard_change`, `ask_owner`); the engine
- * refuses them in a run without the loop, and refuses the reviewers' tools from anyone else.
+ * B) and `submit_review` (ADR-0021 §3), and the helpers' `report_work` (ADR-0026 §3). That
+ * includes the five change tools of the review loop (`view_change`, `merge_change`,
+ * `request_rework`, `discard_change`, `ask_owner`); the engine refuses them in a run without the
+ * loop, and refuses the other roles' tools from anyone else.
  */
 export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.filter(
-  (name) => name !== 'post_review' && !CHANGE_REVIEWER_TOOL_NAMES.includes(name),
+  (name) =>
+    name !== 'post_review' &&
+    !CHANGE_REVIEWER_TOOL_NAMES.includes(name) &&
+    !AGENT_NOTE_TOOL_NAMES.includes(name),
 );
 
 /** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */
@@ -61,8 +71,9 @@ export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewSc
  * - lead: the lead's set (every lead tool except `post_review`);
  * - planner: `submit_plan`; reviewer: `post_review`, or `submit_review` for a change reviewer
  *   (`reviewScope: 'change'`, ADR-0021);
- * - worker: the child-management subset with `canStartHelpers`, else none (depth 1);
- * - tester: none (it is a worker that never starts helpers).
+ * - worker: `report_work` (ADR-0026 §3), plus the child-management subset with
+ *   `canStartHelpers` (depth 2);
+ * - tester: `report_work` (it is a worker that never starts helpers).
  * The adapter builds the MCP server and `canUseTool` from this one list, so the two cannot
  * disagree. The engine checks every call again (`leadToolCall`).
  */
@@ -77,9 +88,11 @@ export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[
     case 'reviewer':
       return isChangeReviewer(spec) ? CHANGE_REVIEWER_ROLE_TOOL_NAMES : REVIEWER_TOOL_NAMES;
     case 'worker':
-      return spec.canStartHelpers === true ? HELPER_PARENT_TOOL_NAMES : [];
+      return spec.canStartHelpers === true
+        ? [...HELPER_PARENT_TOOL_NAMES, ...AGENT_NOTE_TOOL_NAMES]
+        : AGENT_NOTE_TOOL_NAMES;
     case 'tester':
-      return [];
+      return AGENT_NOTE_TOOL_NAMES;
   }
 }
 
@@ -237,9 +250,10 @@ const DENY_ROLE_TOOL: Readonly<Record<'planner' | 'reviewer', string>> = {
 };
 export const DENY_CHANGE_REVIEWER_TOOL = 'The change reviewer can only submit its review.';
 
-export const DENY_WORKER_LEAD_TOOL = 'Worker agents cannot use the control-plane tools.';
+export const DENY_WORKER_LEAD_TOOL =
+  'Worker agents can only report their work (report_work); they cannot use the other control-plane tools.';
 export const DENY_HELPER_LEAD_TOOL =
-  'Helper agents can only start, list, message, stop and check their own helpers.';
+  'Helper agents can only start, list, message, stop and check their own helpers, and report their work.';
 export const DENY_NOT_YOUR_TOOL = 'This control-plane tool is not available to this agent.';
 export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
@@ -333,7 +347,7 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
           ? DENY_CHANGE_REVIEWER_TOOL
           : kind === 'planner' || kind === 'reviewer'
             ? DENY_ROLE_TOOL[kind]
-            : ownTools.size > 0
+            : spec.canStartHelpers === true && kind === 'worker'
               ? DENY_HELPER_LEAD_TOOL
               : DENY_WORKER_LEAD_TOOL;
         return { behavior: 'deny', message, toolUseID };
