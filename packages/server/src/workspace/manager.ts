@@ -247,6 +247,17 @@ export interface WorkspaceManager {
    * `next` contains `expected` and the branch is not checked out in any worktree.
    */
   advanceTicketBranch(ref: TicketBranchRef, expected: string, next: string): Promise<void>;
+  /**
+   * ADR-0026 §5: the change between two recorded commits (`base...head`), read from the project's
+   * repository after its branches are gone (a merged or discarded ticket branch, a merged change).
+   * Null when git no longer has either commit. Nothing is stored.
+   */
+  diffCommits(
+    projectRoot: string,
+    base: string,
+    head: string,
+    options?: { maxDiffBytes?: number },
+  ): Promise<WorkspaceChanges | null>;
   /** The combined change `base...tip` the owner merges, and whether the base moved. */
   reviewTicketBranch(
     ref: TicketBranchRef & { baseBranch: string },
@@ -975,6 +986,26 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       await serial(repoKey(repoRoot), async () => {
         await guardTicketBranch(repoRoot, ref, { checkedOut: true });
         await advanceIn(repoRoot, ref.branch, expected, next);
+      });
+    },
+
+    async diffCommits(projectRoot, base, head, options = {}) {
+      assertCommit(base, 'The base commit');
+      assertCommit(head, 'The head commit');
+      const { repoRoot } = await repoOf(projectRoot);
+      return serial(repoKey(repoRoot), async () => {
+        for (const commit of [base, head]) {
+          const known = await test(
+            ['rev-parse', '--verify', '--quiet', `${commit}^{commit}`],
+            repoRoot,
+          );
+          if (!known) return null;
+        }
+        return diffRange(
+          repoRoot,
+          `${base}...${head}`,
+          options.maxDiffBytes ?? DEFAULT_MAX_DIFF_BYTES,
+        );
       });
     },
 

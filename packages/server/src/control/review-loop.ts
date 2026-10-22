@@ -542,7 +542,27 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     const checks = loop.checkCommits.latestForCommit(runId, null, row.headCommit);
     const base = { runId, ticketBranch: toTicketBranchDto(row), checks };
     if (row.state !== 'open') {
-      return { ...base, files: [], diff: '', diffTruncated: false, baseMoved: false };
+      // ADR-0026 §5: read-only after a merge (or a discard), from the recorded commits; the
+      // diff is computed again on each request and never stored.
+      let changes;
+      try {
+        changes = await ctx.workspaces.diffCommits(
+          projectRootOf(live),
+          row.baseCommit,
+          row.headCommit,
+        );
+      } catch (error) {
+        if (error instanceof WorkspaceError) throw workspaceError(error);
+        throw error;
+      }
+      if (changes === null) {
+        throw new HttpError(
+          410,
+          'diff_unavailable',
+          "This branch's commits are no longer in the repository, so its files are no longer available",
+        );
+      }
+      return { ...base, ...changes, baseMoved: false };
     }
     try {
       const review = await ctx.workspaces.reviewTicketBranch(refOf(live, row));

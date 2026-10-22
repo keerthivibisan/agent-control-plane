@@ -2094,6 +2094,37 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     );
   }
 
+  /**
+   * ADR-0026 §5: a change whose worktree was removed (merged or discarded), from its recorded
+   * commits: the worktree's start (`baseCommit`) to its sealed head. Empty when either is not
+   * recorded or git no longer has it. Computed per request, never stored.
+   */
+  async function recordedChange(
+    live: LiveRun,
+    row: WorkspaceRow,
+  ): Promise<{
+    files: ReviewDto['agents'][number]['files'];
+    diff: string;
+    diffTruncated: boolean;
+  }> {
+    const none = { files: [], diff: '', diffTruncated: false };
+    const head = store.loopRepos.workspaceChanges.getByAgentRun(row.agentRunId)?.headCommit ?? null;
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    if (head === null || row.baseCommit === null || project === undefined) return none;
+    try {
+      const changes = await deps.workspaces.diffCommits(project.rootPath, row.baseCommit, head);
+      return changes ?? none;
+    } catch (error) {
+      if (!(error instanceof WorkspaceError)) throw error;
+      logger.log('warn', 'recorded change unavailable', {
+        runId: live.state.run.id,
+        agentRunId: row.agentRunId,
+        code: error.code,
+      });
+      return none;
+    }
+  }
+
   async function review(runId: string): Promise<ReviewDto> {
     const live = get(runId);
     const agents: ReviewDto['agents'] = [];
@@ -2115,7 +2146,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         state,
       };
       if (row.state === 'removed') {
-        agents.push({ ...base, files: [], diff: '', diffTruncated: false });
+        // ADR-0026 §5: a decided change's worktree is gone; its files come from the recorded
+        // commits while git has them (empty otherwise, and for runs before the review loop).
+        agents.push({ ...base, ...(await recordedChange(live, row)) });
         continue;
       }
       try {
