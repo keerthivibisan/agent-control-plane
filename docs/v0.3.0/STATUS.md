@@ -92,3 +92,20 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-22 **The owner approved part 2 (G series):** GitHub through `gh`, branching strategies,
   the ticket's branch name and target, Push & open PR, and the diff view. G-0 is done: ADR-0025,
   the AGENTS.md rule 8 amendment, the contract, and Shiki 4.5.0. G-A, G-B and G-C started.
+- 2026-10-22 G-C merged (`5c1e446`).
+  - **The shared diff viewer:** a file list, unified or side-by-side (remembered), Shiki syntax
+    colours loaded on demand and bundled (no network), word-level highlights, folded unchanged
+    lines, a large-diff guard and the server's cut notice, keyboard support.
+  - It is used in the change card and the ticket branch card.
+  - Coordinator check: 4,793 tests; e2e 78/78.
+  - **Follow-ups:** auto-unified in narrow panels; move the control panel's `ReviewPanel` and the
+    ticket's `ChangesTab` onto `DiffSection`.
+- 2026-10-22 G-B merged (`07cd88e`), rebased by the coordinator onto G-C.
+  - **Conflicts resolved:** both e2e projects kept in `playwright.config.ts`, and the card's
+    imports.
+  - **What it adds:** branching strategy settings with presets and a live preview; GitHub status in
+    settings; a ticket's branch name and target in New ticket and on the ticket page; the
+    final-step card ("Merge into <target>" or "Push & open PR", with confirmation, link, state and
+    Refresh).
+  - Coordinator check: 4,847 tests; e2e 81/81.
+  - **Follow-up:** a "Push new commits" button for an open pull request, once G-A's re-push lands.
