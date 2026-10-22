@@ -109,3 +109,20 @@ These are owner decisions from 2026-10-22:
   injected runner, in tests.
 - **Migration:** additive. The coordinator backs up the owner's live database before the first
   start on a build with migration 0008.
+
+## Part 3: GitHub-like redesign (D series)
+
+Owner decisions, 2026-10-22: "everything is there but not clear"; the answers were:
+
+- a GitHub-like palette (keep the logo);
+- themes Light / Dark / System;
+- code review as GitHub's "Files changed", with line comments that go back as rework notes;
+- the ticket page and the Workflow editor are the least clear.
+
+| WP  | What                                                                                                                                                                                                                                                                                               | After |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| D-0 | Tokens in GitHub style (light and dark, the diff colours), the system font stack, the Light/Dark/System switch, the shell and shared components restyled, DESIGN.md v3; screenshots for the owner's design checkpoint                                                                              | —     |
+| D-A | The review page like GitHub's "Files changed", per change and for the ticket branch: a file tree, side-by-side, Viewed checkboxes, comments on lines as a pending review, and "Request changes" sending the comments as rework text through the existing owner decision endpoints (no new storage) | D-0   |
+| D-B | The ticket page like a PR page: a header (title, status, branch → target), tabs Conversation / Agents / Files changed / Checks, and a right sidebar (branch, target, PR, run options, tokens)                                                                                                      | D-0   |
+| D-C | Workflow editor clarity in the new style: blocks, links, legend, panel                                                                                                                                                                                                                             | D-0   |
+| D-V | e2e, both themes, a final screenshot review with the owner                                                                                                                                                                                                                                         | all   |

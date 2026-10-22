@@ -143,3 +143,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   `origin`.
 - **Next:** G-V. A consented real push and pull request needs a throwaway repo from the owner; then
   release prep (rebase onto `main` `79c312a`, CHANGELOG `[0.3.0]`, versions, the PR text).
+- 2026-10-22 **The owner asked for a GitHub-like redesign** before testing (part 3, D series; the
+  plan is in the README). D-0 (tokens, themes, shell) started, with a design checkpoint before
+  D-A, D-B and D-C. The owner's app restarted on `e96473a`.
