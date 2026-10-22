@@ -37,9 +37,10 @@
 
 ## Work log
 
-| Date       | What                                                  | Commit | Checks |
-| ---------- | ----------------------------------------------------- | ------ | ------ |
-| 2026-10-22 | Strategy, code host, ticket branch, final step, tests | —      | —      |
+| Date       | What                                                  | Commit    | Checks                                                               |
+| ---------- | ----------------------------------------------------- | --------- | -------------------------------------------------------------------- |
+| 2026-10-22 | Strategy, code host, ticket branch, final step, tests | `d6a184d` | format ✓ lint ✓ typecheck ✓ test 4762/4762 ✓ build ✓; e2e github 3/3 |
+| 2026-10-22 | Full web e2e, work log, status review                 | this one  | full web e2e 79/79 (ports 7631/7641); check ✓ 4762/4762              |
 
 ## Decisions and findings
 
