@@ -158,3 +158,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - **Follow-up:** drop the `@fontsource-variable/{inter,jetbrains-mono}` dependencies
     (coordinator).
   - **Next:** the owner's design checkpoint in the live app; then D-A, D-B and D-C.
+- 2026-10-22 The owner approved the look ("go ahead with the review page, ticket page and
+  workflow"). D-A (the GitHub "Files changed" review pages with line comments), D-B (the ticket
+  page as a PR page) and D-C (a clearer Workflow editor) started in parallel.
+  - D-A owns the routes `…/tickets/:ticketId/files` and `…/changes/:agentRunId`.
+  - D-B links to them through local helpers, which the coordinator swaps at merge.
