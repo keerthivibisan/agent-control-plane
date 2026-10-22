@@ -47,6 +47,9 @@ const REDESIGN_TABLES = ['project_workflow'];
 /** Added by 0006 (RL-0, ADR-0021: the review loop and the ticket branch). */
 const REVIEW_LOOP_TABLES = ['change_reviews', 'ticket_branches'];
 
+/** Added by 0009 (C-A, ADR-0026: attachments). */
+const ACTIVITY_TABLES = ['ticket_attachments'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -132,6 +135,7 @@ describe('0001_observability schema (B3)', () => {
         ...PHASE4_TABLES,
         ...REDESIGN_TABLES,
         ...REVIEW_LOOP_TABLES,
+        ...ACTIVITY_TABLES,
       ].sort(),
     );
   });

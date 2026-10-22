@@ -1,5 +1,6 @@
 import type { AcpDatabase } from '../../database.js';
 import { createContext, type RepositoryOptions } from '../../internal/context.js';
+import { createAttachmentsRepository, type AttachmentsRepository } from './attachments.js';
 import { createCheckRunsRepository, type CheckRunsRepository } from './check-runs.js';
 import { createTicketCommentsRepository, type TicketCommentsRepository } from './comments.js';
 import { createTicketPlansRepository, type TicketPlansRepository } from './plans.js';
@@ -13,6 +14,8 @@ export interface WorkspaceRepositories {
   plans: TicketPlansRepository;
   comments: TicketCommentsRepository;
   checkRuns: CheckRunsRepository;
+  /** ADR-0026 (migration 0009): the owner's attachments. */
+  attachments: AttachmentsRepository;
 }
 
 /**
@@ -31,6 +34,7 @@ export function createWorkspaceRepositories(
     plans: createTicketPlansRepository(ctx),
     comments: createTicketCommentsRepository(ctx),
     checkRuns: createCheckRunsRepository(ctx),
+    attachments: createAttachmentsRepository(ctx),
   };
 }
 
@@ -44,10 +48,13 @@ export type {
 } from './tickets.js';
 export type { TicketPlanDecision, TicketPlanInsertInput, TicketPlansRepository } from './plans.js';
 export type {
+  AgentNoteInput,
+  StoredTicketComment,
   TicketCommentAuthor,
   TicketCommentInsertInput,
   TicketCommentsRepository,
 } from './comments.js';
+export type { AttachmentInsertInput, AttachmentsRepository } from './attachments.js';
 export type {
   CheckRunInsertInput,
   CheckRunListOptions,

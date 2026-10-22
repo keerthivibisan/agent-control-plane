@@ -85,6 +85,7 @@ import {
   type WorkspaceManager,
 } from '../workspace/index.js';
 import type { CheckService } from './checks.js';
+import { attachmentDbError, toCommentDto, toCommentDtos } from './comments.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
@@ -411,7 +412,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       runs,
       currentRun,
       plans: plansWithDeciders(ticketId),
-      comments: ws.comments.listForTicket(ticketId),
+      // ADR-0026: each with its kind (derived for older comments) and attachments.
+      comments: toCommentDtos(
+        ws.comments.listForTicket(ticketId),
+        ws.attachments.listForTicket(ticketId),
+      ),
       // With each result's commit (ADR-0021), so a change card shows only its own commit's.
       checks: ticket.currentRunId === null ? [] : loop.checkCommits.listForRun(ticket.currentRunId),
     };
@@ -932,9 +937,29 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     addComment(ticketId, body) {
       const ticket = ticketOrThrow(ticketId);
       const input = TicketCommentRequestSchema.parse(body);
-      const comment = ws.comments.insert({ ticketId, author: 'owner', body: input.body });
+      // ADR-0026 §4: files uploaded first are attached with the comment, all or none.
+      const ids = input.attachmentIds ?? [];
+      let added;
+      try {
+        added = withTransaction(deps.db, () => {
+          const stored = ws.comments.insert({
+            ticketId,
+            author: 'owner',
+            body: input.body,
+            kind: 'comment',
+          });
+          return {
+            comment: stored,
+            attachments:
+              ids.length === 0 ? [] : ws.attachments.attachToComment(ticketId, stored.id, ids),
+          };
+        });
+      } catch (error) {
+        throw attachmentDbError(error) ?? error;
+      }
+      const { comment, attachments } = added;
       notice('tickets-changed', { projectId: ticket.projectId, ticketId });
-      return comment;
+      return toCommentDto(comment, attachments);
     },
 
     decidePlan(ticketId, planId, body) {

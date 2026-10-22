@@ -14,6 +14,7 @@ import {
 } from '../../src/index.js';
 import { tempDir } from '../helpers.js';
 import {
+  legacyComment,
   setupInput,
   setupWorkspace,
   ticketWithRun,
@@ -363,7 +364,7 @@ describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
       summary: 'Edit src/app.ts',
     });
     store.orch.approvals.decide(approval.id, 'approved');
-    store.ws.comments.insert({ ticketId: ticket.id, author: 'owner', body: 'Before 0006' });
+    legacyComment(store.db, ticket.id, 'Before 0006');
     const before = v5.connection
       .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
       .all();

@@ -15,6 +15,7 @@ import {
 } from '../../src/index.js';
 import { tempDir, thrown } from '../helpers.js';
 import {
+  legacyComment,
   setupInput,
   setupWorkspace,
   ticketWithRun,
@@ -101,7 +102,7 @@ describe('migration 0007_ticket_run_options (RL-H)', () => {
       labels: ['ui'],
       status: 'READY',
     });
-    store.ws.comments.insert({ ticketId: ticket.id, author: 'owner', body: 'Before 0007' });
+    legacyComment(store.db, ticket.id, 'Before 0007');
     const before = v6.connection
       .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
       .all();

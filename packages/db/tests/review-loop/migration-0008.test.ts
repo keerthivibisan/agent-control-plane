@@ -85,7 +85,7 @@ const count = (db: AcpDatabase, table: string) =>
 
 describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
   it('ships as version 8 after untouched 0001-0007', () => {
-    expect(SHIPPED.map((m) => [m.version, m.name])).toEqual([
+    expect(SHIPPED.slice(0, 8).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
       [3, 'workspace'],
@@ -249,7 +249,7 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
       const recorded = v8.connection
         .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
         .all() as { version: number; checksum: string }[];
-      expect(recorded.map((r) => r.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(recorded.map((r) => r.version).slice(0, 8)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       expect(recorded.slice(0, 7)).toEqual(before);
       expect(v8.connection.pragma('foreign_key_check')).toEqual([]);
       expect(v8.connection.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
