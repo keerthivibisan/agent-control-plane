@@ -12,6 +12,36 @@ import { hunkWordChanges, type Range } from './word-diff';
 
 /** One file of a diff: its header (the collapse toggle) and its lines, unified or side by side. */
 
+/** Which side of the change a line is on: the old file (removed lines) or the new one. */
+export type DiffSide = 'old' | 'new';
+
+/**
+ * Optional hooks into the lines for a page that comments on them (v0.3.0 D-A, the review page).
+ * Without them the viewer draws exactly as before.
+ */
+export interface DiffLineSlots {
+  /** A control drawn at the start of a line's code (the "+" comment button), per side. */
+  gutter?: (line: DiffLine, side: DiffSide) => ReactNode;
+  /** What is shown under a line for one side (its comments, an open comment box), or null. */
+  below?: (line: DiffLine, side: DiffSide) => ReactNode;
+  /** A line in a range being commented on: marked with an accent bar. */
+  selected?: (line: DiffLine, side: DiffSide) => boolean;
+  /** Lines that must stay visible: a fold that holds one opens by itself (a comment on it). */
+  pinned?: (line: DiffLine) => boolean;
+}
+
+/** The sides a line is on: a removed line the old, an added line the new, unchanged both. */
+function sidesOf(line: DiffLine): DiffSide[] {
+  return line.kind === 'del' ? ['old'] : line.kind === 'add' ? ['new'] : ['old', 'new'];
+}
+
+/** In unified view one control serves a line: unchanged and added lines comment on the new side. */
+function unifiedSide(line: DiffLine): DiffSide {
+  return line.kind === 'del' ? 'old' : 'new';
+}
+
+const SELECTED = 'shadow-[inset_3px_0_0_var(--color-accent)]';
+
 const ROW_BG: Record<DiffLine['kind'], string> = {
   add: 'bg-[var(--diff-add-bg)]',
   del: 'bg-[var(--diff-del-bg)]',
@@ -134,11 +164,13 @@ function UnifiedTable({
   syntax,
   expanded,
   onExpand,
+  slots,
 }: {
   file: DiffFile;
   syntax: FileSyntax;
   expanded: ReadonlySet<string>;
   onExpand: (id: string) => void;
+  slots: DiffLineSlots | undefined;
 }) {
   const words = useMemo(() => file.hunks.map(hunkWordChanges), [file]);
   return (
@@ -170,18 +202,25 @@ function UnifiedTable({
                   onShow={() => onExpand(row.id)}
                 />
               ) : (
-                <tr
-                  key={`${row.line.oldNo ?? ''}:${row.line.newNo ?? ''}`}
-                  data-kind={row.line.kind}
-                  className={ROW_BG[row.line.kind]}
-                >
-                  <td className={NUM_CELL}>{row.line.oldNo ?? ''}</td>
-                  <td className={NUM_CELL}>{row.line.newNo ?? ''}</td>
-                  <Sign kind={row.line.kind} />
-                  <td className={CODE_CELL}>
-                    <Code line={row.line} syntax={syntax} ranges={words[h]?.get(row.line)} />
-                  </td>
-                </tr>
+                <Fragment key={`${row.line.oldNo ?? ''}:${row.line.newNo ?? ''}`}>
+                  <tr data-kind={row.line.kind} className={ROW_BG[row.line.kind]}>
+                    <td className={NUM_CELL}>{row.line.oldNo ?? ''}</td>
+                    <td className={NUM_CELL}>{row.line.newNo ?? ''}</td>
+                    <Sign kind={row.line.kind} />
+                    <td
+                      className={`${CODE_CELL} ${slots ? 'group/line relative' : ''} ${
+                        slots?.selected?.(row.line, unifiedSide(row.line)) === true ? SELECTED : ''
+                      }`}
+                    >
+                      {slots?.gutter?.(row.line, unifiedSide(row.line))}
+                      <Code line={row.line} syntax={syntax} ranges={words[h]?.get(row.line)} />
+                    </td>
+                  </tr>
+                  <BelowRow
+                    cells={[sidesOf(row.line).map((side) => slots?.below?.(row.line, side))]}
+                    spans={[4]}
+                  />
+                </Fragment>
               ),
             )}
           </Fragment>
@@ -191,14 +230,46 @@ function UnifiedTable({
   );
 }
 
+/**
+ * The row under a line that holds what `below` returns (comments), one cell per side in split
+ * view; nothing when every side is empty.
+ */
+function BelowRow({ cells, spans }: { cells: ReactNode[][]; spans: number[] }) {
+  const has = (parts: ReactNode[]) => parts.some((p) => p !== null && p !== undefined);
+  if (!cells.some(has)) return null;
+  return (
+    <tr data-below="">
+      {cells.map((parts, i) => (
+        <td
+          key={i}
+          colSpan={spans[i]}
+          className={`bg-[var(--diff-bg)] p-0 font-sans text-body ${i > 0 ? 'border-l border-line' : ''}`}
+        >
+          {has(parts) ? (
+            <div className="flex flex-col gap-2 p-2">
+              {parts.map((p, j) =>
+                p === null || p === undefined ? null : <Fragment key={j}>{p}</Fragment>,
+              )}
+            </div>
+          ) : null}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
 function SplitCells({
   line,
   syntax,
   ranges,
+  side,
+  slots,
 }: {
   line: DiffLine | null;
   syntax: FileSyntax;
   ranges: readonly Range[] | undefined;
+  side: DiffSide;
+  slots: DiffLineSlots | undefined;
 }): ReactNode {
   if (line === null) {
     return (
@@ -209,12 +280,17 @@ function SplitCells({
       </>
     );
   }
-  const no = line.kind === 'add' ? line.newNo : line.kind === 'del' ? line.oldNo : null;
+  const no = side === 'new' ? line.newNo : line.oldNo;
   return (
     <>
       <td className={`${NUM_CELL} ${ROW_BG[line.kind]}`}>{no ?? ''}</td>
       <Sign kind={line.kind} />
-      <td className={`${CODE_CELL} ${ROW_BG[line.kind]}`}>
+      <td
+        className={`${CODE_CELL} ${ROW_BG[line.kind]} ${slots ? 'group/line relative' : ''} ${
+          slots?.selected?.(line, side) === true ? SELECTED : ''
+        }`}
+      >
+        {slots?.gutter?.(line, side)}
         <Code line={line} syntax={syntax} ranges={ranges} />
       </td>
     </>
@@ -226,11 +302,13 @@ function SplitTable({
   syntax,
   expanded,
   onExpand,
+  slots,
 }: {
   file: DiffFile;
   syntax: FileSyntax;
   expanded: ReadonlySet<string>;
   onExpand: (id: string) => void;
+  slots: DiffLineSlots | undefined;
 }) {
   const words = useMemo(() => file.hunks.map(hunkWordChanges), [file]);
   return (
@@ -270,39 +348,34 @@ function SplitTable({
               }
               const context = row.left !== null && row.left === row.right;
               return (
-                <tr
-                  key={i}
-                  data-kind={context ? 'context' : 'change'}
-                  className="[&>td:nth-child(4)]:border-l [&>td:nth-child(4)]:border-line"
-                >
-                  {context && row.left !== null ? (
-                    <>
-                      <td className={NUM_CELL}>{row.left.oldNo ?? ''}</td>
-                      <Sign kind="context" />
-                      <td className={CODE_CELL}>
-                        <Code line={row.left} syntax={syntax} ranges={undefined} />
-                      </td>
-                      <td className={NUM_CELL}>{row.left.newNo ?? ''}</td>
-                      <Sign kind="context" />
-                      <td className={CODE_CELL}>
-                        <Code line={row.left} syntax={syntax} ranges={undefined} />
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <SplitCells
-                        line={row.left}
-                        syntax={syntax}
-                        ranges={row.left === null ? undefined : words[h]?.get(row.left)}
-                      />
-                      <SplitCells
-                        line={row.right}
-                        syntax={syntax}
-                        ranges={row.right === null ? undefined : words[h]?.get(row.right)}
-                      />
-                    </>
-                  )}
-                </tr>
+                <Fragment key={i}>
+                  <tr
+                    data-kind={context ? 'context' : 'change'}
+                    className="[&>td:nth-child(4)]:border-l [&>td:nth-child(4)]:border-line"
+                  >
+                    <SplitCells
+                      line={row.left}
+                      syntax={syntax}
+                      side="old"
+                      slots={slots}
+                      ranges={context || row.left === null ? undefined : words[h]?.get(row.left)}
+                    />
+                    <SplitCells
+                      line={row.right}
+                      syntax={syntax}
+                      side="new"
+                      slots={slots}
+                      ranges={context || row.right === null ? undefined : words[h]?.get(row.right)}
+                    />
+                  </tr>
+                  <BelowRow
+                    cells={[
+                      [row.left === null ? null : slots?.below?.(row.left, 'old')],
+                      [row.right === null ? null : slots?.below?.(row.right, 'new')],
+                    ]}
+                    spans={[3, 3]}
+                  />
+                </Fragment>
               );
             })}
           </Fragment>
@@ -364,6 +437,22 @@ export function FilePath({ file }: { file: DiffFile }) {
   );
 }
 
+/** The folds to open: the ones the owner opened, plus any that hold a pinned line. */
+function withPinned(
+  file: DiffFile,
+  expanded: ReadonlySet<string>,
+  pinned: ((line: DiffLine) => boolean) | undefined,
+): ReadonlySet<string> {
+  if (pinned === undefined) return expanded;
+  let out: Set<string> | null = null;
+  file.hunks.forEach((hunk, h) => {
+    for (const row of hunkRows(hunk, h, expanded)) {
+      if (row.type === 'fold' && row.lines.some(pinned)) (out ??= new Set(expanded)).add(row.id);
+    }
+  });
+  return out ?? expanded;
+}
+
 export function DiffFileView({
   file,
   mode,
@@ -372,6 +461,9 @@ export function DiffFileView({
   onToggle,
   onShow,
   headerRef,
+  slots,
+  headerEnd,
+  stickyHeader = false,
 }: {
   file: DiffFile;
   mode: DiffViewMode;
@@ -381,8 +473,18 @@ export function DiffFileView({
   onToggle: () => void;
   onShow: () => void;
   headerRef: (el: HTMLButtonElement | null) => void;
+  /** D-A: hooks for commenting on lines; without them the lines are read-only as before. */
+  slots?: DiffLineSlots | undefined;
+  /** D-A: extra controls at the end of the header row (the review page's Viewed box). */
+  headerEnd?: ReactNode;
+  /**
+   * D-A: the header sticks under the page's own sticky bars while the file scrolls by, at
+   * `--diff-sticky-top` (set by the page).
+   */
+  stickyHeader?: boolean;
 }) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [opened, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const expanded = withPinned(file, opened, slots?.pinned);
   const syntax = useSyntax(file, open && shown);
   const Icon = STATUS_ICON[file.status];
   const bodyId = `diff-${file.id}-body`;
@@ -423,9 +525,21 @@ export function DiffFileView({
     body = (
       <>
         {mode === 'split' ? (
-          <SplitTable file={file} syntax={syntax} expanded={expanded} onExpand={expand} />
+          <SplitTable
+            file={file}
+            syntax={syntax}
+            expanded={expanded}
+            onExpand={expand}
+            slots={slots}
+          />
         ) : (
-          <UnifiedTable file={file} syntax={syntax} expanded={expanded} onExpand={expand} />
+          <UnifiedTable
+            file={file}
+            syntax={syntax}
+            expanded={expanded}
+            onExpand={expand}
+            slots={slots}
+          />
         )}
         {file.cut ? (
           <p
@@ -441,7 +555,9 @@ export function DiffFileView({
 
   return (
     <section
-      className="scroll-mt-20 overflow-hidden rounded-card border border-line bg-[var(--diff-bg)]"
+      // `overflow-clip` (not hidden) rounds the corners without making the box a scroll container,
+      // so a sticky header (D-A) sticks to the page.
+      className="scroll-mt-20 overflow-clip rounded-card border border-line bg-[var(--diff-bg)]"
       data-testid="diff-file"
       data-path={file.path}
       data-status={file.status}
@@ -453,7 +569,8 @@ export function DiffFileView({
       <div
         className={`flex flex-wrap items-center gap-x-3 gap-y-1 bg-subtle px-2 py-1.5 ${
           open ? 'border-b border-line' : ''
-        }`}
+        } ${stickyHeader ? 'sticky top-[var(--diff-sticky-top,0px)] z-[5]' : ''}`}
+        data-testid="diff-file-header"
       >
         <button
           ref={headerRef}
@@ -479,6 +596,7 @@ export function DiffFileView({
           {file.binary ? <Tag>{T.binaryTag}</Tag> : null}
           {file.cut ? <Tag tone="warning">{T.cutTag}</Tag> : null}
           <Counts file={file} />
+          {headerEnd}
         </span>
       </div>
       <div id={bodyId} hidden={!open} className="overflow-x-auto">

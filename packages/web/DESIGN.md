@@ -129,6 +129,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 | `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                |
 | `#/p/:projectId/settings`                  | Settings                                                            |
 | `#/p/:projectId/tickets/:ticketId`         | Ticket                                                              |
+| `…/tickets/:ticketId/files`                | The ticket branch's "Files changed" (D-A; `?run=` an earlier run)   |
+| `…/tickets/:ticketId/changes/:agentRunId`  | One helper's change, "Files changed" (D-A; `?run=` an earlier run)  |
 | `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page                  |
 | `#/projects`                               | All projects (project cards + "Across your projects")               |
 | `#/projects/new`                           | New project                                                         |
@@ -143,8 +145,10 @@ project's board, else All projects; `#/board[/:id]`, `#/projects/:id` → board;
 `#/control/new` → `runs/new`; `#/control/:runId` → its ticket, or its run page.
 
 Build links with `href` (`src/lib/router.ts`): `href.projectPage(id, page, params)`,
-`href.ticket({ id, projectId })`, `href.run({ id, projectId })`, `href.skill(id, name)`. Never
-write hashes by hand.
+`href.ticket({ id, projectId })`, `href.run({ id, projectId })`, `href.skill(id, name)`,
+`href.ticketFiles({ projectId, ticketId, runId? })` and
+`href.ticketChange({ projectId, ticketId, agentRunId, runId? })` (D-A). Never write hashes by
+hand.
 
 ### Adding a project page (R-B, R-D, R-E, R-F)
 
@@ -391,6 +395,12 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   - Large diffs: a file over 400 lines, and every file after the first 1,500 lines, waits for
     "Show this file". A diff the server cut says so, marks the cut file, and names the listed
     files after the cut.
+  - **For the review pages (D-A)**, `DiffFileView` takes optional, additive props; without them
+    it draws exactly as before: `slots` (`gutter` a control at a line's start per side, `below`
+    rows under a line per side, one cell per side in split view, `selected` an accent bar on a
+    range, `pinned` lines whose fold opens by itself), `headerEnd` (controls at the end of the
+    header row) and `stickyHeader` (the header sticks at `--diff-sticky-top`; the file box is
+    `overflow-clip` so it can).
 
 ## Agent views (the logo's vocabulary)
 
@@ -541,6 +551,60 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
     "Merged via pull request #N into <target> at <sha7>; <tip checks>" and "Pushed <branch> and
     opened pull request #N into <target>" (or "…; pull request #N into <target> was already
     open"). Branches and the commit are code; the number is plain text, not a link.
+
+## Review pages: "Files changed" (v0.3.0 D-A)
+
+Owner decision 2026-10-22: "The code review should be like a code review in GitHub, side by
+side." Two full-width pages (`features/review/`; the shell drops its 88rem limit for them):
+`…/tickets/:ticketId/changes/:agentRunId` (one helper's change, `GET /runs/:id/review`) and
+`…/tickets/:ticketId/files` (the ticket branch's combined change, `GET /runs/:id/ticket-branch`).
+`?run=` opens an earlier run; without it, the ticket's current run.
+
+- **Header:** "← WEB-21 title" back to the ticket, "Files changed by <helper>" (or "on the ticket
+  branch"), one line, and the context: the change's state chip, "Round N", its checks and commit
+  (the branch: state, `branch into target`, the tip's checks, changes merged, the tip). A change
+  page links to "Ticket branch files".
+- **Sticky bar** (sticks under the top bar and the demo banner, both measured): the file-tree
+  toggle, "N files changed +A −D", Unified / Side by side (the shared `acp.diff.view` choice;
+  **side by side until the owner chooses** on this page; unified with the reason where there is no
+  room), "X of N viewed", Collapse all / Expand all, the keys (a popover), and **Review changes**
+  (green, with the pending count).
+- **File tree** (left, sticky, 17–19rem; stacked above the files below `lg`, hidden by default
+  there): a filter box (every word, ignoring case, old names too), folders first and single-folder
+  chains folded ("src/search"), each file with its status icon, a comment count, a check once
+  viewed and +/−. A click scrolls to the file and focuses its header. The files on the right
+  follow the tree's order.
+- **Files:** the shared `DiffFileView` boxes with a sticky header and a **Viewed** checkbox, which
+  collapses the file (its header still opens it). Viewed files are kept per change and commit in
+  this browser (`acp.review.viewed.<run>:<agent|branch>@<commit>`; a new commit starts afresh and
+  drops older lists).
+- **Line comments:** a blue "+" at the start of a line (on hover, and always on focus; faintly on
+  touch screens) opens a comment box under it; shift-click a second "+" on the same side for a
+  range (the range gets an accent bar). Comments join the **pending review**: "You · Pending ·
+  line 42 (after)", Edit and Delete. Kept per change in this browser
+  (`acp.review.pending.<run>:<agent|branch>`, every access guarded; read back as data, junk
+  dropped) until sent. A comment whose line is folded opens its fold; one whose line or file is
+  no longer in the diff is listed above the files.
+- **Review changes** (a popover): an overall comment, then the choices, the ones that don't apply
+  disabled with the reason:
+  - a change: **Request changes** sends the comments back to the helper as rework
+    (`POST /runs/:id/review` `rework`, at most 4,000 characters), only when it is the owner's turn
+    on the change (as the change card's buttons);
+  - the ticket branch: **Request changes** to the lead (`POST /runs/:id/ticket-branch`
+    `request-changes`, 8,000), only while the branch waits for the final step;
+  - **Comment**: an owner ticket comment (`POST /tickets/:id/comments`, 8,000), always.
+
+  The text is compiled as `Review comments:` then `- path:42 (new): text` per comment (ranges
+  `10–14`, the old side `(old)`, later lines indented, "written on <sha7>" for an earlier commit),
+  then the overall comment; a preview shows it. Over the limit, the popover says how long it is and
+  waits: nothing is cut. Sent, the pending review is cleared and the page says where it went.
+
+- **Keys** (not while typing or in a dialog): `j` / `k` next and previous file, `v` viewed, `c`
+  comment on the focused line (on a file, it goes to its first changed line). A file's "+"
+  buttons are one tab stop (the first changed line); ↑/↓/Home/End move between lines.
+- **Entry points:** "Review files" on the change card (once the change is saved) and "Files
+  changed" on the ticket branch card (while it is open); the ticket page's tab (D-B) links here.
+- Copy lives in `features/review/copy.ts`; no server change and no new storage.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 

@@ -5,7 +5,7 @@ import type {
   RunDetailDto,
   TicketCommentDto,
 } from '@acp/core/api';
-import { Button } from '../../components/Button';
+import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { DiffSection } from '../../components/diff';
 import { AlertIcon } from '../../components/icons';
@@ -13,6 +13,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { Badge, Pill } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { reviewAction } from '../../lib/api';
+import { href } from '../../lib/router';
 import {
   CONTROL_COPY,
   REVIEW_LOOP_COPY,
@@ -20,6 +21,7 @@ import {
   changeStateWord,
 } from '../../lib/copy';
 import { ActionError, ConfirmAction } from '../control/bits';
+import { REVIEW_PAGE_COPY } from '../review/copy';
 import { useTicketAction } from '../ticket/actions';
 import { Files } from '../ticket/ChangesTab';
 import { ReworkIcon } from './icons';
@@ -342,7 +344,8 @@ export function ChangeCard({
   comments,
   branch,
 }: {
-  run: Pick<RunDetailDto, 'id' | 'agents'>;
+  /** With the run's project and ticket, the card links to the change's review page (D-A). */
+  run: Pick<RunDetailDto, 'id' | 'agents'> & Partial<Pick<RunDetailDto, 'projectId' | 'ticketId'>>;
   change: ChangeReviewDto;
   /** The change's files and diff from `GET /runs/:id/review`, once the server lists it there. */
   review: AgentReview | undefined;
@@ -369,6 +372,20 @@ export function ChangeCard({
             </span>
           ) : null}
         </span>
+        {change.headCommit !== null && run.projectId !== undefined && run.ticketId ? (
+          <ButtonLink
+            size="sm"
+            href={href.ticketChange({
+              projectId: run.projectId,
+              ticketId: run.ticketId,
+              agentRunId: change.agentRunId,
+              runId: run.id,
+            })}
+            data-testid="change-review-files"
+          >
+            {REVIEW_PAGE_COPY.entry.change}
+          </ButtonLink>
+        ) : null}
       </div>
       <DirectRounds change={change} />
       <Conflicts files={change.conflictFiles} branch={branch} />

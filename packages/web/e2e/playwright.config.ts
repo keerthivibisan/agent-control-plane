@@ -130,6 +130,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // v0.3.0 D-A: the review pages (Files changed, line comments, Review changes), routes from
+      // fixtures, the owner's decisions captured.
+      name: 'review-page',
+      testMatch: 'review-page.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       // v0.3.0 G-B (ADR-0025): branching strategies and GitHub, routes from fixtures.
       name: 'github',
       testMatch: 'github.spec.ts',

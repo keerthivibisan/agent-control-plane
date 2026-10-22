@@ -4,8 +4,10 @@ import { useMemo, useSyncExternalStore } from 'react';
  * Hash routes (no router dependency), project first (docs/redesign/README.md §3):
  *
  * - `#/p/:projectId/<page>` for the seven project pages, `#/p/:projectId/skills/:name` for one
- *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket, and `#/p/:projectId/runs/:runId` for a
- *   Phase 3 run that has no ticket (`runs/new` starts one; kept until "Quick ticket" lands);
+ *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket, its review pages
+ *   `…/tickets/:ticketId/files` and `…/tickets/:ticketId/changes/:agentRunId` (D-A), and
+ *   `#/p/:projectId/runs/:runId` for a Phase 3 run that has no ticket (`runs/new` starts one; kept
+ *   until "Quick ticket" lands);
  * - global pages: `#/projects` (All projects), `#/projects/new`, `#/health` and
  *   `#/health/connection` (Data health), `#/sessions/:id` (one session);
  * - every older address parses to a `legacy` route, which the app redirects to its new home
@@ -49,6 +51,19 @@ export type Route =
       params: URLSearchParams;
     }
   | { name: 'ticket'; projectId: string; id: string }
+  /**
+   * v0.3.0 D-A: a ticket's "Files changed" review page, GitHub-like. `agentRunId` null is the
+   * ticket branch's combined change (`tickets/:id/files`); else one helper's change
+   * (`tickets/:id/changes/:agentRunId`). `runId` (`?run=`) picks an earlier run; null is the
+   * ticket's current run.
+   */
+  | {
+      name: 'review';
+      projectId: string;
+      ticketId: string;
+      agentRunId: string | null;
+      runId: string | null;
+    }
   /** A Phase 3 control-panel run without a ticket; `runId` null is the start page. */
   | { name: 'run'; projectId: string; runId: string | null }
   | { name: 'projects' }
@@ -77,12 +92,10 @@ const isProjectPage = (s: string): s is ProjectPageId =>
 function parseProjectRoute(rest: readonly string[], params: URLSearchParams): Route | null {
   const [rawId, page, item, ...extra] = rest;
   const projectId = decode(rawId);
-  if (projectId === null || extra.length > 0) return null;
+  if (projectId === null) return null;
+  if (page === 'tickets') return parseTicketRoute(projectId, item, extra, params);
+  if (extra.length > 0) return null;
   if (page === undefined) return null;
-  if (page === 'tickets') {
-    const id = decode(item);
-    return id === null ? null : { name: 'ticket', projectId, id };
-  }
   if (page === 'runs') {
     const runId = decode(item);
     if (runId === null) return null;
@@ -93,6 +106,28 @@ function parseProjectRoute(rest: readonly string[], params: URLSearchParams): Ro
   // Only Skills has item pages (`skills/:name`, R-D).
   const name = page === 'skills' ? decode(item) : null;
   return name === null ? null : { name: 'project', projectId, page, item: name, params };
+}
+
+/** `tickets/:id`, `tickets/:id/files` and `tickets/:id/changes/:agentRunId` (D-A). */
+function parseTicketRoute(
+  projectId: string,
+  item: string | undefined,
+  extra: readonly string[],
+  params: URLSearchParams,
+): Route | null {
+  const id = decode(item);
+  if (id === null) return null;
+  const [section, sub, ...more] = extra;
+  if (section === undefined) return { name: 'ticket', projectId, id };
+  if (more.length > 0) return null;
+  const runId = decode(params.get('run') ?? undefined);
+  if (section === 'files' && sub === undefined) {
+    return { name: 'review', projectId, ticketId: id, agentRunId: null, runId };
+  }
+  const agentRunId = section === 'changes' ? decode(sub) : null;
+  return agentRunId === null
+    ? null
+    : { name: 'review', projectId, ticketId: id, agentRunId, runId };
 }
 
 function parseLegacy(segments: readonly string[], params: URLSearchParams): LegacyRoute | null {
@@ -187,6 +222,22 @@ export const href = {
   skill: (projectId: string, name: string) => `#/p/${enc(projectId)}/skills/${enc(name)}`,
   ticket: (ticket: { id: string; projectId: string }) =>
     `#/p/${enc(ticket.projectId)}/tickets/${enc(ticket.id)}`,
+  /**
+   * D-A: the ticket branch's "Files changed" (the combined change). `runId` picks an earlier
+   * run; without it, the ticket's current run.
+   */
+  ticketFiles: (t: { projectId: string; ticketId: string; runId?: string | null }) =>
+    withParams(`/p/${enc(t.projectId)}/tickets/${enc(t.ticketId)}/files`, { run: t.runId }),
+  /** D-A: one helper's change, "Files changed" for its latest round. */
+  ticketChange: (c: {
+    projectId: string;
+    ticketId: string;
+    agentRunId: string;
+    runId?: string | null;
+  }) =>
+    withParams(`/p/${enc(c.projectId)}/tickets/${enc(c.ticketId)}/changes/${enc(c.agentRunId)}`, {
+      run: c.runId,
+    }),
   /** A Phase 3 run's page (runs without a ticket). */
   run: (run: { id: string; projectId: string }) => `#/p/${enc(run.projectId)}/runs/${enc(run.id)}`,
   sessions: (params: Params = {}) => scoped('sessions', '/sessions', params),
@@ -200,7 +251,10 @@ export const href = {
 
 /** The project a route belongs to, or null on global pages. */
 export function routeProjectId(route: Route): string | null {
-  return route.name === 'project' || route.name === 'ticket' || route.name === 'run'
+  return route.name === 'project' ||
+    route.name === 'ticket' ||
+    route.name === 'run' ||
+    route.name === 'review'
     ? route.projectId
     : null;
 }

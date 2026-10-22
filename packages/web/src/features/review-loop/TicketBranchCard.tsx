@@ -1,4 +1,5 @@
 import type { RunDetailDto, TicketBranchDto, TicketBranchReviewDto } from '@acp/core/api';
+import { ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { DiffSection } from '../../components/diff';
@@ -8,6 +9,8 @@ import { LoadingBlock } from '../../components/Skeleton';
 import { reviewLoopPaths, reviewLoopSchemas } from '../../lib/api';
 import { PULL_REQUEST_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
+import { href } from '../../lib/router';
+import { REVIEW_PAGE_COPY } from '../review/copy';
 import { Files } from '../ticket/ChangesTab';
 import { CheckRow } from '../ticket/ChecksTab';
 import { BranchIcon } from './icons';
@@ -90,15 +93,30 @@ export function TicketBranchCard({
       description={B.description}
       testId="ticket-branch"
       actions={
-        <span data-testid="branch-state" data-state={branch.state}>
-          <Pill tone={STATE_TONE[branch.state]}>
-            {branch.state !== 'merged'
-              ? B.state[branch.state]
-              : branch.pullRequest?.state === 'merged'
-                ? PULL_REQUEST_COPY.mergedOnGitHub(branch.baseBranch)
-                : B.mergedInto(branch.baseBranch)}
-          </Pill>
-        </span>
+        <>
+          {ticket !== null && branch.state === 'open' ? (
+            <ButtonLink
+              size="sm"
+              href={href.ticketFiles({
+                projectId: ticket.projectId,
+                ticketId: ticket.id,
+                runId: run.id,
+              })}
+              data-testid="branch-review-files"
+            >
+              {REVIEW_PAGE_COPY.entry.branch}
+            </ButtonLink>
+          ) : null}
+          <span data-testid="branch-state" data-state={branch.state}>
+            <Pill tone={STATE_TONE[branch.state]}>
+              {branch.state !== 'merged'
+                ? B.state[branch.state]
+                : branch.pullRequest?.state === 'merged'
+                  ? PULL_REQUEST_COPY.mergedOnGitHub(branch.baseBranch)
+                  : B.mergedInto(branch.baseBranch)}
+            </Pill>
+          </span>
+        </>
       }
       className={mode === 'merge' ? 'border-accent-fill-edge/50' : ''}
     >

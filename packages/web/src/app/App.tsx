@@ -6,6 +6,7 @@ import { ControlPanel } from '../features/control/ControlPanel';
 import { HarnessPage } from '../features/harness/HarnessPage';
 import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../features/project-setup/ProjectSettings';
+import { ReviewPage } from '../features/review/ReviewPage';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { SkillsPage } from '../features/skills/SkillsPage';
@@ -83,6 +84,16 @@ function Screen({ route }: { route: Route }) {
       return <ProjectScreen route={route} />;
     case 'ticket':
       return <TicketPage key={route.id} id={route.id} />;
+    case 'review':
+      return (
+        <ReviewPage
+          key={`${route.ticketId}:${route.agentRunId ?? ''}:${route.runId ?? ''}`}
+          projectId={route.projectId}
+          ticketId={route.ticketId}
+          agentRunId={route.agentRunId}
+          runId={route.runId}
+        />
+      );
     case 'run':
       // Phase 3 runs without a ticket keep their page (chat, approvals, review) until
       // "Quick ticket" replaces ad-hoc runs; `runId` null is the start page.

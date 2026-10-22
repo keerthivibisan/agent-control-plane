@@ -5,7 +5,7 @@ import { PROJECT_PAGES, isProjectPageAvailable, type ProjectPageDef } from './pr
 /** The sidebar page a route belongs to (a ticket or a run belongs to the board). */
 export function activePage(route: Route): ProjectPageDef['id'] | null {
   if (route.name === 'project') return route.page;
-  if (route.name === 'ticket' || route.name === 'run') return 'board';
+  if (route.name === 'ticket' || route.name === 'run' || route.name === 'review') return 'board';
   if (route.name === 'session') return 'sessions';
   return null;
 }
@@ -35,7 +35,7 @@ export function crumbsFor(route: Route, projectId: string | null): Crumb[] {
     }
     return [{ label: label(route.page), to: null }];
   }
-  if (route.name === 'ticket' || route.name === 'run') {
+  if (route.name === 'ticket' || route.name === 'run' || route.name === 'review') {
     return [{ label: label('board'), to: href.board(route.projectId) }];
   }
   if (route.name === 'session' && projectId !== null) {
@@ -53,6 +53,8 @@ export function pageKey(route: Route): string {
       return `ticket:${route.id}`;
     case 'run':
       return `run:${route.runId ?? ''}`;
+    case 'review':
+      return `review:${route.ticketId}:${route.agentRunId ?? 'branch'}:${route.runId ?? ''}`;
     case 'health':
       return `health:${route.tab}`;
     case 'session':

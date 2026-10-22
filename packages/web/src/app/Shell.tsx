@@ -93,7 +93,12 @@ export function Shell({
           />
           <div className="flex min-w-0 flex-1 flex-col">
             <DemoBanner mode={mode} />
-            <main className="mx-auto w-full max-w-content min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 wide:px-10">
+            <main
+              className={`mx-auto w-full min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 ${
+                // D-A: the review pages use the whole width, like GitHub's "Files changed".
+                route.name === 'review' ? 'wide:px-8' : 'max-w-content wide:px-10'
+              }`}
+            >
               <PageTransition pageKey={pageKey(route)}>
                 {unreachable && health.error ? <ErrorNotice error={health.error} /> : children}
               </PageTransition>
