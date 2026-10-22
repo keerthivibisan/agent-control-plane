@@ -191,3 +191,25 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   the search centred, the project switcher and theme on the right), a 256px sidebar with a chevron
   toggle at its top (‹ open, › rail; ⌘B kept). Coordinator check: 4,962 tests; e2e 94/94. The
   owner's app was restarted on it.
+- 2026-10-22 **C-A and C-B merged** (`f67a057`), checked on the combined code.
+  - **C-A:** migration 0009 (comment kinds, agent notes, attachments); `report_work` for helpers and
+    testers; the lead's whole-ticket summary (`ticket-summary`) apart from the run facts
+    (`run-facts`); the activity API; attachment upload, list, content and delete (limits, signature
+    checks, `nosniff`, sandbox CSP); read-only copies for agents; read-only merged Files changed
+    (410 `diff_unavailable` when git lost the commits).
+  - **C-B:** tabs Comments · Agents · Files changed · Checks · Conversation; attachments in the
+    description and comments; the summary card; the Conversation timeline with actor filters;
+    read-only merged files.
+  - **Coordinator fixes:**
+    - a helper could delete `.acp-attachments/.gitignore` or stage a copy, and the seal would commit
+      it: staging now excludes and unstages the folder, and seal and merge refuse a branch whose
+      history touched it (`364e1f7`, 2 tests);
+    - the owner-flow e2e follows the real activity API (`f67a057`).
+  - **Checks:** format, lint, typecheck, build ✓; tests 435 + 368 + 12 + 228 + 2,307 + 1,090 + 645
+    (one timing flake in `flow.test.ts` passed 3/3 on rerun and in the server rerun); e2e 98/99,
+    then the fixed `workspace` spec 1/1.
+  - **The live database was backed up** before migration 0009
+    (`backups/acp-before-0009-20261022-201635.sqlite`, integrity ok); the owner's app was restarted.
+  - **Open:** `ManagedAgentSpec.readOnlyDirs?` (proposed by C-A, so the lead reads its copies
+    without asking); the per-change `/review` shows an empty list instead of 410 when commits are
+    gone; deleting a ticket leaves its attachment files; `TICKET_PAGE_COPY.tabs` is unused.
