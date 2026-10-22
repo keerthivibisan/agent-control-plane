@@ -3,6 +3,7 @@ import {
   CircleCheck,
   FileDiff,
   FileText,
+  History,
   MessageSquare,
   Pencil,
   Play,
@@ -31,7 +32,9 @@ function icon(Lucide: LucideIcon, name: string) {
   return TicketPageIcon;
 }
 
-export const ConversationIcon = icon(MessageSquare, 'ConversationIcon');
+export const CommentsIcon = icon(MessageSquare, 'CommentsIcon');
+/** Conversation (v0.3.0 C-B): the timeline of what happened on the ticket. */
+export const ConversationIcon = icon(History, 'ConversationIcon');
 export const AgentsIcon = icon(Bot, 'AgentsIcon');
 export const FilesChangedIcon = icon(FileDiff, 'FilesChangedIcon');
 export const ChecksIcon = icon(CircleCheck, 'ChecksIcon');

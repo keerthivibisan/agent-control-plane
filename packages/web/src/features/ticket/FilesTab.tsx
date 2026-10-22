@@ -16,13 +16,16 @@ import {
 import { ChangeChecks, ChangeStateChip } from '../review-loop/ChangeCard';
 import { BranchIcon, ReworkIcon } from '../review-loop/icons';
 import { isReviewLoopRun, reworkRoundsBy, shortCommit } from '../review-loop/logic';
+import { MERGED_FILES_COPY } from '../activity/copy';
 import { Files } from './ChangesTab';
 import { FilesChangedIcon } from './icons';
+import { useMergedFiles, type MergedFiles } from './merged-files';
 import type { AgentReview, TicketBranchReview } from './run-data';
 import type { PanelTab } from './SidePanel';
 import { hasWorktree } from './ticket-state';
 
 const B = REVIEW_LOOP_COPY.branch;
+const M = MERGED_FILES_COPY;
 const F = TICKET_PAGE_COPY.files;
 const R = CONTROL_COPY.review;
 
@@ -43,18 +46,65 @@ export function filesCount(
 }
 
 /**
+ * A merged branch's files (ADR-0026 §5): the files and the diff from the recorded commits, to
+ * read only, or "no longer available" when the repository no longer has those commits.
+ */
+function MergedBranchFiles({ merged }: { merged: MergedFiles }) {
+  if (merged.state === 'loading') return <LoadingBlock label={M.loading} />;
+  if (merged.state === 'unavailable') {
+    return (
+      <EmptyState
+        compact
+        icon={<FilesChangedIcon size={20} />}
+        title={M.unavailable}
+        text={M.unavailableText}
+        testId="merged-files-unavailable"
+      />
+    );
+  }
+  if (merged.state === 'error') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <p className="text-danger">{M.failed}</p>
+        <Details>
+          <ErrorNotice error={merged.error} />
+        </Details>
+      </div>
+    );
+  }
+  const { review } = merged;
+  return (
+    <div className="flex flex-col gap-4" data-testid="merged-files">
+      {review.files.length > 0 ? <Files files={review.files} /> : null}
+      {review.diff.length > 0 ? (
+        <DiffSection
+          summary={B.diff}
+          diff={review.diff}
+          truncated={review.diffTruncated}
+          files={review.files.map((f) => f.path)}
+          testId="branch-diff"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The ticket branch at the top (ADR-0021 §4): its name, base and tip, how many changes landed on
  * it, and once the run waits for the final step, its combined files, the diff (collapsed), and
- * the button to the full review page.
+ * the button to the full review page. Once merged (ADR-0026 §5) the files and diff are read only,
+ * and nothing links to a review page, where there is nothing left to decide.
  */
 function BranchFiles({
   run,
   ticket,
   branchReview,
+  mergedFiles,
 }: {
   run: RunDetailDto;
   ticket: TicketRef;
   branchReview: TicketBranchReview;
+  mergedFiles: MergedFiles | null;
 }) {
   const { branch, mode, live, query } = branchReview;
   if (branch === null) return null;
@@ -95,7 +145,13 @@ function BranchFiles({
             <dd className="tabular-nums">{B.changesMerged(merged)}</dd>
           </div>
         </dl>
-        {branch.state !== 'discarded' ? (
+        {mergedFiles !== null ? (
+          <span className="ml-auto" data-testid="merged-read-only">
+            <Badge tone="done" title={M.readOnlyTip}>
+              {M.readOnly}
+            </Badge>
+          </span>
+        ) : branch.state !== 'discarded' ? (
           <ButtonLink
             href={href.ticketFiles({
               projectId: ticket.projectId,
@@ -114,6 +170,7 @@ function BranchFiles({
       </header>
       <div className="flex flex-col gap-4 px-4 py-3">
         {mode === 'waiting' ? <p className="text-dim">{B.waiting}</p> : null}
+        {mergedFiles !== null ? <MergedBranchFiles merged={mergedFiles} /> : null}
         {live ? (
           review !== undefined ? (
             <>
@@ -163,6 +220,7 @@ function RowActions({
   agentRunId,
   role,
   sealed,
+  readOnly,
   onOpen,
 }: {
   ticket: TicketRef;
@@ -172,11 +230,13 @@ function RowActions({
   role: string;
   /** The change has a commit to review. */
   sealed: boolean;
+  /** The ticket's work is merged: no review page to open (ADR-0026 §5). */
+  readOnly: boolean;
   onOpen: () => void;
 }) {
   return (
     <span className="ml-auto flex flex-wrap items-center gap-2">
-      {sealed ? (
+      {sealed && !readOnly ? (
         <ButtonLink
           href={href.ticketChange({
             projectId: ticket.projectId,
@@ -225,6 +285,7 @@ export function FilesTab({
   branchReview: TicketBranchReview;
   onOpenAgent: (agentId: string, tab?: PanelTab) => void;
 }) {
+  const merged = useMergedFiles(run);
   if (run === undefined) {
     return (
       <EmptyState
@@ -235,12 +296,13 @@ export function FilesTab({
     );
   }
   const loop = isReviewLoopRun(run);
+  const readOnly = merged !== null;
   const branchName = run.ticketBranch?.branch ?? null;
   const helpers = run.agents.filter((a) => hasWorktree(a.kind));
   return (
     <div className="flex min-w-0 flex-col gap-5" data-testid="files-tab">
       {run.ticketBranch ? (
-        <BranchFiles run={run} ticket={ticket} branchReview={branchReview} />
+        <BranchFiles run={run} ticket={ticket} branchReview={branchReview} mergedFiles={merged} />
       ) : null}
       <section
         aria-label={loop ? F.changesTitle : F.helpersTitle}
@@ -300,6 +362,7 @@ export function FilesTab({
                       agentRunId={c.agentRunId}
                       role={c.role}
                       sealed={c.headCommit !== null}
+                      readOnly={readOnly}
                       onOpen={() => onOpenAgent(c.agentRunId, 'changes')}
                     />
                   </li>
@@ -339,6 +402,7 @@ export function FilesTab({
                     agentRunId={a.id}
                     role={a.role}
                     sealed={review !== undefined}
+                    readOnly={readOnly}
                     onOpen={() => onOpenAgent(a.id, 'changes')}
                   />
                 </li>

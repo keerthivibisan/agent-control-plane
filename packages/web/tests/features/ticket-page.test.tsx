@@ -1,5 +1,5 @@
-// The ticket page as a pull request page (v0.3.0 D-B): the tabs in the address, what each tab
-// holds, the timeline's order and the sidebar's values. Synthetic data only.
+// The ticket page as a pull request page (v0.3.0 D-B; C-B, ADR-0026: Comments first, Conversation
+// last): the tabs in the address, what each tab holds and the sidebar's values. Synthetic data only.
 import { TicketDetailDtoSchema } from '@acp/core/api';
 import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -15,7 +15,6 @@ import {
   loopWorkingScenario,
   type LoopScenario,
 } from '../../e2e/review-loop-fixtures';
-import { timelineItems } from '../../src/features/ticket/Conversation';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { hashWithTab, tabFromHash } from '../../src/features/ticket/ticket-tabs';
 import { detail as sessionDetail } from '../fixtures/dto';
@@ -47,20 +46,25 @@ const selected = () =>
   screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')?.textContent;
 
 describe('the tab in the address', () => {
-  it('reads ?tab=, with the old section names as aliases, and Conversation by default', () => {
-    expect(tabFromHash(TICKET_HASH)).toBe('conversation');
+  it('reads ?tab=, with the old section names as aliases, and Comments by default', () => {
+    expect(tabFromHash(TICKET_HASH)).toBe('comments');
     expect(tabFromHash(`${TICKET_HASH}?tab=agents`)).toBe('agents');
     expect(tabFromHash(`${TICKET_HASH}?tab=checks`)).toBe('checks');
     expect(tabFromHash(`${TICKET_HASH}?tab=files`)).toBe('files');
     expect(tabFromHash(`${TICKET_HASH}?tab=changes`)).toBe('files');
-    expect(tabFromHash(`${TICKET_HASH}?tab=comments`)).toBe('conversation');
+    expect(tabFromHash(`${TICKET_HASH}?tab=conversation`)).toBe('conversation');
+    expect(tabFromHash(`${TICKET_HASH}?tab=activity`)).toBe('conversation');
+    expect(tabFromHash(`${TICKET_HASH}?tab=comments`)).toBe('comments');
+    // The plan under review is on Comments; the live workflow on Agents.
+    expect(tabFromHash(`${TICKET_HASH}?tab=plan`)).toBe('comments');
     expect(tabFromHash(`${TICKET_HASH}?tab=Workflow`)).toBe('agents');
-    expect(tabFromHash(`${TICKET_HASH}?tab=nonsense`)).toBe('conversation');
+    expect(tabFromHash(`${TICKET_HASH}?tab=nonsense`)).toBe('comments');
   });
 
   it('writes the tab, keeps other parameters, and leaves the default out', () => {
     expect(hashWithTab(TICKET_HASH, 'agents')).toBe(`${TICKET_HASH}?tab=agents`);
-    expect(hashWithTab(`${TICKET_HASH}?tab=agents`, 'conversation')).toBe(TICKET_HASH);
+    expect(hashWithTab(TICKET_HASH, 'conversation')).toBe(`${TICKET_HASH}?tab=conversation`);
+    expect(hashWithTab(`${TICKET_HASH}?tab=agents`, 'comments')).toBe(TICKET_HASH);
     expect(hashWithTab(`${TICKET_HASH}?x=1&tab=agents`, 'checks')).toBe(
       `${TICKET_HASH}?x=1&tab=checks`,
     );
@@ -75,6 +79,9 @@ describe('the tab in the address', () => {
     expect(window.location.hash).toBe(`${TICKET_HASH}?tab=agents`);
     expect(await screen.findByTestId('agent-canvas')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Conversation/ }));
+    expect(window.location.hash).toBe(`${TICKET_HASH}?tab=conversation`);
+    expect(await screen.findByTestId('activity')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Comments/ }));
     expect(window.location.hash).toBe(TICKET_HASH);
     // Tabs replace the address: Back leaves the ticket instead of replaying them.
     expect(window.history.length).toBe(before);
@@ -88,9 +95,21 @@ describe('the tab in the address', () => {
 });
 
 describe('each tab shows its own part', () => {
-  it('Conversation: the timeline, the final step, the comment box and the sidebar', async () => {
+  it('the tabs, in order: Comments, Agents, Files changed, Checks, Conversation', async () => {
     render(loopReviewScenario());
-    expect(await screen.findByTestId('conversation')).toBeTruthy();
+    await screen.findByTestId('comments-tab');
+    expect(screen.getAllByRole('tab').map((t) => t.getAttribute('data-testid'))).toEqual([
+      'ticket-tab-comments',
+      'ticket-tab-agents',
+      'ticket-tab-files',
+      'ticket-tab-checks',
+      'ticket-tab-conversation',
+    ]);
+  });
+
+  it('Comments: the thread, the final step, the comment box and the sidebar', async () => {
+    render(loopReviewScenario());
+    expect(await screen.findByTestId('comments-tab')).toBeTruthy();
     expect(screen.getByTestId('ticket-branch')).toBeTruthy();
     expect(screen.getByLabelText('Add a comment')).toBeTruthy();
     expect(screen.getByTestId('ticket-sidebar')).toBeTruthy();
@@ -125,10 +144,11 @@ describe('each tab shows its own part', () => {
 
   it('counts on the tabs: comments, agents, files and checks', async () => {
     render(loopReviewScenario());
-    await screen.findByTestId('conversation');
+    await screen.findByTestId('comments-tab');
     const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
-    expect(screen.getByTestId('tab-count-conversation').textContent).toBe(
-      String(detail.comments.length),
+    // People's comments (and the lead's summary) only; the rest is on Conversation.
+    expect(screen.getByTestId('tab-count-comments').textContent).toBe(
+      String(detail.comments.filter((c) => c.author === 'owner').length),
     );
     expect(screen.getByTestId('tab-count-agents').textContent).toBe(
       String(detail.currentRun?.agents.length),
@@ -198,33 +218,12 @@ describe('the sidebar', () => {
     expect(link.getAttribute('href')).toBe('#/sessions/s-lead');
   });
 
-  it('stacks under the content: it comes after the conversation in the page', async () => {
+  it('stacks under the content: it comes after the comments in the page', async () => {
     render(loopReviewScenario());
-    const conversation = await screen.findByTestId('conversation');
+    const conversation = await screen.findByTestId('comments-tab');
     const side = screen.getByTestId('ticket-sidebar');
     expect(conversation.compareDocumentPosition(side) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-  });
-});
-
-describe('the timeline', () => {
-  it('orders runs, plan versions and comments by time; same moment: run, plan, comment', () => {
-    const at = '2026-10-17T09:00:00.000Z';
-    const later = '2026-10-17T09:05:00.000Z';
-    const items = timelineItems(
-      {
-        runs: [{ id: 'r1', createdAt: at } as never],
-        plans: [{ id: 'p1', createdAt: at } as never, { id: 'p2', createdAt: later } as never],
-        comments: [
-          { id: 'c1', createdAt: at } as never,
-          { id: 'c0', createdAt: '2026-10-17T08:00:00.000Z' } as never,
-        ],
-      },
-      'p2',
-    );
-    expect(items.map((i) => `${i.kind}`)).toEqual(['comment', 'run', 'plan', 'comment']);
-    // The plan waiting for your decision is shown above the timeline, not in it.
-    expect(items.some((i) => i.kind === 'plan' && i.plan.id === 'p2')).toBe(false);
   });
 });

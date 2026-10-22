@@ -441,7 +441,7 @@ describe('the ticket branch card: the final step', () => {
   async function card() {
     return screen.findByTestId('ticket-branch');
   }
-  /** The pull request is in the Conversation tab's sidebar (v0.3.0 D-B). */
+  /** The pull request is in the Comments tab's sidebar (v0.3.0 D-B; Comments since C-B). */
   const side = () => screen.getByTestId('sidebar-pull-request');
 
   it('fixtures match the contract', () => {
@@ -710,8 +710,10 @@ describe('the ticket page reads an open pull request once when it opens (G-D)', 
 
 describe('the pull request lines in the ticket’s comments (G-D)', () => {
   it('shows the push, the push again and the merge on GitHub as small lines', async () => {
+    window.location.hash = '#?tab=conversation';
     renderTicket(withPullRequestLines(ghMergedScenario()));
-    const comments = await screen.findByTestId('comments');
+    // On Conversation since v0.3.0 C-B (ADR-0026).
+    const comments = await screen.findByTestId('activity');
     await waitFor(() => expect(within(comments).getAllByTestId('merge-line')).toHaveLength(3));
     const lines = within(comments).getAllByTestId('merge-line');
     expect(lines.map((l) => l.getAttribute('data-kind')).sort()).toEqual([

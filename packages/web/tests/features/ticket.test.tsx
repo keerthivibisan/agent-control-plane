@@ -95,10 +95,10 @@ type Server = ReturnType<typeof server>;
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
 
 /**
- * The page on one of its tabs (v0.3.0 D-B): the tab is the address's `?tab=`, Conversation when
- * none is given.
+ * The page on one of its tabs (v0.3.0 D-B): the tab is the address's `?tab=`, Comments when none
+ * is given (C-B).
  */
-function renderTicket(s: Server, tab?: 'agents' | 'files' | 'checks') {
+function renderTicket(s: Server, tab?: 'agents' | 'files' | 'checks' | 'conversation') {
   window.location.hash = `#/p/${PROJECT_ID}/tickets/${TICKET_ID}${tab ? `?tab=${tab}` : ''}`;
   return renderWithApi(<TicketPage id={TICKET_ID} />, s);
 }
@@ -176,7 +176,7 @@ describe('ticket page: routes', () => {
 });
 
 describe('ticket page: plan review', () => {
-  it('shows the plan first on Conversation, with its steps and version', async () => {
+  it('shows the plan first on Comments, with its steps and version', async () => {
     renderTicket(server(planReviewScenario()));
     const card = await screen.findByTestId('plan-card');
     // The agents are on their own tab (v0.3.0 D-B).
@@ -188,17 +188,21 @@ describe('ticket page: plan review', () => {
     expect(within(steps as HTMLElement).getAllByRole('listitem')).toHaveLength(3);
     expect(within(steps as HTMLElement).getByText('Settings toggle')).toBeTruthy();
     expect(screen.getByTestId('ticket-stage').textContent).toContain('Plan review');
-    // Version 1 is in the timeline below, collapsed, followed by the comment that sent it back;
-    // the version waiting for you is not repeated there.
-    const timeline = screen.getByTestId('comments');
+    // The comment that sent version 1 back is on Comments, with the version it was about.
+    const thread = screen.getByTestId('comments');
+    const sentBack = within(thread)
+      .getAllByTestId('comment')
+      .find((c) => c.textContent?.includes('Keep the old settings page'));
+    expect(sentBack?.textContent).toContain('on plan version 1');
+    // Every version is on Conversation (C-B), oldest first and collapsed.
+    fireEvent.click(screen.getByRole('tab', { name: /Conversation/ }));
+    const timeline = await screen.findByTestId('activity');
     const plans = within(timeline).getAllByTestId('timeline-plan');
-    expect(plans.map((p) => p.textContent)).toEqual([expect.stringContaining('Plan version 1')]);
+    expect(plans.map((p) => p.textContent)).toEqual([
+      expect.stringContaining('Plan version 1'),
+      expect.stringContaining('Plan version 2'),
+    ]);
     expect(plans[0]?.querySelector('details')?.hasAttribute('open')).toBe(false);
-    const items = [...timeline.querySelectorAll('ol > li')].map((li) => li.textContent ?? '');
-    const v1 = items.findIndex((t) => t.includes('Plan version 1'));
-    const comment = items.findIndex((t) => t.includes('Keep the old settings page'));
-    expect(v1).toBeGreaterThan(-1);
-    expect(comment).toBeGreaterThan(v1);
   });
 
   it('approves the plan with the CSRF header', async () => {
@@ -505,15 +509,17 @@ describe('ticket page: history and quick actions', () => {
       '/api/runs/run-1/checks': [],
     });
     renderTicket(s);
-    // v0.3.0 D-B: each run is a line in the timeline, oldest first.
-    const timeline = await screen.findByTestId('comments');
+    // The owner's comment on a plan says which version (Comments).
+    expect((await screen.findByTestId('comments')).textContent).toContain('on plan version 1');
+    // v0.3.0 D-B, C-B: each run is a line on Conversation, oldest first.
+    fireEvent.click(screen.getByRole('tab', { name: /Conversation/ }));
+    const timeline = await screen.findByTestId('activity');
     const runs = within(timeline).getAllByTestId('timeline-run');
     expect(runs.map((r) => r.textContent)).toEqual([
       expect.stringContaining('Run 1 started'),
       expect.stringContaining('Run 2 started'),
     ]);
     expect(runs[1]?.textContent).toContain('Shown on this page');
-    expect(timeline.textContent).toContain('on plan version 1');
     fireEvent.click(within(runs[0] as HTMLElement).getByRole('button', { name: 'Show this run' }));
     expect(
       await screen.findByText('You are looking at an earlier run of this ticket.'),
@@ -691,8 +697,8 @@ describe('ticket page: live workflow (redesign R-H)', () => {
     await graph();
     expect(stageOf('unit-tests').dataset.state).toBe('needs-you');
     expect(screen.queryByTestId('held-stage')).toBeNull();
-    // The tester's change is in the review list like a helper's (on Conversation).
-    fireEvent.click(screen.getByRole('tab', { name: /Conversation/ }));
+    // The tester's change is in the review list like a helper's (on Comments).
+    fireEvent.click(screen.getByRole('tab', { name: /Comments/ }));
     expect(within(screen.getByTestId('review-list')).getByText('Tester')).toBeTruthy();
   });
 });
@@ -723,16 +729,21 @@ describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', ()
   });
 
   it('shows reviewer comments with their own label, and points to them from the graph', async () => {
-    renderTicket(server(reviewedScenario()));
-    const comments = await screen.findByTestId('comments');
-    const reviewer = comments.querySelector<HTMLElement>('[data-author="reviewer"]');
+    renderTicket(server(reviewedScenario()), 'conversation');
+    // The reviewer's findings are on Conversation (C-B, ADR-0026); the owner's comments are not.
+    const activity = await screen.findByTestId('activity');
+    const reviewer = activity.querySelector<HTMLElement>('[data-author="reviewer"]');
     if (reviewer === null) throw new Error('no reviewer comment');
     expect(within(reviewer).getByTestId('comment-author').textContent).toBe('Reviewer');
     expect(within(reviewer).getByTestId('comment-author').dataset.tone).toBe('accent');
     expect(reviewer.textContent).toContain('a selector would avoid re-renders');
+    expect(activity.querySelector('[data-author="owner"]')).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /Comments/ }));
+    const comments = await screen.findByTestId('comments');
     const owner = comments.querySelector<HTMLElement>('[data-author="owner"]');
     expect(owner && within(owner).getByTestId('comment-author').textContent).toBe('You');
-    // The graph is on Agents; its link goes back to the Conversation tab.
+    expect(comments.querySelector('[data-author="reviewer"]')).toBeNull();
+    // The graph is on Agents; its link goes to the Conversation tab.
     fireEvent.click(screen.getByRole('tab', { name: /Agents/ }));
     const link = await screen.findByTestId('reviewer-findings-link');
     expect(link.textContent).toBe('1 finding from the reviewer in the conversation');
@@ -740,7 +751,7 @@ describe('ticket page: new roles, reviewer comments and chat (redesign R-H)', ()
     expect(screen.getByRole('tab', { name: /Conversation/ }).getAttribute('aria-selected')).toBe(
       'true',
     );
-    expect(screen.getByTestId('comments')).toBeTruthy();
+    expect(await screen.findByTestId('activity')).toBeTruthy();
   });
 
   it('names the planner and the lead in the chat from when the planner ended (decision C)', async () => {

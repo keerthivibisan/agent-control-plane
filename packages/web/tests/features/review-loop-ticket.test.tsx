@@ -97,8 +97,12 @@ function server(sc: LoopScenario, routes: RouteTable = {}) {
 type Server = ReturnType<typeof server>;
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
 
-/** The ticket page on a tab (v0.3.0 D-B: the address's `?tab=`, Conversation without one). */
-function render(sc: LoopScenario, routes: RouteTable = {}, tab?: 'agents' | 'files' | 'checks') {
+/** The ticket page on a tab (v0.3.0 D-B: the address's `?tab=`, Comments without one, C-B). */
+function render(
+  sc: LoopScenario,
+  routes: RouteTable = {},
+  tab?: 'agents' | 'files' | 'checks' | 'conversation',
+) {
   const s = server(sc, routes);
   window.location.hash = tab ? `#?tab=${tab}` : '';
   renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
@@ -288,8 +292,8 @@ describe('ticket page: a review-loop run at work', () => {
         .getAttribute('href'),
     ).toBe(`#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}?run=${LOOP_RUN_ID}`);
     expect(screen.queryByTestId('owner-decision')).toBeNull();
-    // Conversation: nothing waits for you; the run's approval mode is in the sidebar.
-    openTab(/Conversation/);
+    // Comments: nothing waits for you; the run's approval mode is in the sidebar.
+    openTab(/Comments/);
     expect(screen.queryByTestId('changes-need-you')).toBeNull();
     expect(screen.getByTestId('run-approval-mode').textContent).toBe('Auto edits');
     // The legacy review list is not shown for a review-loop run.
@@ -496,7 +500,7 @@ describe('ticket page: a change that needs the owner', () => {
 describe('ticket page: the owner’s merge of the ticket branch', () => {
   it('loads the combined change: the tip’s checks, the files and the diff', async () => {
     render(loopReviewScenario());
-    // Conversation: the final step, with the tip's checks in one line.
+    // Comments: the final step, with the tip's checks in one line.
     const card = await screen.findByTestId('ticket-branch');
     expect(await within(card).findByRole('button', { name: 'Merge into main' })).toBeTruthy();
     expect(card.textContent).toContain('Ready to merge into main');
@@ -516,12 +520,12 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(within(screen.getByTestId('tip-checks')).getByTestId('branch-checks')).toBeTruthy();
   });
 
-  it('the header’s main action opens Conversation at the final step', async () => {
+  it('the header’s main action opens Comments at the final step', async () => {
     render(loopReviewScenario(), {}, 'checks');
     const shortcut = await screen.findByTestId('final-step-shortcut');
     expect(shortcut.getAttribute('aria-label')).toBe('Merge into main: go to the final step');
     fireEvent.click(shortcut);
-    expect(screen.getByRole('tab', { name: /Conversation/ }).getAttribute('aria-selected')).toBe(
+    expect(screen.getByRole('tab', { name: /Comments/ }).getAttribute('aria-selected')).toBe(
       'true',
     );
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('ticket-branch')));
@@ -579,7 +583,7 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
         'interrupted',
       );
       expect(within(row).getByText('Stopped')).toBeTruthy();
-      openTab(/Conversation/);
+      openTab(/Comments/);
       const card = await screen.findByTestId('ticket-branch');
       await within(card).findByTestId('branch-checks-stopped');
       expect(within(card).queryByTestId('branch-blocked')).toBeNull();
@@ -893,6 +897,8 @@ describe('ticket page: a Full auto run (ADR-0022)', () => {
   it('names the mode and shows the plan as approved automatically', async () => {
     render(fullAuto());
     expect((await screen.findByTestId('run-approval-mode')).textContent).toBe('Full auto');
+    // Plan versions are on Conversation (C-B).
+    openTab(/Conversation/);
     const plan = await screen.findByTestId('timeline-plan');
     expect(within(plan).getByText('Approved automatically (Full auto)')).toBeTruthy();
   });

@@ -89,6 +89,8 @@ import {
   OpenPullRequestRequestSchema,
   TicketBranchDtoSchema,
 } from '@acp/core/api';
+// Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026).
+import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -187,6 +189,25 @@ export interface ApiClient {
   ): Promise<T>;
   /** DELETE answered by 204 No Content (redesign R-D: `DELETE /api/projects/:id/skills/:name`). */
   delete(path: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<void>;
+  /**
+   * A POST whose body is the bytes themselves, not JSON (v0.3.0 C-B, ADR-0026: an attachment's
+   * upload), sent with `contentType` as its `Content-Type`.
+   */
+  postRaw<T>(
+    path: string,
+    data: Blob,
+    contentType: string,
+    schema: Schema<T>,
+    headers?: Record<string, string>,
+  ): Promise<T>;
+}
+
+/** A request body sent as it is (`postRaw`), apart from the JSON bodies of every other call. */
+class RawBody {
+  constructor(
+    readonly data: Blob,
+    readonly contentType: string,
+  ) {}
 }
 
 /** The "schema" of a 204 response: no body at all. */
@@ -209,14 +230,20 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
   ): Promise<T> {
     let res: Response;
     try {
+      const raw = body instanceof RawBody ? body : null;
       const init: RequestInit = {
         method,
         headers:
           body === undefined
             ? { accept: 'application/json', ...extraHeaders }
-            : { accept: 'application/json', 'content-type': 'application/json', ...extraHeaders },
+            : {
+                accept: 'application/json',
+                'content-type': raw !== null ? raw.contentType : 'application/json',
+                ...extraHeaders,
+              },
       };
-      if (body !== undefined) init.body = JSON.stringify(body);
+      if (raw !== null) init.body = raw.data;
+      else if (body !== undefined) init.body = JSON.stringify(body);
       if (signal) init.signal = signal;
       res = await fetchImpl(path, init);
     } catch (e) {
@@ -288,6 +315,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       request('PATCH', path, schema, body, signal, headers),
     delete: (path, signal, headers) =>
       request('DELETE', path, NoContentSchema, undefined, signal, headers),
+    postRaw: (path, data, contentType, schema, headers) =>
+      request('POST', path, schema, new RawBody(data, contentType), undefined, headers),
   };
 }
 
@@ -1175,4 +1204,56 @@ export async function openPullRequest(
 /** Refresh: reads the pull request's state on GitHub again. */
 export function refreshPullRequest(client: ApiClient, ticketId: string) {
   return controlPost(client, codeHostPaths.refresh(ticketId), {}, codeHostSchemas.branch);
+}
+
+// --- Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026) -----------------------------
+//
+// GET /api/tickets/:id/activity → TicketActivityDto (the Conversation tab, oldest first).
+// GET /api/tickets/:id/attachments → AttachmentDto[]; POST the same path (CSRF) with the file's
+// bytes as the body, its type as `Content-Type` and its name, URI-encoded, in `X-Attachment-Name`
+// (optional `?commentId=`) → AttachmentDto. DELETE /api/attachments/:id (CSRF) → 204. Each
+// attachment's bytes are at its `contentUrl` (`/api/attachments/:id/content`).
+
+/** The header that carries an uploaded file's name (URI-encoded). */
+export const ATTACHMENT_NAME_HEADER = 'X-Attachment-Name';
+
+export const activityPaths = {
+  activity: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/activity`,
+  attachments: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/attachments`,
+  attachment: (id: string) => `${API_BASE}/attachments/${enc(id)}`,
+} as const;
+
+export const activitySchemas = {
+  activity: TicketActivityDtoSchema,
+  attachments: AttachmentDtoSchema.array(),
+  attachment: AttachmentDtoSchema,
+} as const;
+
+/**
+ * Uploads one file to the ticket (or to an existing comment with `commentId`). The caller checks
+ * the size, type and name first (`features/attachments/limits.ts`); the server checks them again.
+ */
+export async function uploadAttachment(
+  client: ApiClient,
+  ticketId: string,
+  file: { data: Blob; name: string; mimeType: string },
+  commentId?: string,
+) {
+  const path = withQuery(activityPaths.attachments(ticketId), { commentId });
+  const send = async (fresh: boolean) =>
+    client.postRaw(path, file.data, file.mimeType, activitySchemas.attachment, {
+      [CSRF_HEADER]: await csrfToken(client, fresh),
+      [ATTACHMENT_NAME_HEADER]: encodeURIComponent(file.name),
+    });
+  try {
+    return await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** Removes an attachment the owner added (the file and its row). */
+export function deleteAttachment(client: ApiClient, attachmentId: string) {
+  return controlDelete(client, activityPaths.attachment(attachmentId));
 }

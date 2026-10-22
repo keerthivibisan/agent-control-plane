@@ -7,7 +7,7 @@ import { QueryView } from '../../components/QueryView';
 import { Skeleton } from '../../components/Skeleton';
 import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
 import { controlPaths, controlSchemas, ticketPaths, ticketSchemas } from '../../lib/api';
-import { CONTROL_COPY, TICKET_COPY, TICKET_PAGE_COPY } from '../../lib/copy';
+import { CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
@@ -15,26 +15,30 @@ import {
   PullRequestCheckProvider,
   useCheckPullRequestOnView,
 } from '../branching/pull-request-check';
+import { ActivityTimeline, useActivityCount } from '../activity/ActivityTimeline';
+import { commentsTabCount } from '../activity/comment-kind';
+import { TICKET_TAB_COPY } from '../activity/copy';
 import { AgentsTab } from './AgentsTab';
 import { ChecksPanel, checksCount } from './ChecksPanel';
-import { Conversation } from './Conversation';
+import { CommentsTab } from './CommentsTab';
 import { FilesTab, filesCount } from './FilesTab';
-import { AgentsIcon, ChecksIcon, ConversationIcon, FilesChangedIcon } from './icons';
+import { AgentsIcon, ChecksIcon, CommentsIcon, ConversationIcon, FilesChangedIcon } from './icons';
 import { useRunChecks, useRunReview, useTicketBranchReview } from './run-data';
 import type { PanelTab } from './SidePanel';
 import { TicketSidebar } from './Sidebar';
 import { TicketHeader } from './TicketHeader';
 import { TicketNavProvider, type TicketNav } from './ticket-nav';
 import { lastRunNote } from './ticket-state';
-import { useTicketTab, type TicketTab } from './ticket-tabs';
+import { TICKET_TABS, useTicketTab, type TicketTab } from './ticket-tabs';
 
 const C = TICKET_COPY;
-const T = TICKET_PAGE_COPY.tabs;
+const T = TICKET_TAB_COPY;
 
 /** The side panel's place, so "Open" on another tab brings it into view on Agents. */
 const SIDE_PANEL_ID = 'ticket-side-panel';
 
 const TAB_ICON: Record<TicketTab, ComponentType<IconProps>> = {
+  comments: CommentsIcon,
   conversation: ConversationIcon,
   agents: AgentsIcon,
   files: FilesChangedIcon,
@@ -81,6 +85,7 @@ function TicketSkeleton() {
         <Skeleton className="h-5 w-20" />
         <Skeleton className="h-5 w-28" />
         <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-28" />
       </div>
       <div aria-hidden="true" className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex flex-col gap-4">
@@ -135,6 +140,7 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
   const note = lastRunNote(detail);
   // ADR-0025 §2: an open pull request is read again once when the page opens, never on a timer.
   const prCheck = useCheckPullRequestOnView(ticket.id, detail.currentRun?.ticketBranch);
+  const activityCount = useActivityCount(detail);
 
   const nav = useMemo<TicketNav>(
     () => ({
@@ -191,7 +197,8 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
     ) : null;
 
   const counts: Record<TicketTab, number | null> = {
-    conversation: detail.comments.length,
+    comments: commentsTabCount(detail.comments),
+    conversation: activityCount,
     agents: run === undefined ? null : run.agents.length,
     files: filesCount(reviews, branchReview),
     checks: run === undefined ? null : checksCount(run, checks, branchReview),
@@ -233,22 +240,21 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
           ) : null}
           <Tabs value={tab} onValueChange={setTab}>
             <TabList label={T.label} className="mb-6">
-              {(['conversation', 'agents', 'files', 'checks'] as const).map((t) => (
+              {TICKET_TABS.map((t) => (
                 <Tab key={t} value={t} testId={`ticket-tab-${t}`}>
                   <TabLabel tab={t} count={counts[t]} />
                 </Tab>
               ))}
             </TabList>
-            <TabPanel value="conversation">
+            <TabPanel value="comments">
               <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6 xl:gap-8">
-                <Conversation
+                <CommentsTab
                   detail={detail}
                   run={run}
                   reviews={reviews}
                   checks={checks}
                   branchReview={branchReview}
                   onOpenAgent={select}
-                  onShowRun={showRun}
                 />
                 <TicketSidebar detail={detail} run={run} isCurrent={isCurrent} />
               </div>
@@ -295,6 +301,9 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
                 />
               )}
             </TabPanel>
+            <TabPanel value="conversation">
+              <ActivityTimeline detail={detail} shownRunId={run?.id ?? null} onShowRun={showRun} />
+            </TabPanel>
           </Tabs>
         </div>
       </TicketNavProvider>
@@ -304,9 +313,11 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
 
 /**
  * `#/p/:projectId/tickets/:id` (Phase 4, README §5.3; a pull request page since v0.3.0 D-B): the
- * header with the ticket's state and branch, and four tabs. Conversation (what waits for you, the
- * plan, the timeline, the final step and a sidebar), Agents (the live graph, the agent tree and
- * the side panel), Files changed and Checks. `?tab=` in the address picks the tab.
+ * header with the ticket's state and branch, and five tabs (C-B, ADR-0026). Comments (what waits
+ * for you, the plan, the description and attachments, the lead's ticket summary, people's
+ * comments, the final step and a sidebar), Agents (the live graph, the agent tree and the side
+ * panel), Files changed, Checks and Conversation (the timeline of what happened). `?tab=` in the
+ * address picks the tab.
  */
 export function TicketPage({ id }: { id: string }) {
   const detail = useApiQuery(ticketPaths.ticket(id), ticketSchemas.detail);

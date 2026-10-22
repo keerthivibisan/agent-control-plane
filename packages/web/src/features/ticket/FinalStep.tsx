@@ -84,7 +84,7 @@ function ChecksLine({ checks }: { checks: ChecksSummary }) {
 }
 
 /**
- * The final step (v0.3.0 D-B), at the end of the Conversation tab like GitHub's merge box: where
+ * The final step (v0.3.0 D-B), at the end of the Comments tab like GitHub's merge box: where
  * the ticket branch stands in one line, the tip's checks in one line, then the owner's actions
  * (`BranchFinalStep`: merge into the target, Push & open PR, Request changes, Discard, Update from
  * the target). The pull request itself is in the sidebar. While agents work it only says so.

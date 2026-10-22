@@ -1,10 +1,12 @@
 // The app's own comments on a ticket (ADR-0024 §3, v0.3.0 S-B): the run summary card and the line
-// after a merge, next to the owner's, the lead's and the reviewer's comments, which are unchanged.
-// Synthetic data only.
+// after a merge, next to the lead's notes and the reviewer's findings. Since v0.3.0 C-B (ADR-0026)
+// they are on the Conversation tab, here read from the ticket's own comments as on a server
+// without the activity route. Synthetic data only.
 import { fireEvent, screen, within } from '@testing-library/react';
 import { TicketDetailDtoSchema, type TicketCommentDto } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
-import { Timeline } from '../../src/features/ticket/Conversation';
+import { ActivityView } from '../../src/features/activity/ActivityTimeline';
+import { activityFromDetail } from '../../src/features/activity/activity-from-detail';
 import { ticketDetail, ticketDto } from '../fixtures/board';
 import { runSummary } from '../fixtures/control';
 import { fakeServer, renderWithApi } from '../helpers';
@@ -74,14 +76,22 @@ function renderComments(comments: TicketCommentDto[]) {
     comments,
   });
   renderWithApi(
-    <Timeline detail={detail} shownRunId="run-2" onShowRun={() => {}} />,
+    <ActivityView
+      detail={detail}
+      items={activityFromDetail(detail)}
+      shownRunId="run-2"
+      onShowRun={() => {}}
+    />,
     fakeServer({}),
   );
-  return screen.getByTestId('comments');
+  return screen.getByTestId('activity');
 }
 
+/** The rows an author wrote (not the run lines, which the app draws too). */
 const byAuthor = (list: HTMLElement, author: string) =>
-  [...list.querySelectorAll(`li[data-author="${author}"]`)] as HTMLElement[];
+  [
+    ...list.querySelectorAll(`li[data-author="${author}"]:not([data-type="run-started"])`),
+  ] as HTMLElement[];
 
 describe('ticket comments by the app', () => {
   it('shows a run summary as its own card, with headings, lists and the rest as written', () => {
@@ -283,7 +293,7 @@ describe('ticket comments by the app', () => {
     expect(within(card).getByText('Stopped before the handover.')).toBeTruthy();
   });
 
-  it('leaves the owner’s, the lead’s and the reviewer’s comments as they were', () => {
+  it('sits with the lead’s notes and the reviewer’s findings; the owner’s comment is on Comments', () => {
     const list = renderComments([
       comment({
         id: 'c-o',
@@ -307,17 +317,19 @@ describe('ticket comments by the app', () => {
     ]);
     const label = (author: string) =>
       within(byAuthor(list, author)[0] as HTMLElement).getByTestId('comment-author').textContent;
-    expect(label('owner')).toBe('You');
-    expect(label('lead')).toBe('Lead agent');
+    expect(byAuthor(list, 'owner')).toHaveLength(0);
+    expect(label('lead')).toBe('Lead');
     expect(label('reviewer')).toBe('Reviewer');
     expect(label('app')).toBe('Agent Control Plane');
-    for (const author of ['owner', 'lead', 'reviewer']) {
+    for (const author of ['lead', 'reviewer']) {
       const li = byAuthor(list, author)[0] as HTMLElement;
       expect(within(li).queryByTestId('run-summary')).toBeNull();
     }
     // Oldest first, the summary last.
     expect(
-      [...list.querySelectorAll('li[data-author]')].map((li) => li.getAttribute('data-author')),
-    ).toEqual(['owner', 'lead', 'reviewer', 'app']);
+      [...list.querySelectorAll('li[data-author]:not([data-type="run-started"])')].map((li) =>
+        li.getAttribute('data-author'),
+      ),
+    ).toEqual(['lead', 'reviewer', 'app']);
   });
 });

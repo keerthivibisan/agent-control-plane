@@ -153,9 +153,10 @@ function ThisRun({ detail, run }: { detail: TicketDetailDto; run: RunDetailDto |
 }
 
 /**
- * The Conversation tab's sidebar (v0.3.0 D-B), GitHub's pull request sidebar: small headings over
- * their values. The ticket's branch and target, its pull request, its run options, its labels, the
- * run on screen, and the sessions of that run's agents. Changes open in dialogs.
+ * The Comments tab's sidebar (v0.3.0 D-B; on Comments since C-B), GitHub's pull request sidebar:
+ * small headings over their values. The ticket's branch and target, its pull request, its run
+ * options, its labels, the run on screen, and the sessions of that run's agents. Changes open in
+ * dialogs.
  */
 export function TicketSidebar({
   detail,

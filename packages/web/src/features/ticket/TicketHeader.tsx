@@ -302,7 +302,7 @@ function MetaLine({
             type="button"
             className="font-medium text-warning hover:underline"
             title={H.needsYouTip}
-            onClick={() => nav?.goTo('conversation', NEEDS_YOU_ID)}
+            onClick={() => nav?.goTo('comments', NEEDS_YOU_ID)}
           >
             {C.summary.needsYou(waiting)}
           </button>
@@ -454,7 +454,7 @@ export function TicketHeader({
               variant="primary"
               aria-label={H.goTo(finalAction)}
               data-testid="final-step-shortcut"
-              onClick={() => nav?.goTo('conversation', FINAL_STEP_ID)}
+              onClick={() => nav?.goTo('comments', FINAL_STEP_ID)}
             >
               {finalAction}
             </Button>

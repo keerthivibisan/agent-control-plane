@@ -2,26 +2,31 @@ import { useCallback, useSyncExternalStore } from 'react';
 import { replaceHash } from '../../lib/router';
 
 /*
- * The ticket page's tabs (v0.3.0 D-B), GitHub's pull request tabs: Conversation, Agents, Files
- * changed and Checks. The open tab is the address's `tab` query (`#/p/:id/tickets/:id?tab=agents`),
- * so a link, a reload or a shared address opens the same tab. Conversation is the default and
- * leaves the query out. The router's ticket route ignores the query, so a tab change never
- * remounts the page.
+ * The ticket page's tabs, GitHub's pull request tabs: Comments, Agents, Files changed, Checks and
+ * Conversation (v0.3.0 D-B; C-B, ADR-0026: Comments is the home and first, Conversation the
+ * timeline of what happened, last). The open tab is the address's `tab` query
+ * (`#/p/:id/tickets/:id?tab=agents`), so a link, a reload or a shared address opens the same tab.
+ * Comments is the default and leaves the query out. The router's ticket route ignores the query,
+ * so a tab change never remounts the page.
  */
 
-export const TICKET_TABS = ['conversation', 'agents', 'files', 'checks'] as const;
+export const TICKET_TABS = ['comments', 'agents', 'files', 'checks', 'conversation'] as const;
 export type TicketTab = (typeof TICKET_TABS)[number];
 
-export const DEFAULT_TICKET_TAB: TicketTab = 'conversation';
+export const DEFAULT_TICKET_TAB: TicketTab = 'comments';
 
 /**
  * Words the query accepts for each tab: the tab ids, and the names of what used to be sections of
- * the single page (its comments, its changes), so older links land on the tab that holds them.
+ * the single page (its comments, its plan, its changes), so older links land on the tab that holds
+ * them. `plan` opens Comments, where the plan under review is; `workflow` opens Agents, where the
+ * live workflow is.
  */
 const ALIASES: Readonly<Record<string, TicketTab>> = {
+  comments: 'comments',
+  plan: 'comments',
   conversation: 'conversation',
-  comments: 'conversation',
-  plan: 'conversation',
+  activity: 'conversation',
+  timeline: 'conversation',
   agents: 'agents',
   workflow: 'agents',
   files: 'files',
