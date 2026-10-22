@@ -1,5 +1,6 @@
 import type { ChangeReviewDto, RunDetailDto, TicketDto } from '@acp/core/api';
 import { Button, ButtonLink } from '../../components/Button';
+import { href } from '../../lib/router';
 import { Details } from '../../components/Details';
 import { DiffSection } from '../../components/diff';
 import { EmptyState } from '../../components/EmptyState';
@@ -17,7 +18,6 @@ import { BranchIcon, ReworkIcon } from '../review-loop/icons';
 import { isReviewLoopRun, reworkRoundsBy, shortCommit } from '../review-loop/logic';
 import { Files } from './ChangesTab';
 import { FilesChangedIcon } from './icons';
-import { ticketChangeHref, ticketFilesHref } from './review-links';
 import type { AgentReview, TicketBranchReview } from './run-data';
 import type { PanelTab } from './SidePanel';
 import { hasWorktree } from './ticket-state';
@@ -97,7 +97,7 @@ function BranchFiles({
         </dl>
         {branch.state !== 'discarded' ? (
           <ButtonLink
-            href={ticketFilesHref(ticket)}
+            href={href.ticketFiles({ projectId: ticket.projectId, ticketId: ticket.id })}
             size="sm"
             className="ml-auto"
             title={F.reviewAllTip}
@@ -171,7 +171,7 @@ function RowActions({
     <span className="ml-auto flex flex-wrap items-center gap-2">
       {sealed ? (
         <ButtonLink
-          href={ticketChangeHref(ticket, agentRunId)}
+          href={href.ticketChange({ projectId: ticket.projectId, ticketId: ticket.id, agentRunId })}
           size="sm"
           aria-label={F.filesChangedFor(role)}
           data-testid="change-files-link"
