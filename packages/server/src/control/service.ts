@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -8,6 +9,7 @@ import {
   isPathInside,
   LeadToolInputs,
   type AgentRoleKind,
+  type Attachment,
   type FullAutoSpec,
   type ManagedAgentEvent,
   type ManagedAgentSpec,
@@ -149,6 +151,12 @@ import {
   createAttachmentFiles,
   type AttachmentFiles,
 } from '../attachments/files.js';
+import {
+  AGENT_ATTACHMENTS_DIR,
+  RUN_ATTACHMENTS_DIR,
+  attachmentsBrief,
+  placeAgentCopies,
+} from '../attachments/agent-copies.js';
 import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
@@ -1029,7 +1037,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (
         hooks.agentSetup === undefined &&
         effect.skills === undefined &&
-        effect.agent === undefined
+        effect.agent === undefined &&
+        (kind !== 'lead' || ticketAttachments(live).length === 0)
       ) {
         launch(live, { ...base, cwd: project.rootPath, setup: NO_SETUP });
         return;
@@ -1040,9 +1049,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
+          // ADR-0026 §4: the lead's copies are outside the owner's checkout (the run's folder).
+          const prompt =
+            kind === 'lead'
+              ? await withAttachments(live, kind, project.rootPath, project.rootPath, base.prompt)
+              : base.prompt;
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, cwd: project.rootPath, setup, plugin, agentFile });
+          launch(live, { ...base, prompt, cwd: project.rootPath, setup, plugin, agentFile });
         })(),
       );
       return;
@@ -1062,10 +1076,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
-          const prompt =
+          const brief =
             effect.reviewScope === 'change'
               ? await changeReviewerPrompt(live, agentRunId, effect.prompt)
               : effect.prompt;
+          const prompt = await withAttachments(live, kind, checkout.cwd, project.rootPath, brief);
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
           launch(live, {
@@ -1147,6 +1162,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
         const protection = await protectionFor(live, agentRunId);
+        const withCopies = await withAttachments(live, kind, ws.cwd, project.rootPath, prompt);
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
@@ -1157,7 +1173,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         launch(live, {
           ...base,
-          prompt,
+          prompt: withCopies,
           cwd: ws.cwd,
           setup,
           plugin,
@@ -1167,6 +1183,50 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         });
       })(),
     );
+  }
+
+  /** The owner's attachments on the run's ticket (ADR-0026 §4); none for a run without one. */
+  function ticketAttachments(live: LiveRun): Attachment[] {
+    const ticketId = live.state.run.ticketId;
+    return ticketId === null ? [] : store.workspaceRepos.attachments.listForTicket(ticketId);
+  }
+
+  /** The run's own folder of the lead's attachment copies (ADR-0026 §4). */
+  function runAttachmentsDir(runId: string): string {
+    return join(deps.dataDir, 'runs', runId, RUN_ATTACHMENTS_DIR);
+  }
+
+  /**
+   * ADR-0026 §4: places read-only copies of the ticket's attachments for one agent (see
+   * `attachments/agent-copies.ts`) and adds their names and paths to its brief. Never inside the
+   * owner's checkout; the planner gets none (it may only read inside its folder). A failure to
+   * copy never blocks the start: the brief simply has no attachments.
+   */
+  async function withAttachments(
+    live: LiveRun,
+    kind: AgentRoleKind,
+    cwd: string,
+    projectRoot: string,
+    prompt: string,
+  ): Promise<string> {
+    const list = ticketAttachments(live);
+    if (list.length === 0 || kind === 'planner') return prompt;
+    const lead = kind === 'lead';
+    const dir = lead ? runAttachmentsDir(live.state.run.id) : join(cwd, AGENT_ATTACHMENTS_DIR);
+    if (isPathInside(projectRoot, dir)) return prompt;
+    try {
+      const copies = await placeAgentCopies(attachmentFiles, list, dir, { gitignore: !lead });
+      const brief = attachmentsBrief(copies, lead);
+      return brief === '' ? prompt : `${prompt}\n\n${brief}`;
+    } catch (error) {
+      countDiagnostic('attachments-unavailable');
+      logger.log('warn', 'attachment copies failed', {
+        runId: live.state.run.id,
+        kind,
+        ...errorFields(error),
+      });
+      return prompt;
+    }
   }
 
   /**
@@ -1239,6 +1299,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
         const protection = await protectionFor(live, agentRunId);
+        const prompt = await withAttachments(live, effect.kind, ws.cwd, projectRoot, effect.prompt);
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
@@ -1249,7 +1310,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         launch(live, {
           agentRunId,
           kind: effect.kind,
-          prompt: effect.prompt,
+          prompt,
           model: effect.model,
           cwd: ws.cwd,
           setup,
@@ -1525,9 +1586,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   function removeSkillsPlugin(runId: string): void {
     track(
-      skillsPlugins.remove(runId).catch((error: unknown) => {
-        logger.log('warn', 'skills plugin removal failed', { runId, ...errorFields(error) });
-      }),
+      // ADR-0026 §4: the lead's attachment copies go with the run's other temporary files.
+      rm(runAttachmentsDir(runId), { recursive: true, force: true })
+        .then(() => skillsPlugins.remove(runId))
+        .catch((error: unknown) => {
+          logger.log('warn', 'skills plugin removal failed', { runId, ...errorFields(error) });
+        }),
     );
   }
 
