@@ -332,9 +332,11 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   });
   // The findings are on Conversation (v0.3.0 C-B, ADR-0026).
   await ticketTab(page, /Conversation/).click();
-  const comment = page.getByTestId('activity').locator('[data-author="reviewer"]');
+  const comment = page
+    .getByTestId('activity')
+    .locator('[data-type="review"][data-author="reviewer"]');
   await expect(comment).toContainText('The discount field has no limit on its length.');
-  await expect(comment.getByTestId('comment-author')).toHaveText('Reviewer');
+  await expect(comment.getByTestId('comment-author')).toHaveText('Code reviewer');
   await act(request, reviewer.id, 'finish');
   await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'done');
