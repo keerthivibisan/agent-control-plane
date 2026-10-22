@@ -122,6 +122,13 @@ export default defineConfig({
       testMatch: 'session-names.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
+    {
+      // v0.3.0 G-C (ADR-0025 §6): the shared diff viewer in the review loop's cards, routes from
+      // fixtures, Shiki for real.
+      name: 'diff-viewer',
+      testMatch: 'diff-viewer.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
     // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).
     {
       name: 'pages',

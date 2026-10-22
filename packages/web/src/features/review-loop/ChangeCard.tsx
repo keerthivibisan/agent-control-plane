@@ -7,7 +7,7 @@ import type {
 } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { Details } from '../../components/Details';
+import { DiffSection } from '../../components/diff';
 import { AlertIcon } from '../../components/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { Badge, Pill } from '../../components/Pill';
@@ -20,7 +20,6 @@ import {
   changeStateWord,
 } from '../../lib/copy';
 import { ActionError, ConfirmAction } from '../control/bits';
-import { DiffView } from '../control/ReviewPanel';
 import { useTicketAction } from '../ticket/actions';
 import { Files } from '../ticket/ChangesTab';
 import { ReworkIcon } from './icons';
@@ -381,9 +380,13 @@ export function ChangeCard({
         <>
           <Files files={review.files} />
           {review.files.length > 0 || review.diff.length > 0 ? (
-            <Details summary={CONTROL_COPY.review.diff}>
-              <DiffView diff={review.diff} truncated={review.diffTruncated} />
-            </Details>
+            <DiffSection
+              summary={CONTROL_COPY.review.diff}
+              diff={review.diff}
+              truncated={review.diffTruncated}
+              files={review.files.map((f) => f.path)}
+              testId="change-diff"
+            />
           ) : null}
         </>
       ) : null}

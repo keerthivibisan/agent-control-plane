@@ -2,6 +2,7 @@ import type { RunDetailDto, TicketBranchDto, TicketBranchReviewDto } from '@acp/
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { DiffSection } from '../../components/diff';
 import { ErrorNotice } from '../../components/ErrorNotice';
 import { AlertIcon } from '../../components/icons';
 import { Pill, type PillTone } from '../../components/Pill';
@@ -10,7 +11,6 @@ import { reviewLoopPaths, reviewLoopSchemas, ticketBranchAction } from '../../li
 import { REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError, ConfirmAction } from '../control/bits';
-import { DiffView } from '../control/ReviewPanel';
 import { useTicketAction } from '../ticket/actions';
 import { Files } from '../ticket/ChangesTab';
 import { CheckRow } from '../ticket/ChecksTab';
@@ -54,9 +54,13 @@ function Combined({ review }: { review: TicketBranchReviewDto }) {
         <Files files={review.files} />
       )}
       {review.files.length > 0 || review.diff.length > 0 ? (
-        <Details summary={B.diff} testId="branch-diff">
-          <DiffView diff={review.diff} truncated={review.diffTruncated} />
-        </Details>
+        <DiffSection
+          summary={B.diff}
+          diff={review.diff}
+          truncated={review.diffTruncated}
+          files={review.files.map((f) => f.path)}
+          testId="branch-diff"
+        />
       ) : null}
     </div>
   );
