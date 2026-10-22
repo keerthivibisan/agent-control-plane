@@ -184,6 +184,18 @@ describe('plan approval and the ticket branch', () => {
     expect(r1.integration?.ticketBranch).toBe('acp/WEB-12-r1');
     expect(refused(ticketBranchCreated(r1, BRANCH, makeCtx()))).toBe('invalid-input');
   });
+
+  it('ADR-0025: accepts a name from a branching strategy or the ticket, never main or unsafe', () => {
+    const approved = ok(approve()).state;
+    for (const bad of ['master', 'acp/WEB-12-rx', '-D', 'a..b', 'refs/heads/x', 'HEAD']) {
+      expect(refused(ticketBranchCreated(approved, bad, makeCtx())), bad).toBe('invalid-input');
+    }
+    const named = ok(ticketBranchCreated(approved, 'feature/WEB-12-dark-mode', makeCtx())).state;
+    expect(named.integration?.ticketBranch).toBe('feature/WEB-12-dark-mode');
+    expect(
+      ok(ticketBranchCreated(approved, 'hotfix/login-r2', makeCtx())).state.integration,
+    ).toMatchObject({ ticketBranch: 'hotfix/login-r2' });
+  });
 });
 
 describe('sealing a finished helper', () => {

@@ -64,9 +64,19 @@ export function ticketBranchCreated(
     if (loop === undefined) return noLoop();
     if (d.isStopping()) return refusal('run-not-active', 'The run has ended.');
     const named = TicketBranchNameSchema.safeParse(branch);
+    // ADR-0025: the server names the branch from the ticket or the project's branching strategy,
+    // so any safe name is accepted, except `main`/`master` and an `acp/…` name that is not this
+    // ticket's own legacy name (another ticket's branch, or a helper's `acp/<run>/<agent>`). The
+    // server's guard refuses every other long-lived branch it knows of.
+    const legacy =
+      branch === `acp/${loop.ticketKey}` ||
+      (/^-r[1-9]\d*$/.test(branch.slice(`acp/${loop.ticketKey}`.length)) &&
+        branch.startsWith(`acp/${loop.ticketKey}-r`));
     const ours =
       named.success &&
-      (branch === `acp/${loop.ticketKey}` || branch.startsWith(`acp/${loop.ticketKey}-r`));
+      branch !== 'main' &&
+      branch !== 'master' &&
+      (branch.startsWith('acp/') ? legacy : true);
     if (!ours) {
       return refusal('invalid-input', "That is not a ticket branch name for this run's ticket.");
     }
