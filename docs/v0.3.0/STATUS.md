@@ -127,3 +127,19 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     ticket opens; a "Push new commits" button (`pushedCommit` ≠ head); auto-unified diffs in
     narrow panels; move `ReviewPanel` and `ChangesTab` to `DiffSection`. Note `--no-verify` in
     ADR-0025.
+- 2026-10-22 G-D merged (`f542167`): the web follow-ups.
+  - **Comment lines:** the pull request's comment lines render as system lines.
+  - **Refresh:** an open pull request is read once per visit to the ticket, never on a timer or a
+    notice.
+  - **Push new commits:** offered when `pushedCommit` differs from the head.
+  - **Narrow panels:** diffs switch to unified there, and the saved choice is kept.
+  - **Old diff views:** `ReviewPanel` and `ChangesTab` now use `DiffSection`; the old `DiffView` is
+    removed.
+  - **ADR:** ADR-0025 §1 notes `--no-verify`.
+  - Coordinator check: 4,917 tests; e2e 86/86.
+- 2026-10-22 **Live database migrated to 0008** on the owner's app (`release/0.3.0`), after the
+  backup `~/.agent-control-plane/backups/acp-before-0008-20261022-122645.sqlite`. All 5 projects
+  load; `gh` is detected as installed and logged in (exit codes only); 1 project has a GitHub
+  `origin`.
+- **Next:** G-V. A consented real push and pull request needs a throwaway repo from the owner; then
+  release prep (rebase onto `main` `79c312a`, CHANGELOG `[0.3.0]`, versions, the PR text).
