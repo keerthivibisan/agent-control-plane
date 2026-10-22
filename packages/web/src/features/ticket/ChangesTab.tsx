@@ -1,13 +1,12 @@
 import type { AgentRunDto, ChangedFileDto, CheckRunDto, ReviewDto } from '@acp/core/api';
 import { useId, useState } from 'react';
 import { Button, buttonClass } from '../../components/Button';
-import { Details } from '../../components/Details';
+import { DiffSection } from '../../components/diff';
 import { inputClass } from '../../components/Input';
 import { reviewAction } from '../../lib/api';
 import { CONTROL_COPY, TICKET_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import { ActionError, ConfirmAction } from '../control/bits';
-import { DiffView } from '../control/ReviewPanel';
 import { isAgentLive } from '../control/run-state';
 import { useTicketAction } from './actions';
 import { agentChecks, hasWorktree, mergeGate } from './ticket-state';
@@ -227,9 +226,14 @@ export function ChangesTab({
       </p>
       <Files files={review.files} />
       {review.files.length > 0 || review.diff.length > 0 ? (
-        <Details summary={R.diff} defaultOpen={pending}>
-          <DiffView diff={review.diff} truncated={review.diffTruncated} />
-        </Details>
+        <DiffSection
+          summary={R.diff}
+          diff={review.diff}
+          truncated={review.diffTruncated}
+          files={review.files.map((f) => f.path)}
+          defaultOpen={pending}
+          testId="changes-diff"
+        />
       ) : null}
       {pending ? (
         isAgentLive(agent.status) ? (

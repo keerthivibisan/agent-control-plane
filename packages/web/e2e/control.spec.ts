@@ -291,9 +291,10 @@ test('two helper agents: approve, deny, stop, review, merge one and discard the 
   const writerReview = page.getByTestId(`review-${writer.id}`);
   await expect(builderReview).toContainText('1 changed file');
   await expect(builderReview).toContainText('greeting.txt');
-  await expect(builderReview.getByTestId('diff')).toContainText('+hello from the builder');
+  // The shared diff viewer (G-D), open while each change waits for review.
+  await expect(builderReview.getByTestId('diff-viewer')).toContainText('hello from the builder');
   await expect(writerReview).toContainText('notes.txt');
-  await expect(writerReview.getByTestId('diff')).toContainText('+draft notes');
+  await expect(writerReview.getByTestId('diff-viewer')).toContainText('draft notes');
   await shoot(page, 'review', true); // U-F
 
   // Merge the builder, discard the writer.

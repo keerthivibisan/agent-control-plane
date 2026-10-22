@@ -287,8 +287,9 @@ put it on an inner element.
   `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
   `FeatureIcon`, `BugIcon`, `ChoreIcon` and `CloseIcon` are there for the board and dialogs.
 - **Diff viewer** (`components/diff`, v0.3.0 G-C, ADR-0025 §6): `DiffSection` (a `Details`-style
-  disclosure that draws the viewer only once opened) around `DiffViewer`, used by the change card
-  and the ticket branch card.
+  disclosure that draws the viewer only once opened) around `DiffViewer`, used by the change card,
+  the ticket branch card and, since G-D, the control panel's review and the ticket side panel's
+  Changes tab (the old plain `DiffView` is gone).
   - A summary line; **Unified / Side by side** (`Segmented`, remembered in `acp.diff.view` in
     localStorage, every access guarded, shared by every viewer on the page); **Collapse all /
     Expand all**.
@@ -298,8 +299,10 @@ put it on an inner element.
     tags and +/−; then a table with line numbers before and after, a decorative +/− sign and the
     screen-reader words "Added line" / "Removed line"; changed words in a stronger tint of the
     line's color. Unchanged runs keep 3 lines next to a change; longer runs fold behind "Show N
-    hidden lines". Side by side keeps a 36rem minimum and scrolls sideways in narrow panels;
-    unified wraps long lines.
+    hidden lines". Side by side needs 36rem; where the viewer is narrower (the side panel beside
+    the agents, a phone; followed with a ResizeObserver) it shows unified, with Side by side off
+    (`aria-disabled`, tooltip "Not enough room here") and the saved choice kept for wider places
+    (G-D). Unified wraps long lines.
   - Syntax colors from Shiki, loaded with dynamic imports only for a known language
     (`language.ts`) when a file is drawn; the CSS-variables theme, so `diff.css` sets the colors
     for both themes (4.5:1 on every line background, `tests/components/diff/contrast.test.ts`).

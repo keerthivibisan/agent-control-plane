@@ -5,6 +5,8 @@ import { tokenize } from '../../../src/components/diff/highlight';
 import {
   readViewMode,
   resetViewModeForTests,
+  SPLIT_MIN_REM,
+  splitFits,
   VIEW_MODE_KEY,
 } from '../../../src/components/diff/view-mode';
 import {
@@ -373,5 +375,106 @@ describe('DiffSection', () => {
       <DiffSection summary="Diff" diff={MODIFIED} truncated={false} defaultOpen testId="sec" />,
     );
     expect(within(screen.getByTestId('sec')).getByTestId('diff-viewer')).toBeTruthy();
+  });
+});
+
+describe('narrow places (G-D)', () => {
+  /** A stand-in ResizeObserver: the test says how wide the viewer is, then resizes it. */
+  class FakeObserver {
+    static all: FakeObserver[] = [];
+    private readonly cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+      FakeObserver.all.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {
+      FakeObserver.all = FakeObserver.all.filter((o) => o !== this);
+    }
+    resize(width: number) {
+      const entry = { contentRect: { width } } as unknown as ResizeObserverEntry;
+      this.cb([entry], this);
+    }
+  }
+  const resizeAll = (width: number) =>
+    act(() => {
+      for (const o of FakeObserver.all) o.resize(width);
+    });
+
+  beforeEach(() => {
+    FakeObserver.all = [];
+    vi.stubGlobal('ResizeObserver', FakeObserver);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('knows when side by side fits: 36rem and the file card’s border, or not laid out yet', () => {
+    expect(SPLIT_MIN_REM).toBe(36);
+    expect(splitFits(578, 16)).toBe(true);
+    expect(splitFits(577, 16)).toBe(false);
+    expect(splitFits(390, 16)).toBe(false);
+    expect(splitFits(722, 20)).toBe(true);
+    expect(splitFits(700, 20)).toBe(false);
+    expect(splitFits(0, 16)).toBe(true);
+  });
+
+  it('shows unified where it is too narrow, with Side by side off and why; the choice is kept', () => {
+    window.localStorage.setItem(VIEW_MODE_KEY, 'split');
+    render(<DiffViewer diff={MODIFIED} truncated={false} />);
+    const viewer = screen.getByTestId('diff-viewer');
+    expect(viewer.dataset.view).toBe('split');
+
+    resizeAll(360);
+    expect(viewer.dataset.view).toBe('unified');
+    expect(viewer.dataset.narrow).toBe('');
+    expect(document.querySelectorAll('tr[data-kind="change"]')).toHaveLength(0);
+    const group = screen.getByRole('group', { name: 'Show the changes' });
+    const split = within(group).getByRole('button', { name: 'Side by side' });
+    const unified = within(group).getByRole('button', { name: 'Unified' });
+    expect(unified.getAttribute('aria-pressed')).toBe('true');
+    expect(split.getAttribute('aria-pressed')).toBe('false');
+    expect(split.getAttribute('aria-disabled')).toBe('true');
+    expect(split.getAttribute('title')).toBe('Not enough room here');
+    const describedBy = split.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(describedBy)?.textContent).toBe('Not enough room here');
+    // A click does nothing here, and the saved choice is untouched.
+    fireEvent.click(split);
+    expect(viewer.dataset.view).toBe('unified');
+    expect(window.localStorage.getItem(VIEW_MODE_KEY)).toBe('split');
+
+    // Wider again: the owner's choice comes back.
+    resizeAll(900);
+    expect(viewer.dataset.view).toBe('split');
+    expect(viewer.dataset.narrow).toBeUndefined();
+    expect(split.getAttribute('aria-disabled')).toBeNull();
+    expect(split.getAttribute('title')).toBeNull();
+  });
+
+  it('a narrow viewer leaves the others on the page as chosen', () => {
+    window.localStorage.setItem(VIEW_MODE_KEY, 'split');
+    render(
+      <>
+        <DiffViewer diff={MODIFIED} truncated={false} testId="wide" />
+        <DiffViewer diff={ADDED} truncated={false} testId="narrow" />
+      </>,
+    );
+    act(() => {
+      FakeObserver.all[0]?.resize(1000);
+      FakeObserver.all[1]?.resize(300);
+    });
+    expect(screen.getByTestId('wide').dataset.view).toBe('split');
+    expect(screen.getByTestId('narrow').dataset.view).toBe('unified');
+    // Choosing in the wide one is still the owner's choice for every place.
+    fireEvent.click(within(screen.getByTestId('wide')).getByRole('button', { name: 'Unified' }));
+    expect(window.localStorage.getItem(VIEW_MODE_KEY)).toBe('unified');
+  });
+
+  it('stops following the size once it is gone', () => {
+    const { unmount } = render(<DiffViewer diff={MODIFIED} truncated={false} />);
+    expect(FakeObserver.all).toHaveLength(1);
+    unmount();
+    expect(FakeObserver.all).toHaveLength(0);
   });
 });

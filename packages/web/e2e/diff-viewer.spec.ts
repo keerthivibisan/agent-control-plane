@@ -164,10 +164,15 @@ async function serve(page: Page, sc: LoopScenario): Promise<string[]> {
   return urls;
 }
 
-/** A picture of one element in both themes, at a desktop and a phone width. */
-async function shootPart(page: Page, name: string, testId: string): Promise<void> {
+/** A picture of one element in both themes, at a desktop and a phone width (or the `widths`). */
+async function shootPart(
+  page: Page,
+  name: string,
+  testId: string,
+  widths: readonly number[] = [1440, 390],
+): Promise<void> {
   if (SHOTS === undefined) return;
-  for (const width of [1440, 390]) {
+  for (const width of widths) {
     for (const scheme of ['light', 'dark'] as const) {
       // Tall enough that the part fits: a scrolled element picture draws the sticky bar over it.
       await page.setViewportSize({ width, height: 3400 });
@@ -232,11 +237,26 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
   await expect(expanders).toHaveCount(1);
   await expect(rows).toHaveCount(before + 7);
 
-  // Side by side, remembered after a reload.
-  await viewer.getByRole('button', { name: 'Side by side' }).click();
+  // G-D: the side panel beside the agents is too narrow for side by side: unified, with the
+  // choice off and the reason as its tooltip.
+  const splitButton = viewer.getByRole('button', { name: 'Side by side' });
+  await expect(viewer).toHaveAttribute('data-narrow', '');
+  await expect(splitButton).toHaveAttribute('aria-disabled', 'true');
+  await expect(splitButton).toHaveAttribute('title', 'Not enough room here');
+  // Playwright waits for an aria-disabled button to be enabled; a forced click is the owner's.
+  await splitButton.click({ force: true });
+  await expect(viewer).toHaveAttribute('data-view', 'unified');
+  await shootPart(page, 'change-narrow', 'side-panel', [1440]);
+
+  // Under the agents (narrower windows) the panel is wide: side by side, remembered after a
+  // reload.
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await expect(splitButton).not.toHaveAttribute('aria-disabled', 'true');
+  await splitButton.click();
   await expect(viewer).toHaveAttribute('data-view', 'split');
   await expect(api.locator('tr[data-kind="change"]').first()).toContainText('Removed line:');
-  await shootPart(page, 'change-split', 'side-panel');
+  await shootPart(page, 'change-split', 'side-panel', [1024]);
+  await page.setViewportSize({ width: 1024, height: 900 });
 
   // Collapse one file; the list jumps to it (keyboard) and opens it again.
   const routes = viewer.locator('[data-path="src/server/routes.ts"]');
@@ -271,6 +291,10 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
   const again = page.getByTestId('side-panel').getByTestId('change-diff');
   await again.locator('summary').click();
   await expect(again.getByTestId('diff-viewer')).toHaveAttribute('data-view', 'split');
+  // Back beside the agents: unified there, the choice kept for wider places.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(again.getByTestId('diff-viewer')).toHaveAttribute('data-view', 'unified');
+  expect(await page.evaluate(() => window.localStorage.getItem('acp.diff.view'))).toBe('split');
 
   // Shiki came from the app's own assets; no request left the app's origin.
   const origin = new URL(baseURL ?? 'http://127.0.0.1').origin;

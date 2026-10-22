@@ -4,7 +4,6 @@ import {
   buildAgentTree,
   canChat,
   closedByEngine,
-  diffLines,
   isRunLive,
   splitApprovals,
   type AgentNode,
@@ -98,23 +97,6 @@ describe('budgetView', () => {
       level: 'over',
     });
     expect(budgetView({ used: 0, limit: 0 })).toEqual({ percent: 0, over: 0, level: 'ok' });
-  });
-});
-
-describe('diffLines', () => {
-  it('turns a diff header into a file heading and keeps +/- lines', () => {
-    expect(
-      diffLines(
-        'diff --git a/x.ts b/x.ts\nindex 1..2 100644\n--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-a\n+b\n\\ No newline at end of file\n',
-      ),
-    ).toEqual([
-      { kind: 'file', text: 'x.ts' },
-      { kind: 'hunk', text: '@@ -1 +1 @@' },
-      { kind: 'del', text: '-a' },
-      { kind: 'add', text: '+b' },
-      { kind: 'meta', text: '\\ No newline at end of file' },
-    ]);
-    expect(diffLines('')).toEqual([]);
   });
 });
 

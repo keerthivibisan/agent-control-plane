@@ -1111,9 +1111,6 @@ export const CONTROL_COPY = {
       renamed: 'Renamed',
     },
     diff: 'The changes, line by line',
-    diffEmpty: 'No line-by-line changes to show.',
-    truncated:
-      'Only the start of the changes is shown: they are too large to show in full. Every changed file is listed above.',
     merge: 'Merge',
     discard: 'Discard',
     confirmMerge: (role: string, base: string) =>

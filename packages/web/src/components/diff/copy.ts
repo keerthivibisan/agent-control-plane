@@ -15,6 +15,8 @@ export const DIFF_COPY = {
   filesNav: 'Files in this diff: go to a file',
   viewLabel: 'Show the changes',
   views: { unified: 'Unified', split: 'Side by side' },
+  /** Why Side by side is off where the viewer is narrower than its two columns need. */
+  noRoom: 'Not enough room here',
   collapseAll: 'Collapse all',
   expandAll: 'Expand all',
   status: {

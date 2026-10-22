@@ -7,7 +7,7 @@ import { DiffFileView } from './DiffFileView';
 import { CollapseAllIcon, ExpandAllIcon } from './icons';
 import { initiallyShown, missingPaths } from './layout';
 import { fileLineCount, parseDiff, type DiffFile, type ParsedDiff } from './parse';
-import { useViewMode, type DiffViewMode } from './view-mode';
+import { useSplitFits, useViewMode, type DiffViewMode } from './view-mode';
 import './diff.css';
 
 const VIEWS: readonly { value: DiffViewMode; label: string }[] = [
@@ -36,7 +36,15 @@ export function DiffViewer({
   testId?: string;
 }) {
   const parsed = useMemo(() => parseDiff(diff), [diff]);
-  const [mode, setMode] = useViewMode();
+  const [chosen, setMode] = useViewMode();
+  // Too narrow for side by side (a side panel, a phone): unified here, while the owner's saved
+  // choice stays for wider places.
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const fits = useSplitFits(root);
+  const mode: DiffViewMode = fits ? chosen : 'unified';
+  const views = fits
+    ? VIEWS
+    : VIEWS.map((v) => (v.value === 'split' ? { ...v, disabled: true, reason: T.noRoom } : v));
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [shownState, setShownState] = useState<{ diff: ParsedDiff; ids: ReadonlySet<string> }>(
     () => ({ diff: parsed, ids: initiallyShown(parsed.files) }),
@@ -77,7 +85,13 @@ export function DiffViewer({
   }
 
   return (
-    <div className="acp-diff flex flex-col gap-3" data-testid={testId} data-view={mode}>
+    <div
+      ref={setRoot}
+      className="acp-diff flex flex-col gap-3"
+      data-testid={testId}
+      data-view={mode}
+      data-narrow={fits ? undefined : ''}
+    >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="text-caption text-dim tabular-nums" data-testid="diff-summary">
           {T.summary(files.length, parsed.additions, parsed.deletions)}
@@ -87,7 +101,7 @@ export function DiffViewer({
             label={T.viewLabel}
             hideLabel
             size="sm"
-            options={VIEWS}
+            options={views}
             value={mode}
             onChange={setMode}
           />
