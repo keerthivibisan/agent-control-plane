@@ -163,3 +163,17 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   page as a PR page) and D-C (a clearer Workflow editor) started in parallel.
   - D-A owns the routes `…/tickets/:ticketId/files` and `…/changes/:agentRunId`.
   - D-B links to them through local helpers, which the coordinator swaps at merge.
+- 2026-10-22 **D-A, D-B and D-C merged** (`383b0b6`), checked once on the combined code.
+  - **D-A:** the GitHub "Files changed" review pages (file tree, split view, Viewed, line comments
+    as a pending review, Review changes through the existing owner endpoints).
+  - **D-B:** the ticket page as a PR page (header, tabs, the merge box, sidebar). The coordinator
+    swapped D-B's local links for D-A's `href` helpers, and the links now carry `?run=`.
+  - **D-C:** the clearer Workflow editor (routing, valid-target highlighting, link chooser, legend,
+    grouped Problems).
+  - **Coordinator fixes:** 2 e2e specs and 2 vitest assertions followed the tabbed layout and the
+    `?run=` links.
+  - **Process slip:** commit `6ce9bd3` was merged while 2 web tests still failed (the command did
+    not stop on them). Fixed in `383b0b6` after the full check passed (4,958 tests); e2e 93/93
+    (91 + the 2 fixed specs).
+  - **Lean verification adopted:** agents run targeted tests, and the coordinator runs the full
+    check and e2e once per merge.
