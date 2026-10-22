@@ -146,8 +146,9 @@
   prompts, replies, tasks, plan text, findings, file names, diffs or tool output.
 - **The lead's handover note** (`request_review.summary`, review-loop runs only) is the one free
   text in a summary: owner-facing text the lead writes for the ticket, redacted (rule 4) and capped
-  at 1,500 characters by the engine, then stored after the facts as `Lead's note:`. Legacy runs
-  ignore it. Logs say only that a summary was stored, its trigger, and whether a note was there.
+  at 1,500 characters by the engine, then stored as the summary's main text (after a
+  `From the lead:` line, before the facts under `Details:`; v0.3.0 S-C). Legacy runs ignore it.
+  Logs say only that a summary was stored, its trigger, and whether a note was there.
 - **The merge line** (`Merged acp/<KEY> into <base> at <short commit>; checks passed on the tip
 (2).`) holds branch names, a commit id and the tip checks' results and names only. After a merge
   past a failed check it says `(merged anyway, with a reason)`; the owner's reason stays the

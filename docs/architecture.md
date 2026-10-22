@@ -164,7 +164,9 @@ See [security.md](security.md).
   `agent_run_sessions` (`services/managed-sessions.ts`). `control/run-summary.ts` composes the run
   summary ticket comment (author `app`) from the records after the transition that calls for it
   (the engine's `handover-summary` effect, or a run that ends without one) and adds the merge line
-  after the owner's merge. No migration.
+  after the owner's merge. Since v0.3.0 S-C the lead's note is the comment's main text and the
+  facts follow under `Details:` as short sentences; the web folds them behind a "Details"
+  disclosure. No migration.
 - **Codex adapter (Phase 5):** `packages/adapters/codex`, implementing the same core contracts.
 
 Phase 1 must not add code for these. It only avoids decisions that would block them, for example by

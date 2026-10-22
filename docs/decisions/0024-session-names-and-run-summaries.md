@@ -70,6 +70,18 @@ The note is owner-facing text that the lead writes for the ticket, like the plan
 findings, so it is stored as a comment (ADR-0016, ADR-0021). Prompts, replies, diffs and tool
 output are still never stored.
 
+**Amended 2026-10-21 (v0.3.0 S-C, owner feedback: "a proper comment like humans write"):** the
+lead is asked to write the note like a teammate's ticket update (3 to 6 short past-tense sentences:
+what was explored, then built, then tested, then anything left or risky; no code or step-by-step
+log; a two-sentence example; the brief's line is under 300 characters; the note is still at most
+1,500). The comment body is now `Run summary` (or
+`Run summary (updated)`), then the note after a `From the lead:` line as the main text, or one
+plain sentence on how the run ended when there is no note, then a `Details:` section with the facts
+as short sentences ("Merged 1 change from Helpers: 2 files, 18 lines added; the check passed.").
+The merge line and the ticket branch wording are unchanged. The web shows the note as the comment
+under "Lead · Run summary" and folds the details behind a "Details" disclosure; summaries without a
+`Details:` line show as before.
+
 ### 4. No migration
 
 Comment authors and session data are validated with Zod (`ticket_comments.author` is plain TEXT),
