@@ -15,7 +15,7 @@ exports[`template traces > lead-only approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -71,7 +71,7 @@ exports[`template traces > lead-only failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -149,7 +149,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -223,7 +223,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -287,7 +287,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -373,7 +373,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -451,7 +451,7 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -522,7 +522,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -598,7 +598,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -698,7 +698,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -777,7 +777,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -861,7 +861,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -965,7 +965,7 @@ exports[`template traces > todays-setup approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1036,7 +1036,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1144,7 +1144,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
-  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#d2d6761b/796
+  > send-to-agent agentRunId=L text="The owner approved plan v1. Start the he…"#57ce824b/928
   ~ run RUNNING
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
@@ -1248,7 +1248,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1327,7 +1327,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1443,7 +1443,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#2aaeaa28/1125 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fe2ee528/1257 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
