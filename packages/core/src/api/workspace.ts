@@ -3,6 +3,8 @@ import { AbsolutePathSchema } from '../domain/project.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
+import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
+import { AttachmentDtoSchema } from './activity.js';
 import {
   BranchStrategySchema,
   TicketBranchPrefsPatchSchema,
@@ -47,7 +49,16 @@ export const CheckRunDtoSchema = CheckRunSchema;
 export type CheckRunDto = z.infer<typeof CheckRunDtoSchema>;
 export const TicketDtoSchema = TicketSchema.extend({ stage: TicketStageSchema });
 export type TicketDto = z.infer<typeof TicketDtoSchema>;
-export const TicketCommentDtoSchema = TicketCommentSchema;
+/**
+ * ADR-0026: `kind` says which tab the comment belongs on (derived by the server for older rows), and
+ * `attachments` are the files attached to it. Both absent from servers before 0.3.0.
+ */
+export const TicketCommentDtoSchema = TicketCommentSchema.extend({
+  kind: TicketCommentKindSchema.optional(),
+  /** For an agent's note: the agent run that wrote it, so the page can name the agent. */
+  agentRunId: z.string().min(1).nullable().optional(),
+  attachments: z.array(AttachmentDtoSchema).optional(),
+});
 export type TicketCommentDto = z.infer<typeof TicketCommentDtoSchema>;
 export const TicketPlanDtoSchema = TicketPlanSchema;
 export type TicketPlanDto = z.infer<typeof TicketPlanDtoSchema>;
@@ -175,7 +186,11 @@ export const UpdateTicketRequestSchema = z
 export const MoveTicketRequestSchema = z.object({
   status: z.enum(['BACKLOG', 'READY', 'CANCELLED']),
 });
-export const TicketCommentRequestSchema = z.object({ body: z.string().trim().min(1).max(8000) });
+export const TicketCommentRequestSchema = z.object({
+  body: z.string().trim().min(1).max(8000),
+  /** ADR-0026: attachments uploaded first (`POST …/attachments`), now attached to this comment. */
+  attachmentIds: z.array(z.string().min(1)).max(10).optional(),
+});
 export const PlanDecisionRequestSchema = z
   .object({
     decision: z.enum(['approve', 'request-changes']),
