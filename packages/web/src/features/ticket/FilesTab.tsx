@@ -97,7 +97,11 @@ function BranchFiles({
         </dl>
         {branch.state !== 'discarded' ? (
           <ButtonLink
-            href={href.ticketFiles({ projectId: ticket.projectId, ticketId: ticket.id })}
+            href={href.ticketFiles({
+              projectId: ticket.projectId,
+              ticketId: ticket.id,
+              runId: run.id,
+            })}
             size="sm"
             className="ml-auto"
             title={F.reviewAllTip}
@@ -155,12 +159,15 @@ function BranchFiles({
 /** The row's two ways in: the change's own review page, and the agent's panel on Agents. */
 function RowActions({
   ticket,
+  runId,
   agentRunId,
   role,
   sealed,
   onOpen,
 }: {
   ticket: TicketRef;
+  /** The run the page shows, so an earlier run's change opens, not the current one's. */
+  runId: string;
   agentRunId: string;
   role: string;
   /** The change has a commit to review. */
@@ -171,7 +178,12 @@ function RowActions({
     <span className="ml-auto flex flex-wrap items-center gap-2">
       {sealed ? (
         <ButtonLink
-          href={href.ticketChange({ projectId: ticket.projectId, ticketId: ticket.id, agentRunId })}
+          href={href.ticketChange({
+            projectId: ticket.projectId,
+            ticketId: ticket.id,
+            agentRunId,
+            runId,
+          })}
           size="sm"
           aria-label={F.filesChangedFor(role)}
           data-testid="change-files-link"
@@ -284,6 +296,7 @@ export function FilesTab({
                     </span>
                     <RowActions
                       ticket={ticket}
+                      runId={run.id}
                       agentRunId={c.agentRunId}
                       role={c.role}
                       sealed={c.headCommit !== null}
@@ -322,6 +335,7 @@ export function FilesTab({
                   </span>
                   <RowActions
                     ticket={ticket}
+                    runId={run.id}
                     agentRunId={a.id}
                     role={a.role}
                     sealed={review !== undefined}

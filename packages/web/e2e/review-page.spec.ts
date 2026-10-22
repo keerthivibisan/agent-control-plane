@@ -384,18 +384,18 @@ test('a phone: unified, the tree behind its toggle, and no sideways scroll', asy
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test('entry points: the change card and the ticket branch card link to the review pages', async ({
+test("entry points: the ticket page's Files changed tab links to the review pages", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await serve(page, withDiffs(loopNeedsYouScenario()));
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
-  await expect(page.getByTestId('branch-review-files')).toHaveAttribute(
+  // D-B: the ticket page's Files changed tab holds the ways into the review pages.
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
+  await expect(page.getByTestId('review-all-files')).toHaveAttribute(
     'href',
     `${FILES_HASH}?run=${LOOP_RUN_ID}`,
   );
-  await page.getByTestId('changes-need-you').getByRole('button', { name: 'Open' }).click();
-  const link = page.getByTestId('side-panel').getByTestId('change-review-files');
+  const link = page.getByRole('link', { name: 'Files changed by the Search UI' });
   await expect(link).toHaveAttribute('href', `${CHANGE_HASH}?run=${LOOP_RUN_ID}`);
   await link.click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Files changed by Search UI');

@@ -281,8 +281,8 @@ test.describe('U-V', () => {
     expect(await moving).toEqual(['none|1']);
     await expect(h1(page)).toContainText('Tokens');
 
-    // The ticket page's side panel doesn't slide in.
-    await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
+    // The ticket page's side panel (on the Agents tab since D-B) doesn't slide in.
+    await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}?tab=agents`);
     const slide = watch('[data-testid="side-panel"]');
     await expect(page.getByTestId('side-panel')).toBeVisible();
     expect((await slide).every((v) => v.startsWith('none|'))).toBe(true);
