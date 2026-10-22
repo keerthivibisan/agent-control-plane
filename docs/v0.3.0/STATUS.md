@@ -82,3 +82,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     tokens each time it is sent). Trim it toward about 300 characters, since the owner asked not to
     spend more tokens.
   - **Next:** the check, four commits, the full e2e, review, merge, then restart the owner's app.
+- 2026-10-22 S-C merged (`d0426ff`).
+  - The run summary reads as a human comment: "Lead · Run summary" with the lead's past-tense
+    teammate-style note, and the facts as plain sentences under a collapsed "Details". Runs without
+    a note get one plain sentence.
+  - The lead prompt line is 297 characters (165 before), about 30 more input tokens per run.
+  - Golden traces: only the prompt hashes changed.
+  - Coordinator check: 4,701 tests; e2e 76/76.
