@@ -150,6 +150,36 @@ describe('agent notes, the ticket summary and the activity timeline (ADR-0026)',
     ).toHaveLength(2);
   }, 90_000);
 
+  it("shows the owner's review from Files changed on Conversation, not on Comments", async () => {
+    const s = await setupBoard();
+    const ticket = await s.createTicket('Add dark mode');
+    const review = await s.post(`/api/tickets/${ticket.id}/comments`, {
+      body: 'Review comments:\n- src/app.ts:4 Keep the old name.',
+      kind: 'review',
+    });
+    expect(review.status).toBe(201);
+    expect(review.body).toMatchObject({ author: 'owner', kind: 'review' });
+    const plain = await s.post(`/api/tickets/${ticket.id}/comments`, { body: 'Looks close.' });
+    expect(plain.body).toMatchObject({ author: 'owner', kind: 'comment' });
+
+    const items = (await activity(s, ticket.id)).items;
+    expect(items.filter((i) => i.type === 'review')).toEqual([
+      expect.objectContaining({
+        actor: { kind: 'owner', label: 'You', agentRunId: null },
+        title: 'You reviewed',
+        link: { kind: 'files' },
+      }),
+    ]);
+    // A plain comment belongs to the Comments tab only.
+    expect(JSON.stringify(items)).not.toContain('Looks close.');
+    // The owner cannot claim other kinds.
+    const forged = await s.post(`/api/tickets/${ticket.id}/comments`, {
+      body: 'x',
+      kind: 'ticket-summary',
+    });
+    expect(forged.status).toBe(400);
+  });
+
   it('answers 404 for an unknown ticket', async () => {
     const s = await setupBoard();
     expect((await s.get('/api/tickets/nope/activity')).status).toBe(404);

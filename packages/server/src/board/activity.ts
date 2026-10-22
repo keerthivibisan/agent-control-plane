@@ -318,6 +318,17 @@ export function buildTicketActivity(input: ActivityInput): TicketActivityDto {
         link:
           comment.agentRunId === null ? null : { kind: 'change', agentRunId: comment.agentRunId },
       });
+    } else if (kind === 'review' && comment.author === 'owner') {
+      // The owner's review sent from Files changed with Comment (owner decision 2026-10-22).
+      items.push({
+        id: `review:${comment.id}`,
+        ...base,
+        type: 'review',
+        actor: OWNER,
+        title: title(`${OWNER_LABEL} reviewed`),
+        body: body(comment.body),
+        link: { kind: 'files' },
+      });
     } else if (kind === 'review') {
       // A final reviewer's findings (post_review): named when the run has one final reviewer.
       const finals = (entry?.state?.agents ?? []).filter(

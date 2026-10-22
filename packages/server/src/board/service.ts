@@ -1004,7 +1004,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
             ticketId,
             author: 'owner',
             body: input.body,
-            kind: 'comment',
+            kind: input.kind ?? 'comment',
           });
           return {
             comment: stored,
