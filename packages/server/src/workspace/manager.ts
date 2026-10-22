@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
 import { changedFiles, parseNumstat, type ChangedFile } from './diff.js';
 import { GitCommandError, WorkspaceError } from './errors.js';
+import { AGENT_ATTACHMENTS_DIR } from '../attachments/agent-copies.js';
 import { createGitRunner, type GitRunner } from './git.js';
 import { assertSafeId, branchFor, isSafeId } from './ids.js';
 import {
@@ -448,9 +449,42 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     }
   }
 
-  /** Stages everything in the agent's worktree, so new files show up in the review too. */
+  /**
+   * Stages everything in the agent's worktree, so new files show up in the review too, except the
+   * owner's attachment copies (ADR-0026 §4). Their folder's own `.gitignore` is not enough: the
+   * agent may write in its worktree, so it could delete that file or stage a copy itself.
+   */
   async function stageAll(w: Workspace): Promise<void> {
-    await run(['add', '--all'], w.path);
+    await run(['add', '--all', '--', ':/', `:(top,exclude)${AGENT_ATTACHMENTS_DIR}`], w.path);
+    await run(
+      [
+        'rm',
+        '-r',
+        '--cached',
+        '--quiet',
+        '--ignore-unmatch',
+        '--',
+        `:(top)${AGENT_ATTACHMENTS_DIR}`,
+      ],
+      w.path,
+    );
+  }
+
+  /**
+   * Refuses a branch where any commit since the agent's start touched the attachment copies (the
+   * agent committed them itself): removing them later would still leave them in its history.
+   */
+  async function refuseCommittedCopies(w: Workspace, commit: string): Promise<void> {
+    const listed = await out(
+      ['rev-list', `${w.baseCommit}..${commit}`, '--', `:(top)${AGENT_ATTACHMENTS_DIR}`],
+      w.path,
+    );
+    if (listed.trim() !== '') {
+      throw new WorkspaceError(
+        'invalid-workspace',
+        `The agent's branch contains ${AGENT_ATTACHMENTS_DIR}; attachments are never committed`,
+      );
+    }
   }
 
   async function removeIfEmpty(dir: string): Promise<void> {
@@ -889,6 +923,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
           );
         }
         const headCommit = (await out(['rev-parse', '--verify', 'HEAD^{commit}'], w.path)).trim();
+        await refuseCommittedCopies(w, headCommit);
         const names = await out(
           [...DIFF_BASE, '-z', '--name-only', w.baseCommit, headCommit, '--'],
           w.path,
@@ -1360,6 +1395,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       );
     }
     let tip = (await out(['rev-parse', '--verify', 'HEAD^{commit}'], w.path)).trim();
+    await refuseCommittedCopies(w, tip);
     if (await test(['diff', '--quiet', w.baseCommit, tip, '--'], w.path)) {
       return { outcome: 'no-changes' };
     }

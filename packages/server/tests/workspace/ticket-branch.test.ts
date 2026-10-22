@@ -384,3 +384,30 @@ describe(
     });
   },
 );
+
+describe(
+  'attachment copies never reach a commit (ADR-0026 §4)',
+  { timeout: GIT_TIMEOUT_MS },
+  () => {
+    it('leaves them out even when the agent removed their .gitignore and staged one', async () => {
+      const { manager, w1 } = await loopSetup();
+      write(w1.path, 'fixed.txt', 'ok\n');
+      write(w1.path, '.acp-attachments/notes.txt', 'owner notes\n');
+      git(w1.path, 'add', '--force', '--', '.acp-attachments/notes.txt');
+      const sealed = await manager.seal(w1);
+      expect(sealed).toMatchObject({ changed: true, changedFiles: 1 });
+      expect(git(w1.path, 'ls-tree', '-r', '--name-only', sealed.headCommit)).not.toContain(
+        '.acp-attachments',
+      );
+    });
+
+    it('refuses a branch where the agent committed a copy itself', async () => {
+      const { manager, w1 } = await loopSetup();
+      write(w1.path, '.acp-attachments/notes.txt', 'owner notes\n');
+      git(w1.path, 'add', '--force', '--', '.acp-attachments/notes.txt');
+      git(w1.path, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'x');
+      git(w1.path, 'rm', '-r', '--cached', '--quiet', '--', '.acp-attachments');
+      expect(await code(manager.seal(w1))).toBe('invalid-workspace');
+    });
+  },
+);
