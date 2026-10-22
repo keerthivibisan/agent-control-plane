@@ -213,3 +213,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   - **Open:** `ManagedAgentSpec.readOnlyDirs?` (proposed by C-A, so the lead reads its copies
     without asking); the per-change `/review` shows an empty list instead of 410 when commits are
     gone; deleting a ticket leaves its attachment files; `TICKET_PAGE_COPY.tabs` is unused.
+- 2026-10-22 **Owner request: one Files changed UI.** The ticket tab had a summary table plus a
+  separate line-by-line viewer, and the review pages were a third view. **C-D started**
+  (`wp/c-d-files`, web only): the tab becomes the GitHub review UI (file tree, unified or split,
+  line comments, Review changes), with a "Changes from" picker (all changes, or one helper's
+  change). Old review-page links redirect into the tab. After a merge it is read-only with a
+  "Merged" label. Also the breadcrumb "Board / <KEY>".
