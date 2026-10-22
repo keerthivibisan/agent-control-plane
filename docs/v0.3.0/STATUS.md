@@ -146,3 +146,15 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-22 **The owner asked for a GitHub-like redesign** before testing (part 3, D series; the
   plan is in the README). D-0 (tokens, themes, shell) started, with a design checkpoint before
   D-A, D-B and D-C. The owner's app restarted on `e96473a`.
+- 2026-10-22 D-0 merged (`9dc1db5`).
+  - **The look:** GitHub-like tokens in light and dark (lime gone, the logo kept), GitHub's diff
+    colours, the system fonts (the bundled fonts are no longer loaded), and a dark top bar.
+  - **Themes:** a Light/Dark/System menu (top bar and Settings → Appearance), with no flash on
+    load.
+  - **Restyled:** the Primer-like components, and the sidebar in Project and Workspace sections
+    with the toggle at the top left ("Hide sidebar ⌘B").
+  - **Contrast:** two dark colours were nudged for 4.5:1.
+  - Coordinator check: 4,965 tests; e2e 86/86.
+  - **Follow-up:** drop the `@fontsource-variable/{inter,jetbrains-mono}` dependencies
+    (coordinator).
+  - **Next:** the owner's design checkpoint in the live app; then D-A, D-B and D-C.
