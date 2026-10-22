@@ -78,4 +78,12 @@ describe('comments, activity and attachments (ADR-0026)', () => {
         .success,
     ).toBe(false);
   });
+
+  it('lets the owner send a comment or a review, nothing else', () => {
+    expect(TicketCommentRequestSchema.parse({ body: 'Hi' }).kind).toBeUndefined();
+    expect(TicketCommentRequestSchema.parse({ body: 'Hi', kind: 'review' }).kind).toBe('review');
+    for (const kind of ['ticket-summary', 'agent-note', 'run-facts', 'note', 'system']) {
+      expect(TicketCommentRequestSchema.safeParse({ body: 'Hi', kind }).success, kind).toBe(false);
+    }
+  });
 });

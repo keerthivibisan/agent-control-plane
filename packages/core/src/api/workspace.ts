@@ -190,6 +190,12 @@ export const TicketCommentRequestSchema = z.object({
   body: z.string().trim().min(1).max(8000),
   /** ADR-0026: attachments uploaded first (`POST …/attachments`), now attached to this comment. */
   attachmentIds: z.array(z.string().min(1)).max(10).optional(),
+  /**
+   * What the owner's text is (ADR-0026 §1, owner decision 2026-10-22): `comment` (the default) is
+   * for the Comments tab; `review` is a review sent from Files changed, shown on Conversation as
+   * "You reviewed".
+   */
+  kind: z.enum(['comment', 'review']).optional(),
 });
 export const PlanDecisionRequestSchema = z
   .object({
