@@ -9,12 +9,18 @@ import {
   type RunState,
 } from '@acp/orchestrator';
 import { errorFields, type Logger } from '../logger.js';
+import { withTransaction } from '@acp/db';
 import type { LineCounts } from '../workspace/index.js';
 import { hasReviewableChange } from './roles.js';
 import { agentName, ROLE_WORDS } from './session-names.js';
 import type { RunStore } from './store.js';
 
 /**
+ * ADR-0026 §2 (C-A): since 0.3.0 part 4 the lead's handover note is no longer part of this comment.
+ * It is the lead's own comment of kind `ticket-summary` (the whole ticket so far, on the Comments
+ * tab; a later handover adds a newer one), and this comment, kind `run-facts`, holds the facts and
+ * one opening sentence (Conversation tab). Older summaries keep their `From the lead:` note.
+ *
  * The run summary comment (ADR-0024 §3, v0.3.0 S-A): one ticket comment by author `app`, composed
  * by the server from records it already keeps (the plan, each change, checks, the ticket branch,
  * budget tokens), plus the lead's handover note when it gave one. No prompt, reply, task, diff,
@@ -51,6 +57,12 @@ export const RUN_SUMMARY_UPDATED_HEADING = 'Run summary (updated)';
 export const RUN_SUMMARY_NOTE_HEADING = 'From the lead:';
 /** The line before the facts (v0.3.0 S-C); the web folds what follows behind "Details". */
 export const RUN_SUMMARY_DETAILS_HEADING = 'Details:';
+/**
+ * ADR-0026 §2: the line before the ticket's latest summary in a later run's lead brief, so the
+ * lead's new summary covers the whole ticket.
+ */
+export const TICKET_SUMMARY_SO_FAR =
+  'The ticket summary so far, from an earlier run (the summary you hand over replaces it):';
 /** `TicketCommentSchema.body`. */
 export const COMMENT_BODY_MAX = 8000;
 /** Check names listed per change at most. */
@@ -61,7 +73,7 @@ export type SummaryTrigger =
   | { kind: 'review' }
   | { kind: 'ended'; outcome: 'failed' | 'stopped' | 'lead-ended' };
 
-/** True for a comment the app wrote as a run summary. */
+/** True for a comment the app wrote as a run summary (kind `run-facts`, or older by its heading). */
 export function isRunSummaryComment(comment: Pick<TicketComment, 'author' | 'body'>): boolean {
   if (comment.author !== 'app') return false;
   const first = comment.body.split('\n', 1)[0] ?? '';
@@ -436,7 +448,12 @@ export interface FactsInput {
 function openingOf(input: FactsInput, agents: readonly { kind: string; status: string }[]) {
   const t = input.trigger;
   const lead = agents.find((a) => a.kind === 'lead');
-  if (t.kind === 'handover') return 'The lead handed the work over without a note.';
+  if (t.kind === 'handover') {
+    // ADR-0026 §2: the note itself is the lead's ticket summary, a comment of its own.
+    return t.note === null
+      ? 'The lead handed the work over without a summary.'
+      : 'The lead handed the work over with a summary of the ticket.';
+  }
   if (t.kind === 'review') {
     return input.state.run.status === 'COMPLETED'
       ? 'The run finished with nothing to review.'
@@ -604,7 +621,11 @@ export function createRunSummaries(ctx: RunSummariesContext) {
   function summariesOf(ticketId: string, runId: string): TicketComment[] {
     return store.workspaceRepos.comments
       .listForTicket(ticketId)
-      .filter((c) => c.runId === runId && isRunSummaryComment(c));
+      .filter(
+        (c) =>
+          c.runId === runId &&
+          (c.kind === 'run-facts' || (c.kind === null && isRunSummaryComment(c))),
+      );
   }
 
   async function write(live: SummaryLive, trigger: SummaryTrigger): Promise<void> {
@@ -620,11 +641,29 @@ export function createRunSummaries(ctx: RunSummariesContext) {
       if (ticketKey === null) return;
       const existing = summariesOf(ticketId, runId);
       if (trigger.kind !== 'handover' && existing.length > 0) return;
-      const body = composeRunSummary(
-        gatherRunFacts({ store, state, ticketKey, trigger, lines }),
-        existing.length > 0,
-      );
-      store.workspaceRepos.comments.insert({ ticketId, runId, author: 'app', body });
+      const facts = gatherRunFacts({ store, state, ticketKey, trigger, lines });
+      // ADR-0026 §2: the lead's note is its ticket summary (Comments); the facts are the app's
+      // (Conversation), without the note.
+      const body = composeRunSummary({ ...facts, note: null }, existing.length > 0);
+      const note = trigger.kind === 'handover' ? trigger.note : null;
+      withTransaction(store.db, () => {
+        if (note !== null) {
+          store.workspaceRepos.comments.insert({
+            ticketId,
+            runId,
+            author: 'lead',
+            kind: 'ticket-summary',
+            body: note,
+          });
+        }
+        store.workspaceRepos.comments.insert({
+          ticketId,
+          runId,
+          author: 'app',
+          kind: 'run-facts',
+          body,
+        });
+      });
       logger.log('info', 'run summary stored', {
         runId,
         trigger: trigger.kind,

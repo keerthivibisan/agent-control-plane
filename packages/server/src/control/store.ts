@@ -35,6 +35,8 @@ import { hasReviewableChange } from './roles.js';
  * their own, so each insert is handed the engine's id through a one-shot id slot.
  */
 export interface RunStore {
+  /** The database, for writes that span several repositories (`withTransaction`). */
+  readonly db: AcpDatabase;
   readonly repos: OrchestrationRepositories;
   /** Ticket plans are written with the run state (ADR-0016: the lead's plans are stored). */
   readonly workspaceRepos: WorkspaceRepositories;
@@ -374,6 +376,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           planId: null,
           author: 'reviewer',
           body: effect.body,
+          kind: 'review',
         });
         // ADR-0021 §6: a change reviewer's findings; its round row points at the comment.
         if (effect.changeOf !== undefined && effect.round !== undefined) {
@@ -433,6 +436,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           planId: null,
           author: effect.author,
           body: effect.body,
+          kind: 'note',
         });
         let row = roundRow(runId, effect.agentRunId, effect.round, {
           kind: effect.author,
@@ -457,6 +461,19 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
               : noted;
         }
         loopRepos.changeReviews.setComment(row.id, comment.id);
+        continue;
+      }
+      if (effect.type === 'agent-note') {
+        // ADR-0026 §3: the helper's or tester's note, one per agent run (a later one replaces
+        // it). The engine already redacted it and capped it at MAX_AGENT_NOTE_CHARS.
+        const ticketId = next.run.ticketId;
+        if (ticketId === null) throw new DbError('invalid_input', 'an agent note needs a ticket');
+        workspaceRepos.comments.upsertAgentNote({
+          ticketId,
+          runId,
+          agentRunId: effect.agentRunId,
+          body: effect.body,
+        });
         continue;
       }
       if (effect.type === 'chat-message') {
@@ -484,6 +501,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
   }
 
   return {
+    db: deps.db,
     repos,
     workspaceRepos,
     redesignRepos,

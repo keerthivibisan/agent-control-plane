@@ -143,7 +143,7 @@ import {
 } from './review-loop.js';
 import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
-import { createRunSummaries, endTrigger } from './run-summary.js';
+import { TICKET_SUMMARY_SO_FAR, createRunSummaries, endTrigger } from './run-summary.js';
 import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
@@ -554,6 +554,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         runId: live.state.run.id,
         author: 'app',
         body: text,
+        // ADR-0026: a one-line event (a merge, a pull request) on the Conversation tab.
+        kind: 'system',
       });
     } catch (error) {
       logger.log('error', 'app comment not stored', {
@@ -799,6 +801,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // publishes the ticket notice.
           logger.log('info', 'review comment stored', { runId, agentRunId: effect.agentRunId });
           break;
+        case 'agent-note':
+          // ADR-0026 §3: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'agent note stored', { runId, agentRunId: effect.agentRunId });
+          break;
         case 'start-follow-up':
           startFollowUp(live, effect);
           break;
@@ -1002,7 +1008,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return;
     }
     const kind = effect.kind;
-    const base = { agentRunId, kind, prompt: effect.prompt, model: effect.model };
+    const base = {
+      agentRunId,
+      kind,
+      prompt: kind === 'lead' ? withTicketSummary(live, effect.prompt) : effect.prompt,
+      model: effect.model,
+    };
     if (kind === 'lead' || kind === 'planner') {
       if (
         hooks.agentSetup === undefined &&
@@ -1145,6 +1156,22 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         });
       })(),
     );
+  }
+
+  /**
+   * ADR-0026 §2: a later run's lead starts with the ticket's latest summary from an earlier run,
+   * so the summary it hands over covers the whole ticket. Text the lead wrote for the ticket
+   * (capped at MAX_TICKET_SUMMARY_CHARS), never conversation.
+   */
+  function withTicketSummary(live: LiveRun, prompt: string): string {
+    const ticketId = live.state.run.ticketId;
+    if (ticketId === null) return prompt;
+    const earlier = store.workspaceRepos.comments
+      .listForTicket(ticketId)
+      .filter((c) => c.kind === 'ticket-summary' && c.runId !== live.state.run.id)
+      .at(-1);
+    if (earlier === undefined) return prompt;
+    return `${prompt}\n\n${TICKET_SUMMARY_SO_FAR}\n${earlier.body}`;
   }
 
   /**
@@ -1625,10 +1652,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
     const title = sessionTitle(live, agentRunId);
     if (title !== undefined) spec.title = title;
-    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers) {
+    // ADR-0026 §3: a ticket run's helpers and tester report their work (`report_work`).
+    const notes = (kind === 'worker' || kind === 'tester') && live.state.run.ticketId !== null;
+    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers || notes) {
       // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
       // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
-      // to its own children, the planner's to submit_plan, the reviewer's to post_review.
+      // to its own children, the planner's to submit_plan, the reviewer's to post_review, a
+      // helper's or tester's to report_work.
       spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
     }
     // A rework turn never starts helpers (ADR-0021 §3).
@@ -2511,6 +2541,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
               runId,
               author: 'owner',
               body: text.slice(0, 8000),
+              kind: 'comment',
             });
           } catch (error) {
             logger.log('error', 'owner comment not stored', { runId, ...errorFields(error) });

@@ -29,6 +29,11 @@ async function summaries(s: Board, ticketId: string): Promise<TicketComment[]> {
   return (await appComments(s, ticketId)).filter(isRunSummaryComment);
 }
 
+/** ADR-0026 §2: the lead's ticket summaries (Comments tab), oldest first. */
+async function ticketSummaries(s: Board, ticketId: string) {
+  return (await s.detail(ticketId)).comments.filter((c) => c.kind === 'ticket-summary');
+}
+
 /** The change reviewer approves and ends; the lead merges the change into the ticket branch. */
 async function approveAndMerge(s: Board, lead: Lead, workerId: string, findings = 'Fine.') {
   const reviewer = reviewers(s).at(-1);
@@ -43,7 +48,7 @@ async function approveAndMerge(s: Board, lead: Lead, workerId: string, findings 
 }
 
 describe('the run summary at the handover (ADR-0024 §3)', () => {
-  it('holds the facts from the records and the lead’s note; the merge line follows', async () => {
+  it('holds the facts from the records; the lead’s note is its ticket summary; the merge line follows', async () => {
     const s = await setupBoard({ files: FILES });
     const { ticket, runId, lead } = await approved(s);
     lead.usage('lead-m1', { input: 1200, output: 300, cacheCreation: 40, cacheRead: 9000 });
@@ -58,12 +63,22 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
 
     const [summary, ...more] = await summaries(s, ticket.id);
     expect(more).toEqual([]);
-    expect(summary).toMatchObject({ author: 'app', runId, planId: null });
+    expect(summary).toMatchObject({ author: 'app', runId, planId: null, kind: 'run-facts' });
     const body = summary?.body ?? '';
     const lines = body.split('\n');
-    // v0.3.0 S-C: the lead's note is the comment; the facts follow under Details.
-    expect(lines.slice(0, 5)).toEqual([RUN_SUMMARY_HEADING, '', 'From the lead:', NOTE, '']);
-    expect(lines[5]).toBe('Details:');
+    // ADR-0026 §2: the facts (Conversation) say a summary was handed over; the note is not here.
+    expect(lines.slice(0, 5)).toEqual([
+      RUN_SUMMARY_HEADING,
+      '',
+      'The lead handed the work over with a summary of the ticket.',
+      '',
+      'Details:',
+    ]);
+    expect(body).not.toContain(NOTE);
+    // The note is the lead's own comment of kind ticket-summary (Comments).
+    expect(await ticketSummaries(s, ticket.id)).toEqual([
+      expect.objectContaining({ author: 'lead', runId, body: NOTE, agentRunId: null }),
+    ]);
 
     // Every fact against the database.
     const orch = createOrchestrationRepositories(s.db);
@@ -113,7 +128,7 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
       // The tip's checks ran (the owner's merge needs them): their result is in the line.
       `Merged acp/WEBAPP-1 into main at ${tip.slice(0, 7)}; checks passed on the tip (1).`,
     ]);
-    expect(app[1]).toMatchObject({ runId, author: 'app' });
+    expect(app[1]).toMatchObject({ runId, author: 'app', kind: 'system' });
   }, 60_000);
 
   it('has the facts only without a note, and an updated one after the owner asks for changes', async () => {
@@ -129,10 +144,11 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     expect(found[0]?.body.split('\n').slice(0, 5)).toEqual([
       'Run summary',
       '',
-      'The lead handed the work over without a note.',
+      'The lead handed the work over without a summary.',
       '',
       'Details:',
     ]);
+    expect(await ticketSummaries(s, ticket.id)).toEqual([]);
     expect(found[0]?.body).toContain('- Merged 1 change from Helpers:');
 
     const changes = await s.post(`/api/runs/${runId}/ticket-branch`, {
@@ -163,9 +179,12 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     expect(updated).toContain('has 2 changes merged and is waiting for your merge');
     expect(
       updated.startsWith(
-        'Run summary (updated)\n\nFrom the lead:\nAdded the print view too.\n\nDetails:\n',
+        'Run summary (updated)\n\nThe lead handed the work over with a summary of the ticket.\n\nDetails:\n',
       ),
     ).toBe(true);
+    expect((await ticketSummaries(s, ticket.id)).map((c) => c.body)).toEqual([
+      'Added the print view too.',
+    ]);
   }, 90_000);
 });
 
@@ -401,7 +420,9 @@ describe('no conversation content', () => {
     expect(found[0]?.body).not.toContain(CANARY);
     expect(found[0]?.body.toLowerCase()).not.toContain(CANARY.toLowerCase());
     expect(found[0]?.body).toContain('- Merged 1 change from Helpers: 2 files, 2 lines added');
-    // The lead's note is the one free text in it.
-    expect(found[0]?.body).toContain('From the lead:\nPlain note.\n\nDetails:\n');
+    // ADR-0026 §2: the lead's note is its own ticket summary, the one free text the app stores.
+    expect(found[0]?.body).not.toContain('Plain note.');
+    const ticketSummary = await ticketSummaries(s, ticket.id);
+    expect(ticketSummary.map((c) => c.body)).toEqual(['Plain note.']);
   }, 60_000);
 });

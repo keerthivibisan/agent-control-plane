@@ -184,8 +184,8 @@ describe('Push & open PR, Refresh, merged on GitHub → Done (ADR-0025 §4)', ()
       });
       expect(bareTip(bare, branch)).toBe(tip);
       expect(gh.prs[0]).toMatchObject({ title: 'WEBAPP-1: Add dark mode', baseRefName: 'develop' });
-      expect(gh.prs[0]?.body).toMatch(/^Run summary\n/);
-      expect(gh.prs[0]?.body).toContain('Synthetic lead note for the summary.');
+      // ADR-0026 §2: the lead's ticket summary first, then the run's facts.
+      expect(gh.prs[0]?.body).toMatch(/^Synthetic lead note for the summary\.\n\nRun summary\n/);
       expect(gh.prs[0]?.body.endsWith('\n\nOpened from Agent Control Plane')).toBe(true);
 
       // The ticket shows it; nothing more runs until the owner asks (no timer).

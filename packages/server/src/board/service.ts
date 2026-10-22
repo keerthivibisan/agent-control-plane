@@ -41,6 +41,7 @@ import {
   type TicketCardDto,
   type CodeHostStatusDto,
   type TicketBranchDto,
+  type TicketActivityDto,
   type TicketCommentDto,
   type TicketDetailDto,
   type TicketDto,
@@ -71,12 +72,12 @@ import {
 import type { CodeHostService } from '../code-host/index.js';
 import { managedDisabled, workspaceError } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
-import { withPlanDeciders } from '../control/store.js';
+import { createRunStore, withPlanDeciders, type RunStore } from '../control/store.js';
 import { countsAsHelper } from '../control/roles.js';
 import type { ControlService, ControlWorkspaceHooks } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
 import { HarnessError, listContextCandidates } from '../harness/index.js';
-import type { Logger } from '../logger.js';
+import { errorFields, type Logger } from '../logger.js';
 import type { ProjectsService } from '../services/projects.js';
 import {
   WorkspaceError,
@@ -85,6 +86,7 @@ import {
   type WorkspaceManager,
 } from '../workspace/index.js';
 import type { CheckService } from './checks.js';
+import { buildTicketActivity } from './activity.js';
 import { attachmentDbError, toCommentDto, toCommentDtos } from './comments.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
@@ -137,6 +139,8 @@ export interface BoardService {
   /** `body`: `StartTicketRequest` (ADR-0021 per-run overrides); empty uses the project's. */
   startTicket(ticketId: string, body?: unknown): Promise<TicketDetailDto>;
   addComment(ticketId: string, body: unknown): TicketCommentDto;
+  /** ADR-0026 §1: the Conversation tab's timeline, built from records. */
+  activity(ticketId: string): TicketActivityDto;
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
@@ -245,6 +249,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   });
   const redesign = createRedesignRepositories(deps.db, { now: deps.now });
   const loop = createReviewLoopRepositories(deps.db, { now: deps.now });
+  /** Reads run states for the activity timeline (made on first use). */
+  let runStore: RunStore | undefined;
 
   // ------------------------------------------------------------------ helpers
 
@@ -608,7 +614,14 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const body =
         `Merged ${role}'s changes although required checks did not pass ` +
         `(${failedChecks.join(', ')}). Reason: ${reason}`;
-      ws.comments.insert({ ticketId, runId, author: 'owner', body: body.slice(0, 8000) });
+      // ADR-0026: a decision note (Conversation), not a comment for the Comments tab.
+      ws.comments.insert({
+        ticketId,
+        runId,
+        author: 'owner',
+        body: body.slice(0, 8000),
+        kind: 'note',
+      });
       const t = ws.tickets.getById(ticketId);
       if (t !== undefined) notice('tickets-changed', { projectId: t.projectId, ticketId, runId });
     },
@@ -962,6 +975,41 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       return toCommentDto(comment, attachments);
     },
 
+    activity(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      runStore ??= createRunStore({ db: deps.db, now: deps.now });
+      const store = runStore;
+      const runs = orch.runs
+        .list({ ticketId, limit: MAX_PAGE_SIZE })
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+        .map((run) => {
+          let state: RunState | undefined;
+          try {
+            state = deps.control.peek(run.id) ?? store.load(run.id);
+          } catch (error) {
+            // A run the engine cannot rebuild still shows, with role words for its agents.
+            logger.log('warn', 'activity: run state unavailable', {
+              runId: run.id,
+              ...errorFields(error),
+            });
+          }
+          return {
+            run,
+            state,
+            reviews: loop.changeReviews.listForRun(run.id),
+            branch: loop.ticketBranches.getByRun(run.id),
+            workspaces: orch.workspaces.listForRun(run.id),
+          };
+        });
+      return buildTicketActivity({
+        ticketId,
+        ticketKey: ticket.key,
+        runs,
+        plans: plansWithDeciders(ticketId),
+        comments: ws.comments.listForTicket(ticketId),
+      });
+    },
+
     decidePlan(ticketId, planId, body) {
       const ticket = ticketOrThrow(ticketId);
       const input = PlanDecisionRequestSchema.parse(body);
@@ -973,7 +1021,13 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       deps.control.decidePlan(plan.runId, planId, input.decision, input.comment);
       // The engine only sends the comment to the lead; it is kept on the ticket (ADR-0016).
       if (input.comment !== undefined) {
-        ws.comments.insert({ ticketId, planId, author: 'owner', body: input.comment });
+        ws.comments.insert({
+          ticketId,
+          planId,
+          author: 'owner',
+          body: input.comment,
+          kind: 'comment',
+        });
       }
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId: plan.runId });
       return detail(ticketId);

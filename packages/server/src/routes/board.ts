@@ -13,6 +13,7 @@ import {
   TicketDetailDtoSchema,
   TicketDtoSchema,
   TicketBranchDtoSchema,
+  TicketActivityDtoSchema,
 } from '@acp/core/api';
 import type { BoardService } from '../board/service.js';
 import { requireCsrf } from '../control/csrf.js';
@@ -104,6 +105,10 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.post('/tickets/:id/comments', csrf, json, (req, res) => {
     const dto = board.addComment(param(req.params['id']), req.body);
     res.status(201).json(out(TicketCommentDtoSchema, dto));
+  });
+  // ADR-0026 §1: the Conversation tab's timeline, built from records.
+  router.get('/tickets/:id/activity', (req, res) => {
+    res.json(out(TicketActivityDtoSchema, board.activity(param(req.params['id']))));
   });
   router.post('/tickets/:id/branch/pull-request', csrf, json, async (req, res) => {
     const dto = await board.openPullRequest(param(req.params['id']), req.body);

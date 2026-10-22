@@ -720,19 +720,23 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
   }
 
   /**
-   * The pull request's body (ADR-0025 §2): the ticket's latest run summary comment (ADR-0024),
-   * this run's first, then one line saying where it came from. The owner sees the summary on the
-   * ticket before clicking.
+   * The pull request's body (ADR-0025 §2): the lead's latest ticket summary (ADR-0026 §2), then the
+   * ticket's latest run summary comment (ADR-0024, the facts), this run's first, then one line
+   * saying where it came from. The owner sees both on the ticket before clicking.
    */
   function pullRequestBody(live: LoopLive, ticketKey: string, title: string): string {
     const ticketId = live.state.run.ticketId;
-    const summaries =
-      ticketId === null
-        ? []
-        : store.workspaceRepos.comments.listForTicket(ticketId).filter(isRunSummaryComment);
+    const comments = ticketId === null ? [] : store.workspaceRepos.comments.listForTicket(ticketId);
+    const summaries = comments.filter(
+      (c) => c.kind === 'run-facts' || (c.kind === null && isRunSummaryComment(c)),
+    );
     const summary =
       summaries.filter((c) => c.runId === live.state.run.id).at(-1) ?? summaries.at(-1);
-    const text = summary?.body.trim() ?? `${ticketKey}: ${title}`;
+    const ticketSummary = comments.filter((c) => c.kind === 'ticket-summary').at(-1);
+    const parts = [ticketSummary?.body.trim(), summary?.body.trim()].filter(
+      (p): p is string => p !== undefined && p !== '',
+    );
+    const text = parts.length === 0 ? `${ticketKey}: ${title}` : parts.join('\n\n');
     return `${text}\n\nOpened from Agent Control Plane`;
   }
 
