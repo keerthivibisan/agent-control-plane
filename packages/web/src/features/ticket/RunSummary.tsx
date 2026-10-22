@@ -1,9 +1,16 @@
 import type { TicketCommentDto } from '@acp/core/api';
+import { Details } from '../../components/Details';
 import { MergeIcon, RunSummaryIcon } from '../../components/icons';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { RUN_SUMMARY_COPY } from '../../lib/copy';
-import { parseMergeLine, parseRunSummary, type MergeNote, type SummaryBlock } from './run-summary';
+import {
+  parseMergeLine,
+  parseRunSummary,
+  splitRunSummary,
+  type MergeNote,
+  type SummaryBlock,
+} from './run-summary';
 
 const C = RUN_SUMMARY_COPY;
 
@@ -38,10 +45,18 @@ function Block({ block }: { block: SummaryBlock }) {
   return <p className="whitespace-pre-wrap">{block.lines.join('\n')}</p>;
 }
 
+function Blocks({ blocks }: { blocks: readonly SummaryBlock[] }) {
+  return blocks.map((b, i) => <Block key={i} block={b} />);
+}
+
 /**
  * The run summary Agent Control Plane writes on the ticket when a run hands over or ends
- * (ADR-0024 §3): a card of its own, apart from your comments and the agents'. Lines ending with
- * a colon read as headings and "- " lines as lists; anything else shows as written.
+ * (ADR-0024 §3): a card of its own, apart from your comments and the agents'.
+ *
+ * Since v0.3.0 S-C it reads like a teammate's comment: the lead's note (or the app's one plain
+ * sentence when there is none) as the text, and the facts the app recorded folded behind
+ * "Details". An older summary, with no `Details:` line, shows as before: lines ending with a colon
+ * read as headings and "- " lines as lists; anything else shows as written.
  */
 export function RunSummaryCard({
   comment,
@@ -51,26 +66,42 @@ export function RunSummaryCard({
   /** "Run 2", when the comment belongs to one of this ticket's runs. */
   runLabel: string | null;
 }) {
-  const blocks = parseRunSummary(comment.body);
+  const human = splitRunSummary(comment.body);
+  const base = human?.updated === true ? C.updatedTitle : C.title;
+  const title = human !== null && human.note !== null ? `${C.lead} · ${base}` : base;
   return (
     <article
       className="overflow-hidden rounded-card border border-line bg-panel shadow-card"
       data-testid="run-summary"
-      aria-label={runLabel ? `${C.title}, ${runLabel}` : C.title}
+      data-layout={human ? 'comment' : 'sections'}
+      aria-label={runLabel ? `${title}, ${runLabel}` : title}
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-sunken px-3.5 py-2 text-caption text-dim">
         <RunSummaryIcon size={15} className="text-ink" />
-        <h4 className="font-semibold text-ink">{C.title}</h4>
+        <h4 className="font-semibold text-ink">{title}</h4>
         {runLabel ? <span>{runLabel}</span> : null}
         <AppAuthor />
         <span className="ml-auto">
           <RelativeTime iso={comment.createdAt} />
         </span>
       </header>
-      <div className="flex flex-col gap-2 px-3.5 py-3 leading-6" data-testid="run-summary-body">
-        {blocks.map((b, i) => (
-          <Block key={i} block={b} />
-        ))}
+      <div className="flex flex-col gap-3 px-3.5 py-3 leading-6" data-testid="run-summary-body">
+        {human ? (
+          <>
+            <p className="whitespace-pre-wrap text-ink" data-testid="run-summary-text">
+              {human.text}
+            </p>
+            {human.details.length > 0 && (
+              <Details summary={C.details} testId="run-summary-details">
+                <div className="flex flex-col gap-2">
+                  <Blocks blocks={human.details} />
+                </div>
+              </Details>
+            )}
+          </>
+        ) : (
+          <Blocks blocks={parseRunSummary(comment.body)} />
+        )}
       </div>
     </article>
   );

@@ -374,9 +374,14 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
 
 - **Run summary** (ticket comments by author `app`): a card of its own in the comments (`sunken`
   header with the "Run summary" title, the run number and an "Agent Control Plane" tag; the body on
-  `panel`). The server's plain text is read loosely (`features/ticket/run-summary.ts`): a short
-  line ending with a colon is a heading, `- ` lines are a list (two spaces of indent per level),
-  anything else is shown as written with its line breaks. The note after your merge ("Merged
+  `panel`). Since v0.3.0 S-C it reads like a teammate's comment: a summary with a `Details:` line
+  shows the lead's note (or the app's one plain sentence when the lead left none) as normal comment
+  text, the header says "Lead · Run summary" when the words are the lead's (just "Run summary"
+  otherwise, "(updated)" on a later handover), and the facts sit behind a collapsed "Details"
+  disclosure (the shared native `Details`, so the keyboard opens it). An older summary, with no
+  `Details:` line, and the facts once opened are read loosely (`features/ticket/run-summary.ts`): a
+  short line ending with a colon is a heading, `- ` lines are a list (two spaces of indent per
+  level), anything else is shown as written with its line breaks. The note after your merge ("Merged
   acp/WEB-12 into main at 4f2a9c1") is a small line with a merge icon instead of a card. Your, the
   lead's and the reviewer's comments are unchanged.
 

@@ -1,7 +1,11 @@
 // Reading the app's own ticket comments (ADR-0024 §3, v0.3.0 S-B). The server's exact text may
 // change, so these pin the reading rules, not one format. Synthetic data only.
 import { describe, expect, it } from 'vitest';
-import { parseMergeLine, parseRunSummary } from '../../src/features/ticket/run-summary';
+import {
+  parseMergeLine,
+  parseRunSummary,
+  splitRunSummary,
+} from '../../src/features/ticket/run-summary';
 
 describe('parseRunSummary', () => {
   it('reads headings, lists and text, and drops a first line that repeats the title', () => {
@@ -113,5 +117,80 @@ describe('parseMergeLine', () => {
     expect(parseMergeLine('Merged acp/WEB-12 into main at 1a2b3c4\nMore')).toBeNull();
     expect(parseMergeLine('Run summary\n- Merged 2 changes')).toBeNull();
     expect(parseMergeLine('Merged everything')).toBeNull();
+  });
+});
+
+describe('splitRunSummary (the S-C layout)', () => {
+  const details = [
+    'Details:',
+    '- Plan v1 was approved with 1 step: Helpers.',
+    '- Budget tokens used: 900 by the lead.',
+  ];
+  const factsBlock = {
+    type: 'list',
+    items: [
+      { text: 'Plan v1 was approved with 1 step: Helpers.', depth: 0 },
+      { text: 'Budget tokens used: 900 by the lead.', depth: 0 },
+    ],
+  };
+
+  it('reads the lead’s note, line breaks kept, and the facts after Details', () => {
+    const body = [
+      'Run summary',
+      '',
+      'From the lead:',
+      'Explored the code.',
+      'Added a switch.',
+      '',
+      ...details,
+    ].join('\n');
+    expect(splitRunSummary(body)).toEqual({
+      updated: false,
+      note: 'Explored the code.\nAdded a switch.',
+      text: 'Explored the code.\nAdded a switch.',
+      details: [factsBlock],
+    });
+  });
+
+  it('reads the app’s one sentence when there is no note, and the updated heading', () => {
+    const body = [
+      'Run summary (updated)',
+      '',
+      'The run failed before the work was handed over.',
+      '',
+      ...details,
+    ].join('\r\n');
+    expect(splitRunSummary(body)).toEqual({
+      updated: true,
+      note: null,
+      text: 'The run failed before the work was handed over.',
+      details: [factsBlock],
+    });
+  });
+
+  it('keeps a note that has its own “Details:” line: the facts start after the last one', () => {
+    const body = [
+      'Run summary',
+      '',
+      'From the lead:',
+      'Added it.',
+      'Details:',
+      'See the plan.',
+      '',
+      ...details,
+    ].join('\n');
+    const split = splitRunSummary(body);
+    expect(split?.note).toBe('Added it.\nDetails:\nSee the plan.');
+    expect(split?.details).toEqual([factsBlock]);
+  });
+
+  it('is null for an older summary, or one with nothing before Details', () => {
+    expect(
+      splitRunSummary(
+        "Run summary\nWEB-12: the lead handed the work over.\n\nChanges: none.\n\nLead's note:\nDone.",
+      ),
+    ).toBeNull();
+    expect(splitRunSummary('Run summary\n\nDetails:\n- x.')).toBeNull();
+    expect(splitRunSummary('Run summary\n\nFrom the lead:\n\nDetails:\n- x.')).toBeNull();
   });
 });

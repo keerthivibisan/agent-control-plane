@@ -1,7 +1,9 @@
 // Reading the comments Agent Control Plane writes on a ticket (author `app`, ADR-0024 §3): the run
 // summary, which the server composes as plain text with sections, and the one-line note after the
 // owner's merge. The web never depends on a strict format: these helpers only pick out what reads
-// better as a heading or a list, and everything else is shown as it was written.
+// better as a heading or a list, and everything else is shown as it was written. Since v0.3.0 S-C
+// a summary is the lead's note (or one plain sentence) followed by a `Details:` section; a summary
+// without that line is an older one and reads as before.
 
 /** One part of a run summary, in order. */
 export type SummaryBlock =
@@ -57,6 +59,50 @@ export function parseRunSummary(body: string): SummaryBlock[] {
     open = true;
   }
   return blocks;
+}
+
+/**
+ * A run summary in the layout of v0.3.0 S-C: the lead's note (or one plain sentence) as the
+ * comment, and the facts after a `Details:` line.
+ */
+export interface HumanRunSummary {
+  /** The server's later handover summary of the same run ("Run summary (updated)"). */
+  updated: boolean;
+  /** The lead's own note, as written, when it left one. */
+  note: string | null;
+  /** The comment's text: the note, or the app's one plain sentence when there is none. */
+  text: string;
+  /** The facts after `Details:`, read with the same rules as an older summary. */
+  details: SummaryBlock[];
+}
+
+const DETAILS_LINE = 'Details:';
+const NOTE_LINE = 'From the lead:';
+const HEADING_LINE = /^run summary( \(updated\))?$/i;
+
+/**
+ * Splits a run summary in the S-C layout, or null for any other text (an older summary, which
+ * shows as before). The facts start after the last `Details:` line: the server never writes one
+ * inside them, while a note might.
+ */
+export function splitRunSummary(body: string): HumanRunSummary | null {
+  const lines = body.replace(/\r\n?/g, '\n').split('\n');
+  const at = lines.map((l) => l.trim()).lastIndexOf(DETAILS_LINE);
+  if (at < 0) return null;
+  const head = lines.slice(0, at);
+  const first = HEADING_LINE.exec((head[0] ?? '').trim());
+  if (first) head.shift();
+  const main = head.join('\n').trim();
+  const [lead, ...rest] = main.split('\n');
+  const note = lead?.trim() === NOTE_LINE ? rest.join('\n').trim() : null;
+  const text = note ?? main;
+  if (text.length === 0) return null;
+  return {
+    updated: first?.[1] !== undefined,
+    note: note !== null && note.length > 0 ? note : null,
+    text,
+    details: parseRunSummary(lines.slice(at + 1).join('\n')),
+  };
 }
 
 /** The note after the owner's merge: "Merged acp/WEB-12 into main at 1a2b3c4". */

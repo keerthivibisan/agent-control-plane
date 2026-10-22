@@ -236,52 +236,52 @@ test('a session the app started is titled after its ticket and links to it', asy
 
 // --- The ticket page: the run summary and the merge line ---------------------------------------
 
-const SUMMARY = [
+/** A run summary in the S-C layout, as the server writes it: the lead's note, then the details. */
+const NOTE =
+  'Explored the settings code and found the theme is set in theme-store.ts. Added a dark mode switch on the Settings page that follows the system until you pick one. Tested it with three unit tests; all checks pass. Not done: the email templates still use the light colours.';
+const DETAILS = [
+  '- Plan v1 was approved with 3 steps: Theme store, Settings switch and Tests.',
+  '- Merged 1 change from Theme store: 2 files, 54 lines added and 3 removed; both checks passed.',
+  '- Merged 1 change from Settings switch: 3 files, 88 lines added and 12 removed; both checks passed; 1 rework round, asked for by the reviewer.',
+  '- Merged 1 change from Tests: 1 file, 61 lines added; both checks passed.',
+  '- The ticket branch acp/WEB-12 (from main) has 3 changes merged and is waiting for your merge; checks passed on the tip (2).',
+  '- Budget tokens used: 41,200 by the lead, 96,800 by 3 helpers and 18,300 by 3 reviewers.',
+];
+const SUMMARY = ['Run summary', '', 'From the lead:', NOTE, '', 'Details:', ...DETAILS].join('\n');
+/** A summary without a note: one plain sentence, then the details. */
+const NO_NOTE = [
   'Run summary',
   '',
-  'What the lead says:',
-  'The settings page has a dark mode switch that follows the system until you pick one.',
-  'The choice is kept in local storage. The store helper also added a small migration.',
+  'The run was stopped before the work was handed over.',
   '',
-  'Plan:',
-  '- 3 steps: Theme store, Settings switch, Tests',
+  'Details:',
+  '- No helpers were started.',
+  '- Budget tokens used: 3,100 by the lead.',
+].join('\n');
+/** A summary written before S-C: shown with its sections, as before. */
+const OLDER = [
+  'Run summary',
+  'WEB-12: the lead handed the work over.',
   '',
-  'Changes:',
-  '- Theme store: 2 files, +54 −3; checks passed; merged',
-  '- Settings switch: 3 files, +88 −12; checks passed; 1 rework round (reviewer); merged',
-  '  - Rework: the switch had no label for screen readers',
-  '- Tests: 1 file, +61 −0; checks passed; merged',
+  'Changes (1):',
+  '- Theme store: merged; 2 files, +54 -3 lines; checks passed (2).',
   '',
-  'Ticket branch:',
-  '- acp/WEB-12: 3 changes merged, checks passed on the tip',
-  '',
-  'Tokens:',
-  '- Lead: 41,200 · Helpers: 96,800 · Reviewer: 18,300',
+  "Lead's note:",
+  'Added the theme store.',
 ].join('\n');
 
-function withAppComments(sc: TicketScenario): TicketScenario {
+function appComment(id: string, body: string, createdAt: string): Json {
+  return { id, ticketId: TICKET_ID, runId: RUN_ID, planId: null, author: 'app', body, createdAt };
+}
+
+function withAppComments(sc: TicketScenario, extra: Json[] = []): TicketScenario {
   const path = `/api/tickets/${TICKET_ID}`;
   const detail = sc.routes[path] as Json;
   const comments = [
     ...(detail['comments'] as Json[]),
-    {
-      id: 'c-app-summary',
-      ticketId: TICKET_ID,
-      runId: RUN_ID,
-      planId: null,
-      author: 'app',
-      body: SUMMARY,
-      createdAt: '2026-10-15T09:49:00.000Z',
-    },
-    {
-      id: 'c-app-merge',
-      ticketId: TICKET_ID,
-      runId: RUN_ID,
-      planId: null,
-      author: 'app',
-      body: 'Merged acp/WEB-12 into main at 4f2a9c1',
-      createdAt: '2026-10-15T09:55:00.000Z',
-    },
+    ...extra,
+    appComment('c-app-summary', SUMMARY, '2026-10-15T09:49:00.000Z'),
+    appComment('c-app-merge', 'Merged acp/WEB-12 into main at 4f2a9c1', '2026-10-15T09:55:00.000Z'),
   ];
   return { routes: { ...sc.routes, [path]: { ...detail, comments } } };
 }
@@ -311,7 +311,7 @@ async function serveTicket(page: Page, sc: TicketScenario): Promise<void> {
   });
 }
 
-test('the ticket shows the run summary as a card and the merge as a small line', async ({
+test('the ticket shows the run summary as the lead’s comment and the merge as a small line', async ({
   page,
 }) => {
   await serveTicket(page, withAppComments(doneScenario()));
@@ -321,18 +321,27 @@ test('the ticket shows the run summary as a card and the merge as a small line',
   const comments = page.getByTestId('comments');
   const card = comments.getByTestId('run-summary');
   await expect(card).toHaveCount(1);
-  await expect(card.getByRole('heading', { name: 'Run summary', level: 4 })).toBeVisible();
+  await expect(card.getByRole('heading', { name: 'Lead · Run summary', level: 4 })).toBeVisible();
   await expect(card.getByTestId('comment-author')).toHaveText('Agent Control Plane');
   await expect(card).toContainText('Run 2');
-  await expect(card.getByRole('heading', { level: 5 })).toHaveText([
-    'What the lead says',
-    'Plan',
-    'Changes',
-    'Ticket branch',
-    'Tokens',
-  ]);
-  await expect(card.getByRole('listitem')).toHaveCount(7);
-  await expect(card).toContainText('Rework: the switch had no label for screen readers');
+  // The lead's note is the comment's text; the markers are not shown.
+  await expect(card.getByTestId('run-summary-text')).toHaveText(NOTE);
+  await expect(card).not.toContainText('From the lead');
+
+  // The details are collapsed behind "Details"; the keyboard opens and closes them.
+  const details = card.getByTestId('run-summary-details');
+  const toggle = details.getByText('Details', { exact: true });
+  await expect(toggle).toBeVisible();
+  await expect(details.getByRole('listitem').first()).toBeHidden();
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(details.getByRole('listitem')).toHaveCount(DETAILS.length);
+  await expect(details.getByRole('listitem').first()).toBeVisible();
+  await expect(details).toContainText('1 rework round, asked for by the reviewer');
+  await page.keyboard.press('Space');
+  await expect(details.getByRole('listitem').first()).toBeHidden();
+  await toggle.click();
+  await expect(details.getByRole('listitem').first()).toBeVisible();
 
   const merge = comments.getByTestId('merge-line');
   await expect(merge).toContainText('Merged acp/WEB-12 into main at 4f2a9c1');
@@ -348,4 +357,39 @@ test('the ticket shows the run summary as a card and the merge as a small line',
       await comments.screenshot({ path: `${SHOTS}/session-names-run-summary-${scheme}.png` });
     }
   }
+});
+
+test('a summary without a note says “Run summary”; an older one shows its sections', async ({
+  page,
+}) => {
+  await serveTicket(
+    page,
+    withAppComments(doneScenario(), [
+      appComment('c-app-older', OLDER, '2026-10-15T09:40:00.000Z'),
+      appComment('c-app-stopped', NO_NOTE, '2026-10-15T09:45:00.000Z'),
+    ]),
+  );
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
+  const cards = page.getByTestId('comments').getByTestId('run-summary');
+  await expect(cards).toHaveCount(3);
+
+  // Oldest first: the older layout, as before.
+  const older = cards.nth(0);
+  await expect(older).toHaveAttribute('data-layout', 'sections');
+  await expect(older.getByRole('heading', { name: 'Run summary', level: 4 })).toBeVisible();
+  await expect(older.getByRole('heading', { level: 5 })).toHaveText(['Changes', "Lead's note"]);
+  await expect(older.getByTestId('run-summary-details')).toHaveCount(0);
+
+  const stopped = cards.nth(1);
+  await expect(stopped).toHaveAttribute('data-layout', 'comment');
+  await expect(stopped.getByRole('heading', { name: 'Run summary', level: 4 })).toBeVisible();
+  await expect(stopped.getByTestId('run-summary-text')).toHaveText(
+    'The run was stopped before the work was handed over.',
+  );
+  await expect(stopped.getByRole('listitem').first()).toBeHidden();
+  await stopped.getByText('Details', { exact: true }).click();
+  await expect(stopped.getByRole('listitem')).toHaveText([
+    'No helpers were started.',
+    'Budget tokens used: 3,100 by the lead.',
+  ]);
 });

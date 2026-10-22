@@ -1,7 +1,7 @@
 // The app's own comments on a ticket (ADR-0024 §3, v0.3.0 S-B): the run summary card and the line
 // after a merge, next to the owner's, the lead's and the reviewer's comments, which are unchanged.
 // Synthetic data only.
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { TicketDetailDtoSchema, type TicketCommentDto } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
 import { TicketInfo } from '../../src/features/ticket/TicketInfo';
@@ -21,6 +21,34 @@ const SUMMARY = [
   '- API helper: no changes',
   '',
   'Something the web does not know yet',
+].join('\n');
+
+/** The S-C layout, as the server writes it (synthetic). */
+const HUMAN_NOTE =
+  'Explored the settings code and found the theme is set in theme-store.ts.\nAdded a dark mode switch on the Settings page. Tested it with three unit tests; all checks pass.';
+const HUMAN_DETAILS = [
+  '- Plan v1 was approved with 1 step: Helpers.',
+  '- Merged 1 change from Helpers: 2 files, 18 lines added; the check passed.',
+  '- The ticket branch acp/WEB-12 (from main) has 1 change merged and is waiting for your merge.',
+  '- Budget tokens used: 12,400 by the lead and 48,000 by 1 helper.',
+];
+const HUMAN = [
+  'Run summary',
+  '',
+  'From the lead:',
+  HUMAN_NOTE,
+  '',
+  'Details:',
+  ...HUMAN_DETAILS,
+].join('\n');
+const NO_NOTE = [
+  'Run summary',
+  '',
+  'The run was stopped before the work was handed over.',
+  '',
+  'Details:',
+  '- No helpers were started.',
+  '- Budget tokens used: 900 by the lead.',
 ].join('\n');
 
 function comment(over: Partial<TicketCommentDto> & { id: string }): TicketCommentDto {
@@ -84,6 +112,75 @@ describe('ticket comments by the app', () => {
     expect(body.querySelector('p')?.className).toContain('whitespace-pre-wrap');
     // The title line is the card's heading, not repeated in the body.
     expect(body.textContent).not.toContain('Run summary');
+  });
+
+  it('shows the lead’s note as the comment, with the details folded away (S-C)', () => {
+    const list = renderComments([comment({ id: 'c-app', author: 'app', body: HUMAN })]);
+    const card = within(list).getByTestId('run-summary');
+    expect(card.getAttribute('data-layout')).toBe('comment');
+    expect(card.getAttribute('aria-label')).toBe('Lead · Run summary, Run 2');
+    expect(
+      within(card).getByRole('heading', { name: 'Lead · Run summary', level: 4 }),
+    ).toBeTruthy();
+    expect(within(card).getByTestId('comment-author').textContent).toBe('Agent Control Plane');
+    // The note is the comment's text, line breaks kept; the markers are not shown.
+    const text = within(card).getByTestId('run-summary-text');
+    expect(text.textContent).toBe(HUMAN_NOTE);
+    expect(text.className).toContain('whitespace-pre-wrap');
+    const body = within(card).getByTestId('run-summary-body');
+    expect(body.textContent).not.toContain('From the lead');
+    expect(body.textContent).not.toContain('Run summary');
+    // The details are collapsed behind a "Details" disclosure, a native one the keyboard opens.
+    const details = within(card).getByTestId<HTMLDetailsElement>('run-summary-details');
+    expect(details.tagName).toBe('DETAILS');
+    expect(details.open).toBe(false);
+    const summary = within(details).getByText('Details');
+    expect(summary.tagName).toBe('SUMMARY');
+    fireEvent.click(summary);
+    expect(details.open).toBe(true);
+    // Opened, the facts read as today's sections: one list of short sentences.
+    expect(
+      within(details)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(HUMAN_DETAILS.map((l) => l.slice(2)));
+  });
+
+  it('shows the app’s one sentence as “Run summary” when the lead left no note', () => {
+    const list = renderComments([comment({ id: 'c-app', author: 'app', body: NO_NOTE })]);
+    const card = within(list).getByTestId('run-summary');
+    expect(card.getAttribute('aria-label')).toBe('Run summary, Run 2');
+    expect(within(card).getByRole('heading', { name: 'Run summary', level: 4 })).toBeTruthy();
+    expect(within(card).queryByText(/^Lead/)).toBeNull();
+    expect(within(card).getByTestId('run-summary-text').textContent).toBe(
+      'The run was stopped before the work was handed over.',
+    );
+    const details = within(card).getByTestId<HTMLDetailsElement>('run-summary-details');
+    expect(details.open).toBe(false);
+    expect(within(details).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('says “updated” on a later handover’s summary', () => {
+    const list = renderComments([
+      comment({
+        id: 'c-app',
+        author: 'app',
+        body: HUMAN.replace(/^Run summary/, 'Run summary (updated)'),
+      }),
+    ]);
+    const card = within(list).getByTestId('run-summary');
+    expect(
+      within(card).getByRole('heading', { name: 'Lead · Run summary (updated)', level: 4 }),
+    ).toBeTruthy();
+    expect(within(card).getByTestId('run-summary-body').textContent).not.toContain('updated');
+  });
+
+  it('shows an older summary (no Details line) as before', () => {
+    const list = renderComments([comment({ id: 'c-app', author: 'app', body: SUMMARY })]);
+    const card = within(list).getByTestId('run-summary');
+    expect(card.getAttribute('data-layout')).toBe('sections');
+    expect(within(card).queryByTestId('run-summary-details')).toBeNull();
+    expect(within(card).queryByTestId('run-summary-text')).toBeNull();
   });
 
   it('shows the merge note as a small line, not a card', () => {

@@ -3605,6 +3605,12 @@ export const RUN_SUMMARY_COPY = {
   authorTip:
     'Written by Agent Control Plane from what it recorded during the run, with the lead agent’s note when it left one.',
   title: 'Run summary',
+  /** A later handover's summary of the same run. */
+  updatedTitle: 'Run summary (updated)',
+  /** Whose words the comment's text is, when the lead left a note: "Lead · Run summary". */
+  lead: 'Lead',
+  /** The disclosure over the facts the app recorded. */
+  details: 'Details',
   /** "Run 2", when the comment belongs to a run of this ticket. */
   ofRun: (n: number) => `Run ${formatCount(n)}`,
   /** The words around the parts of "Merged acp/WEB-12 into main at 1a2b3c4". */
