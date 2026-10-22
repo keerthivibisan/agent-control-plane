@@ -631,6 +631,50 @@ side." Two full-width pages (`features/review/`; the shell drops its 88rem limit
   changed" on the ticket branch card (while it is open); the ticket page's tab (D-B) links here.
 - Copy lives in `features/review/copy.ts`; no server change and no new storage.
 
+## Ticket page: Comments, Conversation, attachments (v0.3.0 C-B, ADR-0026)
+
+The ticket page's tabs are **Comments · Agents · Files changed · Checks · Conversation**
+(`ticket-tabs.ts`). Comments is the default (no `?tab=`); `?tab=conversation` opens the last one.
+Old words still land: `comments` and `plan` on Comments, `workflow` on Agents, `changes` on Files
+changed, `activity` and `timeline` on Conversation. A comment's tab follows its `kind`
+(`features/activity/comment-kind.ts`); a comment without one gets it as ADR-0026 says (owner →
+comment, reviewer → review, the app → run facts or a one-line system note, the lead → note).
+
+- **Comments** (`features/ticket/CommentsTab.tsx`), the home: what waits for you (approvals,
+  changes that need you, the legacy review list) and the plan under review stay first, then a
+  thread on GitHub's vertical line: the description box (the key, Description, Created, **Attach
+  files** and Edit; the ticket's own attachments under the text), the lead's **ticket summary**
+  (one card with an accent edge and a "Ticket summary" label, the newest version, "Updated" once a
+  later run rewrote it, earlier versions folded under "N earlier summaries"), people's comments
+  (with "on plan version N" and their attachments), the final-step box and the comment box. A line
+  under the thread points to Conversation. The sidebar stays beside it.
+- **Safe formatting** (`features/activity/RichText.tsx`) for every text written on the ticket:
+  paragraphs keep their line breaks; lists, quotes, fenced and inline code, bold and italic; links
+  only for `http(s):` and `mailto:`, in a new tab without a referrer; HTML shows as text; headings
+  read as bold lines (a comment never adds to the page outline).
+- **Attachments** (`features/attachments`): images as 10rem thumbnails that open the file in a new
+  tab, other files as chips (type icon, name, size, download). The owner's own have a Delete that
+  asks once, in place ("Delete name? Agents can no longer read it."), focus on its Delete. Attach
+  with the button (a hidden file input, several files) or by dropping files on the box (a dashed
+  accent overlay says "Drop files to attach them"). The browser checks the core limits first (10
+  MB, 50 per ticket, 10 per comment, the allowlist by type or extension, never HTML or SVG, a plain
+  name) and lists a refused file with the reason; an allowed one uploads at once (raw bytes,
+  `X-Attachment-Name`), shows "Uploading…" then "Attached", and its id goes with the comment.
+- **Conversation** (`features/activity/ActivityTimeline.tsx`): `GET /api/tickets/:id/activity`
+  oldest first, full width. **Filter chips** above it ("Show": Everyone, then each actor with a
+  count; `aria-pressed` buttons, one at a time). Each item on the line with an icon marker: runs
+  starting (with "Show this run"), plan versions (folded steps), agents starting and ending as event
+  lines; agents' notes, the reviewer's findings (an accent edge and the "Reviewer" label), the
+  lead's notes and decisions as boxes; the run facts as the run summary card (ADR-0024's card,
+  moved here); merges and pull requests as the small merge line. Links per item: the change's or
+  the ticket branch's review page (D-A), the pull request (opens on GitHub), the plan. A server
+  without the route gets the same timeline from the ticket's own runs, plans and comments.
+- **Files changed after a merge:** "Merged: read only" (a purple label) instead of "Review all
+  files"; the merged files and the folded diff from `GET /runs/:id/ticket-branch`; no "Files
+  changed" links per change. When the commits are gone (410, or a refusal whose code names missing
+  commits), an empty state says "The files of this merge are no longer available".
+- Copy lives in `features/activity/copy.ts`.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |
