@@ -240,7 +240,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   });
   const card = page.getByTestId('plan-card');
   await expect(card).toContainText('Add the field and check the code at checkout');
-  // v0.3.0 D-B: the plan is on Conversation, the graph and the chat on Agents.
+  // v0.3.0 D-B: the plan is on Comments (C-B), the graph and the chat on Agents.
   await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-plan-approval')).toHaveAttribute(
     'data-state',
@@ -256,7 +256,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   ).toBeVisible();
   await expect(planPanel).not.toContainText('lead agent');
   await shoot(page, 'plan-review');
-  await ticketTab(page, /Conversation/).click();
+  await ticketTab(page, /Comments/).click();
   // Request changes: the comment reaches the planner, which writes version 2.
   const change = 'Also limit the code to 20 characters.';
   await card.getByLabel('What should change?').fill(change);
@@ -296,7 +296,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await act(request, lead.id, 'call-lead', { name: 'request_review', input: {} });
 
   // ---- Review & merge: the owner merges the helper's change.
-  await ticketTab(page, /Conversation/).click();
+  await ticketTab(page, /Comments/).click();
   const reviewItem = page
     .getByTestId('review-list')
     .getByRole('listitem')
@@ -330,8 +330,9 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
     name: 'post_review',
     input: { text: 'The discount field has no limit on its length.' },
   });
+  // The findings are on Conversation (v0.3.0 C-B, ADR-0026).
   await ticketTab(page, /Conversation/).click();
-  const comment = page.getByTestId('comments').locator('[data-author="reviewer"]');
+  const comment = page.getByTestId('activity').locator('[data-author="reviewer"]');
   await expect(comment).toContainText('The discount field has no limit on its length.');
   await expect(comment.getByTestId('comment-author')).toHaveText('Reviewer');
   await act(request, reviewer.id, 'finish');

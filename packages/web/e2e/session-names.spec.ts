@@ -315,10 +315,11 @@ test('the ticket shows the run summary as the lead’s comment and the merge as 
   page,
 }) => {
   await serveTicket(page, withAppComments(doneScenario()));
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
+  // The run facts and merge lines are on Conversation since v0.3.0 C-B (ADR-0026).
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}?tab=conversation`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
 
-  const comments = page.getByTestId('comments');
+  const comments = page.getByTestId('activity');
   const card = comments.getByTestId('run-summary');
   await expect(card).toHaveCount(1);
   await expect(card.getByRole('heading', { name: 'Lead · Run summary', level: 4 })).toBeVisible();
@@ -346,8 +347,8 @@ test('the ticket shows the run summary as the lead’s comment and the merge as 
 
   const merge = comments.getByTestId('merge-line');
   await expect(merge).toContainText('Merged acp/WEB-12 into main at 4f2a9c1');
-  // The owner's and the lead's comments are as they were.
-  await expect(comments.locator('li[data-author="owner"]').first()).toContainText('You');
+  // The owner's comments are on Comments, not here.
+  await expect(comments.locator('li[data-author="owner"]')).toHaveCount(0);
 
   if (SHOTS !== undefined) {
     for (const scheme of ['light', 'dark'] as const) {
@@ -370,8 +371,8 @@ test('a summary without a note says “Run summary”; an older one shows its se
       appComment('c-app-stopped', NO_NOTE, '2026-10-15T09:45:00.000Z'),
     ]),
   );
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
-  const cards = page.getByTestId('comments').getByTestId('run-summary');
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}?tab=conversation`);
+  const cards = page.getByTestId('activity').getByTestId('run-summary');
   await expect(cards).toHaveCount(3);
 
   // Oldest first: the older layout, as before.

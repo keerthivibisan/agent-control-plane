@@ -430,7 +430,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await waitRun((r) => r.changes?.find((c) => c.role === 'Docs writer')?.state === 'decision');
   await lead(request, leadAgent.id, 'ask_owner', { agentId: docs.id, question: QUESTION });
 
-  await ticketTab(page, /Conversation/).click();
+  await ticketTab(page, /Comments/).click();
   const need = page.getByTestId('changes-need-you');
   await expect(need).toContainText('1 change needs your decision');
   await need.getByRole('button', { name: 'Open' }).click();
@@ -507,7 +507,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
 
   // ---- The owner's single merge: the combined diff, the checks on the tip, Merge into main.
   // v0.3.0 D-B: the checks on Checks, the combined change on Files changed, the merge on
-  // Conversation.
+  // Comments (C-B).
   await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute(
     'data-state',
     'needs-you',
@@ -523,7 +523,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await branchFiles.getByTestId('branch-diff').locator('summary').click();
   await expect(branchFiles.getByTestId('branch-diff')).toContainText(DIFF_MARKER);
   await shootPart(page, 'ticket-branch', 'branch-files');
-  await ticketTab(page, /Conversation/).click();
+  await ticketTab(page, /Comments/).click();
   const branchCard = page.getByTestId('ticket-branch');
   await expect(branchCard.getByRole('button', { name: 'Merge into main' })).toBeVisible();
   await branchCard.getByRole('button', { name: 'Merge into main' }).click();
@@ -671,6 +671,8 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   const branched = await waitRun((r) => r.ticketBranch?.state === 'open');
   expect(branched.status).toBe('RUNNING');
   await expect(page.getByTestId('plan-card')).toHaveCount(0);
+  // Plan versions are on Conversation (v0.3.0 C-B).
+  await ticketTab(page, /Conversation/).click();
   await expect(page.getByTestId('timeline-plan')).toContainText(
     'Approved automatically (Full auto)',
   );
@@ -747,7 +749,7 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   });
   await ticketTab(page, /Files changed/).click();
   await expect(page.getByTestId('branch-files')).toContainText('cart-total.ts');
-  await ticketTab(page, /Conversation/).click();
+  await ticketTab(page, /Comments/).click();
   await expect(page.getByTestId('approvals')).toHaveCount(0);
   const branchCard = page.getByTestId('ticket-branch');
   await branchCard.getByRole('button', { name: 'Merge into main' }).click();

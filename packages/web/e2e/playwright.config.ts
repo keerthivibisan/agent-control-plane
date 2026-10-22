@@ -76,6 +76,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // v0.3.0 C-B (ADR-0026): Comments, Conversation and attachments, routes from fixtures.
+      name: 'ticket-activity',
+      testMatch: 'ticket-activity.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       // Redesign R-A: the project-first shell (and its screenshots) on the demo server.
       name: 'shell',
       testMatch: 'shell.spec.ts',

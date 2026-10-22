@@ -133,7 +133,7 @@ test('an old #/tickets/:id link opens the ticket under its project', async ({ pa
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Dark mode toggle');
 });
 
-test('plan review: the plan card comes first on Conversation; the tree is on Agents', async ({
+test('plan review: the plan card comes first on Comments; the tree is on Agents', async ({
   page,
 }) => {
   await open(page, planReviewScenario());
@@ -160,8 +160,8 @@ test('working: depth-2 helpers nest under their parent; an approval waits', asyn
     .click();
   await page.getByRole('tab', { name: /Approvals/ }).click();
   await shoot(page, 'working-helper');
-  // What waits for you is first on Conversation.
-  await page.getByRole('tab', { name: /Conversation/ }).click();
+  // What waits for you is first on Comments (v0.3.0 C-B).
+  await page.getByRole('tab', { name: /Comments/ }).click();
   await expect(page.getByTestId('approvals')).toContainText('Edit src/theme/store.ts');
 });
 
@@ -220,8 +220,9 @@ test('in review with stages: reviewer findings and the tester’s change', async
   await expect(page.getByTestId(`agent-${TESTER}`).getByTestId('agent-term')).toHaveText(
     'Tester agent',
   );
+  // The findings are on Conversation (v0.3.0 C-B, ADR-0026).
   await page.getByTestId('reviewer-findings-link').click();
-  const reviewer = page.getByTestId('comments').locator('[data-author="reviewer"]');
+  const reviewer = page.getByTestId('activity').locator('[data-author="reviewer"]');
   await expect(reviewer.getByTestId('comment-author')).toHaveText('Reviewer');
   await shoot(page, 'reviewed');
 });

@@ -69,7 +69,7 @@ async function serve(page: Page, sc: LoopScenario): Promise<void> {
 }
 
 async function shoot(page: Page, name: string, tab: string): Promise<void> {
-  const tabQuery = tab === 'conversation' ? '' : `?tab=${tab}`;
+  const tabQuery = tab === 'comments' ? '' : `?tab=${tab}`;
   await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}${tabQuery}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Saved searches');
   await expect(page.getByTestId(`ticket-tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
@@ -87,7 +87,12 @@ async function shoot(page: Page, name: string, tab: string): Promise<void> {
   }
 }
 
-test('ticket page: Conversation, ready for the final step', async ({ page }) => {
+test('ticket page: Comments, ready for the final step', async ({ page }) => {
+  await serve(page, ghReviewScenario());
+  await shoot(page, 'comments', 'comments');
+});
+
+test('ticket page: Conversation, what happened', async ({ page }) => {
   await serve(page, ghReviewScenario());
   await shoot(page, 'conversation', 'conversation');
 });

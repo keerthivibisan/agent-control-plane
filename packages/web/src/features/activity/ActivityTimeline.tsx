@@ -201,10 +201,13 @@ function ItemView({
           </Marker>
         }
       >
-        <RunSummaryCard
-          comment={asComment(item, detail)}
-          runLabel={n === null ? null : RUN_SUMMARY_COPY.ofRun(n)}
-        />
+        <div className="flex flex-col gap-2">
+          <RunSummaryCard
+            comment={asComment(item, detail)}
+            runLabel={n === null ? null : RUN_SUMMARY_COPY.ofRun(n)}
+          />
+          <ItemLink item={item} detail={detail} />
+        </div>
       </Row>
     );
   }

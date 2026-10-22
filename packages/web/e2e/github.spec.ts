@@ -429,8 +429,9 @@ test('G-D: the pull request lines in the comments', async ({ page }) => {
     { start: 'merged', push: 'merged', refresh: 'merged' },
     withPullRequestLines,
   );
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
-  const comments = page.getByTestId('comments');
+  // On Conversation since v0.3.0 C-B (ADR-0026).
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=conversation`);
+  const comments = page.getByTestId('activity');
   const lines = comments.getByTestId('merge-line');
   await expect(lines).toHaveCount(3);
   await expect(comments.locator('[data-kind="pr-merged"]')).toContainText(
@@ -443,5 +444,5 @@ test('G-D: the pull request lines in the comments', async ({ page }) => {
     'pull request #42 into main was already open',
   );
   await expect(comments.locator('[data-kind="pr-merged"] code')).toHaveText(['main', '9c8b7a6']);
-  await shootPart(page, 'pr-lines', 'comments');
+  await shootPart(page, 'pr-lines', 'activity');
 });
