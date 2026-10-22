@@ -286,6 +286,27 @@ put it on an inner element.
   `TokensIcon`, …), `IconProps` (`size`, SVG props), 1.75px strokes, `currentColor`,
   `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
   `FeatureIcon`, `BugIcon`, `ChoreIcon` and `CloseIcon` are there for the board and dialogs.
+- **Diff viewer** (`components/diff`, v0.3.0 G-C, ADR-0025 §6): `DiffSection` (a `Details`-style
+  disclosure that draws the viewer only once opened) around `DiffViewer`, used by the change card
+  and the ticket branch card.
+  - A summary line; **Unified / Side by side** (`Segmented`, remembered in `acp.diff.view` in
+    localStorage, every access guarded, shared by every viewer on the page); **Collapse all /
+    Expand all**.
+  - A file list (status icon, path with the folder dimmed, +/−; one tab stop, ↑/↓/Home/End,
+    Enter jumps to the file and opens it).
+  - Each file: a header button (`aria-expanded`) with status word, similarity, `Binary` and `Cut`
+    tags and +/−; then a table with line numbers before and after, a decorative +/− sign and the
+    screen-reader words "Added line" / "Removed line"; changed words in a stronger tint of the
+    line's color. Unchanged runs keep 3 lines next to a change; longer runs fold behind "Show N
+    hidden lines". Side by side keeps a 36rem minimum and scrolls sideways in narrow panels;
+    unified wraps long lines.
+  - Syntax colors from Shiki, loaded with dynamic imports only for a known language
+    (`language.ts`) when a file is drawn; the CSS-variables theme, so `diff.css` sets the colors
+    for both themes (4.5:1 on every line background, `tests/components/diff/contrast.test.ts`).
+    Plain text while loading, on failure, for other languages and above 3,000 lines.
+  - Large diffs: a file over 400 lines, and every file after the first 1,500 lines, waits for
+    "Show this file". A diff the server cut says so, marks the cut file, and names the listed
+    files after the cut.
 
 ## Agent views (the logo's vocabulary)
 
