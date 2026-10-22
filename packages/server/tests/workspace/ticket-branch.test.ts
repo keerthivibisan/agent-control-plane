@@ -232,20 +232,24 @@ describe("the owner's final merge", { timeout: GIT_TIMEOUT_MS }, () => {
     expect(review).toMatchObject({ tip, baseHead: tb.baseCommit, baseMoved: false });
     expect(review.files.map((f) => f.path)).toEqual(['one.txt']);
     const result = await manager.mergeTicketBranch(ref, tip);
-    expect(result).toEqual({ commit: tip, previousBaseCommit: tb.baseCommit, branchDeleted: true });
+    expect(result).toEqual({
+      commit: tip,
+      previousBaseCommit: tb.baseCommit,
+      branchDeleted: true,
+      movedCheckout: true,
+    });
     expect(head(repo)).toBe(tip);
     expect(readFileSync(join(repo, 'one.txt'), 'utf8')).toBe('1\n');
     expect(branches(repo)).not.toContain('acp/WEB-1');
   });
 
-  it('refuses a dirty tree, another branch, a moved tip and a moved base', async () => {
+  it('refuses a dirty tree on the target, a moved tip and a moved base', async () => {
     const { manager, repo, ref, tip } = await merged();
     write(repo, 'README.md', 'dirty\n');
     expect(await code(manager.mergeTicketBranch(ref, tip))).toBe('base-dirty');
     git(repo, 'checkout', '--quiet', '--', 'README.md');
-    git(repo, 'checkout', '--quiet', '-b', 'other');
-    expect(await code(manager.mergeTicketBranch(ref, tip))).toBe('base-branch-changed');
-    git(repo, 'checkout', '--quiet', 'main');
+    // ADR-0025: another checked-out branch no longer refuses the merge; branching.test.ts covers
+    // the compare-and-swap of a target that is not checked out.
     expect(await code(manager.mergeTicketBranch(ref, 'f'.repeat(40)))).toBe('ticket-branch-moved');
     write(repo, 'main.txt', 'm\n');
     git(repo, 'add', '--all');

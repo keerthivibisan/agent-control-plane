@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   BoardDtoSchema,
   CheckRunDtoSchema,
+  CodeHostStatusDtoSchema,
   ContextCandidateDtoSchema,
   HarnessStatusDtoSchema,
   ProjectAgentSetupDtoSchema,
@@ -11,6 +12,7 @@ import {
   TicketCommentDtoSchema,
   TicketDetailDtoSchema,
   TicketDtoSchema,
+  TicketBranchDtoSchema,
 } from '@acp/core/api';
 import type { BoardService } from '../board/service.js';
 import { requireCsrf } from '../control/csrf.js';
@@ -62,6 +64,11 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
     const dto = await board.createHarnessTicket(param(req.params['id']));
     res.status(201).json(out(TicketDtoSchema, dto));
   });
+  // ADR-0025: GitHub through the owner's own `gh` login. A GET runs `gh` (exit codes, and the
+  // default branch); nothing is pushed or opened except by the POSTs below, on the owner's click.
+  router.get('/projects/:id/code-host', async (req, res) => {
+    res.json(out(CodeHostStatusDtoSchema, await board.codeHostStatus(param(req.params['id']))));
+  });
   router.get('/projects/:id/context-candidates', async (req, res) => {
     const list = await board.contextCandidates(param(req.params['id']));
     res.json(out(CandidateListSchema, list));
@@ -97,6 +104,14 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.post('/tickets/:id/comments', csrf, json, (req, res) => {
     const dto = board.addComment(param(req.params['id']), req.body);
     res.status(201).json(out(TicketCommentDtoSchema, dto));
+  });
+  router.post('/tickets/:id/branch/pull-request', csrf, json, async (req, res) => {
+    const dto = await board.openPullRequest(param(req.params['id']), req.body);
+    res.json(out(TicketBranchDtoSchema, dto));
+  });
+  router.post('/tickets/:id/branch/pull-request/refresh', csrf, json, async (req, res) => {
+    const dto = await board.refreshPullRequest(param(req.params['id']));
+    res.json(out(TicketBranchDtoSchema, dto));
   });
   router.post('/tickets/:id/plans/:planId/decision', csrf, json, (req, res) => {
     const dto = board.decidePlan(param(req.params['id']), param(req.params['planId']), req.body);

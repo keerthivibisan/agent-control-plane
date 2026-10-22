@@ -91,6 +91,34 @@ export function mergeLine(
   return `Merged ${branch} into ${baseBranch} at ${commit.slice(0, 7)}${anyway}${tip === null ? '' : `; ${tipChecksText(tip)}`}.`;
 }
 
+/**
+ * The `app` line when GitHub reports the ticket branch's pull request merged (ADR-0025 §4), seen
+ * on the owner's view or Refresh: `Merged via pull request #12 into develop at abc1234; checks
+ * passed on the tip (2).` The commit is the host's merge commit when it says, else the ticket
+ * branch tip that was pushed.
+ */
+export function pullRequestMergeLine(
+  number: number,
+  target: string,
+  commit: string,
+  options: Pick<MergeLineOptions, 'tipChecks'> = {},
+): string {
+  const tip = options.tipChecks ?? null;
+  return `Merged via pull request #${number} into ${target} at ${commit.slice(0, 7)}${tip === null ? '' : `; ${tipChecksText(tip)}`}.`;
+}
+
+/** The `app` line after the owner's Push & open PR (ADR-0025 §4). */
+export function pullRequestOpenedLine(
+  branch: string,
+  target: string,
+  number: number,
+  created: boolean,
+): string {
+  return created
+    ? `Pushed ${branch} and opened pull request #${number} into ${target}.`
+    : `Pushed ${branch}; pull request #${number} into ${target} was already open.`;
+}
+
 // ------------------------------------------------------------------ facts
 
 export interface CheckTally {

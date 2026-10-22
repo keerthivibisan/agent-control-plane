@@ -38,6 +38,7 @@ import {
   type RunWorkflowDto,
   type RunWorkflowGraphDto,
   type StreamNoticeDto,
+  type TicketBranchDto,
   type TicketBranchReviewDto,
 } from '@acp/core/api';
 import {
@@ -100,6 +101,7 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
+import type { CodeHostService } from '../code-host/index.js';
 import { HttpError, notFound } from '../errors.js';
 import { errorFields, type Logger } from '../logger.js';
 import {
@@ -299,6 +301,8 @@ export interface ControlServiceDeps {
   csrfToken?: string;
   /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
   workspace?: ControlWorkspaceHooks;
+  /** ADR-0025: the owner's push and pull requests; omitted, those routes answer 404. */
+  codeHost?: CodeHostService;
   /** The reviewer's temporary checkouts (ADR-0019); defaults to `<dataDir>/review-checkouts`. */
   reviewCheckouts?: ReviewCheckouts;
   /** The run-scoped skills plugins (ADR-0019 §4); defaults to `<dataDir>/runs/<runId>/…`. */
@@ -356,6 +360,17 @@ export interface ControlService {
    * discard or update from the base branch; returns the ticket branch afterwards.
    */
   ticketBranchAction(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
+  /**
+   * ADR-0025 §4: the owner's Push & open PR for the run's ticket branch (`OpenPullRequestRequest`),
+   * or the link to the open one; returns the ticket branch with its pull request.
+   */
+  openPullRequest(
+    runId: string,
+    body: unknown,
+    ticket: { key: string; title: string },
+  ): Promise<TicketBranchDto>;
+  /** ADR-0025: reads the pull request's state now; merged on GitHub completes the run. */
+  refreshPullRequest(runId: string): Promise<TicketBranchDto>;
   /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
   createTicketRun(input: TicketRunInput): RunDetailDto;
   /**
@@ -519,9 +534,34 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     apply: (live, command) => apply(live as LiveRun, command),
     workspaceFor: (live, row) => workspaceFor(live as LiveRun, row),
     ...(deps.flushIngestion !== undefined && { flushIngestion: deps.flushIngestion }),
+    appComment: (live, text) => appComment(live as LiveRun, text),
+    ...(deps.codeHost !== undefined && { codeHost: deps.codeHost }),
+    notify: (live) => notify('runs-changed', live as LiveRun),
     track,
     countDiagnostic: (code) => countDiagnostic(code),
   });
+
+  /**
+   * ADR-0024 §3: one comment by author `app` on the run's ticket (app data only: branch names,
+   * commit ids, counts, pull request numbers), followed by the board's notice.
+   */
+  function appComment(live: LiveRun, text: string): void {
+    const ticketId = live.state.run.ticketId;
+    if (ticketId === null) return;
+    try {
+      store.workspaceRepos.comments.insert({
+        ticketId,
+        runId: live.state.run.id,
+        author: 'app',
+        body: text,
+      });
+    } catch (error) {
+      logger.log('error', 'app comment not stored', {
+        runId: live.state.run.id,
+        ...errorFields(error),
+      });
+    }
+  }
 
   /** ADR-0024 §3: the run summary comments, composed from the app's own records. */
   const summaries = createRunSummaries({
@@ -2476,18 +2516,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             logger.log('error', 'owner comment not stored', { runId, ...errorFields(error) });
           }
         },
-        appComment: (text) => {
-          // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
-          const ticketId = live.state.run.ticketId;
-          if (ticketId === null) return;
-          try {
-            store.workspaceRepos.comments.insert({ ticketId, runId, author: 'app', body: text });
-          } catch (error) {
-            logger.log('error', 'app comment not stored', { runId, ...errorFields(error) });
-          }
-        },
+        // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
+        appComment: (text) => appComment(live, text),
       });
       return loop.ticketBranchReview(live);
+    },
+
+    openPullRequest(runId, body, ticket) {
+      return loop.openPullRequest(get(runId), body, ticket);
+    },
+
+    refreshPullRequest(runId) {
+      return loop.refreshPullRequest(get(runId));
     },
 
     decidePlan(runId, planId, decision, comment) {

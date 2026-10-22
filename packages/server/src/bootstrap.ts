@@ -33,6 +33,7 @@ import {
   type ControlWorkspaceHooks,
 } from './control/service.js';
 import { createCheckRunner, createMainChecks, type CheckRunner } from './harness/index.js';
+import { createCodeHostService, type CliRunner } from './code-host/index.js';
 import { createGitRunner, createWorkspaceManager, type GitRunner } from './workspace/index.js';
 
 /** The demo projects live only in the separate demo database (AGENTS.md §3.9). */
@@ -71,6 +72,11 @@ export interface StartOptions {
    * did, so the verification of that legacy flow keeps running against the real composition.
    */
   board?: { legacyTicketRuns?: boolean };
+  /**
+   * Tests and the e2e (ADR-0025): the code host CLI runner or command (a fake `gh`), so nothing
+   * reaches GitHub. Default: the real `gh` on the PATH, run only on the owner's request.
+   */
+  codeHost?: { cli?: CliRunner; ghCommand?: string };
 }
 
 export interface RunningServer {
@@ -170,6 +176,13 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   // Filled in by the board service below; the control service reads it at call time.
   const workspaceHooks: ControlWorkspaceHooks = {};
   const workspaceManager = createWorkspaceManager({ dataDir: config.dataDir, git, logger });
+  // ADR-0025: GitHub through the owner's `gh` login; pushes with the same git runner.
+  const codeHost = createCodeHostService({
+    git,
+    logger,
+    ...(options.codeHost?.cli !== undefined && { cli: options.codeHost.cli }),
+    ...(options.codeHost?.ghCommand !== undefined && { ghCommand: options.codeHost.ghCommand }),
+  });
   const controlService = createControlService({
     db,
     repos,
@@ -186,6 +199,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     runTimeoutMs: config.runTimeoutMs,
     flushIngestion: () => scheduler.pollNow(),
     workspace: workspaceHooks,
+    codeHost,
     ...options.control,
   });
   controlRef.current = controlService;
@@ -248,6 +262,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     harness: projectHarness,
     checks,
     git,
+    ticketBranches: workspaceManager,
+    codeHost,
     now,
     publish: (n) => notifier.publish(n),
     logger,

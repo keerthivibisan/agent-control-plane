@@ -23,6 +23,7 @@ import {
   type ControlWorkspaceHooks,
 } from '../../src/control/service.js';
 import { createCheckRunner, createMainChecks } from '../../src/harness/index.js';
+import type { CodeHostService } from '../../src/code-host/index.js';
 import type { Logger } from '../../src/logger.js';
 import { createGitRunner, createWorkspaceManager } from '../../src/workspace/index.js';
 import { createFakeManagedAdapter } from '../control/fake-adapter.js';
@@ -78,6 +79,8 @@ export interface BoardSetupOptions {
    * keep: the owner merges each change into the base branch). Default: the review loop.
    */
   legacyRuns?: boolean;
+  /** ADR-0025: the code host (a fake `gh` over a local bare remote); omitted, none. */
+  codeHost?: CodeHostService;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -122,6 +125,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     homeDir,
     claudeDir: join(homeDir, '.claude'),
     workspace: hooks,
+    ...(options.codeHost !== undefined && { codeHost: options.codeHost }),
   });
   const workspace = createWorkspaceRepositories(db, { now });
   const harness = createProjectHarness({ repos, workspace, now, logger });
@@ -149,6 +153,8 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     harness,
     checks,
     git,
+    ticketBranches: workspaces,
+    ...(options.codeHost !== undefined && { codeHost: options.codeHost }),
     now,
     publish: base.publish,
     logger,

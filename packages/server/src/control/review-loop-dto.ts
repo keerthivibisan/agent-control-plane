@@ -18,6 +18,20 @@ export function toTicketBranchDto(row: TicketBranchRow): TicketBranchDto {
     headCommit: row.headCommit,
     state: row.state,
     mergedCommit: row.mergedCommit,
+    // ADR-0025: the pull request raised for the branch; its base and head are the branch's own.
+    pullRequest:
+      row.pullRequest === null
+        ? null
+        : {
+            provider: row.pullRequest.provider,
+            number: row.pullRequest.number,
+            url: row.pullRequest.url,
+            state: row.pullRequest.state,
+            baseBranch: row.baseBranch,
+            headBranch: row.branch,
+            checkedAt: row.pullRequest.checkedAt,
+            pushedCommit: row.pullRequest.pushedCommit,
+          },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

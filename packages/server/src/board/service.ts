@@ -15,6 +15,8 @@ import {
   type RunBudget,
   type RunStatus,
   type Ticket,
+  type TicketBranchPrefs,
+  type TicketBranchPrefsPatch,
   type TicketRunOptions,
   type TicketStage,
   type TokenCounts,
@@ -37,6 +39,8 @@ import {
   type RunDetailDto,
   type StreamNoticeDto,
   type TicketCardDto,
+  type CodeHostStatusDto,
+  type TicketBranchDto,
   type TicketCommentDto,
   type TicketDetailDto,
   type TicketDto,
@@ -64,7 +68,8 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
-import { managedDisabled } from '../control/errors.js';
+import type { CodeHostService } from '../code-host/index.js';
+import { managedDisabled, workspaceError } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
 import { withPlanDeciders } from '../control/store.js';
 import { countsAsHelper } from '../control/roles.js';
@@ -73,7 +78,12 @@ import { HttpError, notFound } from '../errors.js';
 import { HarnessError, listContextCandidates } from '../harness/index.js';
 import type { Logger } from '../logger.js';
 import type { ProjectsService } from '../services/projects.js';
-import type { GitRunner } from '../workspace/index.js';
+import {
+  WorkspaceError,
+  ticketBranchPlan,
+  type GitRunner,
+  type WorkspaceManager,
+} from '../workspace/index.js';
 import type { CheckService } from './checks.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
@@ -129,6 +139,12 @@ export interface BoardService {
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
+  /** ADR-0025: what the app can do with the project's `origin` (`gh` by exit code only). */
+  codeHostStatus(projectId: string): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §4: Push & open PR for the ticket's current run's ticket branch. */
+  openPullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** ADR-0025: reads the pull request's state now (the owner's view or Refresh). */
+  refreshPullRequest(ticketId: string): Promise<TicketBranchDto>;
   /** What the control service calls back into (ticket status, notices, checks, merge record). */
   controlHooks(): ControlWorkspaceHooks;
 }
@@ -145,6 +161,13 @@ export interface BoardServiceDeps {
   now: () => Date;
   publish: (notice: StreamNoticeDto) => void;
   logger: Logger;
+  /**
+   * ADR-0025: checks a ticket's branch plan (its target exists locally, its name is not a
+   * long-lived branch) before the run starts. Omitted in tests that do not use git.
+   */
+  ticketBranches?: Pick<WorkspaceManager, 'checkTicketBranchPlan'>;
+  /** ADR-0025: the code host status; omitted, its route answers `code_host_unavailable`. */
+  codeHost?: Pick<CodeHostService, 'status'>;
   /**
    * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
    * the legacy flow those runs keep stays covered. Production never sets it.
@@ -196,6 +219,23 @@ export function patchRunOptions(
   });
 }
 
+/**
+ * A ticket's branch settings after an update (ADR-0025): a value sets the field, `null` puts it
+ * back to the project's, an absent field is kept; `null` for the whole patch clears both.
+ */
+export function patchBranchPrefs(
+  current: TicketBranchPrefs | undefined,
+  patch: TicketBranchPrefsPatch | null,
+): TicketBranchPrefs {
+  if (patch === null) return {};
+  const name = patch.name === null ? undefined : (patch.name ?? current?.name);
+  const target = patch.target === null ? undefined : (patch.target ?? current?.target);
+  return {
+    ...(name !== undefined && { name }),
+    ...(target !== undefined && { target }),
+  };
+}
+
 export function createBoardService(deps: BoardServiceDeps): BoardService {
   const { logger } = deps;
   const ws: WorkspaceRepositories = createWorkspaceRepositories(deps.db, { now: deps.now });
@@ -213,7 +253,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     return p;
   }
 
-  /** The ticket with its own run options (RL-H, migration 0007). */
+  /** The ticket with its own run options (RL-H, 0007) and branch settings (ADR-0025, 0008). */
   function ticketOrThrow(ticketId: string): Ticket {
     const t = ws.tickets.getById(ticketId);
     if (t === undefined) throw notFound(`Ticket ${ticketId} not found`);
@@ -223,14 +263,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   function withRunOptions(
     ticket: Ticket,
     options: TicketRunOptions | undefined = loop.ticketRunOptions.get(ticket.id),
+    branch: TicketBranchPrefs | undefined = loop.ticketBranchPrefs.get(ticket.id),
   ): Ticket {
-    return loop.ticketRunOptions.withOptions(ticket, options);
+    return loop.ticketBranchPrefs.withPrefs(
+      loop.ticketRunOptions.withOptions(ticket, options),
+      branch,
+    );
   }
 
-  /** The project's tickets, each with its own run options, in number order. */
+  /** The project's tickets, each with its own run options and branch settings, in number order. */
   function ticketsOf(projectId: string): Ticket[] {
     const options = loop.ticketRunOptions.listForProject(projectId);
-    return ws.tickets.listForProject(projectId).map((t) => withRunOptions(t, options.get(t.id)));
+    const branches = loop.ticketBranchPrefs.listForProject(projectId);
+    return ws.tickets
+      .listForProject(projectId)
+      .map((t) => withRunOptions(t, options.get(t.id), branches.get(t.id)));
   }
 
   async function setupFor(projectId: string): Promise<ProjectAgentSetup> {
@@ -302,8 +349,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   }
 
   function toTicketDto(ticket: Ticket, run = runView(ticket.currentRunId)): TicketDto {
-    // A ticket read here carries its run options already; one from a status write gets them now.
-    const full = ticket.runOptions === undefined ? withRunOptions(ticket) : ticket;
+    // A ticket read here carries its own settings already; one from a status write gets them now.
+    const full =
+      ticket.runOptions === undefined || ticket.branch === undefined
+        ? withRunOptions(ticket)
+        : ticket;
     return { ...full, stage: stageOf(ticket, run) };
   }
 
@@ -430,6 +480,32 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         ws.tickets.setStatus(ticket.id, 'ACTIVE', { from: [ticket.status], currentRunId: runId });
       },
     };
+  }
+
+  /**
+   * ADR-0025: a ticket whose branch has a target (its own or the strategy's) or its own name is
+   * checked before the run starts, so a missing target is refused now, not at plan approval. A
+   * ticket with neither keeps the behaviour before ADR-0025 (checked at plan approval).
+   */
+  async function checkBranchPlan(ticket: Ticket, setup: ProjectAgentSetup): Promise<void> {
+    const plan = ticketBranchPlan(setup.branching, ticket);
+    if (deps.ticketBranches === undefined) return;
+    if (plan.target === null && ticket.branch?.name === undefined) return;
+    try {
+      await deps.ticketBranches.checkTicketBranchPlan(project(ticket.projectId).rootPath, plan);
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw workspaceError(error);
+      throw error;
+    }
+  }
+
+  /** The ticket's current run, for its ticket branch (ADR-0021 §4, ADR-0025). */
+  function currentRunOf(ticket: Ticket): string {
+    if (!deps.control.enabled) throw managedDisabled();
+    if (ticket.currentRunId === null) {
+      throw new HttpError(409, 'no_ticket_branch', 'The ticket has no run with a ticket branch');
+    }
+    return ticket.currentRunId;
   }
 
   /** Re-read: the ticket may have moved while the setup was read. */
@@ -679,8 +755,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       project(projectId);
       const input = CreateTicketRequestSchema.parse(body);
       await setupFor(projectId);
-      // RL-H: the ticket and its own run options are stored together.
-      const ticket = loop.ticketRunOptions.insert({ projectId, ...input });
+      // RL-H, ADR-0025: the ticket, its own run options and branch settings are stored together.
+      const ticket = loop.ticketBranchPrefs.insert({ projectId, ...input });
       notice('tickets-changed', { projectId, ticketId: ticket.id });
       return toTicketDto(ticket);
     },
@@ -704,6 +780,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
             ticketId,
             patchRunOptions(current.runOptions, input.runOptions),
           );
+        }
+        // ADR-0025: only branches made later see the change; an existing ticket branch keeps its
+        // name and target.
+        if (input.branch !== undefined) {
+          loop.ticketBranchPrefs.set(ticketId, patchBranchPrefs(current.branch, input.branch));
         }
       });
       notice('tickets-changed', { projectId: current.projectId, ticketId });
@@ -761,6 +842,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         throw new HttpError(409, 'run_in_progress', 'The ticket already has a run in progress');
       }
       const setup = await setupFor(ticket.projectId);
+      if (deps.legacyTicketRuns !== true) await checkBranchPlan(ticket, setup);
       const { limits, budget } = runSettingsFromSetup(setup);
       // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
       const projectApprovals = approvalsOf(setup);
@@ -878,6 +960,30 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     },
 
     runAgentChecks: (runId, agentRunId) => deps.checks.runForAgent(runId, agentRunId),
+
+    async codeHostStatus(projectId) {
+      const p = project(projectId);
+      if (deps.codeHost === undefined) {
+        throw new HttpError(404, 'code_host_unavailable', 'Code hosting is not available here');
+      }
+      return deps.codeHost.status(p.rootPath);
+    },
+
+    async openPullRequest(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const dto = await deps.control.openPullRequest(runId, body, ticket);
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      return dto;
+    },
+
+    async refreshPullRequest(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const dto = await deps.control.refreshPullRequest(runId);
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      return dto;
+    },
 
     controlHooks: () => hooks,
   };
