@@ -588,13 +588,18 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         (input.approvals !== undefined
           ? legacyAllowlistOf(input.approvals)
           : (stored?.allowlist ?? { editInOwnWorktree: false, runHarnessChecks: false }));
+      // ADR-0025: an absent strategy keeps the stored one; `null` removes it.
+      const { branching: branchingInput, ...rest } = input;
+      const branching =
+        branchingInput === undefined ? stored?.branching : (branchingInput ?? undefined);
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
           planFirst: true,
-          ...input,
+          ...rest,
           allowlist,
           ...(approvals !== undefined && { approvals }),
+          ...(branching !== undefined && { branching }),
         });
         notice('projects-changed', { projectId });
         return saved;

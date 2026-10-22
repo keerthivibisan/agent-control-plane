@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from './node-id.js';
+import { BranchStrategySchema, TicketBranchPrefsSchema } from './branching.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
 import {
@@ -91,6 +92,11 @@ export const TicketSchema = z.object({
   get runOptions() {
     return TicketRunOptionsSchema.optional();
   },
+  /**
+   * ADR-0025: the ticket's own branch name and target branch. Absent (or an absent field) follows
+   * the project's branching strategy.
+   */
+  branch: TicketBranchPrefsSchema.optional(),
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 
@@ -486,6 +492,11 @@ export const ProjectAgentSetupSchema = z.object({
   /** Approval mode and command allowlist (ADR-0021). Absent on setups saved before it. */
   approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
+  /**
+   * ADR-0025: how tickets name, start and finish their branches. Absent: the behaviour before it
+   * (`acp/<KEY>` from the project's current branch).
+   */
+  branching: BranchStrategySchema.optional(),
   updatedAt: IsoTimestampSchema,
 });
 export type ProjectAgentSetup = z.infer<typeof ProjectAgentSetupSchema>;

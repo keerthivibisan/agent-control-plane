@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PullRequestDtoSchema } from './code-host.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import {
   AgentRoleKindSchema,
@@ -180,6 +181,8 @@ export const TicketBranchDtoSchema = z.object({
   state: TicketBranchStateSchema,
   /** The base branch's commit after the owner's merge; null until merged. */
   mergedCommit: GitCommitSchema.nullable(),
+  /** ADR-0025: the pull request raised for this branch, if any. Absent from servers before it. */
+  pullRequest: PullRequestDtoSchema.nullable().optional(),
   createdAt: IsoTimestampSchema,
   updatedAt: IsoTimestampSchema,
 });

@@ -92,6 +92,9 @@ export interface CreateOptions {
 }
 
 /** A run's ticket branch in the project's repository (ADR-0021 §4). */
+/** The ticket branch names before ADR-0025: `acp/<KEY>` or `acp/<KEY>-r<n>`. */
+const LEGACY_TICKET_BRANCH = /^acp\/[A-Z]{2,6}-[1-9]\d*(-r[1-9]\d*)?$/;
+
 export interface TicketBranchRef {
   /** The registered project folder (may be a subfolder of its repository). */
   projectRoot: string;
@@ -450,7 +453,11 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
   }
 
   function assertBranchName(branch: string): void {
-    if (!TicketBranchNameSchema.safeParse(branch).success) {
+    // ADR-0025 widened `TicketBranchNameSchema` to any safe branch name. Until G-A replaces this
+    // with a guard that checks the run's recorded ticket branch (never its base or target, the
+    // checked-out branch or the default branch), ticket-branch operations keep the old, strict
+    // `acp/<KEY>` rule, so they can never act on `main` or another long-lived branch.
+    if (!TicketBranchNameSchema.safeParse(branch).success || !LEGACY_TICKET_BRANCH.test(branch)) {
       throw new WorkspaceError('invalid-ticket-branch', 'Not a ticket branch name');
     }
   }

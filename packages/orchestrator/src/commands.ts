@@ -5,7 +5,7 @@ import {
   ProjectApprovalsSchema,
   ProjectWorkflowSchema,
   ReworkRoundsSchema,
-  TicketBranchNameSchema,
+  TicketKeySchema,
   TokenCountsSchema,
   WorkflowGraphInvalidError,
   WorkflowGraphSchema,
@@ -171,7 +171,7 @@ function checkLoopInputs(
   if (input.ticket === undefined) {
     return refusal('invalid-input', 'The review loop applies to ticket runs only.');
   }
-  if (!TicketBranchNameSchema.safeParse(`acp/${loop.ticketKey}`).success) {
+  if (!TicketKeySchema.safeParse(loop.ticketKey).success) {
     return refusal('invalid-input', 'The ticket key does not give a valid ticket branch name.');
   }
   const reviewer = ChangeReviewerModeSchema.safeParse(loop.reviewer);

@@ -67,8 +67,8 @@ describe('ticket branches repository (ADR-0021 §4)', () => {
       headCommit: BASE,
     };
     for (const bad of [
-      { ...base, branch: 'main' },
-      { ...base, branch: 'acp/web-1' },
+      { ...base, branch: 'refs/heads/acp/WEB-1' },
+      { ...base, branch: 'acp/../WEB-1' },
       { ...base, branch: 'acp/WEB-1;rm' },
       { ...base, baseCommit: 'XYZ' },
       { ...base, headCommit: '' },
@@ -376,7 +376,7 @@ describe('approvals allow rule and run snapshot (ADR-0021 §1)', () => {
       { ...snapshot, integration: { ...snapshot.integration, maxReworkRounds: 9 } },
       { ...snapshot, integration: { reviewer: 'lead', maxReworkRounds: 1 } },
       { ...snapshot, integration: { ...snapshot.integration, ticketKey: 'web-1' } },
-      { ...snapshot, integration: { ...snapshot.integration, ticketBranch: 'main' } },
+      { ...snapshot, integration: { ...snapshot.integration, ticketBranch: 'HEAD' } },
       { ...snapshot, integration: { ...snapshot.integration, extra: 1 } },
       { ...snapshot, surprise: true },
     ]) {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
+import { GitBranchNameSchema } from '../workspace/branching.js';
 
 /**
  * Managed orchestration domain (Phase 3; docs/orchestration-lifecycle.md, ADR-0012..0015).
@@ -117,10 +118,11 @@ export const GitCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit id
 /** The run's ticket branch (ADR-0021 §4): `open` until the owner merges or discards it. */
 export const TicketBranchStateSchema = z.enum(['open', 'merged', 'discarded']);
 export type TicketBranchState = z.infer<typeof TicketBranchStateSchema>;
-/** `acp/<KEY>` for a ticket's first branch, `acp/<KEY>-r<n>` when that name is already taken. */
-export const TicketBranchNameSchema = z
-  .string()
-  .regex(/^acp\/[A-Z]{2,6}-[1-9]\d*(-r[1-9]\d*)?$/, 'acp/<TICKET-KEY> or acp/<TICKET-KEY>-r<n>');
+/**
+ * A ticket branch's name. Before ADR-0025 always `acp/<KEY>` (or `acp/<KEY>-r<n>`); now any safe
+ * branch name, from the project's branching strategy or the ticket's own name.
+ */
+export const TicketBranchNameSchema = GitBranchNameSchema;
 
 /**
  * The ticket branch name for `ticketKey` (e.g. `WEB-12`). Attempt 0 is `acp/WEB-12`; the server
@@ -129,6 +131,8 @@ export const TicketBranchNameSchema = z
  */
 export function ticketBranchName(ticketKey: string, attempt = 0): string {
   if (!Number.isInteger(attempt) || attempt < 0) throw new RangeError('attempt must be 0 or more');
+  // The legacy name (no branching strategy): a ticket key, as before ADR-0025.
+  if (!/^[A-Z]{2,6}-[1-9]\d*$/.test(ticketKey)) throw new RangeError('not a ticket key');
   return TicketBranchNameSchema.parse(
     attempt === 0 ? `acp/${ticketKey}` : `acp/${ticketKey}-r${attempt}`,
   );

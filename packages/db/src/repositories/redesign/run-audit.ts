@@ -6,6 +6,7 @@ import {
   ProjectWorkflowSchema,
   ReworkRoundsSchema,
   TicketBranchNameSchema,
+  TicketKeySchema,
   WorkflowGraphSchema,
   WorkflowNodeIdSchema,
   type ApprovalMode,
@@ -97,10 +98,7 @@ function parseIntegration(value: unknown): StoredRunIntegration | null {
   const m = ReworkRoundsSchema.safeParse(maxReworkRounds);
   if (!r.success || !m.success || typeof handedOver !== 'boolean') return null;
   // The key must give a valid ticket branch name, as the engine requires.
-  if (
-    typeof ticketKey !== 'string' ||
-    !TicketBranchNameSchema.safeParse(`acp/${ticketKey}`).success
-  ) {
+  if (typeof ticketKey !== 'string' || !TicketKeySchema.safeParse(ticketKey).success) {
     return null;
   }
   const branch = ticketBranch === null ? null : TicketBranchNameSchema.safeParse(ticketBranch);

@@ -4,6 +4,11 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import {
+  BranchStrategySchema,
+  TicketBranchPrefsPatchSchema,
+  TicketBranchPrefsSchema,
+} from '../workspace/branching.js';
+import {
   ApprovalModeSchema,
   CheckRunSchema,
   HarnessStatusSchema,
@@ -119,6 +124,8 @@ export const UpdateProjectSetupRequestSchema = z.object({
   /** ADR-0021. Absent: the stored approvals are kept (or, for an older setup, still none). */
   approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
+  /** ADR-0025. Absent: the stored strategy is kept; `null` removes it (the behaviour before it). */
+  branching: BranchStrategySchema.nullable().optional(),
 });
 /**
  * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own
@@ -139,6 +146,8 @@ export const CreateTicketRequestSchema = z.object({
   labels: z.array(TicketLabelSchema).max(10).default([]),
   /** RL-H: the ticket's own run options; absent (or an absent field) follows the project. */
   runOptions: TicketRunOptionsSchema.optional(),
+  /** ADR-0025: the ticket's own branch name and target branch; absent follows the project. */
+  branch: TicketBranchPrefsSchema.optional(),
 });
 /**
  * A change to a ticket's run options (RL-H): a value sets that option for the ticket, `null` puts
@@ -159,6 +168,8 @@ export const UpdateTicketRequestSchema = z
     labels: z.array(TicketLabelSchema).max(10),
     /** RL-H: see `TicketRunOptionsPatchSchema`; `null` puts every option back to the project's. */
     runOptions: TicketRunOptionsPatchSchema.nullable(),
+    /** ADR-0025: see `TicketBranchPrefsPatchSchema`; `null` puts both back to the project's. */
+    branch: TicketBranchPrefsPatchSchema.nullable(),
   })
   .partial();
 export const MoveTicketRequestSchema = z.object({
