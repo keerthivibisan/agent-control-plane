@@ -6,7 +6,6 @@ import { ControlPanel } from '../features/control/ControlPanel';
 import { HarnessPage } from '../features/harness/HarnessPage';
 import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../features/project-setup/ProjectSettings';
-import { ReviewPage } from '../features/review/ReviewPage';
 import { SessionDetail } from '../features/session-detail/SessionDetail';
 import { SessionExplorer } from '../features/sessions/SessionExplorer';
 import { SkillsPage } from '../features/skills/SkillsPage';
@@ -20,7 +19,8 @@ import { href, useRoute, type Route } from '../lib/router';
 import { browserEventSource, useEventStream, type EventSourceFactory } from '../lib/useEventStream';
 import { HealthScreen } from './HealthScreen';
 import { isProjectPageAvailable } from './project-pages';
-import { LegacyRedirect } from './Redirect';
+import { LegacyRedirect, RedirectTo } from './Redirect';
+import { reviewTarget } from './redirects';
 import { Shell } from './Shell';
 
 function NotFound() {
@@ -85,15 +85,8 @@ function Screen({ route }: { route: Route }) {
     case 'ticket':
       return <TicketPage key={route.id} id={route.id} />;
     case 'review':
-      return (
-        <ReviewPage
-          key={`${route.ticketId}:${route.agentRunId ?? ''}:${route.runId ?? ''}`}
-          projectId={route.projectId}
-          ticketId={route.ticketId}
-          agentRunId={route.agentRunId}
-          runId={route.runId}
-        />
-      );
+      // D-A's review pages became the ticket's Files changed tab (C-D): old links land there.
+      return <RedirectTo hash={reviewTarget(route)} />;
     case 'run':
       // Phase 3 runs without a ticket keep their page (chat, approvals, review) until
       // "Quick ticket" replaces ad-hoc runs; `runId` null is the start page.

@@ -4,8 +4,9 @@ import { useMemo, useSyncExternalStore } from 'react';
  * Hash routes (no router dependency), project first (docs/redesign/README.md §3):
  *
  * - `#/p/:projectId/<page>` for the seven project pages, `#/p/:projectId/skills/:name` for one
- *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket, its review pages
- *   `…/tickets/:ticketId/files` and `…/tickets/:ticketId/changes/:agentRunId` (D-A), and
+ *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket (`?tab=files&change=…` is its Files
+ *   changed tab; the older review pages `…/tickets/:ticketId/files` and
+ *   `…/tickets/:ticketId/changes/:agentRunId` redirect there), and
  *   `#/p/:projectId/runs/:runId` for a Phase 3 run that has no ticket (`runs/new` starts one; kept
  *   until "Quick ticket" lands);
  * - global pages: `#/projects` (All projects), `#/projects/new`, `#/health` and
@@ -52,10 +53,9 @@ export type Route =
     }
   | { name: 'ticket'; projectId: string; id: string }
   /**
-   * v0.3.0 D-A: a ticket's "Files changed" review page, GitHub-like. `agentRunId` null is the
-   * ticket branch's combined change (`tickets/:id/files`); else one helper's change
-   * (`tickets/:id/changes/:agentRunId`). `runId` (`?run=`) picks an earlier run; null is the
-   * ticket's current run.
+   * v0.3.0 D-A's review page addresses, kept for old links (C-D redirects them to the ticket's
+   * Files changed tab). `agentRunId` null is all changes (`tickets/:id/files`); else one helper's
+   * change (`tickets/:id/changes/:agentRunId`). `runId` (`?run=`) picks an earlier run.
    */
   | {
       name: 'review';
@@ -223,19 +223,24 @@ export const href = {
   ticket: (ticket: { id: string; projectId: string }) =>
     `#/p/${enc(ticket.projectId)}/tickets/${enc(ticket.id)}`,
   /**
-   * D-A: the ticket branch's "Files changed" (the combined change). `runId` picks an earlier
-   * run; without it, the ticket's current run.
+   * The ticket's Files changed tab with all changes (the ticket branch, base → tip; C-D). `runId`
+   * picks an earlier run; without it, the ticket's current run.
    */
   ticketFiles: (t: { projectId: string; ticketId: string; runId?: string | null }) =>
-    withParams(`/p/${enc(t.projectId)}/tickets/${enc(t.ticketId)}/files`, { run: t.runId }),
-  /** D-A: one helper's change, "Files changed" for its latest round. */
+    withParams(`/p/${enc(t.projectId)}/tickets/${enc(t.ticketId)}`, {
+      tab: 'files',
+      run: t.runId,
+    }),
+  /** The ticket's Files changed tab showing one helper's change (C-D). */
   ticketChange: (c: {
     projectId: string;
     ticketId: string;
     agentRunId: string;
     runId?: string | null;
   }) =>
-    withParams(`/p/${enc(c.projectId)}/tickets/${enc(c.ticketId)}/changes/${enc(c.agentRunId)}`, {
+    withParams(`/p/${enc(c.projectId)}/tickets/${enc(c.ticketId)}`, {
+      tab: 'files',
+      change: c.agentRunId,
       run: c.runId,
     }),
   /** A Phase 3 run's page (runs without a ticket). */

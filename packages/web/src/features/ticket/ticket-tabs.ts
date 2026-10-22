@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { replaceHash } from '../../lib/router';
 
 /*
@@ -49,11 +49,42 @@ export function tabFromHash(hash: string): TicketTab {
   return (asked !== null ? ALIASES[asked.toLowerCase()] : undefined) ?? DEFAULT_TICKET_TAB;
 }
 
-/** The same address with `tab` set (the default removes it); other query parameters stay. */
+/**
+ * The same address with `tab` set (the default removes it); other query parameters stay, except
+ * `change`, which belongs to Files changed and is dropped when another tab opens.
+ */
 export function hashWithTab(hash: string, tab: TicketTab): string {
   const { path, params } = split(hash);
   if (tab === DEFAULT_TICKET_TAB) params.delete('tab');
   else params.set('tab', tab);
+  if (tab !== 'files') params.delete('change');
+  const qs = params.toString();
+  return `#${path}${qs ? `?${qs}` : ''}`;
+}
+
+/**
+ * The ticket page's other address parameters (v0.3.0 C-D): `run`, the run on screen when it is
+ * not the latest, and `change`, the helper's change Files changed shows ("Changes from"; absent
+ * is all changes).
+ */
+export type TicketParam = 'run' | 'change';
+
+/** A parameter's value in an address, or null when it is absent or empty. */
+export function paramFromHash(hash: string, name: TicketParam): string | null {
+  const value = split(hash).params.get(name);
+  return value === null || value === '' ? null : value;
+}
+
+/** The same address with each named parameter set, or removed when its value is null. */
+export function hashWithParams(
+  hash: string,
+  updates: Partial<Record<TicketParam, string | null>>,
+): string {
+  const { path, params } = split(hash);
+  for (const [name, value] of Object.entries(updates)) {
+    if (value === null || value === undefined) params.delete(name);
+    else params.set(name, value);
+  }
   const qs = params.toString();
   return `#${path}${qs ? `?${qs}` : ''}`;
 }
@@ -78,4 +109,22 @@ export function useTicketTab(): [TicketTab, (tab: TicketTab) => void] {
     replaceHash(hashWithTab(window.location.hash, next));
   }, []);
   return [tab, set];
+}
+
+/**
+ * The page's `run` and `change` parameters and a setter that replaces the address (like the tabs:
+ * Back leaves the ticket instead of replaying every choice).
+ */
+export function useTicketParams(): [
+  { run: string | null; change: string | null },
+  (updates: Partial<Record<TicketParam, string | null>>) => void,
+] {
+  const hash = useSyncExternalStore(subscribe, getHash, () => '');
+  const run = paramFromHash(hash, 'run');
+  const change = paramFromHash(hash, 'change');
+  const set = useCallback((updates: Partial<Record<TicketParam, string | null>>) => {
+    const next = hashWithParams(window.location.hash, updates);
+    if (next !== window.location.hash) replaceHash(next);
+  }, []);
+  return [useMemo(() => ({ run, change }), [run, change]), set];
 }

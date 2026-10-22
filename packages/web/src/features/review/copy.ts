@@ -2,32 +2,55 @@ import { countOf } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 
 /**
- * The review page's words (v0.3.0 D-A). They live with the feature, like the diff viewer's, so the
- * three part-3 WPs that ran side by side never edited the same section of `lib/copy.ts`. Plain
- * owner words: a change, its helper, the lead, lines before and after.
+ * The words of Files changed (v0.3.0 D-A's review page; the ticket's Files changed tab since C-D).
+ * They live with the feature, like the diff viewer's, so WPs that run side by side never edit the
+ * same section of `lib/copy.ts`. Plain owner words: a change, its helper, the lead, lines before
+ * and after.
  */
 export const REVIEW_PAGE_COPY = {
   loading: 'Loading the changed files…',
-  back: (key: string) => `Back to ${key}`,
-  title: {
-    change: (role: string) => `Files changed by ${role}`,
-    branch: 'Files changed on the ticket branch',
-  },
-  description: {
-    change: 'This helper’s change, line by line. Comment on lines, then send them back as rework.',
-    branch:
-      'Everything merged into the ticket branch so far, line by line, before your final step.',
-  },
-  tip: 'Like a pull request’s “Files changed”: mark files as viewed, add comments on lines, then use Review changes to send them. Your comments stay in this browser until you send them.',
-  branchFilesLink: 'Ticket branch files',
   round: (round: number) => `Round ${formatCount(round + 1)}`,
-  into: (target: string) => `into ${target}`,
   changesMerged: (n: number) => countOf(n, 'change merged', 'changes merged'),
   checksOnTip: 'Checks on the tip:',
-  /** The page can't show the lines. */
+
+  // --- The tab's head: what it shows, and in which state (C-D)
+  picker: {
+    label: 'Changes from',
+    button: (what: string) => `Changes from: ${what}`,
+    menu: 'Show changes from',
+    all: 'All changes',
+    allHint: 'The ticket branch, from its base to its tip',
+    change: (role: string) => `${role}’s change`,
+  },
+  state: {
+    open: 'Open',
+    merged: 'Merged',
+    closed: 'Closed',
+  },
+  stateTip: {
+    open: 'The ticket branch is open: comment on lines and send your review.',
+    merged: 'The ticket branch is merged. Its files are read only: no comments or reviews.',
+    closed: 'The ticket branch was discarded. Its files are read only.',
+  },
+  intoWord: 'into',
+  mergedWord: 'merged into',
+  discarded: 'was discarded',
+  mergeCommit: 'Merge commit',
+  tipCommit: 'Tip',
+  readOnly: 'Read only',
+  readOnlyTip:
+    'Merged or closed work can’t take comments or reviews. Viewed marks stay in this browser.',
+  openInAgents: 'Open in Agents',
+  openInAgentsLabel: (role: string) => `Open ${role} in Agents`,
+  showAll: 'Show all changes',
+  /** The tab can't show the lines. */
   noRun: {
     title: 'Nothing to review yet',
     text: 'This ticket hasn’t started a run, so there are no changed files.',
+  },
+  noChanges: {
+    title: 'No changes yet',
+    text: 'This run’s helpers haven’t saved a change yet. Their files show here once they do.',
   },
   noChange: {
     title: 'Change not found',
@@ -37,20 +60,14 @@ export const REVIEW_PAGE_COPY = {
     title: 'No ticket branch yet',
     text: 'The ticket branch is made when the plan is approved. Its files show here after that.',
   },
-  branchClosed: {
-    merged: (target: string) =>
-      `This branch is merged into ${target}, so there is nothing left to review here.`,
-    discarded: 'This branch was discarded, so there is nothing left to review here.',
-  },
   changeGone:
-    'This change’s own lines are no longer available: the server lists a change only from when it is saved until it is decided. Its work, if merged, is in the ticket branch’s files.',
+    'This change’s own lines are no longer available: the server lists a change only from when it is saved until it is decided. Its work, if merged, is in all changes.',
   notSaved: 'This change isn’t saved yet: its files show here once the helper finishes its turn.',
-  loadFailed: 'The changed files couldn’t be loaded.',
-  ticketNotFound: {
-    title: 'Ticket not found',
-    text: 'It may have been deleted, or the address is wrong.',
-    action: 'Open the board',
+  gone: {
+    title: 'Files no longer available',
+    text: 'The commits of this work are no longer in the repository, so its files can’t be shown. Diffs are never stored.',
   },
+  loadFailed: 'The changed files couldn’t be loaded.',
 
   // --- The sticky bar
   bar: 'Review tools',
@@ -170,7 +187,7 @@ export const REVIEW_PAGE_COPY = {
     'request-changes': 'Sent to the lead. The run continues.',
     comment: 'Added to the ticket’s comments.',
   },
-  sentLink: 'Open the ticket',
+  sentLink: 'Open Comments',
   /** The entry points on the change card and the ticket branch card. */
   entry: {
     change: 'Review files',

@@ -1,3 +1,9 @@
+import type {
+  ChangeReviewDto,
+  ReviewDto,
+  RunDetailDto,
+  TicketBranchReviewDto,
+} from '@acp/core/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseDiff } from '../../src/components/diff';
 import {
@@ -14,6 +20,13 @@ import {
   sortComments,
 } from '../../src/features/review/compile';
 import { buildFileTree, filterFiles, treeOrder } from '../../src/features/review/file-tree';
+import {
+  branchFilesState,
+  changeChoices,
+  filesStateOf,
+  isReadOnly,
+  selectionFor,
+} from '../../src/features/review/files-state';
 import { shortcutFor } from '../../src/features/review/keyboard';
 import {
   EMPTY_REVIEW,
@@ -418,5 +431,75 @@ describe('keys', () => {
     expect(key('j', { defaultPrevented: true })).toBeNull();
     area.remove();
     dialog.remove();
+  });
+});
+
+describe('Files changed: the selection and the state (C-D)', () => {
+  const change = (agentRunId: string, role: string) =>
+    ({ agentRunId, role }) as unknown as ChangeReviewDto;
+  const entry = (agentRunId: string) => ({ agentRunId }) as unknown as ReviewDto['agents'][number];
+  const agent = (id: string, kind: string, role = id) =>
+    ({ id, kind, role }) as unknown as RunDetailDto['agents'][number];
+  const worktree = (kind: string) => kind === 'worker' || kind === 'tester';
+
+  it('lists a review-loop run’s changes, else the helpers that work in their own copy', () => {
+    const loop = changeChoices(
+      { changes: [change('a', 'API'), change('b', 'UI')], agents: [] },
+      [entry('b')],
+      worktree,
+    );
+    expect(loop.map((c) => [c.agentRunId, c.role, c.review !== null])).toEqual([
+      ['a', 'API', false],
+      ['b', 'UI', true],
+    ]);
+    const legacy = changeChoices(
+      { agents: [agent('lead', 'lead'), agent('w1', 'worker'), agent('t1', 'tester')] },
+      [],
+      worktree,
+    );
+    expect(legacy.map((c) => [c.agentRunId, c.change])).toEqual([
+      ['w1', null],
+      ['t1', null],
+    ]);
+  });
+
+  it('the address’s change first; else all changes with a branch; else the first listed', () => {
+    const choices = changeChoices(
+      { changes: [change('a', 'API'), change('b', 'UI')], agents: [] },
+      [entry('b')],
+      worktree,
+    );
+    expect(selectionFor('a', true, choices)).toEqual({ kind: 'change', agentRunId: 'a' });
+    // A change the run doesn't have is still asked for: the tab says it isn't found.
+    expect(selectionFor('zz', true, choices)).toEqual({ kind: 'change', agentRunId: 'zz' });
+    expect(selectionFor(null, true, choices)).toEqual({ kind: 'all' });
+    expect(selectionFor(null, false, choices)).toEqual({ kind: 'change', agentRunId: 'b' });
+    expect(selectionFor(null, false, choices.slice(0, 1))).toEqual({
+      kind: 'change',
+      agentRunId: 'a',
+    });
+    expect(selectionFor(null, false, [])).toEqual({ kind: 'none' });
+  });
+
+  it('open, merged or closed; merged and closed are read only', () => {
+    expect(filesStateOf(null)).toBeNull();
+    expect(filesStateOf({ state: 'open' })).toBe('open');
+    expect(filesStateOf({ state: 'merged' })).toBe('merged');
+    expect(filesStateOf({ state: 'discarded' })).toBe('closed');
+    expect(isReadOnly(null)).toBe(false);
+    expect(isReadOnly('open')).toBe(false);
+    expect(isReadOnly('merged')).toBe(true);
+    expect(isReadOnly('closed')).toBe(true);
+  });
+
+  it('an empty answer for settled work means no longer available; for open work, no files', () => {
+    const review = { files: [], diff: '' } as unknown as TicketBranchReviewDto;
+    expect(branchFilesState({ data: review, error: null }, true)).toEqual({
+      state: 'unavailable',
+    });
+    expect(branchFilesState({ data: review, error: null }, false)).toEqual({
+      state: 'files',
+      review,
+    });
   });
 });

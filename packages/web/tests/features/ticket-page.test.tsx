@@ -114,7 +114,7 @@ describe('each tab shows its own part', () => {
     expect(screen.getByLabelText('Add a comment')).toBeTruthy();
     expect(screen.getByTestId('ticket-sidebar')).toBeTruthy();
     expect(screen.queryByTestId('agent-canvas')).toBeNull();
-    expect(screen.queryByTestId('branch-files')).toBeNull();
+    expect(screen.queryByTestId('files-tab')).toBeNull();
   });
 
   it('Agents: the live graph, the tree and the side panel; no sidebar', async () => {
@@ -125,14 +125,15 @@ describe('each tab shows its own part', () => {
     expect(screen.queryByTestId('comments')).toBeNull();
   });
 
-  it('Files changed: the ticket branch on top, then every change', async () => {
+  it('Files changed: "Changes from", then the review UI with one file list and one diff', async () => {
     render(loopReviewScenario(), `${TICKET_HASH}?tab=files`);
     const tab = await screen.findByTestId('files-tab');
-    const parts = [...tab.querySelectorAll('[data-testid]')].map((e) =>
-      e.getAttribute('data-testid'),
-    );
-    expect(parts.indexOf('branch-files')).toBeLessThan(parts.indexOf('changes-overview'));
-    expect(within(tab).getAllByTestId('change-row')).toHaveLength(2);
+    expect(within(tab).getByTestId('change-picker').dataset['value']).toBe('');
+    expect(await within(tab).findByTestId('review-files')).toBeTruthy();
+    expect(within(tab).getAllByTestId('review-bar')).toHaveLength(1);
+    expect(within(tab).queryByTestId('changes-overview')).toBeNull();
+    expect(within(tab).queryByTestId('branch-diff')).toBeNull();
+    expect(screen.queryByTestId('ticket-sidebar')).toBeNull();
   });
 
   it('Checks: the tip first, then each change', async () => {

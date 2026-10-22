@@ -29,7 +29,7 @@ import { TicketSidebar } from './Sidebar';
 import { TicketHeader } from './TicketHeader';
 import { TicketNavProvider, type TicketNav } from './ticket-nav';
 import { lastRunNote } from './ticket-state';
-import { TICKET_TABS, useTicketTab, type TicketTab } from './ticket-tabs';
+import { TICKET_TABS, useTicketParams, useTicketTab, type TicketTab } from './ticket-tabs';
 
 const C = TICKET_COPY;
 const T = TICKET_TAB_COPY;
@@ -117,7 +117,10 @@ function Banner({ tone, children }: { tone: 'danger' | 'neutral'; children: Reac
 function Ticket({ detail }: { detail: TicketDetailDto }) {
   const { ticket } = detail;
   const [tab, setTab] = useTicketTab();
-  const [pickedRunId, setPickedRunId] = useState<string | null>(null);
+  // The run on screen (`?run=`, when not the latest) and Files changed's `?change=` live in the
+  // address, so links from other pages (and the old review pages) open the same view.
+  const [params, setParams] = useTicketParams();
+  const pickedRunId = params.run;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>('chat');
   // The chat's unsent text lives here, so a visit to another tab doesn't lose it.
@@ -184,7 +187,8 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
     if (tab !== 'agents') nav.goTo('agents', SIDE_PANEL_ID);
   };
   const showRun = (id: string) => {
-    setPickedRunId(id === currentId ? null : id);
+    // Another run has other changes: Files changed goes back to all of them.
+    setParams({ run: id === currentId ? null : id, change: null });
     setSelectedId(null);
     window.scrollTo?.({ top: 0 });
   };
@@ -286,7 +290,8 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
                   ticket={ticket}
                   run={run}
                   reviews={reviews}
-                  branchReview={branchReview}
+                  change={params.change}
+                  onChange={(change) => setParams({ change })}
                   onOpenAgent={select}
                 />
               )}
@@ -316,8 +321,9 @@ function Ticket({ detail }: { detail: TicketDetailDto }) {
  * header with the ticket's state and branch, and five tabs (C-B, ADR-0026). Comments (what waits
  * for you, the plan, the description and attachments, the lead's ticket summary, people's
  * comments, the final step and a sidebar), Agents (the live graph, the agent tree and the side
- * panel), Files changed, Checks and Conversation (the timeline of what happened). `?tab=` in the
- * address picks the tab.
+ * panel), Files changed (GitHub's review UI with "Changes from", C-D), Checks and Conversation
+ * (the timeline of what happened). `?tab=` in the address picks the tab, `?run=` an earlier run
+ * and `?change=` the change Files changed shows.
  */
 export function TicketPage({ id }: { id: string }) {
   const detail = useApiQuery(ticketPaths.ticket(id), ticketSchemas.detail);

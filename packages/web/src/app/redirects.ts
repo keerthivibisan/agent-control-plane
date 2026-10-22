@@ -1,4 +1,4 @@
-import { href, NEW_RUN, type LegacyRoute } from '../lib/router';
+import { href, NEW_RUN, type LegacyRoute, type Route } from '../lib/router';
 
 /**
  * Where each pre-redesign address goes now (docs/redesign/README.md §3). Pure, so every rule has a
@@ -71,4 +71,15 @@ export function runTarget(run: { id: string; projectId: string; ticketId: string
   return run.ticketId === null
     ? href.run(run)
     : href.ticket({ id: run.ticketId, projectId: run.projectId });
+}
+
+/**
+ * D-A's review pages (`…/tickets/:id/files`, `…/tickets/:id/changes/:agentRunId`) are the
+ * ticket's Files changed tab since C-D: the same selection, and the same run when one was named.
+ */
+export function reviewTarget(route: Extract<Route, { name: 'review' }>): string {
+  const ticket = { projectId: route.projectId, ticketId: route.ticketId, runId: route.runId };
+  return route.agentRunId === null
+    ? href.ticketFiles(ticket)
+    : href.ticketChange({ ...ticket, agentRunId: route.agentRunId });
 }

@@ -3,6 +3,9 @@ import {
   ChevronRight,
   Folder,
   FolderOpen,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
   Keyboard,
   MessageSquare,
   PanelLeftClose,
@@ -41,3 +44,7 @@ export const AddCommentIcon = icon(Plus, 'AddCommentIcon');
 export const KeyboardIcon = icon(Keyboard, 'KeyboardIcon');
 export const HideTreeIcon = icon(PanelLeftClose, 'HideTreeIcon');
 export const ShowTreeIcon = icon(PanelLeftOpen, 'ShowTreeIcon');
+/** The state labels of Files changed (C-D): open, merged, closed, as on GitHub. */
+export const OpenStateIcon = icon(GitPullRequest, 'OpenStateIcon');
+export const MergedStateIcon = icon(GitMerge, 'MergedStateIcon');
+export const ClosedStateIcon = icon(GitPullRequestClosed, 'ClosedStateIcon');

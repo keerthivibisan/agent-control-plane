@@ -92,9 +92,11 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
     name stays "Search or jump to…");
   - **right:** the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`, 36px: current
     project, a menu of projects with their folders, All projects and New project), a slanted
-    hairline, then the page (semibold); then the **theme menu** (`ThemeMenu`, a 36px bordered icon
-    button, "Theme" below). On a narrow screen the page crumb gives way first and the switcher
-    truncates, so the bar never scrolls sideways.
+    hairline, then the page (semibold; on a ticket "Board / WEB-21": Board links to the board and
+    the key is the current page, `aria-current`, not a link, once the ticket is read (C-D)); then
+    the **theme menu** (`ThemeMenu`, a 36px bordered icon button, "Theme" below). On a narrow
+    screen the page crumb gives way first and the switcher truncates, so the bar never scrolls
+    sideways.
 - **Sidebar** (`Sidebar.tsx`), neutral (`sidebar`: `#f6f8fa` light / `#010409` dark), like
   GitHub's nav lists: two sections under small muted semibold headings, **Project** (the project's
   pages from `PROJECT_PAGES`, only the `available` ones) and **Workspace** (**All projects**,
@@ -139,23 +141,23 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 
 ### Routes
 
-| Route                                      | Page                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------- |
-| `#/p/:projectId/board`                     | Board                                                               |
-| `#/p/:projectId/workflow`                  | Workflow (stages, agents, limits; R-B)                              |
-| `#/p/:projectId/skills`, `…/skills/:name`  | Skills & Agents (`?tab=agents` for the Agents tab; R-D)             |
-| `#/p/:projectId/harness`                   | Harness (R-E)                                                       |
-| `#/p/:projectId/tokens`                    | Tokens (R-F: new work vs cache reuse, by session/ticket/role/model) |
-| `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                |
-| `#/p/:projectId/settings`                  | Settings                                                            |
-| `#/p/:projectId/tickets/:ticketId`         | Ticket                                                              |
-| `…/tickets/:ticketId/files`                | The ticket branch's "Files changed" (D-A; `?run=` an earlier run)   |
-| `…/tickets/:ticketId/changes/:agentRunId`  | One helper's change, "Files changed" (D-A; `?run=` an earlier run)  |
-| `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page                  |
-| `#/projects`                               | All projects (project cards + "Across your projects")               |
-| `#/projects/new`                           | New project                                                         |
-| `#/health`, `#/health/connection`          | Data health: Overview, Connection                                   |
-| `#/sessions/:id`                           | One session                                                         |
+| Route                                      | Page                                                                  |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `#/p/:projectId/board`                     | Board                                                                 |
+| `#/p/:projectId/workflow`                  | Workflow (stages, agents, limits; R-B)                                |
+| `#/p/:projectId/skills`, `…/skills/:name`  | Skills & Agents (`?tab=agents` for the Agents tab; R-D)               |
+| `#/p/:projectId/harness`                   | Harness (R-E)                                                         |
+| `#/p/:projectId/tokens`                    | Tokens (R-F: new work vs cache reuse, by session/ticket/role/model)   |
+| `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                  |
+| `#/p/:projectId/settings`                  | Settings                                                              |
+| `#/p/:projectId/tickets/:ticketId`         | Ticket (`?tab=`, `?run=` an earlier run, `?change=` on Files changed) |
+| `…/tickets/:ticketId/files`                | Old link (D-A): redirects to `?tab=files` (keeps `?run=`)             |
+| `…/tickets/:ticketId/changes/:agentRunId`  | Old link (D-A): redirects to `?tab=files&change=:agentRunId`          |
+| `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page                    |
+| `#/projects`                               | All projects (project cards + "Across your projects")                 |
+| `#/projects/new`                           | New project                                                           |
+| `#/health`, `#/health/connection`          | Data health: Overview, Connection                                     |
+| `#/sessions/:id`                           | One session                                                           |
 
 Every older address redirects without a history entry (`src/app/redirects.ts`): `#/` → the last
 project's board, else All projects; `#/board[/:id]`, `#/projects/:id` → board;
@@ -167,8 +169,8 @@ project's board, else All projects; `#/board[/:id]`, `#/projects/:id` → board;
 Build links with `href` (`src/lib/router.ts`): `href.projectPage(id, page, params)`,
 `href.ticket({ id, projectId })`, `href.run({ id, projectId })`, `href.skill(id, name)`,
 `href.ticketFiles({ projectId, ticketId, runId? })` and
-`href.ticketChange({ projectId, ticketId, agentRunId, runId? })` (D-A). Never write hashes by
-hand.
+`href.ticketChange({ projectId, ticketId, agentRunId, runId? })` (the ticket's Files changed tab,
+all changes or one change, since C-D). Never write hashes by hand.
 
 ### Adding a project page (R-B, R-D, R-E, R-F)
 
@@ -420,7 +422,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   - Large diffs: a file over 400 lines, and every file after the first 1,500 lines, waits for
     "Show this file". A diff the server cut says so, marks the cut file, and names the listed
     files after the cut.
-  - **For the review pages (D-A)**, `DiffFileView` takes optional, additive props; without them
+  - **For Files changed (D-A, C-D)**, `DiffFileView` takes optional, additive props; without them
     it draws exactly as before: `slots` (`gutter` a control at a line's start per side, `below`
     rows under a line per side, one cell per side in split view, `selected` an accent bar on a
     range, `pinned` lines whose fold opens by itself), `headerEnd` (controls at the end of the
@@ -577,21 +579,38 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
     opened pull request #N into <target>" (or "…; pull request #N into <target> was already
     open"). Branches and the commit are code; the number is plain text, not a link.
 
-## Review pages: "Files changed" (v0.3.0 D-A)
+## Files changed: one GitHub review UI (v0.3.0 D-A, C-D)
 
-Owner decision 2026-10-22: "The code review should be like a code review in GitHub, side by
-side." Two full-width pages (`features/review/`; the shell drops its 88rem limit for them):
-`…/tickets/:ticketId/changes/:agentRunId` (one helper's change, `GET /runs/:id/review`) and
-`…/tickets/:ticketId/files` (the ticket branch's combined change, `GET /runs/:id/ticket-branch`).
-`?run=` opens an earlier run; without it, the ticket's current run.
+Owner decisions 2026-10-22: "The code review should be like a code review in GitHub, side by
+side" (D-A), then "we have two different UI for code review and view after; we need a single UI"
+(C-D). The ticket page's **Files changed tab is the review UI** (`features/ticket/FilesTab.tsx`
+over D-A's `features/review/` parts); there is no separate summary table, second diff viewer or
+review page. The shell drops its 88rem limit while the tab is open (`nav.ts` `fullWidth`), like
+GitHub's. D-A's addresses `…/tickets/:ticketId/files` and `…/changes/:agentRunId` redirect
+(replace) to `?tab=files` and `?tab=files&change=:agentRunId`, keeping `?run=`.
 
-- **Header:** "← WEB-21 title" back to the ticket, "Files changed by <helper>" (or "on the ticket
-  branch"), one line, and the context: the change's state chip, "Round N", its checks and commit
-  (the branch: state, `branch into target`, the tip's checks, changes merged, the tip). A change
-  page links to "Ticket branch files".
+- **Head** (`files-head`): **Changes from** (`ChangePicker.tsx`, a Radix menu of
+  `menuitemradio`s like the theme menu: arrows, Enter or Space, Escape back to the button; the
+  chosen one checked): **All changes** (the ticket branch from base to tip,
+  `GET /runs/:id/ticket-branch`; the default when the run has one) or one helper's change, each
+  with its state word, checks and file count (`GET /runs/:id/review`). The choice is `?change=`
+  (replaced, not a history entry; another tab drops it; another run resets it). A run without a
+  ticket branch has no "All changes" and opens its first change. Then the **state label**, GitHub's
+  filled pill with an icon and the word: **Open** (green), **Merged** (purple, `done`), **Closed**
+  (red, a discarded branch); then `branch into target` (or `merged into target` with the merge
+  commit, or `was discarded`), the tip and its checks and the changes merged; for one change its
+  state chip, "Round N", checks, rework badges and commit, and **Open in Agents** (the change card
+  in the side panel, where the owner merges, reworks or discards).
+- **Open work:** everything below is interactive. **Merged or closed work:** the same layout read
+  only (ADR-0026 §5): the tree, the files, Unified / Side by side and **Viewed** (kept in this
+  browser) stay; no "+" on lines, no comment boxes, no `c` key, no Review changes ("Read only" in
+  its place); a pending review kept from before stays in the browser, unseen and unsent. When the
+  server answers 410 (or a refusal naming missing commits, or an empty answer for settled work),
+  an empty state "Files no longer available" fills the body under the same head. A change the
+  server no longer lists says so, with "Show all changes".
 - **Sticky bar** (sticks under the top bar and the demo banner, both measured): the file-tree
   toggle, "N files changed +A −D", Unified / Side by side (the shared `acp.diff.view` choice;
-  **side by side until the owner chooses** on this page; unified with the reason where there is no
+  **side by side until the owner chooses** here; unified with the reason where there is no
   room), "X of N viewed", Collapse all / Expand all, the keys (a popover), and **Review changes**
   (green, with the pending count).
 - **File tree** (left, sticky, 17–19rem; stacked above the files below `lg`, hidden by default
@@ -627,9 +646,11 @@ side." Two full-width pages (`features/review/`; the shell drops its 88rem limit
 - **Keys** (not while typing or in a dialog): `j` / `k` next and previous file, `v` viewed, `c`
   comment on the focused line (on a file, it goes to its first changed line). A file's "+"
   buttons are one tab stop (the first changed line); ↑/↓/Home/End move between lines.
-- **Entry points:** "Review files" on the change card (once the change is saved) and "Files
-  changed" on the ticket branch card (while it is open); the ticket page's tab (D-B) links here.
-- Copy lives in `features/review/copy.ts`; no server change and no new storage.
+- **Entry points:** the tab itself; "Review files" on the change card (once the change is saved),
+  "Files changed" on the ticket branch card (while it is open) and Conversation's links all go to
+  the tab with the matching "Changes from" (`href.ticketChange`, `href.ticketFiles`).
+- Copy lives in `features/review/copy.ts`; the rules (selection, state, "no longer available") in
+  `features/review/files-state.ts`; no server change and no new storage.
 
 ## Ticket page: Comments, Conversation, attachments (v0.3.0 C-B, ADR-0026)
 
@@ -666,13 +687,12 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   starting (with "Show this run"), plan versions (folded steps), agents starting and ending as event
   lines; agents' notes, the reviewer's findings (an accent edge and the "Reviewer" label), the
   lead's notes and decisions as boxes; the run facts as the run summary card (ADR-0024's card,
-  moved here); merges and pull requests as the small merge line. Links per item: the change's or
-  the ticket branch's review page (D-A), the pull request (opens on GitHub), the plan. A server
-  without the route gets the same timeline from the ticket's own runs, plans and comments.
-- **Files changed after a merge:** "Merged: read only" (a purple label) instead of "Review all
-  files"; the merged files and the folded diff from `GET /runs/:id/ticket-branch`; no "Files
-  changed" links per change. When the commits are gone (410, or a refusal whose code names missing
-  commits), an empty state says "The files of this merge are no longer available".
+  moved here); merges and pull requests as the small merge line. Links per item: Files changed
+  with that change or all changes chosen (C-D), the pull request (opens on GitHub), the plan. A
+  server without the route gets the same timeline from the ticket's own runs, plans and comments.
+- **Files changed after a merge:** the same review UI read only, with the purple "Merged" label
+  (see "Files changed: one GitHub review UI"); "Files no longer available" when the commits are
+  gone.
 - Copy lives in `features/activity/copy.ts`.
 
 ## Glossary (single source: `src/lib/copy.ts`)

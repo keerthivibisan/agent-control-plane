@@ -21,7 +21,6 @@ import {
   LOOP_RUN_PATH,
   LOOP_RUN_WORKFLOW_PATH,
   LOOP_TICKET_ID,
-  PROJECT_ID,
   LOOP_TICKET_PATH,
   loopDoneScenario,
   loopNeedsYouScenario,
@@ -128,15 +127,16 @@ function withRun(
 }
 
 const panel = () => screen.getByTestId('side-panel');
-/** Files changed lists every change; its Open shows the change in the Agents tab's side panel. */
+/**
+ * Files changed's "Changes from" lists every change; with one chosen, "Open in Agents" shows it in
+ * the Agents tab's side panel.
+ */
 async function openChange(role: string) {
   fireEvent.click(await screen.findByRole('tab', { name: /Files changed/ }));
-  const overview = await screen.findByTestId('changes-overview');
-  const row = within(overview)
-    .getAllByTestId('change-row')
-    .find((r) => r.textContent?.includes(role));
-  if (!row) throw new Error(`no change row ${role}`);
-  fireEvent.click(within(row).getByRole('button', { name: /^Open/ }));
+  fireEvent.click(await screen.findByTestId('change-picker'));
+  const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+  fireEvent.click(within(menu).getByRole('menuitemradio', { name: new RegExp(role) }));
+  fireEvent.click(await screen.findByRole('button', { name: `Open ${role} in Agents` }));
   expect(screen.getByRole('tab', { name: /Agents/ }).getAttribute('aria-selected')).toBe('true');
   return within(panel()).findByTestId('change-card');
 }
@@ -274,23 +274,23 @@ describe('words and rules', () => {
 describe('ticket page: a review-loop run at work', () => {
   it('lists each change with its state, checks and rounds; no owner buttons while the lead decides', async () => {
     render(loopWorkingScenario(), {}, 'files');
-    const overview = await screen.findByTestId('changes-overview');
-    const rows = within(overview).getAllByTestId('change-row');
+    // Files changed's "Changes from" lists every change with its state and checks (C-D).
+    fireEvent.click(await screen.findByTestId('change-picker'));
+    const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+    const rows = within(menu).getAllByTestId('change-option');
     expect(rows.map((r) => within(r).getByTestId('change-state').dataset.state)).toEqual([
       'rework',
       'reviewing',
     ]);
     expect(rows[0]?.textContent).toContain('Rework round 1 of 2');
     expect(rows[0]?.textContent).toContain('1 required check failed');
-    expect(rows[0]?.textContent).toContain('Rework ×1');
     expect(rows[1]?.textContent).toContain('In review');
     expect(rows[1]?.textContent).toContain('2 of 2 checks passed');
-    // Each row links to the change's own review page (v0.3.0 D-A's route).
-    expect(
-      within(rows[0] as HTMLElement)
-        .getByRole('link', { name: 'Files changed by the API builder' })
-        .getAttribute('href'),
-    ).toBe(`#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}?run=${LOOP_RUN_ID}`);
+    // Chosen, the head says its round and rework, and the address names it.
+    fireEvent.click(rows[0] as HTMLElement);
+    const head = await screen.findByTestId('files-change');
+    expect(head.textContent).toContain('Rework ×1');
+    expect(window.location.hash).toContain(`tab=files&change=${L_API}`);
     expect(screen.queryByTestId('owner-decision')).toBeNull();
     // Comments: nothing waits for you; the run's approval mode is in the sidebar.
     openTab(/Comments/);
@@ -300,23 +300,23 @@ describe('ticket page: a review-loop run at work', () => {
     expect(screen.queryByTestId('review-list')).toBeNull();
   });
 
-  it('the ticket branch says it waits while agents work, without loading the diff', async () => {
-    const s = render(loopWorkingScenario());
+  it('the ticket branch says it waits while agents work; only Files changed reads its diff', async () => {
+    const s = render(loopWorkingScenario(), { [LOOP_BRANCH_PATH]: ticketBranchReview() });
     const card = await screen.findByTestId('ticket-branch');
     expect(within(card).getByTestId('branch-state').dataset.state).toBe('open');
     expect(card.textContent).toContain('You can merge once every change is decided');
     expect(within(card).queryByTestId('branch-actions')).toBeNull();
-    // The header names the branch and its target; Files changed shows it with its base and tip.
+    // The header names the branch and its target.
     expect(screen.getByTestId('pr-line-branch').textContent).toBe(LOOP_BRANCH);
     expect(screen.getByTestId('pr-line-target').textContent).toBe('main');
-    openTab(/Files changed/);
-    const files = await screen.findByTestId('branch-files');
-    expect(within(files).getByTestId('branch-name').textContent).toBe(LOOP_BRANCH);
-    expect(files.textContent).toContain('You can merge once every change is decided');
-    expect(within(files).getByTestId('review-all-files').getAttribute('href')).toBe(
-      `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/files?run=${LOOP_RUN_ID}`,
-    );
     expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
+    // Files changed shows all changes on the branch, open, into its target (C-D).
+    openTab(/Files changed/);
+    const head = await screen.findByTestId('files-head');
+    expect(within(head).getByTestId('files-state').dataset.state).toBe('open');
+    expect(within(head).getByTestId('files-branch').textContent).toBe(`${LOOP_BRANCH}intomain`);
+    expect(await screen.findByTestId('review-files')).toBeTruthy();
+    expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(true);
   });
 
   it('a change card shows the decisions with the reviewer’s findings, and the diff', async () => {
@@ -510,11 +510,12 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(screen.queryByTestId('changes-need-you')).toBeNull();
     // The header offers the same main action; it goes to the final step.
     expect(screen.getByTestId('final-step-shortcut').textContent).toBe('Merge into main');
-    // Files changed: the combined files and the diff; Checks: the tip's checks.
+    // Files changed: the combined change in the review UI; Checks: the tip's checks.
     openTab(/Files changed/);
-    const files = await screen.findByTestId('branch-files');
-    expect(within(files).getByText('3 changed files')).toBeTruthy();
-    expect(within(files).getByTestId('branch-diff')).toBeTruthy();
+    const files = await screen.findByTestId('review-files');
+    expect(within(files).getByTestId('review-summary-line').textContent).toContain(
+      '2 files changed',
+    );
     expect(screen.getByTestId('tab-count-files').textContent).toBe('3');
     openTab(/Checks/);
     expect(within(screen.getByTestId('tip-checks')).getByTestId('branch-checks')).toBeTruthy();

@@ -8,7 +8,7 @@ import { useApiQuery } from '../lib/query';
 import { href, navigate, routeProjectId, type Route } from '../lib/router';
 import type { StreamState } from '../lib/useEventStream';
 import { readLastProject, rememberLastProject, validLastProject } from './last-project';
-import { pageKey } from './nav';
+import { fullWidth, pageKey } from './nav';
 import { PageTransition } from './PageTransition';
 import { ShellTooltipProvider } from './ShellTooltip';
 import { Sidebar } from './Sidebar';
@@ -95,8 +95,8 @@ export function Shell({
             <DemoBanner mode={mode} />
             <main
               className={`mx-auto w-full min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 ${
-                // D-A: the review pages use the whole width, like GitHub's "Files changed".
-                route.name === 'review' ? 'wide:px-8' : 'max-w-content wide:px-10'
+                // C-D: Files changed uses the whole width, like GitHub's.
+                fullWidth(route, window.location.hash) ? 'wide:px-8' : 'max-w-content wide:px-10'
               }`}
             >
               <PageTransition pageKey={pageKey(route)}>

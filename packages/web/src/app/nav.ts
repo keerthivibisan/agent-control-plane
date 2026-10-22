@@ -1,3 +1,4 @@
+import { tabFromHash } from '../features/ticket/ticket-tabs';
 import { SHELL_COPY } from '../lib/copy';
 import { href, type Route } from '../lib/router';
 import { PROJECT_PAGES, isProjectPageAvailable, type ProjectPageDef } from './project-pages';
@@ -19,10 +20,15 @@ export interface Crumb {
 
 /**
  * The trail after the project switcher: the project page you are on (a ticket or a run is under
- * Board, one session under Sessions). Global pages (All projects, Data health, New project) have
- * none: they don't belong to the project the switcher shows.
+ * Board, one session under Sessions). A ticket adds its key once known (`Board / WEB-21`), as the
+ * page you are on. Global pages (All projects, Data health, New project) have none: they don't
+ * belong to the project the switcher shows.
  */
-export function crumbsFor(route: Route, projectId: string | null): Crumb[] {
+export function crumbsFor(
+  route: Route,
+  projectId: string | null,
+  ticketKey: string | null = null,
+): Crumb[] {
   const label = (id: ProjectPageDef['id']) =>
     PROJECT_PAGES.find((p) => p.id === id)?.label ?? SHELL_COPY.nav.pages[id];
   if (route.name === 'project') {
@@ -35,7 +41,11 @@ export function crumbsFor(route: Route, projectId: string | null): Crumb[] {
     }
     return [{ label: label(route.page), to: null }];
   }
-  if (route.name === 'ticket' || route.name === 'run' || route.name === 'review') {
+  if (route.name === 'ticket' || route.name === 'review') {
+    const board = { label: label('board'), to: href.board(route.projectId) };
+    return ticketKey === null ? [board] : [board, { label: ticketKey, to: null }];
+  }
+  if (route.name === 'run') {
     return [{ label: label('board'), to: href.board(route.projectId) }];
   }
   if (route.name === 'session' && projectId !== null) {
@@ -66,4 +76,20 @@ export function pageKey(route: Route): string {
     default:
       return route.name;
   }
+}
+
+/** The ticket a route shows (its page, or an old review page address), for the trail's key. */
+export function routeTicketId(route: Route): string | null {
+  if (route.name === 'ticket') return route.id;
+  if (route.name === 'review') return route.ticketId;
+  return null;
+}
+
+/**
+ * Pages that use the whole width instead of the content column: the ticket's Files changed tab
+ * (C-D), like GitHub's, so the file tree and a side-by-side diff have room. `hash` is the address,
+ * whose `tab` the ticket route leaves to the page.
+ */
+export function fullWidth(route: Route, hash: string): boolean {
+  return route.name === 'ticket' && tabFromHash(hash) === 'files';
 }

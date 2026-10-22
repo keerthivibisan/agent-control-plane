@@ -24,6 +24,7 @@ import {
 } from '../../components/diff';
 import '../../components/diff/diff.css';
 import { Button } from '../../components/Button';
+import { Badge } from '../../components/Pill';
 import { Popover } from '../../components/Popover';
 import { Segmented } from '../../components/Segmented';
 import type { ApiError } from '../../lib/api';
@@ -45,12 +46,15 @@ import { useStickyOffsets } from './sticky';
 import { useViewed } from './viewed';
 
 /**
- * GitHub's "Files changed" (v0.3.0 D-A): a sticky bar (the totals, Unified / Side by side, how
- * many files are viewed, Collapse all, the keys, Review changes), the file tree on the left, and
- * on the right each file as a box with a sticky header (path, +/−, Viewed) over its lines. A "+"
- * on a line opens a comment box under it (shift-click a second "+" for a range); comments join
- * the pending review, kept in this browser until Review changes sends them through an existing
- * owner decision. The diff text is the server's, read when shown and never stored (ADR-0009).
+ * GitHub's "Files changed" (v0.3.0 D-A; the ticket's Files changed tab since C-D): a sticky bar
+ * (the totals, Unified / Side by side, how many files are viewed, Collapse all, the keys, Review
+ * changes or "Read only"), the file tree on the left, and on the right each file as a box
+ * with a sticky header (path, +/−, Viewed) over its lines. A "+" on a line opens a comment box
+ * under it (shift-click a second "+" for a range); comments join the pending review, kept in
+ * this browser until Review changes sends them through an existing owner decision. `readOnly`
+ * (merged or closed work, ADR-0026 §5) keeps the files, the tree and Viewed, and drops every
+ * comment and review control. The diff text is the server's, read when shown and never stored
+ * (ADR-0009).
  */
 
 const VIEWS: readonly { value: DiffViewMode; label: string }[] = [
@@ -136,6 +140,7 @@ export function FilesChanged({
   sending,
   sendError,
   ticketHref,
+  readOnly = false,
 }: {
   scope: ReviewScope;
   /** The change's (or branch tip's) commit: viewed files and comments are kept per commit. */
@@ -148,7 +153,10 @@ export function FilesChanged({
   send: (choice: ReviewChoiceId, text: string) => Promise<boolean>;
   sending: boolean;
   sendError: ApiError | null;
+  /** Where "Open Comments" goes after a review is sent. */
   ticketHref: string;
+  /** Merged or closed: files, tree and Viewed only; no comments, no Review changes. */
+  readOnly?: boolean;
 }) {
   const parsed = useMemo(() => parseDiff(diff), [diff]);
   const ordered = useMemo(() => treeOrder(buildFileTree(parsed.files)), [parsed]);
@@ -158,7 +166,8 @@ export function FilesChanged({
   }, [ordered]);
   const { viewed, toggle: toggleViewed } = useViewed(scope, commit);
   const pending = usePendingReview(scope);
-  const { review } = pending;
+  // Read only: pending comments kept for this change stay in the browser, unseen and unsent.
+  const review = readOnly ? { comments: [], summary: '' } : pending.review;
 
   // Unified or side by side: the owner's saved choice (shared with every diff in the app), side
   // by side until they choose; unified where there isn't room.
@@ -274,7 +283,8 @@ export function FilesChanged({
     next.scrollIntoView?.({ block: 'nearest' });
   };
 
-  const slotsFor = (f: DiffFile): DiffLineSlots => {
+  const slotsFor = (f: DiffFile): DiffLineSlots | undefined => {
+    if (readOnly) return undefined;
     const list = byPath.get(f.path) ?? [];
     const activeKey = active.get(`${mode}:${f.id}`) ?? firstKey(f);
     const draftHere = draft !== null && draft.path === f.path ? draft : null;
@@ -405,6 +415,7 @@ export function FilesChanged({
       }
       const f = ordered[Math.max(at, 0)];
       if (f === undefined) return;
+      if (shortcut === 'comment' && readOnly) return;
       if (shortcut === 'viewed') {
         e.preventDefault();
         toggleViewed(f.path);
@@ -431,7 +442,7 @@ export function FilesChanged({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [ordered, fileInPlay, jump, toggleViewed, current]);
+  }, [ordered, fileInPlay, jump, toggleViewed, current, readOnly]);
 
   const onSend = async (choice: ReviewChoiceId, text: string) => {
     const ok = await send(choice, text);
@@ -525,28 +536,38 @@ export function FilesChanged({
           >
             <h2 className="mb-2 text-caption font-semibold">{T.shortcuts}</h2>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-caption">
-              {T.shortcutList.map(([key, what]) => (
-                <div key={key} className="contents">
-                  <dt>
-                    <kbd className="rounded-[4px] border border-line bg-sunken px-1.5 font-mono">
-                      {key}
-                    </kbd>
-                  </dt>
-                  <dd className="text-ink">{what}</dd>
-                </div>
-              ))}
+              {T.shortcutList
+                .filter(([key]) => !readOnly || key !== 'c')
+                .map(([key, what]) => (
+                  <div key={key} className="contents">
+                    <dt>
+                      <kbd className="rounded-[4px] border border-line bg-sunken px-1.5 font-mono">
+                        {key}
+                      </kbd>
+                    </dt>
+                    <dd className="text-ink">{what}</dd>
+                  </div>
+                ))}
             </dl>
             <p className="mt-2 text-caption text-dim">{T.shortcutsNote}</p>
           </Popover>
-          <ReviewPopover
-            review={review}
-            choices={choices}
-            compileOptions={{ commit, order }}
-            onSummary={pending.setSummary}
-            onSend={onSend}
-            pending={sending}
-            error={sendError}
-          />
+          {readOnly ? (
+            <span data-testid="files-read-only">
+              <Badge tone="done" title={T.readOnlyTip}>
+                {T.readOnly}
+              </Badge>
+            </span>
+          ) : (
+            <ReviewPopover
+              review={review}
+              choices={choices}
+              compileOptions={{ commit, order }}
+              onSummary={pending.setSummary}
+              onSend={onSend}
+              pending={sending}
+              error={sendError}
+            />
+          )}
         </div>
       </div>
 
@@ -566,6 +587,7 @@ export function FilesChanged({
         <p
           role="note"
           className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption"
+          data-testid="review-truncated"
         >
           {DIFF_COPY.truncated}
         </p>
@@ -574,6 +596,7 @@ export function FilesChanged({
         <p
           role="note"
           className="rounded-control border border-line bg-sunken px-3 py-2 text-caption"
+          data-testid="review-large"
         >
           {DIFF_COPY.large(ordered.length - heldBack, ordered.length)}
         </p>

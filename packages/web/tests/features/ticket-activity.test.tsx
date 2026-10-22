@@ -48,7 +48,7 @@ import {
   checkFile,
   formatBytes,
 } from '../../src/features/attachments/limits';
-import { isGoneError, mergedFilesState } from '../../src/features/ticket/merged-files';
+import { branchFilesState, isGoneError } from '../../src/features/review/files-state';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { ApiError, createApiClient, uploadAttachment, type FetchLike } from '../../src/lib/api';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
@@ -442,7 +442,10 @@ describe('the Conversation tab', () => {
       within(note as HTMLElement)
         .getByTestId('activity-link')
         .getAttribute('href'),
-    ).toBe(`#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}?run=${LOOP_RUN_ID}`);
+    ).toBe(
+      // Straight to Files changed with that change chosen (C-D).
+      `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files&change=${L_API}&run=${LOOP_RUN_ID}`,
+    );
     // The run facts card (ADR-0024's facts moved here), linking to the ticket branch's files.
     const facts = tab.querySelector<HTMLElement>('li[data-type="run-facts"]');
     expect(within(facts as HTMLElement).getByTestId('run-summary')).toBeTruthy();
@@ -493,7 +496,7 @@ describe('the Conversation tab', () => {
 });
 
 describe('Files changed after a merge (ADR-0026 §5)', () => {
-  it('shows the merged files read only, with no review links', async () => {
+  it('shows the merged files read only, in the Files changed review layout', async () => {
     // The server's answer for the merged branch: the files from the recorded commits.
     const run = (loopDoneScenario().routes[LOOP_TICKET_PATH] as Record<string, unknown>)[
       'currentRun'
@@ -501,12 +504,13 @@ describe('Files changed after a merge (ADR-0026 §5)', () => {
     renderPage(loopDoneScenario(), 'files', {
       [LOOP_BRANCH_PATH]: { ...ticketBranchReview(), ticketBranch: run['ticketBranch'] },
     });
-    const files = await screen.findByTestId('merged-files');
-    expect(within(files).getByText('3 changed files')).toBeTruthy();
-    expect(within(files).getByTestId('branch-diff')).toBeTruthy();
-    expect(screen.getByTestId('merged-read-only').textContent).toBe('Merged: read only');
-    expect(screen.queryByTestId('review-all-files')).toBeNull();
-    expect(screen.queryAllByTestId('change-files-link')).toHaveLength(0);
+    const files = await screen.findByTestId('review-files');
+    expect(within(files).getByTestId('review-summary-line').textContent).toContain(
+      '2 files changed',
+    );
+    expect(screen.getByTestId('files-state').textContent).toBe('Merged');
+    expect(screen.getByTestId('files-read-only').textContent).toBe('Read only');
+    expect(screen.queryByTestId('review-changes')).toBeNull();
   });
 
   it('says the files are no longer available when the commits are gone', async () => {
@@ -516,18 +520,25 @@ describe('Files changed after a merge (ADR-0026 §5)', () => {
           error: { code: 'commits_unavailable', message: 'gone', requestId: 'r' },
         }),
     });
-    expect(await screen.findByTestId('merged-files-unavailable')).toBeTruthy();
-    expect(screen.getByText('The files of this merge are no longer available')).toBeTruthy();
+    expect(await screen.findByTestId('files-unavailable')).toBeTruthy();
+    expect(screen.getByText('Files no longer available')).toBeTruthy();
   });
 
   it('tells a refusal about missing commits from other errors', () => {
     const err = (status: number, code: string | null) =>
       new ApiError({ kind: 'http', path: '/x', status, code, message: 'm' });
     expect(isGoneError(err(410, null))).toBe(true);
+    expect(isGoneError(err(410, 'diff_unavailable'))).toBe(true);
     expect(isGoneError(err(409, 'ticket_branch_missing'))).toBe(true);
     expect(isGoneError(err(404, 'commits_unavailable'))).toBe(true);
     expect(isGoneError(err(404, 'not_found'))).toBe(false);
     expect(isGoneError(err(500, 'internal'))).toBe(false);
-    expect(mergedFilesState({ data: undefined, error: null })).toEqual({ state: 'loading' });
+    expect(branchFilesState({ data: undefined, error: null }, true)).toEqual({ state: 'loading' });
+    expect(branchFilesState({ data: undefined, error: err(410, null) }, true)).toEqual({
+      state: 'unavailable',
+    });
+    expect(branchFilesState({ data: undefined, error: err(500, 'internal') }, false).state).toBe(
+      'error',
+    );
   });
 });

@@ -109,14 +109,3 @@ export const ACTIVITY_COPY = {
     system: 'Agent Control Plane',
   },
 } as const;
-
-export const MERGED_FILES_COPY = {
-  readOnly: 'Merged: read only',
-  readOnlyTip:
-    'This ticket’s work is merged. Its files are read from the recorded commits; there is nothing left to review or decide.',
-  unavailable: 'The files of this merge are no longer available',
-  unavailableText:
-    'The repository no longer has the commits this merge recorded, so its files can’t be shown. The app never stores diffs.',
-  loading: 'Loading the merged files…',
-  failed: 'The merged files couldn’t be loaded.',
-} as const;

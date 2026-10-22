@@ -10,6 +10,7 @@ import {
   LOOP_TICKET_ID,
   LOOP_TICKET_PATH,
   PROJECT_ID,
+  loopDoneScenario,
   loopNeedsYouScenario,
   loopReviewScenario,
   loopWorkingScenario,
@@ -17,21 +18,25 @@ import {
   type LoopScenario,
 } from '../../e2e/review-loop-fixtures';
 import { pendingKey, writePending } from '../../src/features/review/pending-review';
-import { ReviewPage } from '../../src/features/review/ReviewPage';
 import { resetReviewStorageForTests } from '../../src/features/review/storage';
 import { viewedKey } from '../../src/features/review/viewed';
+import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
 /*
- * v0.3.0 D-A: the review page on the review loop's synthetic fixtures: the context, the files and
+ * v0.3.0 D-A's review UI, the ticket's Files changed tab since C-D, on the review loop's synthetic
+ * fixtures: "Changes from" (all changes or one helper's change, in the address), the files and
  * the tree, Viewed, comments on lines as a pending review, and Review changes sending the compiled
- * text through the owner's existing endpoints, with the choices each state allows.
+ * text through the owner's existing endpoints; merged and closed work read only; and the files of
+ * merged work that are no longer available (410).
  */
 
 const COMMENT_PATH = `${LOOP_TICKET_PATH}/comments`;
+const TICKET_HASH = `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`;
 const ok = (body: unknown) => () => jsonResponse(200, body);
 
 function render(sc: LoopScenario, agentRunId: string | null, routes: RouteTable = {}) {
+  window.location.hash = `${TICKET_HASH}?tab=files${agentRunId !== null ? `&change=${agentRunId}` : ''}`;
   const s = fakeServer({
     ...sc.routes,
     [LOOP_BRANCH_PATH]: sc.routes[LOOP_BRANCH_PATH] ?? ticketBranchReview(),
@@ -49,15 +54,7 @@ function render(sc: LoopScenario, agentRunId: string | null, routes: RouteTable 
       }),
     ...routes,
   });
-  renderWithApi(
-    <ReviewPage
-      projectId={PROJECT_ID}
-      ticketId={LOOP_TICKET_ID}
-      agentRunId={agentRunId}
-      runId={null}
-    />,
-    s,
-  );
+  renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
   return s;
 }
 
@@ -67,6 +64,7 @@ const fileBox = (path: string) => {
   if (el === null) throw new Error(`no file ${path}`);
   return el;
 };
+const head = () => within(screen.getByTestId('files-head'));
 
 async function addComment(path: string, button: string, text: string, shiftFrom?: string) {
   const box = within(fileBox(path));
@@ -83,24 +81,89 @@ async function openReview() {
   return screen.findByRole('dialog', { name: 'Finish your review' });
 }
 
+/** Opens "Changes from" and picks an option by its words. */
+async function pick(name: RegExp) {
+  fireEvent.click(await screen.findByTestId('change-picker'));
+  const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+  fireEvent.click(within(menu).getByRole('menuitemradio', { name }));
+}
+
+/** No way to write or send anything: no "+" on lines, no Review changes. */
+function expectReadOnly() {
+  expect(screen.queryByTestId('review-changes')).toBeNull();
+  expect(screen.queryAllByRole('button', { name: /^Comment on / })).toHaveLength(0);
+  expect(document.querySelectorAll('[data-line-button]')).toHaveLength(0);
+  expect(screen.getByTestId('files-read-only').textContent).toBe('Read only');
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   resetReviewStorageForTests();
 });
 
-describe('a helper’s change', () => {
-  it('shows the change in context: helper, state, round, checks, and the link back', async () => {
-    render(loopNeedsYouScenario(), L_UI);
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Files changed by Search UI' }),
-    ).toBeTruthy();
-    const context = screen.getByTestId('review-context');
-    expect(within(context).getByTestId('change-state').dataset['state']).toBe('needs-owner');
-    expect(context.textContent).toContain('Round 1');
-    expect(within(context).getByTestId('change-checks')).toBeTruthy();
-    expect(screen.getByTestId('review-back').getAttribute('href')).toBe(
-      `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`,
+describe('Changes from', () => {
+  it('shows all changes by default, and the address picks one helper’s change', async () => {
+    render(loopReviewScenario(), null);
+    await screen.findByTestId('review-files');
+    const picker = screen.getByTestId('change-picker');
+    expect(picker.dataset['value']).toBe('');
+    expect(picker.getAttribute('aria-label')).toBe('Changes from: All changes');
+    expect(head().getByTestId('files-state').dataset['state']).toBe('open');
+    expect(head().getByTestId('files-branch').textContent).toBe('acp/WEB-21intomain');
+    expect(screen.getByTestId('review-summary-line').textContent).toContain('2 files changed');
+    // One file list and one diff: no summary table, no second viewer.
+    expect(screen.queryByTestId('branch-files')).toBeNull();
+    expect(screen.queryByTestId('changes-overview')).toBeNull();
+    expect(screen.queryByTestId('branch-diff')).toBeNull();
+  });
+
+  it('lists every change with its state, and choosing one puts it in the address', async () => {
+    render(loopNeedsYouScenario(), null);
+    await screen.findByTestId('review-files');
+    fireEvent.click(screen.getByTestId('change-picker'));
+    const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+    const items = within(menu).getAllByRole('menuitemradio');
+    expect(items.map((i) => i.textContent)).toEqual([
+      expect.stringContaining('All changes'),
+      expect.stringContaining('API builder’s change'),
+      expect.stringContaining('Search UI’s change'),
+    ]);
+    expect(items[0]?.getAttribute('aria-checked')).toBe('true');
+    expect(within(items[2] as HTMLElement).getByTestId('change-state').dataset['state']).toBe(
+      'needs-owner',
     );
+    fireEvent.click(items[2] as HTMLElement);
+    await waitFor(() =>
+      expect(window.location.hash).toBe(`${TICKET_HASH}?tab=files&change=${L_UI}`),
+    );
+    expect((await screen.findByTestId('files-change')).dataset['agent']).toBe(L_UI);
+    expect(screen.getByTestId('change-picker').getAttribute('aria-label')).toBe(
+      'Changes from: Search UI’s change',
+    );
+    await screen.findByTestId('review-files');
+    expect(screen.getByTestId('review-summary-line').textContent).toContain('2 files changed');
+    // And back to all changes.
+    await pick(/All changes/);
+    await waitFor(() => expect(window.location.hash).toBe(`${TICKET_HASH}?tab=files`));
+    expect(screen.queryByTestId('files-change')).toBeNull();
+  });
+
+  it('another tab drops the change from the address', async () => {
+    render(loopNeedsYouScenario(), L_UI);
+    await screen.findByTestId('review-files');
+    fireEvent.click(screen.getByRole('tab', { name: /Checks/ }));
+    expect(window.location.hash).toBe(`${TICKET_HASH}?tab=checks`);
+  });
+});
+
+describe('a helper’s change', () => {
+  it('shows the change in context: state, round, checks, commit and Open in Agents', async () => {
+    render(loopNeedsYouScenario(), L_UI);
+    const change = await screen.findByTestId('files-change');
+    expect(within(change).getByTestId('change-state').dataset['state']).toBe('needs-owner');
+    expect(change.textContent).toContain('Round 1');
+    expect(within(change).getByTestId('change-checks')).toBeTruthy();
+    expect(head().getByRole('button', { name: 'Open Search UI in Agents' })).toBeTruthy();
     await screen.findByTestId('review-files');
     expect(screen.getByTestId('review-summary-line').textContent).toContain('2 files changed');
     // Side by side until the owner chooses.
@@ -139,7 +202,10 @@ describe('a helper’s change', () => {
       target: { value: 'Otherwise good.' },
     });
     fireEvent.click(within(pop).getByTestId('review-submit'));
-    await screen.findByTestId('review-sent');
+    const sent = await screen.findByTestId('review-sent');
+    expect(within(sent).getByRole('link', { name: 'Open Comments' }).getAttribute('href')).toBe(
+      TICKET_HASH,
+    );
     expect(posts(s).map((c) => [c.path, c.body])).toEqual([
       [
         LOOP_REVIEW_PATH,
@@ -326,27 +392,30 @@ describe('a helper’s change', () => {
     ]);
   });
 
-  it('says so when the run has no such change', async () => {
+  it('says so when the run has no such change, with a way back to all changes', async () => {
     render(loopNeedsYouScenario(), 'ag-nobody');
-    expect(await screen.findByText('Change not found')).toBeTruthy();
+    const empty = await screen.findByTestId('files-no-change');
+    expect(empty.textContent).toContain('Change not found');
+    fireEvent.click(within(empty).getByRole('button', { name: 'Show all changes' }));
+    await waitFor(() => expect(window.location.hash).toBe(`${TICKET_HASH}?tab=files`));
+    expect(await screen.findByTestId('review-files')).toBeTruthy();
   });
 
   it('says so when the server no longer lists the change’s lines', async () => {
     const sc = loopNeedsYouScenario();
     render(sc, L_API, { [LOOP_REVIEW_PATH]: { runId: LOOP_RUN_ID, agents: [] } });
-    expect((await screen.findByTestId('review-unavailable')).textContent).toContain(
-      'no longer available',
-    );
+    const note = await screen.findByTestId('review-unavailable');
+    expect(note.textContent).toContain('no longer available');
+    expect(within(note).getByRole('button', { name: 'Show all changes' })).toBeTruthy();
   });
 });
 
-describe('the ticket branch', () => {
+describe('all changes (the ticket branch)', () => {
   it('sends Request changes to the lead at the final step', async () => {
     const s = render(loopReviewScenario(), null);
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Files changed on the ticket branch' }),
-    ).toBeTruthy();
     await screen.findByTestId('review-files');
+    expect(head().getByTestId('files-commit').textContent).toBe('Tipa1b2c3d');
+    expect(head().getByTestId('change-checks')).toBeTruthy();
     await addComment(
       'src/search/api.ts',
       'Comment on src/search/api.ts line 6 (after)',
@@ -407,23 +476,107 @@ describe('the ticket branch', () => {
       window.localStorage.getItem(pendingKey({ runId: LOOP_RUN_ID, agentRunId: null })),
     ).toContain('Please rename it.');
   });
+});
 
-  it('says there is nothing to review once the branch is merged', async () => {
+/** The done scenario (merged into main), with the merged branch's files from its commits. */
+function merged(routes: RouteTable = {}) {
+  const sc = loopDoneScenario();
+  const run = (sc.routes[LOOP_TICKET_PATH] as { currentRun: { ticketBranch: unknown } }).currentRun;
+  return render(sc, null, {
+    [LOOP_BRANCH_PATH]: { ...ticketBranchReview(), ticketBranch: run.ticketBranch },
+    ...routes,
+  });
+}
+
+describe('merged or closed work: the same layout, read only', () => {
+  it('merged: the purple Merged label, the target and merge commit, files and Viewed only', async () => {
+    merged();
+    await screen.findByTestId('review-files');
+    const label = head().getByTestId('files-state');
+    expect(label.dataset['state']).toBe('merged');
+    expect(label.textContent).toBe('Merged');
+    expect(label.className).toContain('bg-done');
+    expect(head().getByTestId('files-branch').textContent).toBe('acp/WEB-21merged intomain');
+    expect(head().getByTestId('files-commit').textContent).toBe('Merge commite1f2a3b');
+    expect(screen.getByTestId('review-summary-line').textContent).toContain('2 files changed');
+    expectReadOnly();
+    // Viewed still works, in this browser only.
+    const box = within(fileBox('src/search/api.ts'));
+    fireEvent.click(box.getByRole('checkbox', { name: 'Mark src/search/api.ts as viewed' }));
+    expect(screen.getByTestId('review-viewed-count').textContent).toBe('1 of 2 viewed');
+  });
+
+  it('merged: a pending review kept from before is neither shown nor sendable', async () => {
+    writePending(
+      { runId: LOOP_RUN_ID, agentRunId: null },
+      {
+        comments: [
+          {
+            id: 'old',
+            path: 'src/search/api.ts',
+            side: 'new',
+            line: 6,
+            endLine: 6,
+            body: 'Left before the merge.',
+            commit: null,
+            createdAt: '2026-10-22T09:00:00.000Z',
+          },
+        ],
+        summary: '',
+      },
+    );
+    merged();
+    await screen.findByTestId('review-files');
+    expect(screen.queryByText('Left before the merge.')).toBeNull();
+    expectReadOnly();
+  });
+
+  it('merged: a helper’s change is read only too', async () => {
+    const sc = loopDoneScenario();
+    render(sc, L_API);
+    await screen.findByTestId('files-change');
+    expect(head().getByTestId('files-state').dataset['state']).toBe('merged');
+    await screen.findByTestId('review-files');
+    expectReadOnly();
+  });
+
+  it('merged files no longer available (410): a clear empty state in the same frame', async () => {
+    merged({
+      [LOOP_BRANCH_PATH]: () =>
+        jsonResponse(410, {
+          error: {
+            code: 'diff_unavailable',
+            message: 'This branch’s commits are no longer in the repository',
+            requestId: 'r',
+          },
+        }),
+    });
+    const empty = await screen.findByTestId('files-unavailable');
+    expect(empty.textContent).toContain('Files no longer available');
+    // The frame stays: the picker and the Merged label.
+    expect(head().getByTestId('change-picker')).toBeTruthy();
+    expect(head().getByTestId('files-state').dataset['state']).toBe('merged');
+    expect(screen.queryByTestId('review-files')).toBeNull();
+    expect(screen.queryByTestId('review-changes')).toBeNull();
+  });
+
+  it('discarded: the Closed label, read only', async () => {
     const sc = loopReviewScenario();
     const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
     const run = detail['currentRun'] as Record<string, unknown>;
-    const merged = {
-      ...run,
-      status: 'COMPLETED',
-      ticketBranch: { ...(run['ticketBranch'] as object), state: 'merged' },
-    };
+    const branch = { ...(run['ticketBranch'] as object), state: 'discarded' };
+    const closed = { ...run, status: 'COMPLETED', ticketBranch: branch };
     render(
-      { routes: { ...sc.routes, [LOOP_TICKET_PATH]: { ...detail, currentRun: merged } } },
+      { routes: { ...sc.routes, [LOOP_TICKET_PATH]: { ...detail, currentRun: closed } } },
       null,
-      { [LOOP_RUN_PATH]: merged },
+      {
+        [LOOP_RUN_PATH]: closed,
+        [LOOP_BRANCH_PATH]: { ...ticketBranchReview(), ticketBranch: branch },
+      },
     );
-    expect((await screen.findByTestId('review-unavailable')).textContent).toBe(
-      'This branch is merged into main, so there is nothing left to review here.',
-    );
+    await screen.findByTestId('review-files');
+    expect(head().getByTestId('files-state').textContent).toBe('Closed');
+    expect(head().getByTestId('files-branch').textContent).toBe('acp/WEB-21was discarded');
+    expectReadOnly();
   });
 });

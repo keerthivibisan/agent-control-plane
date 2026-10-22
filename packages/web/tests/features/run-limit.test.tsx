@@ -9,7 +9,7 @@ import {
   directLoopScenario,
   projectGraphDto,
 } from '../../e2e/live-graph-fixtures';
-import { LOOP_TICKET_ID } from '../../e2e/review-loop-fixtures';
+import { L_API, LOOP_TICKET_ID } from '../../e2e/review-loop-fixtures';
 import { projectGraph } from '../../e2e/ticket-fixtures';
 import { roundSentence } from '../../src/features/review-loop/ChangeCard';
 import {
@@ -298,18 +298,14 @@ describe('change cards: the review agent’s direct rework (route c)', () => {
 
   it('shows the direct rounds on the change and its row', async () => {
     const sc = directLoopScenario();
-    // The changes are listed on the Files changed tab (v0.3.0 D-B).
-    window.location.hash = '#?tab=files';
+    // One change on the Files changed tab ("Changes from", v0.3.0 C-D).
+    window.location.hash = `#?tab=files&change=${L_API}`;
     renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, fakeServer(sc.routes));
-    const overview = await screen.findByTestId('changes-overview');
-    const row = within(overview)
-      .getAllByTestId('change-row')
-      .find((r) => r.textContent?.includes('API helper'));
-    if (row === undefined) throw new Error('no row');
+    const row = await screen.findByTestId('files-change');
     expect(within(row).getByTestId('change-direct-badge').textContent).toBe('Direct rework ×1');
     // The lead sent nothing back, so there is no lead rework badge.
     expect(within(row).queryByText(/^Rework ×/)).toBeNull();
-    fireEvent.click(within(row).getByRole('button', { name: /^Open/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open API helper in Agents' }));
     const card = await within(screen.getByTestId('side-panel')).findByTestId('change-card');
     expect(within(card).getByTestId('change-direct-rounds').textContent).toContain(
       'Review agent: 1 direct rework round',
