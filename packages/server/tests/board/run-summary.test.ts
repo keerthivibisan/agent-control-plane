@@ -61,17 +61,16 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     expect(summary).toMatchObject({ author: 'app', runId, planId: null });
     const body = summary?.body ?? '';
     const lines = body.split('\n');
-    expect(lines.slice(0, 2)).toEqual([
-      RUN_SUMMARY_HEADING,
-      'WEBAPP-1: the lead handed the work over.',
-    ]);
+    // v0.3.0 S-C: the lead's note is the comment; the facts follow under Details.
+    expect(lines.slice(0, 5)).toEqual([RUN_SUMMARY_HEADING, '', 'From the lead:', NOTE, '']);
+    expect(lines[5]).toBe('Details:');
 
     // Every fact against the database.
     const orch = createOrchestrationRepositories(s.db);
     const loopRepos = createReviewLoopRepositories(s.db);
     const plan = (await s.detail(ticket.id)).plans[0];
     expect(plan?.status).toBe('approved');
-    expect(body).toContain(`Plan v${plan?.version ?? 0}: 1 step (Helpers).`);
+    expect(body).toContain(`- Plan v${plan?.version ?? 0} was approved with 1 step: Helpers.`);
     const change = loopRepos.workspaceChanges.getByAgentRun(worker.id);
     expect(change?.changeState).toBe('merged');
     const checks = loopRepos.checkCommits.latestForCommit(
@@ -82,23 +81,24 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     expect(checks.map((c) => c.status)).toEqual(['passed']);
     expect(orch.workspaces.getByAgentRun(worker.id)?.changedFiles).toBe(2);
     expect(body).toContain(
-      'Changes (1):\n- Helpers: merged; 2 files, +2 -0 lines; checks passed (1).',
+      '- Merged 1 change from Helpers: 2 files, 2 lines added; the check passed.',
     );
     const branch = loopRepos.ticketBranches.getByRun(runId);
     expect(body).toContain(
-      `Ticket branch ${branch?.branch ?? ''} (from ${branch?.baseBranch ?? ''}): 1 change merged; waiting for your merge`,
+      `- The ticket branch ${branch?.branch ?? ''} (from ${branch?.baseBranch ?? ''}) has 1 change merged and is waiting for your merge`,
     );
     const agents = orch.agentRuns.listForRun(runId);
     const leadRow = agents.find((a) => a.kind === 'lead');
     // ADR-0014 budget tokens: output + uncached input + cache write.
     expect(leadRow?.budgetTokensUsed).toBe(1540);
-    const reviewerTokens = agents
-      .filter((a) => a.kind === 'reviewer')
-      .reduce((n, a) => n + a.budgetTokensUsed, 0);
-    expect(body).toContain(
-      `Budget tokens: lead 1,540; helpers 0; reviewers ${reviewerTokens.toLocaleString('en-US')}.`,
-    );
-    expect(body.endsWith(`Lead's note:\n${NOTE}`)).toBe(true);
+    const reviewerRows = agents.filter((a) => a.kind === 'reviewer');
+    const reviewerTokens = reviewerRows.reduce((n, a) => n + a.budgetTokensUsed, 0);
+    expect(reviewerRows).toHaveLength(1);
+    expect(
+      body.endsWith(
+        `- Budget tokens used: 1,540 by the lead, 0 by 1 helper and ${reviewerTokens.toLocaleString('en-US')} by 1 reviewer.`,
+      ),
+    ).toBe(true);
 
     // The owner's single merge adds the app's merge line.
     await s.settle();
@@ -125,8 +125,15 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
     await s.settle();
     let found = await summaries(s, ticket.id);
     expect(found).toHaveLength(1);
-    expect(found[0]?.body).not.toContain("Lead's note");
-    expect(found[0]?.body).toContain('Changes (1):');
+    expect(found[0]?.body).not.toContain('From the lead:');
+    expect(found[0]?.body.split('\n').slice(0, 5)).toEqual([
+      'Run summary',
+      '',
+      'The lead handed the work over without a note.',
+      '',
+      'Details:',
+    ]);
+    expect(found[0]?.body).toContain('- Merged 1 change from Helpers:');
 
     const changes = await s.post(`/api/runs/${runId}/ticket-branch`, {
       action: 'request-changes',
@@ -146,12 +153,19 @@ describe('the run summary at the handover (ADR-0024 §3)', () => {
       'Run summary (updated)',
     ]);
     const updated = found[1]?.body ?? '';
-    expect(updated).toContain('Changes (2):');
     // `fixed.txt` was already on the ticket branch: the second change is `b.txt` alone.
-    expect(updated).toContain('- Helpers: merged; 2 files, +2 -0 lines; checks passed (1).');
-    expect(updated).toContain('- Helpers 2: merged; 1 file, +2 -0 lines; checks passed (1).');
-    expect(updated).toContain('2 changes merged; waiting for your merge');
-    expect(updated.endsWith("Lead's note:\nAdded the print view too.")).toBe(true);
+    expect(updated).toContain(
+      '- Merged 1 change from Helpers: 2 files, 2 lines added; the check passed.',
+    );
+    expect(updated).toContain(
+      '- Merged 1 change from Helpers 2: 1 file, 2 lines added; the check passed.',
+    );
+    expect(updated).toContain('has 2 changes merged and is waiting for your merge');
+    expect(
+      updated.startsWith(
+        'Run summary (updated)\n\nFrom the lead:\nAdded the print view too.\n\nDetails:\n',
+      ),
+    ).toBe(true);
   }, 90_000);
 });
 
@@ -174,7 +188,7 @@ describe('the merge line after the owner merges anyway', () => {
     await s.settle();
     expect((await run(s, runId)).status).toBe('REVIEW');
     const [summary] = await summaries(s, ticket.id);
-    expect(summary?.body).toContain('1 change merged; waiting for your merge');
+    expect(summary?.body).toContain('has 1 change merged and is waiting for your merge');
     const url = `/api/runs/${runId}/ticket-branch`;
     const tip = createReviewLoopRepositories(s.db).ticketBranches.getByRun(runId)?.headCommit ?? '';
     expect((await s.post(url, { action: 'merge' })).status).toBe(409);
@@ -203,11 +217,12 @@ describe('a facts-only summary when a run ends without a handover', () => {
     expect(found[0]?.body).toBe(
       [
         'Run summary',
-        'WEBAPP-1: the run failed before the lead handed over.',
         '',
-        'Changes: none.',
+        'The run failed before the work was handed over.',
         '',
-        'Budget tokens: lead 0.',
+        'Details:',
+        '- No helpers were started.',
+        '- Budget tokens used: 0 by the lead.',
       ].join('\n'),
     );
   }, 60_000);
@@ -226,10 +241,10 @@ describe('a facts-only summary when a run ends without a handover', () => {
     expect((await run(s, runId)).status).toBe('CANCELLED');
     const found = await summaries(s, ticket.id);
     expect(found).toHaveLength(1);
-    expect(found[0]?.body.split('\n')[1]).toBe(
-      'WEBAPP-1: the run was stopped before the lead handed over.',
+    expect(found[0]?.body.split('\n')[2]).toBe(
+      'The run was stopped before the work was handed over.',
     );
-    expect(found[0]?.body).toMatch(/- Helpers: [^\n]*\(it was stopped\)/);
+    expect(found[0]?.body).toMatch(/\n- [^\n]*Helpers[^\n]*; it was stopped\./);
 
     await s.control.close();
     const again = await setupBoard({
@@ -250,7 +265,7 @@ describe('a facts-only summary when a run ends without a handover', () => {
     expect((await run(again, runId)).status).toBe('CANCELLED');
     const found = await summaries(again, ticket.id);
     expect(found).toHaveLength(1);
-    expect(found[0]?.body).toContain('the run was stopped before the lead handed over.');
+    expect(found[0]?.body).toContain('The run was stopped before the work was handed over.');
     await again.control.close();
     const third = await setupBoard({
       reopen: { dbPath: s.dbPath, repo: s.repo, dataDir: s.dataDir },
@@ -268,8 +283,10 @@ describe('a facts-only summary when a run ends without a handover', () => {
     expect((await run(s, runId)).status).toBe('REVIEW');
     const found = await summaries(s, ticket.id);
     expect(found).toHaveLength(1);
-    expect(found[0]?.body.split('\n')[1]).toBe('WEBAPP-1: the lead failed before handing over.');
-    expect(found[0]?.body).toContain('- Helpers: merged;');
+    expect(found[0]?.body.split('\n')[2]).toBe('The lead failed before handing the work over.');
+    expect(found[0]?.body).toContain('- Merged 1 change from Helpers:');
+    // The ticket branch still waits for the owner's merge.
+    expect(found[0]?.body).toContain('has 1 change merged and is waiting for your merge');
   }, 60_000);
 });
 
@@ -320,11 +337,14 @@ describe('legacy runs (before the review loop)', () => {
     const found = await summaries(s, ticket.id);
     expect(found).toHaveLength(1);
     const body = found[0]?.body ?? '';
-    expect(body.split('\n')[1]).toBe(
-      'WEBAPP-1: the agents finished; their changes wait for your review.',
+    expect(body.split('\n')[2]).toBe(
+      'The agents finished, and their changes are waiting for your review.',
     );
-    expect(body).toContain('- Helpers: waiting for your review; 1 file, +2 -0 lines.');
-    expect(body).not.toContain('Ticket branch');
+    expect(body).toContain(
+      '- 1 change from Helpers is waiting for your review: 1 file, 2 lines added.',
+    );
+    expect(body).not.toContain('ticket branch');
+    expect(body).not.toContain('From the lead:');
     expect(body).not.toContain('Legacy note.');
   }, 60_000);
 });
@@ -380,6 +400,8 @@ describe('no conversation content', () => {
     expect((await s.detail(ticket.id)).comments.some((c) => c.body.includes(CANARY))).toBe(true);
     expect(found[0]?.body).not.toContain(CANARY);
     expect(found[0]?.body.toLowerCase()).not.toContain(CANARY.toLowerCase());
-    expect(found[0]?.body).toContain('- Helpers: merged; 2 files, +2 -0 lines');
+    expect(found[0]?.body).toContain('- Merged 1 change from Helpers: 2 files, 2 lines added');
+    // The lead's note is the one free text in it.
+    expect(found[0]?.body).toContain('From the lead:\nPlain note.\n\nDetails:\n');
   }, 60_000);
 });

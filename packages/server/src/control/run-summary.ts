@@ -21,6 +21,10 @@ import type { RunStore } from './store.js';
  * finding or tool output is ever read for it: labels are workflow block labels, numbers are
  * counts, and the only free text is the lead's note (redacted and capped by the engine).
  *
+ * Since v0.3.0 S-C the lead's note is the main text, written like a teammate's ticket update, and
+ * the facts follow under `Details:` as short sentences; without a note, one plain sentence says
+ * how the run ended (`composeRunSummary`).
+ *
  * When one is written (at most one per trigger, and never twice for the same moment):
  * - **handover** (`handover-summary` effect): every review-loop handover. The first is headed
  *   `Run summary`; a later one, after the owner's "Request changes" and a second handover, is
@@ -40,6 +44,13 @@ import type { RunStore } from './store.js';
 export const RUN_SUMMARY_HEADING = 'Run summary';
 /** The first line of a later handover's summary of the same run. */
 export const RUN_SUMMARY_UPDATED_HEADING = 'Run summary (updated)';
+/**
+ * The line before the lead's note (v0.3.0 S-C): the comment's author is `app`, so the plain text
+ * says whose words follow; the web shows it as "Lead · Run summary" instead.
+ */
+export const RUN_SUMMARY_NOTE_HEADING = 'From the lead:';
+/** The line before the facts (v0.3.0 S-C); the web folds what follows behind "Details". */
+export const RUN_SUMMARY_DETAILS_HEADING = 'Details:';
 /** `TicketCommentSchema.body`. */
 export const COMMENT_BODY_MAX = 8000;
 /** Check names listed per change at most. */
@@ -90,12 +101,25 @@ export interface CheckTally {
   notRun: string[];
 }
 
+/** Where a change ended up. */
+export type ChangeOutcome =
+  | 'merged'
+  | 'discarded'
+  | 'in-review'
+  | 'in-rework'
+  | 'waiting-for-you'
+  | 'waiting-for-review'
+  | 'no-changes'
+  /** No change was recorded for the agent at all. */
+  | 'none';
+
+/** How an agent itself ended, when not normally. */
+export type AgentEnding = 'failed' | 'stopped' | 'timed-out' | 'interrupted';
+
 export interface ChangeFact {
   label: string;
-  /** Where the change ended up, in plain words (`merged`, `discarded`, `waiting for you`, …). */
-  outcome: string;
-  /** How the agent itself ended, when not normally (`failed`, `stopped`, …). */
-  agentEnded: string | null;
+  outcome: ChangeOutcome;
+  agentEnded: AgentEnding | null;
   files: number | null;
   additions: number | null;
   deletions: number | null;
@@ -105,9 +129,11 @@ export interface ChangeFact {
 }
 
 export interface RunSummaryFacts {
-  ticketKey: string;
-  /** The opening line after the key, e.g. `the lead handed the work over.` */
-  headline: string;
+  /**
+   * The one plain sentence shown instead of a note, e.g. `The run was stopped before the work was
+   * handed over.` Used only when `note` is null.
+   */
+  opening: string;
   plan:
     { version: number; steps: string[] } | { version: null; steps: null; proposed: number } | null;
   changes: ChangeFact[];
@@ -125,12 +151,13 @@ export interface RunSummaryFacts {
 }
 
 const KIND_ORDER: readonly AgentRoleKind[] = ['planner', 'lead', 'worker', 'reviewer', 'tester'];
-const KIND_WORDS: Readonly<Record<AgentRoleKind, string>> = {
-  planner: 'planner',
-  lead: 'lead',
-  worker: 'helpers',
-  reviewer: 'reviewers',
-  tester: 'testers',
+/** Who used the tokens: one agent of the kind, then several. */
+const KIND_WORDS: Readonly<Record<AgentRoleKind, readonly [string, string]>> = {
+  planner: ['the planner', 'planners'],
+  lead: ['the lead', 'leads'],
+  worker: ['1 helper', 'helpers'],
+  reviewer: ['1 reviewer', 'reviewers'],
+  tester: ['1 tester', 'testers'],
 };
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -139,6 +166,12 @@ function plural(n: number, one: string, many = `${one}s`): string {
 
 function num(n: number): string {
   return n.toLocaleString('en-US');
+}
+
+/** `A`, `A and B`, `A, B and C`. */
+function andList(items: readonly string[]): string {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`;
 }
 
 /** The latest result per check id, counted (null when no check ran). */
@@ -179,112 +212,187 @@ function tipChecksText(t: CheckTally): string {
   return checksText(t).replace(/^checks: /, 'checks on the tip: ');
 }
 
-function changeLine(c: ChangeFact): string {
-  const parts = [c.agentEnded === null ? c.outcome : `${c.outcome} (${c.agentEnded})`];
-  if (c.files !== null) {
-    const lines =
-      c.additions !== null && c.deletions !== null
-        ? `, +${num(c.additions)} -${num(c.deletions)} lines`
-        : '';
-    parts.push(`${plural(c.files, 'file')}${lines}`);
+/** A change's checks in words: `both checks passed`, `1 of 3 checks passed (failed: Lint)`. */
+function changeChecksText(t: CheckTally): string {
+  const total = t.passed + t.failed.length + t.notRun.length;
+  if (t.passed === total) {
+    return total === 1
+      ? 'the check passed'
+      : total === 2
+        ? 'both checks passed'
+        : `all ${total} checks passed`;
   }
-  if (c.checks !== null) parts.push(checksText(c.checks));
-  const by = (['lead', 'reviewer', 'owner'] as const)
-    .filter((d) => c.rework[d] > 0)
-    .map((d) => `${d === 'owner' ? 'you' : d} ${c.rework[d]}`);
+  const why: string[] = [];
+  if (t.failed.length > 0) why.push(`failed: ${names(t.failed)}`);
+  if (t.notRun.length > 0) why.push(`not run: ${names(t.notRun)}`);
+  return `${t.passed} of ${total} ${total === 1 ? 'check' : 'checks'} passed (${why.join('; ')})`;
+}
+
+/** `3 files, 42 lines added and 5 removed`; lines only where git could tell and any changed. */
+function filesText(c: ChangeFact): string | null {
+  if (c.files === null) return null;
+  const files = plural(c.files, 'file');
+  const add = c.additions;
+  const del = c.deletions;
+  if (add === null || del === null) return files;
+  if (add > 0 && del > 0) return `${files}, ${num(add)} lines added and ${num(del)} removed`;
+  if (add > 0) return `${files}, ${num(add)} ${add === 1 ? 'line' : 'lines'} added`;
+  if (del > 0) return `${files}, ${num(del)} ${del === 1 ? 'line' : 'lines'} removed`;
+  return files;
+}
+
+const DECIDER_WORDS: Readonly<Record<ChangeDecider, string>> = {
+  lead: 'the lead',
+  reviewer: 'the reviewer',
+  owner: 'you',
+};
+
+/** `2 rework rounds, asked for by the lead (1) and the reviewer (1)`. */
+function reworkText(c: ChangeFact): string | null {
+  const by = (['lead', 'reviewer', 'owner'] as const).filter((d) => c.rework[d] > 0);
   const rounds = c.rework.lead + c.rework.reviewer + c.rework.owner;
-  if (rounds > 0) parts.push(`${plural(rounds, 'rework round')} (${by.join(', ')})`);
-  return `- ${c.label}: ${parts.join('; ')}.`;
+  if (rounds === 0) return null;
+  const who = by.map((d) =>
+    by.length > 1 ? `${DECIDER_WORDS[d]} (${c.rework[d]})` : DECIDER_WORDS[d],
+  );
+  return `${plural(rounds, 'rework round')}, asked for by ${andList(who)}`;
+}
+
+const OUTCOME_WORDS: Readonly<Record<ChangeOutcome, (label: string) => string>> = {
+  merged: (l) => `Merged 1 change from ${l}`,
+  discarded: (l) => `Discarded 1 change from ${l}`,
+  'in-review': (l) => `1 change from ${l} is still in review`,
+  'in-rework': (l) => `1 change from ${l} is back in rework`,
+  'waiting-for-you': (l) => `1 change from ${l} is waiting for your decision`,
+  'waiting-for-review': (l) => `1 change from ${l} is waiting for your review`,
+  'no-changes': (l) => `${l} finished with no changes`,
+  none: (l) => `There is no change from ${l}`,
+};
+
+const ENDING_WORDS: Readonly<Record<AgentEnding, string>> = {
+  failed: 'it failed',
+  stopped: 'it was stopped',
+  'timed-out': 'it timed out',
+  interrupted: 'it was interrupted by a restart',
+};
+
+/**
+ * One change as a short sentence: `Merged 1 change from Helpers: 2 files, 18 lines added; both
+ * checks passed.`
+ */
+function changeLine(c: ChangeFact): string {
+  const facts = [filesText(c), c.checks === null ? null : changeChecksText(c.checks), reworkText(c)]
+    .filter((p) => p !== null)
+    .join('; ');
+  const ended = c.agentEnded === null ? '' : `; ${ENDING_WORDS[c.agentEnded]}`;
+  return `- ${OUTCOME_WORDS[c.outcome](c.label)}${facts.length > 0 ? `: ${facts}` : ''}${ended}.`;
+}
+
+function planLine(plan: NonNullable<RunSummaryFacts['plan']>): string {
+  if (plan.version === null) {
+    return `- No plan was approved; ${plural(plan.proposed, 'version was', 'versions were')} proposed.`;
+  }
+  const n = plan.steps.length;
+  return n === 0
+    ? `- Plan v${plan.version} was approved with no steps.`
+    : `- Plan v${plan.version} was approved with ${plural(n, 'step')}: ${andList(plan.steps)}.`;
+}
+
+function ticketBranchLine(branch: NonNullable<RunSummaryFacts['ticketBranch']>): string {
+  // S-A2: never just "open".
+  const where =
+    branch.state === 'merged'
+      ? `was merged into ${branch.baseBranch}`
+      : branch.state === 'discarded'
+        ? 'was discarded'
+        : branch.awaitingMerge
+          ? 'is waiting for your merge'
+          : 'was not merged';
+  const merged = branch.merged === 0 ? 'no changes' : plural(branch.merged, 'change');
+  const tip = branch.tipChecks === null ? '' : `; ${tipChecksText(branch.tipChecks)}`;
+  return `- The ticket branch ${branch.branch} (from ${branch.baseBranch}) has ${merged} merged and ${where}${tip}.`;
+}
+
+function tokensLine(tokens: RunSummaryFacts['tokens']): string | null {
+  const used = tokens
+    .filter((t) => t.agents > 0)
+    .map((t) => {
+      const [one, many] = KIND_WORDS[t.kind];
+      return `${num(t.tokens)} by ${t.agents === 1 ? one : `${t.agents} ${many}`}`;
+    });
+  return used.length === 0 ? null : `- Budget tokens used: ${andList(used)}.`;
 }
 
 /**
- * The comment body: plain text, readable as is, at most `COMMENT_BODY_MAX` characters. When the
- * facts are too long, later change lines give way to a count; the note is kept whole (it is at most
- * 1,500 characters).
+ * The comment body (v0.3.0 S-C): plain text that reads like a teammate's comment, at most
+ * `COMMENT_BODY_MAX` characters.
+ *
+ * ```text
+ * Run summary                      (or "Run summary (updated)")
+ *
+ * From the lead:                   (only with a note; without one, the opening sentence)
+ * <the lead's note>
+ *
+ * Details:
+ * - <plan>  - <one line per change>  - <ticket branch>  - <budget tokens>
+ * ```
+ *
+ * The web shows the note as the comment and keeps the details behind a disclosure; it finds them
+ * by the last `Details:` line, which the facts never contain. When the facts are too long, later
+ * change lines give way to a count; the note is kept whole (it is at most 1,500 characters).
  */
 export function composeRunSummary(facts: RunSummaryFacts, updated = false): string {
-  const head = [
-    updated ? RUN_SUMMARY_UPDATED_HEADING : RUN_SUMMARY_HEADING,
-    `${facts.ticketKey}: ${facts.headline}`,
-  ].join('\n');
-  const sections: string[] = [];
-  const plan = facts.plan;
-  if (plan !== null) {
-    sections.push(
-      plan.version === null
-        ? `Plan: none approved (${plural(plan.proposed, 'version')} proposed).`
-        : `Plan v${plan.version}: ${plural(plan.steps.length, 'step')}${plan.steps.length > 0 ? ` (${plan.steps.join(', ')})` : ''}.`,
-    );
-  }
-  const branch = facts.ticketBranch;
-  const tail: string[] = [];
-  if (branch !== null) {
-    const where =
-      branch.state === 'merged'
-        ? `merged into ${branch.baseBranch}`
-        : branch.state === 'discarded'
-          ? 'discarded'
-          : branch.awaitingMerge
-            ? 'waiting for your merge'
-            : 'not merged';
-    const parts = [
-      `Ticket branch ${branch.branch} (from ${branch.baseBranch}): ${plural(branch.merged, 'change')} merged`,
-      where,
-    ];
-    if (branch.tipChecks !== null) parts.push(tipChecksText(branch.tipChecks));
-    tail.push(`${parts.join('; ')}.`);
-  }
-  const tokens = facts.tokens
-    .filter((t) => t.agents > 0)
-    .map(
-      (t) =>
-        `${KIND_WORDS[t.kind]} ${num(t.tokens)}${t.agents > 1 ? ` (${plural(t.agents, 'agent')})` : ''}`,
-    );
-  if (tokens.length > 0) tail.push(`Budget tokens: ${tokens.join('; ')}.`);
-  if (facts.note !== null) tail.push(`Lead's note:\n${facts.note}`);
+  const heading = updated ? RUN_SUMMARY_UPDATED_HEADING : RUN_SUMMARY_HEADING;
+  const main = facts.note === null ? facts.opening : `${RUN_SUMMARY_NOTE_HEADING}\n${facts.note}`;
+  const before: string[] = [];
+  if (facts.plan !== null) before.push(planLine(facts.plan));
+  const after: string[] = [];
+  if (facts.ticketBranch !== null) after.push(ticketBranchLine(facts.ticketBranch));
+  const tokens = tokensLine(facts.tokens);
+  if (tokens !== null) after.push(tokens);
 
   const build = (shown: number): string => {
-    const lines = facts.changes.slice(0, shown).map(changeLine);
-    if (shown < facts.changes.length) {
-      lines.push(`- …and ${plural(facts.changes.length - shown, 'more change')}.`);
-    }
     const changes =
       facts.changes.length === 0
-        ? ['Changes: none.']
-        : [`Changes (${facts.changes.length}):\n${lines.join('\n')}`];
-    return [head, ...sections, ...changes, ...tail].join('\n\n');
+        ? ['- No helpers were started.']
+        : facts.changes.slice(0, shown).map(changeLine);
+    if (shown < facts.changes.length) {
+      changes.push(`- …and ${plural(facts.changes.length - shown, 'more change')}.`);
+    }
+    const details = [RUN_SUMMARY_DETAILS_HEADING, ...before, ...changes, ...after].join('\n');
+    return [heading, main, details].join('\n\n');
   };
   let shown = facts.changes.length;
   let body = build(shown);
   while (body.length > COMMENT_BODY_MAX && shown > 0) body = build(--shown);
-  // Only a pathological note or label list could still be too long: cut, never fail.
+  // Only a pathological label list could still be too long: cut, never fail.
   return body.length <= COMMENT_BODY_MAX ? body : `${body.slice(0, COMMENT_BODY_MAX - 1)}…`;
 }
 
 // ------------------------------------------------------------------ facts from records
 
-const LOOP_OUTCOME: Readonly<Record<string, string>> = {
-  sealing: 'in review',
-  ready: 'in review',
-  reviewing: 'in review',
-  decision: 'in review',
-  rework: 'in rework',
-  'needs-owner': 'waiting for you',
+const LOOP_OUTCOME: Readonly<Record<string, ChangeOutcome>> = {
+  sealing: 'in-review',
+  ready: 'in-review',
+  reviewing: 'in-review',
+  decision: 'in-review',
+  rework: 'in-rework',
+  'needs-owner': 'waiting-for-you',
   merged: 'merged',
   discarded: 'discarded',
-  'no-changes': 'no changes',
+  'no-changes': 'no-changes',
 };
-const LEGACY_OUTCOME: Readonly<Record<string, string>> = {
-  pending: 'waiting for your review',
+const LEGACY_OUTCOME: Readonly<Record<string, ChangeOutcome>> = {
+  pending: 'waiting-for-review',
   merged: 'merged',
   discarded: 'discarded',
-  'no-changes': 'no changes',
+  'no-changes': 'no-changes',
 };
-const AGENT_ENDED: Readonly<Partial<Record<EngineAgent['status'], string>>> = {
-  FAILED: 'it failed',
-  CANCELLED: 'it was stopped',
-  TIMED_OUT: 'it timed out',
-  NEEDS_REVIEW: 'interrupted by a restart',
+const AGENT_ENDED: Readonly<Partial<Record<EngineAgent['status'], AgentEnding>>> = {
+  FAILED: 'failed',
+  CANCELLED: 'stopped',
+  TIMED_OUT: 'timed-out',
+  NEEDS_REVIEW: 'interrupted',
 };
 
 export interface FactsInput {
@@ -296,24 +404,25 @@ export interface FactsInput {
   lines: ReadonlyMap<string, LineCounts>;
 }
 
-function headlineOf(input: FactsInput, agents: readonly { kind: string; status: string }[]) {
+/** The one plain sentence a summary without the lead's note opens with. */
+function openingOf(input: FactsInput, agents: readonly { kind: string; status: string }[]) {
   const t = input.trigger;
   const lead = agents.find((a) => a.kind === 'lead');
-  if (t.kind === 'handover') return 'the lead handed the work over.';
+  if (t.kind === 'handover') return 'The lead handed the work over without a note.';
   if (t.kind === 'review') {
     return input.state.run.status === 'COMPLETED'
-      ? 'the run finished with nothing to review.'
-      : 'the agents finished; their changes wait for your review.';
+      ? 'The run finished with nothing to review.'
+      : 'The agents finished, and their changes are waiting for your review.';
   }
-  if (t.outcome === 'failed') return 'the run failed before the lead handed over.';
+  if (t.outcome === 'failed') return 'The run failed before the work was handed over.';
   if (t.outcome === 'stopped') {
     return lead?.status === 'TIMED_OUT'
-      ? 'the run timed out before the lead handed over.'
-      : 'the run was stopped before the lead handed over.';
+      ? 'The run timed out before the work was handed over.'
+      : 'The run was stopped before the work was handed over.';
   }
-  if (lead?.status === 'FAILED') return 'the lead failed before handing over.';
-  if (lead?.status === 'CANCELLED') return 'the lead was stopped before handing over.';
-  return 'the lead ended without handing over.';
+  if (lead?.status === 'FAILED') return 'The lead failed before handing the work over.';
+  if (lead?.status === 'CANCELLED') return 'The lead was stopped before handing the work over.';
+  return 'The lead ended without handing the work over.';
 }
 
 /** Every fact from the database (and the run's workflow snapshot for the labels). */
@@ -368,11 +477,11 @@ export function gatherRunFacts(input: FactsInput): RunSummaryFacts {
     const stored = loop ? store.loopRepos.workspaceChanges.getByAgentRun(agent.id) : undefined;
     const outcome = loop
       ? (stored?.changeState ?? null) === null
-        ? 'no change'
-        : (LOOP_OUTCOME[stored?.changeState ?? ''] ?? 'in review')
+        ? 'none'
+        : (LOOP_OUTCOME[stored?.changeState ?? ''] ?? 'in-review')
       : ws === undefined
-        ? 'no change'
-        : (LEGACY_OUTCOME[ws.reviewState] ?? 'waiting for your review');
+        ? 'none'
+        : (LEGACY_OUTCOME[ws.reviewState] ?? 'waiting-for-review');
     const lines = input.lines.get(agent.id);
     const head = stored?.headCommit ?? null;
     const checks = loop
@@ -428,8 +537,7 @@ export function gatherRunFacts(input: FactsInput): RunSummaryFacts {
   });
 
   return {
-    ticketKey: input.ticketKey,
-    headline: headlineOf(input, agents),
+    opening: openingOf(input, agents),
     plan,
     changes,
     ticketBranch,
