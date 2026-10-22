@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useId, type ComponentType, type ReactNode } from 'react';
 import { GridIcon, HealthIcon, type IconProps } from '../components/icons';
 import { paths, schemas } from '../lib/api';
@@ -21,17 +21,18 @@ const DOT: Record<StreamState['status'], string> = {
   unsupported: 'bg-status-stale',
 };
 
-/** The sidebar's two widths: the full list or the 56px icon rail. */
+/** The sidebar's two widths: the full list (256px) or the 60px icon rail (v0.3.0 C-S). */
 export function sidebarWidthClass(collapsed: boolean): string {
   return `shrink-0 transition-[width] duration-200 ease-(--ease-out-soft) motion-reduce:transition-none ${
-    collapsed ? 'w-14' : 'w-sidebar'
+    collapsed ? 'w-sidebar-collapsed' : 'w-sidebar'
   }`;
 }
 
 /**
  * One entry, GitHub's nav list item: icon and label, a hover fill; the selected one semibold on
- * the hover fill with a 4px accent bar at the sidebar's edge. In the rail the label is
- * screen-reader text and shows as a tooltip.
+ * the hover fill with a 4px accent bar at the sidebar's edge. 36px rows with body-size (15px)
+ * labels and 18px icons (v0.3.0 C-S). In the rail the label is screen-reader text and shows as a
+ * tooltip.
  */
 function NavLink({
   to,
@@ -51,14 +52,14 @@ function NavLink({
       <a
         href={to}
         aria-current={active ? 'page' : undefined}
-        className={`group relative flex h-8 items-center gap-2.5 rounded-control px-3 no-underline transition-colors focus-visible:-outline-offset-2 ${
+        className={`group relative flex h-9 items-center gap-3 rounded-control px-[0.8125rem] no-underline transition-colors focus-visible:-outline-offset-2 ${
           active
             ? 'bg-hover font-semibold text-ink before:absolute before:top-1/2 before:-left-2 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-accent'
             : 'text-ink hover:bg-hover'
         }`}
       >
         <Icon
-          size={16}
+          size={18}
           className={`shrink-0 ${active ? 'text-ink' : 'text-dim group-hover:text-ink'}`}
         />
         <span className={collapsed ? 'sr-only' : 'truncate whitespace-nowrap'}>{label}</span>
@@ -88,7 +89,7 @@ function Section({
         className={
           collapsed
             ? 'sr-only'
-            : 'truncate px-3 pt-1 pb-1 text-caption font-semibold whitespace-nowrap text-dim'
+            : 'truncate px-[0.8125rem] pt-1 pb-1.5 text-caption font-semibold whitespace-nowrap text-dim'
         }
       >
         {heading}
@@ -99,27 +100,26 @@ function Section({
 }
 
 /**
- * The sidebar toggle (v0.3.0 D-0, owner request): a panel icon button at the left of the top
- * bar, over the sidebar column, where people look for it; it stays there over the icon rail. The
+ * The sidebar toggle (v0.3.0 C-S, owner request 2026-10-22): a chevron button on the sidebar
+ * itself, at its top right (centred over the icons in the rail): ‹ hides the sidebar to the rail,
+ * › shows it again. It was in the top bar (D-0); the owner wanted it on the thing it moves. The
  * tooltip names it with its shortcut ("Hide sidebar ⌘B"); ⌘B/Ctrl+B and the remembered choice are
  * `useSidebar`'s.
  */
 export function SidebarToggle({
   collapsed,
   onToggle,
-  className,
 }: {
   collapsed: boolean;
   onToggle: () => void;
-  className: string;
 }) {
   const mac = isMacLike();
   const label = collapsed ? F.sidebar.expand : F.sidebar.collapse;
-  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const Icon = collapsed ? ChevronRight : ChevronLeft;
   return (
     <ShellTooltip
-      side="bottom"
-      align="start"
+      side="right"
+      align="center"
       content={
         <>
           <span>{label}</span>
@@ -135,9 +135,9 @@ export function SidebarToggle({
         aria-expanded={!collapsed}
         aria-keyshortcuts={mac ? 'Meta+B' : 'Control+B'}
         data-testid="sidebar-toggle"
-        className={className}
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-canvas text-dim shadow-card transition-colors hover:border-line-strong hover:bg-hover hover:text-ink"
       >
-        <Icon size={16} strokeWidth={1.75} aria-hidden="true" focusable="false" />
+        <Icon size={18} strokeWidth={2} aria-hidden="true" focusable="false" />
       </button>
     </ShellTooltip>
   );
@@ -198,20 +198,23 @@ function Footer({ stream, collapsed }: { stream: StreamState; collapsed: boolean
  * The side navigation (DESIGN.md, "Layout"), GitHub-like: a "Project" section with the project's
  * pages and a "Workspace" section with All projects and Data health, each under a small muted
  * heading; the full list or the icon rail (each entry's label then shows as a tooltip and stays
- * the link's name). The toggle is at the top, in the top bar (`SidebarToggle`); the bottom keeps
- * only the connection and server status.
+ * the link's name). The toggle is on the sidebar, at its top right (`SidebarToggle`), above the
+ * scrolling list so it never scrolls away; the bottom keeps only the connection and server
+ * status.
  */
 export function Sidebar({
   route,
   projectId,
   stream,
   collapsed,
+  onToggle,
 }: {
   route: Route;
   /** The project the project pages link to; null hides the project section. */
   projectId: string | null;
   stream: StreamState;
   collapsed: boolean;
+  onToggle: () => void;
 }) {
   const page = activePage(route);
   const onRouteProject = routeProjectId(route) === projectId || route.name === 'session';
@@ -226,7 +229,14 @@ export function Sidebar({
         aria-label={N.label}
         className="sticky top-topbar flex h-[calc(100vh-var(--spacing-topbar))] flex-col overflow-hidden"
       >
-        <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 py-3">
+        <div
+          className={`flex shrink-0 items-center px-2 pt-2.5 ${
+            collapsed ? 'justify-center' : 'justify-end'
+          }`}
+        >
+          <SidebarToggle collapsed={collapsed} onToggle={onToggle} />
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-2 pt-1 pb-3">
           {projectId !== null ? (
             <Section heading={N.project} collapsed={collapsed} first>
               {availableProjectPages().map((p) => (

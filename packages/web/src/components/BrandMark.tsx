@@ -90,17 +90,34 @@ export function BrandMark({
 /**
  * The mark with the wordmark: the app name, set uppercase in the semibold system font with open tracking
  * (CSS only, so the text stays "Agent Control Plane" for screen readers and tests). `hideName`
- * keeps the name for screen readers only (the sidebar's icon rail).
+ * keeps the name for screen readers only (the sidebar's icon rail). `shortName` (the top bar's
+ * "ACP", v0.3.0 C-S) shows instead of the full name, which stays for screen readers.
  */
 export function BrandLogo({
   size = 24,
   hideName = false,
+  shortName,
   className = '',
 }: {
   size?: number;
   hideName?: boolean;
+  shortName?: string;
   className?: string;
 }) {
+  if (shortName !== undefined && !hideName) {
+    return (
+      <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
+        <BrandMark size={size} />
+        <span
+          aria-hidden="true"
+          className="text-title leading-none font-semibold tracking-[0.04em] whitespace-nowrap"
+        >
+          {shortName}
+        </span>
+        <span className="sr-only">{APP_NAME}</span>
+      </span>
+    );
+  }
   return (
     <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
       <BrandMark size={size} />

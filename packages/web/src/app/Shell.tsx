@@ -30,14 +30,15 @@ function usePaletteShortcut(toggle: () => void) {
 }
 
 /**
- * App frame (DESIGN.md, "Layout"): a dark top bar (the sidebar toggle, brand, the project / page
- * trail with the project switcher, ⌘K, the theme menu), the side navigation (Project: the
- * project's pages; Workspace: All projects and Data health; the full list or an icon rail, toggled
- * with the top bar's button or ⌘B/Ctrl+B and remembered per browser, the rail by default at
- * 1280px and below; the connection and server status at the bottom), the demo banner and the page.
+ * App frame (DESIGN.md, "Layout"): a dark top bar (the brand and "ACP" on the left, the ⌘K search
+ * in the centre, the project / page trail with the project switcher and the theme menu on the
+ * right), the side navigation (Project: the project's pages; Workspace: All projects and Data
+ * health; the full list or an icon rail, toggled with the chevron on the sidebar or ⌘B/Ctrl+B and
+ * remembered per browser, the rail by default at 1280px and below; the connection and server
+ * status at the bottom), the demo banner and the page.
  *
- * The bar is 48px: the shell sets `--spacing-topbar` for everything under it (the sticky sidebar
- * and demo banner use it), so they follow without a token change.
+ * The bar is 56px, the `--spacing-topbar` token (index.css), which the sticky sidebar, the demo
+ * banner and the pages' sticky parts read.
  */
 export function Shell({
   route,
@@ -75,13 +76,11 @@ export function Shell({
 
   return (
     <ShellTooltipProvider>
-      <div className="flex min-h-full flex-col [--spacing-topbar:3rem]">
+      <div className="flex min-h-full flex-col">
         <TopBar
           route={route}
           projects={projects.data}
           currentId={contextId}
-          collapsed={sidebar.collapsed}
-          onToggleSidebar={sidebar.toggle}
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <div className="flex min-h-0 flex-1">
@@ -90,6 +89,7 @@ export function Shell({
             projectId={contextId}
             stream={stream}
             collapsed={sidebar.collapsed}
+            onToggle={sidebar.toggle}
           />
           <div className="flex min-w-0 flex-1 flex-col">
             <DemoBanner mode={mode} />

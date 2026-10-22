@@ -2,16 +2,15 @@ import type { ProjectDto } from '@acp/core/api';
 import { BrandLogo } from '../components/BrandMark';
 import { SearchIcon } from '../components/icons';
 import { ThemeMenu } from '../components/ThemeSwitch';
-import { SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
+import { APP_NAME, SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
 import { href, type Route } from '../lib/router';
 import { crumbsFor } from './nav';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { ShellTooltip } from './ShellTooltip';
-import { SidebarToggle } from './Sidebar';
 
-/** The top bar's bordered icon buttons (the sidebar toggle, the theme menu), like GitHub's. */
+/** The top bar's bordered icon button (the theme menu), like GitHub's. */
 const headerIconButton =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-control border border-header-line text-header-dim transition-colors hover:bg-header-hover hover:text-header-ink';
+  'inline-flex size-9 shrink-0 items-center justify-center rounded-control border border-header-line text-header-dim transition-colors hover:bg-header-hover hover:text-header-ink';
 
 /** A slanted hairline between crumbs (no text, so it adds nothing to the bar's words). */
 function Slash() {
@@ -33,7 +32,7 @@ function Breadcrumbs({
 }) {
   const crumbs = crumbsFor(route, currentId);
   return (
-    <nav aria-label={SHELL_FRAME_COPY.breadcrumb} className="flex min-w-0 flex-1 items-center">
+    <nav aria-label={SHELL_FRAME_COPY.breadcrumb} className="flex min-w-0 items-center">
       <ol className="flex min-w-0 items-center gap-1">
         <li className="min-w-0 shrink">
           <ProjectSwitcher projects={projects} currentId={currentId} route={route} />
@@ -69,74 +68,72 @@ function CrumbItem({ label, to }: { label: string; to: string | null }) {
 }
 
 /**
- * The top bar (DESIGN.md, "Layout"), dark in both themes like GitHub's header: the sidebar toggle
- * over the rail's icon column, the Control Core and the wordmark, the trail (project switcher,
- * then the page), the ⌘K search and the theme menu.
+ * The top bar (DESIGN.md, "Layout"; v0.3.0 C-S), 56px and dark in both themes like GitHub's
+ * header, in three parts:
+ * - left: the Control Core and the short name "ACP", linking home (the full name is the tooltip
+ *   and the link's name);
+ * - centre: the ⌘K search, wide and centred on the bar (the two sides share the rest equally, so
+ *   it stays in the middle); on a narrow screen an icon button;
+ * - right: the trail (the project switcher, then the page) and the theme menu.
+ *
+ * The sidebar toggle is on the sidebar itself (`SidebarToggle`).
  */
 export function TopBar({
   route,
   projects,
   currentId,
-  collapsed,
-  onToggleSidebar,
   onOpenPalette,
 }: {
   route: Route;
   projects: readonly ProjectDto[] | undefined;
   currentId: string | null;
-  /** The sidebar is the icon rail: the wordmark gives way to the mark alone. */
-  collapsed: boolean;
-  onToggleSidebar: () => void;
   onOpenPalette: () => void;
 }) {
   return (
     <header
       aria-label={SHELL_COPY.topBar.label}
       data-topbar=""
-      className="sticky top-0 z-30 flex h-topbar items-center border-b border-header-line bg-header text-header-ink"
+      className="sticky top-0 z-30 flex h-topbar items-center gap-2 border-b border-header-line bg-header px-3 text-header-ink sm:px-4 md:gap-4"
     >
-      {/* As wide as the rail, so the toggle sits over the rail's icons. */}
-      <div className="flex w-14 shrink-0 justify-center">
-        <SidebarToggle
-          collapsed={collapsed}
-          onToggle={onToggleSidebar}
-          className={headerIconButton}
-        />
-      </div>
-      <a
-        href={href.home()}
-        aria-label={SHELL_COPY.topBar.home}
-        className="flex min-w-0 shrink-0 items-center rounded-control text-header-ink no-underline"
-      >
-        <BrandLogo size={24} hideName={collapsed} />
-      </a>
-      <div className="flex min-w-0 flex-1 items-center gap-2 pr-3 pl-3 wide:pr-4 wide:pl-4">
-        <Breadcrumbs route={route} projects={projects} currentId={currentId} />
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            data-testid="open-palette"
-            aria-keyshortcuts="Meta+K Control+K"
-            className="flex h-8 items-center gap-2 rounded-control border border-header-line pr-1 pl-2.5 text-header-dim transition-colors hover:border-header-dim hover:text-header-ink"
+      <div className="flex shrink-0 items-center md:min-w-0 md:flex-1 md:basis-0">
+        <ShellTooltip content={APP_NAME} side="bottom" align="start">
+          <a
+            href={href.home()}
+            aria-label={SHELL_COPY.topBar.home}
+            className="flex min-w-0 items-center rounded-control py-1 text-header-ink no-underline"
           >
-            <SearchIcon size={15} />
-            <span className="hidden w-40 truncate text-left md:inline lg:w-52">
-              {SHELL_COPY.palette.open}
-            </span>
-            <kbd className="rounded-[4px] border border-header-line px-1.5 font-sans text-micro leading-5 text-header-dim">
-              {SHELL_COPY.palette.shortcut}
-            </kbd>
-          </button>
-          <ThemeMenu
-            className={`${headerIconButton} aria-expanded:bg-header-hover aria-expanded:text-header-ink`}
-            wrap={(button) => (
-              <ShellTooltip content={SHELL_COPY.theme.tip} side="bottom" align="end" describe>
-                {button}
-              </ShellTooltip>
-            )}
-          />
-        </div>
+            <BrandLogo size={28} shortName={SHELL_FRAME_COPY.shortName} />
+          </a>
+        </ShellTooltip>
+      </div>
+      {/* The search: 320px at md, 448px from lg, 544px from xl and 640px from 1440px. */}
+      <div className="ml-auto flex shrink-0 justify-center md:ml-0 md:w-80 md:shrink lg:w-[28rem] xl:w-[34rem] min-[90rem]:w-[40rem]">
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          data-testid="open-palette"
+          aria-keyshortcuts="Meta+K Control+K"
+          className="flex size-9 items-center justify-center gap-2 rounded-control border border-header-line text-header-dim transition-colors hover:border-header-dim hover:text-header-ink md:w-full md:justify-start md:pr-1.5 md:pl-3"
+        >
+          <SearchIcon size={16} className="shrink-0" />
+          <span className="sr-only min-w-0 flex-1 truncate text-left md:not-sr-only">
+            {SHELL_COPY.palette.open}
+          </span>
+          <kbd className="hidden rounded-[4px] border border-header-line px-1.5 font-sans text-micro leading-5 text-header-dim md:inline">
+            {SHELL_COPY.palette.shortcut}
+          </kbd>
+        </button>
+      </div>
+      <div className="flex min-w-0 items-center justify-end gap-2 md:flex-1 md:basis-0">
+        <Breadcrumbs route={route} projects={projects} currentId={currentId} />
+        <ThemeMenu
+          className={`${headerIconButton} aria-expanded:bg-header-hover aria-expanded:text-header-ink`}
+          wrap={(button) => (
+            <ShellTooltip content={SHELL_COPY.theme.tip} side="bottom" align="end" describe>
+              {button}
+            </ShellTooltip>
+          )}
+        />
       </div>
     </header>
   );

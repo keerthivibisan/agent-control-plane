@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { expectFocusRing } from './focus-ring.js';
 import { PROJECT_ID, TICKET_ID, fixtureProject, workingScenario } from './ticket-fixtures.js';
 
@@ -532,3 +532,88 @@ test('board keyboard: Move menu items and column Show/Hide show a focus ring on 
   }
 });
 // --- end U-V
+
+// --- C-S (v0.3.0 shell polish, owner request 2026-10-22), add-only: bigger type and a roomier
+// sidebar, the toggle on the sidebar, and the top bar's logo / centred search / controls.
+
+test('shell sizes: 56px bar, 256px sidebar with 36px rows, 15px body; the search is centred (C-S)', async ({
+  page,
+  request,
+}) => {
+  const project = await demoApi(request);
+  await withTickets(page, project.id);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/#/p/${project.id}/board`);
+  await expect(page.getByTestId('board-counts')).toBeVisible();
+
+  const bar = page.locator('header[aria-label="App bar"]');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const sidebar = page.getByTestId('sidebar');
+  const box = async (l: Locator) => {
+    const b = await l.boundingBox();
+    if (b === null) throw new Error('not visible');
+    return b;
+  };
+  expect((await box(bar)).height).toBeCloseTo(56, 0);
+  await expect.poll(async () => (await box(sidebar)).width).toBe(256);
+  expect((await box(nav.getByRole('link', { name: 'Board' }))).height).toBeCloseTo(36, 0);
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('15px');
+
+  // Left: the logo and "ACP", the full name as its tooltip.
+  const home = bar.getByRole('link', { name: 'Agent Control Plane home' });
+  await expect(home).toContainText('ACP');
+  await home.hover();
+  await expect(page.getByRole('tooltip')).toHaveText('Agent Control Plane');
+  await page.mouse.move(900, 500, { steps: 5 });
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  // Centre: the search, 480–640px wide, centred on the bar.
+  const search = bar.getByTestId('open-palette');
+  await expect(search).toContainText('Search or jump to…');
+  const s = await box(search);
+  expect(s.width).toBeGreaterThanOrEqual(480);
+  expect(s.width).toBeLessThanOrEqual(640);
+  expect(Math.abs(s.x + s.width / 2 - 720)).toBeLessThanOrEqual(2);
+  // Right: the trail with the switcher, then the theme menu, past the search.
+  const switcher = bar.getByRole('button', { name: 'Project: demo-api. Switch project' });
+  const w = await box(switcher);
+  expect(w.x).toBeGreaterThan(s.x + s.width);
+  expect((await box(bar.getByTestId('theme-menu'))).x).toBeGreaterThan(w.x);
+
+  // The toggle is on the sidebar (top right), not in the bar.
+  await expect(bar.getByTestId('sidebar-toggle')).toHaveCount(0);
+  const toggle = page.getByTestId('sidebar-toggle');
+  const t = await box(toggle);
+  const side = await box(sidebar);
+  expect(t.x + t.width).toBeLessThanOrEqual(side.x + side.width);
+  expect(t.x).toBeGreaterThan(side.x + side.width / 2);
+  await toggle.hover();
+  await expect(page.getByRole('tooltip')).toContainText('Hide sidebar');
+  if (SHOTS !== undefined) {
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${SHOTS}/cs-toggle-tip-1440-${scheme}.png` });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+  await toggle.click();
+  await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
+  await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeVisible();
+  await expect.poll(async () => (await box(sidebar)).width).toBe(60);
+  // The rail's toggle sits centred over the icons.
+  const rt = await box(toggle);
+  const icon = await box(nav.getByRole('link', { name: 'Board' }).locator('svg'));
+  expect(Math.abs(rt.x + rt.width / 2 - (icon.x + icon.width / 2))).toBeLessThanOrEqual(1);
+  await page.mouse.move(900, 500, { steps: 5 });
+  await shoot(page, 'cs-rail');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
+
+  // Narrow: the search is an icon button, and the bar never scrolls sideways.
+  await page.setViewportSize({ width: 600, height: 900 });
+  await expect.poll(async () => (await box(search)).width).toBeLessThanOrEqual(40);
+  await expect(search).toHaveAccessibleName('Search or jump to…');
+  expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+});
+// --- end C-S

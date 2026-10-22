@@ -125,7 +125,7 @@ export function ProjectSwitcher({
           type="button"
           aria-label={C.button(label)}
           data-testid="project-switcher"
-          className="flex h-8 max-w-72 min-w-0 items-center gap-2 rounded-control px-1.5 text-header-ink transition-colors hover:bg-header-hover aria-expanded:bg-header-hover"
+          className="flex h-9 max-w-72 min-w-0 items-center gap-2 rounded-control px-2 text-header-ink transition-colors hover:bg-header-hover aria-expanded:bg-header-hover"
         >
           {onAllProjects || !current ? (
             <span className="flex size-5 shrink-0 items-center justify-center text-header-dim">

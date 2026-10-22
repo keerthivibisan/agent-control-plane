@@ -2866,6 +2866,11 @@ export const SHELL_FRAME_COPY = {
   },
   /** The sidebar toggle's shortcut as the keyboard labels it (⌘ on Apple keyboards). */
   sidebarShortcut: (mac: boolean) => (mac ? '⌘B' : 'Ctrl+B'),
+  /**
+   * The short name next to the logo in the top bar (v0.3.0 C-S, the owner's words). The full name
+   * (`APP_NAME`) is its tooltip and, with "home", the link's accessible name.
+   */
+  shortName: 'ACP',
 } as const;
 
 // --- Review loop: approval modes, Start dialog, change cards, ticket branch (RL-D, wp/rl-d-web) --

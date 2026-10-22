@@ -90,6 +90,10 @@ describe('Button and fields', () => {
     rerender(<BrandLogo hideName />);
     expect(container.textContent).toBe('Agent Control Plane');
     expect(container.querySelector('.sr-only')?.textContent).toBe('Agent Control Plane');
+    // C-S: a short name shows instead; the full name stays for screen readers.
+    rerender(<BrandLogo shortName="ACP" />);
+    expect(container.querySelector('[aria-hidden="true"]:not(svg)')?.textContent).toBe('ACP');
+    expect(container.querySelector('.sr-only')?.textContent).toBe('Agent Control Plane');
   });
 });
 

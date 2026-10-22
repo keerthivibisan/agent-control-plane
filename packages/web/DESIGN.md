@@ -13,7 +13,8 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > - **A GitHub-like look:** GitHub's palette (white and canvas-subtle grey in light, GitHub dark
 >   in dark), 1px borders, 6px radius, one blue accent, a green primary button, a dark top bar in
 >   both themes, "Box" cards with a header row, underline tabs, outlined pill labels;
-> - **the system font stack** (no bundled fonts), 14px body, semibold headings;
+> - **the system font stack** (no bundled fonts), 14px body (15px since C-S, below), semibold
+>   headings;
 > - **themes:** Light, Dark and System (follows the computer), remembered per browser, chosen in
 >   the top bar's theme menu or Settings → Appearance, with no flash of the wrong theme on load;
 > - **clarity first:** the app has everything; v3 makes it easier to read. Behaviour and copy stay
@@ -24,6 +25,12 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 > Radix for dialogs, menus, tabs, popovers and tooltips, lucide icons and subtle motion that
 > respects reduced motion carry over from v2 (UI refresh, docs/ui-refresh/). The principles below
 > still hold. D-0 replaced the "Visual system" section with the v3 tokens, type and components.
+>
+> **Shell polish (v0.3.0 part 4, WP C-S, owner request 2026-10-22):** bigger and clearer: body
+> 15px with the type scale a step up, a 56px top bar, a 256px sidebar with 36px entries; the
+> sidebar toggle is a chevron on the sidebar itself; the top bar reads logo and "ACP" on the left,
+> a wide centred search, then the project switcher and the theme menu on the right. "Layout" and
+> "Type" below have the details.
 
 ## Principles
 
@@ -51,9 +58,10 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│ [▤] ⧉ AGENT CONTROL PLANE  [■ web-app ⇕] / Board     [⌕ Search or jump to… ⌘K] [◐] │  dark top bar, 48px
+│ ⧉ ACP          [⌕ Search or jump to…            ⌘K]        [■ web-app ⇕] / Board [◐] │  dark top bar, 56px
 ├──────────────┬───────────────────────────────────────────────────────────────────┤
-│ Project      │  (demo banner)                                                    │
+│          [‹] │  (demo banner)                                                    │
+│ Project      │                                                                   │
 │▌Board        │  Page title  ⓘ                                   [Primary action] │
 │  Workflow    │  One line about the page.                                         │
 │  …           │                                                                   │
@@ -67,37 +75,49 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 └──────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
-- **Top bar** (`TopBar.tsx`, sticky, **48px**; the shell sets `--spacing-topbar: 3rem` for the
-  sticky sidebar and demo banner under it), **dark in both themes** like GitHub's header (`header`
-  `#1f2328` light / `#010409` dark, `header-ink` text, `header-dim` quieter text, `header-line`
-  borders, `header-hover` fills; `[data-topbar]` gives focus rings the brighter `header-focus`
-  blue, 3:1 or more on it):
-  - the **sidebar toggle** (`SidebarToggle`, v0.3.0 D-0, owner request: the bottom corner was
-    missed by new users): a bordered panel icon button first in the bar, in a cell as wide as the
-    rail so it sits over the rail's icons; its tooltip is "Hide sidebar ⌘B" / "Show sidebar ⌘B"
-    (Ctrl+B elsewhere), its name "Hide sidebar" / "Show sidebar", with `aria-controls` and
-    `aria-expanded`; it stays there when the sidebar is the icon rail;
-  - the Control Core mark (`BrandMark`, white with the accent centre) and the wordmark, linking to
-    `#/`; the mark alone while the sidebar is the rail;
-  - the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`: current project, a menu of
-    projects with their folders, All projects and New project), a slanted hairline, then the page
-    (semibold); on a narrow screen the page crumb gives way first, so the bar never scrolls
-    sideways;
-  - the **⌘K** search button (bordered, the full "Search or jump to…" field when there is room,
-    the icon below that) and the **theme menu** (`ThemeMenu`, "Theme" below).
+- **Top bar** (`TopBar.tsx`, sticky, **56px**, the `--spacing-topbar` token that the sticky
+  sidebar, the demo banner and the pages' sticky parts read), **dark in both themes** like
+  GitHub's header (`header` `#1f2328` light / `#010409` dark, `header-ink` text, `header-dim`
+  quieter text, `header-line` borders, `header-hover` fills; `[data-topbar]` gives focus rings the
+  brighter `header-focus` blue, 3:1 or more on it). Three parts (v0.3.0 C-S, owner request
+  2026-10-22); from `md` the left and right parts share the rest of the bar equally
+  (`flex-1 basis-0`), so the search stays in the middle:
+  - **left:** the Control Core mark (`BrandMark`, 28px, white with the accent centre) and the
+    short name **"ACP"** (`SHELL_FRAME_COPY.shortName`, 17px semibold), linking to `#/`. The full
+    name "Agent Control Plane" is the tooltip and the link's name ("Agent Control Plane home", as
+    before, so it still says where it goes); the visible "ACP" is `aria-hidden`
+    (`BrandLogo shortName`). The mark sits over the rail's icons;
+  - **centre:** the **⌘K** search, a bordered 36px field "Search or jump to… ⌘K", 320px at `md`,
+    448px from `lg`, 544px from `xl` and 640px from 1440px; below `md` a 36px icon button (its
+    name stays "Search or jump to…");
+  - **right:** the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`, 36px: current
+    project, a menu of projects with their folders, All projects and New project), a slanted
+    hairline, then the page (semibold); then the **theme menu** (`ThemeMenu`, a 36px bordered icon
+    button, "Theme" below). On a narrow screen the page crumb gives way first and the switcher
+    truncates, so the bar never scrolls sideways.
 - **Sidebar** (`Sidebar.tsx`), neutral (`sidebar`: `#f6f8fa` light / `#010409` dark), like
   GitHub's nav lists: two sections under small muted semibold headings, **Project** (the project's
   pages from `PROJECT_PAGES`, only the `available` ones) and **Workspace** (**All projects**,
-  **Data health**), each a labelled `group`, with a divider between them. Entries are 32px, icon
-  (`dim`, `ink` on hover) plus label (`ink`), a `hover` fill. The bottom keeps only the status, as
-  small text: the live-connection dot and word, and the server line.
-  - Two widths: the full list (15rem, `--spacing-sidebar`) or a **56px icon rail** whose entries
-    show their label as a tooltip (and keep it as screen-reader text); in the rail the section
-    headings are screen-reader text and the divider stays.
-  - The top bar's toggle or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is
-    remembered in this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice
-    stored, the rail is used at 1280px and below (`wide:` is the 1281px breakpoint) and the full
-    list above.
+  **Data health**), each a labelled `group`, with a divider between them. Entries are **36px**,
+  an 18px icon (`dim`, `ink` on hover) plus a body-size (15px) label (`ink`), a `hover` fill
+  (v0.3.0 C-S). The bottom keeps only the status, as small text: the live-connection dot and
+  word, and the server line.
+  - Two widths: the full list (**256px**, `--spacing-sidebar`) or a **60px icon rail**
+    (`--spacing-sidebar-collapsed`) whose entries show their label as a tooltip (and keep it as
+    screen-reader text); in the rail the section headings are screen-reader text and the divider
+    stays.
+  - The **sidebar toggle** (`SidebarToggle`, `data-testid="sidebar-toggle"`; v0.3.0 C-S, owner
+    request 2026-10-22: on the sidebar itself, not in the top bar) is a 32px bordered chevron
+    button at the sidebar's top right, above the scrolling list so it never scrolls away: **‹**
+    when open (hides it), **›** in the rail, centred over the icons (shows it). Its tooltip (to
+    the right) is "Hide sidebar ⌘B" / "Show sidebar ⌘B" (Ctrl+B elsewhere), its name "Hide
+    sidebar" / "Show sidebar", with `aria-controls`, `aria-expanded` and `aria-keyshortcuts`.
+    (D-0 had put it first in the top bar; before that it was in the sidebar's bottom corner,
+    which new users missed.)
+  - The toggle or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is remembered in
+    this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice stored, the
+    rail is used at 1280px and below (`wide:` is the 1281px breakpoint) and the full list
+    above.
   - The active entry: semibold on the `hover` fill, with a 4px rounded `accent` bar at the
     sidebar's left edge.
 - **Which project:** the one in the address (`#/p/:projectId/...`), else the last one used
@@ -238,11 +258,15 @@ primary button 4.5 / 4.6 (hover too); `header-ink` 11.8 / 13.7, `header-dim` 8.3
 "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`), and the system monospace stack
   (`ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`) for
   ids, keys, numbers in code and paths. Nothing is bundled (v2's Inter and JetBrains Mono
-  `@font-face` rules are gone). Body 14/20px; `text-caption` 12px (small text); `text-micro` 11px
-  (tiny badges and technical lines only); `text-title` 16px (card and dialog titles, sub-headings);
-  `text-section` 20px; `text-page` 24px; `text-stat` 24px. Headings are semibold with normal
-  tracking. The wordmark is semibold, uppercase, tracked 0.1em. Tables and `<time>` use tabular
-  numbers; add `tabular-nums` wherever numbers line up.
+  `@font-face` rules are gone). One step larger since v0.3.0 C-S (owner request 2026-10-22,
+  "bigger and clearer"), set in the `--text-*` tokens so every page follows: body **15/22px**;
+  `text-caption` 13/20px (small text); `text-micro` 12/16px (tiny badges and technical lines
+  only); `text-title` 17/24px (card and dialog titles, sub-headings); `text-section` 22/30px;
+  `text-page` 26/36px; `text-stat` 26/36px (D-0 had 14, 12, 11, 16, 20, 24 and 24px). Controls
+  keep their heights (buttons and fields 32px, pills 20px). Headings are semibold with normal
+  tracking. The wordmark is semibold, uppercase, tracked 0.1em (the top bar shows the short name
+  "ACP" instead). Tables and `<time>` use tabular numbers; add `tabular-nums` wherever numbers
+  line up.
 - **Spacing:** a 4/8-pt rhythm. Card bodies and header rows pad 16px; page header to content
   24px; grid gaps 16–24px between cards.
 - **Shape:** boxes and controls 6px (`rounded-card`, `rounded-control`), overlays (menus,
@@ -355,7 +379,8 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   for one color. From 20px it uses the master geometry (48 grid), below it the 16-grid one (the
   favicon's). Decorative (`aria-hidden`) unless given a `label`, which makes it `role="img"`.
   `BrandLogo` adds the wordmark: the app name as text, uppercase in CSS only, or screen-reader-only
-  with `hideName` (the icon rail). The static files (`public/brand`, `docs/brand`) keep their own
+  with `hideName`; with `shortName` (the top bar's "ACP", C-S) the short name shows, hidden from
+  screen readers, and the full name stays as screen-reader text. The static files (`public/brand`, `docs/brand`) keep their own
   fixed colors, lime centre included; their rules are in the README, "Brand". The app chrome
   around the logo is GitHub-like since v3. The logo is identity, never decoration: one in the top
   bar, one in the tab.

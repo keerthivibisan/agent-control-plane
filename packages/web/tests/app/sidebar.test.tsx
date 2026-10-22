@@ -166,19 +166,21 @@ describe('toggleable sidebar', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
-  // v0.3.0 D-0 (owner request): the toggle moved from the footer to the top, the entries sit in
-  // two titled sections, and the footer keeps only the status.
-  it('has its toggle at the top of the app bar, sections Project and Workspace, and a status footer', async () => {
+  // v0.3.0 D-0 (owner request): the entries sit in two titled sections, and the footer keeps only
+  // the status. v0.3.0 C-S (owner request 2026-10-22): the toggle moved from the app bar onto the
+  // sidebar, a chevron at its top.
+  it('has its toggle at the top of the sidebar, sections Project and Workspace, and a status footer', async () => {
     window.location.hash = '#/p/p-1/board';
     wideScreen();
     renderApp(server());
     const bar = screen.getByRole('banner', { name: 'App bar' });
-    const toggle = within(bar).getByRole('button', { name: 'Hide sidebar' });
-    // First in the bar, before the brand: where people look for it.
-    expect(bar.querySelector('button')).toBe(toggle);
+    expect(within(bar).queryByRole('button', { name: /sidebar/ })).toBeNull();
+    const toggle = within(sidebar()).getByRole('button', { name: 'Hide sidebar' });
+    expect(screen.getByTestId('sidebar-toggle')).toBe(toggle);
+    // First in the sidebar, before the entries.
+    expect(sidebar().querySelector('a, button')).toBe(toggle);
     expect(toggle.getAttribute('aria-controls')).toBe('app-sidebar');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(within(sidebar()).queryByRole('button', { name: /sidebar/ })).toBeNull();
     fireEvent.focus(toggle);
     expect((await screen.findByRole('tooltip')).textContent).toBe(
       `Hide sidebar${isMacLike() ? '⌘B' : 'Ctrl+B'}`,
@@ -192,10 +194,10 @@ describe('toggleable sidebar', () => {
     expect(within(sidebar()).getByTestId('connection-status')).toBeTruthy();
     expect(within(sidebar()).getByTestId('server-status')).toBeTruthy();
 
-    // Collapsed, it stays in the bar over the icon rail, and the section names stay for screen
+    // Collapsed, it stays at the top of the icon rail, and the section names stay for screen
     // readers.
     fireEvent.click(toggle);
-    expect(within(bar).getByRole('button', { name: 'Show sidebar' })).toBe(toggle);
+    expect(within(sidebar()).getByRole('button', { name: 'Show sidebar' })).toBe(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(within(nav()).getByRole('group', { name: 'Workspace' })).toBeTruthy();
   });
@@ -211,11 +213,31 @@ describe('top bar trail', () => {
     ).toBeTruthy();
     const page = within(trail).getByText('Tokens');
     expect(page.getAttribute('aria-current')).toBe('page');
-    expect(
-      within(screen.getByRole('banner', { name: 'App bar' }))
-        .getByRole('link', { name: 'Agent Control Plane home' })
-        .getAttribute('href'),
-    ).toBe('#/');
+  });
+
+  // v0.3.0 C-S (owner request 2026-10-22): the logo and "ACP" on the left, the search in the
+  // centre, the trail and the theme menu on the right.
+  it('reads left to right: the logo with "ACP", the search, then the trail and the theme menu', async () => {
+    window.location.hash = '#/p/p-1/tokens';
+    renderApp(server());
+    const bar = screen.getByRole('banner', { name: 'App bar' });
+    const home = within(bar).getByRole('link', { name: 'Agent Control Plane home' });
+    expect(home.getAttribute('href')).toBe('#/');
+    // The short name shows; the full name is the link's name and its tooltip.
+    expect(within(home).getByText('ACP').getAttribute('aria-hidden')).toBe('true');
+    fireEvent.focus(home);
+    expect((await screen.findByRole('tooltip')).textContent).toBe('Agent Control Plane');
+    fireEvent.blur(home);
+
+    const search = within(bar).getByTestId('open-palette');
+    expect(search.textContent).toContain('Search or jump to…');
+    const trail = within(bar).getByRole('navigation', { name: 'Breadcrumb' });
+    const theme = within(bar).getByRole('button', { name: /^Theme: / });
+    const follows = (a: Node, b: Node) =>
+      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(follows(home, search)).toBe(true);
+    expect(follows(search, trail)).toBe(true);
+    expect(follows(trail, theme)).toBe(true);
   });
 
   it('puts a ticket or a run under Board and a session under Sessions; global pages have no step', () => {
