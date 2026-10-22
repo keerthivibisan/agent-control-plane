@@ -109,3 +109,21 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     Refresh).
   - Coordinator check: 4,847 tests; e2e 81/81.
   - **Follow-up:** a "Push new commits" button for an open pull request, once G-A's re-push lands.
+- 2026-10-22 G-A merged (`6933079`), rebased by the coordinator onto G-B and G-C.
+  - **Migration 0008:** `tickets.branch_prefs`, `ticket_branches` rebuilt without the `acp/*`
+    check, and the pull request columns with `pr_pushed_commit`.
+  - **Branches:** named from the ticket, the strategy or `acp/<KEY>`, and created from the target.
+    The target must exist locally (`target_branch_missing`).
+  - **The real branch guard:** never the target, `main` or `master`, the strategy's branches,
+    origin's default branch, or the checked-out branch.
+  - **The local merge into the target:** a clean fast-forward when it is checked out, a CAS ref
+    update when it is not, refused in another worktree.
+  - **The `gh` CodeHost:** execFile with no shell, no prompts, `GIT_*` cleared, stderr never read,
+    explicit refspec and never a force, `--no-verify` (repo hooks don't run).
+  - **The pull request:** open or link, push again (fast-forward only), and Refresh to merged marks
+    the ticket Done.
+  - Coordinator check: 4,899 tests; e2e 81/81.
+  - **Follow-ups (web):** parse the "Merged via pull request" line; refresh an open PR when the
+    ticket opens; a "Push new commits" button (`pushedCommit` ≠ head); auto-unified diffs in
+    narrow panels; move `ReviewPanel` and `ChangesTab` to `DiffSection`. Note `--no-verify` in
+    ADR-0025.
