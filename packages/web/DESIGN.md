@@ -8,20 +8,22 @@ On 2026-10-16 the owner asked for a simpler, **project-first** app: pick a proje
 is about that project (docs/redesign/README.md §3, §5). The Layout and Visual system sections
 below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 
-> **v2 direction (UI refresh for v0.1.0, owner decision 2026-10-17; see
-> [docs/ui-refresh/README.md](../../docs/ui-refresh/README.md)):**
+> **v3 direction (v0.3.0 part 3, the GitHub-like redesign; owner decisions 2026-10-22, WP D-0):**
 >
-> - Linear/Vercel style with the **Control Core brand** (WP U-G, owner decisions in
->   [brand-brief.md](../../docs/ui-refresh/brand-brief.md)): warm ivory light theme, graphite dark
->   theme, one signal-lime accent;
-> - hairline borders, radius 8/6 px for cards and controls, square agent nodes, almost no shadows;
-> - Inter and JetBrains Mono (bundled), lucide icons;
-> - Radix for dialogs, menus, tabs, popovers and tooltips;
-> - subtle motion that respects reduced motion.
+> - **A GitHub-like look:** GitHub's palette (white and canvas-subtle grey in light, GitHub dark
+>   in dark), 1px borders, 6px radius, one blue accent, a green primary button, a dark top bar in
+>   both themes, "Box" cards with a header row, underline tabs, outlined pill labels;
+> - **the system font stack** (no bundled fonts), 14px body, semibold headings;
+> - **themes:** Light, Dark and System (follows the computer), remembered per browser, chosen in
+>   the top bar's theme menu or Settings → Appearance, with no flash of the wrong theme on load;
+> - **clarity first:** the app has everything; v3 makes it easier to read. Behaviour and copy stay
+>   as they were;
+> - the **Control Core logo stays** (its static files keep their own colors); the app chrome
+>   around it is GitHub-like. Lime is no longer an accent.
 >
-> The principles below still hold. WP U-A replaced the "Visual system" section with the v2
-> tokens and components; every page adopted them in U-B…U-G, and U-V checked the whole app in
-> light and dark at 1440, 1024 and 390px, by keyboard and with reduced motion.
+> Radix for dialogs, menus, tabs, popovers and tooltips, lucide icons and subtle motion that
+> respects reduced motion carry over from v2 (UI refresh, docs/ui-refresh/). The principles below
+> still hold. D-0 replaced the "Visual system" section with the v3 tokens, type and components.
 
 ## Principles
 
@@ -48,40 +50,56 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 ## Layout (src/app)
 
 ```
-┌──────────────┬────────────────────────────────────────────────────────────────┐
-│ ⧉ AGENT CON… │ [■ web-app ▾] / Board            [⌕ Search or jump to… ⌘K]  ◐  │  top bar, 48px
-├──────────────┼────────────────────────────────────────────────────────────────┤
-│ Project      │  (demo banner)                                                 │
-│ ▌Board       │  Page title  ⓘ                                [Primary action] │
-│  Workflow    │  One line about the page.                                      │
-│  …           │                                                                │
-│  Settings    │  cards…                                                        │
-│ ──────────── │                                                                │
-│  All projects│                                                                │
-│  Data health │                                                                │
-│ ● Live    [⇤]│                                                                │
-└──────────────┴────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ [▤] ⧉ AGENT CONTROL PLANE  [■ web-app ⇕] / Board     [⌕ Search or jump to… ⌘K] [◐] │  dark top bar, 48px
+├──────────────┬───────────────────────────────────────────────────────────────────┤
+│ Project      │  (demo banner)                                                    │
+│▌Board        │  Page title  ⓘ                                   [Primary action] │
+│  Workflow    │  One line about the page.                                         │
+│  …           │                                                                   │
+│  Settings    │  ┌ Card title ─────────────── [action] ┐  (header row on `subtle`)  │
+│ ──────────── │  │ body                                │                           │
+│ Workspace    │  └─────────────────────────────────────┘                           │
+│  All projects│                                                                   │
+│  Data health │                                                                   │
+│ ● Live       │                                                                   │
+│ Server …     │                                                                   │
+└──────────────┴───────────────────────────────────────────────────────────────────┘
 ```
 
 - **Top bar** (`TopBar.tsx`, sticky, **48px**; the shell sets `--spacing-topbar: 3rem` for the
-  sticky sidebar and demo banner under it):
-  - a **brand cell** as wide as the sidebar, so their borders line up: the Control Core mark
-    (`BrandMark`) and the wordmark, linking to `#/`; the mark alone over the rail;
+  sticky sidebar and demo banner under it), **dark in both themes** like GitHub's header (`header`
+  `#1f2328` light / `#010409` dark, `header-ink` text, `header-dim` quieter text, `header-line`
+  borders, `header-hover` fills; `[data-topbar]` gives focus rings the brighter `header-focus`
+  blue, 3:1 or more on it):
+  - the **sidebar toggle** (`SidebarToggle`, v0.3.0 D-0, owner request: the bottom corner was
+    missed by new users): a bordered panel icon button first in the bar, in a cell as wide as the
+    rail so it sits over the rail's icons; its tooltip is "Hide sidebar ⌘B" / "Show sidebar ⌘B"
+    (Ctrl+B elsewhere), its name "Hide sidebar" / "Show sidebar", with `aria-controls` and
+    `aria-expanded`; it stays there when the sidebar is the icon rail;
+  - the Control Core mark (`BrandMark`, white with the accent centre) and the wordmark, linking to
+    `#/`; the mark alone while the sidebar is the rail;
   - the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`: current project, a menu of
-    projects with their folders, All projects and New project), a slanted hairline, then the page;
-    on a narrow screen the page crumb gives way first, so the bar never scrolls sideways;
-  - the **⌘K** search button (the full "Search or jump to…" field when there is room, the icon
-    below that) and the **theme toggle** (System → Light → Dark, with a tooltip).
-- **Sidebar** (`Sidebar.tsx`): a "Project" label, the project's pages from `PROJECT_PAGES` (only
-  the `available` ones), a divider, then **All projects** and **Data health**. The footer has the
-  live-connection dot, the server status and the **sidebar toggle**.
+    projects with their folders, All projects and New project), a slanted hairline, then the page
+    (semibold); on a narrow screen the page crumb gives way first, so the bar never scrolls
+    sideways;
+  - the **⌘K** search button (bordered, the full "Search or jump to…" field when there is room,
+    the icon below that) and the **theme menu** (`ThemeMenu`, "Theme" below).
+- **Sidebar** (`Sidebar.tsx`), neutral (`sidebar`: `#f6f8fa` light / `#010409` dark), like
+  GitHub's nav lists: two sections under small muted semibold headings, **Project** (the project's
+  pages from `PROJECT_PAGES`, only the `available` ones) and **Workspace** (**All projects**,
+  **Data health**), each a labelled `group`, with a divider between them. Entries are 32px, icon
+  (`dim`, `ink` on hover) plus label (`ink`), a `hover` fill. The bottom keeps only the status, as
+  small text: the live-connection dot and word, and the server line.
   - Two widths: the full list (15rem, `--spacing-sidebar`) or a **56px icon rail** whose entries
-    show their label as a tooltip (and keep it as screen-reader text).
-  - The toggle button or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is remembered
-    in this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice stored, the
-    rail is used at 1280px and below (`wide:` is the 1281px breakpoint) and the full list above.
-  - The active entry is a raised `panel` step with a hairline and a 3px signal-lime marker on its
-    left edge (outlined in `accent-fill-edge`).
+    show their label as a tooltip (and keep it as screen-reader text); in the rail the section
+    headings are screen-reader text and the divider stays.
+  - The top bar's toggle or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is
+    remembered in this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice
+    stored, the rail is used at 1280px and below (`wide:` is the 1281px breakpoint) and the full
+    list above.
+  - The active entry: semibold on the `hover` fill, with a 4px rounded `accent` bar at the
+    sidebar's left edge.
 - **Which project:** the one in the address (`#/p/:projectId/...`), else the last one used
   (`src/app/last-project.ts`, localStorage, every access in try/catch). On All projects the
   switcher reads "All projects". The project section is hidden when there is no project.
@@ -150,68 +168,87 @@ Enter opens, Esc closes, Tab stays in the field, and focus returns to the opener
 
 ## Visual system (src/index.css, src/components)
 
-v2 (UI refresh, WP U-A), branded in WP U-G: Linear/Vercel structure (hairline borders, almost
-no shadows) on the Control Core palette: **graphite `#171717`**, **warm ivory `#F4F0E8`** and
-**signal lime `#D8FF64`** (README, "Brand").
+v3 (v0.3.0 D-0): GitHub's look (Primer's colors, borders, radius and components), around the
+Control Core logo. Replaces v2's ivory, graphite and signal-lime palette and its bundled fonts.
 
 **Tokens.** All colors are CSS variables in `@theme` (`src/index.css`); `.dark` only redefines
 values, and every name is also a Tailwind utility (`bg-panel`, `text-dim`). Charts, graphs and
-React Flow read the same names, so never rename one; add a new one instead. The three brand colors
-are tokens of their own (`brand-graphite`, `brand-ivory`, `brand-lime`) and the UI tokens derive
-from them. `tests/design/contrast.test.ts` reads `index.css` and checks every pair below in both
-themes: text 4.5:1 (AA), lines, dots, rings and chart series 3:1.
+React Flow read the same names. v3 kept every v2 name that still means what it says (pages
+restyled without edits), removed the brand tokens (`brand-graphite`, `brand-ivory`, `brand-lime`),
+`accent-ink` (unused) and `accent-fill-hover` (the primary button has its own tokens now), and
+added the ones below marked _new_. `tests/design/contrast.test.ts` reads `index.css`, pins the
+GitHub values and checks every pair in both themes: text 4.5:1 (AA), lines, dots, rings and chart
+series 3:1.
 
-| Token                                                     | Light                         | Dark                          | Use                                                       |
-| --------------------------------------------------------- | ----------------------------- | ----------------------------- | --------------------------------------------------------- |
-| `brand-graphite` / `brand-ivory` / `brand-lime`           | `#171717` `#f4f0e8` `#d8ff64` | same                          | the identity; the tokens below derive from them           |
-| `canvas` / `panel` / `sunken`                             | `#f4f0e8` `#fbf9f5` `#ebe6dc` | `#171717` `#1d1d1d` `#121212` | page (ivory / graphite); cards; wells, tracks, segmented  |
-| `panel-raised`                                            | `#fefdfb`                     | `#252525`                     | menus, popovers, dialogs (above a panel)                  |
-| `hover`                                                   | `#efebe3`                     | `#282828`                     | row, item and quiet-button hover                          |
-| `sidebar`                                                 | `#efeae1`                     | `#131313`                     | the sidebar and top bar surface                           |
-| `ink` / `dim`                                             | `#171717` / `#5c5850`         | `#f4f0e8` / `#a6a29a`         | text (graphite / ivory); secondary text                   |
-| `line` / `line-strong`                                    | `#e2dcd0` / `#cdc6b8`         | `#2c2c2c` / `#3b3b3b`         | warm-neutral hairlines; field and hover borders           |
-| `overlay`                                                 | graphite at 40%               | black at 60%                  | modal backdrop                                            |
-| `accent`                                                  | `#4b5e00` (dark olive)        | `#d8ff64` (lime)              | the text-safe accent: links, focus ring, selected text    |
-| `accent-soft`                                             | `#e9ecd2`                     | `#2a2f1a`                     | quiet selected fills (table row, accent pill, chips)      |
-| `accent-ink`                                              | `#fbf9f5`                     | `#171717`                     | text on an `accent` fill                                  |
-| `accent-fill` (`-hover`) / `accent-fill-ink`              | lime (`#cdf54f`) / graphite   | lime (`#e3ff8a`) / graphite   | the primary button, active and selected markers, the logo |
-| `accent-fill-edge`                                        | `#6f8a12`                     | lime                          | outlines a lime fill or selection where it sits on ivory  |
-| `observed` / `derived`                                    | `#11704f` / `#1f5f8f`         | `#78dcb4` / `#8cc4ee`         | `ProvenanceBadge`                                         |
-| `status-*`, `success`, `warning(-soft)`, `danger(-soft)`, | see `index.css`               | see `index.css`               | **meaning only**, never decoration                        |
-| `token-*`, `estimated(-bg)`, `unavailable`                |                               |                               |                                                           |
+| Token                                                      | Light                                   | Dark                                    | Use                                                                    |
+| ---------------------------------------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
+| `canvas` / `panel`                                         | `#ffffff` / `#ffffff`                   | `#0d1117` / `#0d1117`                   | the page; a box on it (the border draws the box, as on GitHub)         |
+| `subtle` _new_                                             | `#f6f8fa`                               | `#151b23`                               | canvas subtle: a card's header row, a table's header band              |
+| `sunken`                                                   | `#f6f8fa`                               | `#010409`                               | inset wells: board columns, tracks, skeletons, `kbd`                   |
+| `panel-raised`                                             | `#ffffff`                               | `#151b23`                               | menus, popovers, dialogs                                               |
+| `hover`                                                    | `#eaeef2`                               | `#212830`                               | row, item, nav and quiet-button hover; the selected nav entry          |
+| `sidebar`                                                  | `#f6f8fa`                               | `#010409`                               | the side navigation                                                    |
+| `ink` / `dim`                                              | `#1f2328` / `#59636e`                   | `#f0f6fc` / `#9198a1`                   | text (fg default); secondary text (fg muted)                           |
+| `line` / `line-muted` _new_ / `line-strong`                | `#d1d9e0` / `#d1d9e0b3` / `#afb8c1`     | `#3d444d` / `#3d444db3` / `#59636e`     | box borders and dividers; quiet row dividers; fields and hover borders |
+| `overlay`                                                  | `#c8d1da66`                             | `#01040999`                             | modal backdrop                                                         |
+| `accent` / `accent-soft`                                   | `#0969da` / `#ddf4ff`                   | `#4493f8` / `#121d2f`                   | links, focus ring, selected text and borders; quiet selected fills     |
+| `accent-fill` / `accent-fill-ink`                          | `#0969da` / `#ffffff`                   | `#1f6feb` / `#ffffff`                   | the accent as a fill: markers, the working edge, the logo's centre     |
+| `accent-fill-edge`                                         | `#0969da`                               | `#4493f8`                               | the border of a selected or working shape                              |
+| `control` / `control-hover` _new_                          | `#f6f8fa` / `#eff2f5`                   | `#212830` / `#262c36`                   | the default (bordered grey) button                                     |
+| `primary` / `-hover` / `-ink` / `-edge` _new_              | `#1f883d` / `#1c8139` / white           | `#238636` / `#207c33` / white           | the green primary button                                               |
+| `success` / `success-soft` _new_                           | `#1a7f37` / `#dafbe1`                   | `#3fb950` / `#12261e`                   | success text and fills                                                 |
+| `warning` / `warning-soft`                                 | `#9a6700` / `#fff8c5`                   | `#d29922` / `#272215`                   | GitHub's "attention"                                                   |
+| `danger` / `danger-soft`                                   | `#d1242f` / `#ffebe9`                   | `#fa5b53` / `#301b1f`                   | danger text and fills (dark a step lighter than `#f85149`, see below)  |
+| `danger-emphasis` / `on-emphasis` _new_                    | `#a40e26` / `#ffffff`                   | `#b62324` / `#ffffff`                   | the danger button's hover fill and its text                            |
+| `done` / `done-soft` _new_                                 | `#8250df` / `#fbefff`                   | `#ab7df8` / `#252139`                   | GitHub's "done" purple (`Pill tone="done"`)                            |
+| `header` / `-ink` / `-dim` _new_                           | `#1f2328` / white / `#d1d9e0`           | `#010409` / `#f0f6fc` / `#9198a1`       | the dark top bar and its text                                          |
+| `header-line` / `-hover` / `-focus` _new_                  | `#3d444d` / `#32383f` / `#4493f8`       | `#3d444d` / `#212830` / `#4493f8`       | its borders, hover fills and focus ring                                |
+| `tooltip` / `tooltip-ink` _new_                            | `#25292e` / white                       | `#3d444d` / white                       | the tooltip bubble                                                     |
+| `observed` / `derived`                                     | `#1a7f37` / `#0969da`                   | `#3fb950` / `#4493f8`                   | `ProvenanceBadge`                                                      |
+| `estimated` / `estimated-bg` / `unavailable`               | `#9a6700` / `#fff8c5` / `#59636e`       | `#d29922` / `#272215` / `#9198a1`       | provider-reported and missing values                                   |
+| `status-*`                                                 | `#1a7f37` `#9a6700` `#818b98` …         | `#3fb950` `#d29922` `#6e7681` …         | **meaning only**, never decoration (see `index.css`)                   |
+| `token-input` / `-output` / `-cache-write` / `-cache-read` | `#0969da` `#bc4c00` `#8250df` `#1b7c83` | `#4493f8` `#db6d28` `#ab7df8` `#39c5cf` | one hue per token type, everywhere                                     |
 
-In the dark theme elevation goes lighter (canvas < `sunken` < `panel` < `panel-raised`), so board
-columns and wells sit below the cards on them, as `sunken` does in the light theme.
+GitHub's dark soft fills are translucent (`#2ea04326`, `#bb800926`, `#f8514926`, `#388bfd1a`,
+`#ab7df826`); the tokens hold them blended over the dark canvas, as one opaque color, so the
+contrast test can measure text on them. The dark `danger` is `#fa5b53` instead of GitHub's
+`#f85149`, which is 4.4:1 on the default button (`control`); every other value is GitHub's.
 
-**Lime is a fill, not text, on ivory** (1.0:1 against the canvas). In the light theme,
-anything that must be read in the accent (links, selected text, the focus ring) uses `accent`, the
-dark olive; in the dark theme `accent` is the lime itself. Lime fills carry graphite text
-(`accent-fill-ink`, 15.7:1). On ivory a lime fill or selection ring gets an `accent-fill-edge`
-outline so it stays a shape. Lime is never a large background (the demo banner is a neutral
-`sunken` band).
+In the dark theme the inset wells are the darkest step (`sunken` < `canvas` = `panel` <
+`subtle` = `panel-raised`), as on GitHub, so board columns sit below the cards on them.
 
-Measured ratios (light / dark): `ink` on every surface ≥ 14.4 / ≥ 12.9; `dim` ≥ 5.6 / ≥ 5.8;
-`accent` ≥ 5.8 / ≥ 12.1; graphite on lime 15.7 (hover 14.3 / 16.2); `success` 5.4 / 9.2;
-`warning` 5.3 / 8.7; `danger` 5.6 / 6.4; `observed` 5.8 / 10.2; `derived` 6.5 / 9.0;
-`estimated` on its band 6.5 / 10.2; `unavailable` 5.3 / 6.1; `accent-fill-edge` 3.5 / 14.8;
-status dots ≥ 3.7 / ≥ 4.7; chart series (`token-*`) ≥ 3.8 / ≥ 6.9.
+**One accent, blue.** Links, selection, focus, the selected nav entry's bar, the selected tab's
+bar, a selected node's border and ring, a working agent's top edge: all `accent` (or
+`accent-fill`, the same blue as a fill). Green is the primary button and success; it is never
+used for selection. Lime is gone from the app (the static logo files keep it, see "Brand").
 
-- **Type:** Inter for the UI, JetBrains Mono for ids, keys, numbers in code and paths (both
-  bundled, latin `woff2` only: `src/components/fonts.css`). The wordmark is Inter semibold,
-  uppercase, tracked 0.1em. Body 14/20px; `text-micro` 11px (tiny
-  badges and technical lines only); `text-caption` 12px; `text-title` 15px (card titles);
-  `text-section` 18px; `text-page` 24px; `text-stat` 26px. Headings carry their own tighter
-  tracking in the token (don't add `tracking-tight`). Tables and `<time>` use tabular numbers;
-  add `tabular-nums` wherever numbers line up.
-- **Spacing:** a 4/8-pt rhythm, denser than v1. Cards pad 20px; page header to content 24px; grid
-  gaps 16–24px between cards.
-- **Shape:** cards 8px (`rounded-card`), controls 6px (`rounded-control`), status pills fully
-  round, tags (`Badge`) 5px. Borders are 1px `line`; hover moves to `line-strong`.
-- **Elevation:** flat. `shadow-card` is almost nothing (none in dark), `shadow-raised` a hint on
-  hover of clickable cards, `shadow-pop` only for menus, popovers, dialogs and tooltips.
-- **Focus:** a 2px `accent` outline (olive on ivory, lime on graphite) with a 2px offset on every
-  interactive element (base layer); fields instead turn their border `accent` with a soft 3px
-  accent ring.
+Measured ratios (light / dark, the lowest over the surfaces each is used on): `ink` ≥ 13.5 /
+12.9; `dim` ≥ 5.2 / 4.8; `accent` ≥ 4.6 / 5.5; white on `accent-fill` 5.2 / 4.6; white on the
+primary button 4.5 / 4.6 (hover too); `header-ink` 11.8 / 13.7, `header-dim` 8.3 / 5.1 and the
+`header-focus` ring 5.1 / 6.6 on the top bar; tooltip text 14.6 / 9.8; `success` 4.6 / 6.3;
+`warning` 4.5 / 6.3; `danger` 4.6 / 4.7 (also on the default button); `done` 4.5 / 5.2;
+`observed` 5.1 / 7.4; `derived` 5.2 / 6.1; `estimated` on its band 4.5 / 6.3; `unavailable`
+6.1 / 6.5; status dots ≥ 3.5 / ≥ 4.1; chart series (`token-*`) ≥ 4.9 / ≥ 5.6.
+
+- **Type:** the system font stack, as GitHub sets it (`-apple-system, BlinkMacSystemFont,
+"Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`), and the system monospace stack
+  (`ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`) for
+  ids, keys, numbers in code and paths. Nothing is bundled (v2's Inter and JetBrains Mono
+  `@font-face` rules are gone). Body 14/20px; `text-caption` 12px (small text); `text-micro` 11px
+  (tiny badges and technical lines only); `text-title` 16px (card and dialog titles, sub-headings);
+  `text-section` 20px; `text-page` 24px; `text-stat` 24px. Headings are semibold with normal
+  tracking. The wordmark is semibold, uppercase, tracked 0.1em. Tables and `<time>` use tabular
+  numbers; add `tabular-nums` wherever numbers line up.
+- **Spacing:** a 4/8-pt rhythm. Card bodies and header rows pad 16px; page header to content
+  24px; grid gaps 16–24px between cards.
+- **Shape:** boxes and controls 6px (`rounded-card`, `rounded-control`), overlays (menus,
+  popovers, dialogs) 12px (`rounded-overlay`), pills and labels fully round. Borders are 1px
+  `line`; hover moves to `line-strong`.
+- **Elevation:** flat. `shadow-card` is a 1px hint (none in dark), `shadow-raised` a soft shadow
+  on hover of clickable cards, `shadow-pop` only for menus, popovers, dialogs and tooltips.
+- **Focus:** GitHub's 2px `accent` outline with a 2px offset on every interactive element (base
+  layer), `header-focus` on the top bar; fields instead turn their border `accent` with a 1px
+  inner accent ring (2px of accent in all).
 - **Motion** (`src/components/motion.tsx`, keyframes in `index.css`): 150–200ms, ease-out
   (`--ease-out-soft`). Menus and popovers `animate-pop-in`, dialogs `animate-dialog-in`, tooltips
   and backdrops `animate-fade-in`; Motion presets `fade`, `fadeUp`, `slideInRight`, `list` /
@@ -227,61 +264,97 @@ put it on an inner element.
 - **Page header** (`PageHeader`): title, optional ⓘ `tip`, one-line `description`, primary
   action on the right, optional `eyebrow` (a back link). `SectionHeader` for a heading that groups
   cards inside a page.
-- **Card** (`Card`): title (+ `tip`), optional one-line description, actions on the right; `padded`
-  false for edge-to-edge tables and graphs. A clickable card is a list item whose title link
-  covers the card (`after:absolute after:inset-0`), with `line-strong` and `shadow-raised` on
-  hover. `StatCard`: one headline number, 16px padding.
-- **Table** (`DataTable`): caption-size headers on a faint `sunken` band (sentence case), hairline
-  row dividers, 20px outer cell padding, dense rows, `hover` on rows, no zebra stripes; a card list
+- **Card** (`Card`), GitHub's **Box**: a 6px-radius `line` border on `panel`. With a `title` (+
+  `tip`, a one-line description) or `actions`, a **header row** on `subtle` with a divider under
+  it, 16px padding; the body pads 16px. `padded` false for edge-to-edge tables and graphs (the
+  content then starts right under the header's divider: don't add a top border or gap of its own).
+  A clickable card is a list item whose title link covers the card (`after:absolute
+after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: one headline
+  number, 16px padding.
+- **Table** (`DataTable`): semibold caption-size headers on a `subtle` band (sentence case), a
+  `line-muted` border between rows, no zebra stripes, dense rows, `hover` on rows; a card list
   below 1024px.
 - **Empty state** (`EmptyState`): the icon on a small bordered tile, a short title, one sentence,
   **at most one action**. `compact` inside a card.
 - **Loading** (`Skeleton`, `SkeletonText`, `SkeletonCard`, `LoadingBlock`): soft `sunken` blocks
   instead of spinners; the loading words stay in the page, visually hidden. `QueryView` uses
   `LoadingBlock`.
-- **Buttons** (`Button`, `ButtonLink`, `buttonClass`): 32px (`sm`: 28px). `primary`
-  (signal lime with graphite text and an `accent-fill-edge` hairline, one per page area), `secondary` (bordered panel), `quiet` (text, `hover` fill),
-  `danger` (soft red, for confirmations).
+- **Buttons** (`Button`, `ButtonLink`, `buttonClass`), GitHub's: 32px (`sm`: 28px), 6px radius,
+  medium weight. `primary` green (`primary`, white text, a faint dark edge; one per page area),
+  `secondary` the default bordered grey (`control` with a `line` border, `control-hover`),
+  `quiet` (text or icon, `hover` fill), `danger` red text on the default button that fills
+  `danger-emphasis` with white text on hover (for confirmations and destructive actions).
 - **Inputs** (`Input.tsx`): **native** `<input>`, `<select>`, `<textarea>`, checkboxes and radios,
-  restyled. One field style, `fieldClass` (34px, `line-strong` border, accent focus, danger border
-  with `aria-invalid`, no width), `inputClass(extra)` (full width), wrappers `TextInput`, `Select`,
-  `TextArea`, and `labelClass`/`hintClass` (labels above, hints below in caption text).
-- **Pills and tags** (`Pill`, `Badge`): `Pill` is a state word with a dot; `Badge` a quiet tag or
-  count without a dot (`mono` for keys). Tones `neutral`, `accent`, `success`, `warning`,
-  `danger`, mapped from meaning (for example harness Ready → success).
+  restyled. One field style, `fieldClass` (GitHub's: 32px tall, 6px radius, `line-strong` border,
+  on focus the `accent` border plus a 1px inner accent ring, danger border and ring with
+  `aria-invalid`, a `sunken` fill when disabled, no width), `inputClass(extra)` (full width),
+  wrappers `TextInput`, `Select`, `TextArea`, and `labelClass`/`hintClass` (labels above, hints
+  below in caption text). Checkboxes, radios and ranges take `accent`.
+- **Pills and tags** (`Pill`, `Badge`), GitHub's labels: rounded pills, 20px, 12px medium text,
+  with a border in the tone (at half strength) and text in the tone. `Pill` is a state word with a
+  dot and the tone's soft fill; `Badge` a tag or count, outline only, without a dot (`mono` for
+  keys). Tones `neutral`, `accent`, `success`, `warning`, `danger` and (v3) `done` (purple),
+  mapped from meaning (for example harness Ready → success).
 - **Status** (`StatusBadge`): dot (color plus shape) + word + ⓘ. `ProvenanceBadge`: tiny
   uppercase tag, `observed`/`derived` tokens; estimated is dashed and italic.
-- **Tabs** (`Tabs`, `TabList`, `Tab`, `TabPanel`; Radix Tabs): an underline tab bar; arrow keys
-  move and select, a click selects; controlled by the owner. **Link tabs** (`LinkTabList`,
-  `LinkTab`) draw the same bar for sections that are addresses: a `navigation` of links with
-  `aria-current="page"` (Data health).
-- **Dialog** (`Dialog`; Radix Dialog): open while mounted, `onClose` on Escape, backdrop click or
-  the optional × (`closeLabel`); `aria-modal`, focus to `[data-autofocus]` or the first control,
-  Tab trapped, focus back to the opener just after it closes, but only while focus is still in
-  the dialog or nowhere. A dialog opened in the same render that closed another (the palette's
-  New ticket) keeps focus and takes over the closed one's opener.
-- **Menu** (`Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator`; Radix DropdownMenu): a menu button;
-  ArrowDown/Enter/Space open it on the first item, arrows move (`loop` wraps at the ends), Escape
-  closes to the trigger; `tone="danger"` for destructive items. Not modal by default. The
-  highlighted item has the `hover` fill, and with the keyboard the 2px accent ring, inset.
+- **Tabs** (`Tabs`, `TabList`, `Tab`, `TabPanel`; Radix Tabs), GitHub's UnderlineNav: 40px tabs
+  with a rounded `hover` fill behind the label; the selected tab is `ink` over a 2px `accent` bar
+  on the list's bottom border (same weight, so tabs never shift). Arrow keys move and select, a
+  click selects; controlled by the owner. **Link tabs** (`LinkTabList`, `LinkTab`) draw the same
+  bar for sections that are addresses: a `navigation` of links with `aria-current="page"` (Data
+  health).
+- **Dialog** (`Dialog`; Radix Dialog), Primer's overlay: 12px radius, `panel-raised`, a `line`
+  border, `shadow-pop`, 16px padding, the title 16px semibold, a 32px × button. Open while mounted,
+  `onClose` on Escape, backdrop click or the optional × (`closeLabel`); `aria-modal`, focus to
+  `[data-autofocus]` or the first control, Tab trapped, focus back to the opener just after it
+  closes, but only while focus is still in the dialog or nowhere. A dialog opened in the same
+  render that closed another (the palette's New ticket) keeps focus and takes over the closed
+  one's opener.
+- **Menu** (`Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator`; Radix DropdownMenu), Primer's
+  ActionMenu: a 12px-radius overlay with 8px padding, 6px-radius items, semibold muted group
+  labels, full-width separators. A menu button; ArrowDown/Enter/Space open it on the first item,
+  arrows move (`loop` wraps at the ends), Escape closes to the trigger; `tone="danger"` for
+  destructive items. Not modal by default. The highlighted item has the `hover` fill, and with the
+  keyboard the 2px accent ring, inset.
 - **Focus:** every interactive element shows a 2px `accent` outline on `:focus-visible` (3:1 or
-  more against its surface on ivory and graphite; e2e `focus-ring.ts` measures it). Never remove
-  it without an equal replacement.
+  more against its surface in both themes, `header-focus` on the top bar; e2e `focus-ring.ts`
+  measures it). Never remove it without an equal replacement.
 - **Popover** (`Popover`; Radix Popover): a small floating panel (`role="dialog"`, named by
-  `label`) toggled by its trigger.
-- **Segmented** (`Segmented`): a labelled group of `aria-pressed` buttons on a `sunken` track.
-- **Tooltips** (`Tooltip`, `InfoTip`): kept hand-built (they open at once on hover and focus,
-  InfoTip also on tap, and the text exists only while open). Light theme: an `ink` bubble with
-  `canvas` text; dark theme: `panel-raised` with a `line-strong` border. 12px text.
+  `label`) toggled by its trigger, in the menu's overlay look.
+- **Segmented** (`Segmented`), Primer's SegmentedControl: a labelled group of `aria-pressed`
+  buttons on a `hover` track; the chosen one is a `panel` knob with a `line-strong` edge.
+- **Tooltips** (`Tooltip`, `InfoTip`, and the shell's `ShellTooltip`): kept hand-built where they
+  were (they open at once on hover and focus, InfoTip also on tap, and the text exists only while
+  open). Primer's bubble in both themes: `tooltip` (dark grey) with `tooltip-ink` (white) 12px
+  text, 6px radius.
+- **Toast:** the app has none; a saved form says so in place (a `role="status"` line).
 - **Errors** (`ErrorNotice`): an alert on `warning-soft` (server unreachable) or `danger-soft`,
   with an icon; tokens only.
-- **Brand** (`BrandMark`, `BrandLogo`): the Control Core drawn with `currentColor` (graphite on
-  ivory, ivory on graphite) and an `accent-fill` centre framed in the mark's own color; `tone="mono"`
+- **Theme** (`components/ThemeSwitch.tsx`, `lib/theme.ts`, v0.3.0 D-0): **Light**, **Dark** or
+  **System** (follows the computer's `prefers-color-scheme`, live: the page switches when the
+  computer does).
+  - `ThemeMenu`, in the top bar: an icon button showing the current choice's icon (sun, moon,
+    monitor) named "Theme: Dark. Change theme" (System says what it shows now, "System (dark)"),
+    with a "Theme" tooltip, opening a small menu of the three as `menuitemradio`s with the chosen
+    one checked and "Follows your computer" under System; like GitHub's appearance setting.
+  - `ThemeChoice`, in Settings → **Appearance** ("How the app looks in this browser."): the same
+    three as a `Segmented`.
+  - One store (`useTheme`, `setThemePreference`): both controls always agree; a choice made in
+    another tab follows through the `storage` event. Remembered in this browser as `acp.theme`
+    (`light` or `dark`; System is the absence of a choice), every access guarded (no storage means
+    the choice lasts for the page).
+  - **No flash:** `index.html` has a small inline script in `<head>` that reads `acp.theme` and
+    the media query and sets `.dark` and `color-scheme` on `<html>` before anything paints; the app
+    repeats it on start. Keep the two in step (`tests/lib/theme.test.tsx` runs the page's script).
+- **Brand** (`BrandMark`, `BrandLogo`): the Control Core drawn with `currentColor` (white on the
+  dark top bar) and an `accent-fill` (blue) centre framed in the mark's own color; `tone="mono"`
   for one color. From 20px it uses the master geometry (48 grid), below it the 16-grid one (the
   favicon's). Decorative (`aria-hidden`) unless given a `label`, which makes it `role="img"`.
   `BrandLogo` adds the wordmark: the app name as text, uppercase in CSS only, or screen-reader-only
-  with `hideName` (the icon rail). The static files and their rules are in the README, "Brand".
-  The logo is identity, never decoration: one in the top bar, one in the tab.
+  with `hideName` (the icon rail). The static files (`public/brand`, `docs/brand`) keep their own
+  fixed colors, lime centre included; their rules are in the README, "Brand". The app chrome
+  around the logo is GitHub-like since v3. The logo is identity, never decoration: one in the top
+  bar, one in the tab.
 - **Icons** (`components/icons.tsx`): lucide icons under the app's names (`BoardNavIcon`,
   `TokensIcon`, …), `IconProps` (`size`, SVG props), 1.75px strokes, `currentColor`,
   `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
@@ -295,18 +368,26 @@ put it on an inner element.
     Expand all**.
   - A file list (status icon, path with the folder dimmed, +/−; one tab stop, ↑/↓/Home/End,
     Enter jumps to the file and opens it).
-  - Each file: a header button (`aria-expanded`) with status word, similarity, `Binary` and `Cut`
-    tags and +/−; then a table with line numbers before and after, a decorative +/− sign and the
-    screen-reader words "Added line" / "Removed line"; changed words in a stronger tint of the
-    line's color. Unchanged runs keep 3 lines next to a change; longer runs fold behind "Show N
-    hidden lines". Side by side needs 36rem; where the viewer is narrower (the side panel beside
-    the agents, a phone; followed with a ResizeObserver) it shows unified, with Side by side off
-    (`aria-disabled`, tooltip "Not enough room here") and the saved choice kept for wider places
-    (G-D). Unified wraps long lines.
+  - Each file: a header row on `subtle` with a button (`aria-expanded`), status word, similarity,
+    `Binary` and `Cut` tags and +/−; then a table with line numbers before and after, a decorative
+    +/− sign and the screen-reader words "Added line" / "Removed line"; changed words in a
+    stronger tint of the line's color. Unchanged runs keep 3 lines next to a change; longer runs
+    fold behind "Show N hidden lines". Side by side needs 36rem; where the viewer is narrower (the
+    side panel beside the agents, a phone; followed with a ResizeObserver) it shows unified, with
+    Side by side off (`aria-disabled`, tooltip "Not enough room here") and the saved choice kept
+    for wider places (G-D). Unified wraps long lines.
+  - **Diff colors** (`diff.css`, GitHub's, v3): added lines `#dafbe1` / `#2ea04326` (light /
+    dark), removed `#ffebe9` / `#f8514926`, changed words `#aceebb` / `#2ea04366` and `#ffcecb` /
+    `#f8514966` laid over the line, hunk headers `#ddf4ff` / `#388bfd26`, the empty side of a split
+    row `#f6f8fa` / `#151b23`, +/− signs `#116329` / `#3fb950` and `#a40e26` / `#ff7b72`. Dark
+    values stay translucent in the CSS; the contrast test blends them as they are painted (line on
+    `--diff-bg`, word on its line).
   - Syntax colors from Shiki, loaded with dynamic imports only for a known language
     (`language.ts`) when a file is drawn; the CSS-variables theme, so `diff.css` sets the colors
-    for both themes (4.5:1 on every line background, `tests/components/diff/contrast.test.ts`).
-    Plain text while loading, on failure, for other languages and above 3,000 lines.
+    for both themes: GitHub's "prettylights", a step darker (light) or lighter (dark) where a color
+    fell under 4.5:1 on a changed-word tint (keywords, functions, constants, comments, parameters;
+    `tests/components/diff/contrast.test.ts` checks every syntax and gutter color on every line
+    background). Plain text while loading, on failure, for other languages and above 3,000 lines.
   - Large diffs: a file over 400 lines, and every file after the first 1,500 lines, waits for
     "Show this file". A diff the server cut says so, marks the cut file, and names the listed
     files after the cut.
@@ -325,16 +406,16 @@ U-G; the family tree in U-V):
 - **Straight connectors:** React Flow edges are `step` (straight segments, square corners); the CSS
   trees draw straight elbows in `line-strong`. Lines are neutral (`dim`, `ink`); kinds differ by
   dashes, never by the accent.
-- **Lime means working or selected, nothing else:** a working agent has a lime top edge; the
-  selected node a lime ring (with an `accent-fill-edge` border on ivory); the live workflow's
-  working stage an outline with a lime halo. Idle and finished agents are neutral, and the budget
-  bar is neutral within budget.
+- **The accent means working or selected, nothing else** (blue since v3; it was lime): a working
+  agent has an `accent-fill` top edge; the selected node an `accent-fill-edge` border with a soft
+  `accent` ring (25%); the live workflow's working stage an accent outline with a soft accent
+  halo. Idle and finished agents are neutral, and the budget bar is neutral within budget.
 - **Warning and danger only for real states:** a request waiting for you, a failed stage, a budget
   near or over its limit. A passed check is `success` green (its own `passed` tone), not the grey
   of finished work.
 - **Conversations stay neutral:** in the chat and the ticket's comments your messages are an
   outlined bubble (`line-strong` on `panel`) and the agents' a filled one (`hover`); no accent
-  tint, since lime means working or selected.
+  tint, since the accent means working or selected.
 - Diagrams show only real relationships and states (AGENTS.md rule 1): no decorative nodes or
   lines.
 

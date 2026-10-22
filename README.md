@@ -232,13 +232,14 @@ from `packages/web/public/brand/`).
 | `control-plane-*-mono-light.svg` | one color, ivory, for dark backgrounds                         |
 | `favicon.svg`                    | the browser tab: a 16-pixel grid, follows the light/dark theme |
 
-- **Colors:** graphite `#171717` and warm ivory `#F4F0E8` are the identity; signal lime
-  `#D8FF64` is the accent, used as a fill (the logo's centre, primary buttons, active and selected
-  markers), never as a large background and never as small text on ivory.
-- **Fonts:** Inter for the interface and the wordmark (uppercase, semibold, tracked), JetBrains
-  Mono for ids, keys and other technical labels. Both are bundled; nothing loads from a CDN. In
-  the standalone SVGs the wordmark is live text in a system-safe stack (Inter, Helvetica Neue,
-  Arial) whose width is fixed, so the lockup keeps its proportions with any of them.
+- **Colors:** the logo files keep the identity colors: graphite `#171717`, warm ivory `#F4F0E8`
+  and a signal-lime `#D8FF64` centre. Since v0.3.0 the app around the logo is GitHub-like (a blue
+  accent, green primary buttons, a dark top bar; `packages/web/DESIGN.md`, "Visual system"), and
+  the in-app mark is drawn in the text color with an accent-blue centre.
+- **Fonts:** the app uses the system font stack (nothing bundled, nothing from a CDN); the
+  wordmark is uppercase, semibold and tracked. In the standalone SVGs the wordmark is live text in
+  a system-safe stack (Inter, Helvetica Neue, Arial) whose width is fixed, so the lockup keeps its
+  proportions with any of them.
 - **Usage:** keep the mark square and undistorted, with clear space of at least one corner node
   around it; don't recolor it beyond the variants above, add effects, or use it as decoration.
   In the app, `BrandMark` and `BrandLogo` (`packages/web/src/components/BrandMark.tsx`) draw it
