@@ -8,6 +8,14 @@ import { parseRoute } from '../../src/lib/router';
 import { board, PROJECT_ID, webProject } from '../fixtures/board';
 import { candidate, capabilities, diagnostics, health, overview, project } from '../fixtures/dto';
 import { fakeServer } from '../helpers';
+import {
+  L_UI,
+  LOOP_KEY,
+  LOOP_RUN_ID,
+  LOOP_TICKET_ID,
+  PROJECT_ID as LOOP_PROJECT,
+  loopReviewScenario,
+} from '../../e2e/review-loop-fixtures';
 
 function renderApp(fetch: FetchLike) {
   const store = new QueryStore(createApiClient(fetch));
@@ -246,5 +254,37 @@ describe('project switcher', () => {
     ).toBeTruthy();
     // A missing project is never remembered.
     expect(window.localStorage.getItem('acp.lastProject')).toBeNull();
+  });
+});
+
+describe('a ticket in the shell (v0.3.0 C-D)', () => {
+  const ticketHash = `#/p/${LOOP_PROJECT}/tickets/${LOOP_TICKET_ID}`;
+
+  it('the trail reads Board / KEY, the key as the current page', async () => {
+    window.location.hash = ticketHash;
+    renderApp(fakeServer(loopReviewScenario().routes).fetch);
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    const key = await within(trail).findByText(LOOP_KEY);
+    expect(key.getAttribute('aria-current')).toBe('page');
+    expect(key.closest('a')).toBeNull();
+    expect(within(trail).getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
+      `#/p/${LOOP_PROJECT}/board`,
+    );
+  });
+
+  it('an old review page link lands on the Files changed tab, replacing the address', async () => {
+    window.location.hash = `${ticketHash}/changes/${L_UI}?run=${LOOP_RUN_ID}`;
+    const before = window.history.length;
+    renderApp(fakeServer(loopReviewScenario().routes).fetch);
+    await waitFor(() =>
+      expect(window.location.hash).toBe(
+        `${ticketHash}?tab=files&change=${L_UI}&run=${LOOP_RUN_ID}`,
+      ),
+    );
+    expect(window.history.length).toBe(before);
+    expect(
+      (await screen.findByRole('tab', { name: /Files changed/ })).getAttribute('aria-selected'),
+    ).toBe('true');
+    expect((await screen.findByTestId('change-picker')).dataset['value']).toBe(L_UI);
   });
 });

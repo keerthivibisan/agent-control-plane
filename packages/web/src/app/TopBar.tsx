@@ -2,9 +2,11 @@ import type { ProjectDto } from '@acp/core/api';
 import { BrandLogo } from '../components/BrandMark';
 import { SearchIcon } from '../components/icons';
 import { ThemeMenu } from '../components/ThemeSwitch';
+import { ticketPaths, ticketSchemas } from '../lib/api';
 import { APP_NAME, SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
+import { useApiQuery } from '../lib/query';
 import { href, type Route } from '../lib/router';
-import { crumbsFor } from './nav';
+import { crumbsFor, routeTicketId } from './nav';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { ShellTooltip } from './ShellTooltip';
 
@@ -30,7 +32,13 @@ function Breadcrumbs({
   projects: readonly ProjectDto[] | undefined;
   currentId: string | null;
 }) {
-  const crumbs = crumbsFor(route, currentId);
+  // The ticket page reads the same address, so this shares its cached answer (no second request).
+  const ticketId = routeTicketId(route);
+  const ticket = useApiQuery(
+    ticketId !== null ? ticketPaths.ticket(ticketId) : null,
+    ticketSchemas.detail,
+  );
+  const crumbs = crumbsFor(route, currentId, ticket.data?.ticket.key ?? null);
   return (
     <nav aria-label={SHELL_FRAME_COPY.breadcrumb} className="flex min-w-0 items-center">
       <ol className="flex min-w-0 items-center gap-1">
