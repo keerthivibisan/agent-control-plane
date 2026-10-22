@@ -153,7 +153,7 @@ export function FilesChanged({
   send: (choice: ReviewChoiceId, text: string) => Promise<boolean>;
   sending: boolean;
   sendError: ApiError | null;
-  /** Where "Open Comments" goes after a review is sent. */
+  /** Where "Open Conversation" goes after a review is sent (every review shows there). */
   ticketHref: string;
   /** Merged or closed: files, tree and Viewed only; no comments, no Review changes. */
   readOnly?: boolean;

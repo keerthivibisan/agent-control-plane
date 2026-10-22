@@ -231,6 +231,9 @@ export const href = {
       tab: 'files',
       run: t.runId,
     }),
+  /** The ticket's Conversation tab, where reviews sent from Files changed show. */
+  ticketConversation: (t: { projectId: string; ticketId: string }) =>
+    withParams(`/p/${enc(t.projectId)}/tickets/${enc(t.ticketId)}`, { tab: 'conversation' }),
   /** The ticket's Files changed tab showing one helper's change (C-D). */
   ticketChange: (c: {
     projectId: string;

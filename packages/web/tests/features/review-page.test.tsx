@@ -203,8 +203,8 @@ describe('a helper’s change', () => {
     });
     fireEvent.click(within(pop).getByTestId('review-submit'));
     const sent = await screen.findByTestId('review-sent');
-    expect(within(sent).getByRole('link', { name: 'Open Comments' }).getAttribute('href')).toBe(
-      TICKET_HASH,
+    expect(within(sent).getByRole('link', { name: 'Open Conversation' }).getAttribute('href')).toBe(
+      `${TICKET_HASH}?tab=conversation`,
     );
     expect(posts(s).map((c) => [c.path, c.body])).toEqual([
       [
@@ -440,7 +440,7 @@ describe('all changes (the ticket branch)', () => {
     ]);
   });
 
-  it('posts Comment as an owner ticket comment while the agents work', async () => {
+  it('posts Comment as the owner’s review (Conversation) while the agents work', async () => {
     const s = render(loopWorkingScenario(), null);
     await screen.findByTestId('review-files');
     const pop = await openReview();
@@ -453,7 +453,7 @@ describe('all changes (the ticket branch)', () => {
     fireEvent.click(within(pop).getByTestId('review-submit'));
     await screen.findByTestId('review-sent');
     expect(posts(s).map((c) => [c.path, c.body])).toEqual([
-      [COMMENT_PATH, { body: 'Looks right so far.' }],
+      [COMMENT_PATH, { body: 'Looks right so far.', kind: 'review' }],
     ]);
   });
 

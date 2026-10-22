@@ -6,7 +6,7 @@ import type { ReviewChoiceId } from './choices';
 /**
  * One send of a review through whichever existing owner endpoint its choice needs (D-A; C-D moved
  * it out of the review page): rework to a helper (`POST /runs/:id/review`), Request changes to the
- * lead (`POST /runs/:id/ticket-branch`) or Comment (`POST /tickets/:id/comments`). `send` answers
+ * lead (`POST /runs/:id/ticket-branch`) or Comment (`POST /tickets/:id/comments`, kind `review`). `send` answers
  * true when it went through; `error` is the last choice's refusal.
  */
 export function useReviewSend(runId: string, ticketId: string, agentRunId: string | null) {
@@ -22,7 +22,8 @@ export function useReviewSend(runId: string, ticketId: string, agentRunId: strin
     if (choice === 'request-changes') {
       return (await request.run(runId, { action: 'request-changes', comment: text })) !== null;
     }
-    return (await comment.run(ticketId, { body: text })) !== null;
+    // Owner decision 2026-10-22: a review is never a ticket comment; it shows on Conversation.
+    return (await comment.run(ticketId, { body: text, kind: 'review' })) !== null;
   };
   const used = last === 'rework' ? rework : last === 'request-changes' ? request : comment;
   return {

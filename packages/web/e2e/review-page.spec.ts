@@ -362,10 +362,13 @@ test('the ticket branch’s files while agents work: Request changes waits, Comm
   await shoot(page, 'branch-popover');
   await pop.getByTestId('review-submit').click();
 
-  await expect(page.getByTestId('review-sent')).toContainText('Added to the ticket’s comments.');
+  await expect(page.getByTestId('review-sent')).toContainText(
+    'Added to Conversation as your review.',
+  );
   const comment = posted.find((p) => p.path === `/api/tickets/${LOOP_TICKET_ID}/comments`);
   expect(comment?.body).toEqual({
     body: 'Review comments:\n- src/search/api.ts:3 (old): Why was it 50 before?',
+    kind: 'review',
   });
   expect(posted.some((p) => p.path.endsWith('/ticket-branch'))).toBe(false);
   await shoot(page, 'branch');

@@ -185,9 +185,9 @@ export const REVIEW_PAGE_COPY = {
   sent: {
     rework: 'Sent to the helper as rework notes.',
     'request-changes': 'Sent to the lead. The run continues.',
-    comment: 'Added to the ticket’s comments.',
+    comment: 'Added to Conversation as your review.',
   },
-  sentLink: 'Open Comments',
+  sentLink: 'Open Conversation',
   /** The entry points on the change card and the ticket branch card. */
   entry: {
     change: 'Review files',

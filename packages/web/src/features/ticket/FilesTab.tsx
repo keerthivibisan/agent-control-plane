@@ -228,7 +228,7 @@ function BranchFiles({
       send={sender.send}
       sending={sender.sending}
       sendError={sender.error}
-      ticketHref={href.ticket(ticket)}
+      ticketHref={href.ticketConversation({ projectId: ticket.projectId, ticketId: ticket.id })}
       readOnly={readOnly}
     />
   );
@@ -266,7 +266,7 @@ function ChangeFiles({
         send={sender.send}
         sending={sender.sending}
         sendError={sender.error}
-        ticketHref={href.ticket(ticket)}
+        ticketHref={href.ticketConversation({ projectId: ticket.projectId, ticketId: ticket.id })}
         readOnly={readOnly}
       />
     );
