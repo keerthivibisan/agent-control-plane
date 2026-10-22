@@ -66,11 +66,41 @@ const CODE_BACKGROUNDS = [
 const GUTTER = ['diff-number', 'diff-add-sign', 'diff-del-sign'];
 const GUTTER_BACKGROUNDS = ['diff-bg', 'diff-add-bg', 'diff-del-bg', 'diff-hunk-bg'];
 
+/** `top` (#rrggbb or #rrggbbaa) painted over the opaque `under`, as one #rrggbb. */
+function over(top: string, under: string): string {
+  if (top.length === 7) return top;
+  const a = parseInt(top.slice(7, 9), 16) / 255;
+  const mix = (i: number) =>
+    Math.round(
+      parseInt(top.slice(i, i + 2), 16) * a + parseInt(under.slice(i, i + 2), 16) * (1 - a),
+    )
+      .toString(16)
+      .padStart(2, '0');
+  return `#${mix(1)}${mix(3)}${mix(5)}`;
+}
+
+/*
+ * What each background sits on as it is painted (DiffFileView): line and hunk backgrounds on the
+ * viewer's `--diff-bg`, a changed word's tint on its line's background. GitHub's dark values are
+ * translucent, so they are blended down to the color the text is actually read on.
+ */
+const UNDER: Record<string, string> = {
+  'diff-add-bg': 'diff-bg',
+  'diff-del-bg': 'diff-bg',
+  'diff-hunk-bg': 'diff-bg',
+  'diff-add-word': 'diff-add-bg',
+  'diff-del-word': 'diff-del-bg',
+};
+
 describe.each(Object.entries(THEMES))('diff colors, %s theme', (_name, theme) => {
-  const hex = (name: string) => {
+  const hex = (name: string): string => {
     const v = theme[name];
-    if (v === undefined || !/^#[0-9a-f]{6}$/i.test(v)) throw new Error(`--${name}: ${String(v)}`);
-    return v;
+    if (v === undefined || !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v)) {
+      throw new Error(`--${name}: ${String(v)}`);
+    }
+    const under = UNDER[name];
+    if (v.length === 9 && under === undefined) throw new Error(`--${name} must be opaque`);
+    return under === undefined ? v : over(v, hex(under));
   };
 
   it.each(SYNTAX)('%s is readable on every line background', (fg) => {

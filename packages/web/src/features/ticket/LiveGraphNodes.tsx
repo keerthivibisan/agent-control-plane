@@ -25,7 +25,7 @@ const MODE_WORD = REVIEW_LOOP_COPY.modes.word;
  * The live graph's block views (DESIGN.md, "Agent views"), the same look as the Workflow page's
  * editor: square agent blocks framed in `line`, the lead framed in `ink`, smaller steps on the
  * `sunken` well, Ticket and Done as pills. Read-only: the only controls are the agents on a block,
- * which show that agent in the side panel. Lime marks only what is working.
+ * which show that agent in the side panel. The accent marks only what is working.
  */
 
 export interface LiveGraphActions {
@@ -137,7 +137,7 @@ function modelText(node: WorkflowNode): { text: string; own: boolean } {
   return { text: node.agent !== null ? G.fileOrProjectModel : G.projectModel, own: false };
 }
 
-/** The status dot of one agent: lime while it works, the warning tone while it waits for you. */
+/** The status dot of one agent: the accent while it works, the warning tone while it waits for you. */
 function agentDot(agent: AgentRunDto): string {
   if (agent.status === 'WAITING_APPROVAL' || agent.status === 'BLOCKED') return 'bg-warning';
   if (isAgentLive(agent.status)) return 'bg-accent-fill-edge';

@@ -80,6 +80,8 @@ export function LiveRunGraph({
 }: LiveWorkflowProps & { dto: RunWorkflowGraphDto }) {
   const graph = useMemo(() => buildLiveGraph(dto, run), [dto, run]);
   const held = heldBlock(dto, run);
+  // A notice above the graph gets the gap and a divider; otherwise the graph meets the card's header.
+  const above = held !== null || dto.review !== undefined;
   const actions = useMemo<LiveGraphActions>(
     () => ({
       selectAgent: (agent: AgentRunDto, node: WorkflowNode) =>
@@ -100,11 +102,15 @@ export function LiveRunGraph({
       padded={false}
       testId="live-workflow"
     >
-      <div className="pt-4" data-testid="live-run-graph" data-template={dto.graph.template}>
+      <div
+        className={above ? 'pt-4' : ''}
+        data-testid="live-run-graph"
+        data-template={dto.graph.template}
+      >
         {held !== null ? <HeldNotice runId={run.id} name={held.label} stage={held.id} /> : null}
         {dto.review !== undefined ? <ReviewCountsLine counts={dto.review} /> : null}
         <div
-          className={`w-full overflow-hidden border-t border-line ${
+          className={`w-full overflow-hidden ${above ? 'border-t border-line' : ''} ${
             reviewerComments > 0 ? '' : 'rounded-b-card'
           }`}
           style={{

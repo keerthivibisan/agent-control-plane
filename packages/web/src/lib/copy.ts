@@ -1966,6 +1966,8 @@ export const SHELL_COPY = {
     },
     allProjects: 'All projects',
     health: 'Data health',
+    /** The heading over All projects and Data health (v0.3.0 D-0, owner request). */
+    workspace: 'Workspace',
   },
   switcher: {
     button: (name: string) => `Project: ${name}. Switch project`,
@@ -1981,9 +1983,16 @@ export const SHELL_COPY = {
     open: 'Search or jump to…',
     shortcut: '⌘K',
   },
+  /** The theme menu (v0.3.0 D-0): in the top bar and in Settings. */
   theme: {
     label: (word: string) => `Theme: ${word}. Change theme`,
-    tip: 'Change theme: system → light → dark',
+    tip: 'Theme',
+    menu: 'Theme',
+    options: { light: 'Light', dark: 'Dark', system: 'System' },
+    /** What System follows, under its name. */
+    systemHint: 'Follows your computer',
+    settingsTitle: 'Appearance',
+    settingsText: 'How the app looks in this browser.',
   },
   health: {
     tabs: 'Data health sections',
@@ -2742,9 +2751,10 @@ export const PAGES_REFRESH_COPY = {
 export const SHELL_FRAME_COPY = {
   /** The top bar's trail: the project switcher, then the page. */
   breadcrumb: 'Breadcrumb',
+  // The toggle at the top of the sidebar (v0.3.0 D-0, the owner's words).
   sidebar: {
-    collapse: 'Collapse sidebar',
-    expand: 'Expand sidebar',
+    collapse: 'Hide sidebar',
+    expand: 'Show sidebar',
   },
   /** The sidebar toggle's shortcut as the keyboard labels it (⌘ on Apple keyboards). */
   sidebarShortcut: (mac: boolean) => (mac ? '⌘B' : 'Ctrl+B'),

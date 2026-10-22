@@ -344,12 +344,12 @@ export function LiveWorkflowV1({
       padded={false}
       testId="live-workflow"
     >
-      <div className="pt-4">
+      <div className={held !== null ? 'pt-4' : ''}>
         {held !== null ? (
           <HeldNotice runId={run.id} name={WORKFLOW_COPY.stages[held]} stage={held} />
         ) : null}
         <div
-          className={`w-full overflow-hidden border-t border-line ${
+          className={`w-full overflow-hidden ${held !== null ? 'border-t border-line' : ''} ${
             changed || reviewerComments > 0 ? '' : 'rounded-b-card'
           }`}
           style={{

@@ -34,7 +34,7 @@ export function Segmented<T extends string>({
       <div
         role="group"
         aria-labelledby={id}
-        className="inline-flex w-fit flex-wrap gap-0.5 rounded-control border border-line bg-sunken p-0.5"
+        className="inline-flex w-fit flex-wrap gap-0.5 rounded-control bg-hover p-0.5"
       >
         {options.map((o) => {
           const on = o.value === value;
@@ -54,7 +54,7 @@ export function Segmented<T extends string>({
                 size === 'sm' ? 'h-6 px-2 text-caption' : 'h-7 px-2.5'
               } ${
                 on
-                  ? 'bg-panel text-ink shadow-[0_0_0_1px_var(--color-line),0_1px_2px_rgb(0_0_0/0.06)]'
+                  ? 'bg-panel text-ink shadow-[0_0_0_1px_var(--color-line-strong),0_1px_2px_rgb(31_35_40/0.08)]'
                   : off
                     ? 'cursor-not-allowed text-dim opacity-50'
                     : 'text-dim hover:text-ink'

@@ -147,7 +147,7 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
       onClick={() => ctx.onSelect(agent.id)}
       data-kind={agent.kind}
       // The logo's vocabulary (DESIGN.md, "Agent views"): square nodes, the lead framed in ink as
-      // the controller, a lime edge on top while the agent works, a lime ring when selected, and
+      // the controller, an accent edge on top while the agent works, an accent ring when selected, and
       // a warning line along the top only when a request waits for you (with the words below).
       className={`relative flex w-48 cursor-pointer flex-col gap-2.5 rounded-[2px] border bg-panel p-3 text-left transition-[border-color,box-shadow] duration-150 ${
         selected
@@ -241,9 +241,9 @@ function AgentCard({ node, ctx }: { node: AgentNode; ctx: CanvasContext }) {
   );
 }
 
-/** A selected agent: the lime ring of the brand (an olive edge keeps it a line on ivory). */
-const NODE_SELECTED = 'border-accent-fill-edge ring-3 ring-accent-fill/55 dark:ring-accent-fill/25';
-/** A working agent: a lime bar along the top edge, the logo's lit centre. */
+/** A selected agent: an accent ring around an accent border. */
+const NODE_SELECTED = 'border-accent-fill-edge ring-3 ring-accent/25';
+/** A working agent: an accent bar along the top edge. */
 const LIVE_EDGE = 'shadow-[inset_0_3px_0_var(--color-accent-fill)]';
 
 // An org chart in CSS: each child draws its half of the bar above it and a stub down to its card;

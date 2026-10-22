@@ -167,7 +167,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
             </Button>
           }
         >
-          <div className="mt-1 border-t border-line px-5 py-3">
+          <div className="px-4 py-3">
             <Palette graph={graph} dispatch={dispatch} />
           </div>
           <div className="border-t border-line">

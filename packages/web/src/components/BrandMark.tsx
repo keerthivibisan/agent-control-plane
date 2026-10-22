@@ -3,8 +3,8 @@ import { APP_NAME } from '../lib/copy';
 /*
  * The Control Core (README "Brand", docs/brand/): a dominant centre square, four smaller agent
  * nodes at the corners and straight diagonal connectors. The same geometry as the static SVGs in
- * public/brand, drawn here with `currentColor` (graphite on ivory, ivory on graphite: it follows
- * the text color) and the theme's `accent-fill` (signal lime) for the centre, so no color is
+ * public/brand, drawn here with `currentColor` (it follows the text color: white on the dark top
+ * bar) and the theme's `accent-fill` (the accent blue) for the centre, so no color is
  * hard-coded and both themes work.
  *
  * Two constructions, as in the static files: the master on a 48 grid for 20px and up, and a
@@ -49,7 +49,7 @@ export function BrandMark({
   size?: number;
   /** The accessible name when the mark stands alone; without it the mark is decorative. */
   label?: string;
-  /** `accent`: a signal-lime centre. `mono`: one color (`currentColor`). */
+  /** `accent`: an accent-blue centre. `mono`: one color (`currentColor`). */
   tone?: 'accent' | 'mono';
   className?: string;
 }) {
@@ -70,7 +70,7 @@ export function BrandMark({
       <path d={g.lines} fill="none" stroke="currentColor" strokeWidth={w} />
       <path d={g.nodes} fill="currentColor" />
       {tone === 'accent' ? (
-        // Framed in the mark's own color, so the lime centre stays a square on ivory too.
+        // Framed in the mark's own color, so the centre stays a crisp square on any surface.
         <rect
           x={x + w / 2}
           y={y + w / 2}
@@ -88,7 +88,7 @@ export function BrandMark({
 }
 
 /**
- * The mark with the wordmark: the app name, set uppercase in semibold Inter with open tracking
+ * The mark with the wordmark: the app name, set uppercase in the semibold system font with open tracking
  * (CSS only, so the text stays "Agent Control Plane" for screen readers and tests). `hideName`
  * keeps the name for screen readers only (the sidebar's icon rail).
  */

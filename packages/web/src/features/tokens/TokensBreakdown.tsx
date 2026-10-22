@@ -251,7 +251,7 @@ export function TokensBreakdown({
       testId="tokens-breakdown"
       actions={<ProvenanceBadge provenance="derived" />}
     >
-      <div className="px-5 pb-4">
+      <div className="p-4">
         <Segmented
           label={B.by}
           value={by}

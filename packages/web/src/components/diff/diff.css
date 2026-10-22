@@ -1,61 +1,65 @@
 /*
- * The diff viewer's colors (ADR-0025 §6), on the Control Core palette (DESIGN.md, "Visual
- * system"): added lines a soft green, removed lines a soft red, the changed words a stronger tint
- * of the same hue. The `--shiki-*` variables are the syntax colors of Shiki's CSS-variables theme
- * (highlight.ts), so the code follows the app theme without highlighting again. Every syntax and
- * gutter color meets 4.5:1 on every line background in both themes
- * (tests/components/diff-contrast.test.ts). Values only: the `.dark` block redefines them.
+ * The diff viewer's colors (ADR-0025 §6), GitHub's (DESIGN.md v3, "Diff colors"): added lines
+ * green, removed lines red, the changed words a stronger tint of the same hue laid over the line,
+ * the hunk header a light blue. The dark backgrounds are GitHub's translucent values over the
+ * viewer's own `--diff-bg`. The `--shiki-*` variables are the syntax colors of Shiki's
+ * CSS-variables theme (highlight.ts), GitHub's "prettylights" adjusted where needed, so the code
+ * follows the app theme without highlighting again. Every syntax and gutter color meets 4.5:1 on
+ * every line background in both themes, the translucent ones blended as they are painted
+ * (tests/components/diff/contrast.test.ts). Values only: the `.dark` block redefines them.
  */
 .acp-diff {
-  --diff-bg: #fbf9f5;
-  --diff-hunk-bg: #ebe6dc;
-  --diff-add-bg: #e4f2e2;
-  --diff-add-word: #c6e6c3;
-  --diff-del-bg: #fbe7e2;
-  --diff-del-word: #f5cbc1;
-  --diff-number: #5c5850;
-  --diff-add-sign: #15703a;
-  --diff-del-sign: #b02a1c;
+  --diff-bg: #ffffff;
+  --diff-hunk-bg: #ddf4ff;
+  --diff-empty-bg: #f6f8fa;
+  --diff-add-bg: #dafbe1;
+  --diff-add-word: #aceebb;
+  --diff-del-bg: #ffebe9;
+  --diff-del-word: #ffcecb;
+  --diff-number: #59636e;
+  --diff-add-sign: #116329;
+  --diff-del-sign: #a40e26;
 
-  --shiki-foreground: #171717;
+  --shiki-foreground: #1f2328;
   --shiki-background: transparent;
-  --shiki-token-keyword: #8b1f7a;
-  --shiki-token-string: #1f6a2a;
-  --shiki-token-string-expression: #1f6a2a;
-  --shiki-token-function: #1b5a8a;
-  --shiki-token-constant: #8a3d0b;
-  --shiki-token-comment: #5e5951;
-  --shiki-token-parameter: #7a4400;
-  --shiki-token-punctuation: #4f4b44;
-  --shiki-token-link: #4b5e00;
-  --shiki-token-inserted: #11602f;
-  --shiki-token-deleted: #9a2216;
-  --shiki-token-changed: #7a4400;
+  --shiki-token-keyword: #a40e26;
+  --shiki-token-string: #0a3069;
+  --shiki-token-string-expression: #0a3069;
+  --shiki-token-function: #6639ba;
+  --shiki-token-constant: #0550ae;
+  --shiki-token-comment: #57606a;
+  --shiki-token-parameter: #953800;
+  --shiki-token-punctuation: #1f2328;
+  --shiki-token-link: #0a3069;
+  --shiki-token-inserted: #116329;
+  --shiki-token-deleted: #82071e;
+  --shiki-token-changed: #953800;
 }
 
 .dark .acp-diff {
-  --diff-bg: #1d1d1d;
-  --diff-hunk-bg: #121212;
-  --diff-add-bg: #1a2e1f;
-  --diff-add-word: #25492d;
-  --diff-del-bg: #36191a;
-  --diff-del-word: #5a2626;
-  --diff-number: #aaa69e;
-  --diff-add-sign: #5fd68a;
-  --diff-del-sign: #ff958a;
+  --diff-bg: #0d1117;
+  --diff-hunk-bg: #388bfd26;
+  --diff-empty-bg: #151b23;
+  --diff-add-bg: #2ea04326;
+  --diff-add-word: #2ea04366;
+  --diff-del-bg: #f8514926;
+  --diff-del-word: #f8514966;
+  --diff-number: #9198a1;
+  --diff-add-sign: #3fb950;
+  --diff-del-sign: #ff7b72;
 
-  --shiki-foreground: #f4f0e8;
+  --shiki-foreground: #f0f6fc;
   --shiki-background: transparent;
-  --shiki-token-keyword: #e0a8f0;
-  --shiki-token-string: #a6e3a1;
-  --shiki-token-string-expression: #a6e3a1;
-  --shiki-token-function: #8cc4ee;
-  --shiki-token-constant: #f6cf6a;
-  --shiki-token-comment: #b3aea5;
-  --shiki-token-parameter: #f5c08a;
-  --shiki-token-punctuation: #cfcac0;
-  --shiki-token-link: #d8ff64;
-  --shiki-token-inserted: #7fe0a2;
-  --shiki-token-deleted: #ff9d91;
-  --shiki-token-changed: #f5c08a;
+  --shiki-token-keyword: #ffb3ad;
+  --shiki-token-string: #a5d6ff;
+  --shiki-token-string-expression: #a5d6ff;
+  --shiki-token-function: #e2c5ff;
+  --shiki-token-constant: #9ecbff;
+  --shiki-token-comment: #b7c0c9;
+  --shiki-token-parameter: #ffb86b;
+  --shiki-token-punctuation: #f0f6fc;
+  --shiki-token-link: #a5d6ff;
+  --shiki-token-inserted: #aff5b4;
+  --shiki-token-deleted: #ffdcd7;
+  --shiki-token-changed: #ffdfb6;
 }

@@ -2,12 +2,13 @@ import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes 
 
 /**
  * The one field look (DESIGN.md, "Inputs") for native `<input>`, `<select>` and `<textarea>`:
- * 34px tall for one line, a hairline border, the accent border and a soft accent ring on focus,
- * the danger border for an invalid value (`aria-invalid`). No width: add `w-full` or a fixed width.
- * Features use this string on their native elements, or the wrappers below.
+ * GitHub's text field: 32px tall for one line (`min-h-8`), 6px radius, a 1px border, and on focus
+ * the accent border plus a 1px inner accent ring (2px of accent in all), the danger border and
+ * ring for an invalid value (`aria-invalid`). No width: add `w-full` or a fixed width. Features
+ * use this string on their native elements, or the wrappers below.
  */
 export const fieldClass =
-  'min-w-0 rounded-control border border-line-strong bg-panel px-2.5 py-1.5 text-ink shadow-card transition-[border-color,box-shadow] duration-150 placeholder:text-dim/70 hover:border-[color-mix(in_srgb,var(--color-line-strong)_70%,var(--color-dim))] focus:border-accent focus:ring-3 focus:ring-accent/20 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger aria-invalid:focus:ring-danger/20';
+  'min-h-8 min-w-0 rounded-control border border-line-strong bg-panel px-3 py-[5px] text-ink shadow-[inset_0_1px_0_rgb(31_35_40/0.02)] transition-[border-color,box-shadow] duration-150 placeholder:text-dim/70 focus:border-accent focus:ring-1 focus:ring-accent focus:ring-inset focus:outline-none disabled:cursor-not-allowed disabled:bg-sunken disabled:opacity-70 aria-invalid:border-danger aria-invalid:focus:ring-danger';
 
 /** `fieldClass` at full width, plus extra classes. */
 export function inputClass(extra = ''): string {

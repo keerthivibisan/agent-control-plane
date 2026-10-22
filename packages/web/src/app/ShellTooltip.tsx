@@ -56,7 +56,7 @@ export function ShellTooltip({
           align={align}
           sideOffset={8}
           collisionPadding={8}
-          className="z-[60] flex max-w-72 animate-fade-in items-center gap-2 rounded-control border border-transparent bg-ink px-2.5 py-1.5 text-caption leading-[1.125rem] text-canvas shadow-pop select-none dark:border-line-strong dark:bg-panel-raised dark:text-ink"
+          className="z-[60] flex max-w-72 animate-fade-in items-center gap-2 rounded-control bg-tooltip px-2 py-1 text-caption leading-[1.125rem] text-tooltip-ink shadow-pop select-none"
         >
           {content}
         </RadixTooltip.Content>

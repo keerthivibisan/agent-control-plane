@@ -1,5 +1,4 @@
 import '@xyflow/react/dist/style.css';
-import './components/fonts.css';
 import './index.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,7 +8,8 @@ import { createApiClient } from './lib/api';
 import { QueryStore } from './lib/query-store';
 import { applyTheme, readThemePreference } from './lib/theme';
 
-// Apply the theme before the first paint to avoid a light flash in dark mode.
+// index.html's inline script already set the theme before the first paint; this repeats it in
+// case that script did not run (a page served without it).
 applyTheme(readThemePreference());
 
 const container = document.getElementById('root');

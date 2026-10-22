@@ -22,9 +22,9 @@ const C = BOARD_COPY.card;
 /** Drag payload type: only board cards carry it, so other drags (text, files) are ignored. */
 export const TICKET_DRAG_TYPE = 'application/x-acp-ticket';
 
-/** A label or the ticket type: a small, quiet chip. */
+/** A label or the ticket type: a small, quiet pill (GitHub's labels, DESIGN.md v3). */
 const CHIP =
-  'inline-flex h-5 items-center rounded-[0.3125rem] border px-1.5 text-caption font-medium whitespace-nowrap text-dim';
+  'inline-flex h-5 items-center rounded-full border px-2 text-caption font-medium whitespace-nowrap text-dim';
 
 /** Type icon tone: a bug stands out; the type is also said in words (sr-only, and as a chip). */
 const TYPE_TONE: Record<TicketType, string> = {

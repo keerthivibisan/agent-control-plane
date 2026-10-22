@@ -1,13 +1,26 @@
 import type { ReactNode } from 'react';
 
-export type PillTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+export type PillTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'done';
 
-const TONE: Record<PillTone, { frame: string; dot: string }> = {
-  neutral: { frame: 'border-line bg-sunken text-dim', dot: 'bg-status-stale' },
-  accent: { frame: 'border-accent/20 bg-accent-soft text-accent', dot: 'bg-accent' },
-  success: { frame: 'border-success/20 bg-success/10 text-success', dot: 'bg-status-active' },
-  warning: { frame: 'border-warning/25 bg-warning-soft text-warning', dot: 'bg-status-idle' },
-  danger: { frame: 'border-danger/25 bg-danger-soft text-danger', dot: 'bg-danger' },
+/*
+ * GitHub's labels (DESIGN.md v3, "Pills and tags"): a rounded pill with a colored border and
+ * colored text. A Pill (a state) also has the soft fill and a dot; a Badge (a tag) is outline only.
+ */
+const TONE: Record<PillTone, { border: string; fill: string; dot: string }> = {
+  neutral: { border: 'border-line text-dim', fill: 'bg-subtle', dot: 'bg-status-stale' },
+  accent: { border: 'border-accent/50 text-accent', fill: 'bg-accent-soft', dot: 'bg-accent' },
+  success: {
+    border: 'border-success/50 text-success',
+    fill: 'bg-success-soft',
+    dot: 'bg-status-active',
+  },
+  warning: {
+    border: 'border-warning/50 text-warning',
+    fill: 'bg-warning-soft',
+    dot: 'bg-status-idle',
+  },
+  danger: { border: 'border-danger/50 text-danger', fill: 'bg-danger-soft', dot: 'bg-danger' },
+  done: { border: 'border-done/50 text-done', fill: 'bg-done-soft', dot: 'bg-done' },
 };
 
 /**
@@ -33,7 +46,7 @@ export function Pill({
       data-testid={testId}
       data-tone={tone}
       title={title}
-      className={`inline-flex h-5 items-center gap-1.5 rounded-full border px-2 text-caption font-medium whitespace-nowrap ${t.frame}`}
+      className={`inline-flex h-5 items-center gap-1.5 rounded-full border px-2 text-caption font-medium whitespace-nowrap ${t.border} ${t.fill}`}
     >
       {dot ? (
         <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${t.dot}`} />
@@ -44,8 +57,8 @@ export function Pill({
 }
 
 /**
- * A quiet tag: a label, a count, a type ("Bug", "api"). Squarer than a Pill and without a dot,
- * because it names a thing rather than a state.
+ * A quiet tag: a label, a count, a type ("Bug", "api"). Like GitHub's labels: a pill outlined in
+ * its tone, without a fill or a dot, because it names a thing rather than a state.
  */
 export function Badge({
   tone = 'neutral',
@@ -66,7 +79,7 @@ export function Badge({
       data-testid={testId}
       data-tone={tone}
       title={title}
-      className={`inline-flex h-5 items-center rounded-[0.3125rem] border px-1.5 text-caption font-medium whitespace-nowrap tabular-nums ${mono ? 'font-mono' : ''} ${TONE[tone].frame}`}
+      className={`inline-flex h-5 items-center rounded-full border px-2 text-caption font-medium whitespace-nowrap tabular-nums ${mono ? 'font-mono' : ''} ${TONE[tone].border}`}
     >
       {children}
     </span>

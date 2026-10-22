@@ -252,13 +252,13 @@ test('the sidebar toggle and ⌘B/Ctrl+B switch to the icon rail; the choice is 
   }
 
   // The button: the rail, with a tooltip naming the button and its shortcut.
-  const collapse = page.getByRole('button', { name: 'Collapse sidebar' });
+  const collapse = page.getByRole('button', { name: 'Hide sidebar' });
   await collapse.hover();
-  await expect(page.getByRole('tooltip')).toContainText('Collapse sidebar');
+  await expect(page.getByRole('tooltip')).toContainText('Hide sidebar');
   await collapse.click();
   await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
   await expect.poll(width).toBeLessThan(64);
-  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page');
   if (SHOTS !== undefined) {
     for (const scheme of ['light', 'dark'] as const) {

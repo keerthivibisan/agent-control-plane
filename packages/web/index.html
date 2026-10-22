@@ -6,6 +6,23 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg" />
     <title>Agent Control Plane</title>
+    <script>
+      // The theme before the first paint (src/lib/theme.ts has the same rule): the stored choice
+      // ('light' or 'dark'), else the computer's. Storage may be blocked; then System applies.
+      (function () {
+        var pref = null;
+        try {
+          pref = window.localStorage.getItem('acp.theme');
+        } catch (e) {}
+        var dark =
+          pref === 'dark' ||
+          (pref !== 'light' &&
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

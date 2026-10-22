@@ -81,14 +81,12 @@ describe('toggleable sidebar', () => {
     wideScreen();
     const { unmount } = renderApp(server());
     expect(sidebar().getAttribute('data-collapsed')).toBeNull();
-    expect(screen.getByTestId('sidebar-toggle').getAttribute('aria-label')).toBe(
-      'Collapse sidebar',
-    );
+    expect(screen.getByTestId('sidebar-toggle').getAttribute('aria-label')).toBe('Hide sidebar');
     unmount();
     narrowScreen();
     renderApp(server());
     expect(sidebar().getAttribute('data-collapsed')).toBe('true');
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeTruthy();
     // Every entry keeps its name (and its address) in the rail.
     await waitFor(() =>
       expect(within(nav()).getByRole('link', { name: 'Board' }).getAttribute('href')).toBe(
@@ -105,7 +103,7 @@ describe('toggleable sidebar', () => {
     expect(toggle.getAttribute('aria-keyshortcuts')).toBe(isMacLike() ? 'Meta+B' : 'Control+B');
     fireEvent.click(toggle);
     expect(sidebar().getAttribute('data-collapsed')).toBeNull();
-    expect(toggle.getAttribute('aria-label')).toBe('Collapse sidebar');
+    expect(toggle.getAttribute('aria-label')).toBe('Hide sidebar');
     expect(window.localStorage.getItem('acp.sidebar')).toBe('expanded');
 
     fireEvent.keyDown(window, { key: 'b', ...mod });
@@ -166,6 +164,40 @@ describe('toggleable sidebar', () => {
     fireEvent.click(screen.getByTestId('sidebar-toggle'));
     fireEvent.focus(tokens);
     expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  // v0.3.0 D-0 (owner request): the toggle moved from the footer to the top, the entries sit in
+  // two titled sections, and the footer keeps only the status.
+  it('has its toggle at the top of the app bar, sections Project and Workspace, and a status footer', async () => {
+    window.location.hash = '#/p/p-1/board';
+    wideScreen();
+    renderApp(server());
+    const bar = screen.getByRole('banner', { name: 'App bar' });
+    const toggle = within(bar).getByRole('button', { name: 'Hide sidebar' });
+    // First in the bar, before the brand: where people look for it.
+    expect(bar.querySelector('button')).toBe(toggle);
+    expect(toggle.getAttribute('aria-controls')).toBe('app-sidebar');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(within(sidebar()).queryByRole('button', { name: /sidebar/ })).toBeNull();
+    fireEvent.focus(toggle);
+    expect((await screen.findByRole('tooltip')).textContent).toBe(
+      `Hide sidebar${isMacLike() ? '⌘B' : 'Ctrl+B'}`,
+    );
+
+    const project = within(nav()).getByRole('group', { name: 'Project' });
+    const workspace = within(nav()).getByRole('group', { name: 'Workspace' });
+    expect(await within(project).findByRole('link', { name: 'Board' })).toBeTruthy();
+    expect(within(workspace).getByRole('link', { name: 'All projects' })).toBeTruthy();
+    expect(within(workspace).getByRole('link', { name: 'Data health' })).toBeTruthy();
+    expect(within(sidebar()).getByTestId('connection-status')).toBeTruthy();
+    expect(within(sidebar()).getByTestId('server-status')).toBeTruthy();
+
+    // Collapsed, it stays in the bar over the icon rail, and the section names stay for screen
+    // readers.
+    fireEvent.click(toggle);
+    expect(within(bar).getByRole('button', { name: 'Show sidebar' })).toBe(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(within(nav()).getByRole('group', { name: 'Workspace' })).toBeTruthy();
   });
 });
 

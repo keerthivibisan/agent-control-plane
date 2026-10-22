@@ -36,7 +36,7 @@ export const Y_GAP = 170;
 
 /** Theme colors only (index.css), so both themes work. Dashes tell the kinds apart without color. */
 export const EDGE_STYLE: Record<SessionEdgeDto['kind'], { stroke: string; dash?: string }> = {
-  // Neutral ink: lime marks only what is working or selected (DESIGN.md, "Agent views").
+  // Neutral ink: the accent marks only what is working or selected (DESIGN.md, "Agent views").
   subagent: { stroke: 'var(--color-ink)' },
   continuation: { stroke: 'var(--color-dim)', dash: '6 4' },
 };

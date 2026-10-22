@@ -411,7 +411,7 @@ export function ChangesOverview({
   if (changes.length === 0) return null;
   return (
     <Card title={C.allTitle} padded={false} testId="changes-overview">
-      <ul className="mt-3 flex flex-col divide-y divide-line border-t border-line">
+      <ul className="flex flex-col divide-y divide-line">
         {changes.map((c) => (
           <li
             key={c.agentRunId}

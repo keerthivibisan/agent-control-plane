@@ -41,9 +41,9 @@ function colors(text: string): Theme {
 const LIGHT = colors(block(/@theme\s*\{/));
 const DARK = { ...LIGHT, ...colors(block(/\n\.dark\s*\{/)) };
 
-/** A token's hex value, following `var(--color-…)` references (the brand tokens). */
+/** A token's hex value (or a literal `#rrggbb`), following `var(--color-…)` references. */
 function hex(theme: Theme, name: string): string {
-  let value = theme[name];
+  let value = name.startsWith('#') ? name : theme[name];
   for (let hops = 0; value !== undefined && hops < 5; hops += 1) {
     const ref = /^var\(--color-([a-z0-9-]+)\)$/.exec(value);
     if (ref === null) break;
@@ -68,38 +68,61 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const SURFACES = ['canvas', 'panel', 'panel-raised', 'sunken', 'hover', 'sidebar'];
+const SURFACES = [
+  'canvas',
+  'panel',
+  'panel-raised',
+  'subtle',
+  'sunken',
+  'hover',
+  'sidebar',
+  'control',
+  'control-hover',
+];
 
 /** [foreground, background, minimum ratio] */
 const PAIRS: readonly (readonly [string, string, number])[] = [
   ...SURFACES.flatMap((bg) => [['ink', bg, 4.5] as const, ['dim', bg, 4.5] as const]),
   ['ink', 'accent-soft', 4.5],
-  // `accent` is the text-safe accent: links, selected text, the focus ring.
-  ...['canvas', 'panel', 'panel-raised', 'sunken', 'sidebar', 'accent-soft'].map(
+  // `accent` is text and lines: links, selected text, the focus ring.
+  ...['canvas', 'panel', 'panel-raised', 'subtle', 'sunken', 'sidebar', 'accent-soft'].map(
     (bg) => ['accent', bg, 4.5] as const,
   ),
-  ['accent-ink', 'accent', 4.5],
-  // Graphite text on signal lime: the primary button, at rest and on hover.
+  // White text on the accent fill (a selected step, a marker with a word).
   ['accent-fill-ink', 'accent-fill', 4.5],
-  ['accent-fill-ink', 'accent-fill-hover', 4.5],
-  // The light theme's tooltip: canvas text on an ink bubble.
-  ['canvas', 'ink', 4.5],
+  // The green primary button, at rest and on hover; the danger button's hover.
+  ['primary-ink', 'primary', 4.5],
+  ['primary-ink', 'primary-hover', 4.5],
+  ['on-emphasis', 'danger-emphasis', 4.5],
+  // The top bar, dark in both themes: its words, its hover, its focus ring.
+  ['header-ink', 'header', 4.5],
+  ['header-dim', 'header', 4.5],
+  ['header-ink', 'header-hover', 4.5],
+  ['header-dim', 'header-hover', 4.5],
+  ['header-focus', 'header', 3],
+  ['tooltip-ink', 'tooltip', 4.5],
   ['success', 'panel', 4.5],
   ['success', 'canvas', 4.5],
+  ['success', 'success-soft', 4.5],
   ['warning', 'panel', 4.5],
   ['warning', 'canvas', 4.5],
   ['warning', 'warning-soft', 4.5],
   ['danger', 'panel', 4.5],
   ['danger', 'canvas', 4.5],
   ['danger', 'danger-soft', 4.5],
+  ['danger', 'control', 4.5],
+  ['done', 'panel', 4.5],
+  ['done', 'done-soft', 4.5],
   ['observed', 'panel', 4.5],
   ['derived', 'panel', 4.5],
   ['estimated', 'estimated-bg', 4.5],
   ['unavailable', 'panel', 4.5],
   ['unavailable', 'canvas', 4.5],
-  // Non-text: the edge that outlines a lime fill or selection on ivory, status dots, chart series.
+  // Non-text: selected and working edges, markers on wells, status dots, chart series.
   ['accent-fill-edge', 'canvas', 3],
   ['accent-fill-edge', 'panel', 3],
+  ['accent-fill', 'sunken', 3],
+  ['accent', 'hover', 3],
   ['status-active', 'panel', 3],
   ['status-idle', 'panel', 3],
   ['status-stale', 'panel', 3],
@@ -111,19 +134,36 @@ const PAIRS: readonly (readonly [string, string, number])[] = [
 ];
 
 describe('design tokens: contrast (WCAG AA)', () => {
-  it('the brand colors are the owner’s', () => {
-    expect(hex(LIGHT, 'brand-graphite').toLowerCase()).toBe('#171717');
-    expect(hex(LIGHT, 'brand-ivory').toLowerCase()).toBe('#f4f0e8');
-    expect(hex(LIGHT, 'brand-lime').toLowerCase()).toBe('#d8ff64');
-    // The surfaces are the brand: ivory canvas in the light theme, graphite in the dark.
-    expect(hex(LIGHT, 'canvas')).toBe(hex(LIGHT, 'brand-ivory'));
-    expect(hex(DARK, 'canvas')).toBe(hex(LIGHT, 'brand-graphite'));
-    expect(hex(LIGHT, 'accent-fill')).toBe(hex(LIGHT, 'brand-lime'));
+  it('is GitHub’s palette (DESIGN.md v3)', () => {
+    const pick = (theme: Theme, names: string[]) => names.map((n) => hex(theme, n).toLowerCase());
+    const names = ['canvas', 'subtle', 'sunken', 'ink', 'dim', 'accent', 'primary', 'header'];
+    expect(pick(LIGHT, names)).toEqual([
+      '#ffffff',
+      '#f6f8fa',
+      '#f6f8fa',
+      '#1f2328',
+      '#59636e',
+      '#0969da',
+      '#1f883d',
+      '#1f2328',
+    ]);
+    expect(pick(DARK, names)).toEqual([
+      '#0d1117',
+      '#151b23',
+      '#010409',
+      '#f0f6fc',
+      '#9198a1',
+      '#4493f8',
+      '#238636',
+      '#010409',
+    ]);
   });
 
-  it('never uses lime as text on ivory', () => {
-    expect(hex(LIGHT, 'accent')).not.toBe(hex(LIGHT, 'brand-lime'));
-    expect(contrast(hex(LIGHT, 'brand-lime'), hex(LIGHT, 'canvas'))).toBeLessThan(3);
+  it('has no lime left: the v2 brand accent is gone from the app', () => {
+    for (const theme of [LIGHT, DARK]) {
+      expect(Object.values(theme).map((v) => v.toLowerCase())).not.toContain('#d8ff64');
+    }
+    expect(css).not.toMatch(/brand-lime|brand-ivory|brand-graphite/);
   });
 
   for (const [name, theme] of [

@@ -91,7 +91,7 @@ const TAG =
 /**
  * How a stage node looks at rest: an agent, the lead (the controller, framed in ink like the
  * logo's centre), an agent stage that is off, the helpers box, you. Square corners throughout
- * (DESIGN.md, "Agent views"); lime only for the selection.
+ * (DESIGN.md, "Agent views"); the accent only for the selection.
  */
 type FrameKind = 'agent' | 'lead' | 'off' | 'helpers' | 'you';
 
@@ -116,9 +116,7 @@ const FRAME_SELECTED: Record<FrameKind, string> = {
 
 function frame(selected: boolean, kind: FrameKind = 'agent'): string {
   return `relative flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-[2px] border px-3 py-2.5 text-left text-ink transition-[border-color,box-shadow,background-color] duration-150 ${
-    selected
-      ? `${FRAME_SELECTED[kind]} ring-3 ring-accent-fill/55 dark:ring-accent-fill/25`
-      : FRAME_REST[kind]
+    selected ? `${FRAME_SELECTED[kind]} ring-3 ring-accent/25` : FRAME_REST[kind]
   }`;
 }
 

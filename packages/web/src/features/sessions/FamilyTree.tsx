@@ -43,12 +43,10 @@ function MemberCard({
       data-testid={`family-member-${s.id}`}
       data-current={current ? 'true' : undefined}
       // Square, like every agent node (DESIGN.md, "Agent views"): the session outlined has the
-      // brand's lime ring, a top-level session an ink frame, the others a hairline.
+      // accent ring, a top-level session an ink frame, the others a hairline.
       className={`relative max-w-xl rounded-[2px] border bg-panel px-4 py-3 shadow-card transition-colors ${
         current
-          ? `ring-3 ring-accent-fill/55 dark:ring-accent-fill/25 ${
-              top ? 'border-ink' : 'border-accent-fill-edge'
-            }`
+          ? `ring-3 ring-accent/25 ${top ? 'border-ink' : 'border-accent-fill-edge'}`
           : top
             ? 'border-ink/70 hover:border-ink'
             : 'border-line hover:border-line-strong'

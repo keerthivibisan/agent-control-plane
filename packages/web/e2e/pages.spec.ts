@@ -314,11 +314,11 @@ test.describe('U-V', () => {
 
       // The sidebar toggle works from the keyboard and keeps focus.
       const sidebar = page.getByTestId('sidebar');
-      await page.getByRole('button', { name: 'Collapse sidebar' }).focus();
-      await expectFocusRing(page, 'Collapse sidebar');
+      await page.getByRole('button', { name: 'Hide sidebar' }).focus();
+      await expectFocusRing(page, 'Hide sidebar');
       await page.keyboard.press('Enter');
       await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
-      await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
 

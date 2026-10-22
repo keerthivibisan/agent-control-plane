@@ -18,7 +18,7 @@ const G = WORKFLOW_GRAPH_COPY;
 /**
  * The graph as React Flow nodes and edges (pure, so it is tested without a canvas). Links look
  * different by kind through their dashes and weight, never by the accent (DESIGN.md, "Agent
- * views"): lime marks only the selection. A link the rules refuse is drawn in the danger tone,
+ * views"): the accent marks only the selection. A link the rules refuse is drawn in the danger tone,
  * because it is a real problem the owner has to fix.
  */
 

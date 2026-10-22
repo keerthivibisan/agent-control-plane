@@ -19,7 +19,7 @@ const MODE_WORD = REVIEW_LOOP_COPY.modes.word;
 
 /**
  * The editor's block views (DESIGN.md, "Agent views"): square agent blocks framed in `line`, the
- * lead framed in `ink`, smaller steps on the `sunken` well, Ticket and Done as pills. Lime only
+ * lead framed in `ink`, smaller steps on the `sunken` well, Ticket and Done as pills. The accent only
  * for the selection. Every block has one visible link handle on each side it can link from or
  * to (out on the right, in on the left); the hidden top and bottom handles carry the links that go
  * back (findings over the top, rework underneath) so they don't sit on the forward links.
@@ -165,7 +165,7 @@ function frameClass(selected: boolean, lead: boolean, problems: number): string 
       : 'border-line hover:border-line-strong';
   const chosen = lead ? 'border-ink' : 'border-accent-fill-edge';
   return `relative flex h-full w-full flex-col gap-1 overflow-hidden rounded-[2px] border bg-panel px-3 py-2.5 text-left text-ink shadow-card transition-[border-color,box-shadow] duration-150 ${
-    selected ? `${chosen} shadow-raised ring-3 ring-accent-fill/55 dark:ring-accent-fill/25` : rest
+    selected ? `${chosen} shadow-raised ring-3 ring-accent/25` : rest
   }`;
 }
 
@@ -322,9 +322,7 @@ export function AgentBlockView({ data, selected }: NodeProps<BlockNode>) {
 /** A step: Ticket and Done as pills; plan approval and your merge as "You" cards; the rest small. */
 export function GateBlockView({ data, selected }: NodeProps<BlockNode>) {
   const { node } = data;
-  const ring = selected
-    ? 'border-accent-fill-edge ring-3 ring-accent-fill/55 dark:ring-accent-fill/25'
-    : '';
+  const ring = selected ? 'border-accent-fill-edge ring-3 ring-accent/25' : '';
   if (node.type === 'ticket' || node.type === 'done') {
     const ticket = node.type === 'ticket';
     return (

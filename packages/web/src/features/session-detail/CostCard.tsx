@@ -55,7 +55,7 @@ export function CostCard({ snapshot }: { snapshot: UsageSnapshotDto | null }) {
     .map(([model, tokens]) => ({ model, tokens }));
   return (
     <Card title={title} testId="snapshot" padded={false}>
-      <div className="px-5 pb-4">
+      <div className="p-4">
         <div className="text-stat font-semibold tabular-nums">
           <EstimatedCost cost={snapshot.reportedCostUsd} showLabel={false} />
         </div>

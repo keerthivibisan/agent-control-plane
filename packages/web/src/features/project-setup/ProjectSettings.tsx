@@ -17,6 +17,7 @@ import {
 import { labelClass } from '../../components/Input';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
+import { ThemeChoice } from '../../components/ThemeSwitch';
 import {
   isProjectSetupPath,
   paths,
@@ -25,7 +26,7 @@ import {
   schemas,
   updateProjectSetup,
 } from '../../lib/api';
-import { BRANCHING_COPY, PROJECT_SETUP_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
+import { BRANCHING_COPY, PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SHELL_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import type { QueryState } from '../../lib/query-store';
 import { href } from '../../lib/router';
@@ -295,6 +296,13 @@ function SettingsBody({ project }: { project: ProjectDto }) {
               testId="settings-harness-link"
             />
           </ul>
+        </Card>
+        <Card
+          title={SHELL_COPY.theme.settingsTitle}
+          description={SHELL_COPY.theme.settingsText}
+          testId="settings-appearance"
+        >
+          <ThemeChoice />
         </Card>
         <Card title={S.danger} testId="settings-danger" className="border-danger/30">
           <p className="flex items-start gap-2.5 rounded-control border border-danger/20 bg-danger-soft/50 px-3 py-2.5 text-dim">

@@ -90,9 +90,11 @@ export function Dialog({
               const opener = openerRef.current;
               if (lost && opener?.isConnected) opener.focus();
             }}
-            className={`relative w-full ${wide ? 'max-w-xl' : 'max-w-md'} rounded-card border border-line bg-panel-raised p-5 shadow-pop focus:outline-none data-[state=open]:animate-dialog-in`}
+            className={`relative w-full ${wide ? 'max-w-xl' : 'max-w-md'} rounded-overlay border border-line bg-panel-raised p-4 shadow-pop focus:outline-none data-[state=open]:animate-dialog-in`}
           >
-            <RadixDialog.Title className="pr-8 text-title font-semibold">{title}</RadixDialog.Title>
+            <RadixDialog.Title className="pr-10 text-title font-semibold">
+              {title}
+            </RadixDialog.Title>
             {description ? (
               <RadixDialog.Description className="mt-1 text-dim">
                 {description}
@@ -101,12 +103,12 @@ export function Dialog({
             {closeLabel ? (
               <RadixDialog.Close
                 aria-label={closeLabel}
-                className="absolute top-3.5 right-3.5 inline-flex size-7 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
+                className="absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
               >
                 <CloseIcon size={16} />
               </RadixDialog.Close>
             ) : null}
-            <div className="mt-5">{children}</div>
+            <div className="mt-4">{children}</div>
           </RadixDialog.Content>
         </RadixDialog.Overlay>
       </RadixDialog.Portal>

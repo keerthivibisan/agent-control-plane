@@ -203,9 +203,9 @@ function SplitCells({
   if (line === null) {
     return (
       <>
-        <td className={`${NUM_CELL} bg-[var(--diff-hunk-bg)]/40`} />
-        <td className="bg-[var(--diff-hunk-bg)]/40" />
-        <td className="bg-[var(--diff-hunk-bg)]/40" />
+        <td className={`${NUM_CELL} bg-[var(--diff-empty-bg)]`} />
+        <td className="bg-[var(--diff-empty-bg)]" />
+        <td className="bg-[var(--diff-empty-bg)]" />
       </>
     );
   }
@@ -451,7 +451,7 @@ export function DiffFileView({
       id={`diff-${file.id}`}
     >
       <div
-        className={`flex flex-wrap items-center gap-x-3 gap-y-1 bg-panel px-2 py-1.5 ${
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 bg-subtle px-2 py-1.5 ${
           open ? 'border-b border-line' : ''
         }`}
       >
