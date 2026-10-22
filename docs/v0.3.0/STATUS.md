@@ -177,3 +177,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     (91 + the 2 fixed specs).
   - **Lean verification adopted:** agents run targeted tests, and the coordinator runs the full
     check and e2e once per merge.
+- 2026-10-22 **Part 4 planned** (C series, README): Comments and Conversation tabs, attachments
+  (agents read them), helper and tester notes, the lead's whole-ticket summary, read-only merged
+  diffs, and shell polish (sizes, chevron toggle, the header with "ACP" and centred search). Not
+  started; waiting for the owner's go. To confirm: the header shows the logo plus "ACP".

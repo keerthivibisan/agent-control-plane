@@ -126,3 +126,65 @@ Owner decisions, 2026-10-22: "everything is there but not clear"; the answers we
 | D-B | The ticket page like a PR page: a header (title, status, branch → target), tabs Conversation / Agents / Files changed / Checks, and a right sidebar (branch, target, PR, run options, tokens)                                                                                                      | D-0   |
 | D-C | Workflow editor clarity in the new style: blocks, links, legend, panel                                                                                                                                                                                                                             | D-0   |
 | D-V | e2e, both themes, a final screenshot review with the owner                                                                                                                                                                                                                                         | all   |
+
+## Part 4: Comments, Conversation, attachments, shell polish (C series), PLANNED, not started
+
+These are the owner's decisions from 2026-10-22, to go into 0.3.0:
+
+- The ticket page splits into **Comments** (first tab, the "home") and **Conversation** (last tab,
+  what happened).
+- **Attachments:** the owner adds them; agents can read them.
+- **Agent notes:** every helper and tester writes a short "what I did" note.
+- **The lead** writes in Comments a summary of what was done on the **whole ticket**.
+- **The shell is bigger and clearer:** the sidebar toggle moves into the sidebar as a chevron, and
+  the header has the logo plus "ACP" on the left and the search centred.
+
+### Design
+
+- **Tabs:** Comments · Agents · Files changed · Checks · Conversation.
+- **Comments:**
+  - the key, title and description (with editing), and attachments (on the ticket or a comment);
+  - the owner's comments, and the lead's **ticket summary**: one comment for the whole ticket,
+    updated by later runs and marked "updated";
+  - safe formatting (paragraphs, lists, code, links; no raw HTML).
+- **Conversation:** a filterable timeline (by agent):
+  - runs and plan versions;
+  - each helper's and tester's note;
+  - reviewer findings, rework, discard and ask notes, and decisions;
+  - the per-run facts (ADR-0024's facts move here);
+  - merge and pull request lines.
+- **Agent notes:** a small tool for workers and testers, "report what I did", 2–4 sentences, at most
+  about 600 characters (about 50–150 tokens per turn). Stored like the lead's summary and the
+  reviewer's findings; conversations are still never stored. This amends ADR-0019 §7's tool sets,
+  with the tool added to `worker` and `tester` only.
+- **Attachments:**
+  - stored in the app's data folder, with limits such as 10 MB per file and an allowlist of types
+    (images, text and logs, PDF, archives);
+  - downloaded from the local server only;
+  - images previewed.
+  - **Agents** get read-only copies outside the owner's checkout, never committed (for example,
+    under the run's data folder or an excluded path in the helper's worktree, chosen by C-A), and
+    their brief lists them by name.
+- **Merged "Files changed":** read-only after a merge, from the recorded commits (base → merged or
+  head). A change whose commits git no longer has shows "no longer available". Diffs are still never
+  stored.
+- **Shell (C-S):**
+  - the sidebar is wider, with roomier items; the header is about 56px tall; body text is about
+    15px, with headings scaled;
+  - the sidebar toggle is a chevron in the sidebar itself (‹ open, › collapsed), and ⌘B stays;
+  - the header has the logo plus "ACP" on the left (the full name as tooltip and accessible name),
+    a wide centred search, and the project switcher and theme on the right.
+
+### Work packages
+
+| WP  | What                                                                                                                                                                                                              | After |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| C-0 | ADR-0026 (Comments vs Conversation, the agent notes tool, attachments and agent access, migration 0009), contracts                                                                                                | —     |
+| C-A | Server, db and engine: migration 0009 (agent notes, attachments), the notes tool, the activity API, attachment upload and download, attachments for agents, the lead's ticket summary, the read-only merged diffs | C-0   |
+| C-B | Web: the tab restructure, Comments with attachments and the summary, the Conversation timeline with filters, read-only merged Files changed                                                                       | C-0   |
+| C-S | Web shell: sizes, the sidebar chevron toggle, the header redesign                                                                                                                                                 | —     |
+| C-V | The full check and e2e once, plus one consented real run (agent notes, summary, attachments)                                                                                                                      | all   |
+
+**Process:** lean verification (agents run targeted tests; the coordinator runs the full check and
+e2e once per merge). Back up the live database before migration 0009. C-A, C-B and C-S can run in
+parallel after C-0.
