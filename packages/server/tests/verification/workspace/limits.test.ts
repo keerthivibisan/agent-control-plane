@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '@acp/db';
-import { leadToolCall } from '@acp/orchestrator';
+import { AGENT_NOTE_LINE, leadToolCall } from '@acp/orchestrator';
 import { PARENT_HELPER_NOTE } from '../../../src/control/service.js';
 import { createRunStore } from '../../../src/control/store.js';
 import {
@@ -70,10 +70,13 @@ describe('P4-H agent tree limits', () => {
     const parent = await startHelper(b, runId, lead, 'Parent', 'Split the work');
     expect(parent.spec.canStartHelpers).toBe(true);
     expect(parent.spec.leadTools).toBeDefined();
-    expect(parent.spec.prompt).toBe(`Split the work\n\n${PARENT_HELPER_NOTE}`);
+    expect(parent.spec.prompt).toBe(
+      `Split the work\n\n${AGENT_NOTE_LINE}\n\n${PARENT_HELPER_NOTE}`,
+    );
     const child = await startHelper(b, runId, parent, 'Child', 'Do one part');
     expect(child.spec.canStartHelpers).toBeUndefined();
-    expect(child.spec.leadTools).toBeUndefined();
+    // ADR-0026 §3: only report_work (the engine refuses its child tools).
+    expect(child.spec.leadTools).toBeDefined();
     let run = await runDetail(b, runId);
     const leadId = lead.id;
     expect(run.agents.map((a) => [a.role, a.parentAgentRunId])).toEqual([
@@ -151,7 +154,11 @@ describe('P4-H agent tree limits', () => {
     await approveLatestPlan(b, ticket.id);
     const helper = await startHelper(b, runId, lead, 'Builder', 'Build');
     expect(helper.spec.canStartHelpers).toBeUndefined();
-    expect(helper.spec.leadTools).toBeUndefined();
-    expect(helper.spec.prompt).toBe('Build');
+    // ADR-0026 §3: only report_work; the engine refuses the child tools at depth 1.
+    expect(helper.spec.leadTools).toBeDefined();
+    await expect(helper.callLead('start_agent', { role: 'C', task: 'x' })).rejects.toThrow(
+      'Only the lead agent can start agents.',
+    );
+    expect(helper.spec.prompt).toBe(`Build\n\n${AGENT_NOTE_LINE}`);
   }, 60_000);
 });
