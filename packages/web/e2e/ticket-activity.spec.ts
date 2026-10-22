@@ -205,6 +205,10 @@ test('Comments: the summary, attachments, and a comment with an uploaded file', 
     .poll(() => server.sent().find((s) => s.path.endsWith('/comments'))?.body)
     .toBe(JSON.stringify({ body: 'With notes', attachmentIds: ['att-up'] }));
 
+  // The posted comment clears the box when its answer arrives; wait for that, or the clearing
+  // can remove the next file's row.
+  await expect(form.getByTestId('upload')).toHaveCount(0);
+
   // A type that may not be attached is refused before it is sent.
   await form.getByTestId('attachment-input').setInputFiles({
     name: 'logo.svg',
