@@ -286,7 +286,7 @@ describe('ticket page: a review-loop run at work', () => {
       within(rows[0] as HTMLElement)
         .getByRole('link', { name: 'Files changed by the API builder' })
         .getAttribute('href'),
-    ).toBe(`#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}`);
+    ).toBe(`#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}?run=${LOOP_RUN_ID}`);
     expect(screen.queryByTestId('owner-decision')).toBeNull();
     // Conversation: nothing waits for you; the run's approval mode is in the sidebar.
     openTab(/Conversation/);
@@ -310,7 +310,7 @@ describe('ticket page: a review-loop run at work', () => {
     expect(within(files).getByTestId('branch-name').textContent).toBe(LOOP_BRANCH);
     expect(files.textContent).toContain('You can merge once every change is decided');
     expect(within(files).getByTestId('review-all-files').getAttribute('href')).toBe(
-      `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/files`,
+      `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/files?run=${LOOP_RUN_ID}`,
     );
     expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
   });
