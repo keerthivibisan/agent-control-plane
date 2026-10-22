@@ -338,7 +338,8 @@ test('the ticket shows the run summary as the lead’s comment and the merge as 
   await expect(details.getByRole('listitem')).toHaveCount(DETAILS.length);
   await expect(details.getByRole('listitem').first()).toBeVisible();
   await expect(details).toContainText('1 rework round, asked for by the reviewer');
-  await page.keyboard.press('Space');
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(details.getByRole('listitem').first()).toBeHidden();
   await toggle.click();
   await expect(details.getByRole('listitem').first()).toBeVisible();
@@ -377,7 +378,7 @@ test('a summary without a note says “Run summary”; an older one shows its se
   const older = cards.nth(0);
   await expect(older).toHaveAttribute('data-layout', 'sections');
   await expect(older.getByRole('heading', { name: 'Run summary', level: 4 })).toBeVisible();
-  await expect(older.getByRole('heading', { level: 5 })).toHaveText(['Changes', "Lead's note"]);
+  await expect(older.getByRole('heading', { level: 5 })).toHaveText(['Changes (1)', "Lead's note"]);
   await expect(older.getByTestId('run-summary-details')).toHaveCount(0);
 
   const stopped = cards.nth(1);
