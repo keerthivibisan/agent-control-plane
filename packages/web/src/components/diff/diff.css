@@ -1,0 +1,61 @@
+/*
+ * The diff viewer's colors (ADR-0025 §6), on the Control Core palette (DESIGN.md, "Visual
+ * system"): added lines a soft green, removed lines a soft red, the changed words a stronger tint
+ * of the same hue. The `--shiki-*` variables are the syntax colors of Shiki's CSS-variables theme
+ * (highlight.ts), so the code follows the app theme without highlighting again. Every syntax and
+ * gutter color meets 4.5:1 on every line background in both themes
+ * (tests/components/diff-contrast.test.ts). Values only: the `.dark` block redefines them.
+ */
+.acp-diff {
+  --diff-bg: #fbf9f5;
+  --diff-hunk-bg: #ebe6dc;
+  --diff-add-bg: #e4f2e2;
+  --diff-add-word: #c6e6c3;
+  --diff-del-bg: #fbe7e2;
+  --diff-del-word: #f5cbc1;
+  --diff-number: #5c5850;
+  --diff-add-sign: #15703a;
+  --diff-del-sign: #b02a1c;
+
+  --shiki-foreground: #171717;
+  --shiki-background: transparent;
+  --shiki-token-keyword: #8b1f7a;
+  --shiki-token-string: #1f6a2a;
+  --shiki-token-string-expression: #1f6a2a;
+  --shiki-token-function: #1b5a8a;
+  --shiki-token-constant: #8a3d0b;
+  --shiki-token-comment: #5e5951;
+  --shiki-token-parameter: #7a4400;
+  --shiki-token-punctuation: #4f4b44;
+  --shiki-token-link: #4b5e00;
+  --shiki-token-inserted: #11602f;
+  --shiki-token-deleted: #9a2216;
+  --shiki-token-changed: #7a4400;
+}
+
+.dark .acp-diff {
+  --diff-bg: #1d1d1d;
+  --diff-hunk-bg: #121212;
+  --diff-add-bg: #1a2e1f;
+  --diff-add-word: #25492d;
+  --diff-del-bg: #36191a;
+  --diff-del-word: #5a2626;
+  --diff-number: #aaa69e;
+  --diff-add-sign: #5fd68a;
+  --diff-del-sign: #ff958a;
+
+  --shiki-foreground: #f4f0e8;
+  --shiki-background: transparent;
+  --shiki-token-keyword: #e0a8f0;
+  --shiki-token-string: #a6e3a1;
+  --shiki-token-string-expression: #a6e3a1;
+  --shiki-token-function: #8cc4ee;
+  --shiki-token-constant: #f6cf6a;
+  --shiki-token-comment: #b3aea5;
+  --shiki-token-parameter: #f5c08a;
+  --shiki-token-punctuation: #cfcac0;
+  --shiki-token-link: #d8ff64;
+  --shiki-token-inserted: #7fe0a2;
+  --shiki-token-deleted: #ff9d91;
+  --shiki-token-changed: #f5c08a;
+}
