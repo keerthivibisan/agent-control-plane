@@ -137,6 +137,7 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
       'pr_url',
       'pr_state',
       'pr_checked_at',
+      'pr_pushed_commit',
     ]);
     // The indexes of 0006 are back.
     const indexes = db.connection
@@ -168,6 +169,17 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
     );
     expect(() => setPr(db, run.id, { state: '' })).toThrow(/CHECK/);
     expect(() => setPr(db, run.id, { provider: 'x'.repeat(21) })).toThrow(/CHECK/);
+    const pushed = (value: string | null) =>
+      db.connection
+        .prepare('UPDATE ticket_branches SET pr_pushed_commit = ? WHERE run_id = ?')
+        .run(value, run.id);
+    pushed(TIP);
+    expect(() => pushed('HEAD')).toThrow(/CHECK/);
+    // A pushed commit only with a pull request.
+    expect(() =>
+      setPr(db, run.id, { provider: null, number: null, url: null, state: null, checkedAt: null }),
+    ).toThrow(/CHECK/);
+    pushed(null);
     setPr(db, run.id, { provider: null, number: null, url: null, state: null, checkedAt: null });
   });
 
@@ -249,6 +261,7 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
         pr_url: null,
         pr_state: null,
         pr_checked_at: null,
+        pr_pushed_commit: null,
       };
       expect(v8.connection.prepare('SELECT * FROM ticket_branches ORDER BY run_id').all()).toEqual(
         branchesBefore.map((r) => ({ ...r, ...empty })),
@@ -295,7 +308,14 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
           url: URL1,
           state: 'open',
         })?.pullRequest,
-      ).toEqual({ provider: 'github', number: 3, url: URL1, state: 'open', checkedAt: AT });
+      ).toEqual({
+        provider: 'github',
+        number: 3,
+        url: URL1,
+        state: 'open',
+        checkedAt: AT,
+        pushedCommit: null,
+      });
       v8.connection.prepare('DELETE FROM orchestration_runs WHERE id = ?').run(again.id);
       expect(loop.ticketBranches.getByRun(again.id)).toBeUndefined();
     } finally {

@@ -12,7 +12,7 @@
 --     check, index and foreign key is kept as 0006 made it, and every row is copied unchanged.
 --     Nothing references `ticket_branches`, so dropping the old table breaks no foreign key.
 --   * The pull request raised for a ticket branch (ADR-0025 §4) is five nullable columns, all set
---     or all NULL. `pr_provider` and `pr_state` are validated with Zod (CodeHostProviderSchema,
+--     or all NULL, plus the commit the app last pushed for it (set only with a pull request). `pr_provider` and `pr_state` are validated with Zod (CodeHostProviderSchema,
 --     PullRequestStateSchema), with their lengths checked here, so `gitlab` can come without a
 --     rebuild. The URL is the host's own web address of the pull request; no token or user.
 --   * No conversation content (ADR-0009): branch names, a number, a URL, a state and a time.
@@ -53,12 +53,17 @@ CREATE TABLE ticket_branches_0008 (
   pr_state TEXT CHECK (pr_state IS NULL OR length(pr_state) BETWEEN 1 AND 20),
   -- When the app last read the state from the host (the owner's view or Refresh).
   pr_checked_at TEXT,
+  -- The ticket branch commit the app last pushed to origin for the pull request.
+  pr_pushed_commit TEXT
+    CHECK (pr_pushed_commit IS NULL
+      OR (length(pr_pushed_commit) BETWEEN 7 AND 64 AND pr_pushed_commit NOT GLOB '*[^0-9a-f]*')),
   CHECK ((state = 'merged') = (merged_commit IS NOT NULL)),
   -- A pull request is recorded whole or not at all.
   CHECK ((pr_provider IS NULL) = (pr_number IS NULL)
     AND (pr_provider IS NULL) = (pr_url IS NULL)
     AND (pr_provider IS NULL) = (pr_state IS NULL)
     AND (pr_provider IS NULL) = (pr_checked_at IS NULL)),
+  CHECK (pr_pushed_commit IS NULL OR pr_provider IS NOT NULL),
   -- Deleting the run deletes its ticket branch record (never the git branch itself).
   FOREIGN KEY (project_id, run_id) REFERENCES orchestration_runs (project_id, id) ON DELETE CASCADE
 ) STRICT;

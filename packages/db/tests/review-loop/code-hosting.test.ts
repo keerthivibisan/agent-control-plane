@@ -144,8 +144,19 @@ describe("the ticket branch's pull request (ADR-0025 §4)", () => {
       url: URL1,
       state: 'open',
       checkedAt: opened?.updatedAt,
+      pushedCommit: null,
     });
-    expect(loop.ticketBranches.getByRun(run.id)).toEqual(opened);
+    // A push records its commit; a later read (no push) keeps it.
+    expect(
+      loop.ticketBranches.setPullRequest(run.id, {
+        provider: 'github',
+        number: 12,
+        url: URL1,
+        state: 'open',
+        pushedCommit: TIP,
+      })?.pullRequest?.pushedCommit,
+    ).toBe(TIP);
+    expect(loop.ticketBranches.getByRun(run.id)?.pullRequest?.number).toBe(12);
     loop.ticketBranches.markMerged(run.id, TIP);
     const merged = loop.ticketBranches.setPullRequest(run.id, {
       provider: 'github',
@@ -157,7 +168,11 @@ describe("the ticket branch's pull request (ADR-0025 §4)", () => {
     expect(merged).toMatchObject({
       state: 'merged',
       mergedCommit: TIP,
-      pullRequest: { state: 'merged', checkedAt: '2026-10-22T10:00:00.000Z' },
+      pullRequest: {
+        state: 'merged',
+        checkedAt: '2026-10-22T10:00:00.000Z',
+        pushedCommit: TIP,
+      },
     });
     expect(
       loop.ticketBranches.setPullRequest('missing', {
@@ -180,6 +195,7 @@ describe("the ticket branch's pull request (ADR-0025 §4)", () => {
       { ...good, url: 'https://user:token@github.com/acme/widgets/pull/12' },
       { ...good, url: 'not a url' },
       { ...good, state: 'draft' },
+      { ...good, pushedCommit: 'HEAD' },
     ]) {
       expect(
         // @ts-expect-error: invalid values are refused at the boundary as well.

@@ -51,6 +51,8 @@ export interface TicketBranchPullRequest {
   state: PullRequestState;
   /** When the app last read the state from the host. */
   checkedAt: IsoTimestamp;
+  /** The ticket branch commit the app last pushed for it; null when unknown. */
+  pushedCommit: string | null;
 }
 
 export interface TicketBranchRow {
@@ -91,7 +93,11 @@ export interface TicketBranchesRepository {
    */
   setPullRequest(
     runId: string,
-    pullRequest: Omit<TicketBranchPullRequest, 'checkedAt'> & { checkedAt?: string },
+    pullRequest: Omit<TicketBranchPullRequest, 'checkedAt' | 'pushedCommit'> & {
+      checkedAt?: string;
+      /** Set after a push; absent keeps the recorded one (a Refresh pushes nothing). */
+      pushedCommit?: string;
+    },
   ): TicketBranchRow | undefined;
 }
 
@@ -111,11 +117,13 @@ interface TicketBranchDbRow {
   pr_url: string | null;
   pr_state: string | null;
   pr_checked_at: string | null;
+  pr_pushed_commit: string | null;
 }
 
 const T = 'ticket_branches';
 const COLUMNS = `run_id, project_id, branch, base_branch, base_commit, head_commit, state,
-  merged_commit, created_at, updated_at, pr_provider, pr_number, pr_url, pr_state, pr_checked_at`;
+  merged_commit, created_at, updated_at, pr_provider, pr_number, pr_url, pr_state, pr_checked_at,
+  pr_pushed_commit`;
 const INSERT_COLUMNS = `run_id, project_id, branch, base_branch, base_commit, head_commit, state,
   merged_commit, created_at, updated_at`;
 const BaseBranchParser = textParser(1, 255);
@@ -151,6 +159,12 @@ function toPullRequest(row: TicketBranchDbRow): TicketBranchPullRequest | null {
     url: parseStored(PullRequestUrlParser, row.pr_url, T, 'pr_url'),
     state: parseStored(PullRequestStateSchema, row.pr_state, T, 'pr_state'),
     checkedAt: storedTimestamp(row.pr_checked_at, T, 'pr_checked_at'),
+    pushedCommit: parseStored(
+      nullable(GitCommitSchema),
+      row.pr_pushed_commit,
+      T,
+      'pr_pushed_commit',
+    ),
   };
 }
 
@@ -196,7 +210,7 @@ export function createTicketBranchesRepository(ctx: RepositoryContext): TicketBr
 
   const pullRequest = c.prepare(
     `UPDATE ${T} SET pr_provider = ?, pr_number = ?, pr_url = ?, pr_state = ?, pr_checked_at = ?,
-       updated_at = ?
+       pr_pushed_commit = coalesce(?, pr_pushed_commit), updated_at = ?
      WHERE run_id = ? RETURNING ${COLUMNS}`,
   );
 
@@ -273,6 +287,9 @@ export function createTicketBranchesRepository(ctx: RepositoryContext): TicketBr
             parseInput(PullRequestUrlParser, pr.url, 'pull request url'),
             parseInput(PullRequestStateSchema, pr.state, 'pull request state'),
             checkedAt,
+            pr.pushedCommit === undefined
+              ? null
+              : commit(pr.pushedCommit, 'pull request pushedCommit'),
             at,
             requireNonEmpty(runId, 'ticket branch runId'),
           ) as TicketBranchDbRow | undefined,

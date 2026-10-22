@@ -450,6 +450,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "pr_url TEXT NULL",
       "pr_state TEXT NULL",
       "pr_checked_at TEXT NULL",
+      "pr_pushed_commit TEXT NULL",
     ],
     "foreignKeys": [
       "project_id -> orchestration_runs(project_id) ON DELETE CASCADE",

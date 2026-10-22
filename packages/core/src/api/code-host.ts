@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { GitCommitSchema } from '../orchestration/orchestration.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 
 /**
@@ -44,6 +45,12 @@ export const PullRequestDtoSchema = z.object({
   headBranch: GitBranchNameSchema,
   /** When the app last read the state from the host (on the owner's view or Refresh). */
   checkedAt: IsoTimestampSchema,
+  /**
+   * The ticket branch commit the app last pushed (G-A, coordinator-approved additive field): when
+   * the branch's `headCommit` differs, there is something new to push. Absent from servers
+   * before it; null when unknown.
+   */
+  pushedCommit: GitCommitSchema.nullable().optional(),
 });
 export type PullRequestDto = z.infer<typeof PullRequestDtoSchema>;
 
