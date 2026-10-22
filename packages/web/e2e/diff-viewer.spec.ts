@@ -196,13 +196,16 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
   baseURL,
 }) => {
   const urls = await serve(page, withDiffs(loopWorkingScenario()));
-  // v0.3.0 D-B: the changes are listed on Files changed.
-  await page.goto(`/${TICKET_HASH}?tab=files`);
+  // The change card in the Agents tab's side panel (Files changed, since C-D, shows the diff at
+  // once; the side panel's diff stays folded until opened).
+  await page.goto(`/${TICKET_HASH}?tab=agents`);
   await page
-    .getByTestId('changes-overview')
-    .getByTestId('change-row')
-    .first()
-    .getByRole('button', { name: 'Open' })
+    .getByRole('button', { name: 'Show the API builder in the side panel' })
+    .and(page.locator(':not([data-testid="live-agent"])'))
+    .click();
+  await page
+    .getByTestId('side-panel')
+    .getByRole('tab', { name: /Changes/ })
     .click();
   const card = page.getByTestId('side-panel').getByTestId('change-card');
   const section = card.getByTestId('change-diff');
@@ -287,12 +290,9 @@ test('a change’s diff: files, side by side, collapse, hidden lines, Shiki from
     .getByRole('tablist', { name: 'Ticket sections' })
     .getByRole('tab', { name: /Files changed/ })
     .click();
-  await page
-    .getByTestId('changes-overview')
-    .getByTestId('change-row')
-    .first()
-    .getByRole('button', { name: 'Open' })
-    .click();
+  await page.getByTestId('change-picker').click();
+  await page.getByRole('menuitemradio', { name: /API builder/ }).click();
+  await page.getByRole('button', { name: 'Open API builder in Agents' }).click();
   const again = page.getByTestId('side-panel').getByTestId('change-diff');
   await again.locator('summary').click();
   await expect(again.getByTestId('diff-viewer')).toHaveAttribute('data-view', 'split');
@@ -314,20 +314,21 @@ test('the ticket branch’s combined diff: the large-diff guard and the server�
 }) => {
   await page.addInitScript(() => window.localStorage.setItem('acp.diff.view', 'unified'));
   await serve(page, withDiffs(loopReviewScenario()));
+  // C-D: all changes on Files changed, in the review UI.
   await page.goto(`/${TICKET_HASH}?tab=files`);
-  const branch = page.getByTestId('branch-files');
-  await branch.getByTestId('branch-diff').locator('summary').click();
-  const viewer = branch.getByTestId('diff-viewer');
-  await expect(viewer.getByTestId('diff-truncated')).toHaveText(
+  const files = page.getByTestId('review-files');
+  await expect(files.getByTestId('review-truncated')).toHaveText(
     'The server cut this diff at its size limit: only its start is shown.',
   );
-  await expect(viewer.getByTestId('diff-large')).toContainText('2 of 3 files are shown');
-  const big = viewer.locator('[data-path="src/search/index.ts"]');
+  await expect(files.getByTestId('review-large')).toContainText('2 of 3 files are shown');
+  const big = files.locator('[data-testid="diff-file"][data-path="src/search/index.ts"]');
   await expect(big).toHaveAttribute('data-shown', 'false');
-  await expect(viewer.locator('[data-path="src/search/SearchBox.tsx"]')).toContainText('Cut');
-  await expect(viewer.getByTestId('diff-missing')).toContainText('src/search/useSearch.ts');
-  await shootPart(page, 'branch', 'branch-files');
+  await expect(
+    files.locator('[data-testid="diff-file"][data-path="src/search/SearchBox.tsx"]'),
+  ).toContainText('Cut');
+  await expect(files.getByTestId('review-missing')).toContainText('src/search/useSearch.ts');
+  await shootPart(page, 'branch', 'review-files');
   await big.getByRole('button', { name: 'Show this file' }).click();
   await expect(big.locator('tr[data-kind="add"]')).toHaveCount(450);
-  await expect(viewer.getByTestId('diff-large')).toHaveCount(0);
+  await expect(files.getByTestId('review-large')).toHaveCount(0);
 });

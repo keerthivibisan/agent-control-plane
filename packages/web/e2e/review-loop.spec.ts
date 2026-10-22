@@ -149,11 +149,11 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Saved searches');
 
   // Working: the API builder reworks its change; the Search UI's change is in review.
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview.getByTestId('change-state')).toHaveText([
-    /Rework round 1 of 2/,
-    /In review/,
-  ]);
+  // C-D: "Changes from" on Files changed lists each change with its state.
+  await page.getByTestId('change-picker').click();
+  const menu = page.getByRole('menu', { name: 'Show changes from' });
+  await expect(menu.getByTestId('change-state')).toHaveText([/Rework round 1 of 2/, /In review/]);
+  await page.keyboard.press('Escape');
   await tab(/Comments/).click();
   await expect(page.getByTestId('run-approval-mode')).toHaveText('Auto edits');
   await expect(page.getByTestId('owner-decision')).toHaveCount(0);
@@ -164,7 +164,9 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
     'Asked a helper to rework its change',
   );
   await tab(/Files changed/).click();
-  await overview.getByTestId('change-row').first().getByRole('button', { name: 'Open' }).click();
+  await page.getByTestId('change-picker').click();
+  await menu.getByRole('menuitemradio', { name: /API builder/ }).click();
+  await page.getByRole('button', { name: 'Open API builder in Agents' }).click();
   const panel = page.getByTestId('side-panel');
   await expect(panel.getByTestId('change-finding')).toContainText('Cap pageSize at 100');
   await shoot(page, 'working');
@@ -190,8 +192,12 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   await tab(/Checks/).click();
   await expect(page.getByTestId('branch-checks')).toBeVisible();
   await tab(/Files changed/).click();
-  await page.getByTestId('branch-diff').locator('summary').click();
-  await shootPart(page, 'ticket-branch', 'branch-files');
+  // All changes: the ticket branch, open, in the review UI.
+  await page.getByTestId('change-picker').click();
+  await menu.getByRole('menuitemradio', { name: /All changes/ }).click();
+  await expect(page.getByTestId('files-state')).toHaveText('Open');
+  await expect(page.getByTestId('review-files')).toBeVisible();
+  await shootPart(page, 'ticket-branch', 'files-tab');
   await tab(/Comments/).click();
   const branch = page.getByTestId('ticket-branch');
   await expect(branch.getByRole('button', { name: 'Merge into main' })).toBeVisible();

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { LOOP_TICKET_ID, PROJECT_ID } from './review-loop-fixtures.js';
+import { L_API, LOOP_TICKET_ID, PROJECT_ID } from './review-loop-fixtures.js';
 import {
   demoApi,
   withBoard,
@@ -217,12 +217,11 @@ test('readme: the board', async ({ page, request }) => {
 test('readme: a ticket with a live run and its review loop', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page);
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
+  // The reworked change on Files changed (C-D), opened in the Agents tab: its card shows the
+  // review agent's findings in the side panel.
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files&change=${L_API}`);
   await expect(h1(page)).toContainText('Saved searches');
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview).toBeVisible();
-  // Open the reworked change: its card shows the review agent's findings in the side panel.
-  await overview.getByTestId('change-row').first().getByRole('button', { name: 'Open' }).click();
+  await page.getByRole('button', { name: 'Open API builder in Agents' }).click();
   await expect(page.getByTestId('side-panel').getByTestId('change-finding')).toBeVisible();
   // The agent tree, the open change card and the changes list, under the run's workflow.
   const agents = page.getByTestId('agent-canvas');

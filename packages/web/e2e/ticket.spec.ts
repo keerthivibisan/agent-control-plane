@@ -422,7 +422,9 @@ test('the run’s own graph: states, modes, the sandbox and the review agent’s
   ).toBeVisible();
   // Its change: the review agent decided the rework itself.
   await page.getByRole('tab', { name: /Files changed/ }).click();
-  await page.getByTestId('changes-overview').getByRole('button', { name: /^Open/ }).first().click();
+  await page.getByTestId('change-picker').click();
+  await page.getByRole('menuitemradio', { name: /API helper/ }).click();
+  await page.getByRole('button', { name: 'Open API helper in Agents' }).click();
   const card = page.getByTestId('side-panel').getByTestId('change-card');
   await expect(card.getByTestId('change-direct-rounds')).toContainText(
     'Review agent: 1 direct rework round',

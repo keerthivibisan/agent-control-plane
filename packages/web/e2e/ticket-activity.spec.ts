@@ -240,7 +240,7 @@ test('Conversation: the timeline, its links and the filter chips', async ({ page
   await expect(note).toContainText('Checked it with two unit tests');
   await expect(note.getByTestId('activity-link')).toHaveAttribute(
     'href',
-    `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_API}?run=${LOOP_RUN_ID}`,
+    `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files&change=${L_API}&run=${LOOP_RUN_ID}`,
   );
   await expect(
     activity.locator('li[data-type="run-facts"]').getByTestId('run-summary'),
@@ -276,10 +276,11 @@ test('Files changed after the merge: read only, or no longer available', async (
   };
   await serve(page, withFiles);
   await open(page, 'files');
-  await expect(page.getByTestId('merged-read-only')).toHaveText('Merged: read only');
-  await expect(page.getByTestId('merged-files')).toContainText('3 changed files');
-  await expect(page.getByTestId('review-all-files')).toHaveCount(0);
-  await expect(page.getByTestId('change-files-link')).toHaveCount(0);
+  // C-D: the Files changed review layout, read only, with the Merged label.
+  await expect(page.getByTestId('files-state')).toHaveText('Merged');
+  await expect(page.getByTestId('files-read-only')).toHaveText('Read only');
+  await expect(page.getByTestId('review-summary-line')).toContainText('2 files changed');
+  await expect(page.getByTestId('review-changes')).toHaveCount(0);
   await shoot(page, 'merged-files');
 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
@@ -295,7 +296,5 @@ test('Files changed after the merge: read only, or no longer available', async (
     }),
   );
   await page.reload();
-  await expect(page.getByTestId('merged-files-unavailable')).toContainText(
-    'The files of this merge are no longer available',
-  );
+  await expect(page.getByTestId('files-unavailable')).toContainText('Files no longer available');
 });

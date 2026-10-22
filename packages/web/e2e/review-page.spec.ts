@@ -8,6 +8,7 @@ import {
   LOOP_RUN_ID,
   LOOP_TICKET_ID,
   PROJECT_ID,
+  loopDoneScenario,
   loopNeedsYouScenario,
   loopWorkingScenario,
   type LoopScenario,
@@ -15,16 +16,21 @@ import {
 import { fixtureProject } from './ticket-fixtures.js';
 
 /*
- * v0.3.0 D-A: the review pages, GitHub's "Files changed", on the demo server's built UI with the
- * ticket routes answered from the review loop's synthetic fixtures (page.route) and their diffs
- * replaced by the ones below. The owner's decisions are POSTs to the existing endpoints, captured
- * here and answered from the fixtures; nothing reaches a server. With ACP_SCREENSHOT_DIR set, it
- * saves light and dark pictures at 1440 wide.
+ * v0.3.0 D-A's review UI, GitHub's "Files changed", which is the ticket page's Files changed tab
+ * since C-D: on the demo server's built UI with the ticket routes answered from the review loop's
+ * synthetic fixtures (page.route) and their diffs replaced by the ones below. The owner's
+ * decisions are POSTs to the existing endpoints, captured here and answered from the fixtures;
+ * nothing reaches a server. With ACP_SCREENSHOT_DIR set, it saves light and dark pictures at 1440
+ * wide.
  */
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;
-const CHANGE_HASH = `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/changes/${L_UI}`;
-const FILES_HASH = `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}/files`;
+const TICKET_HASH = `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`;
+const FILES_HASH = `${TICKET_HASH}?tab=files`;
+const CHANGE_HASH = `${FILES_HASH}&change=${L_UI}`;
+/** D-A's review page addresses, which old links still carry. */
+const OLD_CHANGE_HASH = `${TICKET_HASH}/changes/${L_UI}`;
+const OLD_FILES_HASH = `${TICKET_HASH}/files`;
 
 type Json = Record<string, unknown>;
 
@@ -182,12 +188,11 @@ test('a change’s files: split, viewed, two line comments and Request changes a
   const posted = await serve(page, withDiffs(loopNeedsYouScenario()));
   await page.goto(`/${CHANGE_HASH}`);
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Files changed by Search UI');
-  await expect(page.getByTestId('review-back')).toHaveAttribute(
-    'href',
-    `#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`,
+  await expect(page.getByTestId('change-picker')).toHaveAccessibleName(
+    'Changes from: Search UI’s change',
   );
-  const context = page.getByTestId('review-context');
+  await expect(page.getByTestId('files-state')).toHaveText('Open');
+  const context = page.getByTestId('files-change');
   await expect(context.getByTestId('change-state')).toHaveAttribute('data-state', 'needs-owner');
   await expect(context).toContainText('Round 1');
   const files = page.getByTestId('review-files');
@@ -330,10 +335,8 @@ test('the ticket branch’s files while agents work: Request changes waits, Comm
   await page.setViewportSize({ width: 1440, height: 1000 });
   const posted = await serve(page, withDiffs(loopWorkingScenario()));
   await page.goto(`/${FILES_HASH}`);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Files changed on the ticket branch',
-  );
-  await expect(page.getByTestId('review-context')).toContainText('acp/WEB-21');
+  await expect(page.getByTestId('change-picker')).toHaveAccessibleName('Changes from: All changes');
+  await expect(page.getByTestId('files-branch')).toContainText('acp/WEB-21');
 
   const api = page.locator('[data-review-file="src/search/api.ts"]');
   await api.locator('tr[data-kind="change"]').first().hover();
@@ -384,19 +387,104 @@ test('a phone: unified, the tree behind its toggle, and no sideways scroll', asy
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test("entry points: the ticket page's Files changed tab links to the review pages", async ({
+test('old review page links land on the tab; Changes from works by keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await serve(page, withDiffs(loopNeedsYouScenario()));
+  // D-A's addresses redirect, replacing the address, to the tab with the same selection.
+  await page.goto(`/${OLD_CHANGE_HASH}?run=${LOOP_RUN_ID}`);
+  await expect(page).toHaveURL(new RegExp(`${escape(CHANGE_HASH)}&run=${LOOP_RUN_ID}$`));
+  await expect(page.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByTestId('change-picker')).toHaveAttribute('data-value', L_UI);
+  await page.goto(`/${OLD_FILES_HASH}`);
+  await expect(page).toHaveURL(new RegExp(`${escape(FILES_HASH)}$`));
+  await expect(page.getByTestId('change-picker')).toHaveAttribute('data-value', '');
+  // The breadcrumb names the ticket, as the page you are on.
+  const trail = page.getByRole('navigation', { name: 'Breadcrumb' });
+  await expect(trail.locator('[aria-current="page"]')).toHaveText('WEB-21');
+
+  // "Changes from" by keyboard: Enter opens, arrows move, Enter picks, focus comes back.
+  const picker = page.getByTestId('change-picker');
+  await picker.focus();
+  await page.keyboard.press('Enter');
+  const menu = page.getByRole('menu', { name: 'Show changes from' });
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(3);
+  await expect(menu.getByRole('menuitemradio', { name: /All changes/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await shoot(page, 'picker');
+  await page.keyboard.press('End');
+  await expect(menu.getByRole('menuitemradio', { name: /Search UI/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${escape(CHANGE_HASH)}$`));
+  await expect(picker).toBeFocused();
+  await expect(page.getByTestId('files-change')).toHaveAttribute('data-agent', L_UI);
+  // Open in Agents shows the change in the side panel.
+  await page.getByRole('button', { name: 'Open Search UI in Agents' }).click();
+  await expect(page.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('side-panel').getByTestId('change-card')).toBeVisible();
+});
+
+/** The done scenario: merged into main; the merged files come from the recorded commits. */
+function merged(): LoopScenario {
+  return withDiffs(loopDoneScenario());
+}
+
+test('merged: the same layout read only, with the Merged label and the merge commit', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await serve(page, withDiffs(loopNeedsYouScenario()));
-  // D-B: the ticket page's Files changed tab holds the ways into the review pages.
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
-  await expect(page.getByTestId('review-all-files')).toHaveAttribute(
-    'href',
-    `${FILES_HASH}?run=${LOOP_RUN_ID}`,
-  );
-  const link = page.getByRole('link', { name: 'Files changed by the Search UI' });
-  await expect(link).toHaveAttribute('href', `${CHANGE_HASH}?run=${LOOP_RUN_ID}`);
-  await link.click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Files changed by Search UI');
+  const posted = await serve(page, merged());
+  await page.goto(`/${FILES_HASH}`);
+  await expect(page.getByTestId('files-state')).toHaveText('Merged');
+  await expect(page.getByTestId('files-branch')).toHaveText('acp/WEB-21merged intomain');
+  await expect(page.getByTestId('files-commit')).toHaveText('Merge commite1f2a3b');
+  await expect(page.getByTestId('review-summary-line')).toContainText('3 files changed');
+  await expect(page.getByTestId('files-read-only')).toHaveText('Read only');
+  // No comment boxes and no review.
+  await expect(page.getByTestId('review-changes')).toHaveCount(0);
+  await expect(page.locator('[data-line-button]')).toHaveCount(0);
+  // Viewed still works, in this browser.
+  const doc = page.locator('[data-review-file="docs/search.md"]');
+  await doc.getByRole('checkbox', { name: 'Mark docs/search.md as viewed' }).check();
+  await expect(page.getByTestId('review-viewed-count')).toHaveText('1 of 3 viewed');
+  // `c` does nothing here.
+  await page.keyboard.press('c');
+  await expect(page.getByTestId('review-comment-form')).toHaveCount(0);
+  await shoot(page, 'merged');
+  expect(posted).toEqual([]);
 });
+
+test('merged files no longer available (410): an empty state in the same frame', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await serve(page, merged());
+  await page.route(`**${LOOP_BRANCH_PATH}`, (route) =>
+    route.fulfill({
+      status: 410,
+      json: {
+        error: {
+          code: 'diff_unavailable',
+          message: 'This branch’s commits are no longer in the repository',
+          requestId: 'e2e',
+        },
+      },
+    }),
+  );
+  await page.goto(`/${FILES_HASH}`);
+  await expect(page.getByTestId('files-unavailable')).toContainText('Files no longer available');
+  await expect(page.getByTestId('files-state')).toHaveText('Merged');
+  await expect(page.getByTestId('change-picker')).toBeVisible();
+  await expect(page.getByTestId('review-files')).toHaveCount(0);
+  await shoot(page, 'gone');
+});
+
+/** A hash for a RegExp. */
+function escape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

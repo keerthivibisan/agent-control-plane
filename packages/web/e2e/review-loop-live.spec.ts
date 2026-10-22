@@ -360,11 +360,15 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await act(request, reviewUi.id, 'finish');
   await waitRun((r) => r.changes?.every((c) => c.state === 'decision') === true);
   await ticketTab(page, /Files changed/).click();
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview.getByTestId('change-state')).toHaveText([
+  // C-D: "Changes from" lists each change with its state.
+  const picker = page.getByTestId('change-picker');
+  const changes = page.getByRole('menu', { name: 'Show changes from' });
+  await picker.click();
+  await expect(changes.getByTestId('change-state')).toHaveText([
     'Needs lead decision',
     'Needs lead decision',
   ]);
+  await page.keyboard.press('Escape');
 
   // ---- The lead merges the API builder's change into the ticket branch. A merge waits for
   // the required checks on the merged commit; the lead tries again once they have run.
@@ -391,7 +395,9 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   const rework = await agentOf(request, (a) => a.id === ui.id && a.rework);
   expect(rework.prompt).toContain(REWORK_NOTE);
   await act(request, rework.id, 'started');
-  await expect(overview.getByTestId('change-state').nth(1)).toHaveText('Rework round 1 of 2');
+  await picker.click();
+  await expect(changes.getByTestId('change-state').nth(1)).toHaveText('Rework round 1 of 2');
+  await page.keyboard.press('Escape');
   await act(request, rework.id, 'write', {
     path: 'discount-field.ts',
     content: 'export const field = "<label>Discount code</label><input>";\n',
@@ -460,22 +466,16 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   // The UI builder's card: two rounds; the review agent's finding and the lead's note are both
   // kept (ticket comments), each on its own line; rework ×1.
   await ticketTab(page, /Files changed/).click();
-  await overview
-    .getByTestId('change-row')
-    .filter({ hasText: 'UI builder' })
-    .getByRole('button', { name: 'Open' })
-    .click();
+  await picker.click();
+  await changes.getByRole('menuitemradio', { name: /UI builder/ }).click();
+  await expect(page.getByTestId('files-change')).toContainText('Rework ×1');
+  await page.getByRole('button', { name: 'Open UI builder in Agents' }).click();
   const uiCard = side.getByTestId('change-card');
   await expect(uiCard.getByTestId('change-history').getByRole('listitem')).toHaveText([
     new RegExp(`Round 1.*Review agent asked for rework.*${FINDING}`),
     new RegExp(`Round 1.*Lead sent it back for rework.*${REWORK_NOTE}`),
     /Round 2.*Review agent approved it · Lead merged it/,
   ]);
-  await ticketTab(page, /Files changed/).click();
-  await expect(overview.getByTestId('change-row').filter({ hasText: 'UI builder' })).toContainText(
-    'Rework ×1',
-  );
-  await ticketTab(page, /Agents/).click();
 
   // The auto-recorded approvals show their rule.
   // The agent tree's card; the live graph has a button with the same name on the block.
@@ -515,14 +515,15 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await ticketTab(page, /Checks/).click();
   await expect(page.getByTestId('branch-checks')).toContainText('Passed');
   await ticketTab(page, /Files changed/).click();
-  const branchFiles = page.getByTestId('branch-files');
-  await expect(branchFiles).toContainText('discount-api.ts');
-  await expect(branchFiles).toContainText('discount-field.ts');
-  await expect(branchFiles).toContainText('docs/discount.md');
-  await expect(branchFiles).toContainText('3 changes merged');
-  await branchFiles.getByTestId('branch-diff').locator('summary').click();
-  await expect(branchFiles.getByTestId('branch-diff')).toContainText(DIFF_MARKER);
-  await shootPart(page, 'ticket-branch', 'branch-files');
+  // C-D: all changes, the ticket branch, in the review UI.
+  const branchFiles = page.getByTestId('files-tab');
+  await expect(branchFiles.getByTestId('files-head')).toContainText('3 changes merged');
+  const reviewFiles = branchFiles.getByTestId('review-files');
+  await expect(reviewFiles).toContainText('discount-api.ts');
+  await expect(reviewFiles).toContainText('discount-field.ts');
+  await expect(reviewFiles).toContainText('docs/discount.md');
+  await expect(reviewFiles).toContainText(DIFF_MARKER);
+  await shootPart(page, 'ticket-branch', 'files-tab');
   await ticketTab(page, /Comments/).click();
   const branchCard = page.getByTestId('ticket-branch');
   await expect(branchCard.getByRole('button', { name: 'Merge into main' })).toBeVisible();
@@ -536,11 +537,15 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('review-counts')).toHaveText('3 merged');
   await ticketTab(page, /Files changed/).click();
-  await expect(overview.getByTestId('change-state')).toHaveText([
+  // Merged: the same Files changed, read only.
+  await expect(page.getByTestId('files-state')).toHaveText('Merged');
+  await picker.click();
+  await expect(changes.getByTestId('change-state')).toHaveText([
     'Merged into acp/SHOP-1',
     'Merged into acp/SHOP-1',
     'Merged into acp/SHOP-1',
   ]);
+  await page.keyboard.press('Escape');
   await shoot(page, 'done');
   expect((await run()).status).toBe('COMPLETED');
 
@@ -748,7 +753,7 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
     timeout: 45_000,
   });
   await ticketTab(page, /Files changed/).click();
-  await expect(page.getByTestId('branch-files')).toContainText('cart-total.ts');
+  await expect(page.getByTestId('review-files')).toContainText('cart-total.ts');
   await ticketTab(page, /Comments/).click();
   await expect(page.getByTestId('approvals')).toHaveCount(0);
   const branchCard = page.getByTestId('ticket-branch');

@@ -110,10 +110,9 @@ test('design: the ticket branch diff, side by side', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page, loopReviewScenario());
   await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
-  const branch = page.getByTestId('branch-files');
-  await branch.getByTestId('branch-diff').locator('summary').click();
-  const viewer = branch.getByTestId('diff-viewer');
-  await viewer.getByRole('button', { name: 'Side by side' }).click();
+  // C-D: all changes on Files changed, in the review UI.
+  const viewer = page.getByTestId('review-files');
+  await page.getByTestId('review-bar').getByRole('button', { name: 'Side by side' }).click();
   await expect(viewer).toHaveAttribute('data-view', 'split');
   await expect(viewer.locator('[data-syntax="highlighted"]').first()).toBeVisible();
   for (const scheme of SCHEMES) {
