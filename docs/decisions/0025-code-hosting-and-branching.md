@@ -29,6 +29,8 @@ strictly local: no network calls except the `claude` process the Agent SDK start
 - **Commands:** pushing uses `git push` (the owner's git credentials) and pull requests use
   `gh pr create`, `gh pr view` and `gh pr list`. Every command is an argument array (ADR-0013),
   never a shell, with `GIT_TERMINAL_PROMPT=0`, `GH_PROMPT_DISABLED=1` and a time limit.
+- **Hooks (2026-10-22, G-A):** pushes use `git push --no-verify`, so the repository's own pre-push
+  hooks never run from the app: as with managed runs, a repository cannot make the app run its code.
 - **Inputs:** branch names are validated (`GitBranchNameSchema`), and titles and bodies go through
   a temporary file or argument, never a shell string.
 - **GitLab later:** the same shape, with `glab`, behind one small `CodeHost` interface in the
