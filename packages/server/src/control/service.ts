@@ -144,6 +144,11 @@ import {
 import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
 import { TICKET_SUMMARY_SO_FAR, createRunSummaries, endTrigger } from './run-summary.js';
+import {
+  ATTACHMENTS_DIR,
+  createAttachmentFiles,
+  type AttachmentFiles,
+} from '../attachments/files.js';
 import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
@@ -318,6 +323,8 @@ export interface ControlServiceDeps {
   claudeDir?: string;
   /** Full auto's per-run temp folders and deny-read list; defaults to `<dataDir>/sandbox-tmp`. */
   fullAutoPaths?: FullAutoPaths;
+  /** ADR-0026 §4: the attachments' bytes; defaults to `<dataDir>/attachments`. */
+  attachmentFiles?: AttachmentFiles;
 }
 
 export interface ControlCounters {
@@ -332,6 +339,8 @@ export interface ControlCounters {
 export interface ControlService {
   readonly enabled: boolean;
   readonly csrfToken: string;
+  /** ADR-0026 §4: the attachments' bytes in the app's data folder (the board serves them). */
+  readonly attachmentFiles: AttachmentFiles;
   /** Orphan worktree cleanup and the sweep timer; call once before serving requests. */
   start(): Promise<void>;
   /** Aborts every running agent without recording anything; restart recovery handles them. */
@@ -478,6 +487,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     deps.reviewCheckouts ?? createReviewCheckouts({ dataDir: deps.dataDir, git: deps.git, logger });
   const skillsPlugins = deps.skillsPlugins ?? createSkillsPlugins({ dataDir: deps.dataDir });
   const agentProfiles = deps.agentProfiles ?? createAgentProfiles();
+  const attachmentFiles =
+    deps.attachmentFiles ?? createAttachmentFiles({ root: join(deps.dataDir, ATTACHMENTS_DIR) });
   const fullAutoPaths =
     deps.fullAutoPaths ??
     createFullAutoPaths({
@@ -2184,6 +2195,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   return {
     enabled: deps.enabled,
     csrfToken,
+    attachmentFiles,
 
     async start() {
       // No agent survives a restart: reviewers' checkouts and skills plugins are temporary

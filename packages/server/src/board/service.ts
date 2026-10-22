@@ -1,5 +1,8 @@
 import {
+  AttachmentNameSchema,
   HARNESS_TICKET_TEMPLATE,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_TICKET,
   TICKET_STAGES,
   WorkflowGraphInvalidError,
   approvalsOf,
@@ -9,6 +12,7 @@ import {
   ticketStage,
   tightenMode,
   validateWorkflowGraph,
+  type Attachment,
   type CheckRun,
   type CompileContext,
   type ProjectAgentSetup,
@@ -41,6 +45,7 @@ import {
   type TicketCardDto,
   type CodeHostStatusDto,
   type TicketBranchDto,
+  type AttachmentDto,
   type TicketActivityDto,
   type TicketCommentDto,
   type TicketDetailDto,
@@ -87,12 +92,43 @@ import {
 } from '../workspace/index.js';
 import type { CheckService } from './checks.js';
 import { buildTicketActivity } from './activity.js';
-import { attachmentDbError, toCommentDto, toCommentDtos } from './comments.js';
+import { attachmentDbError, toAttachmentDto, toCommentDto, toCommentDtos } from './comments.js';
+import { allowedMimeType, contentMatches, sha256Of } from '../attachments/content.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
 import { ensureSetup, legacyAllowlistOf } from './setup.js';
 import { effectiveWorkflow, projectRunDefaults } from '../workflow/graph.js';
+
+/** What `POST /api/tickets/:id/attachments` received (ADR-0026 §4). */
+export interface AttachmentUpload {
+  /** The request's `Content-Type`: the declared type, checked against the allowlist. */
+  contentType: string | undefined;
+  /** `X-Attachment-Name`, URI-encoded. */
+  name: string | undefined;
+  /** `?commentId=`: attach to this comment of the ticket. */
+  commentId: string | undefined;
+  bytes: Uint8Array;
+}
+
+/** The decoded `X-Attachment-Name`, or a 400. */
+function attachmentName(header: string | undefined): string {
+  let decoded: string | undefined;
+  try {
+    decoded = header === undefined ? undefined : decodeURIComponent(header);
+  } catch {
+    decoded = undefined;
+  }
+  const parsed = AttachmentNameSchema.safeParse(decoded);
+  if (!parsed.success) {
+    throw new HttpError(
+      400,
+      'invalid_attachment_name',
+      'X-Attachment-Name must be a plain file name (URI-encoded, no folders)',
+    );
+  }
+  return parsed.data;
+}
 
 /**
  * The project's workflow graph cannot run (ADR-0023 §3): the run is not created. The message is
@@ -141,6 +177,15 @@ export interface BoardService {
   addComment(ticketId: string, body: unknown): TicketCommentDto;
   /** ADR-0026 §1: the Conversation tab's timeline, built from records. */
   activity(ticketId: string): TicketActivityDto;
+  /**
+   * ADR-0026 §4: stores one attachment of the owner's on the ticket (or one of its comments) after
+   * checking its type, name, size and content.
+   */
+  uploadAttachment(ticketId: string, input: AttachmentUpload): Promise<AttachmentDto>;
+  listAttachments(ticketId: string): AttachmentDto[];
+  /** The stored row and the file to serve. */
+  attachmentContent(id: string): { attachment: Attachment; path: string };
+  deleteAttachment(id: string): Promise<void>;
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
@@ -1008,6 +1053,91 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         plans: plansWithDeciders(ticketId),
         comments: ws.comments.listForTicket(ticketId),
       });
+    },
+
+    async uploadAttachment(ticketId, input) {
+      const ticket = ticketOrThrow(ticketId);
+      const mimeType = allowedMimeType(input.contentType);
+      if (mimeType === null) {
+        throw new HttpError(
+          415,
+          'attachment_type_not_allowed',
+          'This file type cannot be attached (images, text, Markdown, CSV, JSON, PDF, zip or gzip)',
+        );
+      }
+      const name = attachmentName(input.name);
+      const bytes = input.bytes;
+      if (bytes.byteLength === 0) throw new HttpError(400, 'empty_attachment', 'The file is empty');
+      if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+        throw new HttpError(413, 'payload_too_large', 'Request body is too large');
+      }
+      if (!contentMatches(mimeType, bytes)) {
+        throw new HttpError(
+          415,
+          'attachment_content_mismatch',
+          `The file's content is not ${mimeType}`,
+        );
+      }
+      if (ws.attachments.countForTicket(ticketId) >= MAX_ATTACHMENTS_PER_TICKET) {
+        throw new HttpError(
+          409,
+          'attachment_conflict',
+          `A ticket has at most ${MAX_ATTACHMENTS_PER_TICKET} attachments`,
+        );
+      }
+      const commentId = input.commentId ?? null;
+      if (commentId !== null && ws.comments.getById(commentId)?.ticketId !== ticketId) {
+        throw new HttpError(404, 'comment_not_found', 'No such comment on this ticket');
+      }
+      const sha256 = sha256Of(bytes);
+      const files = deps.control.attachmentFiles;
+      await files.put(sha256, bytes);
+      let stored: Attachment;
+      try {
+        stored = ws.attachments.insert({
+          ticketId,
+          commentId,
+          name,
+          mimeType,
+          sizeBytes: bytes.byteLength,
+          sha256,
+        });
+      } catch (error) {
+        if (ws.attachments.countBySha256(sha256) === 0) await files.remove(sha256);
+        throw attachmentDbError(error) ?? error;
+      }
+      // Sizes and types only: never the name or the content.
+      logger.log('info', 'attachment stored', { ticketId, sizeBytes: stored.sizeBytes });
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId });
+      return toAttachmentDto(stored);
+    },
+
+    listAttachments(ticketId) {
+      ticketOrThrow(ticketId);
+      return ws.attachments.listForTicket(ticketId).map(toAttachmentDto);
+    },
+
+    attachmentContent(id) {
+      const attachment = ws.attachments.getById(id);
+      if (attachment === undefined) {
+        throw new HttpError(404, 'attachment_not_found', `Attachment ${id} not found`);
+      }
+      return { attachment, path: deps.control.attachmentFiles.pathOf(attachment.sha256) };
+    },
+
+    async deleteAttachment(id) {
+      const removed = ws.attachments.delete(id);
+      if (removed === undefined) {
+        throw new HttpError(404, 'attachment_not_found', `Attachment ${id} not found`);
+      }
+      // Content-addressed: the file goes once no row points at it.
+      if (ws.attachments.countBySha256(removed.sha256) === 0) {
+        await deps.control.attachmentFiles.remove(removed.sha256);
+      }
+      const ticket = ws.tickets.getById(removed.ticketId);
+      if (ticket !== undefined) {
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId: ticket.id });
+      }
     },
 
     decidePlan(ticketId, planId, body) {
