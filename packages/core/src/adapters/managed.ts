@@ -19,6 +19,12 @@ export interface ManagedAgentSpec {
   cwd: string;
   /** First user message. Further messages go through `send`. */
   prompt: string;
+  /**
+   * Absolute folders outside `cwd` that the agent may READ without asking the owner (ADR-0026 §4:
+   * the read-only copies of the owner's attachments that a lead or planner gets in the run's data
+   * folder). Reads only: it never allows an edit or a command, and never widens a role's tools.
+   */
+  readOnlyDirs?: readonly string[];
   /** Resolved model id, or null for the provider default. */
   model: string | null;
   /**
