@@ -296,3 +296,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   install and login, and on the owner's click creates a repository on GitHub or connects an
   existing one as `origin`, optionally pushing the current branch. Contract (`CreateRepository`,
   `ConnectRepository`, `parseGitHubRepository`) and ADR-0025 §7 done by the coordinator.
+- 2026-10-23 **G-E merged** (`fb9439e`): the Settings GitHub card guides installing `gh` and
+  `gh auth login` (the owner's terminal), then creates a repository (`gh repo create`, run outside
+  the checkout; the account name read first; `origin` rebuilt from the parsed names; optional push
+  of the current branch) or connects an existing one as `origin`. Every refusal runs before GitHub
+  is touched; an existing remote is never changed. Coordinator check: 5,289 tests; e2e 105/105.
+  Proposed follow-ups: `CodeHostStatusDto.hasOrigin` (a non-GitHub origin) and `currentBranch`
+  (to say "Push main now"). Waiting for the owner's UI test.
