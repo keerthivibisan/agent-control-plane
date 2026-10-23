@@ -32,4 +32,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0024](0024-session-names-and-run-summaries.md)          | Session names and run summary comments                     | accepted |
 | [0025](0025-code-hosting-and-branching.md)               | Code hosting (GitHub) and branching strategies             | accepted |
 | [0026](0026-comments-conversation-and-attachments.md)    | Comments, Conversation and attachments                     | accepted |
-| [0027](0027-harness-setup-and-check-blocks.md)           | Harness setup steps and check blocks in the workflow graph | proposed |
+| [0027](0027-harness-setup-and-check-blocks.md)           | Harness setup steps and check blocks in the workflow graph | accepted |

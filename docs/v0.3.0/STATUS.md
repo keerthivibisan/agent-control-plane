@@ -240,3 +240,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   had none) and may read there without asking (`ManagedAgentSpec.readOnlyDirs`, reads only).
   ADR-0026 §4 amended. Check: all packages ✓ (the server suite re-run after the machine slept
   mid-check: 647/647); e2e 98/99, the `review-loop-live` timing flake then 3/3 three times.
+- 2026-10-23 **Part 5 planned and approved: the harness in the workflow** (H series, ADR-0027
+  accepted). The owner asked how the harness fits the graph and for a plan with a setup step, then
+  "i think we can have this as part of 0.3.0". Setup steps, labels and outputs in the harness file,
+  an owner network switch, configurable Checks blocks (on each change, before the lead's merge, on
+  the branch) with failure routes; migration 0010. WPs H-0 (coordinator), H-A core, H-B server and
+  db, H-C engine, H-D web, H-V verification. H-0 started.

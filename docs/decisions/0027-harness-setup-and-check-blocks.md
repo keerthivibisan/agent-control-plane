@@ -1,13 +1,13 @@
 # ADR-0027: Harness setup steps and check blocks in the workflow graph
 
-- **Status:** proposed (owner request 2026-10-23: "we are not able to introduce harness in
-  orchestration graph"; "write the plan with setup step included")
+- **Status:** accepted (owner, 2026-10-23: "we are not able to introduce harness in orchestration
+  graph"; "write the plan with setup step included"; "i think we can have this as part of 0.3.0")
 - **Date:** 2026-10-23
 - **Deciders:** project owner (decisions); coordinator (draft)
 - **Amends:** ADR-0017 (the harness manifest, the commands the app may run), ADR-0021 §3 (when
   checks run and who decides after a failure), ADR-0023 (the Checks gate becomes a configurable
   block)
-- **Plan:** [docs/v0.4.0/README.md](../v0.4.0/README.md)
+- **Plan:** [docs/v0.3.0/README.md](../v0.3.0/README.md), part 5 (H series)
 
 ## Context
 
