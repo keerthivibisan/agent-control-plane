@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, realpath, rm, rmdir, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { GitBranchNameSchema } from '@acp/core';
+import { GitBranchNameSchema, HARNESS_MANIFEST_PATH } from '@acp/core';
 import { z } from 'zod';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
 import { changedFiles, parseNumstat, type ChangedFile } from './diff.js';
@@ -9,6 +9,7 @@ import { GitCommandError, WorkspaceError } from './errors.js';
 import { AGENT_ATTACHMENTS_DIR } from '../attachments/agent-copies.js';
 import { createGitRunner, type GitRunner } from './git.js';
 import { assertSafeId, branchFor, isSafeId } from './ids.js';
+import { outputPathspecs, readSmallFile, setupOutputsOf } from './setup-outputs.js';
 import {
   ALWAYS_PROTECTED,
   legacyTicketBranchPlan,
@@ -449,13 +450,51 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     }
   }
 
+  /** Setup outputs declared by the harness file at a worktree's base commit, by commit. */
+  const baseOutputs = new Map<string, readonly string[]>();
+
+  /**
+   * ADR-0027 §3: the setup steps' `outputs` (relative to the project folder) as paths from the
+   * top of the repository: those the harness file at the worktree's base commit declares, and
+   * those of the owner's checkout (whose setup steps are the ones that ran). Never staged.
+   */
+  async function setupOutputs(w: Workspace): Promise<string[]> {
+    const subdir = relative(w.path, w.cwd).split(sep).join('/');
+    const prefix = subdir === '' ? '' : `${subdir}/`;
+    const key = `${w.repoRoot}\0${w.baseCommit}\0${prefix}`;
+    let fromBase = baseOutputs.get(key);
+    if (fromBase === undefined) {
+      fromBase = setupOutputsOf(
+        await probe(['show', `${w.baseCommit}:${prefix}${HARNESS_MANIFEST_PATH}`], w.path),
+      );
+      baseOutputs.set(key, fromBase);
+    }
+    const owner = setupOutputsOf(
+      await readSmallFile(join(w.repoRoot, ...subdir.split('/'), HARNESS_MANIFEST_PATH)),
+    );
+    return [...new Set([...fromBase, ...owner])].map((o) => `${prefix}${o}`);
+  }
+
   /**
    * Stages everything in the agent's worktree, so new files show up in the review too, except the
-   * owner's attachment copies (ADR-0026 §4). Their folder's own `.gitignore` is not enough: the
-   * agent may write in its worktree, so it could delete that file or stage a copy itself.
+   * owner's attachment copies (ADR-0026 §4) and the setup steps' outputs (ADR-0027 §3). Their own
+   * `.gitignore` is not enough: the agent may write in its worktree, so it could delete that file
+   * or stage a copy itself. Outputs are unstaged back to HEAD (never removed from the index), so
+   * a folder the repository already tracks is left as it was.
    */
   async function stageAll(w: Workspace): Promise<void> {
-    await run(['add', '--all', '--', ':/', `:(top,exclude)${AGENT_ATTACHMENTS_DIR}`], w.path);
+    const outputs = await setupOutputs(w);
+    await run(
+      [
+        'add',
+        '--all',
+        '--',
+        ':/',
+        `:(top,exclude)${AGENT_ATTACHMENTS_DIR}`,
+        ...outputPathspecs('', outputs, 'top,exclude'),
+      ],
+      w.path,
+    );
     await run(
       [
         'rm',
@@ -468,11 +507,15 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       ],
       w.path,
     );
+    if (outputs.length > 0) {
+      await run(['reset', '--quiet', '--', ...outputPathspecs('', outputs, 'top')], w.path);
+    }
   }
 
   /**
-   * Refuses a branch where any commit since the agent's start touched the attachment copies (the
-   * agent committed them itself): removing them later would still leave them in its history.
+   * Refuses a branch where any commit since the agent's start touched the attachment copies or a
+   * setup output (the agent committed them itself): removing them later would still leave them in
+   * its history.
    */
   async function refuseCommittedCopies(w: Workspace, commit: string): Promise<void> {
     const listed = await out(
@@ -483,6 +526,18 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       throw new WorkspaceError(
         'invalid-workspace',
         `The agent's branch contains ${AGENT_ATTACHMENTS_DIR}; attachments are never committed`,
+      );
+    }
+    const outputs = await setupOutputs(w);
+    if (outputs.length === 0) return;
+    const touched = await out(
+      ['rev-list', `${w.baseCommit}..${commit}`, '--', ...outputPathspecs('', outputs, 'top')],
+      w.path,
+    );
+    if (touched.trim() !== '') {
+      throw new WorkspaceError(
+        'invalid-workspace',
+        "The agent's branch contains a setup step's output folder; setup outputs are never committed",
       );
     }
   }
@@ -895,8 +950,18 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       return serial(worktreeKey(w.path), async () => {
         await requireWorktree(w);
         // Untracked files too (`--untracked-files=all`): they would be part of a later seal.
+        // ADR-0027 §3: setup outputs are never sealed, so they do not count as pending either.
+        const outputs = await setupOutputs(w);
         const pending = await out(
-          ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+          [
+            'status',
+            '--porcelain=v1',
+            '-z',
+            '--untracked-files=all',
+            ...(outputs.length === 0
+              ? []
+              : ['--', ':/', ...outputPathspecs('', outputs, 'top,exclude')]),
+          ],
           w.path,
         );
         if (pending !== '') return null;

@@ -113,6 +113,8 @@ export function harnessStatusOf(raw: unknown, checkedAt: string): HarnessReadRes
         ? []
         : ['No check is marked as required, so a failing check never blocks a merge.'],
       checks,
+      // ADR-0027 §1: the setup steps as declared (empty when the file has none).
+      setup: (manifest.setup ?? []).map((step) => ({ ...step })),
     },
     manifest,
   };
@@ -129,6 +131,10 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   context: 'context file list',
   notes: 'notes',
   checks: 'check list',
+  setup: 'setup step list',
+  network: '"network" flag',
+  outputs: 'output folder list',
+  labels: 'label list',
   version: 'version',
 };
 
@@ -145,6 +151,14 @@ export function describeIssue(issue: Issue, raw: unknown): string {
   if (top === 'version') return 'The harness file must say "version": 1.';
   if (top === 'checks' && typeof index === 'number') {
     const subject = `Check ${checkLabel(raw, index)}`;
+    if (field === undefined) return `${subject} must be an object.`;
+    const label = FIELD_LABELS[String(field)] ?? String(field);
+    return `${subject}: the ${label} ${detail(issue, valueAt(raw, path))}.`;
+  }
+  if (top === 'setup' && typeof index === 'number') {
+    // ADR-0027 §1: setup steps read like checks ("Setup step 'install': the command …").
+    const id = valueAt(raw, ['setup', index, 'id']);
+    const subject = `Setup step ${typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(id) ? `'${id}'` : `number ${index + 1}`}`;
     if (field === undefined) return `${subject} must be an object.`;
     const label = FIELD_LABELS[String(field)] ?? String(field);
     return `${subject}: the ${label} ${detail(issue, valueAt(raw, path))}.`;
