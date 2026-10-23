@@ -283,15 +283,24 @@ function fromLeadServer(options: CanUseToolOptions): boolean {
   return server === undefined || (server.source === 'sdk' && server.name === LEAD_MCP_SERVER_NAME);
 }
 
+/**
+ * A read-only tool whose target is inside the agent's folder, or inside one of the folders it may
+ * also read (`spec.readOnlyDirs`, ADR-0026 §4: its attachment copies).
+ */
 function readsOnlyInside(
   toolName: string,
   input: Record<string, unknown>,
-  cwd: string,
+  spec: ManagedAgentSpec,
   options: CanUseToolOptions,
 ): boolean {
   if (!READ_ONLY_TOOLS.has(toolName) || options.blockedPath !== undefined) return false;
   const target = targetPath(input);
-  return target === null || isInside(path.resolve(cwd, target), cwd);
+  if (target === null) return true;
+  const resolved = path.resolve(spec.cwd, target);
+  return (
+    isInside(resolved, spec.cwd) ||
+    (spec.readOnlyDirs ?? []).some((dir) => path.isAbsolute(dir) && isInside(resolved, dir))
+  );
 }
 
 /**
@@ -325,6 +334,7 @@ function outsideSetMessage(spec: ManagedAgentSpec, toolName: string): string {
  * - a `Skill` call is allowed, without asking, only for one of the run's plugin skills
  *   (`isRunSkillCall`); any other skill name or input shape is denied;
  * - a read-only role (planner, reviewer) is denied anything else without asking (ADR-0019);
+ * - a read in one of `spec.readOnlyDirs` (the lead's or planner's attachment copies) is allowed;
  * - everything else (an edit or `Bash` of a worker or tester, a lead's read outside its folder)
  *   asks the owner through `callbacks.requestPermission`, with a redacted summary.
  * A rejected or failed request, or an aborted agent, is a deny: the callback never throws. Tool
@@ -371,7 +381,7 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
           : { behavior: 'deny', message: DENY_SKILL, toolUseID };
       }
     }
-    if (readsOnlyInside(toolName, input, spec.cwd, options)) {
+    if (readsOnlyInside(toolName, input, spec, options)) {
       return { behavior: 'allow', toolUseID };
     }
     if (isReadOnlyRole(spec.kind)) return { behavior: 'deny', message: DENY_READ_ONLY, toolUseID };
@@ -403,7 +413,7 @@ function followUpGate(spec: ManagedAgentSpec): CanUseTool {
   const allowed: ReadonlySet<string> = new Set(followUpToolNames(spec));
   return (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
-    if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec.cwd, options)) {
+    if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec, options)) {
       return Promise.resolve({ behavior: 'allow', toolUseID });
     }
     return Promise.resolve({ behavior: 'deny', message: DENY_FOLLOW_UP, toolUseID });

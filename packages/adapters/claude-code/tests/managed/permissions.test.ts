@@ -338,3 +338,65 @@ describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 
     });
   });
 });
+
+describe('readOnlyDirs: reads of the attachment copies (ADR-0026 §4)', () => {
+  const COPIES = '/data/runs/r1/attachments/agent-lead';
+
+  function gate(kind: 'lead' | 'planner' | 'reviewer', dirs?: readonly string[]) {
+    const requests: PermissionRequest[] = [];
+    const canUseTool = createCanUseTool(
+      {
+        agentRunId: `agent-${kind}`,
+        kind,
+        cwd: CWD,
+        prompt: 'p',
+        model: null,
+        ...(dirs === undefined ? {} : { readOnlyDirs: dirs }),
+      },
+      {
+        requestPermission(r) {
+          requests.push(r);
+          return Promise.resolve({ allow: false, message: 'no' });
+        },
+      },
+    );
+    return { canUseTool, requests };
+  }
+
+  it('lets the lead and the planner read inside them without asking', async () => {
+    for (const kind of ['lead', 'planner'] as const) {
+      const { canUseTool, requests } = gate(kind, [COPIES]);
+      await expect(
+        canUseTool('Read', { file_path: `${COPIES}/notes.md` }, opts()),
+      ).resolves.toMatchObject({ behavior: 'allow' });
+      await expect(
+        canUseTool('Grep', { pattern: 'x', path: COPIES }, opts()),
+      ).resolves.toMatchObject({ behavior: 'allow' });
+      expect(requests).toEqual([]);
+    }
+  });
+
+  it('allows nothing beside them: a sibling, a way out, a blocked path, or another tool', async () => {
+    const { canUseTool, requests } = gate('lead', [COPIES]);
+    await canUseTool('Read', { file_path: '/data/runs/r1/attachments/agent-other/x' }, opts());
+    await canUseTool('Read', { file_path: `${COPIES}/../../../../etc/passwd` }, opts());
+    await canUseTool('Read', { file_path: `${COPIES}/a.md` }, opts({ blockedPath: COPIES }));
+    expect(requests).toHaveLength(3);
+    // The lead has no edit tool at all: an edit there is denied without asking.
+    await expect(
+      canUseTool('Write', { file_path: `${COPIES}/a.md`, content: 'x' }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    expect(requests).toHaveLength(3);
+  });
+
+  it('ignores a relative folder, and changes nothing without the field', async () => {
+    const relative = gate('planner', ['attachments']);
+    await expect(
+      relative.canUseTool('Read', { file_path: '/elsewhere/attachments/a.md' }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    const none = gate('reviewer');
+    await expect(
+      none.canUseTool('Read', { file_path: `${COPIES}/notes.md` }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+  });
+});
