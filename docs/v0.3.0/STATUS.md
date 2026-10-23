@@ -318,3 +318,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   demo 12, db 235, orchestrator 2,322, web 1,163, server 731 (re-run with 2 workers after timeouts
   under memory pressure on this 8 GB machine) ✓; build ✓; e2e 107/107. Follow-ups: the Create
   action in the "Start with options" dialog, and the branch picker in New ticket.
+- 2026-10-23 **G-G and T-A started** (one agent). Owner: "git is working as expected awesome, we
+  need branch delete option like merge and delete" (chose a Merge pull request button with merge,
+  squash or rebase and Delete branch, plus a Delete branch button), and a ticket badge with the time
+  taken and total tokens at the right of the header line ("leave cost for now"). Contracts and
+  ADR-0025 §9 by the coordinator.
