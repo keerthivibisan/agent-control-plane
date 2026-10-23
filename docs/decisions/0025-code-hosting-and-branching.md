@@ -113,6 +113,20 @@ Diffs are still read from git when shown and never stored (ADR-0009).
   limit and hooks disabled, as in §1. `gh`'s output is not shown or kept beyond a plain error
   sentence.
 
+### 8. Creating branches from the app (amended 2026-10-23, owner: "can we also give option to create these branches ... We need to create any branch")
+
+- **Listing:** the app reads the project's local branches with `git for-each-ref refs/heads`, and
+  which exist on `origin` from `refs/remotes/origin` (no fetch).
+- **Creating, on the owner's click only:** `git branch --no-track <name> refs/heads/<from>` in the
+  project's checkout. The checkout is never switched and no file changes; it adds one branch
+  reference, as the ticket branches already do. Names are checked with `GitBranchNameSchema` and
+  `git check-ref-format --branch`; an existing branch is never moved (409 `branch_exists`).
+- **Pushing it, on the owner's click only:** `git push --no-verify origin
+refs/heads/<name>:refs/heads/<name>`, as for ticket branches (§1).
+- **Where:** in the project's Settings (a Branches list with New branch), in a ticket's branch
+  settings (pick a target or create one), and on the "target branch does not exist" refusal
+  ("Create <name> from <base>", then Start again).
+
 ## Consequences
 
 - **Network:** the app makes network calls for the first time beyond `claude`, only on the owner's
