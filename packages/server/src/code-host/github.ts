@@ -1,5 +1,5 @@
 import { GitBranchNameSchema } from '@acp/core';
-import type { CodeHostProvider, PullRequestState } from '@acp/core/api';
+import { GitHubOwnerSchema, type CodeHostProvider, type PullRequestState } from '@acp/core/api';
 import { z } from 'zod';
 import { CodeHostError, MESSAGES } from './errors.js';
 import { repoSlug, type RemoteRepo } from './remote.js';
@@ -49,12 +49,20 @@ export interface CodeHostCli {
   /** Creates the pull request; returns its number. */
   create(cwd: string, remote: RemoteRepo, input: CreatePullRequestInput): Promise<number>;
   view(cwd: string, remote: RemoteRepo, number: number): Promise<PullRequestInfo>;
+  /** The logged-in account's name (`gh api user`), checked as a GitHub owner (ADR-0025 §7). */
+  login(cwd: string): Promise<string>;
+  /**
+   * `gh repo create <target> --private|--public` (ADR-0025 §7): never `--source`, `--push` or
+   * `--clone`, so nothing local is touched. Its output is not read; the exit code decides.
+   */
+  createRepository(cwd: string, target: string, visibility: 'private' | 'public'): Promise<void>;
 }
 
 /** Time limits per command (ms): short checks, longer for calls that write on the host. */
 export const GH_TIMEOUTS = {
   version: 10_000,
   auth: 15_000,
+  user: 15_000,
   repo: 20_000,
   list: 30_000,
   create: 60_000,
@@ -241,6 +249,38 @@ export function createGitHubCli(run: CliRunner, command = 'gh'): CodeHostCli {
         throw new CodeHostError('gh-failed', 'The GitHub CLI answered for another pull request');
       }
       return pr;
+    },
+
+    async login(cwd) {
+      const r = await run(command, ['api', '--hostname=github.com', 'user', '--jq=.login'], {
+        cwd,
+        timeoutMs: GH_TIMEOUTS.user,
+        maxOutputBytes: 4 * 1024,
+      });
+      if (r.exitCode !== 0) throw failed(r, 'read your GitHub account name');
+      const login = GitHubOwnerSchema.safeParse(r.stdout.trim());
+      if (!login.success) {
+        throw new CodeHostError('gh-failed', 'The GitHub CLI gave an unexpected account name');
+      }
+      return login.data;
+    },
+
+    async createRepository(cwd, target, visibility) {
+      const r = await run(command, ['repo', 'create', target, `--${visibility}`], {
+        cwd,
+        timeoutMs: GH_TIMEOUTS.create,
+        maxOutputBytes: 64 * 1024,
+      });
+      if (r.exitCode === 0) return;
+      if (r.notFound) throw new CodeHostError('code_host_not_ready', MESSAGES.createNotInstalled);
+      if (r.timedOut) {
+        throw new CodeHostError(
+          'timeout',
+          'GitHub did not answer in time, so the repository may or may not exist now. Look on GitHub: if it is there, connect it as an existing repository.',
+        );
+      }
+      // gh's own words (stdout or stderr) are never shown: one plain sentence instead.
+      throw new CodeHostError('repository_create_failed', MESSAGES.createFailed);
     },
   };
 }

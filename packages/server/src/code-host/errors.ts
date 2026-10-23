@@ -1,8 +1,9 @@
 import { HttpError } from '../errors.js';
 
 /**
- * Why pushing or a pull request did not happen (ADR-0025). Plain codes and messages written by
- * the app; never the CLI's or git's own output, which may quote a token, a user or a path.
+ * Why pushing, a pull request or connecting a project did not happen (ADR-0025). Plain codes and
+ * messages written by the app; never the CLI's or git's own output, which may quote a token, a
+ * user or a path.
  */
 export type CodeHostErrorCode =
   /** The host's CLI (`gh`) is not on the PATH. */
@@ -18,7 +19,22 @@ export type CodeHostErrorCode =
   /** The CLI or git did not finish within its time limit. */
   | 'timeout'
   /** The CLI failed otherwise, or answered with something the app does not recognise. */
-  | 'gh-failed';
+  | 'gh-failed'
+  // Connecting a project from Settings (ADR-0025 §7, G-E): snake_case, as the plan names them.
+  /** The project already has a remote named `origin`; the app never changes or removes one. */
+  | 'origin_exists'
+  /** Creating needs `gh` installed and logged in (by exit code). */
+  | 'code_host_not_ready'
+  /** What the owner typed is not a GitHub repository (`parseGitHubRepository`). */
+  | 'invalid_repository'
+  /** `gh repo create` exited non-zero: the name is taken or not allowed, or GitHub said no. */
+  | 'repository_create_failed'
+  /** `git remote add origin` failed (after the repository was created, when creating). */
+  | 'remote_add_failed'
+  /** "Push now" with the project folder not on a branch. */
+  | 'detached_head'
+  /** The project folder is not a git repository, so it cannot have an `origin`. */
+  | 'not_a_git_repository';
 
 export class CodeHostError extends Error {
   override readonly name = 'CodeHostError';
@@ -38,11 +54,18 @@ const STATUS: Readonly<Record<CodeHostErrorCode, number>> = {
   'pr-exists-elsewhere': 409,
   timeout: 504,
   'gh-failed': 502,
+  origin_exists: 409,
+  code_host_not_ready: 409,
+  invalid_repository: 422,
+  repository_create_failed: 422,
+  remote_add_failed: 500,
+  detached_head: 409,
+  not_a_git_repository: 409,
 };
 
 /**
- * The `ErrorDto`. Unlike other refusals (snake_case, control/errors.ts), the code is exactly one
- * of the seven names above, as the web (G-B) and the plan expect them.
+ * The `ErrorDto`. Unlike other refusals (snake_case, control/errors.ts), the pull request codes
+ * keep the seven kebab-case names the web (G-B) expects; the G-E codes are snake_case.
  */
 export function codeHostHttpError(error: CodeHostError): HttpError {
   return new HttpError(STATUS[error.code], error.code, error.message);
@@ -52,4 +75,19 @@ export const MESSAGES = {
   noRemote: 'The project has no GitHub remote named origin, so it cannot open pull requests',
   notInstalled: 'Install the GitHub CLI (gh) to push and open pull requests from the app',
   notLoggedIn: 'Log in to GitHub in a terminal with gh auth login, then try again',
+  originExists:
+    'This project already has a remote named origin. The app never changes or removes a remote.',
+  createNotInstalled: 'Install the GitHub CLI (gh), then check again to create a repository.',
+  createNotLoggedIn: 'Run gh auth login in a terminal, then check again to create a repository.',
+  invalidRepository:
+    'That is not a GitHub repository. Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+  createFailed:
+    'GitHub refused to create the repository: it may already exist, or the name is not allowed.',
+  detachedHead:
+    'The project folder is not on a branch, so there is nothing to push. Switch to a branch, or create the repository without pushing.',
+  oddBranch:
+    'The project folder’s branch has a name the app does not push. Push it yourself, or create the repository without pushing.',
+  notGitRepository: 'The project folder is not a git repository, so it cannot have an origin.',
+  remoteAddFailed:
+    'The app could not set the repository as origin. Check that you can write to the project folder, then try again.',
 } as const;

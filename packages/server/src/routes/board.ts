@@ -87,6 +87,17 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.get('/projects/:id/code-host', async (req, res) => {
     res.json(out(CodeHostStatusDtoSchema, await board.codeHostStatus(param(req.params['id']))));
   });
+  // ADR-0025 §7: connecting the project from Settings, only when it has no `origin` yet. Create
+  // runs `gh repo create` and `git remote add origin` (and the push, if asked); connect runs only
+  // `git remote add origin`. Both answer the fresh status.
+  router.post('/projects/:id/code-host/repository', csrf, json, async (req, res) => {
+    const dto = await board.createCodeHostRepository(param(req.params['id']), req.body);
+    res.json(out(CodeHostStatusDtoSchema, dto));
+  });
+  router.post('/projects/:id/code-host/remote', csrf, json, async (req, res) => {
+    const dto = await board.connectCodeHostRepository(param(req.params['id']), req.body);
+    res.json(out(CodeHostStatusDtoSchema, dto));
+  });
   router.get('/projects/:id/context-candidates', async (req, res) => {
     const list = await board.contextCandidates(param(req.params['id']));
     res.json(out(CandidateListSchema, list));

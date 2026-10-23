@@ -2,7 +2,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitBranchNameSchema } from '@acp/core';
-import type { CodeHostStatusDto } from '@acp/core/api';
+import {
+  gitHubRemoteUrl,
+  parseGitHubRepository,
+  type CodeHostStatusDto,
+  type CreateRepositoryRequest,
+  type GitHubRepository,
+} from '@acp/core/api';
 import { silentLogger, type Logger } from '../logger.js';
 import { GitCommandError, SAFE_GIT_CONFIG, type GitRunner } from '../workspace/index.js';
 import { CodeHostError, MESSAGES } from './errors.js';
@@ -22,6 +28,12 @@ import { createCliRunner, type CliRunner } from './runner.js';
  * - `openPullRequest`: links the open pull request for the branch when it targets the same base,
  *   refuses one that targets another base, else pushes and runs `gh pr create`.
  * - `view`: `gh pr view`.
+ * - `createRepository` (ADR-0025 §7): `gh repo create`, then `git remote add origin <address>`
+ *   and, if asked, the push of the current branch. Only when there is no `origin` yet.
+ * - `connectRepository` (ADR-0025 §7): `git remote add origin <address>`; nothing is pushed.
+ *
+ * The `origin` address is always rebuilt from a checked owner and name (`gitHubRemoteUrl`), never
+ * the text the owner typed, and an existing remote is never changed or removed.
  */
 
 export interface OpenPullRequestInput {
@@ -40,6 +52,10 @@ export interface CodeHostService {
     input: OpenPullRequestInput,
   ): Promise<{ pullRequest: PullRequestInfo; created: boolean }>;
   view(projectRoot: string, number: number): Promise<PullRequestInfo>;
+  /** Creates the repository on GitHub and sets it as `origin`; answers the fresh status. */
+  createRepository(projectRoot: string, input: CreateRepositoryRequest): Promise<CodeHostStatusDto>;
+  /** Sets an existing GitHub repository (as the owner typed it) as `origin`; nothing is pushed. */
+  connectRepository(projectRoot: string, repository: string): Promise<CodeHostStatusDto>;
 }
 
 export interface CodeHostServiceDeps {
@@ -50,7 +66,10 @@ export interface CodeHostServiceDeps {
   /** The CLI command (`gh`); tests may pass a fake's absolute path. */
   ghCommand?: string;
   logger?: Logger;
-  /** Where the pull request body's temporary file goes; defaults to the OS temp folder. */
+  /**
+   * Where the pull request body's temporary file goes, and the folder `gh repo create` and
+   * `gh api user` run in (so they never see the project's checkout); the OS temp folder.
+   */
   tmpDir?: string;
 }
 
@@ -140,32 +159,167 @@ export function createCodeHostService(deps: CodeHostServiceDeps): CodeHostServic
     }
   }
 
+  /** The project's remote names (`git remote`); refuses a folder that is not a repository. */
+  async function remoteNames(projectRoot: string): Promise<string[]> {
+    try {
+      const { stdout } = await deps.git([...SAFE_GIT_CONFIG, 'remote'], { cwd: projectRoot });
+      return stdout
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '');
+    } catch (error) {
+      if (error instanceof GitCommandError) {
+        throw new CodeHostError('not_a_git_repository', MESSAGES.notGitRepository);
+      }
+      throw error;
+    }
+  }
+
+  async function requireNoOrigin(projectRoot: string): Promise<void> {
+    if ((await remoteNames(projectRoot)).includes('origin')) {
+      throw new CodeHostError('origin_exists', MESSAGES.originExists);
+    }
+  }
+
+  /**
+   * The branch to push when the owner asked for it: null when HEAD has no commit yet (nothing to
+   * push). A detached HEAD is refused before anything is created.
+   */
+  async function branchToPush(projectRoot: string): Promise<string | null> {
+    let name: string;
+    try {
+      const { stdout } = await deps.git(
+        [...SAFE_GIT_CONFIG, 'symbolic-ref', '--quiet', '--short', 'HEAD'],
+        { cwd: projectRoot },
+      );
+      name = stdout.trim();
+    } catch (error) {
+      if (error instanceof GitCommandError) {
+        throw new CodeHostError('detached_head', MESSAGES.detachedHead);
+      }
+      throw error;
+    }
+    if (!GitBranchNameSchema.safeParse(name).success) {
+      throw new CodeHostError('detached_head', MESSAGES.oddBranch);
+    }
+    try {
+      await deps.git([...SAFE_GIT_CONFIG, 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], {
+        cwd: projectRoot,
+      });
+    } catch (error) {
+      if (error instanceof GitCommandError) return null;
+      throw error;
+    }
+    return name;
+  }
+
+  /** `git remote add origin <address>`; a failure re-checks for an `origin` added meanwhile. */
+  async function addOrigin(
+    projectRoot: string,
+    repo: GitHubRepository,
+    failedMessage: string,
+  ): Promise<void> {
+    try {
+      await deps.git([...SAFE_GIT_CONFIG, 'remote', 'add', 'origin', gitHubRemoteUrl(repo)], {
+        cwd: projectRoot,
+      });
+    } catch (error) {
+      if (!(error instanceof GitCommandError)) throw error;
+      // The exit code only: git's stderr can quote paths.
+      logger.log('info', 'code_host.remote_add_failed', { exitCode: error.exitCode });
+      const raced = await remoteNames(projectRoot).then(
+        (names) => names.includes('origin'),
+        () => false,
+      );
+      if (raced) throw new CodeHostError('origin_exists', MESSAGES.originExists);
+      throw new CodeHostError('remote_add_failed', failedMessage);
+    }
+  }
+
+  async function status(projectRoot: string): Promise<CodeHostStatusDto> {
+    const remote = await remoteOf(projectRoot);
+    const provider = remote === null ? null : providerOf(remote);
+    const installed = await github.installed(projectRoot);
+    const loggedIn = !installed ? null : await github.loggedIn(projectRoot);
+    const defaultBranch =
+      provider === 'github' && remote !== null && loggedIn === true
+        ? await github.defaultBranch(projectRoot, remote)
+        : null;
+    const problem =
+      provider === null
+        ? MESSAGES.noRemote
+        : !installed
+          ? MESSAGES.notInstalled
+          : loggedIn !== true
+            ? MESSAGES.notLoggedIn
+            : null;
+    return {
+      provider,
+      // Only `owner/name` of a supported host: another host's path is not shown either.
+      repo: provider === null || remote === null ? null : repoSlug(remote),
+      defaultBranch,
+      cli: { name: github.cliName, installed, loggedIn },
+      problem,
+    };
+  }
+
   return {
-    async status(projectRoot) {
-      const remote = await remoteOf(projectRoot);
-      const provider = remote === null ? null : providerOf(remote);
-      const installed = await github.installed(projectRoot);
-      const loggedIn = !installed ? null : await github.loggedIn(projectRoot);
-      const defaultBranch =
-        provider === 'github' && remote !== null && loggedIn === true
-          ? await github.defaultBranch(projectRoot, remote)
-          : null;
-      const problem =
-        provider === null
-          ? MESSAGES.noRemote
-          : !installed
-            ? MESSAGES.notInstalled
-            : loggedIn !== true
-              ? MESSAGES.notLoggedIn
-              : null;
-      return {
-        provider,
-        // Only `owner/name` of a supported host: another host's path is not shown either.
-        repo: provider === null || remote === null ? null : repoSlug(remote),
-        defaultBranch,
-        cli: { name: github.cliName, installed, loggedIn },
-        problem,
-      };
+    status,
+
+    async createRepository(projectRoot, input) {
+      await requireNoOrigin(projectRoot);
+      // gh runs outside the checkout: `gh repo create` must never see the project's repository.
+      const neutral = deps.tmpDir ?? tmpdir();
+      if (!(await github.installed(neutral))) {
+        throw new CodeHostError('code_host_not_ready', MESSAGES.createNotInstalled);
+      }
+      if (!(await github.loggedIn(neutral))) {
+        throw new CodeHostError('code_host_not_ready', MESSAGES.createNotLoggedIn);
+      }
+      // Everything that can refuse is asked before the repository exists on GitHub.
+      const pushBranch = input.push ? await branchToPush(projectRoot) : null;
+      // The new repository's owner and name are what the app sent, or the account name from
+      // `gh api user` (checked as an owner); never read from gh's free-form output.
+      const owner = input.owner ?? (await github.login(neutral));
+      const repo: GitHubRepository = { owner, name: input.name, protocol: 'https' };
+      // `<name>` alone creates it in the logged-in account. A name starting with `-` would read
+      // as an option, so it goes as `<account>/<name>`, which means the same.
+      const target =
+        input.owner === undefined && !input.name.startsWith('-')
+          ? input.name
+          : `${owner}/${input.name}`;
+      await github.createRepository(neutral, target, input.visibility);
+      logger.log('info', 'code_host.repository_created', {
+        visibility: input.visibility,
+        push: input.push,
+      });
+      const slug = `${repo.owner}/${repo.name}`;
+      await addOrigin(
+        projectRoot,
+        repo,
+        `GitHub created ${slug}, but the app could not set it as origin. In the project folder, run: git remote add origin ${gitHubRemoteUrl(repo)}`,
+      );
+      if (pushBranch !== null) {
+        try {
+          await push(projectRoot, pushBranch);
+        } catch (error) {
+          if (!(error instanceof CodeHostError)) throw error;
+          throw new CodeHostError(
+            error.code,
+            `GitHub created ${slug} and it is now the project’s origin, but pushing ${pushBranch} did not work. ${error.message}`,
+          );
+        }
+      }
+      return status(projectRoot);
+    },
+
+    async connectRepository(projectRoot, repository) {
+      const repo = parseGitHubRepository(repository);
+      if (repo === null) throw new CodeHostError('invalid_repository', MESSAGES.invalidRepository);
+      await requireNoOrigin(projectRoot);
+      await addOrigin(projectRoot, repo, MESSAGES.remoteAddFailed);
+      logger.log('info', 'code_host.repository_connected', { protocol: repo.protocol });
+      return status(projectRoot);
     },
 
     push,

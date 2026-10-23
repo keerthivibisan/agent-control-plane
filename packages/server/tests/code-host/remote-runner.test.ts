@@ -178,4 +178,54 @@ process.exit(9);`,
       .find((a) => a.startsWith('--body-file='));
     expect(bodyArg !== undefined && existsSync(bodyArg.slice(12))).toBe(false);
   });
+
+  it('G-E: create a repository through the real runner: argv, no-prompt env, outside the checkout', async () => {
+    const dir = tempDir('acp-gh-');
+    const neutral = tempDir('acp-gh-tmp-');
+    const gh = fakeGhScript(
+      dir,
+      `fs.appendFileSync(${JSON.stringify(join(dir, 'cwd.txt'))}, process.cwd() + '\\n');
+const sub = args.slice(0, 2).join(' ');
+if (args[0] === '--version' || sub === 'auth status') process.exit(0);
+if (args[0] === 'api') { process.stdout.write('octo\\n'); process.exit(0); }
+if (sub === 'repo create') { process.stdout.write('https://github.com/octo/new-app\\n'); process.exit(0); }
+if (sub === 'repo view') { process.stdout.write('{"defaultBranchRef":{"name":"main"}}'); process.exit(0); }
+process.exit(9);`,
+    );
+    const repo = makeRepo();
+    const bare = tempDir('acp-bare-');
+    git(bare, 'init', '--quiet', '--bare');
+    git(repo, 'config', `url.${bare}.insteadOf`, 'https://github.com/octo/new-app.git');
+    const service = createCodeHostService({
+      git: createGitRunner({ env: GIT_TEST_ENV }),
+      cli: createCliRunner(),
+      ghCommand: gh,
+      tmpDir: neutral,
+    });
+    const status = await service.createRepository(repo, {
+      name: 'new-app',
+      visibility: 'public',
+      push: true,
+    });
+    expect(status).toMatchObject({ provider: 'github', repo: 'octo/new-app' });
+    const made = calls(dir);
+    expect(made.map((c) => c.args)).toEqual([
+      ['--version'],
+      ['auth', 'status', '--hostname=github.com'],
+      ['api', '--hostname=github.com', 'user', '--jq=.login'],
+      ['repo', 'create', 'new-app', '--public'],
+      // The status answered afterwards.
+      ['--version'],
+      ['auth', 'status', '--hostname=github.com'],
+      ['repo', 'view', 'octo/new-app', '--json=defaultBranchRef'],
+    ]);
+    expect(made.every((c) => c.prompt === '1' && c.terminal === '0')).toBe(true);
+    // Creating ran in the neutral folder, never in the project's checkout.
+    const cwds = readFileSync(join(dir, 'cwd.txt'), 'utf8').trim().split('\n');
+    expect(cwds.slice(0, 4)).toEqual([neutral, neutral, neutral, neutral]);
+    expect(git(repo, 'config', '--get', 'remote.origin.url').trim()).toBe(
+      'https://github.com/octo/new-app.git',
+    );
+    expect(bareTip(bare, 'main')).not.toBeNull();
+  });
 });

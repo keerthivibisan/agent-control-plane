@@ -29,7 +29,9 @@ import {
   type WorkflowProgram,
 } from '@acp/core';
 import {
+  ConnectRepositoryRequestSchema,
   CreateRepoProjectRequestSchema,
+  CreateRepositoryRequestSchema,
   CreateTicketRequestSchema,
   MoveTicketRequestSchema,
   PlanDecisionRequestSchema,
@@ -76,7 +78,7 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
-import type { CodeHostService } from '../code-host/index.js';
+import { CodeHostError, codeHostHttpError, type CodeHostService } from '../code-host/index.js';
 import { managedDisabled, workspaceError } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
 import { createRunStore, withPlanDeciders, type RunStore } from '../control/store.js';
@@ -195,6 +197,10 @@ export interface BoardService {
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
   /** ADR-0025: what the app can do with the project's `origin` (`gh` by exit code only). */
   codeHostStatus(projectId: string): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §7: creates the repository on GitHub and sets it as `origin` (the owner's click). */
+  createCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §7: sets an existing GitHub repository as `origin` (the owner's click). */
+  connectCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
   /** ADR-0025 §4: Push & open PR for the ticket's current run's ticket branch. */
   openPullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
   /** ADR-0025: reads the pull request's state now (the owner's view or Refresh). */
@@ -221,7 +227,7 @@ export interface BoardServiceDeps {
    */
   ticketBranches?: Pick<WorkspaceManager, 'checkTicketBranchPlan'>;
   /** ADR-0025: the code host status; omitted, its route answers `code_host_unavailable`. */
-  codeHost?: Pick<CodeHostService, 'status'>;
+  codeHost?: Pick<CodeHostService, 'status' | 'createRepository' | 'connectRepository'>;
   /**
    * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
    * the legacy flow those runs keep stays covered. Production never sets it.
@@ -309,6 +315,23 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     const p = deps.repos.projects.getById(projectId);
     if (p === undefined) throw notFound(`Project ${projectId} not found`);
     return p;
+  }
+
+  function requireCodeHost(): NonNullable<BoardServiceDeps['codeHost']> {
+    if (deps.codeHost === undefined) {
+      throw new HttpError(404, 'code_host_unavailable', 'Code hosting is not available here');
+    }
+    return deps.codeHost;
+  }
+
+  /** A code host call with its refusals as the `ErrorDto` (codes and the app's own words). */
+  async function codeHostCall<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof CodeHostError) throw codeHostHttpError(error);
+      throw error;
+    }
   }
 
   /** The ticket with its own run options (RL-H, 0007) and branch settings (ADR-0025, 0008). */
@@ -1197,10 +1220,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
 
     async codeHostStatus(projectId) {
       const p = project(projectId);
-      if (deps.codeHost === undefined) {
-        throw new HttpError(404, 'code_host_unavailable', 'Code hosting is not available here');
-      }
-      return deps.codeHost.status(p.rootPath);
+      return requireCodeHost().status(p.rootPath);
+    },
+
+    async createCodeHostRepository(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const input = CreateRepositoryRequestSchema.parse(body);
+      return codeHostCall(() => host.createRepository(p.rootPath, input));
+    },
+
+    async connectCodeHostRepository(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const { repository } = ConnectRepositoryRequestSchema.parse(body);
+      return codeHostCall(() => host.connectRepository(p.rootPath, repository));
     },
 
     async openPullRequest(ticketId, body) {

@@ -26,13 +26,31 @@ export interface FakePr {
   draft: boolean;
 }
 
-export type FakeGhCommand = 'version' | 'auth' | 'repo' | 'list' | 'create' | 'view';
+export type FakeGhCommand =
+  | 'version'
+  | 'auth'
+  | 'repo'
+  | 'list'
+  | 'create'
+  | 'view'
+  /** `gh api user --jq=.login` (G-E). */
+  | 'login'
+  /** `gh repo create <target> --private|--public` (G-E). */
+  | 'repo-create';
 
 export interface FakeGh {
   run: CliRunner;
   calls: { file: string; args: string[]; options: CliRunOptions }[];
   prs: FakePr[];
-  state: { installed: boolean; loggedIn: boolean; defaultBranch: string | null };
+  state: {
+    installed: boolean;
+    loggedIn: boolean;
+    defaultBranch: string | null;
+    /** The logged-in account (G-E). */
+    login: string;
+  };
+  /** Repositories "GitHub" has, as `owner/name`; `repo create` refuses one that exists (G-E). */
+  repos: { slug: string; visibility: string }[];
   /** A canned result for a command (an exit code, a timeout, garbage output). */
   fail: Partial<Record<FakeGhCommand, CliResult>>;
   /** Marks a pull request merged on "GitHub". */
@@ -54,6 +72,8 @@ export function commandOf(args: readonly string[]): FakeGhCommand | null {
   if (args[0] === '--version') return 'version';
   if (args[0] === 'auth' && args[1] === 'status') return 'auth';
   if (args[0] === 'repo' && args[1] === 'view') return 'repo';
+  if (args[0] === 'repo' && args[1] === 'create') return 'repo-create';
+  if (args[0] === 'api' && args.includes('user')) return 'login';
   if (args[0] === 'pr' && (args[1] === 'list' || args[1] === 'create' || args[1] === 'view')) {
     return args[1];
   }
@@ -63,7 +83,13 @@ export function commandOf(args: readonly string[]): FakeGhCommand | null {
 export function createFakeGh(): FakeGh {
   const calls: FakeGh['calls'] = [];
   const prs: FakePr[] = [];
-  const state = { installed: true, loggedIn: true, defaultBranch: 'main' as string | null };
+  const state = {
+    installed: true,
+    loggedIn: true,
+    defaultBranch: 'main' as string | null,
+    login: 'octo',
+  };
+  const repos: FakeGh['repos'] = [];
   const fail: FakeGh['fail'] = {};
   let next = 12;
 
@@ -145,6 +171,27 @@ export function createFakeGh(): FakeGh {
         if (pr === undefined) return Promise.resolve({ ...ok(''), exitCode: 1 });
         return Promise.resolve(ok(JSON.stringify(view(pr))));
       }
+      case 'login':
+        if (!state.loggedIn) return Promise.resolve({ ...ok(''), exitCode: 4 });
+        return Promise.resolve(ok(`${state.login}\n`));
+      case 'repo-create': {
+        // Exactly `repo create <target> --private|--public`: nothing else is accepted.
+        const [, , target, visibility, ...rest] = args;
+        if (
+          target === undefined ||
+          (visibility !== '--private' && visibility !== '--public') ||
+          rest.length > 0
+        ) {
+          return Promise.resolve({ ...ok(''), exitCode: 2 });
+        }
+        const slug = target.includes('/') ? target : `${state.login}/${target}`;
+        if (repos.some((r) => r.slug.toLowerCase() === slug.toLowerCase())) {
+          return Promise.resolve({ ...ok(`already exists ${CANARY}\n`), exitCode: 1 });
+        }
+        repos.push({ slug, visibility: visibility.slice(2) });
+        // gh prints the new repository's URL; the app does not read it.
+        return Promise.resolve(ok(`https://github.com/${slug} ${CANARY}\n`));
+      }
       default:
         return Promise.resolve({ ...ok(''), exitCode: 2 });
     }
@@ -155,6 +202,7 @@ export function createFakeGh(): FakeGh {
     calls,
     prs,
     state,
+    repos,
     fail,
     merge(number, oid) {
       const pr = prs.find((p) => p.number === number);
