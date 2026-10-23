@@ -147,8 +147,54 @@ export const PlanApprovalGateSchema = z.object({
   ...NodeBase,
   auto: z.boolean(),
 });
-/** The project's required harness checks; a change merges into the ticket branch only after them. */
-export const ChecksGateSchema = z.object({ type: z.literal('checks'), ...NodeBase });
+/**
+ * Where a Checks block runs (ADR-0027 §5):
+ * - `change`: on a helper's or tester's sealed change, before its review (wired from it with a
+ *   `flow` edge);
+ * - `merge`: on the change integrated with the ticket tip, before the lead's merge (one per graph,
+ *   mandatory: the block before ADR-0027);
+ * - `branch`: on the ticket branch tip after every change, before the owner's merge (in the final
+ *   chain).
+ */
+export const CheckBlockPlaceSchema = z.enum(['change', 'merge', 'branch']);
+export type CheckBlockPlace = z.infer<typeof CheckBlockPlaceSchema>;
+
+const checkSlug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
+
+/** Which of the harness file's checks a block runs: the required ones, a list, or labels. */
+export const CheckSelectionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('required') }),
+  z.object({ kind: z.literal('ids'), ids: z.array(checkSlug).min(1).max(20) }),
+  z.object({ kind: z.literal('labels'), labels: z.array(checkSlug).min(1).max(5) }),
+]);
+export type CheckSelection = z.infer<typeof CheckSelectionSchema>;
+
+/**
+ * Where a failed block sends the work (ADR-0027 §5): the lead decides, the owner is asked, or the
+ * helper reworks it (a `rework` edge from the block to that helper, `maxRounds`).
+ */
+export const CheckFailureRouteSchema = z.enum(['lead', 'owner', 'helper']);
+export type CheckFailureRoute = z.infer<typeof CheckFailureRouteSchema>;
+
+/** The failure routes each place allows; the first is the default. */
+export const CHECK_FAILURE_ROUTES: Readonly<Record<CheckBlockPlace, readonly CheckFailureRoute[]>> =
+  Object.freeze({
+    change: ['lead', 'owner', 'helper'],
+    merge: ['lead', 'owner'],
+    branch: ['owner'],
+  });
+
+/**
+ * The project's harness checks (ADR-0017, ADR-0027). Absent fields mean the block before ADR-0027:
+ * before the lead's merge, every required check, the lead decides.
+ */
+export const ChecksGateSchema = z.object({
+  type: z.literal('checks'),
+  ...NodeBase,
+  place: CheckBlockPlaceSchema.optional(),
+  select: CheckSelectionSchema.optional(),
+  onFailure: CheckFailureRouteSchema.optional(),
+});
 /** Every change is decided and the ticket branch holds the merged work. */
 export const TicketMergeGateSchema = z.object({ type: z.literal('ticket-merge'), ...NodeBase });
 /** The owner merges the ticket branch into the base branch, once. */

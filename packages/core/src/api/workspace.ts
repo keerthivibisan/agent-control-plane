@@ -13,6 +13,7 @@ import {
 import {
   ApprovalModeSchema,
   CheckRunSchema,
+  SetupRunSchema,
   HarnessStatusSchema,
   ProjectAgentSetupSchema,
   ProjectAllowlistSchema,
@@ -47,6 +48,8 @@ export const HarnessStatusDtoSchema = HarnessStatusSchema;
 export type HarnessStatusDto = z.infer<typeof HarnessStatusDtoSchema>;
 export const CheckRunDtoSchema = CheckRunSchema;
 export type CheckRunDto = z.infer<typeof CheckRunDtoSchema>;
+export const SetupRunDtoSchema = SetupRunSchema;
+export type SetupRunDto = z.infer<typeof SetupRunDtoSchema>;
 export const TicketDtoSchema = TicketSchema.extend({ stage: TicketStageSchema });
 export type TicketDto = z.infer<typeof TicketDtoSchema>;
 /**
@@ -100,6 +103,8 @@ export const TicketDetailDtoSchema = z.object({
   plans: z.array(TicketPlanDtoSchema),
   comments: z.array(TicketCommentDtoSchema),
   checks: z.array(CheckRunDtoSchema),
+  /** ADR-0027: the current run's setup runs, oldest first. Absent from servers before it. */
+  setupRuns: z.array(SetupRunDtoSchema).optional(),
 });
 export type TicketDetailDto = z.infer<typeof TicketDetailDtoSchema>;
 
@@ -137,6 +142,8 @@ export const UpdateProjectSetupRequestSchema = z.object({
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
   /** ADR-0025. Absent: the stored strategy is kept; `null` removes it (the behaviour before it). */
   branching: BranchStrategySchema.nullable().optional(),
+  /** ADR-0027 §2. Absent: the stored switch is kept (off when never set). */
+  setupNetwork: z.boolean().optional(),
 });
 /**
  * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own
