@@ -198,7 +198,7 @@ describe('the Start refusal: create the missing target, then start again once', 
     path: '/api/tickets/t-1/start',
     status: 409,
     code: 'target_branch_missing',
-    message: 'The target branch dev does not exist in the project; create it locally first',
+    message: 'The target branch dev does not exist in the project yet',
   });
 
   it('offers "Create dev from main" and retries the start exactly once', async () => {

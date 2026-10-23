@@ -727,7 +727,7 @@ test('G-F: Start refused for a missing target creates it, then starts once more'
         json: {
           error: {
             code: 'target_branch_missing',
-            message: 'The target branch dev does not exist in the project; create it locally first',
+            message: 'The target branch dev does not exist in the project yet',
             requestId: 'e2e',
           },
         },

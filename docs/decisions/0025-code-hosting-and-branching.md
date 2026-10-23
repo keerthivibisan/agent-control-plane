@@ -104,8 +104,10 @@ Diffs are still read from git when shown and never stored (ADR-0009).
 - **Connect an existing repository:** on the owner's click, `git remote add origin <address>`, and
   nothing is pushed.
 - **What may be written:** one `origin` remote in the project's own `.git/config`, only when there
-  is none yet (409 `origin_exists` otherwise; the app never changes or removes a remote). This is
-  the only change the app makes to the owner's checkout outside the merges the owner clicks.
+  is none yet (409 `origin_exists` otherwise; the app never changes or removes a remote). A push
+  (a ticket branch for a pull request, or a new branch, §8) uses `--set-upstream`, so it also
+  records that branch's tracking branch there. Nothing else in the owner's checkout changes
+  outside the merges the owner clicks.
 - **Inputs:** names and addresses are checked with `GitHubOwnerSchema`, `GitHubRepoNameSchema` and
   `parseGitHubRepository` (github.com only; no user, port, query or extra path). The address the
   app writes is rebuilt from the parsed owner and name (`gitHubRemoteUrl`), never the typed text.
@@ -121,8 +123,8 @@ Diffs are still read from git when shown and never stored (ADR-0009).
   project's checkout. The checkout is never switched and no file changes; it adds one branch
   reference, as the ticket branches already do. Names are checked with `GitBranchNameSchema` and
   `git check-ref-format --branch`; an existing branch is never moved (409 `branch_exists`).
-- **Pushing it, on the owner's click only:** `git push --no-verify origin
-refs/heads/<name>:refs/heads/<name>`, as for ticket branches (§1).
+- **Pushing it, on the owner's click only:** the same push as for ticket branches (§1):
+  `git push --set-upstream --no-verify origin refs/heads/<name>:refs/heads/<name>`.
 - **Where:** in the project's Settings (a Branches list with New branch), in a ticket's branch
   settings (pick a target or create one), and on the "target branch does not exist" refusal
   ("Create <name> from <base>", then Start again).

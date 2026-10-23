@@ -684,7 +684,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     if (tip === null || !FULL_COMMIT.test(tip)) {
       throw new WorkspaceError(
         'target-branch-missing',
-        `The target branch ${target} does not exist in the project; create it locally first`,
+        `The target branch ${target} does not exist in the project yet`,
       );
     }
     return { baseBranch: target, baseCommit: tip };
