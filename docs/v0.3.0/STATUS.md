@@ -323,3 +323,14 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   squash or rebase and Delete branch, plus a Delete branch button), and a ticket badge with the time
   taken and total tokens at the right of the header line ("leave cost for now"). Contracts and
   ADR-0025 §9 by the coordinator.
+- 2026-10-24 **Paused by the owner** ("we can hold it as for now and will resume sooner"). The
+  G-G/T-A agent was stopped. Its work is on `wp/g-g-merge-totals` (worktree
+  `.claude/worktrees/agent-acae7aa5beef0c1fd`): `a7fb761` (db: one ticket's direct usage),
+  `74b214e` (server: merge the PR, Delete branch, ticket totals), and a WIP commit with the web
+  part started (api.ts and copy.ts additions only; no components; no G-G.md yet). To resume: a new
+  agent continues on `git switch -c wp/g-g-2 wp/g-g-merge-totals`, rebases onto `release/0.3.0`,
+  checks the server part against the brief, builds the PR box merge/delete UI and the ticket badge,
+  writes G-G.md, and squashes the WIP. Then the full check (vitest with fewer workers on this 8 GB
+  machine) and e2e, merge, restart the app. Still to do for 0.3.0 after that: small follow-ups
+  (the Create action in "Start with options", the branch picker in New ticket, the ⌘K "Run checks"
+  name), then release prep.
