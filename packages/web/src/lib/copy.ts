@@ -3937,3 +3937,225 @@ export const RUN_SUMMARY_COPY = {
     alreadyOpen: 'was already open',
   },
 } as const;
+
+// --- The harness in the workflow (v0.3.0 part 5, H-D; ADR-0027) ---------------------------------
+// Add-only. The Workflow editor's Checks blocks, the Harness page's setup steps and network switch,
+// and the ticket's Checks tab grouped by block. Plain owner words: checks, setup, the lead, you.
+
+import type {
+  CheckBlockPlace,
+  CheckFailureRoute,
+  CheckRunPlace,
+  CheckSelection,
+  SetupRunStatus,
+} from '@acp/core';
+
+const PLACE_WORDS = {
+  change: 'On each change',
+  merge: 'Before the lead’s merge',
+  branch: 'On the ticket branch',
+} as const satisfies Record<CheckBlockPlace, string>;
+
+export const SETUP_STATUS_COPY: Readonly<Record<SetupRunStatus, ControlStatusCopy>> = {
+  passed: { word: 'Passed', tip: 'The step finished without an error.', tone: 'passed' },
+  failed: { word: 'Failed', tip: 'The step finished with an error.', tone: 'problem' },
+  'timed-out': {
+    word: 'Took too long',
+    tip: 'The step ran past its time limit and was stopped.',
+    tone: 'problem',
+  },
+  error: {
+    word: "Couldn't run",
+    tip: "The step couldn't be started, for example because its command isn't installed.",
+    tone: 'problem',
+  },
+  refused: {
+    word: 'Not run: needs the network',
+    tip: 'This step uses the network, and “Setup may use the network” is off for this project. Turn it on on the Harness page, then try again.',
+    tone: 'problem',
+  },
+  interrupted: {
+    word: 'Stopped',
+    tip: 'The app stopped before this step finished, so it has no result.',
+    tone: 'stopped',
+  },
+};
+
+export const HARNESS_BLOCKS_COPY = {
+  places: PLACE_WORDS,
+  placeHints: {
+    change: 'Runs on a helper’s or tester’s change before it is reviewed.',
+    merge:
+      'Runs on each change merged with the ticket branch, before the lead merges it. Every workflow has this block.',
+    branch: 'Runs on the ticket branch after every change, before you merge it into main.',
+  } satisfies Record<CheckBlockPlace, string>,
+  /** The block's kind on the canvas and in its panel; the merge block keeps its old word. */
+  kinds: {
+    change: 'Checks on a change',
+    merge: 'Checks',
+    branch: 'Checks on the branch',
+  } satisfies Record<CheckBlockPlace, string>,
+  kindText: {
+    change: 'Runs the chosen checks on a helper’s or tester’s change before its review.',
+    merge:
+      'Runs the chosen checks on each change before the lead merges it into the ticket branch.',
+    branch: 'Runs the chosen checks on the ticket branch before you merge it into main.',
+  } satisfies Record<CheckBlockPlace, string>,
+  newLabels: { change: 'Change checks', branch: 'Branch checks' },
+  palette: {
+    group: 'Checks',
+    items: { change: 'Checks on a change', branch: 'Checks on the branch' },
+    hints: {
+      change: 'Runs checks on a helper’s change before its review. Linked from a helper.',
+      branch: 'Runs checks on the ticket branch. Added just before your merge.',
+    },
+    noEditors: 'Add a helper or a tester first: these checks run on their changes.',
+    allChecked: 'Every helper and tester already has checks on its change.',
+    branchFull: 'The workflow already has checks on the branch; it can have only one.',
+  },
+  chip: {
+    required: 'Required',
+    ids: (n: number) => countOf(n, 'check'),
+    labels: (labels: readonly string[]) => labels.join(' · '),
+    runs: 'Runs: ',
+  },
+  panel: {
+    nameHint: 'What the canvas and the ticket call this block, for example “Fast checks”.',
+    place: 'Where it runs',
+    mandatory:
+      'Every workflow has this block, so no change merges without checks. It can’t be moved or removed.',
+    branchTaken:
+      'The workflow already has checks on the ticket branch, so this one stays on a change.',
+    noEditors: 'Add a helper or a tester to run checks on a change.',
+    checks: {
+      for: (role: string) => `Checks the changes of “${role}”.`,
+      unlinked:
+        'Not linked to a helper yet. Link a helper or tester to this block with a “Next step” link.',
+    },
+    select: 'Which checks',
+    selectKinds: {
+      required: 'All required checks',
+      ids: 'Pick checks',
+      labels: 'By label',
+    } satisfies Record<CheckSelection['kind'], string>,
+    selectHints: {
+      required: 'Every check the harness file marks as required.',
+      ids: 'Only the checks you tick.',
+      labels: 'Every check that has one of the labels you choose, for example “fast”.',
+    } satisfies Record<CheckSelection['kind'], string>,
+    runs: (names: readonly string[]) =>
+      names.length === 0
+        ? 'No check matches yet, so this block runs nothing.'
+        : `Runs: ${names.join(', ')}.`,
+    noHarness:
+      'This project has no readable harness file yet, so there are no checks to pick from. They come from .acp/harness.json.',
+    openHarness: 'Open the Harness page',
+    checksLegend: 'Checks to run',
+    checksHint: (max: number) => `Up to ${formatCount(max)} checks.`,
+    labelsLegend: 'Labels',
+    labelsHint: (max: number) => `Up to ${formatCount(max)} labels. Checks with any of them run.`,
+    noLabels: 'No check in the harness file has a label yet.',
+    labelChecks: (n: number) => countOf(n, 'check'),
+    required: 'Required',
+    missingCheck: (id: string) => `“${id}” is not in the harness file any more.`,
+    missingLabel: (label: string) => `No check has the label “${label}” any more.`,
+    remove: (name: string) => `Remove ${name}`,
+    empty: (label: string) => `“${label}”: pick at least one check or label.`,
+    failure: 'When a check fails',
+    failures: {
+      lead: 'The lead decides',
+      owner: 'Ask me',
+      helper: 'Back to the helper',
+    } satisfies Record<CheckFailureRoute, string>,
+    failureHints: {
+      lead: 'The lead is told which checks failed and decides what to do.',
+      owner: 'The change waits for you.',
+      helper:
+        'The change goes back to its helper with the failing checks’ names and the end of their output. The lead is told each round.',
+    } satisfies Record<CheckFailureRoute, string>,
+    branchFailure: 'On the ticket branch a failure waits for you: you decide when you merge.',
+    rounds: 'Rounds back to the helper',
+    roundsHint:
+      'How often a failing change goes back to the helper. After the last round the lead decides.',
+    roundsValue: (n: number) => (n === 0 ? 'No rounds' : countOf(n, 'round')),
+    noReworkLink:
+      'This block has no rework link back to its helper yet, so the change can’t go back.',
+  },
+  warnings: {
+    check: (block: string, id: string) =>
+      `“${block}” picks the check “${id}”, which .acp/harness.json does not list.`,
+    label: (block: string, label: string) =>
+      `“${block}” picks the label “${label}”, which no check in .acp/harness.json has.`,
+  },
+  harness: {
+    run: 'Run setup and checks now',
+    running: 'Running setup and checks…',
+    runTip:
+      'Runs the setup steps, then every check, on a temporary copy of the main branch’s last commit. Your files are not changed.',
+    setup: {
+      title: 'Setup',
+      description: 'Prepares a fresh copy of the project before agents and checks start.',
+      tip: 'Each step runs directly, without a shell, in a helper’s or tester’s own copy and in each temporary copy the checks use, never in your project folder. Reading agents never run setup. A failed step stops that start.',
+      label: 'Setup steps',
+      step: 'Step',
+      command: 'Command',
+      timeLimit: 'Time limit',
+      creates: 'Creates',
+      createsTip:
+        'Folders the step creates. They are never part of a change, a commit or your project folder.',
+      network: 'Uses the network',
+      networkTip:
+        'This step downloads things. It runs only while “Setup may use the network” is on.',
+      none: 'No setup steps',
+      noneText:
+        'A fresh copy has nothing installed. If checks need dependencies, add a “setup” list to .acp/harness.json.',
+    },
+    network: {
+      label: 'Setup may use the network',
+      hint: 'Off by default. While it is off, setup steps marked “Uses the network” do not run, and the ticket says why. The app does not cut steps off from the network: this switch is your consent.',
+      on: 'On',
+      off: 'Off',
+      saving: 'Saving…',
+      failed: 'The switch wasn’t saved.',
+      blocked: (n: number) =>
+        `${countOf(n, 'setup step')} ${n === 1 ? 'uses' : 'use'} the network and won’t run while this is off.`,
+      noneUses: 'No setup step uses the network.',
+    },
+    latestSetup: {
+      title: 'Latest setup on the main branch',
+      none: 'No setup has run on the main branch yet.',
+      label: 'Setup results',
+    },
+    where: {
+      column: 'Where it runs',
+      labels: 'Labels',
+      tip: 'The Checks blocks in this project’s workflow that run this check.',
+      none: 'Not in the workflow',
+      block: (place: string, label: string) => `${place}: ${label}`,
+    },
+  },
+  ticket: {
+    setupTitle: 'Setup',
+    setupTip:
+      'The harness setup steps, run in each helper’s or tester’s own copy before it starts and in each temporary copy before checks.',
+    setupFor: (role: string) => `For ${role}`,
+    setupForChecks: 'For the checks',
+    groups: {
+      change: PLACE_WORDS.change,
+      merge: PLACE_WORDS.merge,
+      branch: PLACE_WORDS.branch,
+      main: 'Run now on the main branch',
+    } satisfies Record<CheckRunPlace, string>,
+    groupTips: {
+      change: 'Checks blocks on each helper’s change, before its review.',
+      merge: 'The checks on each change before the lead merges it into the ticket branch.',
+      branch: 'The checks on the ticket branch’s tip; your merge into main counts these.',
+      main: 'Run setup and checks now, on the main branch.',
+    } satisfies Record<CheckRunPlace, string>,
+    output: 'Output (last part)',
+    noOutput: 'No output.',
+    took: (text: string) => `took ${text}`,
+    exitCode: (code: number | null) =>
+      code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
+  },
+} as const;

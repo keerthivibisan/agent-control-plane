@@ -2,12 +2,17 @@ import type { WorkflowGraph } from '@acp/core';
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
 import { useState, type Dispatch, type MouseEvent } from 'react';
 import { buttonClass } from '../../../components/Button';
-import { ChevronDownIcon, PlusSmallIcon } from '../../../components/icons';
+import { CheckIcon, ChevronDownIcon, PlusSmallIcon } from '../../../components/icons';
 import { floatingClass } from '../../../components/Menu';
-import { WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
+import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
 import { ROLE_ICON } from '../icons';
 import { EDITOR_COPY } from './copy';
-import { paletteAvailability, type EditorAction } from './state';
+import {
+  checksAvailability,
+  paletteAvailability,
+  type CheckBlockItem,
+  type EditorAction,
+} from './state';
 
 const P = WORKFLOW_GRAPH_COPY.palette;
 const T = EDITOR_COPY.toolbar;
@@ -26,6 +31,51 @@ const ITEM_ICON: Readonly<Record<PaletteItemKey, (typeof ROLE_ICON)['lead']>> = 
   'final-reviewer': ROLE_ICON.reviewer,
   tester: ROLE_ICON.tester,
 };
+
+const ITEM_CLASS =
+  'group flex cursor-default items-start gap-2.5 rounded-control px-2 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:cursor-not-allowed data-[highlighted]:bg-hover';
+
+const CHECK_ITEMS: readonly CheckBlockItem[] = ['change', 'branch'];
+
+/**
+ * A Checks block the menu can add (ADR-0027 §5): on a change, linked from the selected helper or
+ * tester when it has none yet (else the first without one), or on the branch, just before your
+ * merge. The block before the lead's merge is in every workflow, so it is not offered.
+ */
+function AddChecksItem({
+  place,
+  graph,
+  near,
+  dispatch,
+}: {
+  place: CheckBlockItem;
+  graph: WorkflowGraph;
+  near: string | undefined;
+  dispatch: Dispatch<EditorAction>;
+}) {
+  const H = HARNESS_BLOCKS_COPY.palette;
+  const availability = checksAvailability(graph, place);
+  return (
+    <RadixMenu.Item
+      disabled={!availability.ok}
+      onSelect={() => dispatch({ type: 'add-checks', place, near })}
+      data-testid={`palette-checks-${place}`}
+      className={ITEM_CLASS}
+    >
+      <span className="mt-0.5 flex shrink-0 text-dim group-data-[disabled]:opacity-60">
+        <CheckIcon size={15} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="font-medium text-ink group-data-[disabled]:text-dim">
+          {H.items[place]}
+        </span>
+        <span className="text-caption text-dim" data-testid="palette-hint">
+          {availability.ok ? H.hints[place] : availability.reason}
+        </span>
+      </span>
+    </RadixMenu.Item>
+  );
+}
 
 /**
  * One block the menu can add: its name and, underneath, what it does, or why it can't be added
@@ -48,7 +98,7 @@ function AddItem({
       disabled={!availability.ok}
       onSelect={() => dispatch({ type: 'add', item })}
       data-testid={`palette-${item}`}
-      className="group flex cursor-default items-start gap-2.5 rounded-control px-2 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:cursor-not-allowed data-[highlighted]:bg-hover"
+      className={ITEM_CLASS}
     >
       <span className="mt-0.5 flex shrink-0 text-dim group-data-[disabled]:opacity-60">
         <Icon size={15} />
@@ -64,16 +114,19 @@ function AddItem({
 }
 
 /**
- * "Add block": a menu button over the blocks the owner can add, in two groups (agents; reviewers
- * and testers), each limited by `NODE_CAPABILITIES`. The new block lands in its kind's place and
- * is selected, so its settings open at once.
+ * "Add block": a menu button over the blocks the owner can add, in three groups (agents; reviewers
+ * and testers; checks), each limited by `NODE_CAPABILITIES` or the Checks blocks' places. The new
+ * block lands in its kind's place and is selected, so its settings open at once.
  */
 export function Palette({
   graph,
   dispatch,
+  selectedNode,
 }: {
   graph: WorkflowGraph;
   dispatch: Dispatch<EditorAction>;
+  /** The selected block: a change Checks block is linked from it when it may be. */
+  selectedNode?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -113,6 +166,21 @@ export function Palette({
               ))}
             </RadixMenu.Group>
           ))}
+          <RadixMenu.Group>
+            <RadixMenu.Separator className="-mx-2 my-2 h-px bg-line" />
+            <RadixMenu.Label className="px-2 pt-1 pb-1 text-caption font-semibold text-dim">
+              {HARNESS_BLOCKS_COPY.palette.group}
+            </RadixMenu.Label>
+            {CHECK_ITEMS.map((place) => (
+              <AddChecksItem
+                key={place}
+                place={place}
+                graph={graph}
+                near={selectedNode}
+                dispatch={dispatch}
+              />
+            ))}
+          </RadixMenu.Group>
         </RadixMenu.Content>
       </RadixMenu.Portal>
     </RadixMenu.Root>

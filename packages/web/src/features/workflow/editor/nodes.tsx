@@ -2,7 +2,8 @@ import { NODE_CAPABILITIES, type ApprovalMode, type WorkflowNode } from '@acp/co
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { AlertIcon, CheckIcon, SparkIcon, TicketIcon } from '../../../components/icons';
 import { Tooltip } from '../../../components/Tooltip';
-import { REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { HARNESS_BLOCKS_COPY, REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { checkPlaceOf, checkSelectionOf, isChecksNode, type ChecksNode } from '../check-blocks';
 import {
   AgentFileIcon,
   DoneIcon,
@@ -63,6 +64,7 @@ export type BlockNode = Node<BlockData, 'agent' | 'gate'>;
 
 /** The word for a block's kind ("Change reviewer", "You"). */
 export function kindWord(node: WorkflowNode): string {
+  if (isChecksNode(node)) return HARNESS_BLOCKS_COPY.kinds[checkPlaceOf(node)];
   if (node.type === 'reviewer') {
     return node.scope === 'change' ? G.kinds['reviewer-change'] : G.kinds['reviewer-final'];
   }
@@ -71,6 +73,10 @@ export function kindWord(node: WorkflowNode): string {
 
 /** One sentence on what a block of this kind does. */
 export function kindText(node: WorkflowNode): string {
+  // The merge block keeps its words until it is configured (a block from before ADR-0027).
+  if (isChecksNode(node) && (node.place !== undefined || node.select !== undefined)) {
+    return HARNESS_BLOCKS_COPY.kindText[checkPlaceOf(node)];
+  }
   if (node.type === 'reviewer') {
     return node.scope === 'change' ? G.kindText['reviewer-change'] : G.kindText['reviewer-final'];
   }
@@ -385,6 +391,15 @@ export function AgentBlockView({ data, selected }: NodeProps<BlockNode>) {
   );
 }
 
+/** What a Checks block runs, in a few words: "Required", "2 checks", "fast · full". */
+export function selectionChip(node: ChecksNode): string {
+  const C = HARNESS_BLOCKS_COPY.chip;
+  const s = checkSelectionOf(node);
+  if (s.kind === 'ids') return C.ids(s.ids.length);
+  if (s.kind === 'labels') return C.labels(s.labels);
+  return C.required;
+}
+
 function stepTitle(node: WorkflowNode): string {
   if (node.type === 'plan-approval') return G.gateTitle['plan-approval'];
   if (node.type === 'owner-merge') return G.gateTitle['owner-merge'];
@@ -428,6 +443,15 @@ export function GateBlockView({ data, selected }: NodeProps<BlockNode>) {
       <span className="min-w-0 truncate font-medium" data-testid="block-label">
         {stepTitle(node)}
       </span>
+      {isChecksNode(node) ? (
+        <span
+          className={`${CHIP} min-w-0 truncate border-line-strong text-dim`}
+          data-testid="checks-select"
+        >
+          <span className="sr-only">{HARNESS_BLOCKS_COPY.chip.runs}</span>
+          {selectionChip(node)}
+        </span>
+      ) : null}
       {node.type === 'plan-approval' ? (
         <span
           className={node.auto ? `${CHIP} border-line-strong text-dim` : 'sr-only'}

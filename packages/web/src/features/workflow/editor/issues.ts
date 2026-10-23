@@ -2,10 +2,12 @@ import {
   MAX_NODE_DESCRIPTION,
   WorkflowGraphSchema,
   validateWorkflowGraph,
+  type HarnessCheck,
   type ValidateGraphContext,
   type WorkflowGraph,
 } from '@acp/core';
-import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { checkSelectionWarnings } from '../check-blocks';
 import type { EditorIssue } from './IssuesList';
 
 const P = WORKFLOW_GRAPH_COPY.panel;
@@ -31,7 +33,9 @@ export function shapeIssues(graph: WorkflowGraph): EditorIssue[] {
           ? `${label}: ${P.modelTooLong}`
           : field === 'description'
             ? `${label}: ${P.descriptionTooLong(MAX_NODE_DESCRIPTION)}`
-            : P.shapeProblem(label);
+            : field === 'select'
+              ? HARNESS_BLOCKS_COPY.panel.empty(label)
+              : P.shapeProblem(label);
     const key = `${node?.id ?? ''}|${message}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -45,9 +49,20 @@ export function shapeIssues(graph: WorkflowGraph): EditorIssue[] {
   return out;
 }
 
-/** Everything the problems list shows, in order: shape problems, then the validator's issues. */
-export function editorIssues(graph: WorkflowGraph, ctx: ValidateGraphContext): EditorIssue[] {
-  return [...shapeIssues(graph), ...validateWorkflowGraph(graph, ctx)];
+/**
+ * Everything the problems list shows, in order: shape problems, the validator's issues, then the
+ * Checks blocks' picks the harness file does not have (`harnessChecks`: undefined while unknown).
+ */
+export function editorIssues(
+  graph: WorkflowGraph,
+  ctx: ValidateGraphContext,
+  harnessChecks?: readonly HarnessCheck[],
+): EditorIssue[] {
+  return [
+    ...shapeIssues(graph),
+    ...validateWorkflowGraph(graph, ctx),
+    ...checkSelectionWarnings(graph, harnessChecks),
+  ];
 }
 
 export function hasErrors(issues: readonly EditorIssue[]): boolean {

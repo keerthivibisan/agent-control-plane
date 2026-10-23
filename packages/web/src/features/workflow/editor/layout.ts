@@ -1,12 +1,13 @@
 import type { NodePosition, WorkflowGraph, WorkflowNode, WorkflowNodeId } from '@acp/core';
+import { checkPlaceOf, isChecksNode } from '../check-blocks';
 
 /**
  * Where the editor draws each block. A block the owner moved keeps its saved `position`; the
  * others are laid out automatically in three rows that read like lines of text (v0.3.0 D-C):
  *
  *   Ticket → (Planner →) Approve the plan                       the plan path
- *   Lead → helpers (stacked) → change reviewers (stacked)       the work
- *   Checks → Ticket branch → final reviewers, testers → Your merge → Done     the merge chain
+ *   Lead → helpers (stacked) → change checks → change reviewers (stacked)    the work
+ *   Checks → Ticket branch → final reviewers, testers, branch checks → Your merge → Done
  *
  * The plan path and the work share columns, so the plan reaches the lead with one straight or
  * one-bend line. The merge chain starts under the lead (the lead's merge line goes straight down)
@@ -58,7 +59,16 @@ export function sizeOf(node: WorkflowNode): { width: number; height: number } {
 }
 
 function isFinalStage(node: WorkflowNode): boolean {
-  return (node.type === 'reviewer' && node.scope === 'final') || node.type === 'tester';
+  return (
+    (node.type === 'reviewer' && node.scope === 'final') ||
+    node.type === 'tester' ||
+    (isChecksNode(node) && checkPlaceOf(node) === 'branch')
+  );
+}
+
+/** A Checks block on a change sits with the work, next to the helpers it checks (ADR-0027). */
+function isChangeChecks(node: WorkflowNode): boolean {
+  return isChecksNode(node) && checkPlaceOf(node) === 'change';
 }
 
 /**
@@ -78,6 +88,8 @@ export function rowOf(node: WorkflowNode): 0 | 1 | 2 {
       return 1;
     case 'reviewer':
       return node.scope === 'change' ? 1 : 2;
+    case 'checks':
+      return checkPlaceOf(node) === 'change' ? 1 : 2;
     default:
       return 2;
   }
@@ -112,6 +124,7 @@ function columnRows(graph: WorkflowGraph): WorkflowNode[][][] {
   const workRow: WorkflowNode[][] = [
     of('lead'),
     [...of('helper'), ...of('helper-pool')],
+    graph.nodes.filter(isChangeChecks),
     graph.nodes.filter((n) => n.type === 'reviewer' && n.scope === 'change'),
   ].filter((c) => c.length > 0);
   return [planRow, workRow];
@@ -146,7 +159,7 @@ export function layoutGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodePosit
   // The merge chain, left to right from under the lead, each block at its own width.
   const of = (type: WorkflowNode['type']) => graph.nodes.filter((n) => n.type === type);
   const chain = [
-    ...of('checks'),
+    ...of('checks').filter((n) => isChecksNode(n) && checkPlaceOf(n) === 'merge'),
     ...of('ticket-merge'),
     ...finalOrder(graph),
     ...of('owner-merge'),

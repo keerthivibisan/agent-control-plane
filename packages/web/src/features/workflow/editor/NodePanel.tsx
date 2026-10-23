@@ -11,6 +11,7 @@ import {
   type WorkflowNode,
   type WorkflowNodeId,
 } from '@acp/core';
+import type { HarnessStatusDto } from '@acp/core/api';
 import { useId, useState, type Dispatch, type ReactNode } from 'react';
 import { Button } from '../../../components/Button';
 import { AlertIcon } from '../../../components/icons';
@@ -25,7 +26,9 @@ import {
   TextField,
 } from '../../project-setup/fields';
 import { FullAutoWarning } from '../../review-loop/ApprovalsEditor';
+import { isChecksNode } from '../check-blocks';
 import { RemoveIcon } from '../icons';
+import { CheckBlockFields } from './CheckBlockFields';
 import { LinkSample } from './edges';
 import { EDITOR_COPY } from './copy';
 import { IssueRow, type EditorIssue } from './IssuesList';
@@ -54,6 +57,8 @@ export interface NodePanelContext {
   projectModel: string | null;
   projectMode: ApprovalMode | null;
   helperLimit: number;
+  /** The project's harness, for the Checks blocks' picks; undefined while unknown. */
+  harness?: HarnessStatusDto | undefined;
 }
 
 /** A warning under a field: what is wrong and what happens because of it. */
@@ -500,6 +505,14 @@ export function NodePanel({
       <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
         {'skills' in node ? (
           <AgentFields node={node} ctx={ctx} change={change} />
+        ) : isChecksNode(node) ? (
+          <CheckBlockFields
+            node={node}
+            graph={graph}
+            harness={ctx.harness}
+            projectId={ctx.projectId}
+            dispatch={dispatch}
+          />
         ) : node.type === 'plan-approval' ? (
           <CheckboxField
             label={P.planAuto}

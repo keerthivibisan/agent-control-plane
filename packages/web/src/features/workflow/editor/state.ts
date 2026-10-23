@@ -5,6 +5,9 @@ import {
   NODE_CAPABILITIES,
   canConnect,
   type ApprovalMode,
+  type CheckBlockPlace,
+  type CheckFailureRoute,
+  type CheckSelection,
   type NodePosition,
   type ReviewerScope,
   type SkillName,
@@ -14,7 +17,18 @@ import {
   type WorkflowNode,
   type WorkflowNodeId,
 } from '@acp/core';
-import { WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
+import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
+import {
+  blocksWithoutChangeChecks,
+  checkFailureOf,
+  checkPlaceOf,
+  checkedBlock,
+  checksBlocks,
+  failureRoutes,
+  isChecksNode,
+  isEditingBlock,
+  type ChecksNode,
+} from '../check-blocks';
 
 /**
  * The graph editor's state (ADR-0023, docs/workflow-graph/README.md §5): the graph being edited,
@@ -62,7 +76,12 @@ export interface NodePatch {
   canStartHelpers?: boolean;
   scope?: ReviewerScope;
   auto?: boolean;
+  /** A Checks block's selection (ADR-0027 §5); its place and failure route have their own actions. */
+  select?: CheckSelection;
 }
+
+/** The Checks blocks the menu adds (ADR-0027 §5); the one before the lead's merge is fixed. */
+export type CheckBlockItem = Exclude<CheckBlockPlace, 'merge'>;
 
 export type EditorAction =
   /** Load a graph (first load, a template, "restore my earlier setup", a save's answer). */
@@ -76,6 +95,12 @@ export type EditorAction =
   | { type: 'dismiss-refusal' }
   | { type: 'remove-edge'; id: string }
   | { type: 'set-rounds'; id: string; maxRounds: number }
+  /** Adds a Checks block on a change (linked from `near` when it may be) or on the branch. */
+  | { type: 'add-checks'; place: CheckBlockItem; near?: WorkflowNodeId | undefined }
+  /** Moves a Checks block between a change and the branch, rewiring it; never the merge block. */
+  | { type: 'set-check-place'; id: WorkflowNodeId; place: CheckBlockItem }
+  /** A Checks block's failure route; "back to the helper" adds the rework link, others drop it. */
+  | { type: 'set-check-failure'; id: WorkflowNodeId; onFailure: CheckFailureRoute }
   | { type: 'select'; selection: Selection }
   /** Clears the selection only when it is still `id` (React Flow sends deselects separately). */
   | { type: 'deselect'; id: string };
@@ -97,8 +122,12 @@ function single(graph: WorkflowGraph, type: WorkflowNode['type']): WorkflowNode 
   return all.length === 1 ? all[0] : undefined;
 }
 
-/** The blocks the palette adds can be removed; the lead and the steps are in every workflow. */
+/**
+ * The blocks the palette adds can be removed; the lead and the steps are in every workflow, and so
+ * is the Checks block before the lead's merge (ADR-0027 §5: mandatory).
+ */
 export function isRemovable(node: WorkflowNode): boolean {
+  if (isChecksNode(node)) return checkPlaceOf(node) !== 'merge';
   return (
     node.type === 'planner' ||
     node.type === 'helper' ||
@@ -108,10 +137,13 @@ export function isRemovable(node: WorkflowNode): boolean {
   );
 }
 
+/** A block on the final chain between the ticket merge and your merge (branch checks too). */
 function isFinalStage(node: WorkflowNode | undefined): boolean {
   return (
     node !== undefined &&
-    ((node.type === 'reviewer' && node.scope === 'final') || node.type === 'tester')
+    ((node.type === 'reviewer' && node.scope === 'final') ||
+      node.type === 'tester' ||
+      (isChecksNode(node) && checkPlaceOf(node) === 'branch'))
   );
 }
 
@@ -146,6 +178,26 @@ function countFor(graph: WorkflowGraph, item: PaletteItemKey): { count: number; 
         max: NODE_CAPABILITIES.tester.maxPerGraph,
       };
   }
+}
+
+/** Whether the menu may add a Checks block in this place, and why not (in plain sight). */
+export function checksAvailability(
+  graph: WorkflowGraph,
+  place: CheckBlockItem,
+): { ok: true } | { ok: false; reason: string } {
+  const H = HARNESS_BLOCKS_COPY.palette;
+  if (graph.nodes.length >= MAX_GRAPH_NODES) {
+    return { ok: false, reason: WORKFLOW_GRAPH_COPY.palette.tooManyBlocks(MAX_GRAPH_NODES) };
+  }
+  if (place === 'branch') {
+    return checksBlocks(graph).some((b) => checkPlaceOf(b) === 'branch')
+      ? { ok: false, reason: H.branchFull }
+      : { ok: true };
+  }
+  if (!graph.nodes.some(isEditingBlock)) return { ok: false, reason: H.noEditors };
+  return blocksWithoutChangeChecks(graph).length === 0
+    ? { ok: false, reason: H.allChecked }
+    : { ok: true };
 }
 
 /** Whether the palette may add the item, and why not (the palette's tooltip). */
@@ -376,7 +428,106 @@ function insertFinalStage(graph: WorkflowGraph, stage: WorkflowNodeId): Workflow
   );
   if (into === undefined) return graph;
   const g = unlink(graph, (e) => e.id !== into.id);
-  return link(link(g, 'flow', into.from, stage), 'flow', stage, ownerMerge.id);
+  const first = link(g, 'flow', into.from, stage);
+  const both = link(first, 'flow', stage, ownerMerge.id);
+  // Only when both links are allowed: a half-made chain would break your merge's path.
+  return both.edges.length === g.edges.length + 2 ? both : graph;
+}
+
+/**
+ * Takes a block off the graph's links (keeps the block): every link to or from it goes, and a
+ * final stage's neighbours on the chain are joined again, as when it is removed.
+ */
+function detach(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
+  const node = nodeOf(graph, id);
+  const before = graph.edges.filter((e) => e.type === 'flow' && e.to === id);
+  const after = graph.edges.filter((e) => e.type === 'flow' && e.from === id);
+  let g = unlink(graph, (e) => e.from !== id && e.to !== id);
+  if (isFinalStage(node)) {
+    const prev = before.length === 1 ? before[0] : undefined;
+    const next = after.length === 1 ? after[0] : undefined;
+    if (prev !== undefined && next !== undefined) g = link(g, 'flow', prev.from, next.to);
+  }
+  return g;
+}
+
+/** Links a change block from an editing block without one: `near` when it may, else the first. */
+function wireChangeBlock(
+  graph: WorkflowGraph,
+  block: WorkflowNodeId,
+  near?: WorkflowNodeId,
+): WorkflowGraph {
+  const free = blocksWithoutChangeChecks(graph);
+  const from = free.find((n) => n.id === near) ?? free[0];
+  return from === undefined ? graph : link(graph, 'flow', from.id, block);
+}
+
+/** A new Checks block: every required check, the place's default failure route. */
+function newChecksNode(graph: WorkflowGraph, place: CheckBlockItem): ChecksNode {
+  const L = HARNESS_BLOCKS_COPY.newLabels;
+  return {
+    type: 'checks',
+    id: freeId(graph, place === 'change' ? 'change-checks' : 'branch-checks'),
+    label: freeLabel(graph, (n) => (n === 1 ? L[place] : `${L[place]} ${n}`)),
+    place,
+    select: { kind: 'required' },
+    onFailure: failureRoutes(place)[0] ?? 'lead',
+  };
+}
+
+function addChecks(
+  graph: WorkflowGraph,
+  place: CheckBlockItem,
+  near?: WorkflowNodeId,
+): { graph: WorkflowGraph; id: string } {
+  const node = newChecksNode(graph, place);
+  const g: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
+  return {
+    graph: place === 'branch' ? insertFinalStage(g, node.id) : wireChangeBlock(g, node.id, near),
+    id: node.id,
+  };
+}
+
+function replaceNode(graph: WorkflowGraph, node: WorkflowNode): WorkflowGraph {
+  return { ...graph, nodes: graph.nodes.map((n) => (n.id === node.id ? node : n)) };
+}
+
+/** Moves a change or branch block to the other place, with the other place's wiring. */
+function setCheckPlace(
+  graph: WorkflowGraph,
+  id: WorkflowNodeId,
+  place: CheckBlockItem,
+): WorkflowGraph {
+  const node = nodeOf(graph, id);
+  if (!isChecksNode(node) || checkPlaceOf(node) === 'merge' || checkPlaceOf(node) === place) {
+    return graph;
+  }
+  if (!checksAvailability({ ...graph, nodes: graph.nodes.filter((n) => n.id !== id) }, place).ok) {
+    return graph;
+  }
+  const routes = failureRoutes(place);
+  const onFailure = routes.includes(checkFailureOf(node)) ? checkFailureOf(node) : routes[0];
+  const moved: ChecksNode = { ...node, place, ...(onFailure !== undefined ? { onFailure } : {}) };
+  const g = replaceNode(detach(graph, id), moved);
+  return place === 'branch' ? insertFinalStage(g, id) : wireChangeBlock(g, id);
+}
+
+/** Sets the failure route; "back to the helper" links the block back to the helper it checks. */
+function setCheckFailure(
+  graph: WorkflowGraph,
+  id: WorkflowNodeId,
+  onFailure: CheckFailureRoute,
+): WorkflowGraph {
+  const node = nodeOf(graph, id);
+  if (!isChecksNode(node) || !failureRoutes(checkPlaceOf(node)).includes(onFailure)) return graph;
+  let g = replaceNode(graph, { ...node, onFailure });
+  if (onFailure === 'helper') {
+    const helper = checkedBlock(g, node);
+    if (helper !== undefined) g = link(g, 'rework', id, helper.id);
+  } else {
+    g = unlink(g, (e) => !(e.type === 'rework' && e.from === id));
+  }
+  return g;
 }
 
 /** Removes a block and its links; a final stage's neighbours on the chain are joined again. */
@@ -390,6 +541,13 @@ function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
     nodes: graph.nodes.filter((n) => n.id !== id),
     edges: graph.edges.filter((e) => e.from !== id && e.to !== id),
   };
+  if (isEditingBlock(node)) {
+    // Its change checks block checked only it: it goes too, rather than staying unlinked.
+    const orphans = checksBlocks(graph).filter(
+      (b) => checkPlaceOf(b) === 'change' && checkedBlock(graph, b)?.id === id,
+    );
+    for (const b of orphans) g = removeNode(g, b.id);
+  }
   if (node.type === 'planner' && !g.nodes.some((n) => n.type === 'planner')) {
     g = unwirePlanner(g);
   } else if (isFinalStage(node)) {
@@ -465,6 +623,8 @@ export function patchNode(node: WorkflowNode, patch: NodePatch): WorkflowNode {
       };
     case 'plan-approval':
       return { ...node, auto: patch.auto ?? node.auto };
+    case 'checks':
+      return { ...node, label, ...(patch.select !== undefined ? { select: patch.select } : {}) };
     default:
       // The other steps have nothing the owner sets.
       return node;
@@ -559,6 +719,24 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
           ),
         }),
       };
+    }
+    case 'add-checks': {
+      if (!checksAvailability(g, action.place).ok) return state;
+      const added = addChecks(g, action.place, action.near);
+      return {
+        graph: custom(added.graph),
+        selection: { kind: 'node', id: added.id },
+        refusal: null,
+      };
+    }
+    case 'set-check-place':
+    case 'set-check-failure': {
+      const next =
+        action.type === 'set-check-place'
+          ? setCheckPlace(g, action.id, action.place)
+          : setCheckFailure(g, action.id, action.onFailure);
+      if (next === g) return state;
+      return { ...state, graph: custom(next), refusal: null };
     }
     case 'select':
       return { ...state, selection: action.selection };

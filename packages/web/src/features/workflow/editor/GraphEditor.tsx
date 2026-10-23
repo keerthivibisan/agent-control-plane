@@ -517,7 +517,11 @@ export function GraphEditor(props: {
           role="group"
           className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-t-[calc(var(--radius-card)-1px)] border-b border-line bg-subtle px-3 py-2"
         >
-          <Palette graph={props.graph} dispatch={props.dispatch} />
+          <Palette
+            graph={props.graph}
+            dispatch={props.dispatch}
+            selectedNode={props.selection?.kind === 'node' ? props.selection.id : undefined}
+          />
           <div className="ml-auto flex flex-wrap items-center gap-x-1 gap-y-1">
             <LegendToggle open={legendOpen} onChange={setLegendOpen} />
             <HowItWorks />

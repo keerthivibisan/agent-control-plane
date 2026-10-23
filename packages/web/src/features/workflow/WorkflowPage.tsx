@@ -10,6 +10,8 @@ import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import {
   isWorkflowGraphPath,
+  projectSetupPaths,
+  projectSetupSchemas,
   workflowGraphPaths,
   workflowGraphSchemas,
   workflowPaths,
@@ -18,6 +20,7 @@ import {
 } from '../../lib/api';
 import { WORKFLOW_COPY, WORKFLOW_GRAPH_COPY } from '../../lib/copy';
 import { useApiQuery, useQueryStore } from '../../lib/query';
+import { usableHarness } from './check-blocks';
 import { refusalMessage } from './draft';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
@@ -111,19 +114,29 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   /** The graph the last save stored, until the refetch brings it back as `dto.graph`. */
   const [stored, setStored] = useState<WorkflowGraph | null>(null);
   const agentFiles = useApiQuery(workflowPaths.agents(projectId), workflowSchemas.agents).data;
+  // The harness's checks, for the Checks blocks' picks (ADR-0027); unknown while it loads.
+  const harness = useApiQuery(
+    projectSetupPaths.harness(projectId),
+    projectSetupSchemas.harness,
+  ).data;
+  const harnessChecks = usableHarness(harness);
 
   const graph = state.graph;
   const projectMode = approvalsOf(dto.setup).mode;
   const helperLimit = dto.setup.maxConcurrentHelpers;
   const issues = useMemo(
     () =>
-      editorIssues(graph, {
-        skills: dto.skills,
-        agents: dto.agents,
-        maxConcurrentHelpers: helperLimit,
-        projectMode,
-      }),
-    [graph, dto.skills, dto.agents, helperLimit, projectMode],
+      editorIssues(
+        graph,
+        {
+          skills: dto.skills,
+          agents: dto.agents,
+          maxConcurrentHelpers: helperLimit,
+          projectMode,
+        },
+        harnessChecks,
+      ),
+    [graph, dto.skills, dto.agents, helperLimit, projectMode, harnessChecks],
   );
   const blocked = hasErrors(issues);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
@@ -145,8 +158,18 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       projectModel: dto.setup.model,
       projectMode,
       helperLimit,
+      harness,
     }),
-    [projectId, dto.skills, dto.agents, agentModels, dto.setup.model, projectMode, helperLimit],
+    [
+      projectId,
+      dto.skills,
+      dto.agents,
+      agentModels,
+      dto.setup.model,
+      projectMode,
+      helperLimit,
+      harness,
+    ],
   );
 
   const focusOn = useCallback((selection: NonNullable<Selection>) => {
