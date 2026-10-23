@@ -6,11 +6,14 @@ import {
   gitHubRemoteUrl,
   parseGitHubRepository,
   type CodeHostStatusDto,
+  type CreateBranchRequest,
   type CreateRepositoryRequest,
   type GitHubRepository,
+  type ProjectBranchesDto,
 } from '@acp/core/api';
 import { silentLogger, type Logger } from '../logger.js';
 import { GitCommandError, SAFE_GIT_CONFIG, type GitRunner } from '../workspace/index.js';
+import { createProjectBranches } from './branches.js';
 import { CodeHostError, MESSAGES } from './errors.js';
 import { createGitHubCli, type CodeHostCli, type PullRequestInfo } from './github.js';
 import { parseRemoteUrl, providerOf, repoSlug, type RemoteRepo } from './remote.js';
@@ -31,6 +34,8 @@ import { createCliRunner, type CliRunner } from './runner.js';
  * - `createRepository` (ADR-0025 §7): `gh repo create`, then `git remote add origin <address>`
  *   and, if asked, the push of the current branch. Only when there is no `origin` yet.
  * - `connectRepository` (ADR-0025 §7): `git remote add origin <address>`; nothing is pushed.
+ * - `branches` and `createBranch` (ADR-0025 §8): the project's local branches, and a new one
+ *   made with `git branch --no-track` (and, if asked, sent with `push`); see `branches.ts`.
  *
  * The `origin` address is always rebuilt from a checked owner and name (`gitHubRemoteUrl`), never
  * the text the owner typed, and an existing remote is never changed or removed.
@@ -56,6 +61,10 @@ export interface CodeHostService {
   createRepository(projectRoot: string, input: CreateRepositoryRequest): Promise<CodeHostStatusDto>;
   /** Sets an existing GitHub repository (as the owner typed it) as `origin`; nothing is pushed. */
   connectRepository(projectRoot: string, repository: string): Promise<CodeHostStatusDto>;
+  /** The project's local branches, read from git now (no fetch). */
+  branches(projectRoot: string): Promise<ProjectBranchesDto>;
+  /** Creates a local branch without switching the checkout; answers the fresh list. */
+  createBranch(projectRoot: string, input: CreateBranchRequest): Promise<ProjectBranchesDto>;
 }
 
 export interface CodeHostServiceDeps {
@@ -263,8 +272,13 @@ export function createCodeHostService(deps: CodeHostServiceDeps): CodeHostServic
     };
   }
 
+  const projectBranches = createProjectBranches({ git: deps.git, push, logger });
+
   return {
     status,
+
+    branches: (projectRoot) => projectBranches.list(projectRoot),
+    createBranch: (projectRoot, input) => projectBranches.create(projectRoot, input),
 
     async createRepository(projectRoot, input) {
       await requireNoOrigin(projectRoot);

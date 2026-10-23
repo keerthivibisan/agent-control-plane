@@ -30,6 +30,7 @@ import {
 } from '@acp/core';
 import {
   ConnectRepositoryRequestSchema,
+  CreateBranchRequestSchema,
   CreateRepoProjectRequestSchema,
   CreateRepositoryRequestSchema,
   CreateTicketRequestSchema,
@@ -47,6 +48,7 @@ import {
   type StreamNoticeDto,
   type TicketCardDto,
   type CodeHostStatusDto,
+  type ProjectBranchesDto,
   type TicketBranchDto,
   type AttachmentDto,
   type TicketActivityDto,
@@ -201,6 +203,10 @@ export interface BoardService {
   createCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
   /** ADR-0025 §7: sets an existing GitHub repository as `origin` (the owner's click). */
   connectCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §8: the project's local branches, read from git now (no fetch). */
+  projectBranches(projectId: string): Promise<ProjectBranchesDto>;
+  /** ADR-0025 §8: creates (and, if asked, pushes) a local branch on the owner's click. */
+  createProjectBranch(projectId: string, body: unknown): Promise<ProjectBranchesDto>;
   /** ADR-0025 §4: Push & open PR for the ticket's current run's ticket branch. */
   openPullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
   /** ADR-0025: reads the pull request's state now (the owner's view or Refresh). */
@@ -227,7 +233,10 @@ export interface BoardServiceDeps {
    */
   ticketBranches?: Pick<WorkspaceManager, 'checkTicketBranchPlan'>;
   /** ADR-0025: the code host status; omitted, its route answers `code_host_unavailable`. */
-  codeHost?: Pick<CodeHostService, 'status' | 'createRepository' | 'connectRepository'>;
+  codeHost?: Pick<
+    CodeHostService,
+    'status' | 'createRepository' | 'connectRepository' | 'branches' | 'createBranch'
+  >;
   /**
    * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
    * the legacy flow those runs keep stays covered. Production never sets it.
@@ -1235,6 +1244,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const host = requireCodeHost();
       const { repository } = ConnectRepositoryRequestSchema.parse(body);
       return codeHostCall(() => host.connectRepository(p.rootPath, repository));
+    },
+
+    async projectBranches(projectId) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      return codeHostCall(() => host.branches(p.rootPath));
+    },
+
+    async createProjectBranch(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const input = CreateBranchRequestSchema.parse(body);
+      return codeHostCall(() => host.createBranch(p.rootPath, input));
     },
 
     async openPullRequest(ticketId, body) {

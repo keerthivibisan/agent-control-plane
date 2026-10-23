@@ -34,7 +34,18 @@ export type CodeHostErrorCode =
   /** "Push now" with the project folder not on a branch. */
   | 'detached_head'
   /** The project folder is not a git repository, so it cannot have an `origin`. */
-  | 'not_a_git_repository';
+  | 'not_a_git_repository'
+  // Creating branches from the app (ADR-0025 §8, G-F): snake_case, as the contract names them.
+  /** A local branch of that name exists; the app never moves it. */
+  | 'branch_exists'
+  /** The branch to start from is not a local branch of the project. */
+  | 'base_branch_missing'
+  /** "Also push" without an `origin` remote (checked before the branch is created). */
+  | 'no_origin'
+  /** `git check-ref-format --branch` refuses the name. */
+  | 'invalid_branch_name'
+  /** `git branch` failed otherwise (e.g. `feature` exists and the name is `feature/x`). */
+  | 'branch_create_failed';
 
 export class CodeHostError extends Error {
   override readonly name = 'CodeHostError';
@@ -61,6 +72,11 @@ const STATUS: Readonly<Record<CodeHostErrorCode, number>> = {
   remote_add_failed: 500,
   detached_head: 409,
   not_a_git_repository: 409,
+  branch_exists: 409,
+  base_branch_missing: 404,
+  no_origin: 409,
+  invalid_branch_name: 422,
+  branch_create_failed: 409,
 };
 
 /**
@@ -90,4 +106,16 @@ export const MESSAGES = {
   notGitRepository: 'The project folder is not a git repository, so it cannot have an origin.',
   remoteAddFailed:
     'The app could not set the repository as origin. Check that you can write to the project folder, then try again.',
+  // G-F (ADR-0025 §8).
+  branchExists: (name: string) =>
+    `The project already has a branch named ${name}. The app never moves an existing branch.`,
+  baseBranchMissing: (from: string) =>
+    `The project has no local branch named ${from} to start from.`,
+  noOrigin:
+    'The project has no remote named origin, so the branch cannot be pushed. Create it without pushing, or connect GitHub first.',
+  invalidBranchName: (name: string) => `Git does not accept ${name} as a branch name.`,
+  branchCreateFailed: (name: string) =>
+    `Git could not create ${name}. A branch whose name is part of it (or starts with it and a /) may already exist.`,
+  createdNotPushed: (name: string) =>
+    `The app created ${name} in the project, but pushing it to origin did not work.`,
 } as const;

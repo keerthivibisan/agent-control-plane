@@ -11,6 +11,7 @@ import {
   ContextCandidateDtoSchema,
   HarnessStatusDtoSchema,
   ProjectAgentSetupDtoSchema,
+  ProjectBranchesDtoSchema,
   ProjectDtoSchema,
   TicketCardDtoSchema,
   TicketCommentDtoSchema,
@@ -97,6 +98,15 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.post('/projects/:id/code-host/remote', csrf, json, async (req, res) => {
     const dto = await board.connectCodeHostRepository(param(req.params['id']), req.body);
     res.json(out(CodeHostStatusDtoSchema, dto));
+  });
+  // ADR-0025 §8: the project's local branches (read from git when asked, no fetch), and a new
+  // one on the owner's click: `git branch --no-track`, never a checkout; pushed only if asked.
+  router.get('/projects/:id/branches', async (req, res) => {
+    res.json(out(ProjectBranchesDtoSchema, await board.projectBranches(param(req.params['id']))));
+  });
+  router.post('/projects/:id/branches', csrf, json, async (req, res) => {
+    const dto = await board.createProjectBranch(param(req.params['id']), req.body);
+    res.status(201).json(out(ProjectBranchesDtoSchema, dto));
   });
   router.get('/projects/:id/context-candidates', async (req, res) => {
     const list = await board.contextCandidates(param(req.params['id']));

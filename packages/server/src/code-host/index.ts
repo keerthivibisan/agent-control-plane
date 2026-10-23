@@ -1,3 +1,5 @@
+export { MAX_BRANCHES, createProjectBranches } from './branches.js';
+export type { ProjectBranches, ProjectBranchesDeps } from './branches.js';
 export { CodeHostError, codeHostHttpError } from './errors.js';
 export type { CodeHostErrorCode } from './errors.js';
 export { createGitHubCli, GH_TIMEOUTS } from './github.js';
