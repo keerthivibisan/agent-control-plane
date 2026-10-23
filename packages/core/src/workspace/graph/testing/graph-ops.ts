@@ -6,6 +6,7 @@ import type {
   WorkflowNodeId,
   WorkflowNodeOf,
 } from '../../workflow-graph.js';
+import { isCheckBlockAt } from '../check-blocks.js';
 import { isChangeReviewer, isFinalStage } from '../graph-index.js';
 import type { GraphRng } from './rng.js';
 
@@ -135,21 +136,76 @@ export function hasEdge(
   return graph.edges.some((e) => e.type === type && e.from === from && e.to === to);
 }
 
-/** The final chain's node ids from the ticket merge to the owner's merge, following flow edges. */
+/**
+ * The final chain's node ids from the ticket merge to the owner's merge, following flow edges (a
+ * tester's flow to its change block is not part of it).
+ */
 export function chainIds(graph: WorkflowGraph): WorkflowNodeId[] {
   const start = firstOfType(graph, 'ticket-merge');
   if (start === undefined) return [];
+  const changeBlockIds = new Set(changeBlocks(graph).map((n) => n.id));
   const chain = [start.id];
   for (;;) {
     const last = chain[chain.length - 1];
-    const next = graph.edges.find((e) => e.type === 'flow' && e.from === last)?.to;
+    const next = graph.edges.find(
+      (e) => e.type === 'flow' && e.from === last && !changeBlockIds.has(e.to),
+    )?.to;
     if (next === undefined || chain.includes(next)) return chain;
     chain.push(next);
     if (graph.nodes.find((n) => n.id === next)?.type === 'owner-merge') return chain;
   }
 }
 
+// ---------------------------------------------------------------- Checks blocks (ADR-0027 §5)
+
+export function checkBlocksAt(
+  graph: WorkflowGraph,
+  place: 'change' | 'merge' | 'branch',
+): WorkflowNodeOf<'checks'>[] {
+  return graph.nodes.filter(
+    (n): n is WorkflowNodeOf<'checks'> => n.type === 'checks' && isCheckBlockAt(n, place),
+  );
+}
+
+export function changeBlocks(graph: WorkflowGraph): WorkflowNodeOf<'checks'>[] {
+  return checkBlocksAt(graph, 'change');
+}
+
+/** The block before the lead's merge (the first, when a broken graph has more). */
+export function mergeBlock(graph: WorkflowGraph): WorkflowNodeOf<'checks'> | undefined {
+  return checkBlocksAt(graph, 'merge')[0];
+}
+
+/** The ids of the editing nodes that flow into a change block. */
+export function blockInputs(graph: WorkflowGraph, blockId: WorkflowNodeId): WorkflowNodeId[] {
+  return graph.edges.filter((e) => e.type === 'flow' && e.to === blockId).map((e) => e.from);
+}
+
+/** The change block an editing node flows into, if any. */
+export function changeBlockOf(
+  graph: WorkflowGraph,
+  editorId: WorkflowNodeId,
+): WorkflowNodeId | undefined {
+  const ids = new Set(changeBlocks(graph).map((n) => n.id));
+  return graph.edges.find((e) => e.type === 'flow' && e.from === editorId && ids.has(e.to))?.to;
+}
+
+/** Removes change blocks nothing flows into any more (and their rework edges). */
+export function dropOrphanCheckBlocks(graph: WorkflowGraph): WorkflowGraph {
+  let g = graph;
+  for (const block of changeBlocks(g)) {
+    if (blockInputs(g, block.id).length === 0) g = removeNode(g, block.id);
+  }
+  return g;
+}
+
 // ---------------------------------------------------------------- random config
+
+/** One of `items`, or undefined (an absent optional field), each equally likely. */
+export function pickOptional<T>(rng: GraphRng, items: readonly T[]): T | undefined {
+  const i = rng.int(items.length + 1);
+  return i === 0 ? undefined : items[i - 1];
+}
 
 const MODELS: readonly (string | null)[] = [null, null, 'sonnet', 'opus', 'haiku'];
 const SKILLS: readonly string[] = ['tdd', 'react-pages', 'sql-migrations', 'docs-style'];

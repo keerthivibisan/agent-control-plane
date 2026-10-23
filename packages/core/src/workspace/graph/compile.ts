@@ -6,6 +6,9 @@ import {
   type EffectiveNodeMode,
   type GraphIssue,
   type ProgramAgentNode,
+  type ProgramBranchCheckBlock,
+  type ProgramChangeCheckBlock,
+  type ProgramCheckBlock,
   type ProgramFinalReviewerNode,
   type ProgramHelperNode,
   type ProgramTesterNode,
@@ -17,6 +20,7 @@ import {
   type WorkflowNodeOf,
   type WorkflowProgram,
 } from '../workflow-graph.js';
+import { checkBlockOf, copySelection, isCheckBlockAt } from './check-blocks.js';
 import { edgesOfType, indexNodes, isChangeReviewer } from './graph-index.js';
 import { validateWorkflowGraph } from './validate.js';
 
@@ -75,6 +79,12 @@ function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
  * - `changeReviewers`: the change reviewers some route uses, in graph order (none when every
  *   change goes to the lead).
  * - `finalStages`: the final chain from the ticket merge to the owner's merge, in order.
+ * - `checkBlocks` (ADR-0027 §5): the block before the lead's merge, the block on the ticket branch
+ *   (null without one; `afterStages` is its position among the final stages) and, per editing
+ *   node, the change block it flows into. Settings default as `checkBlockOf` says. A change
+ *   block's `maxRounds` is its rework edge's rounds to that node with "back to the helper" (null
+ *   otherwise); `ctx.maxReworkRounds` is the review's setting and does not replace it.
+ *   An old graph compiles to `{ merge: { required, lead }, branch: null, change: {} }`.
  */
 export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): WorkflowProgram {
   const errors = validateWorkflowGraph(graph, {
@@ -148,13 +158,21 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   }
 
   const finalStages: (ProgramFinalReviewerNode | ProgramTesterNode)[] = [];
+  let branchBlock: ProgramBranchCheckBlock | null = null;
+  // A tester's flow to its change block is not a step of the chain.
   const flowNext = (from: WorkflowNodeId): WorkflowEdge | undefined =>
-    edges.find((e) => e.type === 'flow' && e.from === from);
+    edges.find((e) => {
+      if (e.type !== 'flow' || e.from !== from) return false;
+      const to = index.byId.get(e.to);
+      return to === undefined || !isCheckBlockAt(to, 'change');
+    });
   let step = flowNext(must(nodeOf('ticket-merge'), 'the ticket merge').id);
   for (;;) {
     const node = must(index.byId.get(must(step, 'the final chain').to), 'a final chain step');
     if (node.type === 'owner-merge') break;
-    if (node.type === 'tester') {
+    if (node.type === 'checks') {
+      branchBlock = { ...programBlock(node), place: 'branch', afterStages: finalStages.length };
+    } else if (node.type === 'tester') {
       finalStages.push({
         ...agentNode(node),
         type: 'tester',
@@ -174,6 +192,34 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
     .filter((n) => usedReviewers.has(n.id))
     .map(agentNode);
 
+  const mergeNode = must(
+    graph.nodes.find((n): n is WorkflowNodeOf<'checks'> => isCheckBlockAt(n, 'merge')),
+    'the Checks block before the merge',
+  );
+  const change: Record<WorkflowNodeId, ProgramChangeCheckBlock> = Object.create(null) as Record<
+    WorkflowNodeId,
+    ProgramChangeCheckBlock
+  >;
+  for (const editor of [...helpers, ...finalStages]) {
+    if (editor.type === 'reviewer') continue;
+    const into = edges.find((e) => {
+      if (e.type !== 'flow' || e.from !== editor.id) return false;
+      const to = index.byId.get(e.to);
+      return to !== undefined && isCheckBlockAt(to, 'change');
+    });
+    const block = into === undefined ? undefined : index.byId.get(into.to);
+    if (block === undefined || block.type !== 'checks') continue;
+    const base = programBlock(block);
+    const rework = edgesOfType(edges, 'rework').find(
+      (e) => e.from === block.id && e.to === editor.id,
+    );
+    change[editor.id] = {
+      ...base,
+      place: 'change',
+      maxRounds: base.onFailure === 'helper' && rework !== undefined ? rework.maxRounds : null,
+    };
+  }
+
   const planner = nodeOf('planner');
   const gate = must(nodeOf('plan-approval'), 'the plan gate');
   return {
@@ -184,6 +230,21 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
     changeReviewers,
     finalStages,
     nodeModes,
+    checkBlocks: {
+      merge: { ...programBlock(mergeNode), place: 'merge' },
+      branch: branchBlock,
+      change,
+    },
+  };
+}
+
+function programBlock(node: WorkflowNodeOf<'checks'>): ProgramCheckBlock {
+  const block = checkBlockOf(node);
+  return {
+    nodeId: node.id,
+    label: node.label,
+    select: copySelection(block.select),
+    onFailure: block.onFailure,
   };
 }
 

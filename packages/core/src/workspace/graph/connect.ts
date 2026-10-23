@@ -6,6 +6,7 @@ import type {
   WorkflowNode,
   WorkflowNodeId,
 } from '../workflow-graph.js';
+import { isCheckBlockAt } from './check-blocks.js';
 import {
   indexNodes,
   isChangeReviewer,
@@ -25,14 +26,20 @@ import {
  *     `ticket → lead → plan-approval` without one (the lead writes the plan itself, so the plan
  *     gate is the end of its plan path). So `ticket → lead` and `lead → plan-approval` are allowed
  *     only without a planner, and `plan-approval → lead` only with one;
- *   - `checks → ticket-merge`;
- *   - the final chain: `ticket-merge` | final reviewer | tester → final reviewer | tester |
- *     `owner-merge`, then `owner-merge → done`;
+ *   - `checks → ticket-merge` for the block before the lead's merge (place `merge`, the default);
+ *   - the final chain: `ticket-merge` | final reviewer | tester | branch block → final reviewer |
+ *     tester | branch block | `owner-merge` (never one branch block to another), then
+ *     `owner-merge → done`;
+ *   - a change block (ADR-0027 §5): `helper` | `helper-pool` | `tester` → change block. Nothing
+ *     flows out of it: the change goes on to its review route;
  * - `assigns`: lead → `helper` | `helper-pool`;
  * - `review`: `helper` | `helper-pool` | `tester` → change reviewer | lead;
  * - `findings`: change reviewer → lead;
- * - `rework`: change reviewer | lead → `helper` | `helper-pool` | `tester`;
- * - `merge`: lead → `checks`.
+ * - `rework`: change reviewer | lead | change block → `helper` | `helper-pool` | `tester`;
+ * - `merge`: lead → the block before the lead's merge.
+ *
+ * Which helper a change block may send back, and when, are path rules (`check-rework`), as is a
+ * reviewer's rework without its review: the matrix looks at the two ends only.
  */
 
 /** The issue codes an edge can fail `canConnect` with; the validator reports exactly these. */
@@ -58,6 +65,7 @@ function allowed(
 ): boolean {
   switch (type) {
     case 'flow':
+      if (isCheckBlockAt(to, 'change')) return isEditor(from);
       switch (from.type) {
         case 'ticket':
           return to.type === 'planner' || (to.type === 'lead' && !hasPlanner);
@@ -68,13 +76,14 @@ function allowed(
         case 'lead':
           return to.type === 'plan-approval' && !hasPlanner;
         case 'checks':
-          return to.type === 'ticket-merge';
+          if (isCheckBlockAt(from, 'merge')) return to.type === 'ticket-merge';
+          return isCheckBlockAt(from, 'branch') && (isFinalStage(to) || to.type === 'owner-merge');
         case 'owner-merge':
           return to.type === 'done';
         default:
           return (
             (from.type === 'ticket-merge' || isFinalStage(from)) &&
-            (isFinalStage(to) || to.type === 'owner-merge')
+            (isFinalStage(to) || to.type === 'owner-merge' || isCheckBlockAt(to, 'branch'))
           );
       }
     case 'assigns':
@@ -84,20 +93,24 @@ function allowed(
     case 'findings':
       return isChangeReviewer(from) && to.type === 'lead';
     case 'rework':
-      return (isChangeReviewer(from) || from.type === 'lead') && isEditor(to);
+      return (
+        (isChangeReviewer(from) || from.type === 'lead' || isCheckBlockAt(from, 'change')) &&
+        isEditor(to)
+      );
     case 'merge':
-      return from.type === 'lead' && to.type === 'checks';
+      return from.type === 'lead' && isCheckBlockAt(to, 'merge');
   }
 }
 
 /** What each edge type is for, in the owner's words, to explain a refusal. */
 const EDGE_RULES: Readonly<Record<WorkflowEdgeType, string>> = Object.freeze({
-  flow: 'A flow link follows the plan path (Ticket, the planner or the Lead, Plan approval) or the steps after the ticket merge (final reviewers and testers, then your merge, then Done).',
+  flow: 'A flow link follows the plan path (Ticket, the planner or the Lead, Plan approval) or the steps after the ticket merge (final reviewers, testers and the Checks block on the ticket branch, then your merge, then Done), or takes a helper’s or tester’s change to a Checks block on the change.',
   assigns: 'Only the Lead assigns work, to a helper block.',
   review: 'A helper or tester sends its change for review to a change reviewer or to the Lead.',
   findings: 'A change reviewer sends its findings to the Lead.',
-  rework: 'A change reviewer or the Lead sends a helper’s or tester’s change back for rework.',
-  merge: 'Only the Lead merges, through the Checks block.',
+  rework:
+    'A change reviewer, the Lead or a Checks block on the change sends a helper’s or tester’s change back for rework.',
+  merge: 'Only the Lead merges, through the Checks block before the merge.',
 });
 
 const EDGE_VERBS: Readonly<Record<WorkflowEdgeType, string>> = Object.freeze({

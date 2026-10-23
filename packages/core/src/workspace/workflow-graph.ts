@@ -379,12 +379,22 @@ export const GraphIssueCodeSchema = z.enum([
   'cycle',
   'unreachable',
   'not-assigned',
+  // Checks blocks (ADR-0027 §5)
+  'check-block-input',
+  'many-check-blocks',
+  'check-failure-route',
+  'check-rework',
   // warnings
   'missing-skill',
   'missing-agent-file',
   'full-auto-plan-manual',
   'plan-auto-without-full-auto',
   'instances-over-limit',
+  // warnings about a block's selection against the harness file (ADR-0027 §4, §5)
+  'unknown-check',
+  'unknown-check-label',
+  'no-checks-selected',
+  'merge-skips-required',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -519,6 +529,53 @@ export interface CompileContext {
 }
 
 /**
+ * A Checks block as the engine runs it (ADR-0027 §5), its settings with the defaults filled in
+ * (`checkBlockOf`). Which checks it runs is `checksForBlock(manifest, select)`, against the harness
+ * file of the checkout it runs in.
+ */
+export interface ProgramCheckBlock {
+  nodeId: WorkflowNodeId;
+  label: string;
+  select: CheckSelection;
+  onFailure: CheckFailureRoute;
+}
+
+/** The block before the lead's merge: one per graph; `onFailure` is `lead` or `owner`. */
+export interface ProgramMergeCheckBlock extends ProgramCheckBlock {
+  place: 'merge';
+}
+
+/** The block on the ticket branch, before the owner's merge; `onFailure` is `owner`. */
+export interface ProgramBranchCheckBlock extends ProgramCheckBlock {
+  place: 'branch';
+  /**
+   * How many of `finalStages` come before it on the final chain: it runs on the tip after the
+   * last change and after `finalStages[0 .. afterStages - 1]`, before the rest.
+   */
+  afterStages: number;
+}
+
+/** A block on an editing node's sealed change, before its review. */
+export interface ProgramChangeCheckBlock extends ProgramCheckBlock {
+  place: 'change';
+  /**
+   * `onFailure: 'helper'`: how often the block may send the change back (its rework edge's rounds,
+   * not replaced by the run's review rounds); null for the other routes.
+   */
+  maxRounds: number | null;
+}
+
+/** Every Checks block of a run (ADR-0027 §5). */
+export interface ProgramCheckBlocks {
+  /** Old graphs: the `checks` node with `{ kind: 'required' }` and `lead`. */
+  merge: ProgramMergeCheckBlock;
+  /** Null without a block on the ticket branch (every old graph). */
+  branch: ProgramBranchCheckBlock | null;
+  /** Each editing node's change block, by the editing node's id; absent for a node without one. */
+  change: Readonly<Record<WorkflowNodeId, ProgramChangeCheckBlock>>;
+}
+
+/**
  * A valid graph compiled for one run (ADR-0023 §4). Built in memory when a run is created or
  * loaded, from the run's snapshot of the graph, and never stored.
  */
@@ -535,4 +592,6 @@ export interface WorkflowProgram {
   finalStages: readonly (ProgramFinalReviewerNode | ProgramTesterNode)[];
   /** Every editing node's mode for this run. */
   nodeModes: Readonly<Record<WorkflowNodeId, EffectiveNodeMode>>;
+  /** The Checks blocks (ADR-0027 §5). */
+  checkBlocks: ProgramCheckBlocks;
 }

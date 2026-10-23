@@ -2,6 +2,14 @@
 // contract in `../workflow-graph.ts`, shared by the editor, the server and the engine.
 export { canConnect, type ConnectIssueCode, type ConnectResult } from './connect.js';
 export {
+  CHECK_FAILURE_ROUTE_NAMES,
+  CHECK_PLACE_NAMES,
+  checkBlockOf,
+  defaultFailureRoute,
+  isCheckBlockAt,
+  type CheckBlockConfig,
+} from './check-blocks.js';
+export {
   RESERVED_HELPER_LABELS,
   isGraphRunnable,
   isReservedHelperLabel,

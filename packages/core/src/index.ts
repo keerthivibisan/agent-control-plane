@@ -25,3 +25,4 @@ export * from './workspace/workflow-graph.js';
 export * from './workspace/branching.js';
 export * from './workspace/ticket-activity.js';
 export * from './workspace/graph/index.js';
+export * from './workspace/harness-select.js';
