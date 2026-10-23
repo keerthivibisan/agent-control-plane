@@ -246,3 +246,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   an owner network switch, configurable Checks blocks (on each change, before the lead's merge, on
   the branch) with failure routes; migration 0010. WPs H-0 (coordinator), H-A core, H-B server and
   db, H-C engine, H-D web, H-V verification. H-0 started.
+- 2026-10-23 **H-0 done** (`42bfbab`): contracts for setup steps (network, outputs), check labels,
+  `setupNetwork`, check run places and blocks, setup runs, and the Checks block's place, selection
+  and failure route (no new edge type: `flow` wires a change block, `rework` sends a failure back).
+  Full check: 5,116 tests. Note: a harness file may name any program, `sh` included (ADR-0017's
+  accepted risk); the app never runs through a shell, and shells are never allowlisted for agents.
+  H-A (core rules) and H-D (web) started in parallel; H-B (server, db) and H-C (engine) after H-A.
