@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,9 +9,12 @@ import {
   type ApprovalMode,
   type ManagedAgentSpec,
   type ManagedExecutionAdapter,
+  type WorkflowEdge,
+  type WorkflowGraph,
 } from '@acp/core';
 import {
   CSRF_HEADER,
+  CheckRunDtoSchema,
   CsrfTokenDtoSchema,
   ProjectDtoSchema,
   RunDetailDtoSchema,
@@ -27,7 +30,7 @@ import {
 import { createManagedClaudeCode, type ManagedQueryFn } from '@acp/adapter-claude-code';
 import { managedAgentEnv } from '../../../../src/control/env.js';
 import { git } from '../../control/harness.js';
-import { startAutopilot, type Autopilot } from '../autopilot.js';
+import { startAutopilot, type Autopilot, type AutopilotScript } from '../autopilot.js';
 import { bootGraphServer, commitFiles, errorCode, ok, type GraphServer } from '../harness.js';
 import { scenario as scenarioOf, type Scenario, type ScenarioId } from './scenarios.js';
 
@@ -74,6 +77,16 @@ export interface DriveOptions {
    * facts, the timeline, and that the copies never reach a commit.
    */
   attach?: boolean;
+  /**
+   * v0.3.0 H-B (ADR-0027): the harness in the workflow. The harness file gains one setup step (no
+   * network; its output folder `.prepared`) and labelled checks (`test`: required, `fast`; `full`:
+   * not required, `full`), and the scenario's graph gains a fast Checks block on each helper's
+   * change (back to the helper, 1 round) and a full block on the ticket branch. Asserts the setup
+   * ran in every editing agent's new worktree (and never for the lead or reviewers), the blocks
+   * ran at their places, and the outputs never reached a commit or the owner's checkout. In the
+   * dry run the first turn of each helper also fails the fast check, so the block sends it back.
+   */
+  harness?: boolean;
 }
 
 export interface DriveResult {
@@ -118,6 +131,157 @@ export const HARNESS: Readonly<Record<string, string>> = {
   ].join('\n'),
 };
 
+/** `--harness` (ADR-0027): the Checks blocks' node ids and the setup's output folder. */
+export const HARNESS_BLOCKS = { change: 'fast-checks', branch: 'full-checks' } as const;
+export const SETUP_OUTPUT = '.prepared';
+
+/**
+ * `--harness`: one setup step (no network) that prepares `.prepared/ready`, and two labelled
+ * checks that each need it (so a check proves the setup ran in its own checkout): `test` runs the
+ * repo's `node:test` files (required, `fast`), `full` only checks the setup (not required, `full`).
+ */
+export const HARNESS_WITH_SETUP: Readonly<Record<string, string>> = {
+  '.acp/harness.json': `${JSON.stringify(
+    {
+      version: 1,
+      description: 'H-B real run harness (synthetic)',
+      setup: [
+        {
+          id: 'prepare',
+          name: 'Prepare the copy',
+          argv: ['node', 'prepare.mjs'],
+          timeoutSec: 60,
+          outputs: [SETUP_OUTPUT],
+        },
+      ],
+      checks: [
+        {
+          id: 'test',
+          name: 'Unit tests',
+          argv: ['node', 'check.mjs'],
+          timeoutSec: 60,
+          required: true,
+          labels: ['fast'],
+        },
+        {
+          id: 'full',
+          name: 'Full check',
+          argv: ['node', 'full.mjs'],
+          timeoutSec: 60,
+          required: false,
+          labels: ['full'],
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`,
+  'prepare.mjs': [
+    "import { mkdirSync, writeFileSync } from 'node:fs';",
+    `mkdirSync('${SETUP_OUTPUT}', { recursive: true });`,
+    `writeFileSync('${SETUP_OUTPUT}/ready', 'ready\\n');`,
+    "console.log('prepared');",
+    '',
+  ].join('\n'),
+  'check.mjs': [
+    "import { existsSync, readdirSync } from 'node:fs';",
+    "import { spawnSync } from 'node:child_process';",
+    `if (!existsSync('${SETUP_OUTPUT}/ready')) {`,
+    "  console.error('The setup did not run in this checkout.');",
+    '  process.exit(3);',
+    '}',
+    "const dir = 'test';",
+    'const files = existsSync(dir)',
+    "  ? readdirSync(dir).filter((f) => f.endsWith('.test.mjs')).map((f) => `${dir}/${f}`)",
+    '  : [];',
+    'if (files.length === 0) process.exit(0);',
+    "const r = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' });",
+    'process.exit(r.status ?? 1);',
+    '',
+  ].join('\n'),
+  'full.mjs': [
+    "import { existsSync } from 'node:fs';",
+    `process.exit(existsSync('${SETUP_OUTPUT}/ready') ? 0 : 3);`,
+    '',
+  ].join('\n'),
+};
+
+/**
+ * `--harness`: the scenario's graph with a fast Checks block on every helper's change (back to
+ * the helper, 1 round) and a full block on the ticket branch, right before the owner's merge.
+ */
+export function withHarnessBlocks(graph: WorkflowGraph): WorkflowGraph {
+  const editors = graph.nodes
+    .filter((n) => n.type === 'helper' || n.type === 'helper-pool')
+    .map((n) => n.id);
+  const toOwner = graph.edges.find((e) => e.type === 'flow' && e.to === 'owner-merge');
+  if (toOwner === undefined) throw new Error('the graph has no flow into the owner merge');
+  const edges: WorkflowEdge[] = graph.edges.filter((e) => e !== toOwner);
+  for (const id of editors) {
+    edges.push(
+      { type: 'flow', id: `flow-${id}-fast`.slice(0, 40), from: id, to: HARNESS_BLOCKS.change },
+      {
+        type: 'rework',
+        id: `rework-fast-${id}`.slice(0, 40),
+        from: HARNESS_BLOCKS.change,
+        to: id,
+        maxRounds: 1,
+      },
+    );
+  }
+  edges.push(
+    { type: 'flow', id: 'flow-into-full', from: toOwner.from, to: HARNESS_BLOCKS.branch },
+    { type: 'flow', id: 'flow-full-owner', from: HARNESS_BLOCKS.branch, to: 'owner-merge' },
+  );
+  return {
+    ...graph,
+    template: 'custom',
+    nodes: [
+      ...graph.nodes,
+      {
+        type: 'checks',
+        id: HARNESS_BLOCKS.change,
+        label: 'Fast checks',
+        place: 'change',
+        select: { kind: 'labels', labels: ['fast'] },
+        onFailure: 'helper',
+      },
+      {
+        type: 'checks',
+        id: HARNESS_BLOCKS.branch,
+        label: 'Full checks',
+        place: 'branch',
+        select: { kind: 'labels', labels: ['full'] },
+        onFailure: 'owner',
+      },
+    ],
+    edges,
+  };
+}
+
+/** A `node:test` file that fails on a helper's first turn and passes after its check rework. */
+function harnessTest(passing: boolean): string {
+  return [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    `test('harness', () => assert.equal(${passing ? 1 : 0}, 1));`,
+    '',
+  ].join('\n');
+}
+
+/** `--harness` in the dry run: each helper's first turn fails the fast check, the next fixes it. */
+function withFailingFirstTurn(script: AutopilotScript): AutopilotScript {
+  return {
+    ...script,
+    helperFiles: (role, round) => ({
+      ...script.helperFiles(role, round),
+      [`test/${role.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-harness.test.mjs`]: harnessTest(
+        round > 0,
+      ),
+    }),
+  };
+}
+
 // ------------------------------------------------------------------ observing each start
 
 interface SandboxShape {
@@ -149,6 +313,8 @@ interface StartRecord {
   denials: Record<string, number>;
   /** The brief lists the owner's attachments (ADR-0026 §4); the prompt itself is never kept. */
   attachmentsListed: boolean;
+  /** The brief lists the checks the agent may run (ADR-0027 §4); only whether, never the text. */
+  checksListed: boolean;
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -208,6 +374,7 @@ function observingAdapter(inner: ManagedQueryFn, starts: StartRecord[]): Managed
       gate: {},
       denials: {},
       attachmentsListed: spec.prompt.includes('The owner attached'),
+      checksListed: spec.prompt.includes("You may run the project's checks"),
     };
     starts.push(record);
     const gate = o.canUseTool;
@@ -313,7 +480,8 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
       ),
     );
     const repo = project.rootPath;
-    commitFiles(repo, HARNESS, 'Add the harness');
+    commitFiles(repo, options.harness === true ? HARNESS_WITH_SETUP : HARNESS, 'Add the harness');
+    const graph = options.harness === true ? withHarnessBlocks(sc.graph) : sc.graph;
     const p = `/api/projects/${project.id}`;
     ok(
       await b.put(`${p}/setup`, {
@@ -333,7 +501,7 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
       ok(await b.post(`${p}/skills/${skill.name}/commit`), 200, 'skill commit');
     }
     const saved = WorkflowGraphDtoSchema.parse(
-      ok(await b.put(`${p}/workflow-graph`, { graph: sc.graph }), 200, 'graph'),
+      ok(await b.put(`${p}/workflow-graph`, { graph }), 200, 'graph'),
     );
     const graphIssues: Record<string, number> = {};
     for (const issue of saved.issues) count(graphIssues, `${issue.severity}:${issue.code}`);
@@ -367,7 +535,10 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
     if (rid === undefined) throw new Error('the ticket has no run');
     runId = rid;
     say(`scenario ${sc.id}: run started`);
-    if (options.dryRun) autopilot = startAutopilot(b, ticket.id, rid, sc.dryRun);
+    if (options.dryRun) {
+      const script = options.harness === true ? withFailingFirstTurn(sc.dryRun) : sc.dryRun;
+      autopilot = startAutopilot(b, ticket.id, rid, script);
+    }
 
     // ---- the owner's part, polled
     const configured = new Map<string, ApprovalMode>();
@@ -631,6 +802,82 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
         notes.every((c) => c.body.length <= 600) && summaries.every((c) => c.body.length <= 1500);
     }
 
+    // ---- v0.3.0 H-B (ADR-0027): setup in each editing worktree, Checks blocks at their places
+    let part5: Record<string, unknown> | null = null;
+    if (options.harness === true) {
+      const checkRuns = CheckRunDtoSchema.array().parse(ok(await b.get(`/api/runs/${rid}/checks`)));
+      const setupRuns = tEnd.setupRuns ?? [];
+      const kindOf = (id: string | null) =>
+        id === null ? 'tip' : (end.agents.find((a) => a.id === id)?.kind ?? 'unknown');
+      const setupByWho: Record<string, number> = {};
+      for (const r of setupRuns) count(setupByWho, `${kindOf(r.agentRunId)}:${r.status}`);
+      const checksByPlace: Record<string, number> = {};
+      for (const c of checkRuns) {
+        count(
+          checksByPlace,
+          `${c.place ?? 'none'}:${c.checkId}:${c.agentRunId === null ? 'tip' : 'change'}:${c.status}`,
+        );
+      }
+      const firstStarts = editors.filter(({ s }) => !s.rework);
+      const outputsCommitted = git(repo, 'log', '--all', '--name-only', '--format=').includes(
+        `${SETUP_OUTPUT}/`,
+      );
+      const atPlace = (place: string, block: string | null) =>
+        checkRuns.filter((c) => c.place === place && (c.blockNodeId ?? null) === block);
+      part5 = {
+        setupRunsByWho: setupByWho,
+        checksByPlaceCheckTargetStatus: checksByPlace,
+        startsListingChecks: agents.reduce<Record<string, number>>((acc, { s }) => {
+          if (s.checksListed) count(acc, `${s.kind}${s.rework ? ':rework' : ''}`);
+          return acc;
+        }, {}),
+        outputsInAnyCommit: outputsCommitted,
+        outputsInOwnerCheckout: existsSync(join(repo, SETUP_OUTPUT)),
+      };
+      // Every editing agent's first start: its own worktree set up once, before it started; a
+      // rework turn reuses it; the lead and reviewers never get one.
+      assertions['setupRanInEachEditingWorktree'] = firstStarts.every(
+        ({ s }) =>
+          setupRuns.filter((r) => r.agentRunId === s.agentRunId && r.status === 'passed').length ===
+          1,
+      );
+      assertions['noSetupForReadingRoles'] = setupRuns.every((r) => {
+        const kind = kindOf(r.agentRunId);
+        return kind === 'tip' || kind === 'worker' || kind === 'tester';
+      });
+      assertions['editorsBriefedWithChecks'] = firstStarts.every(({ s }) => s.checksListed);
+      assertions['readersNotBriefedWithChecks'] = others.every(({ s }) => !s.checksListed);
+      // The change block: only its selection (fast: `test`), in the helper's worktree.
+      const changeRuns = atPlace('change', HARNESS_BLOCKS.change);
+      assertions['changeBlockRan'] =
+        changeRuns.length > 0 &&
+        changeRuns.every((c) => c.checkId === 'test' && c.agentRunId !== null);
+      // The ticket branch: required ∪ full, on the tip, in a fresh checkout that was set up.
+      const tipRuns = atPlace('branch', HARNESS_BLOCKS.branch);
+      assertions['branchBlockRanOnTip'] =
+        tipRuns.every((c) => c.agentRunId === null) &&
+        ['test', 'full'].every((id) => tipRuns.some((c) => c.checkId === id));
+      assertions['tipCheckoutSetUp'] = setupRuns.some(
+        (r) => r.agentRunId === null && r.status === 'passed',
+      );
+      assertions['onlyKnownPlaces'] = checkRuns.every(
+        (c) =>
+          (c.place === 'change' && c.blockNodeId === HARNESS_BLOCKS.change) ||
+          (c.place === 'merge' && c.blockNodeId === 'checks') ||
+          (c.place === 'branch' && c.blockNodeId === HARNESS_BLOCKS.branch) ||
+          c.place === undefined,
+      );
+      assertions['outputsNeverCommitted'] = !outputsCommitted;
+      assertions['outputsNeverInOwnerCheckout'] = part5['outputsInOwnerCheckout'] === false;
+      if (options.dryRun) {
+        // Scripted: each helper's first turn fails the fast check, so its block sent it back.
+        assertions['changeBlockSentBackToHelper'] =
+          changeRuns.some((c) => c.status === 'failed') &&
+          editors.some(({ s }) => s.rework) &&
+          changes.every((c) => c.reworkRounds === 0 || sc.expect.direct);
+      }
+    }
+
     const logText = logs.join('\n');
     const comments = tEnd.comments.map((c) => c.body).filter((x) => x.length >= 12);
     const summary: Record<string, unknown> = {
@@ -656,6 +903,7 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
       },
       graphIssues,
       part4,
+      ...(part5 !== null && { part5 }),
       nodes: [...configured.entries()].map(([nodeId, mode]) => ({
         nodeId,
         configuredMode: mode,

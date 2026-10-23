@@ -18,6 +18,11 @@ import { SCENARIO_IDS, type ScenarioId } from './scenarios.js';
  * lead (with a Full auto pool the run tightens to Auto edits); `c` the reviewer ↔ helper loop with
  * direct rework; `mixed` a Manual named helper, a Full auto pool and an Auto edits tester.
  *
+ * Options: `--attach` (v0.3.0 C-V) attaches a synthetic file to the ticket; `--harness` (v0.3.0
+ * H-B, ADR-0027) adds a setup step and labelled checks to the harness file and Checks blocks to
+ * the graph (a fast one on each helper's change, back to the helper; a full one on the ticket
+ * branch), and asserts where setup and checks ran and that setup outputs are never committed.
+ *
  * Refused (exit 2): no `--scenario`, an unknown one, a real run without ACP_REAL_RUN=1, a real run
  * in CI, and both `--dry-run` and ACP_REAL_RUN=1 at once (ambiguous). Never from `pnpm test` (the
  * file is not `*.test.ts`); its dry run is tested by `drive.test.ts`.
@@ -50,6 +55,8 @@ const scenario = given as ScenarioId;
 const dryRun = process.argv.includes('--dry-run');
 // v0.3.0 C-V: attach a synthetic file and check notes, the summary and attachments (ADR-0026).
 const attach = process.argv.includes('--attach');
+// v0.3.0 H-B: setup steps and Checks blocks at their places (ADR-0027).
+const harness = process.argv.includes('--harness');
 const real = process.env['ACP_REAL_RUN'] === '1';
 if (dryRun && real) refuse('--dry-run and ACP_REAL_RUN=1 together: choose one');
 if (!dryRun && !real) {
@@ -81,6 +88,7 @@ try {
     dryRun,
     limitMs,
     attach,
+    harness,
     keep,
     onKept: (dirs) => progress(`kept for inspection: ${dirs.join(', ')}`),
     progress,

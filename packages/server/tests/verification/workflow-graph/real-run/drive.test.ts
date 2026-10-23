@@ -110,10 +110,51 @@ describe('the WG-V real-run driver, dry run (fake adapter)', { timeout: 180_000 
     });
   }
 
+  // v0.3.0 H-B (ADR-0027): setup steps and Checks blocks at their places.
+  for (const id of ['a', 'mixed'] as const) {
+    it(`scenario ${id} with --harness: setup per editing worktree, blocks at their places`, async () => {
+      const { ok, summary } = await driveScenario({
+        scenario: id,
+        dryRun: true,
+        limitMs: 120_000,
+        harness: true,
+      });
+      const assertions = summary['assertions'] as Record<string, boolean>;
+      expect(Object.entries(assertions).filter(([, v]) => !v)).toEqual([]);
+      expect(ok).toBe(true);
+      for (const name of [
+        'setupRanInEachEditingWorktree',
+        'noSetupForReadingRoles',
+        'changeBlockRan',
+        'branchBlockRanOnTip',
+        'tipCheckoutSetUp',
+        'outputsNeverCommitted',
+        'changeBlockSentBackToHelper',
+      ]) {
+        expect(assertions[name], name).toBe(true);
+      }
+      const part5 = summary['part5'] as {
+        setupRunsByWho: Record<string, number>;
+        checksByPlaceCheckTargetStatus: Record<string, number>;
+      };
+      expect(part5.setupRunsByWho['tip:passed']).toBeGreaterThan(0);
+      expect(part5.checksByPlaceCheckTargetStatus['change:test:change:failed']).toBeGreaterThan(0);
+      expect(part5.checksByPlaceCheckTargetStatus['branch:full:tip:passed']).toBe(1);
+      const text = JSON.stringify(summary);
+      expect(text).not.toMatch(/\/(tmp|var|private|Users)\//);
+      expect(text).not.toMatch(/\b[0-9a-f]{40}\b/);
+    });
+  }
+
   it('the command line runs a dry run and refuses a real run without consent', async () => {
     const dry = await runDrive(['--scenario', 'a', '--dry-run']);
     expect(dry.code, dry.stderr).toBe(0);
     expect((JSON.parse(dry.stdout) as { ok: boolean; dryRun: boolean }).ok).toBe(true);
+    const harness = await runDrive(['--scenario', 'a', '--dry-run', '--harness']);
+    expect(harness.code, harness.stderr).toBe(0);
+    const harnessSummary = JSON.parse(harness.stdout) as { ok: boolean; part5?: unknown };
+    expect(harnessSummary.ok).toBe(true);
+    expect(typeof harnessSummary.part5).toBe('object');
 
     for (const [args, env, says] of [
       [['--scenario', 'a'], {}, 'ACP_REAL_RUN=1'],
