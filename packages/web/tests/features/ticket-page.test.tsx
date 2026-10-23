@@ -136,11 +136,15 @@ describe('each tab shows its own part', () => {
     expect(screen.queryByTestId('ticket-sidebar')).toBeNull();
   });
 
-  it('Checks: the tip first, then each change', async () => {
+  it('Checks: by place (H-D): each change before the lead’s merge, then the tip', async () => {
     render(loopReviewScenario(), `${TICKET_HASH}?tab=checks`);
     const tab = await screen.findByTestId('checks-tab');
     expect(within(tab).getByTestId('tip-checks')).toBeTruthy();
-    expect(within(tab).getByRole('heading', { name: 'Checks on each change' })).toBeTruthy();
+    expect(within(tab).getByRole('heading', { name: /Before the lead’s merge/ })).toBeTruthy();
+    const order = [...tab.querySelectorAll('[data-testid]')].map((e) =>
+      e.getAttribute('data-testid'),
+    );
+    expect(order.indexOf('merge-checks')).toBeLessThan(order.indexOf('tip-checks'));
   });
 
   it('counts on the tabs: comments, agents, files and checks', async () => {

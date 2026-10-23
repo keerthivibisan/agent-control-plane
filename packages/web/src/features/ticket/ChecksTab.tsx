@@ -1,4 +1,4 @@
-import { checkRunWasInterrupted } from '@acp/core';
+import { checkRunWasInterrupted, type CheckRunPlace } from '@acp/core';
 import type { AgentRunDto, CheckRunDto } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
@@ -6,7 +6,12 @@ import { InfoTip } from '../../components/InfoTip';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
 import { runAgentChecks } from '../../lib/api';
-import { CHECK_STATUS_COPY, TICKET_COPY, type ControlStatusCopy } from '../../lib/copy';
+import {
+  CHECK_STATUS_COPY,
+  HARNESS_BLOCKS_COPY,
+  TICKET_COPY,
+  type ControlStatusCopy,
+} from '../../lib/copy';
 import { formatDuration } from '../../lib/format';
 import { ActionError } from '../control/bits';
 import { isAgentLive } from '../control/run-state';
@@ -78,8 +83,81 @@ export function CheckRow({ check }: { check: CheckRunDto }) {
   );
 }
 
-/** Harness results for one helper agent (README §5.3 "Checks"), latest run of each check first. */
+/**
+ * Where a check ran (ADR-0027 §5). A row from before it has no place: it ran before the lead's
+ * merge (the one block there was), so it reads as `merge`, as it always did.
+ */
+export function checkPlace(check: Pick<CheckRunDto, 'place'>): CheckRunPlace {
+  return check.place ?? 'merge';
+}
+
+/** The places an agent's own checks can have, in the order the tab shows them. */
+const AGENT_PLACES: readonly CheckRunPlace[] = ['change', 'merge'];
+
+/**
+ * Harness results for one helper agent (README §5.3 "Checks"), latest run of each check first.
+ * With `place`, only the checks of that place (the ticket's Checks tab groups them by block);
+ * without it, every place the agent has, each under its own heading when there is more than one.
+ */
 export function ChecksTab({
+  runId,
+  agent,
+  checks,
+  canRunAgain,
+  place,
+}: {
+  runId: string;
+  agent: AgentRunDto;
+  checks: readonly CheckRunDto[];
+  /** The agent's changes still wait for review. */
+  canRunAgain: boolean;
+  place?: CheckRunPlace;
+}) {
+  if (agent.kind === 'lead') return <p className="text-dim">{C.leadNone}</p>;
+  if (!hasWorktree(agent.kind)) return <p className="text-dim">{C.readOnlyNone}</p>;
+  if (place !== undefined) {
+    return (
+      <AgentChecks
+        runId={runId}
+        agent={agent}
+        checks={checks.filter((c) => checkPlace(c) === place)}
+        canRunAgain={canRunAgain}
+      />
+    );
+  }
+  const mine = checks.filter((c) => c.agentRunId === agent.id);
+  const places = AGENT_PLACES.filter((p) => mine.some((c) => checkPlace(c) === p));
+  if (places.length < 2) {
+    return (
+      <AgentChecks
+        runId={runId}
+        agent={agent}
+        checks={checks}
+        canRunAgain={canRunAgain && places[0] !== 'change'}
+      />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      {places.map((p) => (
+        <section key={p} aria-label={HARNESS_BLOCKS_COPY.ticket.groups[p]} data-place={p}>
+          <h3 className="mb-2 text-caption font-semibold text-dim">
+            {HARNESS_BLOCKS_COPY.ticket.groups[p]}
+          </h3>
+          <AgentChecks
+            runId={runId}
+            agent={agent}
+            checks={mine.filter((c) => checkPlace(c) === p)}
+            // "Run checks again" re-runs the checks before the lead's merge.
+            canRunAgain={canRunAgain && p === 'merge'}
+          />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function AgentChecks({
   runId,
   agent,
   checks,
@@ -88,12 +166,9 @@ export function ChecksTab({
   runId: string;
   agent: AgentRunDto;
   checks: readonly CheckRunDto[];
-  /** The agent's changes still wait for review. */
   canRunAgain: boolean;
 }) {
   const again = useTicketAction(runAgentChecks);
-  if (agent.kind === 'lead') return <p className="text-dim">{C.leadNone}</p>;
-  if (!hasWorktree(agent.kind)) return <p className="text-dim">{C.readOnlyNone}</p>;
   const { latest, earlier } = agentChecks(checks, agent.id);
   const gate = mergeGate(latest);
   return (
