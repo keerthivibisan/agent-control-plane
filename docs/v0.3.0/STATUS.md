@@ -252,3 +252,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   Full check: 5,116 tests. Note: a harness file may name any program, `sh` included (ADR-0017's
   accepted risk); the app never runs through a shell, and shells are never allowlisted for agents.
   H-A (core rules) and H-D (web) started in parallel; H-B (server, db) and H-C (engine) after H-A.
+- 2026-10-23 **H-A merged** (`0267b96`): Checks block defaults, rules (one merge block, at most one
+  branch block, change blocks wired from helpers or testers, failure routes per place, rework links
+  for "back to the helper"), `canConnect` agreement, `checksForBlock`, `checkSelectionIssues`
+  (warnings only), and `program.checkBlocks`. Old graphs compile unchanged (no golden trace or
+  snapshot changed). Coordinator check: 5,158 tests; e2e 101/101. H-B and H-C started.
