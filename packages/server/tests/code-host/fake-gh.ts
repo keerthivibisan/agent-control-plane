@@ -24,6 +24,11 @@ export interface FakePr {
   title: string;
   body: string;
   draft: boolean;
+  /** G-G: what `gh pr view --json mergeable,mergeStateStatus` says (MERGEABLE / CLEAN by default). */
+  mergeable?: string;
+  mergeStateStatus?: string;
+  /** G-G: the method `gh pr merge` used. */
+  mergedWith?: 'merge' | 'squash' | 'rebase';
 }
 
 export type FakeGhCommand =
@@ -36,7 +41,9 @@ export type FakeGhCommand =
   /** `gh api user --jq=.login` (G-E). */
   | 'login'
   /** `gh repo create <target> --private|--public` (G-E). */
-  | 'repo-create';
+  | 'repo-create'
+  /** `gh pr merge <n> --repo=… --merge|--squash|--rebase [--delete-branch]` (G-G). */
+  | 'merge';
 
 export interface FakeGh {
   run: CliRunner;
@@ -48,6 +55,16 @@ export interface FakeGh {
     defaultBranch: string | null;
     /** The logged-in account (G-E). */
     login: string;
+    /** G-G: the repository's allowed merge methods (`gh repo view --json …Allowed`). */
+    methods: {
+      mergeCommitAllowed: boolean;
+      squashMergeAllowed: boolean;
+      rebaseMergeAllowed: boolean;
+    };
+    /** G-G: the local bare "GitHub" repository, where `--delete-branch` deletes the head. */
+    bare: string | null;
+    /** G-G: the merge commit `gh pr merge` reports (null: none). */
+    mergeOid: string | null;
   };
   /** Repositories "GitHub" has, as `owner/name`; `repo create` refuses one that exists (G-E). */
   repos: { slug: string; visibility: string }[];
@@ -74,6 +91,7 @@ export function commandOf(args: readonly string[]): FakeGhCommand | null {
   if (args[0] === 'repo' && args[1] === 'view') return 'repo';
   if (args[0] === 'repo' && args[1] === 'create') return 'repo-create';
   if (args[0] === 'api' && args.includes('user')) return 'login';
+  if (args[0] === 'pr' && args[1] === 'merge') return 'merge';
   if (args[0] === 'pr' && (args[1] === 'list' || args[1] === 'create' || args[1] === 'view')) {
     return args[1];
   }
@@ -88,6 +106,9 @@ export function createFakeGh(): FakeGh {
     loggedIn: true,
     defaultBranch: 'main' as string | null,
     login: 'octo',
+    methods: { mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true },
+    bare: null as string | null,
+    mergeOid: null as string | null,
   };
   const repos: FakeGh['repos'] = [];
   const fail: FakeGh['fail'] = {};
@@ -101,6 +122,9 @@ export function createFakeGh(): FakeGh {
     headRefName: pr.headRefName,
     mergedAt: pr.mergedAt,
     mergeCommit: pr.mergeCommit,
+    isDraft: pr.draft,
+    mergeable: pr.mergeable ?? 'MERGEABLE',
+    mergeStateStatus: pr.mergeStateStatus ?? (pr.draft ? 'DRAFT' : 'CLEAN'),
   });
 
   const run: CliRunner = (file, args, options) => {
@@ -111,7 +135,7 @@ export function createFakeGh(): FakeGh {
     }
     if (command !== null && fail[command] !== undefined) return Promise.resolve(fail[command]);
     // Every command of the app names the repository (or the host) explicitly.
-    if (command === 'list' || command === 'create' || command === 'view') {
+    if (command === 'list' || command === 'create' || command === 'view' || command === 'merge') {
       if (flag(args, 'repo') !== REPO) return Promise.resolve({ ...ok(''), exitCode: 1 });
     }
     switch (command) {
@@ -127,6 +151,7 @@ export function createFakeGh(): FakeGh {
           ok(
             JSON.stringify({
               defaultBranchRef: state.defaultBranch === null ? null : { name: state.defaultBranch },
+              ...state.methods,
             }),
           ),
         );
@@ -191,6 +216,38 @@ export function createFakeGh(): FakeGh {
         repos.push({ slug, visibility: visibility.slice(2) });
         // gh prints the new repository's URL; the app does not read it.
         return Promise.resolve(ok(`https://github.com/${slug} ${CANARY}\n`));
+      }
+      case 'merge': {
+        // Exactly `pr merge <n> --repo=… --<method> [--delete-branch]`: nothing else is accepted.
+        const [, , n, repo, method, ...rest] = args;
+        const del = rest.length === 1 && rest[0] === '--delete-branch';
+        if (
+          repo !== `--repo=${REPO}` ||
+          (method !== '--merge' && method !== '--squash' && method !== '--rebase') ||
+          (rest.length > 0 && !del)
+        ) {
+          return Promise.resolve({ ...ok(''), exitCode: 2 });
+        }
+        const pr = prs.find((p) => String(p.number) === n);
+        const refused = { ...ok(`refused ${CANARY}\n`), exitCode: 1 };
+        if (pr === undefined || pr.state !== 'OPEN' || pr.draft) return Promise.resolve(refused);
+        const allowed = {
+          '--merge': state.methods.mergeCommitAllowed,
+          '--squash': state.methods.squashMergeAllowed,
+          '--rebase': state.methods.rebaseMergeAllowed,
+        }[method];
+        const status = pr.mergeStateStatus ?? 'CLEAN';
+        if (!allowed || pr.mergeable === 'CONFLICTING' || !['CLEAN', 'UNSTABLE'].includes(status)) {
+          return Promise.resolve(refused);
+        }
+        pr.state = 'MERGED';
+        pr.mergedAt = '2026-10-23T10:00:00Z';
+        pr.mergeCommit = state.mergeOid === null ? null : { oid: state.mergeOid };
+        pr.mergedWith = method.slice(2) as 'merge' | 'squash' | 'rebase';
+        if (del && state.bare !== null && bareTip(state.bare, pr.headRefName) !== null) {
+          git(state.bare, 'update-ref', '-d', `refs/heads/${pr.headRefName}`);
+        }
+        return Promise.resolve(ok(`Merged pull request #${pr.number} ${CANARY}\n`));
       }
       default:
         return Promise.resolve({ ...ok(''), exitCode: 2 });

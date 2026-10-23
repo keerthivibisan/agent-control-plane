@@ -1,5 +1,10 @@
 import { GitBranchNameSchema } from '@acp/core';
-import { GitHubOwnerSchema, type CodeHostProvider, type PullRequestState } from '@acp/core/api';
+import {
+  GitHubOwnerSchema,
+  type CodeHostProvider,
+  type PullRequestMergeMethod,
+  type PullRequestState,
+} from '@acp/core/api';
 import { z } from 'zod';
 import { CodeHostError, MESSAGES } from './errors.js';
 import { repoSlug, type RemoteRepo } from './remote.js';
@@ -34,6 +39,22 @@ export interface CreatePullRequestInput {
   draft: boolean;
 }
 
+/**
+ * What GitHub says about merging a pull request (G-G), read only after `gh pr merge` failed, to
+ * say why in plain words. Each field is null when the host did not say.
+ */
+export interface MergeReadiness {
+  state: PullRequestState;
+  isDraft: boolean | null;
+  /** `MERGEABLE`, `CONFLICTING` or `UNKNOWN` (still computing). */
+  mergeable: string | null;
+  /** E.g. `CLEAN`, `BLOCKED`, `BEHIND`, `DIRTY`, `DRAFT`, `UNSTABLE`. */
+  mergeStateStatus: string | null;
+}
+
+/** Which merge methods the repository allows (G-G); null when the host did not say. */
+export type MergeMethodsAllowed = Record<PullRequestMergeMethod, boolean | null>;
+
 export interface CodeHostCli {
   readonly provider: CodeHostProvider;
   /** E.g. `gh`. */
@@ -56,6 +77,22 @@ export interface CodeHostCli {
    * `--clone`, so nothing local is touched. Its output is not read; the exit code decides.
    */
   createRepository(cwd: string, target: string, visibility: 'private' | 'public'): Promise<void>;
+  /**
+   * `gh pr merge <number> --repo=<owner>/<name> --merge|--squash|--rebase [--delete-branch]`
+   * (ADR-0025 §9). The caller runs it outside the project's checkout; the result is returned
+   * as is (its output unread) for the caller to map.
+   */
+  merge(
+    cwd: string,
+    remote: RemoteRepo,
+    number: number,
+    method: PullRequestMergeMethod,
+    deleteBranch: boolean,
+  ): Promise<CliResult>;
+  /** The pull request's merge state (`gh pr view --json`); null when it cannot be read. */
+  mergeReadiness(cwd: string, remote: RemoteRepo, number: number): Promise<MergeReadiness | null>;
+  /** The repository's allowed merge methods (`gh repo view --json`); null when unreadable. */
+  mergeMethods(cwd: string, remote: RemoteRepo): Promise<MergeMethodsAllowed | null>;
 }
 
 /** Time limits per command (ms): short checks, longer for calls that write on the host. */
@@ -67,6 +104,8 @@ export const GH_TIMEOUTS = {
   list: 30_000,
   create: 60_000,
   view: 30_000,
+  /** `gh pr merge` writes on GitHub (and may delete the head branch there). */
+  merge: 60_000,
 } as const;
 
 const Commit = z.string().regex(/^[0-9a-f]{7,64}$/);
@@ -98,6 +137,26 @@ const PullViewSchema = z.object({
   headRefName: GitBranchNameSchema,
   mergedAt: z.string().nullable().optional(),
   mergeCommit: z.object({ oid: z.string() }).nullable().optional(),
+});
+
+const ReadinessSchema = z.object({
+  state: State,
+  isDraft: z.boolean().nullable().optional(),
+  mergeable: z
+    .string()
+    .regex(/^[A-Z_]{1,40}$/)
+    .nullable()
+    .optional(),
+  mergeStateStatus: z
+    .string()
+    .regex(/^[A-Z_]{1,40}$/)
+    .nullable()
+    .optional(),
+});
+const MethodsSchema = z.object({
+  mergeCommitAllowed: z.boolean().nullable().optional(),
+  squashMergeAllowed: z.boolean().nullable().optional(),
+  rebaseMergeAllowed: z.boolean().nullable().optional(),
 });
 
 function failed(result: CliResult, what: string): CodeHostError {
@@ -281,6 +340,71 @@ export function createGitHubCli(run: CliRunner, command = 'gh'): CodeHostCli {
       }
       // gh's own words (stdout or stderr) are never shown: one plain sentence instead.
       throw new CodeHostError('repository_create_failed', MESSAGES.createFailed);
+    },
+
+    merge(cwd, remote, number, method, deleteBranch) {
+      return run(
+        command,
+        [
+          'pr',
+          'merge',
+          String(number),
+          repoArg(remote),
+          `--${method}`,
+          ...(deleteBranch ? ['--delete-branch'] : []),
+        ],
+        { cwd, timeoutMs: GH_TIMEOUTS.merge, maxOutputBytes: 64 * 1024 },
+      );
+    },
+
+    async mergeReadiness(cwd, remote, number) {
+      const r = await run(
+        command,
+        [
+          'pr',
+          'view',
+          String(number),
+          repoArg(remote),
+          '--json=state,isDraft,mergeable,mergeStateStatus',
+        ],
+        { cwd, timeoutMs: GH_TIMEOUTS.view, maxOutputBytes: 16 * 1024 },
+      );
+      if (r.exitCode !== 0) return null;
+      try {
+        const v = parseJson(ReadinessSchema, r.stdout, 'pr view');
+        return {
+          state: v.state,
+          isDraft: v.isDraft ?? null,
+          mergeable: v.mergeable ?? null,
+          mergeStateStatus: v.mergeStateStatus ?? null,
+        };
+      } catch {
+        return null;
+      }
+    },
+
+    async mergeMethods(cwd, remote) {
+      const r = await run(
+        command,
+        [
+          'repo',
+          'view',
+          repoSlug(remote),
+          '--json=mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed',
+        ],
+        { cwd, timeoutMs: GH_TIMEOUTS.repo, maxOutputBytes: 16 * 1024 },
+      );
+      if (r.exitCode !== 0) return null;
+      try {
+        const v = parseJson(MethodsSchema, r.stdout, 'repo view');
+        return {
+          merge: v.mergeCommitAllowed ?? null,
+          squash: v.squashMergeAllowed ?? null,
+          rebase: v.rebaseMergeAllowed ?? null,
+        };
+      } catch {
+        return null;
+      }
     },
   };
 }

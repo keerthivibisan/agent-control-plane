@@ -45,7 +45,20 @@ export type CodeHostErrorCode =
   /** `git check-ref-format --branch` refuses the name. */
   | 'invalid_branch_name'
   /** `git branch` failed otherwise (e.g. `feature` exists and the name is `feature/x`). */
-  | 'branch_create_failed';
+  | 'branch_create_failed'
+  // Merging a pull request and deleting the ticket branch (ADR-0025 §9, G-G): snake_case.
+  /** The repository does not allow the chosen merge method (GitHub's settings). */
+  | 'merge_method_not_allowed'
+  /** GitHub would not merge it now: conflicts, required reviews or checks, a draft, behind. */
+  | 'pull_request_not_mergeable'
+  /** `gh pr merge` failed otherwise. */
+  | 'merge_failed'
+  /** The branch is the checkout's current branch (or checked out in another worktree). */
+  | 'branch_checked_out'
+  /** The branch is the ticket's target or the project's base or default target. */
+  | 'branch_protected'
+  /** Deleting the branch on origin or in the project failed. */
+  | 'branch_delete_failed';
 
 export class CodeHostError extends Error {
   override readonly name = 'CodeHostError';
@@ -77,6 +90,12 @@ const STATUS: Readonly<Record<CodeHostErrorCode, number>> = {
   no_origin: 409,
   invalid_branch_name: 422,
   branch_create_failed: 409,
+  merge_method_not_allowed: 409,
+  pull_request_not_mergeable: 409,
+  merge_failed: 502,
+  branch_checked_out: 409,
+  branch_protected: 409,
+  branch_delete_failed: 409,
 };
 
 /**
@@ -118,4 +137,37 @@ export const MESSAGES = {
     `Git could not create ${name}. A branch whose name is part of it (or starts with it and a /) may already exist.`,
   createdNotPushed: (name: string) =>
     `The app created ${name} in the project, but pushing it to origin did not work.`,
+  // G-G (ADR-0025 §9).
+  mergeNotReady:
+    'Merging needs the GitHub CLI installed and signed in: run gh auth login in a terminal, then try again.',
+  mergeTimeout: (n: number) =>
+    `GitHub did not answer in time, so pull request #${n} may or may not be merged now. Press Refresh to see.`,
+  methodNotAllowed: (method: string) =>
+    `This repository does not allow ${method} on GitHub. Choose another way to merge, or change it in the repository's settings.`,
+  notMergeableConflicts: (n: number) =>
+    `Pull request #${n} has conflicts with its target on GitHub. Resolve them there, then try again.`,
+  notMergeableBlocked: (n: number) =>
+    `GitHub will not merge pull request #${n} yet: it needs the required reviews or passing required checks first.`,
+  notMergeableBehind: (n: number) =>
+    `Pull request #${n} is behind its target and the repository requires it to be up to date. Update it on GitHub, then try again.`,
+  notMergeableDraft: (n: number) =>
+    `Pull request #${n} is a draft. Mark it ready for review on GitHub, then try again.`,
+  notMergeableClosed: (n: number) =>
+    `Pull request #${n} is closed on GitHub, so it cannot be merged. Press Refresh to see its state.`,
+  mergeFailed: (n: number) =>
+    `GitHub did not merge pull request #${n}. Look at it on GitHub, then try again or merge it there.`,
+  branchCheckedOut: (name: string) =>
+    `${name} is the branch the project folder is on, so the app will not delete it. Switch to another branch first.`,
+  branchCheckedOutElsewhere: (name: string) =>
+    `${name} is checked out in another worktree, so git will not delete it. Remove that worktree or switch it to another branch first.`,
+  branchProtected: (name: string) =>
+    `${name} is the ticket's target or the project's base branch; the app never deletes it.`,
+  remoteUnreadable: (name: string) =>
+    `The app could not reach origin to check for ${name}, so nothing was deleted. Check your connection and access, then try again.`,
+  remoteDeleteFailed: (name: string) =>
+    `Git could not delete ${name} on origin: check your access, or whether the branch is protected on GitHub. Nothing was deleted in the project folder.`,
+  remoteDeleteTimeout: (name: string) =>
+    `Deleting ${name} on origin did not finish in time, so it may or may not be gone there. Nothing was deleted in the project folder; try again.`,
+  localDeleteFailed: (name: string, remoteDone: boolean) =>
+    `${remoteDone ? `Deleted ${name} on origin, but git` : 'Git'} could not delete ${name} in the project folder. Try again, or run git branch -D ${name} there.`,
 } as const;

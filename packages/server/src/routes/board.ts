@@ -19,6 +19,7 @@ import {
   TicketDtoSchema,
   TicketBranchDtoSchema,
   TicketActivityDtoSchema,
+  TicketTotalsDtoSchema,
   AttachmentDtoSchema,
 } from '@acp/core/api';
 import { MAX_ATTACHMENT_BYTES } from '@acp/core';
@@ -200,6 +201,19 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   router.post('/tickets/:id/branch/pull-request/refresh', csrf, json, async (req, res) => {
     const dto = await board.refreshPullRequest(param(req.params['id']));
     res.json(out(TicketBranchDtoSchema, dto));
+  });
+  // ADR-0025 §9 (G-G): merge the open pull request on GitHub; delete the finished ticket branch.
+  router.post('/tickets/:id/branch/pull-request/merge', csrf, json, async (req, res) => {
+    const dto = await board.mergePullRequest(param(req.params['id']), req.body);
+    res.json(out(TicketBranchDtoSchema, dto));
+  });
+  router.post('/tickets/:id/branch/delete', csrf, json, async (req, res) => {
+    const dto = await board.deleteTicketBranch(param(req.params['id']), req.body);
+    res.json(out(TicketBranchDtoSchema, dto));
+  });
+  // v0.3.0 T-A: the ticket badge (time taken and tokens; no cost).
+  router.get('/tickets/:id/totals', (req, res) => {
+    res.json(out(TicketTotalsDtoSchema, board.ticketTotals(param(req.params['id']))));
   });
   router.post('/tickets/:id/plans/:planId/decision', csrf, json, (req, res) => {
     const dto = board.decidePlan(param(req.params['id']), param(req.params['planId']), req.body);

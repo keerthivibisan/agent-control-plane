@@ -30,7 +30,12 @@ import {
   type RunState,
 } from '@acp/orchestrator';
 import type { z } from 'zod';
-import { CodeHostError, codeHostHttpError, type CodeHostService } from '../code-host/index.js';
+import {
+  CodeHostError,
+  codeHostHttpError,
+  withPresence,
+  type CodeHostService,
+} from '../code-host/index.js';
 import { HttpError } from '../errors.js';
 import { branchSpec, changeSpec, mergeSpec, type CheckSpec } from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
@@ -667,6 +672,29 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     if (anyway && outcome.kind === 'merged') mergedAnyway(outcome.overridden);
   }
 
+  /**
+   * ADR-0025 §9 (G-G): whether the branch still exists in the project and on origin, from local
+   * refs only (no network), so the final step can offer Delete branch. Left out when no code
+   * host is wired or the refs cannot be read.
+   */
+  async function withBranchPresence(
+    live: LoopLive,
+    row: TicketBranchRow,
+  ): Promise<TicketBranchDto> {
+    const dto = toTicketBranchDto(row);
+    if (ctx.codeHost === undefined) return dto;
+    try {
+      const presence = await ctx.codeHost.ticketBranchPresence(
+        projectRootOf(live),
+        row.branch,
+        'tracking',
+      );
+      return withPresence(dto, presence);
+    } catch {
+      return dto;
+    }
+  }
+
   /** GET `/api/runs/:id/ticket-branch`: the combined change the owner merges once. */
   async function ticketBranchReview(live: LoopLive): Promise<TicketBranchReviewDto> {
     const runId = live.state.run.id;
@@ -682,7 +710,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       );
     }
     const checks = loop.checkCommits.latestForCommit(runId, null, row.headCommit);
-    const base = { runId, ticketBranch: toTicketBranchDto(row), checks };
+    const base = { runId, ticketBranch: await withBranchPresence(live, row), checks };
     if (row.state !== 'open') {
       // ADR-0026 §5: read-only after a merge (or a discard), from the recorded commits; the
       // diff is computed again on each request and never stored.

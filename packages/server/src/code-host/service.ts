@@ -10,6 +10,7 @@ import {
   type CreateRepositoryRequest,
   type GitHubRepository,
   type ProjectBranchesDto,
+  type PullRequestMergeMethod,
 } from '@acp/core/api';
 import { silentLogger, type Logger } from '../logger.js';
 import { GitCommandError, SAFE_GIT_CONFIG, type GitRunner } from '../workspace/index.js';
@@ -18,6 +19,12 @@ import { CodeHostError, MESSAGES } from './errors.js';
 import { createGitHubCli, type CodeHostCli, type PullRequestInfo } from './github.js';
 import { parseRemoteUrl, providerOf, repoSlug, type RemoteRepo } from './remote.js';
 import { createCliRunner, type CliRunner } from './runner.js';
+import {
+  createTicketBranchGit,
+  type LocalDeleteOutcome,
+  type OriginRead,
+  type TicketBranchPresence,
+} from './ticket-branch.js';
 
 /**
  * The code host service (ADR-0025): what the app can do with a project's `origin`, and the
@@ -36,6 +43,10 @@ import { createCliRunner, type CliRunner } from './runner.js';
  * - `connectRepository` (ADR-0025 §7): `git remote add origin <address>`; nothing is pushed.
  * - `branches` and `createBranch` (ADR-0025 §8): the project's local branches, and a new one
  *   made with `git branch --no-track` (and, if asked, sent with `push`); see `branches.ts`.
+ * - `mergePullRequest` (ADR-0025 §9): `gh pr merge` run outside the checkout; a refusal is
+ *   explained from `gh pr view` / `gh repo view` JSON, never from gh's own words.
+ * - `ticketBranchPresence`, `deleteTicketBranch`, `deleteLocalBranch` (ADR-0025 §9): where a
+ *   finished ticket branch still exists, and deleting it; see `ticket-branch.ts`.
  *
  * The `origin` address is always rebuilt from a checked owner and name (`gitHubRemoteUrl`), never
  * the text the owner typed, and an existing remote is never changed or removed.
@@ -65,7 +76,37 @@ export interface CodeHostService {
   branches(projectRoot: string): Promise<ProjectBranchesDto>;
   /** Creates a local branch without switching the checkout; answers the fresh list. */
   createBranch(projectRoot: string, input: CreateBranchRequest): Promise<ProjectBranchesDto>;
+  /** Merges the pull request on GitHub (G-G); resolves once GitHub merged it. */
+  mergePullRequest(projectRoot: string, input: MergePullRequestInput): Promise<void>;
+  /** Where the ticket branch still exists (G-G); see `OriginRead`. */
+  ticketBranchPresence(
+    projectRoot: string,
+    branch: string,
+    read: OriginRead,
+  ): Promise<TicketBranchPresence>;
+  /** Deletes the ticket branch on origin and in the project (G-G); answers what is left. */
+  deleteTicketBranch(
+    projectRoot: string,
+    branch: string,
+    protect: readonly string[],
+  ): Promise<TicketBranchPresence>;
+  /** The local half of "Delete branch" on a merge: never the checked-out branch; never throws. */
+  deleteLocalBranch(projectRoot: string, branch: string): Promise<LocalDeleteOutcome>;
 }
+
+export interface MergePullRequestInput {
+  number: number;
+  method: PullRequestMergeMethod;
+  /** GitHub deletes the head branch (`--delete-branch`); the local one is the caller's. */
+  deleteBranch: boolean;
+}
+
+/** The method's name in GitHub's settings, for a refusal. */
+const METHOD_WORDS: Readonly<Record<PullRequestMergeMethod, string>> = {
+  merge: 'merge commits',
+  squash: 'squash merging',
+  rebase: 'rebase merging',
+};
 
 export interface CodeHostServiceDeps {
   /** The workspace git runner (argument arrays, `GIT_TERMINAL_PROMPT=0`, a time limit). */
@@ -273,12 +314,77 @@ export function createCodeHostService(deps: CodeHostServiceDeps): CodeHostServic
   }
 
   const projectBranches = createProjectBranches({ git: deps.git, push, logger });
+  const ticketBranches = createTicketBranchGit({ git: deps.git, logger });
+
+  /** Why `gh pr merge` failed, from GitHub's JSON (gh's own words are never read). */
+  async function mergeRefusal(
+    neutral: string,
+    remote: RemoteRepo,
+    input: MergePullRequestInput,
+  ): Promise<CodeHostError | null> {
+    const n = input.number;
+    const readiness = await github.mergeReadiness(neutral, remote, n);
+    // Merged meanwhile, or gh failed only at deleting the branch after merging: not a refusal.
+    if (readiness?.state === 'merged') return null;
+    if (readiness?.state === 'closed') {
+      return new CodeHostError('pull_request_not_mergeable', MESSAGES.notMergeableClosed(n));
+    }
+    const methods = await github.mergeMethods(neutral, remote);
+    if (methods?.[input.method] === false) {
+      return new CodeHostError(
+        'merge_method_not_allowed',
+        MESSAGES.methodNotAllowed(METHOD_WORDS[input.method]),
+      );
+    }
+    const status = readiness?.mergeStateStatus ?? null;
+    if (readiness?.isDraft === true || status === 'DRAFT') {
+      return new CodeHostError('pull_request_not_mergeable', MESSAGES.notMergeableDraft(n));
+    }
+    if (readiness?.mergeable === 'CONFLICTING' || status === 'DIRTY') {
+      return new CodeHostError('pull_request_not_mergeable', MESSAGES.notMergeableConflicts(n));
+    }
+    if (status === 'BEHIND') {
+      return new CodeHostError('pull_request_not_mergeable', MESSAGES.notMergeableBehind(n));
+    }
+    if (status === 'BLOCKED') {
+      return new CodeHostError('pull_request_not_mergeable', MESSAGES.notMergeableBlocked(n));
+    }
+    return new CodeHostError('merge_failed', MESSAGES.mergeFailed(n));
+  }
 
   return {
     status,
 
     branches: (projectRoot) => projectBranches.list(projectRoot),
     createBranch: (projectRoot, input) => projectBranches.create(projectRoot, input),
+
+    ticketBranchPresence: (projectRoot, branch, read) =>
+      ticketBranches.presence(projectRoot, branch, read),
+    deleteTicketBranch: (projectRoot, branch, protect) =>
+      ticketBranches.remove(projectRoot, branch, protect),
+    deleteLocalBranch: (projectRoot, branch) => ticketBranches.removeLocal(projectRoot, branch),
+
+    async mergePullRequest(projectRoot, input) {
+      const remote = await requireGitHub(projectRoot);
+      // ADR-0025 §9: gh runs outside the checkout, so `gh pr merge` can never switch, pull or
+      // delete anything there (with `--repo` it does not touch local branches either).
+      const neutral = deps.tmpDir ?? tmpdir();
+      if (!(await github.installed(neutral)) || !(await github.loggedIn(neutral))) {
+        throw new CodeHostError('code_host_not_ready', MESSAGES.mergeNotReady);
+      }
+      const r = await github.merge(neutral, remote, input.number, input.method, input.deleteBranch);
+      logger.log('info', 'code_host.merge', {
+        method: input.method,
+        deleteBranch: input.deleteBranch,
+        exitCode: r.exitCode,
+        timedOut: r.timedOut,
+      });
+      if (r.exitCode === 0) return;
+      if (r.notFound) throw new CodeHostError('code_host_not_ready', MESSAGES.mergeNotReady);
+      if (r.timedOut) throw new CodeHostError('timeout', MESSAGES.mergeTimeout(input.number));
+      const refusal = await mergeRefusal(neutral, remote, input);
+      if (refusal !== null) throw refusal;
+    },
 
     async createRepository(projectRoot, input) {
       await requireNoOrigin(projectRoot);

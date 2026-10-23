@@ -56,6 +56,7 @@ import {
   type TicketDetailDto,
   type TicketDto,
   type TicketRunOptionsPatch,
+  type TicketTotalsDto,
 } from '@acp/core/api';
 import {
   MAX_PAGE_SIZE,
@@ -105,6 +106,13 @@ import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
 import { ensureSetup, legacyAllowlistOf } from './setup.js';
 import { effectiveWorkflow, projectRunDefaults } from '../workflow/graph.js';
+import { createTicketTokens } from '../tokens/service.js';
+import {
+  createTicketBranchActions,
+  type TicketBranchCodeHost,
+  type TicketBranchContext,
+} from './ticket-branch-actions.js';
+import { buildTicketTotals } from './ticket-totals.js';
 
 /** What `POST /api/tickets/:id/attachments` received (ADR-0026 §4). */
 export interface AttachmentUpload {
@@ -211,6 +219,12 @@ export interface BoardService {
   openPullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
   /** ADR-0025: reads the pull request's state now (the owner's view or Refresh). */
   refreshPullRequest(ticketId: string): Promise<TicketBranchDto>;
+  /** ADR-0025 §9: merges the open pull request on GitHub (the owner's click), then reads it. */
+  mergePullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** ADR-0025 §9: deletes the finished ticket branch on origin and in the project. */
+  deleteTicketBranch(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** v0.3.0 T-A: how long the ticket took and its tokens (no cost). */
+  ticketTotals(ticketId: string): TicketTotalsDto;
   /** What the control service calls back into (ticket status, notices, checks, merge record). */
   controlHooks(): ControlWorkspaceHooks;
 }
@@ -236,7 +250,8 @@ export interface BoardServiceDeps {
   codeHost?: Pick<
     CodeHostService,
     'status' | 'createRepository' | 'connectRepository' | 'branches' | 'createBranch'
-  >;
+  > &
+    TicketBranchCodeHost;
   /**
    * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
    * the legacy flow those runs keep stays covered. Production never sets it.
@@ -319,6 +334,28 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   let runStore: RunStore | undefined;
 
   // ------------------------------------------------------------------ helpers
+
+  /** ADR-0025 §9 (G-G): merging the pull request and deleting the ticket branch. */
+  const branchActions = createTicketBranchActions({
+    refreshPullRequest: (runId) => deps.control.refreshPullRequest(runId),
+    peek: (runId) => deps.control.peek(runId),
+    branchOf: (runId) => loop.ticketBranches.getByRun(runId),
+    logger,
+  });
+  /** v0.3.0 T-A: the Tokens page's `byTicket` numbers for one ticket. */
+  const ticketTokens = createTicketTokens(deps.db);
+
+  async function branchContext(ticket: Ticket, runId: string): Promise<TicketBranchContext> {
+    const p = project(ticket.projectId);
+    const setup = await setupFor(ticket.projectId).catch(() => undefined);
+    return { runId, projectRoot: p.rootPath, strategy: setup?.branching };
+  }
+
+  /** The DTO with `localExists` and `headOnOrigin` from local refs, when a code host is wired. */
+  async function present(ticket: Ticket, dto: TicketBranchDto): Promise<TicketBranchDto> {
+    if (deps.codeHost === undefined) return dto;
+    return branchActions.present(deps.codeHost, project(ticket.projectId).rootPath, dto);
+  }
 
   function project(projectId: string) {
     const p = deps.repos.projects.getById(projectId);
@@ -1264,7 +1301,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const runId = currentRunOf(ticket);
       const dto = await deps.control.openPullRequest(runId, body, ticket);
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
-      return dto;
+      return present(ticket, dto);
     },
 
     async refreshPullRequest(ticketId) {
@@ -1272,7 +1309,42 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const runId = currentRunOf(ticket);
       const dto = await deps.control.refreshPullRequest(runId);
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
-      return dto;
+      return present(ticket, dto);
+    },
+
+    async mergePullRequest(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const host = requireCodeHost();
+      try {
+        return await branchActions.merge(host, await branchContext(ticket, runId), body);
+      } finally {
+        // Also after a refusal: GitHub may have merged it, and Refresh shows what happened.
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      }
+    },
+
+    async deleteTicketBranch(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const host = requireCodeHost();
+      try {
+        return await branchActions.remove(host, await branchContext(ticket, runId), body);
+      } finally {
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      }
+    },
+
+    ticketTotals(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      const usage = ticketTokens(ticket.projectId, ticket.id);
+      if (usage === undefined) throw notFound(`Project ${ticket.projectId} not found`);
+      return buildTicketTotals({
+        ticket,
+        runs: orch.runs.list({ ticketId, limit: MAX_PAGE_SIZE }),
+        usage,
+        now: deps.now(),
+      });
     },
 
     controlHooks: () => hooks,

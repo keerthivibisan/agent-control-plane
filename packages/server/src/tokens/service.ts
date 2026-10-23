@@ -124,3 +124,18 @@ export function createTokensService(deps: { db: AcpDatabase; now?: () => Date })
     },
   };
 }
+
+/**
+ * One ticket's tokens (v0.3.0 T-A, the ticket badge): its direct usage, mapped exactly as the
+ * Tokens page's `byTicket` row (the same cells, all time), so the two always show the same
+ * numbers. `undefined` for an unknown project.
+ */
+export function createTicketTokens(
+  db: AcpDatabase,
+): (projectId: string, ticketId: string) => ReturnType<typeof rowDto> | undefined {
+  const queries = createTokenQueries(db);
+  return (projectId, ticketId) => {
+    const r = queries.ticketTokens(projectId, ticketId);
+    return r === undefined ? undefined : rowDto(r);
+  };
+}
