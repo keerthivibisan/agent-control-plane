@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { isPathInside } from '@acp/core';
+import { defaultProjectWorkflow, isPathInside } from '@acp/core';
 import { CSRF_HEADER } from '@acp/core/api';
 import { createReviewLoopRepositories } from '@acp/db';
 import { AGENT_ATTACHMENTS_DIR } from '../../src/attachments/agent-copies.js';
@@ -46,7 +46,7 @@ function expectReadOnlyCopy(path: string) {
 }
 
 describe('attachments for agents (ADR-0026 §4)', () => {
-  it("gives the lead read-only copies in the run's folder, outside the owner's checkout", async () => {
+  it("gives the lead read-only copies in the run's folder, readable without asking", async () => {
     const s = await setupBoard({ files: FILES });
     const ticket = await s.createTicket('Add dark mode');
     await attach(s, ticket.id);
@@ -55,8 +55,36 @@ describe('attachments for agents (ADR-0026 §4)', () => {
     await s.settle();
     const lead = s.fake.lead();
     expect(lead.spec.prompt).toContain('The owner attached a file to this ticket.');
-    expect(lead.spec.prompt).toContain('reading one asks the owner');
+    expect(lead.spec.prompt).not.toContain('asks the owner');
     const path = listedPath(lead.spec.prompt, 'notes.txt');
+    // The adapter allows reads in this folder without asking (ADR-0026 §4, `readOnlyDirs`).
+    expect(lead.spec.readOnlyDirs).toEqual([dirname(path)]);
+    expect(isPathInside(s.dataDir, path)).toBe(true);
+    expect(isPathInside(s.repo, path)).toBe(false);
+    expectReadOnlyCopy(path);
+    expect(git(s.repo, 'status', '--porcelain', '--ignored')).toBe('');
+  });
+
+  it('gives a separate planner its own copies, readable without asking', async () => {
+    const s = await setupBoard({ files: FILES });
+    const stages = defaultProjectWorkflow('x', '2026-10-17T09:00:00.000Z').stages;
+    expect(
+      (
+        await s.send('put', `/api/projects/${s.project.id}/workflow`, {
+          plannerMode: 'separate',
+          stages,
+        })
+      ).status,
+    ).toBe(200);
+    const ticket = await s.createTicket('Add dark mode');
+    await attach(s, ticket.id);
+    await s.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' });
+    expect((await s.post(`/api/tickets/${ticket.id}/start`, {})).status).toBe(200);
+    await s.settle();
+    const planner = s.fake.agents.find((a) => a.spec.kind === 'planner');
+    if (planner === undefined) throw new Error('no planner');
+    const path = listedPath(planner.spec.prompt, 'notes.txt');
+    expect(planner.spec.readOnlyDirs).toEqual([dirname(path)]);
     expect(isPathInside(s.dataDir, path)).toBe(true);
     expect(isPathInside(s.repo, path)).toBe(false);
     expectReadOnlyCopy(path);
@@ -80,6 +108,7 @@ describe('attachments for agents (ADR-0026 §4)', () => {
     expectReadOnlyCopy(copy);
     expectReadOnlyCopy(join(worker.spec.cwd, AGENT_ATTACHMENTS_DIR, '2-notes.txt'));
     expect(worker.spec.prompt).not.toContain('asks the owner');
+    expect(worker.spec.readOnlyDirs).toBeUndefined();
     // Ignored by its own .gitignore: nothing to stage.
     expect(git(worktree, 'status', '--porcelain')).toBe('');
 

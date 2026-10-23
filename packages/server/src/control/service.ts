@@ -463,6 +463,8 @@ interface LaunchInput {
   rework?: { resumeSessionId: string | null } | undefined;
   /** ADR-0021: what a reviewer reviews. */
   reviewScope?: 'change' | 'final' | undefined;
+  /** ADR-0026 §4: the lead's or planner's attachment copies, readable without asking. */
+  readOnlyDirs?: string[] | undefined;
   /**
    * ADR-0022, ADR-0023 §5: a helper's or tester's sandbox paths, with auto mode (its block runs
    * Full auto) or without (a Full auto block a ticket or run tightened).
@@ -1038,7 +1040,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         hooks.agentSetup === undefined &&
         effect.skills === undefined &&
         effect.agent === undefined &&
-        (kind !== 'lead' || ticketAttachments(live).length === 0)
+        ticketAttachments(live).length === 0
       ) {
         launch(live, { ...base, cwd: project.rootPath, setup: NO_SETUP });
         return;
@@ -1049,14 +1051,27 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
-          // ADR-0026 §4: the lead's copies are outside the owner's checkout (the run's folder).
-          const prompt =
-            kind === 'lead'
-              ? await withAttachments(live, kind, project.rootPath, project.rootPath, base.prompt)
-              : base.prompt;
+          // ADR-0026 §4: the lead's and planner's copies are outside the owner's checkout (the
+          // run's folder), readable without asking (`readOnlyDirs`).
+          const copies = await withAttachments(
+            live,
+            agentRunId,
+            kind,
+            project.rootPath,
+            project.rootPath,
+            base.prompt,
+          );
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, prompt, cwd: project.rootPath, setup, plugin, agentFile });
+          launch(live, {
+            ...base,
+            prompt: copies.prompt,
+            readOnlyDirs: copies.readOnlyDirs,
+            cwd: project.rootPath,
+            setup,
+            plugin,
+            agentFile,
+          });
         })(),
       );
       return;
@@ -1080,7 +1095,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             effect.reviewScope === 'change'
               ? await changeReviewerPrompt(live, agentRunId, effect.prompt)
               : effect.prompt;
-          const prompt = await withAttachments(live, kind, checkout.cwd, project.rootPath, brief);
+          const { prompt } = await withAttachments(
+            live,
+            agentRunId,
+            kind,
+            checkout.cwd,
+            project.rootPath,
+            brief,
+          );
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
           launch(live, {
@@ -1162,7 +1184,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
         const protection = await protectionFor(live, agentRunId);
-        const withCopies = await withAttachments(live, kind, ws.cwd, project.rootPath, prompt);
+        const withCopies = (
+          await withAttachments(live, agentRunId, kind, ws.cwd, project.rootPath, prompt)
+        ).prompt;
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
@@ -1191,33 +1215,47 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return ticketId === null ? [] : store.workspaceRepos.attachments.listForTicket(ticketId);
   }
 
-  /** The run's own folder of the lead's attachment copies (ADR-0026 §4). */
-  function runAttachmentsDir(runId: string): string {
-    return join(deps.dataDir, 'runs', runId, RUN_ATTACHMENTS_DIR);
+  /**
+   * The run's folder of attachment copies (ADR-0026 §4), or one agent's folder in it: the lead
+   * and the planner each get their own.
+   */
+  function runAttachmentsDir(runId: string, agentRunId?: string): string {
+    const all = join(deps.dataDir, 'runs', runId, RUN_ATTACHMENTS_DIR);
+    return agentRunId === undefined ? all : join(all, agentRunId);
   }
 
   /**
    * ADR-0026 §4: places read-only copies of the ticket's attachments for one agent (see
    * `attachments/agent-copies.ts`) and adds their names and paths to its brief. Never inside the
-   * owner's checkout; the planner gets none (it may only read inside its folder). A failure to
-   * copy never blocks the start: the brief simply has no attachments.
+   * owner's checkout. The lead and the planner read the owner's checkout in place, so theirs go
+   * in the run's folder (one per agent), which they may read without asking (`readOnlyDirs`). A
+   * failure to copy never blocks the start: the brief simply has no attachments.
    */
   async function withAttachments(
     live: LiveRun,
+    agentRunId: string,
     kind: AgentRoleKind,
     cwd: string,
     projectRoot: string,
     prompt: string,
-  ): Promise<string> {
+  ): Promise<{ prompt: string; readOnlyDirs?: string[] }> {
     const list = ticketAttachments(live);
-    if (list.length === 0 || kind === 'planner') return prompt;
-    const lead = kind === 'lead';
-    const dir = lead ? runAttachmentsDir(live.state.run.id) : join(cwd, AGENT_ATTACHMENTS_DIR);
-    if (isPathInside(projectRoot, dir)) return prompt;
+    if (list.length === 0) return { prompt };
+    const inRunFolder = kind === 'lead' || kind === 'planner';
+    const dir = inRunFolder
+      ? runAttachmentsDir(live.state.run.id, agentRunId)
+      : join(cwd, AGENT_ATTACHMENTS_DIR);
+    if (isPathInside(projectRoot, dir)) return { prompt };
     try {
-      const copies = await placeAgentCopies(attachmentFiles, list, dir, { gitignore: !lead });
-      const brief = attachmentsBrief(copies, lead);
-      return brief === '' ? prompt : `${prompt}\n\n${brief}`;
+      const copies = await placeAgentCopies(attachmentFiles, list, dir, {
+        gitignore: !inRunFolder,
+      });
+      const brief = attachmentsBrief(copies);
+      if (brief === '') return { prompt };
+      return {
+        prompt: `${prompt}\n\n${brief}`,
+        ...(inRunFolder && { readOnlyDirs: [dir] }),
+      };
     } catch (error) {
       countDiagnostic('attachments-unavailable');
       logger.log('warn', 'attachment copies failed', {
@@ -1225,7 +1263,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         kind,
         ...errorFields(error),
       });
-      return prompt;
+      return { prompt };
     }
   }
 
@@ -1299,7 +1337,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
         const protection = await protectionFor(live, agentRunId);
-        const prompt = await withAttachments(live, effect.kind, ws.cwd, projectRoot, effect.prompt);
+        const { prompt } = await withAttachments(
+          live,
+          agentRunId,
+          effect.kind,
+          ws.cwd,
+          projectRoot,
+          effect.prompt,
+        );
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
@@ -1586,7 +1631,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   function removeSkillsPlugin(runId: string): void {
     track(
-      // ADR-0026 §4: the lead's attachment copies go with the run's other temporary files.
+      // ADR-0026 §4: the lead's and planner's copies go with the run's other temporary files.
       rm(runAttachmentsDir(runId), { recursive: true, force: true })
         .then(() => skillsPlugins.remove(runId))
         .catch((error: unknown) => {
@@ -1742,6 +1787,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     if (input.rework !== undefined) spec.rework = { ...input.rework };
     if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
+    if (input.readOnlyDirs !== undefined) spec.readOnlyDirs = input.readOnlyDirs;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
     // ADR-0022, ADR-0023 §5: only helpers and the tester are protected; the adapter ignores it

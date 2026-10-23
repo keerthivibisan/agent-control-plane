@@ -11,9 +11,9 @@ import type { AttachmentFiles } from './files.js';
  *   `.gitignore` (`*`) ignores the folder and everything in it: the app's seal (`git add --all`)
  *   never stages them, and they never reach the ticket branch or the owner's checkout.
  * - A reviewer gets them the same way in its temporary read-only checkout.
- * - The lead reads the owner's checkout in place, so its copies are in the run's data folder
- *   (`<dataDir>/runs/<runId>/attachments`); reading one asks the owner, like any read outside its
- *   folder. The planner, which may only read inside its folder, is not given them.
+ * - The lead and the planner read the owner's checkout in place, so their copies are in the run's
+ *   data folder (`<dataDir>/runs/<runId>/attachments/<agentRunId>`), which they may read without
+ *   asking (`ManagedAgentSpec.readOnlyDirs`).
  */
 
 /** The folder of the copies inside an agent's worktree or checkout. */
@@ -79,10 +79,10 @@ function size(bytes: number): string {
 }
 
 /** The brief's lines for the copies; empty without any. */
-export function attachmentsBrief(copies: readonly AgentCopy[], asksOwner: boolean): string {
+export function attachmentsBrief(copies: readonly AgentCopy[]): string {
   if (copies.length === 0) return '';
   return [
-    `The owner attached ${copies.length === 1 ? 'a file' : `${copies.length} files`} to this ticket. Read-only copies (read them if they help; never copy them into the project${asksOwner ? '; reading one asks the owner' : ''}):`,
+    `The owner attached ${copies.length === 1 ? 'a file' : `${copies.length} files`} to this ticket. Read-only copies (read them if they help; never copy them into the project):`,
     ...copies.map((c) => `- ${c.name} (${c.mimeType}, ${size(c.sizeBytes)}): ${c.path}`),
   ].join('\n');
 }
