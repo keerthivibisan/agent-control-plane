@@ -307,3 +307,14 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   to create any branch"; seen on "ACPGIT-1 didn't start. The target branch dev does not exist").
   List and create branches (never switching the checkout), optionally push; in Settings, a ticket's
   branch settings and the refusal itself. Contract and ADR-0025 §8 by the coordinator.
+- 2026-10-23 **G-F merged** (`403e14b` rebased): list a project's local branches and create any
+  branch from the app (`git branch --no-track <name> refs/heads/<from>`, never switching the
+  checkout, never moving an existing branch), optionally pushing it. On the Start refusal ("Create
+  dev from main", then Start again once), in Settings (Local branches card; "Create it" in the
+  strategy form) and in a ticket's target field. The GitHub card says "Push main now". Coordinator
+  fixes: the refusal's wording; ADR-0025 §7 and §8 now say pushes use `--set-upstream`.
+  **Lint memory fix** (`533a495`): ESLint needed about the default 2 GB heap and crashed twice; the
+  lint script now gives it 4 GB. Checks: format ✓ lint ✓ typecheck ✓; tests core 493, adapter 371,
+  demo 12, db 235, orchestrator 2,322, web 1,163, server 731 (re-run with 2 workers after timeouts
+  under memory pressure on this 8 GB machine) ✓; build ✓; e2e 107/107. Follow-ups: the Create
+  action in the "Start with options" dialog, and the branch picker in New ticket.
