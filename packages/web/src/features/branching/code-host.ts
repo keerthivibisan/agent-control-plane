@@ -1,7 +1,17 @@
-import type { CodeHostStatusDto, PullRequestDto, TicketDto } from '@acp/core/api';
-import type { ApiError } from '../../lib/api';
 import {
+  GitHubOwnerSchema,
+  GitHubRepoNameSchema,
+  parseGitHubRepository,
+  type CodeHostStatusDto,
+  type ProjectDto,
+  type PullRequestDto,
+  type TicketDto,
+} from '@acp/core/api';
+import type { ApiError, CreateRepositoryRequest } from '../../lib/api';
+import {
+  CODE_HOST_CONNECT_COPY,
   PULL_REQUEST_COPY,
+  type CodeHostConnectErrorCode,
   type CodeHostProblemKey,
   type PullRequestErrorCode,
 } from '../../lib/copy';
@@ -91,4 +101,100 @@ export function hasNewCommits(branch: {
 /** Merged is final; an open one can be merged and a closed one reopened on GitHub. */
 export function canRefresh(pr: Pick<PullRequestDto, 'state'>): boolean {
   return pr.state !== 'merged';
+}
+
+// --- Connecting a project from Settings (G-E, ADR-0025 §7) ---------------------------------------
+
+/**
+ * What the Settings card offers: install the CLI, sign in, connect (create or link a repository),
+ * or the connection. The CLI comes first, as creating needs it; then the sign-in; then origin.
+ */
+export type ConnectStep = 'install' | 'login' | 'connect' | 'ready';
+
+export function connectStep(status: CodeHostStatusDto): ConnectStep {
+  if (!status.cli.installed) return 'install';
+  if (status.cli.loggedIn !== true) return 'login';
+  if (status.provider === null || status.repo === null) return 'connect';
+  return 'ready';
+}
+
+/** `https://github.com/<owner>/<name>` for a status's `owner/name`; null when it isn't one. */
+export function gitHubRepoUrl(repo: string): string | null {
+  const parsed = parseGitHubRepository(repo);
+  return parsed === null || `${parsed.owner}/${parsed.name}` !== repo
+    ? null
+    : `https://github.com/${parsed.owner}/${parsed.name}`;
+}
+
+/**
+ * The default repository name: the project folder's name, made into a GitHub name (other
+ * characters become `-`, no leading or trailing `-` or `.`, no `.git` ending, at most 100). Empty
+ * when nothing usable is left, so the owner types one.
+ */
+export function defaultRepoName(project: Pick<ProjectDto, 'name' | 'rootPath'>): string {
+  const folder = project.rootPath.split(/[\\/]/).filter(Boolean).at(-1) ?? project.name;
+  let name = folder
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/\.git$/i, '');
+  name = name.replace(/^[-.]+|[-.]+$/g, '').slice(0, 100);
+  name = name.replace(/[-.]+$/g, '');
+  return GitHubRepoNameSchema.safeParse(name).success ? name : '';
+}
+
+export interface CreateRepoDraft {
+  name: string;
+  owner: string;
+  visibility: 'private' | 'public';
+  push: boolean;
+}
+
+export interface CreateRepoCheck {
+  errors: { name?: string; owner?: string };
+  /** The request to send; null while a field needs a fix. */
+  request: CreateRepositoryRequest | null;
+}
+
+/** Checks the Create form with the core schemas, as typed. */
+export function checkCreateRepo(draft: CreateRepoDraft): CreateRepoCheck {
+  const E = CODE_HOST_CONNECT_COPY.create.errors;
+  const name = draft.name.trim();
+  const owner = draft.owner.trim();
+  const errors: CreateRepoCheck['errors'] = {};
+  if (name === '') errors.name = E.nameMissing;
+  else if (!GitHubRepoNameSchema.safeParse(name).success) errors.name = E.name;
+  if (owner !== '' && !GitHubOwnerSchema.safeParse(owner).success) errors.owner = E.owner;
+  const ok = errors.name === undefined && errors.owner === undefined;
+  return {
+    errors,
+    request: ok
+      ? {
+          name,
+          ...(owner !== '' && { owner }),
+          visibility: draft.visibility,
+          push: draft.push,
+        }
+      : null,
+  };
+}
+
+/** Server sentences the app writes with specifics in them, shown as they come. */
+const OWN_SENTENCE_CODES: readonly string[] = [
+  'remote_add_failed',
+  'detached_head',
+  'push-rejected',
+  'timeout',
+];
+const CONNECT_ERROR_CODES = Object.keys(CODE_HOST_CONNECT_COPY.errors) as readonly string[];
+
+function isConnectErrorCode(code: string | null): code is CodeHostConnectErrorCode {
+  return code !== null && CONNECT_ERROR_CODES.includes(code);
+}
+
+/** A failed create or connect in plain words; null for an error without a known code. */
+export function connectErrorText(error: ApiError): string | null {
+  if (error.kind !== 'http') return null;
+  if (isConnectErrorCode(error.code)) return CODE_HOST_CONNECT_COPY.errors[error.code];
+  if (error.code !== null && OWN_SENTENCE_CODES.includes(error.code)) return error.message;
+  return null;
 }

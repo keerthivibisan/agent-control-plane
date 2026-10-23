@@ -91,6 +91,8 @@ import {
   OpenPullRequestRequestSchema,
   TicketBranchDtoSchema,
 } from '@acp/core/api';
+// Connecting a project to GitHub from Settings (G-E, ADR-0025 §7).
+import { ConnectRepositoryRequestSchema, CreateRepositoryRequestSchema } from '@acp/core/api';
 // Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026).
 import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
 
@@ -1179,6 +1181,10 @@ export type OpenPullRequestRequest = ReturnType<typeof OpenPullRequestRequestSch
 
 export const codeHostPaths = {
   status: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host`,
+  /** G-E: create the repository on GitHub and set it as origin. */
+  repository: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host/repository`,
+  /** G-E: set an existing GitHub repository as origin. */
+  remote: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host/remote`,
   pullRequest: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request`,
   refresh: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request/refresh`,
 } as const;
@@ -1206,6 +1212,43 @@ export async function openPullRequest(
 /** Refresh: reads the pull request's state on GitHub again. */
 export function refreshPullRequest(client: ApiClient, ticketId: string) {
   return controlPost(client, codeHostPaths.refresh(ticketId), {}, codeHostSchemas.branch);
+}
+
+// G-E (ADR-0025 §7): connecting a project from Settings, only on the owner's click and only when
+// the project has no origin yet (409 `origin_exists` otherwise). POST …/code-host/repository with
+// a CreateRepositoryRequest creates the repository with the owner's `gh` login and sets it as
+// origin (and pushes the current branch when asked); POST …/code-host/remote with a
+// ConnectRepositoryRequest sets an existing one as origin. Both answer the new CodeHostStatusDto.
+
+export type CreateRepositoryRequest = ReturnType<typeof CreateRepositoryRequestSchema.parse>;
+export type ConnectRepositoryRequest = ReturnType<typeof ConnectRepositoryRequestSchema.parse>;
+
+export function createCodeHostRepository(
+  client: ApiClient,
+  projectId: string,
+  input: CreateRepositoryRequest,
+) {
+  const path = codeHostPaths.repository(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(CreateRepositoryRequestSchema, input, path),
+    codeHostSchemas.status,
+  );
+}
+
+export function connectCodeHostRepository(
+  client: ApiClient,
+  projectId: string,
+  input: ConnectRepositoryRequest,
+) {
+  const path = codeHostPaths.remote(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(ConnectRepositoryRequestSchema, input, path),
+    codeHostSchemas.status,
+  );
 }
 
 // --- Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026) -----------------------------

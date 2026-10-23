@@ -123,13 +123,24 @@ test('Settings: GitHub’s status with Check again, and a branching strategy sav
   // GitHub: the CLI is missing; once installed, Check again shows the connection.
   const gh = page.getByTestId('settings-code-host');
   await expect(gh.getByTestId('code-host-message')).toContainText(
-    'The GitHub CLI isn’t installed. Install the GitHub CLI (gh) and run gh auth login',
+    'The GitHub CLI (gh) isn’t installed.',
+  );
+  await expect(gh.getByText('brew install gh', { exact: true })).toBeVisible();
+  await expect(gh.getByRole('link', { name: /cli\.github\.com/ })).toHaveAttribute(
+    'href',
+    'https://cli.github.com',
   );
   await expect(gh.getByTestId('code-host-state')).toHaveText('Not connected');
   await shootPart(page, 'code-host-problem', 'settings-code-host');
   host = 'ready';
   await gh.getByRole('button', { name: 'Check again' }).click();
-  await expect(gh.getByTestId('code-host-message')).toHaveText('Connected to GitHub: acme/web-app');
+  await expect(gh.getByTestId('code-host-message')).toContainText(
+    'Connected to GitHub: acme/web-app',
+  );
+  await expect(gh.getByTestId('code-host-repo-link')).toHaveAttribute(
+    'href',
+    'https://github.com/acme/web-app',
+  );
   await expect(gh.getByTestId('code-host-state')).toHaveText('Connected');
   await shootPart(page, 'code-host', 'settings-code-host');
 
@@ -170,6 +181,115 @@ test('Settings: GitHub’s status with Check again, and a branching strategy sav
   });
   // Opening the page and Check again asked GitHub twice; nothing else did.
   expect(asked).toBe(2);
+});
+
+/**
+ * G-E: the Settings page with the code host answered from `host`, and create and connect recorded
+ * (CSRF checked) and answered as the server would: the new status, connected.
+ */
+async function withConnectRoutes(page: Page, start: CodeHostKind) {
+  await withFixtureProject(page);
+  await withSetup(page, setupFixture());
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: fixtureProject() }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/context-candidates`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  const state: { host: Json; sent: { path: string; body: Json }[] } = {
+    host: codeHost(start),
+    sent: [],
+  };
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: state.host }));
+  for (const [path, repo] of [
+    ['repository', 'octo/web-app'],
+    ['remote', 'acme/widgets'],
+  ] as const) {
+    await page.route(`**${CODE_HOST_PATH}/${path}`, async (route) => {
+      const req = route.request();
+      expect(req.method()).toBe('POST');
+      expect(req.headers()['x-acp-csrf']).toBe(CSRF);
+      state.sent.push({ path, body: req.postDataJSON() as Json });
+      state.host = { ...codeHost('ready'), repo };
+      await route.fulfill({ json: state.host });
+    });
+  }
+  return state;
+}
+
+test('G-E: Settings connects GitHub: sign in first, then create a repository', async ({ page }) => {
+  const state = await withConnectRoutes(page, 'not-logged-in');
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+  const gh = page.getByTestId('settings-code-host');
+
+  // Not signed in: the command to run, and why the app doesn't run it.
+  const login = gh.getByTestId('code-host-login');
+  await expect(login.getByText('gh auth login', { exact: true })).toBeVisible();
+  await expect(login.getByRole('button', { name: 'Copy command' })).toBeVisible();
+  await expect(login).toContainText('the app never handles your GitHub credentials');
+  await shootPart(page, 'code-host-login', 'settings-code-host');
+
+  // Signed in now: Check again offers to create one, named after the folder.
+  state.host = codeHost('no-remote');
+  await gh.getByRole('button', { name: 'Check again' }).click();
+  const create = gh.getByTestId('code-host-create');
+  await expect(create.getByLabel('Repository name')).toHaveValue('web-app');
+  await expect(create.getByLabel('Owner')).toHaveAttribute('placeholder', 'Your account');
+  await expect(create.getByLabel('Private', { exact: true })).toBeChecked();
+  await expect(create.getByLabel('Push the current branch now')).toBeChecked();
+  await expect(create.getByTestId('code-host-create-summary')).toHaveText(
+    'Creates github.com/you/web-app as a private repository and sets it as origin, then pushes the current branch.',
+  );
+  // A name GitHub won't take is said as typed, and nothing is sent.
+  await create.getByLabel('Repository name').fill('my app');
+  await expect(create).toContainText('Use letters, digits, dots, dashes and underscores');
+  await create.getByRole('button', { name: 'Create repository' }).click();
+  await expect(create.getByLabel('Repository name')).toBeFocused();
+  expect(state.sent).toEqual([]);
+  await create.getByLabel('Repository name').fill('web-app');
+  await shootPart(page, 'code-host-create', 'settings-code-host');
+
+  // Keyboard: the button is reached with Tab and pressed with Enter.
+  await create.getByLabel('Push the current branch now').focus();
+  await page.keyboard.press('Tab');
+  await expect(create.getByRole('button', { name: 'Create repository' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(gh.getByTestId('code-host-repo-link')).toHaveAttribute(
+    'href',
+    'https://github.com/octo/web-app',
+  );
+  await expect(gh.getByTestId('code-host-message')).toBeFocused();
+  await expect(gh.getByTestId('code-host-state')).toHaveText('Connected');
+  expect(state.sent).toEqual([
+    { path: 'repository', body: { name: 'web-app', visibility: 'private', push: true } },
+  ]);
+});
+
+test('G-E: Settings connects an existing repository, read as typed', async ({ page }) => {
+  const state = await withConnectRoutes(page, 'no-remote');
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+  const gh = page.getByTestId('settings-code-host');
+  await gh.getByRole('button', { name: 'Connect an existing repository' }).click();
+  await expect(gh.getByRole('button', { name: 'Connect an existing repository' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  const form = gh.getByTestId('code-host-existing');
+  const field = form.getByLabel('Repository', { exact: true });
+  await field.fill('https://gitlab.com/acme/widgets');
+  await expect(form.getByTestId('code-host-existing-read')).toHaveText(
+    'Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+  );
+  await field.fill('git@github.com:acme/widgets.git');
+  await expect(form.getByTestId('code-host-existing-read')).toHaveText(
+    'Connects github.com/acme/widgets as origin, over SSH. Nothing is pushed.',
+  );
+  await shootPart(page, 'code-host-existing', 'settings-code-host');
+  await field.press('Enter');
+  await expect(gh.getByTestId('code-host-repo-link')).toHaveText(/acme\/widgets/);
+  expect(state.sent).toEqual([
+    { path: 'remote', body: { repository: 'git@github.com:acme/widgets.git' } },
+  ]);
 });
 
 test('New ticket: its own branch name and target under More options', async ({ page, request }) => {

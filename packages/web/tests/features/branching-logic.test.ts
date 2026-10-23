@@ -8,7 +8,12 @@ import { describe, expect, it } from 'vitest';
 import { codeHost, pullRequest } from '../../e2e/github-fixtures';
 import {
   canRefresh,
+  checkCreateRepo,
   codeHostReadiness,
+  connectErrorText,
+  connectStep,
+  defaultRepoName,
+  gitHubRepoUrl,
   defaultPullRequestTitle,
   hasNewCommits,
   pullRequestErrorText,
@@ -35,7 +40,7 @@ import {
   validateTicketBranch,
 } from '../../src/features/branching/ticket-branch';
 import { ApiError } from '../../src/lib/api';
-import { BRANCHING_COPY, PULL_REQUEST_COPY } from '../../src/lib/copy';
+import { BRANCHING_COPY, CODE_HOST_CONNECT_COPY, PULL_REQUEST_COPY } from '../../src/lib/copy';
 
 /*
  * G-B (ADR-0025): the pure rules behind the branching strategy form, a ticket's own branch and
@@ -320,5 +325,86 @@ describe('G-D: the open pull request', () => {
     expect(checkOnView({})).toBe(false);
     expect(checkOnView(null)).toBe(false);
     expect(checkOnView(undefined)).toBe(false);
+  });
+});
+
+describe('G-E: connecting a project from Settings', () => {
+  const status = (k: Parameters<typeof codeHost>[0]) => CodeHostStatusDtoSchema.parse(codeHost(k));
+  const K = CODE_HOST_CONNECT_COPY;
+
+  it('steps: install gh, then sign in, then connect, then ready', () => {
+    expect(connectStep(status('no-cli'))).toBe('install');
+    expect(connectStep(status('not-logged-in'))).toBe('login');
+    expect(connectStep(status('no-remote'))).toBe('connect');
+    expect(connectStep(status('ready'))).toBe('ready');
+    // No origin and no gh: installing comes first.
+    expect(
+      connectStep({
+        ...status('no-remote'),
+        cli: { name: 'gh', installed: false, loggedIn: null },
+      }),
+    ).toBe('install');
+  });
+
+  it('the default name is the folder’s, made into a GitHub name', () => {
+    const name = (rootPath: string) => defaultRepoName({ name: 'p', rootPath });
+    expect(name('/work/web-app')).toBe('web-app');
+    expect(name('/work/My Project (v2)/')).toBe('My-Project-v2');
+    expect(name('/work/site.git')).toBe('site');
+    expect(name('/work/.hidden')).toBe('hidden');
+    expect(name('/work/über')).toBe('ber');
+    expect(name('/work/日本')).toBe('');
+    expect(name(`/work/${'a'.repeat(150)}`)).toHaveLength(100);
+    expect(name('C:\\work\\win-app')).toBe('win-app');
+  });
+
+  it('checks the Create form with the core schemas', () => {
+    const draft = { name: 'web-app', owner: '', visibility: 'private' as const, push: true };
+    expect(checkCreateRepo(draft)).toEqual({
+      errors: {},
+      request: { name: 'web-app', visibility: 'private', push: true },
+    });
+    expect(checkCreateRepo({ ...draft, name: ' site ', owner: ' acme-org ' }).request).toEqual({
+      name: 'site',
+      owner: 'acme-org',
+      visibility: 'private',
+      push: true,
+    });
+    expect(checkCreateRepo({ ...draft, name: '' }).errors.name).toBe(K.create.errors.nameMissing);
+    for (const bad of ['a b', '.', '..', 'x.git', 'a/b', 'a'.repeat(101)]) {
+      const c = checkCreateRepo({ ...draft, name: bad });
+      expect([c.errors.name, c.request], bad).toEqual([K.create.errors.name, null]);
+    }
+    for (const bad of ['-acme', 'acme-', 'a--b', 'a_b', 'a'.repeat(40)]) {
+      expect(checkCreateRepo({ ...draft, owner: bad }).errors.owner, bad).toBe(
+        K.create.errors.owner,
+      );
+    }
+  });
+
+  it('links only a real owner/name', () => {
+    expect(gitHubRepoUrl('acme/web-app')).toBe('https://github.com/acme/web-app');
+    expect(gitHubRepoUrl('acme/web-app/x')).toBeNull();
+    expect(gitHubRepoUrl('javascript:alert(1)')).toBeNull();
+    expect(gitHubRepoUrl('acme/web-app.git')).toBeNull();
+  });
+
+  it('words every refusal; the server’s own sentences with specifics are shown as they come', () => {
+    const http = (code: string, message = 'server words') =>
+      new ApiError({ kind: 'http', path: '/x', message, status: 409, code });
+    expect(connectErrorText(http('origin_exists'))).toBe(K.errors.origin_exists);
+    expect(connectErrorText(http('repository_create_failed'))).toBe(
+      K.errors.repository_create_failed,
+    );
+    expect(connectErrorText(http('invalid_repository'))).toBe(K.errors.invalid_repository);
+    expect(connectErrorText(http('code_host_not_ready'))).toBe(K.errors.code_host_not_ready);
+    expect(connectErrorText(http('remote_add_failed', 'GitHub created a/b, but…'))).toBe(
+      'GitHub created a/b, but…',
+    );
+    expect(connectErrorText(http('detached_head', 'Not on a branch.'))).toBe('Not on a branch.');
+    expect(connectErrorText(http('something_else'))).toBeNull();
+    expect(
+      connectErrorText(new ApiError({ kind: 'unreachable', path: '/x', message: 'down' })),
+    ).toBeNull();
   });
 });

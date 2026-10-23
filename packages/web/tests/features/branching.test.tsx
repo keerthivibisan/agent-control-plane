@@ -38,6 +38,7 @@ import { TicketPage } from '../../src/features/ticket/TicketPage';
 import type { FetchLike } from '../../src/lib/api';
 import {
   BRANCHING_COPY,
+  CODE_HOST_CONNECT_COPY,
   CODE_HOST_COPY,
   PULL_REQUEST_COPY,
   TICKET_BRANCH_COPY,
@@ -76,6 +77,7 @@ const P = `/api/projects/${PROJECT_ID}`;
 const GH_FLOW = BranchStrategySchema.parse(githubFlowStrategy());
 const C = BRANCHING_COPY;
 const H = CODE_HOST_COPY;
+const K = CODE_HOST_CONNECT_COPY;
 const PR = PULL_REQUEST_COPY;
 const TB = TICKET_BRANCH_COPY;
 
@@ -146,7 +148,7 @@ describe('Settings: the branching strategy', () => {
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
     const card = await branchingCard();
     // GitHub's default branch is where GitHub flow starts.
-    await screen.findByText(H.connected('acme/web-app'));
+    await screen.findByTestId('code-host-repo-link');
     fireEvent.click(within(card).getByLabelText(/GitHub flow/));
     expect(within(card).getByLabelText<HTMLInputElement>('Base branch').value).toBe('main');
     const template = within(card).getByLabelText<HTMLInputElement>('Ticket branch name');
@@ -234,10 +236,10 @@ describe('Settings: the branching strategy', () => {
 
 describe('Settings: GitHub status', () => {
   it.each([
-    ['no-remote', H.problems['no-remote']],
-    ['no-cli', H.problems['no-cli']],
-    ['not-logged-in', H.problems['not-logged-in']],
-  ] as const)('says what to fix when %s', async (kind, text) => {
+    ['no-remote', K.connect.message],
+    ['no-cli', K.install.message],
+    ['not-logged-in', K.login.message],
+  ] as const)('says what to do when %s', async (kind, text) => {
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, settingsServer({}, kind));
     const card = await screen.findByTestId('settings-code-host');
     expect(await within(card).findByText(text)).toBeTruthy();
@@ -245,11 +247,17 @@ describe('Settings: GitHub status', () => {
     expect(within(card).getByTestId('code-host-message').dataset['problem']).toBe(kind);
   });
 
-  it('shows the connection, and Check again asks once more', async () => {
+  it('shows the connection as a link to the repository, and Check again asks once more', async () => {
     const s = settingsServer();
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
     const card = await screen.findByTestId('settings-code-host');
-    expect(await within(card).findByText('Connected to GitHub: acme/web-app')).toBeTruthy();
+    const link = await within(card).findByTestId('code-host-repo-link');
+    expect(link.getAttribute('href')).toBe('https://github.com/acme/web-app');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(within(card).getByTestId('code-host-message').textContent).toContain(
+      'Connected to GitHub: acme/web-app',
+    );
     expect(within(card).getByTestId('code-host-state').textContent).toBe(H.word.connected);
     expect(within(card).getByText('main')).toBeTruthy();
     const asked = () => s.calls.filter((c) => c.path === CODE_HOST_PATH).length;
@@ -272,6 +280,268 @@ describe('Settings: GitHub status', () => {
     for (const k of ['ready', 'no-remote', 'no-cli', 'not-logged-in'] as const) {
       expect(CodeHostStatusDtoSchema.safeParse(codeHost(k)).success).toBe(true);
     }
+    expect(CodeHostStatusDtoSchema.safeParse(connectedAs('octo/web-app')).success).toBe(true);
+  });
+});
+
+// --- Settings: connecting the project to GitHub (G-E) -------------------------------------------
+
+/** The status after a create or connect: ready, with this `owner/name`. */
+function connectedAs(repo: string) {
+  return { ...codeHost('ready'), repo };
+}
+
+/**
+ * Settings with a logged-in `gh` and no origin; create and connect answer `answer(body)` (the new
+ * status, or a Response), and the status GET answers whatever the last success set.
+ */
+function connectServer(answer: (body: unknown) => Response | object) {
+  let host: object = codeHost('no-remote');
+  const reply = (body: unknown) => {
+    const r = answer(body);
+    if (r instanceof Response) return r;
+    host = r;
+    return jsonResponse(200, r);
+  };
+  return settingsServer({}, 'ready', {
+    [CODE_HOST_PATH]: () => jsonResponse(200, host),
+    [`POST ${P}/code-host/repository`]: reply,
+    [`POST ${P}/code-host/remote`]: reply,
+  });
+}
+
+async function connectCard() {
+  const card = await screen.findByTestId('settings-code-host');
+  await within(card).findByTestId('code-host-connect');
+  return card;
+}
+
+describe('Settings: install and sign in to the GitHub CLI (G-E)', () => {
+  it('no gh: how to install it (Homebrew, cli.github.com), then Check again', async () => {
+    const s = settingsServer({}, 'no-cli');
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await screen.findByTestId('settings-code-host');
+    const step = await within(card).findByTestId('code-host-install');
+    expect(within(step).getByText('brew install gh')).toBeTruthy();
+    expect(within(step).getByRole('button', { name: 'Copy command' })).toBeTruthy();
+    const site = within(step).getByRole('link', { name: /cli\.github\.com/ });
+    expect(site.getAttribute('href')).toBe('https://cli.github.com');
+    expect(site.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(within(card).queryByTestId('code-host-connect')).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: H.recheck }));
+    await waitFor(() => expect(s.calls.filter((c) => c.path === CODE_HOST_PATH)).toHaveLength(2));
+  });
+
+  it('not signed in: the command to run, with a copy button and why the app never runs it', async () => {
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, settingsServer({}, 'not-logged-in'));
+    const card = await screen.findByTestId('settings-code-host');
+    const step = await within(card).findByTestId('code-host-login');
+    expect(within(step).getByText('gh auth login')).toBeTruthy();
+    expect(within(step).getByRole('button', { name: 'Copy command' })).toBeTruthy();
+    expect(step.textContent).toContain('the app never handles your GitHub credentials');
+    expect(within(card).getByRole('button', { name: H.recheck })).toBeTruthy();
+  });
+});
+
+describe('Settings: create a new repository (G-E)', () => {
+  it('defaults to the folder’s name, private, pushing; says what happens; then shows the link', async () => {
+    const s = connectServer(() => connectedAs('octo/web-app'));
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    const create = within(card).getByTestId('code-host-create');
+    const name = await within(create).findByLabelText<HTMLInputElement>(K.create.name);
+    await waitFor(() => expect(name.value).toBe('web-app'));
+    expect(within(create).getByLabelText<HTMLInputElement>(K.create.owner).placeholder).toBe(
+      'Your account',
+    );
+    expect(within(create).getByLabelText<HTMLInputElement>(/^Private/).checked).toBe(true);
+    expect(within(create).getByLabelText<HTMLInputElement>(K.create.push).checked).toBe(true);
+    expect(within(create).getByTestId('code-host-create-summary').textContent).toBe(
+      K.create.summary(null, 'web-app', 'private', true),
+    );
+    expect(K.create.summary(null, 'web-app', 'private', true)).toBe(
+      'Creates github.com/you/web-app as a private repository and sets it as origin, then pushes the current branch.',
+    );
+
+    fireEvent.click(within(create).getByRole('button', { name: K.create.button }));
+    const link = await within(card).findByTestId('code-host-repo-link');
+    expect(link.getAttribute('href')).toBe('https://github.com/octo/web-app');
+    // Focus moves to the connection, so it is read out.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(within(card).getByTestId('code-host-message')),
+    );
+    expect(mutations(s).map((c) => [c.method, c.path, c.body])).toEqual([
+      ['POST', `${P}/code-host/repository`, { name: 'web-app', visibility: 'private', push: true }],
+    ]);
+    expect(s.csrf).toEqual([CSRF]);
+    // The status is read again after the click.
+    await waitFor(() => expect(s.calls.filter((c) => c.path === CODE_HOST_PATH)).toHaveLength(2));
+  });
+
+  it('an organization, public, not pushing: sent as chosen', async () => {
+    const s = connectServer(() => connectedAs('acme-org/site'));
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    const create = within(card).getByTestId('code-host-create');
+    fireEvent.change(within(create).getByLabelText(K.create.name), { target: { value: 'site' } });
+    fireEvent.change(within(create).getByLabelText(K.create.owner), {
+      target: { value: 'acme-org' },
+    });
+    fireEvent.click(within(create).getByLabelText(/^Public/));
+    fireEvent.click(within(create).getByLabelText(K.create.push));
+    expect(within(create).getByTestId('code-host-create-summary').textContent).toBe(
+      'Creates github.com/acme-org/site as a public repository and sets it as origin.',
+    );
+    fireEvent.click(within(create).getByRole('button', { name: K.create.button }));
+    await within(card).findByTestId('code-host-repo-link');
+    expect(mutations(s)[0]?.body).toEqual({
+      name: 'site',
+      owner: 'acme-org',
+      visibility: 'public',
+      push: false,
+    });
+  });
+
+  it('checks the name and owner as typed; Create sends nothing until they are fixed', async () => {
+    const s = connectServer(() => connectedAs('octo/ok'));
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    const create = within(card).getByTestId('code-host-create');
+    const name = within(create).getByLabelText(K.create.name);
+    for (const bad of ['a b', 'x.git', '..', 'a/b']) {
+      fireEvent.change(name, { target: { value: bad } });
+      expect(within(create).getByText(K.create.errors.name)).toBeTruthy();
+      expect(name.getAttribute('aria-invalid')).toBe('true');
+    }
+    fireEvent.change(name, { target: { value: '' } });
+    expect(within(create).getByText(K.create.errors.nameMissing)).toBeTruthy();
+    expect(within(create).queryByTestId('code-host-create-summary')).toBeNull();
+    fireEvent.click(within(create).getByRole('button', { name: K.create.button }));
+    expect(document.activeElement).toBe(name);
+
+    fireEvent.change(name, { target: { value: 'ok' } });
+    const owner = within(create).getByLabelText(K.create.owner);
+    fireEvent.change(owner, { target: { value: '-bad' } });
+    fireEvent.click(within(create).getByRole('button', { name: K.create.button }));
+    expect(within(create).getByText(K.create.errors.owner)).toBeTruthy();
+    expect(document.activeElement).toBe(owner);
+    expect(mutations(s)).toHaveLength(0);
+  });
+
+  it('a refusal is said in plain words and focused; one the server words itself is shown as is', async () => {
+    let n = 0;
+    const s = connectServer(() => {
+      n += 1;
+      return n === 1
+        ? jsonResponse(422, {
+            error: { code: 'repository_create_failed', message: 'x', requestId: 'r-1' },
+          })
+        : jsonResponse(500, {
+            error: {
+              code: 'remote_add_failed',
+              message:
+                'GitHub created octo/web-app, but the app could not set it as origin. In the project folder, run: git remote add origin https://github.com/octo/web-app.git',
+              requestId: 'r-2',
+            },
+          });
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    const create = within(card).getByTestId('code-host-create');
+    await waitFor(() =>
+      expect(within(create).getByLabelText<HTMLInputElement>(K.create.name).value).toBe('web-app'),
+    );
+    const button = within(create).getByRole('button', { name: K.create.button });
+    fireEvent.click(button);
+    const alert = await within(create).findByRole('alert');
+    expect(alert.textContent).toBe(K.errors.repository_create_failed);
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(within(create).getByRole('alert').textContent).toContain(
+        'GitHub created octo/web-app, but the app could not set it as origin',
+      ),
+    );
+    expect(within(create).getByTestId('code-host-connect-error').dataset['code']).toBe(
+      'remote_add_failed',
+    );
+  });
+
+  it('shows the busy state and blocks a second click while creating', async () => {
+    let release: (r: Response) => void = () => {};
+    const pending = new Promise<Response>((r) => (release = r));
+    const routes = connectServer(() => connectedAs('octo/web-app'));
+    const fetch: FetchLike = (input, init) =>
+      init?.method === 'POST' && input.endsWith('/code-host/repository')
+        ? pending
+        : routes.fetch(input, init);
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, { ...routes, fetch });
+    const card = await connectCard();
+    const create = within(card).getByTestId('code-host-create');
+    await waitFor(() =>
+      expect(within(create).getByLabelText<HTMLInputElement>(K.create.name).value).toBe('web-app'),
+    );
+    fireEvent.click(within(create).getByRole('button', { name: K.create.button }));
+    const busy = await within(create).findByRole('button', { name: K.create.busy });
+    expect(busy).toHaveProperty('disabled', true);
+    expect(within(create).getByLabelText(K.create.name)).toHaveProperty('disabled', true);
+    release(jsonResponse(200, connectedAs('octo/web-app')));
+    await within(card).findByTestId('code-host-repo-link');
+  });
+});
+
+describe('Settings: connect an existing repository (G-E)', () => {
+  it('reads the text live, shows the github.com address, and connects it', async () => {
+    const s = connectServer(() => connectedAs('acme/widgets'));
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    fireEvent.click(within(card).getByRole('button', { name: K.connect.existing }));
+    expect(
+      within(card).getByRole('button', { name: K.connect.existing }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    const form = within(card).getByTestId('code-host-existing');
+    const field = within(form).getByLabelText(K.existing.label);
+    const read = within(form).getByTestId('code-host-existing-read');
+    fireEvent.change(field, { target: { value: 'git@github.com:acme/widgets.git' } });
+    expect(read.textContent).toBe(K.existing.summary('acme', 'widgets', 'ssh'));
+    fireEvent.change(field, { target: { value: 'https://github.com/acme/widgets' } });
+    expect(read.textContent).toBe(
+      'Connects github.com/acme/widgets as origin, over HTTPS. Nothing is pushed.',
+    );
+    for (const bad of ['acme', 'https://gitlab.com/acme/widgets', 'acme/widgets; rm -rf /']) {
+      fireEvent.change(field, { target: { value: bad } });
+      expect(read.textContent).toBe(K.existing.invalid);
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+    }
+    fireEvent.click(within(form).getByRole('button', { name: K.existing.button }));
+    expect(mutations(s)).toHaveLength(0);
+    expect(document.activeElement).toBe(field);
+
+    fireEvent.change(field, { target: { value: '  acme/widgets ' } });
+    fireEvent.click(within(form).getByRole('button', { name: K.existing.button }));
+    const link = await within(card).findByTestId('code-host-repo-link');
+    expect(link.getAttribute('href')).toBe('https://github.com/acme/widgets');
+    expect(mutations(s).map((c) => [c.path, c.body])).toEqual([
+      [`${P}/code-host/remote`, { repository: 'acme/widgets' }],
+    ]);
+    expect(s.csrf).toEqual([CSRF]);
+  });
+
+  it('origin_exists says nothing was changed', async () => {
+    const s = connectServer(() =>
+      jsonResponse(409, {
+        error: { code: 'origin_exists', message: 'exists', requestId: 'r-3' },
+      }),
+    );
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await connectCard();
+    fireEvent.click(within(card).getByRole('button', { name: K.connect.existing }));
+    const form = within(card).getByTestId('code-host-existing');
+    fireEvent.change(within(form).getByLabelText(K.existing.label), {
+      target: { value: 'acme/widgets' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: K.existing.button }));
+    expect((await within(form).findByRole('alert')).textContent).toBe(K.errors.origin_exists);
   });
 });
 

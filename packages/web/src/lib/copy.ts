@@ -3513,6 +3513,105 @@ export const CODE_HOST_COPY = {
   loadFailed: 'GitHub couldn’t be checked.',
 } as const;
 
+/** The refusals of connecting a project from Settings (G-E), worded by the web. */
+export type CodeHostConnectErrorCode =
+  | 'origin_exists'
+  | 'code_host_not_ready'
+  | 'invalid_repository'
+  | 'repository_create_failed'
+  | 'not_a_git_repository'
+  | 'invalid_request'
+  | 'gh-failed';
+
+/** G-E (ADR-0025 §7): connecting a project to GitHub from its Settings card. */
+export const CODE_HOST_CONNECT_COPY = {
+  /** Connected: "Connected to GitHub:" then the `owner/name` link. */
+  connectedLead: 'Connected to GitHub:',
+  newTab: '(opens in a new tab)',
+  install: {
+    message:
+      'The GitHub CLI (gh) isn’t installed. The app uses it to create repositories and open pull requests with your own GitHub login.',
+    brew: 'On a Mac with Homebrew, run this in a terminal:',
+    command: 'brew install gh',
+    other: 'On other systems, follow the steps at',
+    site: 'cli.github.com',
+    siteUrl: 'https://cli.github.com',
+    then: 'Then sign in with gh auth login, and check again.',
+  },
+  login: {
+    message: 'The GitHub CLI isn’t signed in.',
+    run: 'Run this in a terminal:',
+    command: 'gh auth login',
+    why: 'You sign in to GitHub yourself, in the terminal: the app never handles your GitHub credentials.',
+    then: 'When it says you’re logged in, check again.',
+  },
+  copyCommand: 'command',
+  connect: {
+    message:
+      'This project isn’t on GitHub yet. Create a repository for it, or connect one you already have.',
+    choose: 'How to connect',
+    create: 'Create a new repository',
+    existing: 'Connect an existing repository',
+  },
+  create: {
+    name: 'Repository name',
+    nameHint: 'Letters, digits, dots, dashes and underscores.',
+    owner: 'Owner',
+    ownerPlaceholder: 'Your account',
+    ownerHint: 'Leave empty for your own account, or enter an organization you belong to.',
+    visibility: 'Visibility',
+    private: 'Private',
+    privateHint: 'Only you and the people you add can see it.',
+    public: 'Public',
+    publicHint: 'Anyone on the internet can see it.',
+    push: 'Push the current branch now',
+    pushHint:
+      'Sends the branch the project folder is on, so GitHub has your code. A branch without commits is not pushed.',
+    /** "Creates github.com/you/web-app as a private repository and sets it as origin." */
+    summary: (
+      owner: string | null,
+      name: string,
+      visibility: 'private' | 'public',
+      push: boolean,
+    ) =>
+      `Creates github.com/${owner ?? 'you'}/${name} as a ${visibility} repository and sets it as origin${push ? ', then pushes the current branch' : ''}.`,
+    button: 'Create repository',
+    busy: 'Creating…',
+    errors: {
+      nameMissing: 'Enter a name.',
+      name: 'Use letters, digits, dots, dashes and underscores, up to 100. Not “.”, “..” or a name ending in .git.',
+      owner: 'Use the account or organization name: letters, digits and single dashes, up to 39.',
+    },
+  },
+  existing: {
+    label: 'Repository',
+    hint: 'owner/name, or its GitHub address.',
+    placeholder: 'owner/name or https://github.com/owner/name',
+    /** "Connects github.com/acme/widgets as origin, over HTTPS." */
+    summary: (owner: string, name: string, protocol: 'https' | 'ssh') =>
+      `Connects github.com/${owner}/${name} as origin, over ${protocol === 'ssh' ? 'SSH' : 'HTTPS'}. Nothing is pushed.`,
+    invalid: 'Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+    button: 'Connect',
+    busy: 'Connecting…',
+  },
+  errors: {
+    origin_exists:
+      'This project already has a remote named origin, so nothing was changed. Check again to see it.',
+    code_host_not_ready:
+      'The GitHub CLI isn’t ready: it’s missing or not signed in. Check again for the steps.',
+    invalid_repository:
+      'That isn’t a GitHub repository. Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+    repository_create_failed:
+      'GitHub refused to create the repository: it may already exist, or the name is not allowed.',
+    not_a_git_repository: 'The project folder isn’t a git repository, so it can’t have an origin.',
+    invalid_request: 'The app couldn’t send that. Check the fields, then try again.',
+    'gh-failed':
+      'The GitHub CLI reported a problem. Try again; if it keeps failing, run gh auth status in a terminal.',
+  } satisfies Record<CodeHostConnectErrorCode, string>,
+  failed: 'That didn’t work.',
+  done: 'Connected. GitHub is set up for this project.',
+} as const;
+
 export const TICKET_BRANCH_COPY = {
   title: 'Branch',
   note: 'Where this ticket’s work goes. Empty fields follow the project.',
