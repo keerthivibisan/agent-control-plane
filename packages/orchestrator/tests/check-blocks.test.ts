@@ -7,6 +7,7 @@ import {
   checksFinished,
   programOf,
   recordChangeDecision,
+  recoverAfterRestart,
 } from '../src/index.js';
 import type { FailedCheck, RunState } from '../src/index.js';
 import { POOL, graphRunning, testGraph } from './graph-helpers.js';
@@ -260,6 +261,38 @@ describe('a failed setup (ADR-0027 §1)', () => {
     // Late or repeated reports change nothing; the lead cannot have a setup.
     expect(ok(agentSetupFailed(r.state, W, 'again', makeCtx(3100))).effects).toEqual([]);
     expect(refused(agentSetupFailed(r.state, LEAD, 'x', makeCtx(3200)))).toBe('invalid-input');
+  });
+
+  it('gives the lead the end of the step output (at most 4 KiB)', () => {
+    let s = graphRunning(testGraph({ named: false }), {}, [
+      { title: 'S', role: 'Store', detail: '' },
+    ]);
+    s = ok(leadTool(s, 'start_agent', { role: 'Store', task: 'Build the store' }, 'w')).state;
+    const outputTail = `${'x'.repeat(8000)}\nnpm ERR! could not resolve`;
+    const r = ok(
+      agentSetupFailed(
+        s,
+        W,
+        { reason: "Setup step 'Install' failed (exit 1).", outputTail },
+        makeCtx(3000, 'sf'),
+      ),
+    );
+    const said = leadMessages(r.effects).join('\n');
+    expect(said).toContain("did not start: Setup step 'Install' failed (exit 1).");
+    expect(said).toContain("The end of the step's output:\n");
+    expect(said).toContain('npm ERR! could not resolve');
+    expect(said.length).toBeLessThan(5000);
+  });
+});
+
+describe('a restart while a Checks block runs (ADR-0027 §5)', () => {
+  it('drops the pending block result: the owner decides the change', () => {
+    const s0 = sealedHelper(blockGraph('lead'));
+    const pending = ok(sealed(s0, W, 'rv')).state;
+    expect(changeOf(pending, W).blockChecks).toBe('pending');
+    const r = ok(recoverAfterRestart(pending, makeCtx(7000, 'rs')));
+    expect(changeOf(r.state, W).state).toBe('needs-owner');
+    expect(changeOf(r.state, W).blockChecks).toBeUndefined();
   });
 });
 

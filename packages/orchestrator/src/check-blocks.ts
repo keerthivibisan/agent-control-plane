@@ -287,19 +287,28 @@ function reworkForChecks(
   );
 }
 
+/** Why an editing agent's setup did not pass, as the server reports it. */
+export interface SetupFailure {
+  /** The server's plain sentence, e.g. "Setup step 'Install' failed (exit 1)." */
+  reason: string;
+  /** The end of the step's output (redacted by the server); at most 4 KiB reaches the lead. */
+  outputTail?: string;
+}
+
 /**
  * ADR-0027 §1: the setup of a new helper's or tester's worktree failed, timed out or was refused
  * (a network step while the project's switch is off), so the agent never starts. Its Latest line
- * says why (`reason`, the server's plain sentence, e.g. "Setup 'install' failed: exit 1"), the
- * lead is told, and it ends like a failed turn (a loop run seals its empty worktree). Ignored for
- * an agent no longer starting (stopped meanwhile).
+ * says why (the reason), the lead is told with the end of the step's output, and it ends like a
+ * failed turn (a loop run seals its empty worktree). Ignored for an agent no longer starting
+ * (stopped meanwhile).
  */
 export function agentSetupFailed(
   state: RunState,
   agentRunId: string,
-  reason: string,
+  failure: string | SetupFailure,
   ctx: EngineContext,
 ): EngineResult {
+  const { reason, outputTail = '' } = typeof failure === 'string' ? { reason: failure } : failure;
   return applyCommand(state, ctx, (d): Body<undefined> => {
     const agent = d.agent(agentRunId);
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
@@ -309,9 +318,13 @@ export function agentSetupFailed(
     if (agent.status !== 'STARTING') return done;
     const text = cleanSummary(reason, 'Setup failed');
     agent.latestActivity = text;
+    const tail = lastUtf8(outputTail, CHECK_FAILURE_TAIL_MAX_BYTES).trimEnd();
     notifyLead(
       d,
-      `${agent.role} (agentId ${agent.id}) did not start: ${text} The project's setup prepares each helper's copy of the project before it starts, so it did no work. A helper started now would most likely fail the same way; the owner can see the setup's output on the ticket.`,
+      [
+        `${agent.role} (agentId ${agent.id}) did not start: ${text} The project's setup prepares each helper's copy of the project before it starts, so it did no work. A helper started now would most likely fail the same way; the owner can see the setup's output on the ticket.`,
+        ...(tail === '' ? [] : [`The end of the step's output:\n${tail}`]),
+      ].join('\n\n'),
     );
     if (d.integration !== undefined) enterReview(d, agent, true);
     else d.endAgent(agent, 'FAILED', false);

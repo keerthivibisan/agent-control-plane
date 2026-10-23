@@ -1002,6 +1002,9 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
         // interrupted (not run). "Running" would refuse every merge with nothing running, so the
         // change has no result yet: the next merge starts its checks again.
         if (change.checks === 'pending') change.checks = null;
+        // ADR-0027 §5: the same for a Checks block on the change; its result can never arrive,
+        // and the owner decides the change now.
+        if (change.blockChecks === 'pending') delete change.blockChecks;
       }
     }
     if (cancelling) d.setRunStatus('CANCELLED');

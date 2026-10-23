@@ -94,7 +94,7 @@ export {
   changeChecksFinished,
   failureDetails,
 } from './check-blocks.js';
-export type { ChangeChecksResult, FailedCheck } from './check-blocks.js';
+export type { ChangeChecksResult, FailedCheck, SetupFailure } from './check-blocks.js';
 export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,
