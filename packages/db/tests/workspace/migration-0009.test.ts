@@ -28,7 +28,7 @@ function file(name = 'notes.txt', sha256 = SHA) {
 describe('migration 0009 (C-A)', () => {
   it('ships as 0009_ticket_activity', () => {
     const shipped = loadMigrations(DEFAULT_MIGRATIONS_DIR);
-    expect(shipped.at(-1)).toMatchObject({ version: 9, name: 'ticket_activity' });
+    expect(shipped.find((m) => m.version === 9)).toMatchObject({ name: 'ticket_activity' });
   });
 
   it('keeps comments stored before it, with a null kind and agent run', () => {

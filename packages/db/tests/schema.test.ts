@@ -50,6 +50,9 @@ const REVIEW_LOOP_TABLES = ['change_reviews', 'ticket_branches'];
 /** Added by 0009 (C-A, ADR-0026: attachments). */
 const ACTIVITY_TABLES = ['ticket_attachments'];
 
+/** Added by 0010 (H-B, ADR-0027: setup runs). */
+const HARNESS_TABLES = ['setup_runs'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -136,6 +139,7 @@ describe('0001_observability schema (B3)', () => {
         ...REDESIGN_TABLES,
         ...REVIEW_LOOP_TABLES,
         ...ACTIVITY_TABLES,
+        ...HARNESS_TABLES,
       ].sort(),
     );
   });
