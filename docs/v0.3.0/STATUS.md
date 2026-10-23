@@ -264,3 +264,12 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   the ticket's Checks tab (setup runs, then checks by place). Selection warnings come from core.
   Coordinator check: 5,184 tests; e2e 103/103. Not done: the ⌘K "Run checks" name. The server
   side (H-B and H-C, one agent on `wp/h-bc-server-engine`) is still running.
+- 2026-10-23 **Paused by the owner** ("please hold this, i will let you know when to resume"). The
+  H-B/H-C agent was stopped; its work is on `wp/h-bc-server-engine` (worktree
+  `.claude/worktrees/agent-a1499a6ae24261504`): `a68b868` migration 0010 (db), `622680e` engine
+  (check blocks, setup failures), and a WIP commit with the server part in progress (setup runner,
+  blocks, outputs staging; its outputs tests not written; may not compile). To resume: a new agent
+  continues on `git switch -c wp/h-bc-2 wp/h-bc-server-engine`, rebases onto `release/0.3.0`
+  (`d53dbb2`+), finishes the server part, tests and the `--harness` driver dry run, and squashes the
+  WIP. Then: back up the live database before 0010, full check and e2e, merge, restart the app, one
+  consented real run.
