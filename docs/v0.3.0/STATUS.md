@@ -235,3 +235,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   summary read like a teammate's. See `docs/research/c-v-real-run-2026-10-22.md`; temp data deleted.
   **Gap found:** the lead's read of its attachment copy asks the owner; recommended fix:
   `ManagedAgentSpec.readOnlyDirs?` (C-A's proposal).
+- 2026-10-23 **readOnlyDirs fix** (owner: "yes, go ahead with the fix"; `819403f`..`569498a`). The
+  lead and the planner get their attachment copies in the run's folder (one per agent; the planner
+  had none) and may read there without asking (`ManagedAgentSpec.readOnlyDirs`, reads only).
+  ADR-0026 §4 amended. Check: all packages ✓ (the server suite re-run after the machine slept
+  mid-check: 647/647); e2e 98/99, the `review-loop-live` timing flake then 3/3 three times.
