@@ -257,3 +257,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   for "back to the helper"), `canConnect` agreement, `checksForBlock`, `checkSelectionIssues`
   (warnings only), and `program.checkBlocks`. Old graphs compile unchanged (no golden trace or
   snapshot changed). Coordinator check: 5,158 tests; e2e 101/101. H-B and H-C started.
+- 2026-10-23 **H-D merged** (`a96f0d3`), on H-A's real rules: the Workflow editor's Checks block
+  panel (place, which checks, on failure, rounds; the merge block cannot be removed), "Checks on a
+  change" and "Checks on the branch" in Add block, the Harness page (setup steps, "Setup may use
+  the network", labels, where each check runs, "Run setup and checks now", main setup runs), and
+  the ticket's Checks tab (setup runs, then checks by place). Selection warnings come from core.
+  Coordinator check: 5,184 tests; e2e 103/103. Not done: the ⌘K "Run checks" name. The server
+  side (H-B and H-C, one agent on `wp/h-bc-server-engine`) is still running.
