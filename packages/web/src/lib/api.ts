@@ -71,6 +71,8 @@ import {
 import { RunWorkflowDtoSchema } from '@acp/core/api';
 // Live run graph and the blocks' modes for the run options (WG-E, ADR-0023).
 import { RunWorkflowGraphDtoSchema } from '@acp/core/api';
+// The harness in the workflow: setup runs on main (H-D, ADR-0027).
+import { SetupRunDtoSchema } from '@acp/core/api';
 // Review loop: Start overrides and the ticket branch (RL-D, ADR-0021).
 import {
   StartTicketRequestSchema,
@@ -1256,4 +1258,26 @@ export async function uploadAttachment(
 /** Removes an attachment the owner added (the file and its row). */
 export function deleteAttachment(client: ApiClient, attachmentId: string) {
   return controlDelete(client, activityPaths.attachment(attachmentId));
+}
+
+// --- The harness in the workflow (v0.3.0 H-D, ADR-0027) ----------------------------------------
+//
+// Served by H-B: GET /api/projects/:id/harness/setup-runs → SetupRunDto[], the latest setup runs
+// on the main branch ("Run setup and checks now"), oldest first; a server from before it answers
+// 404, read as none (`isSetupRunsUnavailable`). "Run setup and checks now" is the same POST
+// …/harness/checks as before (`runHarnessChecks`); the switch "Setup may use the network" is the
+// setup PUT's `setupNetwork` (`updateProjectSetup`). Both paths are under …/harness and …/setup,
+// so `isProjectSetupPath` refetches them.
+
+export const harnessSetupPaths = {
+  setupRuns: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/harness/setup-runs`,
+} as const;
+
+export const harnessSetupSchemas = {
+  setupRuns: SetupRunDtoSchema.array(),
+} as const;
+
+/** A 404: the server has no setup runs route (before ADR-0027), so there are none to show. */
+export function isSetupRunsUnavailable(error: ApiError | null): boolean {
+  return error !== null && error.kind === 'http' && error.status === 404;
 }
