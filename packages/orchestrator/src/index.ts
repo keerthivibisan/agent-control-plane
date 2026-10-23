@@ -89,6 +89,13 @@ export {
 } from './change-commands.js';
 export type { MergeBlocked } from './change-commands.js';
 export {
+  CHECK_FAILURE_TAIL_MAX_BYTES,
+  agentSetupFailed,
+  changeChecksFinished,
+  failureDetails,
+} from './check-blocks.js';
+export type { ChangeChecksResult, FailedCheck } from './check-blocks.js';
+export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,
   changeSummary,
@@ -103,6 +110,7 @@ export { deriveRunWorkflow, deriveRunWorkflowGraph } from './run-workflow.js';
 export {
   agentLaunchMode,
   agentNodeId,
+  changeCheckBlockOf,
   editingNodeOf,
   effectiveMode,
   helperNodeLines,

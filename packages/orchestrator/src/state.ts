@@ -1,6 +1,7 @@
 import type {
   AgentRoleKind,
   AgentRun,
+  CheckSelection,
   AllowRule,
   ApprovalKindSchema,
   ApprovalStatus,
@@ -106,6 +107,19 @@ export interface EngineChange {
    * like `verdict`.
    */
   reviewerRounds?: number;
+  /**
+   * ADR-0027 §5: the result of the Checks block on this change's sealed commit, while the block
+   * runs (`pending`) and after it. Absent when the change's node flows into no block (every graph
+   * from before ADR-0027) and after each new seal until the block starts. A `pending` change waits
+   * in `ready` and gets no reviewer.
+   */
+  blockChecks?: 'pending' | 'passed' | 'failed';
+  /**
+   * ADR-0027 §5, "back to the helper": how often the change's Checks block sent it back for
+   * rework. Counted against the block's `maxRounds`, apart from the review's rounds (`round` is
+   * not raised: the change has not been reviewed yet). Absent means none. In memory with the run.
+   */
+  checkRounds?: number;
 }
 
 /**
@@ -386,6 +400,25 @@ export type EngineEffect =
   | { type: 'merge-change'; agentRunId: string; by: ChangeDecider; anyway: boolean }
   /** The change was discarded: remove the helper's worktree (idempotent). */
   | { type: 'discard-change'; agentRunId: string }
+  /**
+   * ADR-0027 §5: the change's Checks block. Run `checksForBlock(manifest, select)` on `commit` (the
+   * sealed change) in the helper's own worktree, store each result with place `change` and
+   * `blockNodeId`, then report with `changeChecksFinished`. The change's review waits for it.
+   */
+  | {
+      type: 'run-change-checks';
+      agentRunId: string;
+      commit: string;
+      blockNodeId: WorkflowNodeId;
+      select: CheckSelection;
+    }
+  /**
+   * ADR-0027 §5: the final chain reached the Checks block on the ticket branch (after its
+   * `afterStages` final stages). Run the required checks and the block's selection on the ticket
+   * branch's recorded tip in a fresh checkout (setup first), with place `branch`. Nothing waits for
+   * the result: the owner's merge gate reads it (and runs the checks again on a newer tip).
+   */
+  | { type: 'run-branch-checks'; blockNodeId: WorkflowNodeId; select: CheckSelection }
   /**
    * The `change_reviews` row for (agentRunId, round), emitted whenever it changes: the reviewer is
    * assigned, the verdict arrives, or the round is decided. Upsert by (agentRunId, round).

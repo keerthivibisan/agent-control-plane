@@ -11,6 +11,7 @@ import {
   approvedPlan,
   beginChangeMerge,
   cancelRun,
+  changeChecksFinished,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -160,6 +161,7 @@ type Ev =
   | { k: 'lead' }
   | { k: 'planner' }
   | { k: 'seal'; id: string }
+  | { k: 'checks'; id: string; commit: string }
   | { k: 'branch' }
   | { k: 'merge'; id: string; by: string; anyway: boolean };
 
@@ -247,6 +249,10 @@ export function simulate(
                 a.change.conflictFiles.length,
                 turnOutcome.get(a.id) ?? null,
                 mergeAttempts.get(`${a.id}:${a.change.round}`) ?? 0,
+                // ADR-0027: only graphs with a change Checks block have these.
+                ...(a.change.blockChecks !== undefined || a.change.checkRounds !== undefined
+                  ? [a.change.blockChecks ?? null, a.change.checkRounds ?? 0]
+                  : []),
               ],
       ]),
       approvals: state.approvals
@@ -300,6 +306,9 @@ export function simulate(
         }
         case 'seal-change':
           enqueue({ k: 'seal', id: e.agentRunId });
+          break;
+        case 'run-change-checks':
+          enqueue({ k: 'checks', id: e.agentRunId, commit: e.commit });
           break;
         case 'create-ticket-branch':
           enqueue({ k: 'branch' });
@@ -649,10 +658,40 @@ export function simulate(
         id,
         {
           changed,
-          headCommit: changed ? `c0ffee${(a.change?.round ?? 0).toString(16)}` : null,
+          // A check rework keeps the round; its new seal still gets a new commit (ADR-0027).
+          headCommit: changed
+            ? `c0ffee${(a.change?.round ?? 0).toString(16)}${(a.change?.checkRounds ?? 0) > 0 ? (a.change?.checkRounds ?? 0).toString(16) : ''}`
+            : null,
           changedFiles: changed ? 2 : 0,
         },
         c,
+      ),
+    );
+  };
+
+  /** The fake server ran the change's Checks block (ADR-0027 §5): it passed or it failed. */
+  const runChecks = (id: string, commit: string): void => {
+    const a = agentOf(id);
+    const c = a?.change;
+    if (a === undefined || c?.blockChecks !== 'pending' || c.headCommit !== commit) return;
+    const role = a.kind === 'tester' ? 'tester' : roleKey(a);
+    const outcome = choose(ask, `checks:${role}:${c.round}:${c.checkRounds ?? 0}`, [
+      'passed',
+      'failed',
+    ]);
+    apply('server', `change checks ${outcome}`, (s, cx) =>
+      changeChecksFinished(
+        s,
+        id,
+        {
+          commit,
+          passed: outcome === 'passed',
+          failed:
+            outcome === 'passed'
+              ? []
+              : [{ name: 'Lint', status: 'failed', exitCode: 1, outputTail: 'lint error' }],
+        },
+        cx,
       ),
     );
   };
@@ -851,6 +890,9 @@ export function simulate(
         break;
       case 'seal':
         seal(ev.id);
+        break;
+      case 'checks':
+        runChecks(ev.id, ev.commit);
         break;
       case 'branch':
         if (state.integration?.ticketBranch === null && !isTerminalRunStatus(state.run.status)) {

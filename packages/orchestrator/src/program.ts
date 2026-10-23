@@ -10,6 +10,7 @@ import type {
   CompileContext,
   EffectiveNodeMode,
   ProgramAgentNode,
+  ProgramChangeCheckBlock,
   ProgramFinalReviewerNode,
   ProgramHelperNode,
   ProgramTesterNode,
@@ -183,6 +184,19 @@ export function reviewRouteOf(
   agent: Pick<EngineAgent, 'kind' | 'stage'>,
 ): ReviewRoute {
   return editingNodeOf(program, agent)?.review ?? { by: 'lead', leadRounds: 0 };
+}
+
+/**
+ * The Checks block on this helper's or tester's change (ADR-0027 §5), or undefined when its node
+ * flows into none (every graph from before ADR-0027).
+ */
+export function changeCheckBlockOf(
+  program: WorkflowProgram,
+  agent: Pick<EngineAgent, 'kind' | 'stage'>,
+): ProgramChangeCheckBlock | undefined {
+  const node = editingNodeOf(program, agent);
+  if (node === undefined || !Object.hasOwn(program.checkBlocks.change, node.id)) return undefined;
+  return program.checkBlocks.change[node.id];
 }
 
 /** A program agent node by id (lead, planner, helpers, change reviewers, final stages). */

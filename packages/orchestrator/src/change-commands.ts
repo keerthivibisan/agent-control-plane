@@ -1,6 +1,7 @@
 import { GitCommitSchema, TicketBranchNameSchema } from '@acp/core';
 import type { ChangeDecider } from '@acp/core';
 import type { TicketBranchActionRequest } from '@acp/core/api';
+import { startChangeChecks } from './check-blocks.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
@@ -130,6 +131,8 @@ export function changeSealed(
     change.headCommit = result.headCommit;
     change.state = 'ready';
     change.readyAt = d.now;
+    // ADR-0027 §5: a Checks block on the change runs first; the review waits for its result.
+    startChangeChecks(d, agent, change);
     // `reconcile` assigns a reviewer, oldest change first.
     return done;
   });
@@ -162,8 +165,12 @@ export function beginChangeMerge(
   return onChange(state, agentRunId, ctx, (d, agent) => {
     const anyway = options.anyway === true;
     const check = checkChange(d, agent.id, anyway ? 'merge-anyway' : 'merge', options.by);
-    if (check !== null) return check;
     const change = agent.change;
+    if (check?.code === 'checks-failed' && options.by === 'lead' && change !== undefined) {
+      // ADR-0027 §5: the block before the merge sends a failed change to the owner.
+      if (mergeFailureRoute(d) === 'owner') return { value: toOwner(d, agent, change) };
+    }
+    if (check !== null) return check;
     if (change === undefined) return refusal('change-not-found', 'No change.');
     change.merging = true;
     d.effects.push({ type: 'merge-change', agentRunId: agent.id, by: options.by, anyway });
@@ -225,6 +232,19 @@ export function recordChangeDecision(
   });
 }
 
+/** Where the block before the lead's merge sends a failed change (ADR-0027 §5; old graphs: lead). */
+function mergeFailureRoute(d: Draft): 'lead' | 'owner' | 'helper' {
+  return d.program().checkBlocks.merge.onFailure;
+}
+
+/** The change goes to the owner after a failed merge block; returns the lead's reply. */
+function toOwner(d: Draft, agent: EngineAgent, change: NonNullable<EngineAgent['change']>): string {
+  change.merging = false;
+  change.state = 'needs-owner';
+  leadActivity(d, `${agent.role}'s change failed its checks; the owner decides`);
+  return `This workflow sends a change whose checks failed before the merge to the owner, who decides; you will get a message when they do.`;
+}
+
 /** Why the server could not merge a change (README §6, `merge_change` steps 3–4). */
 export type MergeBlocked =
   | { reason: 'merge-conflict'; files: readonly string[] }
@@ -271,9 +291,12 @@ export function changeMergeBlocked(
       case 'checks-failed': {
         change.checks = 'failed';
         const failed = blocked.failed.slice(0, MAX_LISTED);
-        return {
-          value: `Required checks failed on ${role}'s change${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. Ask for rework, discard it, or ask the owner.`,
-        };
+        const text = `Required checks failed on ${role}'s change${failed.length > 0 ? `: ${failed.join(', ')}` : ''}.`;
+        // ADR-0027 §5: the block before the merge may send a failed change to the owner.
+        if (mergeFailureRoute(d) === 'owner' && change.state !== 'needs-owner') {
+          return { value: `${text} ${toOwner(d, agent, change)}` };
+        }
+        return { value: `${text} Ask for rework, discard it, or ask the owner.` };
       }
       case 'failed':
         return { value: `The merge of ${role}'s change failed. Try again, or ask the owner.` };
@@ -309,6 +332,14 @@ export function checksFinished(
       change.state === 'decision' || (change.state === 'reviewing' && change.reviewer === 'lead');
     if (!atLead) return done;
     const failed = result.failed.slice(0, MAX_LISTED);
+    if (!result.requiredPassed && mergeFailureRoute(d) === 'owner') {
+      // ADR-0027 §5: the block before the merge sends a failed change to the owner.
+      notifyLead(
+        d,
+        `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. ${toOwner(d, agent, change)}`,
+      );
+      return done;
+    }
     notifyLead(
       d,
       result.requiredPassed

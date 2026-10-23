@@ -71,7 +71,7 @@ function liveOfNode(view: LoopView, agent: EngineAgent): number {
 }
 
 /** The helper's node has room for one more live agent (testers: no per-node limit). */
-function nodeHasRoom(view: LoopView, agent: EngineAgent): boolean {
+export function nodeHasRoom(view: LoopView, agent: EngineAgent): boolean {
   const node = editingNodeOf(programOf(view), agent);
   if (node === undefined || node.type === 'tester') return true;
   return liveOfNode(view, agent) < node.maxInstances;
@@ -100,10 +100,13 @@ function freshChange(
   round: number,
   turnFailed: boolean,
   reviewerRounds: number | undefined,
+  checkRounds?: number,
 ): EngineChange {
   return {
     // The rounds a change reviewer sent back stay counted for the whole change (ADR-0023 §4).
     ...(reviewerRounds !== undefined ? { reviewerRounds } : {}),
+    // So do the rounds its Checks block sent back (ADR-0027 §5).
+    ...(checkRounds !== undefined ? { checkRounds } : {}),
     state: 'sealing',
     round,
     verdict: null,
@@ -186,7 +189,12 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
   );
   agent.awaitingHelpers = false;
   d.setAgentStatus(agent, 'AWAITING_REVIEW');
-  agent.change = freshChange(agent.change?.round ?? 0, turnFailed, agent.change?.reviewerRounds);
+  agent.change = freshChange(
+    agent.change?.round ?? 0,
+    turnFailed,
+    agent.change?.reviewerRounds,
+    agent.change?.checkRounds,
+  );
   d.effects.push({ type: 'seal-change', agentRunId: agent.id });
 }
 
@@ -198,7 +206,12 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
  */
 export function stoppedWithoutReview(agent: EngineAgent): void {
   agent.change = {
-    ...freshChange(agent.change?.round ?? 0, false, agent.change?.reviewerRounds),
+    ...freshChange(
+      agent.change?.round ?? 0,
+      false,
+      agent.change?.reviewerRounds,
+      agent.change?.checkRounds,
+    ),
     state: 'decision',
   };
 }
@@ -279,11 +292,14 @@ function handoverPromptText(d: Draft, changes: readonly EngineAgent[]): string {
   return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review (with your summary).`;
 }
 
-/** Changes waiting for a reviewer, oldest first (ties: the agent's creation order). */
+/**
+ * Changes waiting for a reviewer, oldest first (ties: the agent's creation order). A change whose
+ * Checks block still runs waits for its result (ADR-0027 §5).
+ */
 function readyQueue(d: Draft): EngineAgent[] {
   return changeAgents(d)
     .map((a, i) => ({ a, i }))
-    .filter(({ a }) => a.change?.state === 'ready')
+    .filter(({ a }) => a.change?.state === 'ready' && a.change.blockChecks !== 'pending')
     .sort(
       (x, y) => (x.a.change?.readyAt ?? '').localeCompare(y.a.change?.readyAt ?? '') || x.i - y.i,
     )
@@ -702,7 +718,11 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
 export function waitingLines(view: LoopView): string[] {
   return undecidedChanges(view).map((a) => {
     const state = a.change?.state ?? 'sealing';
-    return `- ${a.role} (agentId ${a.id}): ${STATE_WORDS[state]}`;
+    const words =
+      state === 'ready' && a.change?.blockChecks === 'pending'
+        ? 'is being checked (its Checks block)'
+        : STATE_WORDS[state];
+    return `- ${a.role} (agentId ${a.id}): ${words}`;
   });
 }
 
@@ -718,7 +738,7 @@ function utf8Bytes(text: string): number {
 }
 
 /** The longest prefix of `text` that fits in `max` UTF-8 bytes (never splits a character). */
-function cutUtf8(text: string, max: number): string {
+export function cutUtf8(text: string, max: number): string {
   let n = 0;
   let end = 0;
   for (const ch of text) {
@@ -780,6 +800,11 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
       : change.checks === 'pending'
         ? 'running'
         : change.checks;
+  if (change.blockChecks !== undefined) {
+    lines.push(
+      `Checks on the change (its Checks block): ${change.blockChecks === 'pending' ? 'running' : change.blockChecks}${(change.checkRounds ?? 0) > 0 ? `, after ${change.checkRounds} check rework round(s)` : ''}.`,
+    );
+  }
   lines.push(`Required checks: ${checks}.`);
   if (change.conflictFiles.length > 0) {
     lines.push(`Conflicting files on the last merge attempt: ${change.conflictFiles.join(', ')}.`);

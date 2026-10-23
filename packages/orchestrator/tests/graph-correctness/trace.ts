@@ -133,7 +133,12 @@ export function effectLine(names: IdNames, effect: EngineEffect): string {
 function changeWords(a: EngineAgent): string {
   const c = a.change;
   if (c === undefined) return '';
-  return ` change=${c.state}/r${c.round}${c.verdict !== null ? `/${c.verdict}` : ''}${c.checks !== null ? `/checks:${c.checks}` : ''}`;
+  // ADR-0027: the change block's words only appear for graphs that have one.
+  const block =
+    c.blockChecks !== undefined || c.checkRounds !== undefined
+      ? `/block:${c.blockChecks ?? '-'}/cr${c.checkRounds ?? 0}`
+      : '';
+  return ` change=${c.state}/r${c.round}${c.verdict !== null ? `/${c.verdict}` : ''}${c.checks !== null ? `/checks:${c.checks}` : ''}${block}`;
 }
 
 /** What changed between two states: run status, each agent's status, review and change. */

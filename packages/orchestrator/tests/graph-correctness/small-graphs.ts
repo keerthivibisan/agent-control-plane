@@ -74,11 +74,16 @@ export function smallGraphShard(shard: number, shards: number): ShardReport {
   return report;
 }
 
-/** Layer 2 over one shard of the generated valid graphs (seeds `from` to `to`). */
-export function generatedShard(from: number, to: number): ShardReport {
+/**
+ * Layer 2 over one shard of the generated valid graphs (seeds `from` to `to`); `checkBlocks`
+ * (ADR-0027) adds Checks blocks on changes, before the merge and on the ticket branch.
+ */
+export function generatedShard(from: number, to: number, checkBlocks = false): ShardReport {
   const report = emptyReport();
   for (let seed = from; seed <= to; seed++) {
-    const graph = generateValidGraph(seed);
+    const graph = checkBlocks
+      ? generateValidGraph(seed, { checkBlocks: true })
+      : generateValidGraph(seed);
     report.graphs++;
     report.valid++;
     check(report, `seed ${seed}`, graph, undefined);
