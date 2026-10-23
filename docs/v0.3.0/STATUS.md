@@ -303,3 +303,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   is touched; an existing remote is never changed. Coordinator check: 5,289 tests; e2e 105/105.
   Proposed follow-ups: `CodeHostStatusDto.hasOrigin` (a non-GitHub origin) and `currentBranch`
   (to say "Push main now"). Waiting for the owner's UI test.
+- 2026-10-23 **G-F started** (owner: "can we also give option to create these branches ... We need
+  to create any branch"; seen on "ACPGIT-1 didn't start. The target branch dev does not exist").
+  List and create branches (never switching the checkout), optionally push; in Settings, a ticket's
+  branch settings and the refusal itself. Contract and ADR-0025 §8 by the coordinator.
