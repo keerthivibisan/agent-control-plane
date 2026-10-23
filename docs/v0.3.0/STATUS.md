@@ -285,3 +285,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   Real-run driver `--harness` (dry run passes). Coordinator fix: setup refuses any folder inside the
   project checkout (`f4ebe72`, test). Live database backed up before 0010
   (`backups/acp-before-0010-20261023-161801.sqlite`). Coordinator check: 5,234 tests; e2e 103/103.
+- 2026-10-23 **H-V real run passed** (owner consent "yes, run the real test"): scenario a with
+  `--harness`, 25,249 budget tokens, 20/20 assertions (setup in the helper's worktree and the tip
+  checkout, none for the lead; checks at `change`, `merge` and `branch`; outputs never committed).
+  The helper passed the fast check at once, so the failure route was not exercised in the real run
+  (covered by tests and the dry run). See `docs/research/h-v-real-run-2026-10-23.md`; temp data
+  deleted. **The harness part (part 5) is done.** The owner is running the GitHub push and PR tests.
