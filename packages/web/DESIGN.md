@@ -695,6 +695,35 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   gone.
 - Copy lives in `features/activity/copy.ts`.
 
+## The harness in the workflow (ADR-0027, WP H-D)
+
+- **Checks blocks on the canvas** are step pills as wide as an agent card (216×40), with a small
+  outlined chip saying what they run ("Required", "2 checks", "fast · full"; read out as "Runs:
+  …"). On a change they sit in the work row next to the helpers; on the branch on the merge chain
+  before your merge. No new link kinds or styles: a change block is reached by a "Next step" link
+  and sends work back with a "Rework" link.
+- **Add block** has a third group, **Checks**: "Checks on a change" (linked from the selected
+  helper or tester when it has none, else the first without one) and "Checks on the branch" (one,
+  just before your merge). A full item stays listed with its reason, like the others.
+- **The Checks block panel** (`editor/CheckBlockFields.tsx`): Name; **Where it runs** (the block
+  before the lead's merge is fixed: a note says every workflow has it, and it has no Remove);
+  **Which checks** as choice cards (all required / pick checks / by label) with a checklist of
+  the harness's checks (name, id, Required, labels) or label chips (`aria-pressed`), a picked
+  name the harness no longer has flagged in the warning tone with a remove button, and a
+  "Runs: …" line; **When a check fails** offers only the place's routes in plain words, and
+  "Back to the helper" shows the rounds (0–5) of its rework link. Missing picks are warnings in
+  Problems (code `check-missing`, `check-label-missing`).
+- **Harness page:** a **Setup** card (steps table: name with a warning-tone "Uses the network"
+  badge, command, time limit, "Creates" folders) with the **"Setup may use the network"** switch
+  (`role="switch"`, its On/Off word next to it, saved at once; the line under it says how many
+  network steps won't run while it is off) and the latest setup runs on main. The Checks table
+  gains **Labels** (mono badges) and **Where it runs** (the Checks blocks that pick the check).
+  The header button reads "Run setup and checks now" once there is setup.
+- **Ticket, Checks tab:** Setup (per agent copy, then "For the checks"), then On each change, Before
+  the lead's merge (rows without a place land here), On the ticket branch, Run now on the main
+  branch. Setup and check outputs are native disclosures, open when the step or check did not
+  pass; the chevron's turn honours reduced motion.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |

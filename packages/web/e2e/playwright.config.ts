@@ -94,6 +94,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // v0.3.0 H-D (ADR-0027): the Checks blocks in the editor and the Harness page's setup.
+      name: 'harness-blocks',
+      testMatch: 'harness-blocks.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       // Redesign R-F: the project Tokens page (and its screenshots) on the demo server.
       name: 'tokens',
       testMatch: 'tokens.spec.ts',

@@ -54,6 +54,8 @@ export function editsFiles(type: WorkflowNode['type']): boolean {
 
 export function sizeOf(node: WorkflowNode): { width: number; height: number } {
   if (node.type === 'ticket' || node.type === 'done') return { width: END_W, height: STEP_H };
+  // A Checks block also shows what it runs ("fast · full"), so it is as wide as an agent.
+  if (node.type === 'checks') return { width: AGENT_W, height: STEP_H };
   if (isGateType(node.type)) return { width: STEP_W, height: STEP_H };
   return { width: AGENT_W, height: editsFiles(node.type) ? EDIT_H : AGENT_H };
 }

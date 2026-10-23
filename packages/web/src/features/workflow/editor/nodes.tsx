@@ -445,7 +445,7 @@ export function GateBlockView({ data, selected }: NodeProps<BlockNode>) {
       </span>
       {isChecksNode(node) ? (
         <span
-          className={`${CHIP} min-w-0 truncate border-line-strong text-dim`}
+          className={`${CHIP} ml-auto max-w-[45%] min-w-0 shrink-0 truncate border-line-strong text-dim`}
           data-testid="checks-select"
         >
           <span className="sr-only">{HARNESS_BLOCKS_COPY.chip.runs}</span>
