@@ -192,6 +192,21 @@ describe('setup in an editing agent’s new worktree (ADR-0027 §1)', () => {
     expect((await ticketDetail(s, ticket.id)).setupRuns).toHaveLength(1);
   }, 60_000);
 
+  it("refuses to run setup in the owner's own checkout, whatever the caller passes", async () => {
+    const s = await setupBoard({ files: files() });
+    for (const cwd of [s.repo, join(s.repo, 'src')]) {
+      const result = await s.checks.setupWorktree({
+        runId: 'r1',
+        agentRunId: 'a1',
+        projectId: s.project.id,
+        cwd,
+        commit: null,
+      });
+      expect(result).toMatchObject({ ok: false });
+    }
+    expect(existsSync(join(s.repo, 'prepared'))).toBe(false);
+  });
+
   it('does not start the helper when a network step is refused, and says why', async () => {
     const s = await setupBoard({ files: files({ network: true }) });
     const { ticket, runId, lead } = await approved(s);

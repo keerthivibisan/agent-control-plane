@@ -1,5 +1,6 @@
 import {
   checkRunWasInterrupted,
+  isPathInside,
   type CheckRun,
   type HarnessCheck,
   type Project,
@@ -547,6 +548,11 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
         logger.log('warn', 'harness unreadable for setup', errorFields(error));
       }
       if (manifest === null) return { ok: true, hasHarness: false, ran: [], checks: [] };
+      // ADR-0027 §1: never in the owner's checkout, whatever the caller passes.
+      if (isPathInside(project.rootPath, input.cwd)) {
+        logger.log('warn', 'setup refused in the project checkout', { runId: input.runId });
+        return { ok: false, reason: "Setup never runs in the project's own folder." };
+      }
       const failed = await setupIn(
         project,
         input.cwd,
