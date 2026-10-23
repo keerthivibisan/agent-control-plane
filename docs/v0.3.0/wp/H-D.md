@@ -5,10 +5,10 @@
 > look: [packages/web/DESIGN.md](../../../packages/web/DESIGN.md) ("The harness in the workflow").
 > Web only: the Workflow editor's Checks blocks, the Harness page, the ticket's Checks tab.
 
-| Field  | Value                                           |
-| ------ | ----------------------------------------------- |
-| Status | review                                          |
-| Branch | `wp/h-d-web`, from `release/0.3.0` at `42bfbab` |
+| Field  | Value                                                              |
+| ------ | ------------------------------------------------------------------ |
+| Status | review                                                             |
+| Branch | `wp/h-d-web`, rebased on `release/0.3.0` at `453daa8` (H-A merged) |
 
 ## Done
 
@@ -42,17 +42,25 @@
 
 ## Decisions
 
-- Missing-pick warnings are computed in the web (`checkSelectionWarnings`) from the Harness
-  status: core had no `checkSelectionIssues` at `42bfbab`. Swap it in once H-A adds one.
+- Missing-pick warnings come from core since H-A: `validateWorkflowGraph(graph, { …, harness })`
+  with `harnessForValidation` (ready/partial: its checks; none: null; invalid or loading: no
+  warnings). The web-side `checkSelectionWarnings` was dropped. Block defaults come from core's
+  `checkBlockOf`, the checks a block runs from `checksForBlock`. The panel keeps its own plain
+  words for places and routes (core's `CHECK_PLACE_NAMES` / `CHECK_FAILURE_ROUTE_NAMES` are
+  lowercase message fragments).
 - The ticket's Checks tab reads `setupRuns` from the cached ticket detail (same query key), so
   `TicketPage.tsx` (not H-D's) is unchanged.
 - The merge block keeps its eyebrow "Checks" and, until configured, its old description.
-- Tests that wire change or branch blocks mock `canConnect` with ADR-0027's planned rules
-  (`tests/fixtures/planned-check-rules.ts`), so they pass before and after H-A.
+- Against H-A's real rules: a change block may check several helpers ("Back to the helper" adds a
+  rework link to each, the rounds are set on all); a tester's flow to its change block is not a
+  chain step, so removing or moving a block rejoins only the final chain. No test mocks core.
+- The ⌘K "Run checks" action keeps its name: the palette does not read the harness, and renaming
+  it would need a harness fetch in `features/palette` (not H-D's path).
 
 ## Tests
 
-- vitest: `harness-blocks-state.test.ts` (11), `harness-blocks-panel.test.tsx` (5),
+- vitest: `harness-blocks-state.test.ts` (12, including a graph with a change block, back to
+  the helper, and a branch block passing core's validation), `harness-blocks-panel.test.tsx` (5),
   `harness-setup.test.tsx` (6), `ticket-checks-groups.test.tsx` (3); `ticket-page.test.tsx`
   updated for the Checks tab's new order and heading.
 - e2e `harness-blocks.spec.ts` (2): the panel (fixed merge block, picks by keyboard, label chips,
@@ -62,5 +70,7 @@
 ## Log
 
 - 2026-10-23: claimed.
-- 2026-10-23: editor Checks blocks (a840af6); Harness page setup (6b57657); ticket Checks tab
-  (21f35e4); e2e, DESIGN.md, status review.
+- 2026-10-23: editor Checks blocks; Harness page setup; ticket Checks tab; e2e, DESIGN.md,
+  status review.
+- 2026-10-23: rebased on H-A (`453daa8`); core's selection warnings, defaults and rules; mocks
+  removed; a real-validation save test; status review.

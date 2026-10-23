@@ -1,17 +1,19 @@
 import {
   WorkflowGraphSchema,
+  isGraphRunnable,
+  validateWorkflowGraph,
   workflowTemplate,
   type CheckSelection,
   type HarnessCheck,
   type WorkflowGraph,
   type WorkflowNode,
 } from '@acp/core';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { customGraph } from '../../e2e/workflow-fixtures';
 import {
   blocksRunningCheck,
   checkFailureOf,
-  checkSelectionWarnings,
+  harnessForValidation,
   harnessLabels,
   missingSelection,
   selectedChecks,
@@ -30,16 +32,11 @@ import {
 } from '../../src/features/workflow/editor/state';
 
 /*
- * H-D (ADR-0027 §5): the editor's Checks blocks, pure. H-A is changing core's link rules in
- * parallel to allow the blocks on a change and on the branch, so `canConnect` is mocked here with
- * those planned rules on top of today's: a helper or tester flows into a change block, a change
- * block reworks the helper it checks, and branch blocks sit on the final chain. Everything else
- * is core's own answer, so the editor is checked for using `canConnect`, not for the rules.
+ * H-D (ADR-0027 §5): the editor's Checks blocks, pure, against core's real rules (H-A): a helper
+ * or tester flows into a change block, a change block reworks the blocks it checks, branch blocks
+ * sit on the final chain. The editor only ever links through `canConnect`, so a graph built here
+ * is checked with `validateWorkflowGraph`, the same check the server runs on a save.
  */
-
-vi.mock('@acp/core', async (importOriginal) =>
-  (await import('../fixtures/planned-check-rules')).withPlannedCheckRules(importOriginal),
-);
 
 const parse = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
 const run = (graph: WorkflowGraph, ...actions: EditorAction[]): EditorState =>
@@ -90,7 +87,7 @@ describe('check blocks: selection', () => {
     expect(missingSelection({ kind: 'labels', labels: ['slow'] }, CHECKS).labels).toEqual(['slow']);
   });
 
-  it('warns for picks the harness file does not have, and not while it is unknown', () => {
+  it('warns (core’s check) for picks the harness file does not have, not while unknown', () => {
     const g = parse(customGraph());
     const picked: WorkflowGraph = {
       ...g,
@@ -98,18 +95,46 @@ describe('check blocks: selection', () => {
         n.type === 'checks' ? { ...n, select: { kind: 'ids', ids: ['lint', 'gone'] } } : n,
       ),
     };
-    const warnings = checkSelectionWarnings(picked, CHECKS);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatchObject({
-      code: 'check-missing',
-      severity: 'warning',
-      nodeId: 'checks',
-    });
-    expect(warnings[0]?.message).toContain('“gone”');
-    expect(checkSelectionWarnings(picked, undefined)).toEqual([]);
-    // In the problems list, as a warning (it does not block a save).
-    const listed = editorIssues(picked, {}, CHECKS).filter((i) => i.code === 'check-missing');
-    expect(listed).toHaveLength(1);
+    const unknown = (h: ReturnType<typeof harnessForValidation>) =>
+      editorIssues(picked, h === undefined ? {} : { harness: h }).filter(
+        (i) => i.code === 'unknown-check',
+      );
+    const ready = harnessForValidation({ state: 'ready', checks: CHECKS });
+    expect(unknown(ready)).toHaveLength(1);
+    expect(unknown(ready)[0]).toMatchObject({ severity: 'warning', nodeId: 'checks' });
+    expect(unknown(ready)[0]?.message).toContain('"gone"');
+    // Unreadable or still loading: nothing flagged. No harness file: null for core.
+    expect(harnessForValidation({ state: 'invalid', checks: [] })).toBeUndefined();
+    expect(harnessForValidation(undefined)).toBeUndefined();
+    expect(harnessForValidation({ state: 'none', checks: [] })).toBeNull();
+    expect(unknown(undefined)).toEqual([]);
+  });
+
+  it('a change block (back to the helper) and a branch block pass core’s validation', () => {
+    let s = run(parse(customGraph()), { type: 'add-checks', place: 'change', near: 'helper-1' });
+    s = run(
+      s.graph,
+      { type: 'set-check-failure', id: 'change-checks', onFailure: 'helper' },
+      {
+        type: 'update-node',
+        id: 'change-checks',
+        patch: { select: { kind: 'labels', labels: ['fast'] } },
+      },
+      { type: 'add-checks', place: 'branch' },
+      {
+        type: 'update-node',
+        id: 'branch-checks',
+        patch: { select: { kind: 'labels', labels: ['full'] } },
+      },
+    );
+    const g = WorkflowGraphSchema.parse(s.graph);
+    expect(has(g, 'flow', 'helper-1', 'change-checks')).toBe(true);
+    expect(has(g, 'rework', 'change-checks', 'helper-1')).toBe(true);
+    expect(has(g, 'flow', 'branch-checks', 'owner-merge')).toBe(true);
+    const issues = validateWorkflowGraph(g, { harness: { checks: CHECKS } });
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(issues.filter((i) => i.nodeId?.endsWith('checks') === true)).toEqual([]);
+    expect(isGraphRunnable(issues)).toBe(true);
   });
 
   it('an empty pick is a problem on the block, in words', () => {

@@ -20,7 +20,7 @@ import {
 } from '../../lib/api';
 import { WORKFLOW_COPY, WORKFLOW_GRAPH_COPY } from '../../lib/copy';
 import { useApiQuery, useQueryStore } from '../../lib/query';
-import { usableHarness } from './check-blocks';
+import { harnessForValidation } from './check-blocks';
 import { refusalMessage } from './draft';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
@@ -119,24 +119,21 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
     projectSetupPaths.harness(projectId),
     projectSetupSchemas.harness,
   ).data;
-  const harnessChecks = usableHarness(harness);
+  const harnessFile = useMemo(() => harnessForValidation(harness), [harness]);
 
   const graph = state.graph;
   const projectMode = approvalsOf(dto.setup).mode;
   const helperLimit = dto.setup.maxConcurrentHelpers;
   const issues = useMemo(
     () =>
-      editorIssues(
-        graph,
-        {
-          skills: dto.skills,
-          agents: dto.agents,
-          maxConcurrentHelpers: helperLimit,
-          projectMode,
-        },
-        harnessChecks,
-      ),
-    [graph, dto.skills, dto.agents, helperLimit, projectMode, harnessChecks],
+      editorIssues(graph, {
+        skills: dto.skills,
+        agents: dto.agents,
+        maxConcurrentHelpers: helperLimit,
+        projectMode,
+        ...(harnessFile !== undefined ? { harness: harnessFile } : {}),
+      }),
+    [graph, dto.skills, dto.agents, helperLimit, projectMode, harnessFile],
   );
   const blocked = hasErrors(issues);
   const errorCount = issues.filter((i) => i.severity === 'error').length;

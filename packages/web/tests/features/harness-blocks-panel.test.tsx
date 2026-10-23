@@ -15,13 +15,9 @@ import { fakeServer, jsonResponse, renderWithApi } from '../helpers';
  * H-D (ADR-0027 §5): the Workflow editor's Checks block panel against a fake server: the place
  * (the block before the lead's merge is fixed), which checks (required, a checklist of the
  * harness's checks with labels, label chips), the failure routes each place allows and the rounds
- * back to the helper, the Add block menu's Checks items and the problems for missing picks. Core's
- * link rules for the new places are mocked with ADR-0027's (H-A adds them to core in parallel).
+ * back to the helper, the Add block menu's Checks items and the problems for missing picks. The
+ * link and validation rules are core's own (H-A), so a save here passes the server's check too.
  */
-
-vi.mock('@acp/core', async (importOriginal) =>
-  (await import('../fixtures/planned-check-rules')).withPlannedCheckRules(importOriginal),
-);
 
 beforeAll(() => {
   if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
@@ -180,11 +176,11 @@ describe('Workflow editor: the Checks block panel', () => {
         within(issuesList())
           .getAllByTestId('issue')
           .map((i) => i.dataset['code']),
-      ).toContain('check-missing'),
+      ).toContain('unknown-check'),
     );
     await select('checks');
     const issues = within(panel()).getAllByTestId('issue');
-    expect(issues.map((i) => i.dataset['code'])).toContain('check-missing');
+    expect(issues.map((i) => i.dataset['code'])).toContain('unknown-check');
     const missing = within(panel()).getByTestId('check-pick-missing');
     fireEvent.click(within(missing).getByRole('button', { name: 'Remove gone' }));
     await waitFor(() =>
@@ -192,12 +188,12 @@ describe('Workflow editor: the Checks block panel', () => {
         within(panel())
           .queryAllByTestId('issue')
           .map((i) => i.dataset['code']),
-      ).not.toContain('check-missing'),
+      ).not.toContain('unknown-check'),
     );
   });
 
   it('Add block › Checks on a change: linked from the selected helper; back to the helper with rounds', async () => {
-    render();
+    const { server } = render();
     await select('helper-1');
     addBlock(/Checks on a change/);
     await waitFor(() =>
@@ -217,6 +213,28 @@ describe('Workflow editor: the Checks block panel', () => {
     const three = within(rounds).getByRole('radio', { name: '3 rounds' });
     fireEvent.click(three);
     expect((three as HTMLInputElement).checked).toBe(true);
+    // Real rules: the graph saves, with the block, its flow in and its rework link out.
+    fireEvent.click(screen.getByTestId('save-workflow'));
+    await waitFor(() => expect(server.calls.some((c) => c.method === 'PUT')).toBe(true));
+    const put = server.calls.find((c) => c.method === 'PUT');
+    const sent = WorkflowGraphSchema.parse((put?.body as { graph: unknown }).graph);
+    expect(sent.nodes.find((n) => n.id === 'change-checks')).toMatchObject({
+      type: 'checks',
+      place: 'change',
+      onFailure: 'helper',
+    });
+    expect(sent.edges).toContainEqual(
+      expect.objectContaining({ type: 'flow', from: 'helper-1', to: 'change-checks' }),
+    );
+    expect(sent.edges).toContainEqual(
+      expect.objectContaining({
+        type: 'rework',
+        from: 'change-checks',
+        to: 'helper-1',
+        maxRounds: 3,
+      }),
+    );
+    await screen.findByTestId('saved');
     // Its links: the rework link back to the helper. Remove is offered for a change block.
     const links = within(panel()).getByTestId('node-links');
     expect(links.textContent).toContain('Sends the change back for rework');

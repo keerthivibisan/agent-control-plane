@@ -22,9 +22,10 @@ import {
   blocksWithoutChangeChecks,
   checkFailureOf,
   checkPlaceOf,
-  checkedBlock,
+  checkedBlocks,
   checksBlocks,
   failureRoutes,
+  isChangeBlockLink,
   isChecksNode,
   isEditingBlock,
   type ChecksNode,
@@ -441,7 +442,7 @@ function insertFinalStage(graph: WorkflowGraph, stage: WorkflowNodeId): Workflow
 function detach(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
   const node = nodeOf(graph, id);
   const before = graph.edges.filter((e) => e.type === 'flow' && e.to === id);
-  const after = graph.edges.filter((e) => e.type === 'flow' && e.from === id);
+  const after = chainLinksFrom(graph, id);
   let g = unlink(graph, (e) => e.from !== id && e.to !== id);
   if (isFinalStage(node)) {
     const prev = before.length === 1 ? before[0] : undefined;
@@ -522,12 +523,19 @@ function setCheckFailure(
   if (!isChecksNode(node) || !failureRoutes(checkPlaceOf(node)).includes(onFailure)) return graph;
   let g = replaceNode(graph, { ...node, onFailure });
   if (onFailure === 'helper') {
-    const helper = checkedBlock(g, node);
-    if (helper !== undefined) g = link(g, 'rework', id, helper.id);
+    // A rework link back to every block it checks (core's `check-rework`).
+    for (const helper of checkedBlocks(g, node)) g = link(g, 'rework', id, helper.id);
   } else {
     g = unlink(g, (e) => !(e.type === 'rework' && e.from === id));
   }
   return g;
+}
+
+/** A block's flow links onward on the final chain (a tester's link to its change block is not). */
+function chainLinksFrom(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowEdge[] {
+  return graph.edges.filter(
+    (e) => e.type === 'flow' && e.from === id && !isChangeBlockLink(graph, e),
+  );
 }
 
 /** Removes a block and its links; a final stage's neighbours on the chain are joined again. */
@@ -535,7 +543,7 @@ function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
   const node = nodeOf(graph, id);
   if (node === undefined || !isRemovable(node)) return graph;
   const before = graph.edges.filter((e) => e.type === 'flow' && e.to === id);
-  const after = graph.edges.filter((e) => e.type === 'flow' && e.from === id);
+  const after = chainLinksFrom(graph, id);
   let g: WorkflowGraph = {
     ...graph,
     nodes: graph.nodes.filter((n) => n.id !== id),
@@ -543,9 +551,10 @@ function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
   };
   if (isEditingBlock(node)) {
     // Its change checks block checked only it: it goes too, rather than staying unlinked.
-    const orphans = checksBlocks(graph).filter(
-      (b) => checkPlaceOf(b) === 'change' && checkedBlock(graph, b)?.id === id,
-    );
+    const orphans = checksBlocks(graph).filter((b) => {
+      const checked = checkedBlocks(graph, b);
+      return checkPlaceOf(b) === 'change' && checked.length === 1 && checked[0]?.id === id;
+    });
     for (const b of orphans) g = removeNode(g, b.id);
   }
   if (node.type === 'planner' && !g.nodes.some((n) => n.type === 'planner')) {

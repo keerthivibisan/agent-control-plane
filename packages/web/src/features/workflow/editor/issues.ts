@@ -2,12 +2,10 @@ import {
   MAX_NODE_DESCRIPTION,
   WorkflowGraphSchema,
   validateWorkflowGraph,
-  type HarnessCheck,
   type ValidateGraphContext,
   type WorkflowGraph,
 } from '@acp/core';
 import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
-import { checkSelectionWarnings } from '../check-blocks';
 import type { EditorIssue } from './IssuesList';
 
 const P = WORKFLOW_GRAPH_COPY.panel;
@@ -50,19 +48,11 @@ export function shapeIssues(graph: WorkflowGraph): EditorIssue[] {
 }
 
 /**
- * Everything the problems list shows, in order: shape problems, the validator's issues, then the
- * Checks blocks' picks the harness file does not have (`harnessChecks`: undefined while unknown).
+ * Everything the problems list shows, in order: shape problems, then the validator's issues (with
+ * `ctx.harness`, its warnings about the Checks blocks' picks, ADR-0027).
  */
-export function editorIssues(
-  graph: WorkflowGraph,
-  ctx: ValidateGraphContext,
-  harnessChecks?: readonly HarnessCheck[],
-): EditorIssue[] {
-  return [
-    ...shapeIssues(graph),
-    ...validateWorkflowGraph(graph, ctx),
-    ...checkSelectionWarnings(graph, harnessChecks),
-  ];
+export function editorIssues(graph: WorkflowGraph, ctx: ValidateGraphContext): EditorIssue[] {
+  return [...shapeIssues(graph), ...validateWorkflowGraph(graph, ctx)];
 }
 
 export function hasErrors(issues: readonly EditorIssue[]): boolean {

@@ -4081,12 +4081,6 @@ export const HARNESS_BLOCKS_COPY = {
     noReworkLink:
       'This block has no rework link back to its helper yet, so the change can’t go back.',
   },
-  warnings: {
-    check: (block: string, id: string) =>
-      `“${block}” picks the check “${id}”, which .acp/harness.json does not list.`,
-    label: (block: string, label: string) =>
-      `“${block}” picks the label “${label}”, which no check in .acp/harness.json has.`,
-  },
   harness: {
     run: 'Run setup and checks now',
     running: 'Running setup and checks…',

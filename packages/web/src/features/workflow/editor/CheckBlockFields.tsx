@@ -17,11 +17,11 @@ import {
   checkFailureOf,
   checkPlaceOf,
   checkSelectionOf,
-  checkedBlock,
+  checkedBlocks,
   failureRoutes,
   harnessLabels,
   missingSelection,
-  reworkLinkOf,
+  reworkLinksOf,
   selectedChecks,
   usableHarness,
   type ChecksNode,
@@ -113,7 +113,7 @@ function PlaceField({
   const options = (['change', 'branch'] as const).filter(
     (p) => p === place || checksAvailability(others, p).ok,
   );
-  const checked = place === 'change' ? checkedBlock(graph, node) : undefined;
+  const checked = place === 'change' ? checkedBlocks(graph, node) : [];
   return (
     <div className="flex flex-col gap-2" data-testid="check-place" data-place={place}>
       <ChoiceCards<'change' | 'branch'>
@@ -129,7 +129,9 @@ function PlaceField({
       ) : null}
       {place === 'change' ? (
         <p className="text-caption text-dim" data-testid="check-target">
-          {checked === undefined ? P.checks.unlinked : P.checks.for(checked.label)}
+          {checked.length === 0
+            ? P.checks.unlinked
+            : P.checks.for(checked.map((n) => n.label).join('”, “'))}
         </p>
       ) : null}
     </div>
@@ -364,7 +366,9 @@ function FailureField({
   const place = checkPlaceOf(node);
   const routes = failureRoutes(place);
   const route = checkFailureOf(node);
-  const rework = reworkLinkOf(graph, node);
+  // One rework link per block it checks; the rounds are set on all of them at once.
+  const reworks = reworkLinksOf(graph, node);
+  const rework = reworks[0];
   return (
     <div className="flex flex-col gap-3" data-testid="check-failure" data-route={route}>
       <ChoiceCards<CheckFailureRoute>
@@ -397,7 +401,9 @@ function FailureField({
             name={`check-rounds-${node.id}`}
             value={rework.maxRounds}
             choices={ROUND_CHOICES}
-            onChange={(maxRounds) => dispatch({ type: 'set-rounds', id: rework.id, maxRounds })}
+            onChange={(maxRounds) => {
+              for (const r of reworks) dispatch({ type: 'set-rounds', id: r.id, maxRounds });
+            }}
             valueText={P.roundsValue}
           />
         )
