@@ -129,6 +129,20 @@ Diffs are still read from git when shown and never stored (ADR-0009).
   settings (pick a target or create one), and on the "target branch does not exist" refusal
   ("Create <name> from <base>", then Start again).
 
+### 9. Merging a pull request and deleting the ticket branch (amended 2026-10-23, owner: "we need branch delete option like merge and delete"; chose "Merge PR + delete, and Delete")
+
+- **Merge, on the owner's click only:** `gh pr merge <number> --repo <owner>/<name>
+--merge|--squash|--rebase [--delete-branch]`, run outside the project's checkout so `gh` never
+  switches or deletes anything there. The method is the owner's choice per click; GitHub may refuse
+  one the repository does not allow, and the app shows that plainly. Then the app reads the pull
+  request again, and the ticket becomes Done when GitHub reports it merged (§4).
+- **Delete branch, on the owner's click only, once the branch is merged or discarded:** `git push
+--no-verify origin --delete refs/heads/<branch>` when `origin` still has it, and `git branch -D
+<branch>` in the project when the ticket branch is not the checkout's current branch (refused
+  otherwise). Only the ticket's own branch, never the base or target branch.
+- **With "Delete branch" on a merge:** GitHub deletes the head branch, and the app deletes its local
+  ticket branch as above.
+
 ## Consequences
 
 - **Network:** the app makes network calls for the first time beyond `claude`, only on the owner's
