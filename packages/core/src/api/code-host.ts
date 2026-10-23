@@ -64,3 +64,86 @@ export const OpenPullRequestRequestSchema = z.object({
   draft: z.boolean().optional(),
 });
 export type OpenPullRequestRequest = z.infer<typeof OpenPullRequestRequestSchema>;
+
+// ---------------------------------------------------------------- connecting a project (G-E)
+
+/**
+ * A GitHub account or organization name: letters, digits and single hyphens, at most 39, not
+ * starting or ending with a hyphen (ADR-0025 §7).
+ */
+export const GitHubOwnerSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/, 'a GitHub account or organization');
+/** A GitHub repository name: letters, digits, `.`, `-`, `_`, at most 100; not `.`, `..` or `*.git`. */
+export const GitHubRepoNameSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9._-]{1,100}$/, 'letters, digits, dots, dashes and underscores')
+  .refine((n) => n !== '.' && n !== '..' && !n.toLowerCase().endsWith('.git'), {
+    message: 'not ".", ".." or a name ending in .git',
+  });
+
+/**
+ * POST `/api/projects/:id/code-host/repository` (CSRF; the owner's click only; ADR-0025 §7).
+ * Creates the repository on GitHub with the owner's `gh` login and sets it as the project's
+ * `origin`; with `push`, pushes the project's current branch. Refused (409 `origin_exists`) when
+ * the project already has an `origin`. Answers the new `CodeHostStatusDto`.
+ */
+export const CreateRepositoryRequestSchema = z.object({
+  name: GitHubRepoNameSchema,
+  /** Absent: the logged-in account. */
+  owner: GitHubOwnerSchema.optional(),
+  visibility: z.enum(['private', 'public']),
+  push: z.boolean(),
+});
+export type CreateRepositoryRequest = z.infer<typeof CreateRepositoryRequestSchema>;
+
+/**
+ * POST `/api/projects/:id/code-host/remote` (CSRF; the owner's click only; ADR-0025 §7). Sets an
+ * existing GitHub repository as the project's `origin` (`owner/name`, an `https://github.com/…`
+ * address or `git@github.com:…`; see `parseGitHubRepository`). Nothing is pushed. Refused (409
+ * `origin_exists`) when the project already has an `origin`. Answers the new `CodeHostStatusDto`.
+ */
+export const ConnectRepositoryRequestSchema = z.object({
+  repository: z.string().trim().min(3).max(300),
+});
+export type ConnectRepositoryRequest = z.infer<typeof ConnectRepositoryRequestSchema>;
+
+export interface GitHubRepository {
+  owner: string;
+  name: string;
+  /** How `origin` is written: `https://github.com/<owner>/<name>.git` or `git@github.com:…`. */
+  protocol: 'https' | 'ssh';
+}
+
+/**
+ * Reads what the owner typed as a GitHub repository; null when it is not one. Only `github.com`,
+ * never a user, password, port, query or extra path, so the `origin` the app writes is exactly
+ * `https://github.com/<owner>/<name>.git` (or the `git@github.com:` form the owner chose).
+ */
+export function parseGitHubRepository(input: string): GitHubRepository | null {
+  const text = input.trim();
+  const forms: { re: RegExp; protocol: GitHubRepository['protocol'] }[] = [
+    { re: /^([^/\s:@]+)\/([^/\s:@]+?)(?:\.git)?$/, protocol: 'https' },
+    {
+      re: /^https:\/\/github\.com\/([^/\s:@?#]+)\/([^/\s:@?#]+?)(?:\.git)?\/?$/,
+      protocol: 'https',
+    },
+    { re: /^git@github\.com:([^/\s:@]+)\/([^/\s:@]+?)(?:\.git)?$/, protocol: 'ssh' },
+  ];
+  for (const { re, protocol } of forms) {
+    const m = re.exec(text);
+    if (m === null) continue;
+    const owner = GitHubOwnerSchema.safeParse(m[1]);
+    const name = GitHubRepoNameSchema.safeParse(m[2]);
+    if (owner.success && name.success) return { owner: owner.data, name: name.data, protocol };
+    return null;
+  }
+  return null;
+}
+
+/** The `origin` address the app writes for a repository. */
+export function gitHubRemoteUrl(repo: GitHubRepository): string {
+  return repo.protocol === 'ssh'
+    ? `git@github.com:${repo.owner}/${repo.name}.git`
+    : `https://github.com/${repo.owner}/${repo.name}.git`;
+}
