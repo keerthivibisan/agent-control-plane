@@ -97,6 +97,12 @@ export interface ProjectTokens extends TokenRow {
 export interface TokenQueries {
   /** `undefined` for an unknown project. Throws `DbError('invalid_input')` for a bad range. */
   projectTokens(projectId: string, range?: TokensRange): ProjectTokens | undefined;
+  /**
+   * One ticket's direct usage, all time (v0.3.0 T-A, the ticket badge): the same cells as
+   * `projectTokens` without a range, filtered to the ticket, so it equals that ticket's
+   * `byTicket` row exactly. `undefined` for an unknown project.
+   */
+  ticketTokens(projectId: string, ticketId: string): TokenRow | undefined;
 }
 
 /**
@@ -219,7 +225,22 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
       AND (@to IS NULL OR created_at < @to)
       AND (@from IS NULL OR ended_at IS NULL OR ended_at >= @from)`);
 
+  // The same cells as `cells` (no range), for one ticket's sessions.
+  const ticketCells = c.prepare(`
+    WITH ${SCOPED_CTE}
+    SELECT sc.session_id AS session_id, sc.kind AS kind, sc.ticket_id AS ticket_id,
+      substr(r.occurred_at, 1, 10) AS day, r.model AS model, ${TOTALS_SELECT}
+    FROM usage_records r JOIN scoped sc ON sc.session_id = r.session_id
+    WHERE sc.ticket_id = @ticket
+    GROUP BY r.session_id, day, r.model`);
+
   return {
+    ticketTokens(projectId, ticketId) {
+      if (projectExists.get(projectId) === undefined) return undefined;
+      const all = ticketCells.all({ project: projectId, ticket: ticketId }) as CellDbRow[];
+      return row(fold(all, () => 'all').get('all') ?? emptyUsageTotals());
+    },
+
     projectTokens(projectId, range = {}) {
       if (projectExists.get(projectId) === undefined) return undefined;
       const from = range.from === undefined ? null : toStoredTimestamp(range.from, 'from');
