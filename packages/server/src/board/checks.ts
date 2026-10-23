@@ -1,14 +1,34 @@
-import { checkRunWasInterrupted, type CheckRun } from '@acp/core';
+import {
+  checkRunWasInterrupted,
+  type CheckRun,
+  type HarnessCheck,
+  type Project,
+  type SetupRun,
+  type WorkflowProgram,
+} from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
-import type { Repositories, ReviewLoopRepositories, WorkspaceRepositories } from '@acp/db';
-import { isActiveAgentStatus, isLiveAgentStatus } from '@acp/orchestrator';
+import type {
+  HarnessRepositories,
+  Repositories,
+  ReviewLoopRepositories,
+  WorkspaceRepositories,
+} from '@acp/db';
+import { isActiveAgentStatus, isLiveAgentStatus, programOf } from '@acp/orchestrator';
 import { hasReviewableChange } from '../control/roles.js';
 import type { ControlService, ReviewGate } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
 import {
   ChecksShutdown,
   HarnessError,
+  MAIN_SPEC,
+  branchSpec,
+  checksNotRun,
+  checksToGate,
+  checksToRun,
+  mergeSpec,
+  setupFailureNote,
   type CheckRunner,
+  type CheckSpec,
   type MainChecks,
 } from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
@@ -27,6 +47,11 @@ import type { ProjectHarness } from './harness.js';
  * - Each result is stored (`check_runs`) as it finishes, and a notice is published.
  * - Stopping a run stops its running check and skips the rest. Stopping the app does too, but
  *   stores them as `interrupted` (no result), so the merge gates run them again (WG-F3).
+ * - ADR-0027: each result is stored with where it ran (`place`) and the Checks block that ran it;
+ *   what runs and what gates at each place is a `CheckSpec` (harness/blocks.ts). The setup steps
+ *   run in every new editing agent's worktree before it starts (`setupWorktree`) and in every
+ *   fresh check checkout (the ticket branch tip, main) before its checks; each step is stored
+ *   (`setup_runs`). A checkout whose setup did not pass records its checks as not run.
  */
 
 export interface CheckService {
@@ -34,8 +59,15 @@ export interface CheckService {
   runForAgent(runId: string, agentRunId: string): Promise<CheckRun[]>;
   /** In the background: every helper of the run whose changes wait for review. */
   runOnReview(runId: string): void;
-  /** "Run checks now" on the project's main branch (a temporary checkout). */
+  /** "Run checks now" on the project's main branch (a temporary checkout): setup, then checks. */
   runOnMain(projectId: string): Promise<CheckRun[]>;
+  /** ADR-0027: setup runs before "Run checks now" on main, newest first. */
+  mainSetupHistory(projectId: string, limit?: number): SetupRun[];
+  /**
+   * ADR-0027 §1: runs the project's setup steps (from the owner's checkout) in a new editing
+   * agent's worktree before it starts, storing each step. Never throws for a step.
+   */
+  setupWorktree(input: WorktreeSetupInput): Promise<WorktreeSetup>;
   /** What the merge rule needs: failed required checks and whether checks are running. */
   gate(runId: string, agentRunId: string): ReviewGate;
   /** Stops the run's running check (the run was stopped). */
@@ -46,12 +78,23 @@ export interface CheckService {
    * with nothing unsealed. `agentRunId` null: the run's ticket branch tip, in a temporary detached
    * checkout. The manifest is still read from the owner's checkout.
    */
-  runOnCommit(runId: string, agentRunId: string | null, commit: string): Promise<CheckRun[]>;
+  runOnCommit(
+    runId: string,
+    agentRunId: string | null,
+    commit: string,
+    spec?: CheckSpec,
+    options?: CommitChecksOptions,
+  ): Promise<CheckRun[]>;
   /**
    * ADR-0021 merge gate: the required checks' latest results **on this commit** only. Results on
    * any other commit (an earlier seal, another round) never count.
    */
-  gateForCommit(runId: string, agentRunId: string | null, commit: string): Promise<CommitGate>;
+  gateForCommit(
+    runId: string,
+    agentRunId: string | null,
+    commit: string,
+    spec?: CheckSpec,
+  ): Promise<CommitGate>;
   /**
    * In the background: `runOnCommit`, then `onFinished` with the gate's verdict (also when the
    * checks could not run: then `requiredPassed` is false and `failed` names why in plain words).
@@ -61,6 +104,8 @@ export interface CheckService {
     agentRunId: string | null,
     commit: string,
     onFinished: (result: CommitChecksResult) => void,
+    spec?: CheckSpec,
+    options?: CommitChecksOptions,
   ): void;
   /** Tests: resolves when no background check run is in flight. */
   idle(): Promise<void>;
@@ -84,11 +129,47 @@ export interface CommitChecksResult {
   commit: string;
   requiredPassed: boolean;
   failed: readonly string[];
+  /** ADR-0027: the latest result of each gated check on the commit (for failure details). */
+  results?: readonly CheckRun[];
 }
+
+export interface CommitChecksOptions {
+  /** Checks whose latest result on this commit already passed are not run again. */
+  skipPassed?: boolean;
+}
+
+export interface WorktreeSetupInput {
+  runId: string;
+  agentRunId: string;
+  projectId: string;
+  /** The agent's project folder inside its worktree (manifest paths are relative to it). */
+  cwd: string;
+  /** The commit the new worktree is at. */
+  commit: string | null;
+}
+
+/** What the worktree's setup came to (ADR-0027 §1). */
+export type WorktreeSetup =
+  | {
+      ok: true;
+      /** The project has a valid harness file (the agent's brief then lists setup and checks). */
+      hasHarness: boolean;
+      /** The setup steps that ran, by name, in order. */
+      ran: readonly string[];
+      /** The harness file's checks, as declared, for the brief. */
+      checks: readonly HarnessCheck[];
+    }
+  | {
+      ok: false;
+      reason: string;
+      /** The end of the failed step's output (redacted). */ outputTail?: string;
+    };
 
 export interface CheckServiceDeps {
   repos: Pick<Repositories, 'projects' | 'events'>;
-  workspace: Pick<WorkspaceRepositories, 'checkRuns' | 'tickets'>;
+  workspace: Pick<WorkspaceRepositories, 'checkRuns' | 'tickets' | 'projectSetup'>;
+  /** ADR-0027: setup runs (migration 0010). */
+  harnessRepos: HarnessRepositories;
   /** ADR-0021: check results stored with their commit. */
   reviewLoop: Pick<ReviewLoopRepositories, 'checkCommits'>;
   /** ADR-0021: temporary detached checkouts of the ticket branch tip. */
@@ -122,9 +203,41 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     return c;
   }
 
-  function store(result: CheckRun): CheckRun {
+  function store(result: CheckRun, spec?: CheckSpec): CheckRun {
     const { id: _runnerId, ...input } = result;
-    return deps.workspace.checkRuns.insert(input);
+    return deps.workspace.checkRuns.insert(
+      spec === undefined ? input : { ...input, place: spec.place, blockNodeId: spec.blockNodeId },
+    );
+  }
+
+  function storeSetup(result: SetupRun): void {
+    const { id: _runnerId, ...input } = result;
+    try {
+      deps.harnessRepos.setupRuns.insert(input);
+    } catch (error) {
+      logger.log('error', 'setup result not stored', {
+        runId: result.runId,
+        ...errorFields(error),
+      });
+    }
+  }
+
+  /** ADR-0027 §2: the owner's switch for network setup steps (off when never set). */
+  function networkAllowed(projectId: string): boolean {
+    return deps.workspace.projectSetup.get(projectId)?.setupNetwork === true;
+  }
+
+  /** The default spec of a commit's checks: the merge block for a change, the branch for a tip. */
+  function defaultSpec(runId: string, agentRunId: string | null): CheckSpec {
+    const state = deps.control.peek(runId);
+    let program: WorkflowProgram | null;
+    try {
+      program = state === undefined ? null : programOf(state);
+    } catch {
+      // A stored graph the validator now refuses: the old defaults (every required check).
+      program = null;
+    }
+    return agentRunId === null ? branchSpec(program) : mergeSpec(program);
   }
 
   function publish(projectId: string, runId: string): void {
@@ -221,7 +334,10 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     runId: string,
     agentRunId: string | null,
     commit: string,
+    specIn?: CheckSpec,
+    options: CommitChecksOptions = {},
   ): Promise<CheckRun[]> {
+    const spec = specIn ?? defaultSpec(runId, agentRunId);
     if (closed) throw new HttpError(409, 'run_not_active', 'The server is shutting down.');
     if (!FULL_COMMIT.test(commit)) throw new HttpError(400, 'invalid_request', 'Not a commit id');
     const state = deps.control.peek(runId);
@@ -263,23 +379,54 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
       // From the owner's checkout, never the commit under check (P4-C handoff).
       const manifest = (await deps.harness.read(project))?.manifest ?? null;
       if (manifest === null) return [];
+      let checks = checksToRun(manifest, spec);
+      if (options.skipPassed === true) {
+        const passed = new Set(
+          deps.reviewLoop.checkCommits
+            .latestForCommit(runId, agentRunId, commit)
+            .filter((r) => r.status === 'passed')
+            .map((r) => r.checkId),
+        );
+        checks = checks.filter((c) => !passed.has(c.id));
+      }
+      if (checks.length === 0) return [];
       const stored: CheckRun[] = [];
+      const keep = (result: CheckRun): void => {
+        try {
+          const { id: _runnerId, ...input } = result;
+          stored.push(
+            deps.reviewLoop.checkCommits.insert({
+              ...input,
+              commit,
+              place: spec.place,
+              blockNodeId: spec.blockNodeId,
+            }),
+          );
+        } catch (error) {
+          logger.log('error', 'check result not stored', { runId, ...errorFields(error) });
+        }
+        publish(project.id, runId);
+      };
+      const signal = controllerFor(runId).signal;
+      // ADR-0027 §1: a fresh checkout (the ticket branch tip) is set up before its checks; an
+      // agent's worktree was set up when the agent started.
+      if (checkout !== undefined) {
+        const failed = await setupIn(project, checkout.cwd, runId, null, commit, signal);
+        if (failed !== null) {
+          const notRun = checksNotRun({ checks, projectId: project.id, runId, agentRunId }, failed);
+          for (const r of notRun) keep(r);
+          logger.log('info', 'commit checks not run: setup failed', { runId, agentRunId });
+          return stored;
+        }
+      }
       await deps.runner.run({
         root,
-        checks: manifest.checks,
+        checks,
         projectId: project.id,
         runId,
         agentRunId,
-        signal: controllerFor(runId).signal,
-        onResult: (result) => {
-          try {
-            const { id: _runnerId, ...input } = result;
-            stored.push(deps.reviewLoop.checkCommits.insert({ ...input, commit }));
-          } catch (error) {
-            logger.log('error', 'check result not stored', { runId, ...errorFields(error) });
-          }
-          publish(project.id, runId);
-        },
+        signal,
+        onResult: keep,
       });
       logger.log('info', 'commit checks finished', {
         runId,
@@ -304,13 +451,25 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     runId: string,
     agentRunId: string | null,
     commit: string,
+    specIn?: CheckSpec,
   ): Promise<CommitGate> {
+    return (await gateDetails(runId, agentRunId, commit, specIn)).gate;
+  }
+
+  /** The gate, and the latest result of each gated check on the commit (failure details). */
+  async function gateDetails(
+    runId: string,
+    agentRunId: string | null,
+    commit: string,
+    specIn?: CheckSpec,
+  ): Promise<{ gate: CommitGate; results: CheckRun[] }> {
+    const spec = specIn ?? defaultSpec(runId, agentRunId);
     const state = deps.control.peek(runId);
     const project =
       state === undefined ? undefined : deps.repos.projects.getById(state.run.projectId);
     const manifest =
       project === undefined ? null : ((await deps.harness.read(project))?.manifest ?? null);
-    const required = (manifest?.checks ?? []).filter((c) => c.required);
+    const required = manifest === null ? [] : checksToGate(manifest, spec);
     const latest = new Map(
       deps.reviewLoop.checkCommits
         .latestForCommit(runId, agentRunId, commit)
@@ -327,11 +486,50 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
       else if (result.status !== 'passed') failedRequired.push(check.name);
     }
     return {
-      passed: missing.length === 0 && failedRequired.length === 0,
-      failedRequired,
-      missing,
-      running: running.has(commitKey(runId, agentRunId, commit)),
+      gate: {
+        passed: missing.length === 0 && failedRequired.length === 0,
+        failedRequired,
+        missing,
+        running: running.has(commitKey(runId, agentRunId, commit)),
+      },
+      results: required.flatMap((c) => {
+        const r = latest.get(c.id);
+        return r === undefined ? [] : [r];
+      }),
     };
+  }
+
+  /**
+   * Runs the project's setup steps in `root`, storing each; null when they all passed (or there
+   * are none), else the first step that did not.
+   */
+  async function setupIn(
+    project: Project,
+    root: string,
+    runId: string | null,
+    agentRunId: string | null,
+    commit: string | null,
+    signal: AbortSignal | undefined,
+  ): Promise<SetupRun | null> {
+    const manifest = (await deps.harness.read(project))?.manifest ?? null;
+    const steps = manifest?.setup ?? [];
+    if (steps.length === 0) return null;
+    const results = await deps.runner.runSetup({
+      root,
+      steps,
+      networkAllowed: networkAllowed(project.id),
+      projectId: project.id,
+      runId,
+      agentRunId,
+      commit,
+      ...(signal !== undefined && { signal }),
+      onResult: (r) => {
+        storeSetup(r);
+        if (runId !== null) publish(project.id, runId);
+      },
+    });
+    const failed = results.find((r) => r.status !== 'passed');
+    return failed ?? null;
   }
 
   return {
@@ -339,17 +537,59 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     runOnCommit,
     gateForCommit,
 
-    startOnCommit(runId, agentRunId, commit, onFinished) {
+    async setupWorktree(input) {
+      const project = deps.repos.projects.getById(input.projectId);
+      if (project === undefined) return { ok: false, reason: 'The project is gone.' };
+      let manifest = null;
+      try {
+        manifest = (await deps.harness.read(project))?.manifest ?? null;
+      } catch (error) {
+        logger.log('warn', 'harness unreadable for setup', errorFields(error));
+      }
+      if (manifest === null) return { ok: true, hasHarness: false, ran: [], checks: [] };
+      const failed = await setupIn(
+        project,
+        input.cwd,
+        input.runId,
+        input.agentRunId,
+        input.commit,
+        controllerFor(input.runId).signal,
+      );
+      if (failed !== null) {
+        logger.log('info', 'worktree setup did not pass', {
+          runId: input.runId,
+          agentRunId: input.agentRunId,
+        });
+        return { ok: false, reason: setupFailureNote(failed), outputTail: failed.outputTail };
+      }
+      return {
+        ok: true,
+        hasHarness: true,
+        ran: (manifest.setup ?? []).map((s) => s.name),
+        checks: manifest.checks,
+      };
+    },
+
+    mainSetupHistory(projectId, limit = 50) {
+      if (deps.repos.projects.getById(projectId) === undefined) {
+        throw notFound(`Project ${projectId} not found`);
+      }
+      return deps.harnessRepos.setupRuns.listForProjectMain(projectId, { limit });
+    },
+
+    startOnCommit(runId, agentRunId, commit, onFinished, spec, options) {
       if (closed) return;
       const task = (async () => {
         let result: CommitChecksResult;
         try {
-          await runOnCommit(runId, agentRunId, commit);
-          const gate = await gateForCommit(runId, agentRunId, commit);
+          await runOnCommit(runId, agentRunId, commit, spec, options);
+          const { gate, results } = await gateDetails(runId, agentRunId, commit, spec);
           result = {
             commit,
             requiredPassed: gate.passed,
             failed: [...gate.failedRequired, ...gate.missing],
+            // Failure details only (ADR-0027 §5: what a change block sends back).
+            ...(!gate.passed && { results }),
           };
         } catch (error) {
           const code = error instanceof HttpError ? error.code : errorFields(error).errorName;
@@ -400,8 +640,13 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
       }
       mainRunning.add(projectId);
       try {
-        const result = await deps.mainChecks.run({ projectRoot: project.rootPath, projectId });
-        const stored = result.results.map(store);
+        const result = await deps.mainChecks.run({
+          projectRoot: project.rootPath,
+          projectId,
+          setupNetwork: networkAllowed(projectId),
+          onSetupResult: storeSetup,
+        });
+        const stored = result.results.map((r) => store(r, MAIN_SPEC));
         logger.log('info', 'main checks finished', { projectId, checks: stored.length });
         return stored;
       } catch (error) {

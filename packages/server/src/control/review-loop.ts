@@ -4,10 +4,13 @@ import type {
   TicketBranchReviewDto,
 } from '@acp/core/api';
 import { OpenPullRequestRequestSchema, TicketBranchActionRequestSchema } from '@acp/core/api';
+import type { CheckRun } from '@acp/core';
 import type { TicketBranchRow, WorkspaceRow } from '@acp/db';
 import {
+  CHECK_FAILURE_TAIL_MAX_BYTES,
   beginChangeMerge,
   cancelRun,
+  changeChecksFinished,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -16,10 +19,12 @@ import {
   recordChangeDecision,
   recordTicketBranchDecision,
   requestTicketChanges,
+  programOf,
   ticketBranchCreated,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
+  type FailedCheck,
   type MergeBlocked,
   type Refusal,
   type RunState,
@@ -27,6 +32,7 @@ import {
 import type { z } from 'zod';
 import { CodeHostError, codeHostHttpError, type CodeHostService } from '../code-host/index.js';
 import { HttpError } from '../errors.js';
+import { branchSpec, changeSpec, mergeSpec, type CheckSpec } from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
 import {
   WorkspaceError,
@@ -88,12 +94,17 @@ export interface LoopLive {
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
-/** The commit-checks hooks (the board's check service, ADR-0021 checks per commit). */
+/**
+ * The commit-checks hooks (the board's check service, ADR-0021 checks per commit). `spec`
+ * (ADR-0027 §5) says which checks run and gate at that place; absent, the merge block's for a
+ * change and the ticket branch's for the tip.
+ */
 export interface CommitChecksHooks {
   gate(
     runId: string,
     agentRunId: string | null,
     commit: string,
+    spec?: CheckSpec,
   ): Promise<{
     passed: boolean;
     failedRequired: readonly string[];
@@ -108,7 +119,10 @@ export interface CommitChecksHooks {
       commit: string;
       requiredPassed: boolean;
       failed: readonly string[];
+      results?: readonly CheckRun[];
     }) => void,
+    spec?: CheckSpec,
+    options?: { skipPassed?: boolean },
   ): void;
 }
 
@@ -227,25 +241,148 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     }
   }
 
-  /** Starts the required checks on `commit`; only the latest started commit's result reports. */
-  function startChecks(live: LoopLive, agentRunId: string | null, commit: string): void {
+  /** The run's compiled program, or null (a stored graph the validator refuses: old defaults). */
+  function programFor(live: LoopLive) {
+    try {
+      return programOf(live.state);
+    } catch {
+      return null;
+    }
+  }
+
+  /** ADR-0027 §5: the merge block's checks (`merge_change`, and the early run on a seal). */
+  function mergeChecks(live: LoopLive): CheckSpec {
+    return mergeSpec(programFor(live));
+  }
+
+  /** ADR-0027 §5: the ticket branch's checks (the owner's merge, the branch block). */
+  function branchChecks(live: LoopLive): CheckSpec {
+    return branchSpec(programFor(live));
+  }
+
+  /**
+   * Starts the merge block's checks on `commit` (the ticket branch's for the tip); only the
+   * latest started commit's result reports.
+   */
+  function startChecks(
+    live: LoopLive,
+    agentRunId: string | null,
+    commit: string,
+    options: { skipPassed?: boolean } = {},
+  ): void {
     const checks = ctx.commitChecks();
     if (checks === undefined) return;
     const runId = live.state.run.id;
     if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
-    checks.start(runId, agentRunId, commit, (result) => {
-      if (agentRunId === null) return; // the ticket tip: the owner sees it with the branch
-      if (live.checkTargets.get(agentRunId) !== commit) return; // superseded by a newer commit
-      live.checkTargets.delete(agentRunId);
-      const applied = ctx.apply(live, (s, c) => checksFinished(s, agentRunId, result, c));
+    const spec = agentRunId === null ? branchChecks(live) : mergeChecks(live);
+    checks.start(
+      runId,
+      agentRunId,
+      commit,
+      (result) => {
+        if (agentRunId === null) return; // the ticket tip: the owner sees it with the branch
+        if (live.checkTargets.get(agentRunId) !== commit) return; // superseded by a newer commit
+        live.checkTargets.delete(agentRunId);
+        const applied = ctx.apply(live, (s, c) =>
+          checksFinished(
+            s,
+            agentRunId,
+            { commit: result.commit, requiredPassed: result.requiredPassed, failed: result.failed },
+            c,
+          ),
+        );
+        if (!applied.ok) {
+          logger.log('info', 'checks result not recorded', {
+            runId,
+            agentRunId,
+            code: applied.refusal.code,
+          });
+        }
+      },
+      spec,
+      options,
+    );
+  }
+
+  /** The last `max` UTF-8 bytes of a check's (already redacted) output. */
+  function tailBytes(text: string, max: number): string {
+    const buf = Buffer.from(text, 'utf8');
+    if (buf.length <= max) return text;
+    // Skip continuation bytes so the cut never splits a character.
+    let start = buf.length - max;
+    while (start < buf.length && ((buf[start] ?? 0) & 0xc0) === 0x80) start++;
+    return buf.subarray(start).toString('utf8');
+  }
+
+  /**
+   * ADR-0027 §5, `run-change-checks`: the change's Checks block on its sealed commit, in the
+   * helper's worktree; the result (with each failing check's last 4 KiB) goes to the engine. A
+   * pass also starts the merge block's early run on that commit (checks that already passed on it
+   * are not run again), as a seal without a block does.
+   */
+  function runChangeChecks(
+    live: LoopLive,
+    effect: Extract<EngineEffect, { type: 'run-change-checks' }>,
+  ): void {
+    const runId = live.state.run.id;
+    const id = effect.agentRunId;
+    const report = (passed: boolean, failed: FailedCheck[]): void => {
+      const applied = ctx.apply(live, (s, c) =>
+        changeChecksFinished(s, id, { commit: effect.commit, passed, failed }, c),
+      );
       if (!applied.ok) {
-        logger.log('info', 'checks result not recorded', {
+        logger.log('info', 'change checks result not recorded', {
           runId,
-          agentRunId,
+          agentRunId: id,
           code: applied.refusal.code,
         });
+        return;
       }
-    });
+      logger.log('info', 'change checks finished', { runId, agentRunId: id, passed });
+      if (passed) startChecks(live, id, effect.commit, { skipPassed: true });
+    };
+    const checks = ctx.commitChecks();
+    if (checks === undefined) {
+      // Without a check service nothing can fail. Reported after this effect is carried out,
+      // never from inside the transition that asked for it.
+      ctx.track(Promise.resolve().then(() => report(true, [])));
+      return;
+    }
+    checks.start(
+      runId,
+      id,
+      effect.commit,
+      (result) => {
+        if (result.requiredPassed) {
+          report(true, []);
+          return;
+        }
+        const byName = new Map((result.results ?? []).map((r) => [r.name, r]));
+        const failed = result.failed.map((name): FailedCheck => {
+          const r = byName.get(name);
+          return r === undefined
+            ? { name, status: 'skipped', exitCode: null, outputTail: 'No result: it did not run.' }
+            : {
+                name,
+                status: r.status,
+                exitCode: r.exitCode,
+                outputTail: tailBytes(r.outputTail, CHECK_FAILURE_TAIL_MAX_BYTES),
+              };
+        });
+        report(false, failed);
+      },
+      changeSpec(effect.blockNodeId, effect.select),
+    );
+  }
+
+  /**
+   * ADR-0027 §5, `run-branch-checks`: the Checks block on the ticket branch, on its recorded tip
+   * (a fresh checkout, setup first). Nothing waits for it; the owner's merge gate reads it.
+   */
+  function runBranchChecks(live: LoopLive): void {
+    const row = loop.ticketBranches.getByRun(live.state.run.id);
+    if (row === undefined || row.state !== 'open') return;
+    startChecks(live, null, row.headCommit, { skipPassed: true });
   }
 
   // ------------------------------------------------------------------ effects
@@ -295,7 +432,12 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
           files: result.changedFiles,
         });
         if (!result.changed) await release(live, agentRunId);
-        else if (result.headCommit !== null) startChecks(live, agentRunId, result.headCommit);
+        else if (result.headCommit !== null) {
+          // ADR-0027 §5: a change with a Checks block runs it first (`run-change-checks`); the
+          // merge block's early run follows its pass.
+          const change = live.state.agents.find((a) => a.id === agentRunId)?.change;
+          if (change?.blockChecks !== 'pending') startChecks(live, agentRunId, result.headCommit);
+        }
       })(),
     );
   }
@@ -410,7 +552,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         return { kind: 'no-changes', reply: r.value, overridden: [] };
       }
       const commit = integrated.commit;
-      const gate = (await ctx.commitChecks()?.gate(runId, id, commit)) ?? {
+      const gate = (await ctx.commitChecks()?.gate(runId, id, commit, mergeChecks(live))) ?? {
         passed: true,
         failedRequired: [],
         missing: [],
@@ -650,7 +792,9 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         }
         case 'merge':
         case 'merge-anyway': {
-          const gate = (await ctx.commitChecks()?.gate(runId, null, row.headCommit)) ?? {
+          const gate = (await ctx
+            .commitChecks()
+            ?.gate(runId, null, row.headCommit, branchChecks(live))) ?? {
             passed: true,
             failedRequired: [],
             missing: [],
@@ -904,6 +1048,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     openPullRequest,
     refreshPullRequest,
     sealChange,
+    runChangeChecks,
+    runBranchChecks,
     createTicketBranch,
     mergeChange,
     discardChange,

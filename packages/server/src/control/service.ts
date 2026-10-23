@@ -51,8 +51,10 @@ import {
   type WorkspaceRow,
 } from '@acp/db';
 import {
+  AGENT_NOTE_LINE,
   agentDepth,
   agentEvent,
+  agentSetupFailed,
   agentLaunchMode,
   allowlistTarget,
   cancelRun,
@@ -103,6 +105,7 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
+import type { WorktreeSetup, WorktreeSetupInput } from '../board/checks.js';
 import type { CodeHostService } from '../code-host/index.js';
 import { HttpError, notFound } from '../errors.js';
 import { errorFields, type Logger } from '../logger.js';
@@ -252,6 +255,11 @@ export interface ControlWorkspaceHooks {
   allowlist?: (projectId: string, policy?: ProjectApprovals) => Promise<AllowlistContext | null>;
   /** ADR-0021: the harness checks per commit (the merge gate and the checks it starts). */
   commitChecks?: CommitChecksHooks;
+  /**
+   * ADR-0027 §1: runs the project's setup steps in a new helper's or tester's worktree before it
+   * starts. Not called for rework turns (the worktree is set up), nor for reading roles.
+   */
+  setupWorktree?: (input: WorktreeSetupInput) => Promise<WorktreeSetup>;
   reviewGate?: (runId: string, agentRunId: string) => ReviewGate;
   /** The owner merged although a required check failed; `reason` is their own text. */
   mergedAnyway?: (input: {
@@ -444,6 +452,46 @@ interface LiveRun {
   mergeChain: Promise<unknown>;
   /** ADR-0021: the latest commit whose checks were started per agent. */
   checkTargets: Map<string, string>;
+}
+
+/** The most checks an editing agent's brief lists by name and command (ADR-0027 §4). */
+const BRIEF_MAX_CHECKS = 10;
+
+/** One argument list as the agent would type it (arguments with spaces or quotes are quoted). */
+function commandLine(argv: readonly string[]): string {
+  return argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a))).join(' ');
+}
+
+/**
+ * ADR-0027 §4: one to three short lines for an editing agent's first brief, only when the project
+ * has a harness file: the setup steps that ran (names) and the checks it may run (names and the
+ * exact commands; the allowlist pre-approves exactly those, per the run's approval mode).
+ */
+export function setupBriefLines(setup: Extract<WorktreeSetup, { ok: true }>): string[] {
+  if (!setup.hasHarness) return [];
+  const lines: string[] = [];
+  if (setup.ran.length > 0) {
+    lines.push(`The project's setup already ran in your copy: ${setup.ran.join(', ')}.`);
+  }
+  const checks = setup.checks.slice(0, BRIEF_MAX_CHECKS);
+  if (checks.length > 0) {
+    const list = checks.map(
+      (c) => `${c.name} (\`${commandLine(c.argv)}\`${c.cwd !== undefined ? ` in ${c.cwd}` : ''})`,
+    );
+    lines.push(
+      `You may run the project's checks with exactly these commands: ${list.join('; ')}${setup.checks.length > checks.length ? '; and more in .acp/harness.json' : ''}.`,
+    );
+  }
+  return lines;
+}
+
+/** The brief with `lines` added, before the closing note line when it ends with one. */
+function withBriefLines(prompt: string, lines: readonly string[]): string {
+  if (lines.length === 0) return prompt;
+  const block = lines.join('\n');
+  if (!prompt.endsWith(AGENT_NOTE_LINE)) return `${prompt}\n\n${block}`;
+  const head = prompt.slice(0, prompt.length - AGENT_NOTE_LINE.length).trimEnd();
+  return `${head}\n\n${block}\n\n${AGENT_NOTE_LINE}`;
 }
 
 /** What `launch` needs from a `start-agent` effect. */
@@ -848,6 +896,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'discard-change':
           loop.discardChange(live, effect.agentRunId);
           break;
+        // ADR-0027 §5: Checks blocks, run by the check service, results back to the engine.
+        case 'run-change-checks':
+          loop.runChangeChecks(live, effect);
+          break;
+        case 'run-branch-checks':
+          loop.runBranchChecks(live);
+          break;
         case 'change-round':
         case 'change-comment':
           // Stored in the same transaction as the state (RunStore.commit); no text is logged.
@@ -1179,13 +1234,52 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           return;
         }
         live.workspaces.set(agentRunId, ws);
+        // ADR-0027 §1: the project's setup runs in the new worktree before the agent starts.
+        let briefLines: string[] = [];
+        if (hooks.setupWorktree !== undefined) {
+          const prepared = await hooks
+            .setupWorktree({
+              runId,
+              agentRunId,
+              projectId: project.id,
+              cwd: ws.cwd,
+              commit: ws.baseCommit,
+            })
+            .catch((error: unknown): WorktreeSetup => {
+              logger.log('warn', 'worktree setup failed', {
+                runId,
+                agentRunId,
+                ...errorFields(error),
+              });
+              return { ok: false, reason: 'The project setup could not run.' };
+            });
+          if (!prepared.ok) {
+            live.starting.delete(agentRunId);
+            live.pendingSends.delete(agentRunId);
+            const role = live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'A helper';
+            logger.log('info', 'agent not started: setup did not pass', { runId, agentRunId });
+            defer(() => {
+              const failure = {
+                reason: prepared.reason,
+                ...(prepared.outputTail !== undefined && { outputTail: prepared.outputTail }),
+              };
+              const applied = apply(live, (s, c) => agentSetupFailed(s, agentRunId, failure, c));
+              // The ticket says why too (app data: the step's name and how it ended).
+              if (applied.ok) appComment(live, `${role} did not start: ${prepared.reason}`);
+              maybeCompleteCancellation(live);
+            });
+            return;
+          }
+          briefLines = setupBriefLines(prepared);
+        }
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, project.rootPath, effect);
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
         const protection = await protectionFor(live, agentRunId);
+        const briefed = withBriefLines(prompt, briefLines);
         const withCopies = (
-          await withAttachments(live, agentRunId, kind, ws.cwd, project.rootPath, prompt)
+          await withAttachments(live, agentRunId, kind, ws.cwd, project.rootPath, briefed)
         ).prompt;
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.

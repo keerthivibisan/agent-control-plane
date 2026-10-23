@@ -7,6 +7,7 @@ import type { ManagedExecutionAdapter, ObservationAdapter } from '@acp/core';
 import {
   createQueries,
   createRepositories,
+  createHarnessRepositories,
   createReviewLoopRepositories,
   createWorkspaceRepositories,
   openDatabase,
@@ -245,6 +246,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     repos,
     workspace: workspaceRepos,
     reviewLoop: createReviewLoopRepositories(db, { now }),
+    harnessRepos: createHarnessRepositories(db, { now }),
     checkouts: workspaceManager,
     control: controlService,
     runner: checkRunner,

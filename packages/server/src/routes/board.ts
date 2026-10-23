@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   BoardDtoSchema,
   CheckRunDtoSchema,
+  SetupRunDtoSchema,
   CodeHostStatusDtoSchema,
   ContextCandidateDtoSchema,
   HarnessStatusDtoSchema,
@@ -34,6 +35,7 @@ import { contentDisposition, isInlineType, isTextType } from '../attachments/con
  */
 
 const CheckRunListSchema = z.array(CheckRunDtoSchema);
+const SetupRunListSchema = z.array(SetupRunDtoSchema);
 const CardListSchema = z.array(TicketCardDtoSchema);
 const CandidateListSchema = z.array(ContextCandidateDtoSchema);
 const AttachmentListSchema = z.array(AttachmentDtoSchema);
@@ -71,6 +73,10 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   });
   router.post('/projects/:id/harness/checks', csrf, json, async (req, res) => {
     res.json(out(CheckRunListSchema, await board.runMainChecks(param(req.params['id']))));
+  });
+  // ADR-0027: the setup steps run before "Run checks now" on main, newest first.
+  router.get('/projects/:id/harness/setup-runs', (req, res) => {
+    res.json(out(SetupRunListSchema, board.mainSetupHistory(param(req.params['id']))));
   });
   router.post('/projects/:id/harness/ticket', csrf, json, async (req, res) => {
     const dto = await board.createHarnessTicket(param(req.params['id']));

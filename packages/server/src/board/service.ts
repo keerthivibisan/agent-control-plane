@@ -14,6 +14,7 @@ import {
   validateWorkflowGraph,
   type Attachment,
   type CheckRun,
+  type SetupRun,
   type CompileContext,
   type ProjectAgentSetup,
   type RunBudget,
@@ -56,6 +57,7 @@ import {
   MAX_PAGE_SIZE,
   createOrchestrationRepositories,
   createRedesignRepositories,
+  createHarnessRepositories,
   createReviewLoopRepositories,
   createWorkspaceRepositories,
   type AcpDatabase,
@@ -164,6 +166,8 @@ export interface BoardService {
   runMainChecks(projectId: string): Promise<CheckRun[]>;
   /** Past "Run checks now" results on the main branch, newest first (R-E's history). */
   mainCheckHistory(projectId: string, limit?: number): CheckRun[];
+  /** ADR-0027: the setup runs before "Run checks now" on main, newest first. */
+  mainSetupHistory(projectId: string, limit?: number): SetupRun[];
   createHarnessTicket(projectId: string): Promise<TicketDto>;
   contextCandidates(projectId: string): Promise<ContextCandidateDto[]>;
   board(projectId: string): Promise<BoardDto>;
@@ -294,6 +298,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   });
   const redesign = createRedesignRepositories(deps.db, { now: deps.now });
   const loop = createReviewLoopRepositories(deps.db, { now: deps.now });
+  /** ADR-0027: setup runs (migration 0010). */
+  const harnessRepos = createHarnessRepositories(deps.db, { now: deps.now });
   /** Reads run states for the activity timeline (made on first use). */
   let runStore: RunStore | undefined;
 
@@ -470,6 +476,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       ),
       // With each result's commit (ADR-0021), so a change card shows only its own commit's.
       checks: ticket.currentRunId === null ? [] : loop.checkCommits.listForRun(ticket.currentRunId),
+      // ADR-0027: the current run's setup runs (agents' worktrees and check checkouts).
+      setupRuns:
+        ticket.currentRunId === null ? [] : harnessRepos.setupRuns.listForRun(ticket.currentRunId),
     };
   }
 
@@ -613,9 +622,18 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           next.integration === undefined ? undefined : loop.ticketBranches.getByRun(runId);
         if (next.integration === undefined) deps.checks.runOnReview(runId);
         else if (tip !== undefined && tip.state === 'open') {
-          deps.checks.startOnCommit(runId, null, tip.headCommit, () => {
-            notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
-          });
+          // The ticket branch's checks (ADR-0027 §5: required and the branch block's selection);
+          // those that already passed on this tip (the branch block ran there) are not rerun.
+          deps.checks.startOnCommit(
+            runId,
+            null,
+            tip.headCommit,
+            () => {
+              notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
+            },
+            undefined,
+            { skipPassed: true },
+          );
         }
       }
       if (changed && (status === 'CANCELLING' || status === 'CANCELLED' || status === 'FAILED')) {
@@ -647,10 +665,12 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     allowlist: (projectId, policy) => deps.harness.allowlist(projectId, policy),
     reviewGate: (runId, agentRunId) => deps.checks.gate(runId, agentRunId),
     commitChecks: {
-      gate: (runId, agentRunId, commit) => deps.checks.gateForCommit(runId, agentRunId, commit),
-      start: (runId, agentRunId, commit, onFinished) =>
-        deps.checks.startOnCommit(runId, agentRunId, commit, onFinished),
+      gate: (runId, agentRunId, commit, spec) =>
+        deps.checks.gateForCommit(runId, agentRunId, commit, spec),
+      start: (runId, agentRunId, commit, onFinished, spec, options) =>
+        deps.checks.startOnCommit(runId, agentRunId, commit, onFinished, spec, options),
     },
+    setupWorktree: (input) => deps.checks.setupWorktree(input),
 
     mergedAnyway({ runId, role, reason, failedChecks }) {
       // The owner's reason is their own text (ADR-0016): kept on the ticket, for the record.
@@ -728,9 +748,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           ? legacyAllowlistOf(input.approvals)
           : (stored?.allowlist ?? { editInOwnWorktree: false, runHarnessChecks: false }));
       // ADR-0025: an absent strategy keeps the stored one; `null` removes it.
-      const { branching: branchingInput, ...rest } = input;
+      const { branching: branchingInput, setupNetwork: networkInput, ...rest } = input;
       const branching =
         branchingInput === undefined ? stored?.branching : (branchingInput ?? undefined);
+      // ADR-0027 §2: an absent switch keeps the stored one (off when never set).
+      const setupNetwork = networkInput ?? stored?.setupNetwork;
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
@@ -739,6 +761,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           allowlist,
           ...(approvals !== undefined && { approvals }),
           ...(branching !== undefined && { branching }),
+          ...(setupNetwork !== undefined && { setupNetwork }),
         });
         notice('projects-changed', { projectId });
         return saved;
@@ -746,6 +769,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         throw dbConflict(error, 'Another project already uses this project key') ?? error;
       }
     },
+
+    mainSetupHistory: (projectId, limit = 50) => deps.checks.mainSetupHistory(projectId, limit),
 
     mainCheckHistory(projectId, limit = 50) {
       project(projectId); // 404 for an unknown project

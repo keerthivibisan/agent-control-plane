@@ -5,6 +5,7 @@ import { CSRF_HEADER, type TicketDetailDto, type TicketDto } from '@acp/core/api
 import {
   createQueries,
   createRepositories,
+  createHarnessRepositories,
   createReviewLoopRepositories,
   createWorkspaceRepositories,
   openDatabase,
@@ -135,6 +136,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     repos,
     workspace,
     reviewLoop: createReviewLoopRepositories(db, { now }),
+    harnessRepos: createHarnessRepositories(db, { now }),
     checkouts: workspaces,
     control,
     runner,
