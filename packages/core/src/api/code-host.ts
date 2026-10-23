@@ -147,3 +147,41 @@ export function gitHubRemoteUrl(repo: GitHubRepository): string {
     ? `git@github.com:${repo.owner}/${repo.name}.git`
     : `https://github.com/${repo.owner}/${repo.name}.git`;
 }
+
+// ---------------------------------------------------------------- the project's branches (G-F)
+
+/** One local branch of the project (ADR-0025 §8). */
+export const ProjectBranchDtoSchema = z.object({
+  name: GitBranchNameSchema,
+  commit: GitCommitSchema,
+  /** The project's checkout is on this branch. */
+  current: z.boolean(),
+  /** `origin` has a branch of the same name (from the last fetch); null without an `origin`. */
+  onOrigin: z.boolean().nullable(),
+});
+export type ProjectBranchDto = z.infer<typeof ProjectBranchDtoSchema>;
+
+/** GET `/api/projects/:id/branches`: the project's local branches, read from git when asked. */
+export const ProjectBranchesDtoSchema = z.object({
+  /** The checkout's branch; null on a detached HEAD or an unborn branch. */
+  current: GitBranchNameSchema.nullable(),
+  /** Whether the project has an `origin` remote (of any host). */
+  hasOrigin: z.boolean(),
+  /** Sorted by name; at most 500 (`truncated` when there were more). */
+  branches: z.array(ProjectBranchDtoSchema).max(500),
+  truncated: z.boolean(),
+});
+export type ProjectBranchesDto = z.infer<typeof ProjectBranchesDtoSchema>;
+
+/**
+ * POST `/api/projects/:id/branches` (CSRF; the owner's click only; ADR-0025 §8). Creates the local
+ * branch `name` at the tip of the local branch `from`, without switching the checkout; with `push`,
+ * pushes it to `origin`. Refused: 409 `branch_exists`, 404 `base_branch_missing`, 409 `no_origin`
+ * (push without an `origin`). Answers the new `ProjectBranchesDto`.
+ */
+export const CreateBranchRequestSchema = z.object({
+  name: GitBranchNameSchema,
+  from: GitBranchNameSchema,
+  push: z.boolean().optional(),
+});
+export type CreateBranchRequest = z.infer<typeof CreateBranchRequestSchema>;
