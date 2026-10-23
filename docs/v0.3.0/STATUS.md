@@ -273,3 +273,5 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   (`d53dbb2`+), finishes the server part, tests and the `--harness` driver dry run, and squashes the
   WIP. Then: back up the live database before 0010, full check and e2e, merge, restart the app, one
   consented real run.
+- 2026-10-23 **Resumed by the owner** ("we can resume now"). A new agent continues H-B/H-C on
+  `wp/h-bc-2` from `wp/h-bc-server-engine` (migration 0010, engine, the WIP server part).
