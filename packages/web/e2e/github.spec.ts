@@ -566,3 +566,189 @@ test('G-D: the pull request lines in the comments', async ({ page }) => {
   await expect(comments.locator('[data-kind="pr-merged"] code')).toHaveText(['main', '9c8b7a6']);
   await shootPart(page, 'pr-lines', 'activity');
 });
+
+// --- G-F (ADR-0025 §8): a project's branches, created from the app -------------------------------
+
+const BRANCHES_PATH = `/api/projects/${PROJECT_ID}/branches`;
+
+/**
+ * `GET`/`POST /api/projects/:id/branches` as the server answers them (CSRF checked): the list,
+ * and a create that adds the branch (on origin when pushed) and answers the new list.
+ */
+async function withBranches(
+  page: Page,
+  names: string[],
+  options: { current?: string; hasOrigin?: boolean; onOrigin?: string[] } = {},
+): Promise<Json[]> {
+  const hasOrigin = options.hasOrigin ?? true;
+  const current = options.current ?? names[0] ?? null;
+  const all = [...names];
+  const origin = new Set(options.onOrigin ?? []);
+  const list = (): Json => ({
+    current,
+    hasOrigin,
+    truncated: false,
+    branches: [...all].sort().map((name, i) => ({
+      name,
+      commit: String((i % 9) + 1).repeat(40),
+      current: name === current,
+      onOrigin: hasOrigin ? origin.has(name) : null,
+    })),
+  });
+  const posts: Json[] = [];
+  await page.route(`**${BRANCHES_PATH}`, async (route) => {
+    const req = route.request();
+    if (req.method() === 'POST') {
+      expect(req.headers()['x-acp-csrf']).toBe(CSRF);
+      const body = req.postDataJSON() as Json;
+      posts.push(body);
+      const name = String(body['name']);
+      all.push(name);
+      if (body['push'] === true) origin.add(name);
+      await route.fulfill({ status: 201, json: list() });
+      return;
+    }
+    await route.fulfill({ json: list() });
+  });
+  return posts;
+}
+
+test('G-F: Settings lists the branches and creates one; a missing base offers Create it', async ({
+  page,
+}) => {
+  await withFixtureProject(page);
+  await withSetup(
+    page,
+    setupFixture({
+      branching: { ...githubFlowStrategy(), preset: 'custom', baseBranch: 'develop' },
+    }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: fixtureProject() }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/context-candidates`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  const posts = await withBranches(page, ['main', 'feature/search'], { onOrigin: ['main'] });
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+
+  const card = page.getByTestId('settings-branches');
+  const rows = card.getByTestId('branch-row');
+  await expect(rows).toHaveCount(2);
+  const main = rows.filter({ hasText: 'main' });
+  await expect(main.getByTestId('branch-current')).toHaveText('Current');
+  await expect(main.getByTestId('branch-on-origin')).toHaveText('On GitHub');
+  // Sorted by name, main is the second row: its fixture commit is 2222….
+  await expect(main).toContainText('2222222');
+  await shootPart(page, 'branches', 'settings-branches');
+
+  // New branch: a bad name is said as typed; a good one is created from main and pushed.
+  const form = card.getByTestId('branch-new');
+  const name = form.getByLabel('Name', { exact: true });
+  await name.fill('bad name');
+  await name.blur();
+  await expect(form).toContainText('Use letters, digits');
+  await name.fill('release/2.0');
+  await expect(form.getByLabel('From', { exact: true })).toHaveValue('main');
+  await expect(form.getByLabel('Also push to GitHub')).toBeChecked();
+  await form.getByRole('button', { name: 'Create branch' }).click();
+  await expect(form.getByTestId('branch-created')).toHaveText(
+    'Created release/2.0 and pushed it to origin.',
+  );
+  await expect(rows).toHaveCount(3);
+  await expect(
+    rows.filter({ hasText: 'release/2.0' }).getByTestId('branch-on-origin'),
+  ).toBeVisible();
+
+  // The strategy's base branch, develop, isn't in the folder: Create it.
+  const strategy = page.getByTestId('settings-branching');
+  const note = strategy.getByTestId('branching-base-missing');
+  await expect(note).toContainText('develop isn’t a branch in the project folder yet.');
+  await note.getByRole('button', { name: 'Create it' }).click();
+  const create = note.getByRole('button', { name: 'Create develop from main' });
+  await expect(create).toBeFocused();
+  await shootPart(page, 'branching-missing', 'settings-branching');
+  await note.getByLabel('Also push to GitHub').uncheck();
+  await create.click();
+  await expect(strategy.getByTestId('branching-base-missing-created')).toHaveText(
+    'Created develop.',
+  );
+  expect(posts).toEqual([
+    { name: 'release/2.0', from: 'main', push: true },
+    { name: 'develop', from: 'main' },
+  ]);
+});
+
+test('G-F: Start refused for a missing target creates it, then starts once more', async ({
+  page,
+  request,
+}) => {
+  const demoId = await demoApi(request);
+  await withFixtureProject(page);
+  await withSetup(
+    page,
+    setupFixture({ branching: { ...githubFlowStrategy(), defaultTargetBranch: 'dev' } }),
+  );
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  const card: Json = {
+    ...createdTicket({ title: 'Saved searches' }),
+    status: 'READY',
+    stage: 'READY',
+    activeHelpers: 0,
+    budgetTokensUsed: null,
+    needsYou: 0,
+    latestEstimatedCost: null,
+    lastActivityAt: null,
+    lastRunOutcome: null,
+  };
+  await page.route(`**/api/board?projectId=${PROJECT_ID}`, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set('projectId', demoId);
+    const real = (await (await route.fetch({ url: url.toString() })).json()) as Json;
+    const stages = ['BACKLOG', 'READY', 'WORKING', 'NEEDS_YOU', 'IN_REVIEW', 'DONE'];
+    await route.fulfill({
+      json: {
+        ...real,
+        project: { ...(real['project'] as object), ...fixtureProject() },
+        projectKey: 'WEB',
+        columns: stages.map((stage) => ({ stage, tickets: stage === 'READY' ? [card] : [] })),
+      },
+    });
+  });
+  const posts = await withBranches(page, ['main']);
+  let starts = 0;
+  await page.route('**/api/tickets/t-30/start', async (route) => {
+    expect(route.request().headers()['x-acp-csrf']).toBe(CSRF);
+    starts += 1;
+    if (starts === 1) {
+      await route.fulfill({
+        status: 409,
+        json: {
+          error: {
+            code: 'target_branch_missing',
+            message: 'The target branch dev does not exist in the project; create it locally first',
+            requestId: 'e2e',
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: ghReviewScenario().routes[`/api/tickets/${LOOP_TICKET_ID}`] });
+  });
+  await page.goto(`/#/p/${PROJECT_ID}/board`);
+  await page.getByRole('button', { name: 'Move WEB-30' }).click();
+  await page.getByRole('menuitem', { name: 'Start (the lead agent plans it)' }).click();
+  const fix = page.getByTestId('start-fix');
+  await expect(fix).toContainText('dev isn’t a branch in the project folder yet.');
+  await expect(page.getByRole('alert').first()).toContainText("WEB-30 didn't start.");
+  await expect(fix.getByLabel('Also push to GitHub')).toBeChecked();
+  await shootPart(page, 'start-fix', 'start-fix');
+  await fix.getByRole('button', { name: 'Create dev from main' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Started WEB-30. The lead agent is planning it.' }),
+  ).toBeVisible();
+  await expect(fix).toHaveCount(0);
+  expect(posts).toEqual([{ name: 'dev', from: 'main', push: true }]);
+  expect(starts).toBe(2);
+});

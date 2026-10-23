@@ -3565,6 +3565,8 @@ export const CODE_HOST_CONNECT_COPY = {
     public: 'Public',
     publicHint: 'Anyone on the internet can see it.',
     push: 'Push the current branch now',
+    /** G-F: the same, once the project's branches say which branch it is. */
+    pushNamed: (branch: string) => `Push ${branch} now`,
     pushHint:
       'Sends the branch the project folder is on, so GitHub has your code. A branch without commits is not pushed.',
     /** "Creates github.com/you/web-app as a private repository and sets it as origin." */
@@ -3573,8 +3575,10 @@ export const CODE_HOST_CONNECT_COPY = {
       name: string,
       visibility: 'private' | 'public',
       push: boolean,
+      /** G-F: the branch that is pushed, when known. */
+      branch?: string | null,
     ) =>
-      `Creates github.com/${owner ?? 'you'}/${name} as a ${visibility} repository and sets it as origin${push ? ', then pushes the current branch' : ''}.`,
+      `Creates github.com/${owner ?? 'you'}/${name} as a ${visibility} repository and sets it as origin${push ? `, then pushes ${branch ?? 'the current branch'}` : ''}.`,
     button: 'Create repository',
     busy: 'Creating…',
     errors: {
@@ -3635,6 +3639,82 @@ export const TICKET_BRANCH_COPY = {
   created: 'The run created this branch. Its name and target stay as they are for this run.',
   actualBranch: 'Name',
   actualTarget: 'Target',
+} as const;
+
+/** The refusals of creating a branch (G-F), worded by the web. */
+export type ProjectBranchErrorCode =
+  | 'branch_exists'
+  | 'base_branch_missing'
+  | 'no_origin'
+  | 'invalid_branch_name'
+  | 'not_a_git_repository'
+  | 'code_host_unavailable'
+  | 'invalid_request';
+
+/** G-F (ADR-0025 §8): a project's local branches, and creating one on the owner's click. */
+export const PROJECT_BRANCHES_COPY = {
+  card: {
+    title: 'Local branches',
+    description: 'The branches in the project folder. Create one here to use it as a target.',
+    tip: 'Read from git when you open this page; the app doesn’t fetch. A new branch starts at the tip of the branch you pick. The project folder stays on its branch and no file changes.',
+  },
+  loading: 'Reading the branches…',
+  loadFailed: 'The branches couldn’t be read.',
+  refresh: 'Refresh',
+  refreshing: 'Refreshing…',
+  empty: 'This project has no branches yet. Make a first commit in the project folder.',
+  /** "12 branches" over the list. */
+  count: (n: number) => `${n} ${n === 1 ? 'branch' : 'branches'}`,
+  truncated: 'Only the first 500 branches are shown.',
+  listLabel: 'Local branches',
+  current: 'Current',
+  currentTip: 'The project folder is on this branch.',
+  onOrigin: (github: boolean) => (github ? 'On GitHub' : 'On origin'),
+  onOriginTip: 'origin has a branch of this name (as of your last fetch).',
+  commitLabel: (commit: string) => `Commit ${commit}`,
+  newTitle: 'New branch',
+  name: 'Name',
+  nameHint: 'For example dev, release/2.0 or feature/search.',
+  nameMissing: 'Enter a branch name.',
+  nameExists: 'A branch with this name already exists.',
+  from: 'From',
+  fromHint: 'The new branch starts at this branch’s latest commit.',
+  /** The push checkbox: "Also push to GitHub", or to origin when it isn't on GitHub. */
+  push: (github: boolean) => (github ? 'Also push to GitHub' : 'Also push to origin'),
+  pushHint: 'Sends the new branch to origin right after it is created.',
+  create: 'Create branch',
+  /** The one-click form: "Create dev from main". */
+  createFrom: (name: string, from: string) => `Create ${name} from ${from}`,
+  busy: 'Creating…',
+  /** Read out once the branch exists. */
+  created: (name: string, pushed: boolean) =>
+    pushed ? `Created ${name} and pushed it to origin.` : `Created ${name}.`,
+  noBase: 'There is no local branch to start from yet.',
+  failed: 'The branch wasn’t created.',
+  errors: {
+    branch_exists: 'A branch with this name already exists, so nothing was changed.',
+    base_branch_missing:
+      'The branch to start from isn’t in the project folder any more. Refresh and pick another.',
+    no_origin:
+      'This project has no origin remote, so the branch can’t be pushed. Create it without pushing.',
+    invalid_branch_name: 'Git doesn’t accept this name. Try a simpler one, for example dev.',
+    not_a_git_repository: 'The project folder isn’t a git repository, so it has no branches.',
+    code_host_unavailable: 'This server can’t read the project’s branches.',
+    invalid_request: 'The app couldn’t send that. Check the name, then try again.',
+  } satisfies Record<ProjectBranchErrorCode, string>,
+  /** Start refused because the target is missing (`target_branch_missing`). */
+  missing: {
+    text: (target: string) =>
+      `${target} isn’t a branch in the project folder yet. Create it, and the ticket starts again.`,
+    exists: (target: string) => `${target} exists now.`,
+    startAgain: 'Start again',
+  },
+  /** The strategy form's warning under a branch field. */
+  strategyMissing: (name: string) => `${name} isn’t a branch in the project folder yet.`,
+  createIt: 'Create it',
+  /** The ticket's target field. */
+  targetListLabel: 'Local branches',
+  targetMissing: (name: string) => `${name} isn’t a branch in the project folder yet.`,
 } as const;
 
 export const PULL_REQUEST_COPY = {

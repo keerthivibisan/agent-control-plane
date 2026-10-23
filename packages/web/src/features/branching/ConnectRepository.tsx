@@ -8,6 +8,7 @@ import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { Segmented } from '../../components/Segmented';
 import {
   ApiError,
+  branchPaths,
   codeHostPaths,
   connectCodeHostRepository,
   createCodeHostRepository,
@@ -18,6 +19,7 @@ import {
 import { CODE_HOST_CONNECT_COPY } from '../../lib/copy';
 import { useApiQuery, useQueryStore } from '../../lib/query';
 import { alertClass } from '../control/bits';
+import { useProjectBranches } from './Branches';
 import { checkCreateRepo, connectErrorText, defaultRepoName } from './code-host';
 
 const C = CODE_HOST_CONNECT_COPY;
@@ -59,7 +61,9 @@ function useConnectAction<A extends unknown[]>(
       } catch (e) {
         setState({ pending: false, error: toApiError(e) });
       } finally {
-        store.invalidate((key) => key === statusPath);
+        // G-F: a push now also changes which branches are on origin.
+        const branchesPath = branchPaths.list(projectId);
+        store.invalidate((key) => key === statusPath || key === branchesPath);
       }
     },
     [store, fn, projectId, onDone],
@@ -119,6 +123,8 @@ function CreateForm({
   const [owner, setOwner] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [push, setPush] = useState(true);
+  // G-F: the branch the project folder is on, so the checkbox can name it ("Push main now").
+  const current = useProjectBranches(projectId).data?.current ?? null;
   const [touched, setTouched] = useState({ name: false, owner: false, submit: false });
   const action = useConnectAction(projectId, createCodeHostRepository, onDone);
   const check = checkCreateRepo({ name, owner, visibility, push });
@@ -244,7 +250,7 @@ function CreateForm({
         />
         <span className="flex flex-col">
           <label htmlFor={ids.push} className={labelClass}>
-            {C.create.push}
+            {current === null ? C.create.push : C.create.pushNamed(current)}
           </label>
           <span id={`${ids.push}-hint`} className={hintClass}>
             {C.create.pushHint}
@@ -263,6 +269,7 @@ function CreateForm({
             check.request.name,
             visibility,
             push,
+            current,
           )}
         </p>
       ) : null}

@@ -1,15 +1,17 @@
 import type { BranchStrategy } from '@acp/core';
 import type { TicketDetailDto } from '@acp/core/api';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { InfoTip } from '../../components/InfoTip';
+import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { projectSetupPaths, projectSetupSchemas, updateTicket } from '../../lib/api';
-import { TICKET_BRANCH_COPY } from '../../lib/copy';
+import { PROJECT_BRANCHES_COPY, TICKET_BRANCH_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { ActionError } from '../control/bits';
 import { TextField } from '../project-setup/fields';
 import { useTicketAction } from '../ticket/actions';
+import { MissingBranchNote, useProjectBranches } from './Branches';
 import {
   draftFromPrefs,
   hasTicketBranchErrors,
@@ -21,6 +23,7 @@ import {
 } from './ticket-branch';
 
 const C = TICKET_BRANCH_COPY;
+const B = PROJECT_BRANCHES_COPY;
 
 export interface BranchDefaults {
   strategy: BranchStrategy | undefined;
@@ -50,19 +53,92 @@ export function targetPlaceholder(defaults: BranchDefaults | null): string {
 }
 
 /**
+ * G-F (ADR-0025 §8): the target field as a combobox of the project's local branches (a native
+ * `<datalist>`, so any name can still be typed), and when the typed branch doesn't exist yet,
+ * "Create it" right under it.
+ */
+function TargetCombobox({
+  projectId,
+  value,
+  onChange,
+  error,
+  placeholder,
+  preferredBase,
+}: {
+  projectId: string;
+  value: string;
+  onChange: (v: string) => void;
+  error: string | undefined;
+  placeholder: string | null;
+  preferredBase: string | undefined;
+}) {
+  const id = useId();
+  const branches = useProjectBranches(projectId);
+  const typed = value.trim();
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>
+        {C.target}
+      </label>
+      <input
+        id={id}
+        list={`${id}-list`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? undefined}
+        spellCheck={false}
+        autoComplete="off"
+        aria-invalid={error !== undefined ? true : undefined}
+        aria-describedby={error !== undefined ? `${id}-hint ${id}-error` : `${id}-hint`}
+        className={inputClass('font-mono')}
+        data-testid="ticket-branch-target-input"
+      />
+      <datalist id={`${id}-list`} aria-label={B.targetListLabel}>
+        {(branches.data?.branches ?? []).map((b) => (
+          <option key={b.name} value={b.name} />
+        ))}
+      </datalist>
+      <span id={`${id}-hint`} className={hintClass}>
+        {C.targetHint}
+      </span>
+      {error !== undefined ? (
+        <span id={`${id}-error`} role="alert" className="text-caption font-medium text-danger">
+          {error}
+        </span>
+      ) : typed !== '' ? (
+        <MissingBranchNote
+          key={typed}
+          projectId={projectId}
+          name={typed}
+          preferredBase={preferredBase}
+          testId="ticket-branch-target-missing"
+          direct
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * The two fields (ADR-0025 §4), validated as typed. Placeholders show what an empty field
- * follows: the name the project would give and its target branch.
+ * follows: the name the project would give and its target branch. With `projectId` (a ticket's
+ * branch settings), the target offers the project's local branches and can create a missing one.
  */
 export function TicketBranchInputs({
   draft,
   onChange,
   namePlaceholder,
   targetPlaceholder,
+  projectId,
+  preferredBase,
 }: {
   draft: TicketBranchDraft;
   onChange: (next: TicketBranchDraft) => void;
   namePlaceholder: string | null;
   targetPlaceholder: string | null;
+  projectId?: string | undefined;
+  /** Where a created target starts by default when it exists: the strategy's base branch. */
+  preferredBase?: string | undefined;
 }) {
   const errors = validateTicketBranch(draft);
   return (
@@ -76,15 +152,26 @@ export function TicketBranchInputs({
         placeholder={namePlaceholder ?? undefined}
         mono
       />
-      <TextField
-        label={C.target}
-        hint={C.targetHint}
-        error={errors.target}
-        value={draft.target}
-        onChange={(v) => onChange({ ...draft, target: v })}
-        placeholder={targetPlaceholder ?? undefined}
-        mono
-      />
+      {projectId === undefined ? (
+        <TextField
+          label={C.target}
+          hint={C.targetHint}
+          error={errors.target}
+          value={draft.target}
+          onChange={(v) => onChange({ ...draft, target: v })}
+          placeholder={targetPlaceholder ?? undefined}
+          mono
+        />
+      ) : (
+        <TargetCombobox
+          projectId={projectId}
+          value={draft.target}
+          onChange={(v) => onChange({ ...draft, target: v })}
+          error={errors.target}
+          placeholder={targetPlaceholder}
+          preferredBase={preferredBase}
+        />
+      )}
     </div>
   );
 }
@@ -209,6 +296,8 @@ export function TicketBranchSection({
               onChange={setDraft}
               namePlaceholder={name}
               targetPlaceholder={targetPlaceholder(defaults)}
+              projectId={ticket.projectId}
+              preferredBase={defaults?.strategy?.baseBranch}
             />
             <ActionError error={save.error} message={C.failed} />
             <div className="flex flex-wrap justify-end gap-2">

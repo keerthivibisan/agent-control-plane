@@ -5,6 +5,7 @@ import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { AlertIcon, CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
 import { ApprovalsIcon } from '../review-loop/icons';
+import { BranchesCard } from '../branching/Branches';
 import { BranchingFields } from '../branching/BranchingFields';
 import { CodeHostCard, useCodeHost } from '../branching/CodeHostCard';
 import {
@@ -177,6 +178,7 @@ function SettingsForm({
           }}
           projectKey={draft.projectKey}
           defaultBranch={host.data?.defaultBranch ?? undefined}
+          projectId={project.id}
         />
       </Card>
       <ActionError error={save.error} message={S.saveFailed} />
@@ -270,6 +272,7 @@ function SettingsBody({ project }: { project: ProjectDto }) {
           {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
         </QueryView>
         <CodeHostCard projectId={id} />
+        <BranchesCard projectId={id} />
         <Card title={S.elsewhere.title} testId="settings-elsewhere">
           <ul className="-my-3 flex flex-col divide-y divide-line">
             <MovedRow

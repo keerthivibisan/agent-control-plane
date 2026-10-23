@@ -19,6 +19,7 @@ import {
 import { href } from '../../lib/router';
 import { hasNewCommits } from '../branching/code-host';
 import { projectBranchName, projectTarget } from '../branching/ticket-branch';
+import { MissingTargetFix } from '../branching/Branches';
 import { useBranchDefaults } from '../branching/TicketBranchFields';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
 import { BranchIcon, OptionsIcon } from '../review-loop/icons';
@@ -66,10 +67,12 @@ function StartButton({
   ticket,
   kind,
 }: {
-  ticket: Pick<TicketDto, 'id' | 'key' | 'projectId' | 'runOptions'>;
+  ticket: Pick<TicketDto, 'id' | 'key' | 'projectId' | 'runOptions' | 'branch'>;
   kind: 'start' | 'rerun';
 }) {
   const start = useTicketAction(rerunTicket);
+  // G-F: a refusal for a missing target branch offers to create it, then starts once more.
+  const branchDefaults = useBranchDefaults(ticket.projectId);
   // ADR-0021: "Options" opens the Start dialog for this run's own settings; Start stays one click.
   const withOptions = useTicketAction(rerunTicket);
   const [dialog, setDialog] = useState(false);
@@ -104,6 +107,13 @@ function StartButton({
         </Button>
       </div>
       <ActionError error={start.error} message={C.actions.startFailed} />
+      <MissingTargetFix
+        projectId={ticket.projectId}
+        ticketBranch={ticket.branch}
+        strategy={branchDefaults?.strategy}
+        error={start.error}
+        onRetry={() => void start.run(ticket.id)}
+      />
       {dialog ? (
         <StartDialog
           projectId={ticket.projectId}

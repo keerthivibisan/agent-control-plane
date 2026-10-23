@@ -93,6 +93,8 @@ import {
 } from '@acp/core/api';
 // Connecting a project to GitHub from Settings (G-E, ADR-0025 §7).
 import { ConnectRepositoryRequestSchema, CreateRepositoryRequestSchema } from '@acp/core/api';
+// A project's branches: list and create (G-F, ADR-0025 §8).
+import { CreateBranchRequestSchema, ProjectBranchesDtoSchema } from '@acp/core/api';
 // Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026).
 import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
 
@@ -1248,6 +1250,38 @@ export function connectCodeHostRepository(
     path,
     checked(ConnectRepositoryRequestSchema, input, path),
     codeHostSchemas.status,
+  );
+}
+
+// --- A project's branches (G-F, ADR-0025 §8) ----------------------------------------------------
+//
+// GET /api/projects/:id/branches → ProjectBranchesDto: the local branches, read from git when
+// asked (no fetch), with the current one and which are on origin. POST the same path (CSRF; the
+// owner's click only) with a CreateBranchRequest creates `name` at the tip of the local `from`
+// without switching the checkout, and pushes it when asked; it answers the new list. Refusals:
+// 409 `branch_exists`, 404 `base_branch_missing`, 409 `no_origin`, 422 `invalid_branch_name`.
+
+export type CreateBranchRequest = ReturnType<typeof CreateBranchRequestSchema.parse>;
+
+export const branchPaths = {
+  list: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/branches`,
+} as const;
+
+export const branchSchemas = {
+  list: ProjectBranchesDtoSchema,
+} as const;
+
+export function createProjectBranch(
+  client: ApiClient,
+  projectId: string,
+  input: CreateBranchRequest,
+) {
+  const path = branchPaths.list(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(CreateBranchRequestSchema, input, path),
+    branchSchemas.list,
   );
 }
 

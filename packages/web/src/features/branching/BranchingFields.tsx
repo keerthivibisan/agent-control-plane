@@ -1,9 +1,11 @@
+import { isSafeBranchName } from '@acp/core';
 import { useId } from 'react';
 import { BranchIcon } from '../review-loop/icons';
 import { InfoTip } from '../../components/InfoTip';
 import { labelClass } from '../../components/Input';
 import { BRANCHING_COPY, TICKET_TYPE_COPY, type BranchingChoiceKey } from '../../lib/copy';
 import { ChoiceCards, TextField } from '../project-setup/fields';
+import { MissingBranchNote } from './Branches';
 import {
   BRANCHING_CHOICES,
   TICKET_TYPES,
@@ -62,6 +64,7 @@ export function BranchingFields({
   onChange,
   projectKey,
   defaultBranch,
+  projectId,
 }: {
   draft: BranchingDraft;
   errors: BranchingErrors;
@@ -69,10 +72,28 @@ export function BranchingFields({
   projectKey: string;
   /** The repository's default branch when known (GitHub's), for the presets; else `main`. */
   defaultBranch?: string | undefined;
+  /**
+   * G-F (ADR-0025 §8): in Settings, the project, so a base or target branch the project folder
+   * doesn't have gets a warning with "Create it". The new-project wizard has none yet.
+   */
+  projectId?: string | undefined;
 }) {
   const name = useId();
   const locked = isLocked(draft.choice);
   const set = (patch: Partial<BranchingDraft>) => onChange({ ...draft, ...patch });
+  const base = draft.baseBranch.trim();
+  const target = draft.defaultTargetBranch.trim();
+  /** A warning only for a name that is valid as typed (else the field's own error shows). */
+  const missingNote = (value: string, error: string | undefined, testId: string, from?: string) =>
+    projectId !== undefined && error === undefined && isSafeBranchName(value) ? (
+      <MissingBranchNote
+        key={value}
+        projectId={projectId}
+        name={value}
+        preferredBase={from}
+        testId={testId}
+      />
+    ) : null;
   return (
     <div className="flex flex-col gap-6" data-testid="branching-fields" data-choice={draft.choice}>
       <ChoiceCards<BranchingChoiceKey>
@@ -93,24 +114,33 @@ export function BranchingFields({
       ) : (
         <>
           <div className="grid gap-6 sm:grid-cols-2">
-            <TextField
-              label={C.baseBranch}
-              hint={C.baseBranchHint}
-              error={errors.baseBranch}
-              value={draft.baseBranch}
-              onChange={(v) => set({ baseBranch: v })}
-              placeholder="main"
-              mono
-            />
-            <TextField
-              label={C.targetBranch}
-              hint={C.targetBranchHint}
-              error={errors.defaultTargetBranch}
-              value={draft.defaultTargetBranch}
-              onChange={(v) => set({ defaultTargetBranch: v })}
-              placeholder="main"
-              mono
-            />
+            <div className="flex min-w-0 flex-col gap-3">
+              <TextField
+                label={C.baseBranch}
+                hint={C.baseBranchHint}
+                error={errors.baseBranch}
+                value={draft.baseBranch}
+                onChange={(v) => set({ baseBranch: v })}
+                placeholder="main"
+                mono
+              />
+              {missingNote(base, errors.baseBranch, 'branching-base-missing')}
+            </div>
+            <div className="flex min-w-0 flex-col gap-3">
+              <TextField
+                label={C.targetBranch}
+                hint={C.targetBranchHint}
+                error={errors.defaultTargetBranch}
+                value={draft.defaultTargetBranch}
+                onChange={(v) => set({ defaultTargetBranch: v })}
+                placeholder="main"
+                mono
+              />
+              {/* Same name as the base: one warning is enough, under the base. */}
+              {target === base
+                ? null
+                : missingNote(target, errors.defaultTargetBranch, 'branching-target-missing', base)}
+            </div>
           </div>
           <TextField
             label={C.template}
