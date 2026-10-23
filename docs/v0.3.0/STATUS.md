@@ -291,3 +291,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   The helper passed the fast check at once, so the failure route was not exercised in the real run
   (covered by tests and the dry run). See `docs/research/h-v-real-run-2026-10-23.md`; temp data
   deleted. **The harness part (part 5) is done.** The owner is running the GitHub push and PR tests.
+- 2026-10-23 **G-E started** (owner: "Cant we bring this in our ACP plane project settings UI to
+  configure github there"; "yes, build it now in 0.3.0"). The Settings GitHub card guides `gh`
+  install and login, and on the owner's click creates a repository on GitHub or connects an
+  existing one as `origin`, optionally pushing the current branch. Contract (`CreateRepository`,
+  `ConnectRepository`, `parseGitHubRepository`) and ADR-0025 §7 done by the coordinator.
