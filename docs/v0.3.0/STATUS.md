@@ -275,3 +275,13 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   consented real run.
 - 2026-10-23 **Resumed by the owner** ("we can resume now"). A new agent continues H-B/H-C on
   `wp/h-bc-2` from `wp/h-bc-server-engine` (migration 0010, engine, the WIP server part).
+- 2026-10-23 **H-B and H-C merged** (`f4ebe72`). Setup runs in each new helper's or tester's
+  worktree before it starts and in fresh check checkouts (tip, main), never in the owner's checkout
+  or for reading roles; a network step is refused while "Setup may use the network" is off; a failed
+  setup stops the agent with the reason and output tail to the lead and the ticket; `outputs` never
+  reach a change or commit. Checks blocks run at their places (change before review with failure
+  routes helper/lead/owner; the merge block's selection; the branch block on the tip, shown, while
+  the owner's merge gates on required checks). Migration 0010. Old graphs' golden traces unchanged.
+  Real-run driver `--harness` (dry run passes). Coordinator fix: setup refuses any folder inside the
+  project checkout (`f4ebe72`, test). Live database backed up before 0010
+  (`backups/acp-before-0010-20261023-161801.sqlite`). Coordinator check: 5,234 tests; e2e 103/103.
