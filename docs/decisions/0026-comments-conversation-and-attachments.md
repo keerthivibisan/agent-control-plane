@@ -45,6 +45,11 @@
      `nosniff`.
    - **Agents:** they read them as read-only copies outside the owner's checkout and never commit
      them; their brief lists them by name.
+     - Helpers, testers and reviewers get them in `.acp-attachments/` in their own worktree or
+       checkout. The app never stages that folder, and refuses a branch whose history touched it.
+     - **Amended 2026-10-22 (owner approval after the C-V real run):** the lead and the planner
+       get theirs in the run's data folder, one folder per agent, and may read there without
+       asking (`ManagedAgentSpec.readOnlyDirs`, reads only).
 5. **Merged diffs.** After a merge, "Files changed" is read-only, built from the recorded commits.
    Diffs are still never stored.
 
