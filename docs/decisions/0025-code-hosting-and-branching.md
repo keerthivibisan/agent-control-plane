@@ -93,6 +93,26 @@ The web shows diffs with one shared viewer:
 
 Diffs are still read from git when shown and never stored (ADR-0009).
 
+### 7. Connecting a project from Settings (amended 2026-10-23, owner: "Cant we bring this in our ACP plane project settings UI to configure github there"; "yes, build it now in 0.3.0")
+
+- **The login stays the owner's.** `gh auth login` is interactive and handles credentials, so the
+  app never runs it. The Settings card shows the command and a Check again button.
+- **Create a repository:** on the owner's click, the app runs `gh repo create <owner>/<name>
+--private|--public` (no `--source`, no `--push`), then `git remote add origin <address>` in the
+  project's checkout. With "push my branch now", it then runs `git push --no-verify -u origin
+<current branch>`.
+- **Connect an existing repository:** on the owner's click, `git remote add origin <address>`, and
+  nothing is pushed.
+- **What may be written:** one `origin` remote in the project's own `.git/config`, only when there
+  is none yet (409 `origin_exists` otherwise; the app never changes or removes a remote). This is
+  the only change the app makes to the owner's checkout outside the merges the owner clicks.
+- **Inputs:** names and addresses are checked with `GitHubOwnerSchema`, `GitHubRepoNameSchema` and
+  `parseGitHubRepository` (github.com only; no user, port, query or extra path). The address the
+  app writes is rebuilt from the parsed owner and name (`gitHubRemoteUrl`), never the typed text.
+- **Commands:** argument arrays only, with `GIT_TERMINAL_PROMPT=0`, `GH_PROMPT_DISABLED=1`, a time
+  limit and hooks disabled, as in §1. `gh`'s output is not shown or kept beyond a plain error
+  sentence.
+
 ## Consequences
 
 - **Network:** the app makes network calls for the first time beyond `claude`, only on the owner's
