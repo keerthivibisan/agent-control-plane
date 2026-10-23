@@ -291,3 +291,30 @@ export const ProjectTokensDtoSchema = z.object({
   byModel: z.array(z.object({ model: z.string().min(1), ...UsageRowBase })),
 });
 export type ProjectTokensDto = z.infer<typeof ProjectTokensDtoSchema>;
+
+/**
+ * GET `/api/tickets/:id/totals`: how long the ticket took and the tokens its runs used (v0.3.0
+ * T-A). Tokens sum the DIRECT usage of the ticket's agent sessions, as the Tokens page's
+ * `byTicket` does. No cost: provider-reported costs are never added up (ADR-0014).
+ */
+export const TicketTotalsDtoSchema = z.object({
+  ticketId: z.string().min(1),
+  /** The first run's start; null before any run. */
+  startedAt: IsoTimestampSchema.nullable(),
+  /** When the ticket was done or closed; null while it is open. */
+  finishedAt: IsoTimestampSchema.nullable(),
+  /** `finishedAt` (or now, while open) minus `startedAt`; null before any run. */
+  elapsedMs: count.nullable(),
+  runs: z.array(
+    z.object({
+      runId: z.string().min(1),
+      startedAt: IsoTimestampSchema,
+      endedAt: IsoTimestampSchema.nullable(),
+      /** Null while the run is live. */
+      durationMs: count.nullable(),
+    }),
+  ),
+  usage: UsageTotalsDtoSchema,
+  headline: TokenHeadlineDtoSchema,
+});
+export type TicketTotalsDto = z.infer<typeof TicketTotalsDtoSchema>;

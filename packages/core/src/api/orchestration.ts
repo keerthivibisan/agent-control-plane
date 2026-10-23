@@ -183,6 +183,12 @@ export const TicketBranchDtoSchema = z.object({
   mergedCommit: GitCommitSchema.nullable(),
   /** ADR-0025: the pull request raised for this branch, if any. Absent from servers before it. */
   pullRequest: PullRequestDtoSchema.nullable().optional(),
+  /**
+   * ADR-0025 §9: whether the ticket branch still exists in the project (`refs/heads`). Absent from
+   * servers before it. POST `/api/tickets/:id/branch/delete` (CSRF; the owner's click only)
+   * deletes it there and on `origin`, once the branch is merged or discarded.
+   */
+  localExists: z.boolean().optional(),
   createdAt: IsoTimestampSchema,
   updatedAt: IsoTimestampSchema,
 });

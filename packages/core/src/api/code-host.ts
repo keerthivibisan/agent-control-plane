@@ -51,6 +51,11 @@ export const PullRequestDtoSchema = z.object({
    * before it; null when unknown.
    */
   pushedCommit: GitCommitSchema.nullable().optional(),
+  /**
+   * ADR-0025 §9: whether the head branch still exists on `origin`, as last read (on the owner's
+   * view, Refresh, or after a merge or delete). Null when unknown; absent from servers before it.
+   */
+  headOnOrigin: z.boolean().nullable().optional(),
 });
 export type PullRequestDto = z.infer<typeof PullRequestDtoSchema>;
 
@@ -185,3 +190,19 @@ export const CreateBranchRequestSchema = z.object({
   push: z.boolean().optional(),
 });
 export type CreateBranchRequest = z.infer<typeof CreateBranchRequestSchema>;
+
+// ---------------------------------------------------------------- merging and deleting (G-G)
+
+export const PullRequestMergeMethodSchema = z.enum(['merge', 'squash', 'rebase']);
+export type PullRequestMergeMethod = z.infer<typeof PullRequestMergeMethodSchema>;
+
+/**
+ * POST `/api/tickets/:id/branch/pull-request/merge` (CSRF; the owner's click only; ADR-0025 §9).
+ * Merges the ticket's open pull request on GitHub with `method`; with `deleteBranch`, GitHub
+ * deletes the head branch and the app deletes its local ticket branch. Answers the ticket branch.
+ */
+export const MergePullRequestRequestSchema = z.object({
+  method: PullRequestMergeMethodSchema,
+  deleteBranch: z.boolean(),
+});
+export type MergePullRequestRequest = z.infer<typeof MergePullRequestRequestSchema>;
