@@ -156,6 +156,9 @@ Diffs are still read from git when shown and never stored (ADR-0009).
 - **Shown:** the ticket branch records its source when it differs from the target, and the ticket
   shows it ("from release/1.0").
 - The strategy's `baseBranch` stays a protected long-lived branch, as before.
+- **Storage:** migration 0011 (additive) adds `ticket_branches.source_branch` (null when the branch
+  started from its target, and for rows from before it). The live database is backed up before
+  it is applied.
 
 ### 11. Where the owner's pushes go (amended 2026-10-24, F-2)
 

@@ -3441,7 +3441,7 @@ export const BRANCHING_COPY = {
   card: {
     title: 'Branches',
     description: 'How ticket branches are named, where they start and where the work goes back.',
-    tip: 'Each ticket’s work happens on its own branch, created from its target branch when you approve the plan. A change here applies to plans you approve from now on.',
+    tip: 'Each ticket’s work happens on its own branch, created when you approve the plan: from the branch you choose to start from, or from its target branch. A change here applies to plans you approve from now on.',
   },
   choiceLabel: 'Branching strategy',
   choices: {
