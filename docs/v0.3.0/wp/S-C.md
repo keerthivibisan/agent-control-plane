@@ -6,7 +6,7 @@
 | -------- | -------------------------------------------------------------------------------------- |
 | Status   | review                                                                                 |
 | Branch   | `wp/s-c-human-comment`, rebased on `release/0.3.0` `249d668`                           |
-| Worktree | `/Users/grootan/Desktop/agent-control-plane/.claude/worktrees/agent-a0f8d98453fef2751` |
+| Worktree | `.claude/worktrees/agent-a0f8d98453fef2751` |
 
 Owner feedback (2026-10-21): "The comments are like what each phase did; we don't need that. We
 need a proper comment like humans write: we explored this, we added this feature and tested this,

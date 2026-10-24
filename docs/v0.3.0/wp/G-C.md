@@ -7,7 +7,7 @@
 | -------- | -------------------------------------------------------------------------------------- |
 | Status   | review                                                                                 |
 | Branch   | `wp/g-c-diff`, from `release/0.3.0` `de0a9fa`                                          |
-| Worktree | `/Users/grootan/Desktop/agent-control-plane/.claude/worktrees/agent-a1bf99d61762f6ba9` |
+| Worktree | `.claude/worktrees/agent-a1bf99d61762f6ba9` |
 
 ## Tasks
 
