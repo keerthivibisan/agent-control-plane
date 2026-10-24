@@ -448,3 +448,11 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   and start-from branch settings. Not yet approved: the download (ask again; use the CLI only in a
   git-ignored folder, never its Claude Code plugin or skills). Script on `wp/v-1-video` (draft 2).
   Release prep (R-3, `wp/r-3-b`) keeps running unless the owner says otherwise.
+- 2026-10-25 **R-3 merged** (`53620b8`): version 0.3.0 everywhere (the footer reads "Server
+  0.3.0"), the unused fontsource fonts removed, CHANGELOG [0.3.0] for users, README (status,
+  features, test counts) and fresh screenshots on demo data, BUILD, START, roadmap and the v0.3.0
+  release section. R-3's check: format ✓ lint ✓ typecheck ✓ build ✓; tests 5,835 ✓; e2e 111/111;
+  README screenshots 10/10. PR text and release notes in the coordinator worktree's
+  `.acp-data/{pr,release-notes}-v0.3.0.md`. AGENTS.md and HANDOFF.md point at v0.3.0.
+  **Release ready.** Waiting for the owner: push `release/0.3.0` again, open the PR, merge, tag.
+  The video's final cut waits (HyperFrames download not yet approved).
