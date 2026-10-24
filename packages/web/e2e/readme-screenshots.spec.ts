@@ -1,6 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { L_API, LOOP_TICKET_ID, PROJECT_ID } from './review-loop-fixtures.js';
+import {
+  CODE_HOST_PATH,
+  PROJECT_SETUP_PATH,
+  codeHost,
+  ghReviewScenario,
+  githubFlowStrategy,
+} from './github-fixtures.js';
+import { CSRF, L_API, LOOP_TICKET_ID, PROJECT_ID } from './review-loop-fixtures.js';
 import {
   demoApi,
   withBoard,
@@ -8,7 +15,8 @@ import {
   withLoopRun,
   withWorkflow,
 } from './shot-fixtures.js';
-import { WF_CSRF, agentFilesFixture } from './workflow-fixtures.js';
+import { fixtureProject } from './ticket-fixtures.js';
+import { WF_CSRF, agentFilesFixture, setupFixture } from './workflow-fixtures.js';
 
 /*
  * The README screenshots, saved to docs/images/. Runs only with ACP_README_SHOTS set and the
@@ -52,6 +60,35 @@ async function shoot(page: Page, name: string, o: ShotOptions = {}): Promise<voi
   }
   // The viewport, not fullPage: a full-page capture tears at the sticky top bar.
   await page.screenshot({ path: `${OUT}${name}.png` });
+}
+
+/**
+ * The synthetic project's setup with a GitHub flow strategy and a connected GitHub (`gh` ready),
+ * as github.spec.ts serves it: demo mode has no setup or code host of its own.
+ */
+async function withGitHub(page: Page): Promise<void> {
+  await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: CSRF } }));
+  await page.route(`**${PROJECT_SETUP_PATH}`, (route) =>
+    route.fulfill({ json: { ...setupFixture(), branching: githubFlowStrategy() } }),
+  );
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  // The project's local branches (GET only: the pictures never create one).
+  const names = ['develop', 'feature/WEB-21-saved-searches', 'main'];
+  await page.route(`**/api/projects/${PROJECT_ID}/branches`, (route) =>
+    route.fulfill({
+      json: {
+        current: 'main',
+        hasOrigin: true,
+        truncated: false,
+        branches: names.map((name, i) => ({
+          name,
+          commit: String(i + 1).repeat(40),
+          current: name === 'main',
+          onOrigin: name !== 'develop',
+        })),
+      },
+    }),
+  );
 }
 
 /** Three synthetic skill files for the Skills & Agents page. */
@@ -265,4 +302,60 @@ test('readme: skills and agent files', async ({ page }) => {
   await expect(h1(page)).toContainText('Skills & Agents');
   await expect(page.getByText('plan-tickets').first()).toBeVisible();
   await shoot(page, 'skills');
+});
+
+test('readme: the ticket page, ready for the final step', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-comments')).toHaveAttribute('aria-selected', 'true');
+  await shoot(page, 'ticket');
+  await shoot(page, 'ticket-dark', { scheme: 'dark' });
+});
+
+test('readme: Files changed, the review', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-files')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('src/search/api.ts').first()).toBeVisible();
+  await shoot(page, 'files-changed');
+  await shoot(page, 'files-changed-dark', { scheme: 'dark' });
+});
+
+test('readme: Conversation', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=conversation`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-conversation')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await shoot(page, 'conversation');
+});
+
+test('readme: project settings with GitHub and branching', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: fixtureProject() }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/context-candidates`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+  await expect(h1(page)).toContainText('Settings');
+  await expect(
+    page.getByTestId('settings-code-host').getByTestId('code-host-message'),
+  ).toBeVisible();
+  await expect(page.getByTestId('branches-list').getByText('develop')).toBeVisible();
+  const branching = page.getByTestId('settings-branching');
+  await expect(branching).toBeVisible();
+  await shoot(page, 'settings-github', { scrollTo: branching, height: 1300 });
 });
