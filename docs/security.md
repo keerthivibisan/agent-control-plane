@@ -166,7 +166,13 @@
   starting with `--` stays a title); a time limit per command (10 s to 60 s; `git push` 120 s);
   `GH_PROMPT_DISABLED=1`, `GIT_TERMINAL_PROMPT=0`, no pager, colour or update notices; inherited
   `GIT_*` variables dropped. `git push` disables hooks (`core.hooksPath=/dev/null`, `--no-verify`)
-  and is never forced: `refs/heads/<b>:refs/heads/<b>` with `--set-upstream`. The pull request's
+  and is never forced: `<commit>:refs/heads/<b>`, then the tracking ref and the upstream that
+  `--set-upstream origin` would set. **F-2:** every push for the owner (and the delete on origin)
+  goes to `origin`'s configured address, passed as the address, never as the remote name, so a
+  `remote.origin.pushurl` planted in the shared config is never used. The address must parse as a
+  repository address or be a local folder; `ext::` and `fd::` are off; a
+  `url.<x>.pushInsteadOf` rule that would rewrite it is refused (`code-host/push-target.ts`).
+  `url.<x>.insteadOf` still applies, as it does to the owner's own fetches. The pull request's
   body goes through a temporary file (mode 600, removed after the call).
 - **The `gh` login.** The app never reads, stores or sends a token. `gh --version` and `gh auth
 status --hostname=github.com` are judged by their exit code only; their output is dropped

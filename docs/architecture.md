@@ -187,7 +187,8 @@ See [security.md](security.md).
     working tree; refused when the target is checked out in another worktree.
   - **`code-host/`:** a `CodeHostService` over one provider interface (`CodeHostCli`; GitHub's
     `gh` now, GitLab's `glab` later): `status` (`origin` parsed to `owner/name`, `gh` by exit
-    code, the default branch from `gh repo view`), `push` (`git push --set-upstream`, never
+    code, the default branch from `gh repo view`), `push` (`git push` to `origin`'s own
+    address, never a planted push URL (F-2), then the tracking ref and upstream; never
     forced), `openPullRequest` (link the open one for the same base, refuse one for another base,
     else push and `gh pr create`) and `view`. A `CliRunner` (`execFile`, no shell, time limits, no
     prompts, stderr dropped) is injected; tests use a fake `gh` and a local bare `origin`.

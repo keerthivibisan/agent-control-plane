@@ -56,12 +56,14 @@ what the app did after the fault.
 ## Expected-failure policy: `knownGap`
 
 A case the app cannot meet today is written as `knownGap(fix, tag, title, body)` instead of `it`.
-`fix` names the work package expected to close it (`F-2` today). The wrapper behaves like this:
+`fix` names the work package expected to close it (there are none open since F-2). The wrapper
+behaves like this:
 
 - It **passes** while the body fails with a message carrying `[tag]`. That means the gap is still
   open, and it breaks the invariant the test names.
 - It **fails** if the body passes. The message says the gap is closed: make it a plain `it()` and
-  update this page. This forces the update when the fix merges (F-1 flipped 52 of them).
+  update this page. This forces the update when the fix merges (F-1 flipped 52 of them, F-2 the
+  last 12).
 - It **fails** if the body throws anything else, such as a broken setup or another invariant.
   `it.fails` would hide those, which is why the suite does not use it.
 
@@ -96,24 +98,40 @@ moved outside the app, the check expects these steps:
 
 The finish then continues as before.
 
-## Known gaps on `release/0.3.0` after F-1 (12, all `F-2`)
+## Closed by F-2 (2026-10-24, `wp/f-2-gaps`)
 
-- **Unbounded replacement helpers (server ×2, engine ×2).** A lead can start replacement helpers
-  for one plan step without limit. It can discard each branch-changed change first, or discard a
-  sealed change and replace it. Rework rounds are bounded; replacements are not. F-1's
-  discardable failure makes this loop cheaper.
-- **Retrying a merge that cannot succeed (server ×1, engine ×1).** The server reports a merge
-  refused because the ticket branch moved (`ticket-branch-moved`) as `failed`. The lead is told
-  "Try again" and can retry forever.
-- **Lead discard after other seal failures (server ×2, engine ×1).** This is `invalid-workspace`:
-  the worktree is gone, or an attachment copy was committed. The change still goes to
-  `needs-owner`, which only the owner can decide.
-- **Planted push URL (server ×1).** The owner's Push & open PR pushes to the remote name `origin`.
-  A `remote.origin.pushurl` that a helper planted in the shared config therefore receives the push.
-- **Harness checks that write (orchestrator ×1).** A harness check whose command is itself
-  `git push` or `git checkout` is auto-approved by `run-harness-check` in auto-edits and Full auto.
-- **Here-strings (adapter ×1).** The guard does not read `bash <<< 'git checkout main'`, a shell
-  fed its command on stdin. In Full auto the sandbox's git directories still stop the write.
+The last 12 known gaps flipped and are now plain tests with the same assertions
+([docs/v0.3.0/wp/F-2.md](../v0.3.0/wp/F-2.md)):
+
+- **Unbounded replacement helpers (server ×2, engine ×2).** A helper whose change was discarded
+  or could not be saved is a lost attempt. A plan step (the helper node a start resolves to, and
+  its role) may lose `max(2, 1 + maxReworkRounds)` attempts, 3 by default, times the approved
+  plan's steps with that role. The run may lose that many times its plan steps, so renaming the
+  role does not help. Past either, `start_agent` is refused (`attempts-exhausted`) with a plain
+  message, and the lead hands over. Merged and no-change work never counts; the golden traces are
+  unchanged.
+- **Retrying a merge that cannot succeed (server ×1, engine ×1).** The server now reports
+  `ticket-branch-moved` and `ticket-branch-checked-out` instead of `failed`. The change goes to
+  the owner at once, and the lead is told not to retry: only the owner can reset (F-1) or free
+  the branch. A merge that fails for a git reason goes to the owner after 3 failures in a row
+  (`MAX_FAILED_MERGES`).
+- **Lead discard after other seal failures (server ×2, engine ×1).** `sealFailure` adds
+  `invalid-workspace` and `not-saved` (a failed seal with no code). The change still waits in
+  `needs-owner`; the lead may discard it and never merge or rework it.
+- **Planted push URL (server ×1).** Every push for the owner goes to `origin`'s configured
+  address, never to the remote name, so no `pushurl` is used. A `pushInsteadOf` rewrite of that
+  address is refused, and `ext::` and `fd::` are off (`code-host/push-target.ts`).
+- **Harness checks that write (orchestrator ×1).** F-1's command guard (`checkGitCommand`, now in
+  `@acp/core`) runs before every allowlist rule, so such a check is never pre-approved. The
+  harness status warns about any check or setup step that is branch-managing git.
+- **Here-strings (adapter ×1).** The guard reads a shell's input. A here-string or here-document
+  fed to a shell is read as a script. A shell that reads a pipe, or input with a command
+  substitution, is denied when the command mentions git. `xargs git` with no subcommand is
+  denied. Eleven rows of such spellings and four ordinary ones were added.
+
+## Known gaps
+
+None on `release/0.3.0` after F-2. Counts: server 35, orchestrator 44, adapter 81.
 
 Observed and asserted as safe, but worth knowing:
 
@@ -147,8 +165,10 @@ Observed and asserted as safe, but worth knowing:
    `changeMergeBlocked`. Check what the lead and the owner may still do with `checkChangeAction`.
 3. **Commands.** Add a row to the right list in `adversarial-commands.test.ts`. An ordinary
    command must `pass` in every mode. A hostile one must be `guard`.
-4. Anything that fails today goes in a `knownGap` with a `// F-2:` comment (or the work package
-   that will fix it) saying what fixes it. Add it to the list above.
+4. Anything that fails today goes in a `knownGap` with a comment naming the work package that
+   will fix it and what fixes it (widen the `fix` parameter's type to that name). Add it to a
+   "Known gaps" list above. The adapter table has no `knownGap` of its own since F-2; copy the
+   kit's when a row needs one.
 
 ## How to run
 

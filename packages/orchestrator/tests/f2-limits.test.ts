@@ -65,7 +65,7 @@ function discardLoop(s: RunState, roles: (i: number) => string, max = 20) {
 
 describe('stepAttemptLimit', () => {
   it('is 1 + the rework rounds, at least 2', () => {
-    expect(stepAttemptLimit({ integration: undefined })).toBe(2);
+    expect(stepAttemptLimit({})).toBe(2);
     for (const [rounds, limit] of [
       [0, 2],
       [1, 2],
