@@ -183,3 +183,33 @@ lead, the lead, planner and orchestrator. Control-tool names in an agent's "Late
   - the ticket-branch request has a fifth action, `update-from-base`, for "Update from main";
   - `RunDetailDto.changes` carries the change cards;
   - enum-like columns are length-checked in SQL and value-checked by Zod, as in 0002–0005.
+
+## Amendment 2026-10-24: the app owns branches (F-1)
+
+Owner-reported incident on ACPGIT-3 (helpers switched to, committed to and reset the ticket branch); owner approval of the fix in chat.
+
+1. Workers and testers never run commands that create, switch, move, commit to, reset, merge,
+   rebase, stash, fetch or push branches, in any approval mode. The adapter enforces this with:
+   - a PreToolUse hook on Bash (it runs before Claude Code's permission pipeline, auto mode
+     included);
+   - the gate's denial without asking the owner;
+   - `disallowedTools` prefix deny rules.
+     The guard is an allowlist. It allows git that reads, git that changes only files and the
+     index of the agent's folder, and listing forms. Everything else is denied, including aliases
+     and `-c`.
+2. Plans may not contain such steps. `submit_plan` refuses them deterministically, before any
+   approval, owner or automatic. The planning briefs say so, and the helper and tester briefs
+   say the app owns branches and commits.
+3. A change whose worktree left its own branch (`workspace-branch-changed` at the seal):
+   - is not committed;
+   - its worktree is detached where it is, and no ref moves;
+   - it goes to the lead with that reason (`sealFailure: 'branch-changed'`), or to the owner
+     when no lead is live;
+   - merge and rework are refused, and the lead or the owner may discard it. Discard deletes
+     only the helper's own branch.
+4. The ticket branch moved outside the app (its tip is not the recorded head):
+   - merge and push keep refusing, as before;
+   - the ticket shows it (`movedOutside`);
+   - the owner may reset it to the recorded head, by `update-ref <recorded> <seen>`
+     (compare-and-swap) after the ticket-branch guard and a worktree prune. This is refused
+     while any worktree has it checked out. No other ref moves.

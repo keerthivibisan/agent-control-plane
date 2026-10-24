@@ -150,3 +150,15 @@ the docs recommend an isolation boundary for unattended runs; auto-approved call
 - Contract: `ApprovalMode += 'full-auto'`, `TicketPlan.decidedBy?`, `ManagedAgentSpec.fullAuto?`,
   `finished.failure?`, all additive. The engine's `ruleAllowedByMode('full-auto')` equals Auto
   edits'.
+
+## Amendment 2026-10-24: the git folders are not writable (F-1)
+
+Decision 2's `filesystem.denyWrite` also holds the
+worktree's `--git-dir` and `--git-common-dir`. The server resolves them at spec time, absolute
+and as real paths (`FullAutoSpec.gitDirs`). The `Edit` deny rules hold them too. A helper whose
+git folders cannot be resolved does not start (fail closed).
+
+Reason: Claude Code (0.3.296) adds a linked worktree's common git directory to the sandbox's
+writable paths on its own. It denies only `hooks`, `config` and similar files there, so a
+sandboxed `git commit` could write refs and objects (docs/research/f-1-branch-guard-2026-10-24.md).
+The same applies to the tightened sandbox (ADR-0023 §5).
