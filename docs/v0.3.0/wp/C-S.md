@@ -2,11 +2,11 @@
 
 > Progress file for C-S. Only its agent edits it. Plan: [../README.md](../README.md).
 
-| Field    | Value                                                                                  |
-| -------- | -------------------------------------------------------------------------------------- |
-| Status   | review                                                                                 |
-| Branch   | `wp/c-s-shell`, from `release/0.3.0` `fa25a35`                                         |
-| Worktree | `.claude/worktrees/agent-ab242c76fcc0fee55` |
+| Field    | Value                                          |
+| -------- | ---------------------------------------------- |
+| Status   | review                                         |
+| Branch   | `wp/c-s-shell`, from `release/0.3.0` `fa25a35` |
+| Worktree | `.claude/worktrees/agent-ab242c76fcc0fee55`    |
 
 Owner request (2026-10-22): the shell bigger and clearer, the sidebar toggle on the sidebar
 itself, and a header with the logo and "ACP" on the left, a wide centred search, and the project

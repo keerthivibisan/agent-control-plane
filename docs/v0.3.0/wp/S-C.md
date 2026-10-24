@@ -2,11 +2,11 @@
 
 > Progress file for S-C. Only its agent edits it. Plan: [../README.md](../README.md).
 
-| Field    | Value                                                                                  |
-| -------- | -------------------------------------------------------------------------------------- |
-| Status   | review                                                                                 |
-| Branch   | `wp/s-c-human-comment`, rebased on `release/0.3.0` `249d668`                           |
-| Worktree | `.claude/worktrees/agent-a0f8d98453fef2751` |
+| Field    | Value                                                        |
+| -------- | ------------------------------------------------------------ |
+| Status   | review                                                       |
+| Branch   | `wp/s-c-human-comment`, rebased on `release/0.3.0` `249d668` |
+| Worktree | `.claude/worktrees/agent-a0f8d98453fef2751`                  |
 
 Owner feedback (2026-10-21): "The comments are like what each phase did; we don't need that. We
 need a proper comment like humans write: we explored this, we added this feature and tested this,

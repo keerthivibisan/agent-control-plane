@@ -3,11 +3,11 @@
 > Progress file for G-C. Only its agent edits it. Plan: [../README.md](../README.md) (part 2,
 > ADR-0025 §6).
 
-| Field    | Value                                                                                  |
-| -------- | -------------------------------------------------------------------------------------- |
-| Status   | review                                                                                 |
-| Branch   | `wp/g-c-diff`, from `release/0.3.0` `de0a9fa`                                          |
-| Worktree | `.claude/worktrees/agent-a1bf99d61762f6ba9` |
+| Field    | Value                                         |
+| -------- | --------------------------------------------- |
+| Status   | review                                        |
+| Branch   | `wp/g-c-diff`, from `release/0.3.0` `de0a9fa` |
+| Worktree | `.claude/worktrees/agent-a1bf99d61762f6ba9`   |
 
 ## Tasks
 
