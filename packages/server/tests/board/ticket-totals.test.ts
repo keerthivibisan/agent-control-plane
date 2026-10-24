@@ -134,6 +134,7 @@ describe('ticket branch actions: merge guards (G-G)', () => {
     headCommit: 'b'.repeat(40),
     state: 'open',
     mergedCommit: null,
+    sourceBranch: null,
     createdAt: T0,
     updatedAt: T0,
     pullRequest: {

@@ -18,6 +18,9 @@ export function toTicketBranchDto(row: TicketBranchRow): TicketBranchDto {
     headCommit: row.headCommit,
     state: row.state,
     mergedCommit: row.mergedCommit,
+    // ADR-0025 §10: shown ("from release/1.0") only when the branch did not start from its target.
+    ...(row.sourceBranch !== null &&
+      row.sourceBranch !== row.baseBranch && { sourceBranch: row.sourceBranch }),
     // ADR-0025: the pull request raised for the branch; its base and head are the branch's own.
     pullRequest:
       row.pullRequest === null

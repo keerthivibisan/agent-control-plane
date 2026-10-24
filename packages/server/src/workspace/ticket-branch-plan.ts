@@ -16,10 +16,13 @@ import { WorkspaceError } from './errors.js';
  *   is taken, attempt `n` adds `-r<n>`, for every kind of name.
  * - **Target:** the ticket's own `branch.target`, else the strategy's `defaultTargetBranch`, else
  *   null: the branch the project has checked out, as before.
+ * - **Source (ADR-0025 §10):** where the branch starts: the ticket's own `branch.from`, else the
+ *   strategy's `defaultSourceBranch`, else null: the target, as before. The source is only read
+ *   (its tip), so it may be a long-lived branch.
  * - **Long-lived branches** the app never creates, moves, merges, pushes from or deletes as a
- *   ticket branch: `main`, `master`, the strategy's base and default target, `develop` in Git
- *   flow, and (checked by the manager in the repository) the run's target, the checked-out branch
- *   and `origin`'s default branch.
+ *   ticket branch: `main`, `master`, the strategy's base, default target and default source,
+ *   `develop` in Git flow, and (checked by the manager in the repository) the run's target and
+ *   source, the checked-out branch and `origin`'s default branch.
  */
 
 export interface TicketBranchPlan {
@@ -27,8 +30,10 @@ export interface TicketBranchPlan {
   ticketKey: string;
   /** The name for attempt `n` (0 is the plain name); throws a `WorkspaceError` when unsafe. */
   nameFor(attempt: number): string;
-  /** The branch the ticket branch starts from and is merged into; null: the checked-out branch. */
+  /** The branch the ticket branch is merged into; null: the checked-out branch. */
   target: string | null;
+  /** ADR-0025 §10: the branch whose tip the ticket branch starts at; null: the target. */
+  source: string | null;
   /** Names that are never a ticket branch, beyond the target and the repository's own. */
   protectedNames: readonly string[];
 }
@@ -42,6 +47,7 @@ export function strategyProtectedNames(strategy: BranchStrategy | undefined): st
   if (strategy !== undefined) {
     names.add(strategy.baseBranch);
     names.add(strategy.defaultTargetBranch);
+    if (strategy.defaultSourceBranch !== undefined) names.add(strategy.defaultSourceBranch);
     if (strategy.preset === 'git-flow') names.add('develop');
   }
   return [...names];
@@ -72,6 +78,7 @@ export function ticketBranchPlan(
     ticketKey: ticket.key,
     nameFor,
     target: ticket.branch?.target ?? strategy?.defaultTargetBranch ?? null,
+    source: ticket.branch?.from ?? strategy?.defaultSourceBranch ?? null,
     protectedNames: strategyProtectedNames(strategy),
   };
 }
@@ -88,6 +95,7 @@ export function legacyTicketBranchPlan(ticketKey: string): TicketBranchPlan {
       }
     },
     target: null,
+    source: null,
     protectedNames: ALWAYS_PROTECTED,
   };
 }

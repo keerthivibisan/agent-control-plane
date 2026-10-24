@@ -62,7 +62,7 @@ function setupResult(
 describe('migration 0010 (H-B)', () => {
   it('ships as 0010_harness_setup', () => {
     const shipped = loadMigrations(DEFAULT_MIGRATIONS_DIR);
-    expect(shipped.at(-1)).toMatchObject({ version: 10, name: 'harness_setup' });
+    expect(shipped.find((m) => m.version === 10)).toMatchObject({ name: 'harness_setup' });
   });
 
   it('upgrades a 0009 database in place: check runs kept without a place', () => {

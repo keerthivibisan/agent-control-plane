@@ -1,4 +1,5 @@
 import {
+  GitBranchNameSchema,
   GitCommitSchema,
   TicketBranchNameSchema,
   TicketBranchStateSchema,
@@ -28,7 +29,8 @@ import { guardWrite, nullable, textParser } from '../orchestration/shared.js';
  * ADR-0025). The row is the server's record of which ticket branches it made: a branch with no row
  * is never moved, merged or deleted. The tip moves only by compare-and-swap (`advance`), the same
  * rule the git ref follows. Before 0.3.0 the name was always `acp/<KEY>`; now the project's
- * branching strategy or the ticket names it. 0008 adds the pull request raised for it, if any.
+ * branching strategy or the ticket names it. 0008 adds the pull request raised for it, if any;
+ * 0011 the branch it started from when that is not its target (ADR-0025 §10).
  */
 
 export interface TicketBranchInsertInput {
@@ -40,6 +42,11 @@ export interface TicketBranchInsertInput {
   baseCommit: string;
   /** Usually `baseCommit`: a new ticket branch starts at the base branch tip. */
   headCommit: string;
+  /**
+   * ADR-0025 §10 (migration 0011): the branch it was created from, only when that is not the
+   * target (`baseCommit` is then that branch's tip). Absent: it started from the target.
+   */
+  sourceBranch?: string;
 }
 
 /** The pull request raised for a ticket branch (ADR-0025 §4; migration 0008 `pr_*`). */
@@ -64,6 +71,8 @@ export interface TicketBranchRow {
   headCommit: string;
   state: TicketBranchState;
   mergedCommit: string | null;
+  /** ADR-0025 §10: the branch it started from when not the target; null otherwise and before 0011. */
+  sourceBranch: string | null;
   createdAt: IsoTimestamp;
   updatedAt: IsoTimestamp;
   /** Null until the owner pushes the branch and opens (or links) a pull request. */
@@ -118,14 +127,15 @@ interface TicketBranchDbRow {
   pr_state: string | null;
   pr_checked_at: string | null;
   pr_pushed_commit: string | null;
+  source_branch: string | null;
 }
 
 const T = 'ticket_branches';
 const COLUMNS = `run_id, project_id, branch, base_branch, base_commit, head_commit, state,
   merged_commit, created_at, updated_at, pr_provider, pr_number, pr_url, pr_state, pr_checked_at,
-  pr_pushed_commit`;
+  pr_pushed_commit, source_branch`;
 const INSERT_COLUMNS = `run_id, project_id, branch, base_branch, base_commit, head_commit, state,
-  merged_commit, created_at, updated_at`;
+  merged_commit, created_at, updated_at, source_branch`;
 const BaseBranchParser = textParser(1, 255);
 const PullRequestNumberParser: Parser<number> = {
   safeParse: (value) =>
@@ -178,6 +188,7 @@ function toRow(row: TicketBranchDbRow): TicketBranchRow {
     headCommit: parseStored(GitCommitSchema, row.head_commit, T, 'head_commit'),
     state: parseStored(TicketBranchStateSchema, row.state, T, 'state'),
     mergedCommit: parseStored(nullable(GitCommitSchema), row.merged_commit, T, 'merged_commit'),
+    sourceBranch: parseStored(nullable(GitBranchNameSchema), row.source_branch, T, 'source_branch'),
     createdAt: storedTimestamp(row.created_at, T, 'created_at'),
     updatedAt: storedTimestamp(row.updated_at, T, 'updated_at'),
     pullRequest: toPullRequest(row),
@@ -187,7 +198,7 @@ function toRow(row: TicketBranchDbRow): TicketBranchRow {
 export function createTicketBranchesRepository(ctx: RepositoryContext): TicketBranchesRepository {
   const c = ctx.connection;
   const insert = c.prepare(
-    `INSERT INTO ${T} (${INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?)
+    `INSERT INTO ${T} (${INSERT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, 'open', NULL, ?, ?, ?)
      RETURNING ${COLUMNS}`,
   );
   const byRun = c.prepare(`SELECT ${COLUMNS} FROM ${T} WHERE run_id = ?`);
@@ -238,6 +249,9 @@ export function createTicketBranchesRepository(ctx: RepositoryContext): TicketBr
             commit(input.headCommit, 'ticket branch headCommit'),
             at,
             at,
+            input.sourceBranch === undefined
+              ? null
+              : parseInput(GitBranchNameSchema, input.sourceBranch, 'ticket branch sourceBranch'),
           ) as TicketBranchDbRow,
         ),
       );

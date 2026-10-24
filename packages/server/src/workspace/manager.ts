@@ -33,7 +33,8 @@ import {
  *   of a clean tree when the target is checked out, else of the target's ref by compare-and-swap.
  * - ADR-0025: the ticket branch's name comes from the ticket or the project's branching strategy
  *   (`acp/<KEY>` without one), and its target from the ticket or the strategy (the checked-out
- *   branch without one). Every ticket-branch operation refuses a long-lived branch: the run's
+ *   branch without one). §10: it starts at the tip of its source (the ticket's `from`, else the
+ *   strategy's default source, else the target), which is only read. Every ticket-branch operation refuses a long-lived branch: the run's
  *   target, `main`, `master`, the strategy's branches, the checked-out branch and `origin`'s
  *   default branch.
  * - Git operations are serialized per worktree and per repository (U-V: concurrent `git add` in one
@@ -122,8 +123,10 @@ export interface CreatedTicketBranch {
   branch: string;
   /** The target branch (ADR-0025) or, without one, the branch the project had checked out. */
   baseBranch: string;
-  /** Its commit at creation; the ticket branch starts there. */
+  /** The source's commit at creation (the target's, without a source); the branch starts there. */
   baseCommit: string;
+  /** ADR-0025 §10: the branch it started from, only when that is not the target. */
+  sourceBranch?: string;
 }
 
 export interface SealResult {
@@ -199,12 +202,12 @@ export interface WorkspaceManager {
   // ------------------------------------------------------------- ADR-0021 ticket branch
 
   /**
-   * Creates the ticket branch (ADR-0025 §4) with `branch --no-track` at its target's tip, or at the
-   * project's current HEAD when the plan has no target (a ticket key alone is the legacy plan:
-   * `acp/<KEY>`). The first free name is taken (`-r<n>`): a name that exists in the repository, or
+   * Creates the ticket branch (ADR-0025 §4) with `branch --no-track` at its source's tip (§10: the
+   * plan's source, else its target), or at the project's current HEAD when the plan has neither
+   * (a ticket key alone is the legacy plan: `acp/<KEY>`). The first free name is taken (`-r<n>`): a name that exists in the repository, or
    * that `isTaken` reports (an open ticket branch the database knows), is skipped. A missing
-   * local target is refused (`target-branch-missing`), and so is a name that is a long-lived
-   * branch.
+   * local target is refused (`target-branch-missing`), a missing local source too
+   * (`source-branch-missing`), and so is a name that is a long-lived branch.
    */
   createTicketBranch(
     projectRoot: string,
@@ -212,13 +215,14 @@ export interface WorkspaceManager {
     isTaken?: (branch: string) => boolean,
   ): Promise<CreatedTicketBranch>;
   /**
-   * Before a run starts (ADR-0025): the plan's target exists locally and its first name is not a
-   * long-lived branch. Returns the target and its tip; refuses like `createTicketBranch`.
+   * Before a run starts (ADR-0025): the plan's target and source exist locally and its first name
+   * is not a long-lived branch. Returns the target and the tip the branch would start at (the
+   * source's); refuses like `createTicketBranch`.
    */
   checkTicketBranchPlan(
     projectRoot: string,
     plan: TicketBranchPlan,
-  ): Promise<{ target: string; commit: string }>;
+  ): Promise<{ target: string; commit: string; sourceBranch?: string }>;
   /** The ticket branch's current tip, or null when the branch does not exist. */
   ticketBranchTip(ref: TicketBranchRef): Promise<string | null>;
   /**
@@ -676,10 +680,33 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
   }
 
   /**
-   * Where a new ticket branch starts (ADR-0025 §4): the plan's target branch tip, which must exist
-   * locally (no fetch: the app never reaches the remote for this), or the checked-out branch's.
+   * Where a new ticket branch starts (ADR-0025 §4, §10): the target must exist locally (no fetch:
+   * the app never reaches the remote for this), or the checked-out branch stands for it; the
+   * branch starts at the source's tip when the plan names another branch, else the target's.
+   * Only refs are read: the checkout is never switched.
    */
   async function startOf(
+    repoRoot: string,
+    plan: TicketBranchPlan,
+  ): Promise<{ baseBranch: string; baseCommit: string; sourceBranch?: string }> {
+    const target = await targetOf(repoRoot, plan);
+    const source = plan.source;
+    if (source === null || source === target.baseBranch) return target;
+    if (!GitBranchNameSchema.safeParse(source).success) {
+      throw new WorkspaceError('invalid-ticket-branch', 'The source is not a valid branch name');
+    }
+    const tip = await refTip(repoRoot, source);
+    if (tip === null || !FULL_COMMIT.test(tip)) {
+      throw new WorkspaceError(
+        'source-branch-missing',
+        `The branch ${source}, which the ticket branch starts from, does not exist in the project yet`,
+      );
+    }
+    return { baseBranch: target.baseBranch, baseCommit: tip, sourceBranch: source };
+  }
+
+  /** The plan's target and its tip, or the checked-out branch's without one. */
+  async function targetOf(
     repoRoot: string,
     plan: TicketBranchPlan,
   ): Promise<{ baseBranch: string; baseCommit: string }> {
@@ -718,6 +745,8 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     target: string,
   ): Promise<Set<string>> {
     const names = new Set([...ALWAYS_PROTECTED, ...plan.protectedNames, target]);
+    // The source is a branch the ticket branch is made from, so it is never the ticket branch.
+    if (plan.source !== null) names.add(plan.source);
     const current = await currentBranch(repoRoot);
     if (current !== null) names.add(current);
     const def = await originDefault(repoRoot);
@@ -917,7 +946,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       const plan = typeof planInput === 'string' ? legacyTicketBranchPlan(planInput) : planInput;
       const { repoRoot } = await repoOf(projectRoot);
       return serial(repoKey(repoRoot), async () => {
-        const { baseBranch, baseCommit } = await startOf(repoRoot, plan);
+        const { baseBranch, baseCommit, sourceBranch } = await startOf(repoRoot, plan);
         const reserved = await reservedFor(repoRoot, plan, baseBranch);
         for (let attempt = 0; attempt < 100; attempt++) {
           const branch = plan.nameFor(attempt);
@@ -933,7 +962,12 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
               `Could not create the ticket branch (${errorName(error)})`,
             );
           }
-          return { branch, baseBranch, baseCommit };
+          return {
+            branch,
+            baseBranch,
+            baseCommit,
+            ...(sourceBranch !== undefined && { sourceBranch }),
+          };
         }
         throw new WorkspaceError('ticket-branch-exists', 'No free ticket branch name was found');
       });
@@ -942,11 +976,15 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     async checkTicketBranchPlan(projectRoot, plan) {
       const { repoRoot } = await repoOf(projectRoot);
       return serial(repoKey(repoRoot), async () => {
-        const { baseBranch, baseCommit } = await startOf(repoRoot, plan);
+        const { baseBranch, baseCommit, sourceBranch } = await startOf(repoRoot, plan);
         const reserved = await reservedFor(repoRoot, plan, baseBranch);
         const first = plan.nameFor(0);
         if (reserved.has(first)) throw longLived(first);
-        return { target: baseBranch, commit: baseCommit };
+        return {
+          target: baseBranch,
+          commit: baseCommit,
+          ...(sourceBranch !== undefined && { sourceBranch }),
+        };
       });
     },
 

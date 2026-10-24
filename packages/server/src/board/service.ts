@@ -242,8 +242,8 @@ export interface BoardServiceDeps {
   publish: (notice: StreamNoticeDto) => void;
   logger: Logger;
   /**
-   * ADR-0025: checks a ticket's branch plan (its target exists locally, its name is not a
-   * long-lived branch) before the run starts. Omitted in tests that do not use git.
+   * ADR-0025: checks a ticket's branch plan (its target and source exist locally, its name is not
+   * a long-lived branch) before the run starts. Omitted in tests that do not use git.
    */
   ticketBranches?: Pick<WorkspaceManager, 'checkTicketBranchPlan'>;
   /** ADR-0025: the code host status; omitted, its route answers `code_host_unavailable`. */
@@ -304,8 +304,9 @@ export function patchRunOptions(
 }
 
 /**
- * A ticket's branch settings after an update (ADR-0025): a value sets the field, `null` puts it
- * back to the project's, an absent field is kept; `null` for the whole patch clears both.
+ * A ticket's branch settings after an update (ADR-0025, §10 for `from`): a value sets the field,
+ * `null` puts it back to the project's, an absent field is kept; `null` for the whole patch clears
+ * them all.
  */
 export function patchBranchPrefs(
   current: TicketBranchPrefs | undefined,
@@ -314,9 +315,11 @@ export function patchBranchPrefs(
   if (patch === null) return {};
   const name = patch.name === null ? undefined : (patch.name ?? current?.name);
   const target = patch.target === null ? undefined : (patch.target ?? current?.target);
+  const from = patch.from === null ? undefined : (patch.from ?? current?.from);
   return {
     ...(name !== undefined && { name }),
     ...(target !== undefined && { target }),
+    ...(from !== undefined && { from }),
   };
 }
 
@@ -617,14 +620,15 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   }
 
   /**
-   * ADR-0025: a ticket whose branch has a target (its own or the strategy's) or its own name is
-   * checked before the run starts, so a missing target is refused now, not at plan approval. A
-   * ticket with neither keeps the behaviour before ADR-0025 (checked at plan approval).
+   * ADR-0025: a ticket whose branch has a target or a source (§10; its own or the strategy's) or
+   * its own name is checked before the run starts, so a missing target or source is refused now
+   * (`target_branch_missing`, `source_branch_missing`), not at plan approval. A ticket with none
+   * keeps the behaviour before ADR-0025 (checked at plan approval).
    */
   async function checkBranchPlan(ticket: Ticket, setup: ProjectAgentSetup): Promise<void> {
     const plan = ticketBranchPlan(setup.branching, ticket);
     if (deps.ticketBranches === undefined) return;
-    if (plan.target === null && ticket.branch?.name === undefined) return;
+    if (plan.target === null && plan.source === null && ticket.branch?.name === undefined) return;
     try {
       await deps.ticketBranches.checkTicketBranchPlan(project(ticket.projectId).rootPath, plan);
     } catch (error) {
@@ -939,7 +943,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           );
         }
         // ADR-0025: only branches made later see the change; an existing ticket branch keeps its
-        // name and target.
+        // name, target and source.
         if (input.branch !== undefined) {
           loop.ticketBranchPrefs.set(ticketId, patchBranchPrefs(current.branch, input.branch));
         }

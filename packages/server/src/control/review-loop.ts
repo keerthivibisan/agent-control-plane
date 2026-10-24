@@ -218,9 +218,9 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
   }
 
   /**
-   * ADR-0025: the ticket branch's name and target from the ticket's own settings and the project's
-   * strategy, read now (at plan approval). A run without a ticket, or whose ticket is gone, keeps
-   * the legacy plan for its key.
+   * ADR-0025: the ticket branch's name, target and source (§10) from the ticket's own settings
+   * and the project's strategy, read now (at plan approval). A run without a ticket, or whose
+   * ticket is gone, keeps the legacy plan for its key.
    */
   function planFor(live: LoopLive, ticketKey: string): TicketBranchPlan {
     const ticketId = live.state.run.ticketId;
@@ -549,6 +549,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
             baseBranch: created.baseBranch,
             baseCommit: created.baseCommit,
             headCommit: created.baseCommit,
+            // ADR-0025 §10: recorded only when the branch did not start from its target.
+            ...(created.sourceBranch !== undefined && { sourceBranch: created.sourceBranch }),
           });
           branch = created.branch;
         } catch (error) {

@@ -43,6 +43,8 @@ export type WorkspaceErrorCode =
   | 'ticket-branch-exists'
   /** ADR-0025: the ticket's target branch does not exist in the project's repository. */
   | 'target-branch-missing'
+  /** ADR-0025 §10: the branch the ticket branch starts from does not exist in the repository. */
+  | 'source-branch-missing'
   /** ADR-0025: the target is checked out in another worktree, so its ref is not moved. */
   | 'target-checked-out'
   | 'git-failed';

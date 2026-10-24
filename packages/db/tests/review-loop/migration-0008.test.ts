@@ -138,6 +138,8 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
       'pr_state',
       'pr_checked_at',
       'pr_pushed_commit',
+      // Added by 0011 (G-H).
+      'source_branch',
     ]);
     // The indexes of 0006 are back.
     const indexes = db.connection
@@ -262,6 +264,8 @@ describe('migration 0008_code_hosting (G-A, ADR-0025)', () => {
         pr_state: null,
         pr_checked_at: null,
         pr_pushed_commit: null,
+        // Added by 0011 (G-H), which runs too.
+        source_branch: null,
       };
       expect(v8.connection.prepare('SELECT * FROM ticket_branches ORDER BY run_id').all()).toEqual(
         branchesBefore.map((r) => ({ ...r, ...empty })),
