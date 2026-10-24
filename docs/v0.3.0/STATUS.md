@@ -386,3 +386,18 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   F-1's guard. 52 of 63 known gaps flipped to plain tests with F-1; 12 remain as `knownGap` for
   F-2 (they turn red when fixed). Coordinator check: tests 498 + 563 + 12 + 237 + 2,421 + 1,192 +
   809 ✓; build ✓; e2e 110/110. F-2 started.
+- 2026-10-24 **Paused by the owner** ("please pause all the stuffs"). Both agents stopped.
+  - **F-2** (`wp/f-2-gaps`, worktree `agent-a5e43d45340c0d149`): the 12 gaps closed in 5 commits
+    (`1e8e6f5`..`a82b772`; the adversarial suites, orchestrator 2,436 and server 817 passed in the
+    agent's run), plus a WIP commit: the harness runner refusing branch-managing checks and setup
+    steps (in progress). To resume: a new agent continues on `git switch -c wp/f-2-b wp/f-2-gaps`,
+    finishes the runner refusal and its tests, squashes the WIP, rebases; the coordinator applies
+    F-2.md's ADR amendments (ADR-0021, ADR-0017/0027, ADR-0025), runs the full check (2 workers)
+    and e2e, merges.
+  - **V-1** demo video (`wp/v-1-demo-video`): stopped at the start (no commits, one temp file).
+    Owner choices: teams + LinkedIn + website; captions + Mac voice; dark 1920×1080; full (~2.5
+    min) and short (~1 min) cuts; a draft now, the final on the release code. Restart from the brief.
+  - **Then:** G-H ("start from" branch, contract done), release prep (rebase onto main `79c312a`,
+    drop the fontsource dependencies, versions, CHANGELOG, README and screenshots, final check,
+    PR text and notes in `.acp-data/`; ask the owner who pushes), optional consented real run of
+    the branch guard.
