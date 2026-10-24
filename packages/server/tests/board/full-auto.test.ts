@@ -110,6 +110,12 @@ describe('Full auto (ADR-0022)', () => {
     expect(deny).toContain(s.dataDir);
     expect(deny).toContain(realpathSync(s.dataDir));
     expect(worker.spec.cwd.startsWith(realpathSync(s.dataDir))).toBe(true);
+    // F-1: the repository's git folders (common and the worktree's own), which the sandbox
+    // denies writing: only the app commits and moves refs.
+    const common = realpathSync(join(s.repo, '.git'));
+    const gitDirs = worker.spec.fullAuto?.gitDirs ?? [];
+    expect(gitDirs).toContain(common);
+    expect(gitDirs.some((d) => d.startsWith(join(common, 'worktrees')))).toBe(true);
   });
 
   it('denies what reaches the gate without asking; the Auto edits rules still allow theirs', async () => {

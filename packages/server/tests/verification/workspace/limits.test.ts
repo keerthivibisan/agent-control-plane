@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '@acp/db';
-import { AGENT_NOTE_LINE, leadToolCall } from '@acp/orchestrator';
+import { AGENT_NOTE_LINE, BRANCH_RULE_LINE, leadToolCall } from '@acp/orchestrator';
 import { PARENT_HELPER_NOTE } from '../../../src/control/service.js';
 import { createRunStore } from '../../../src/control/store.js';
 import {
@@ -71,7 +71,7 @@ describe('P4-H agent tree limits', () => {
     expect(parent.spec.canStartHelpers).toBe(true);
     expect(parent.spec.leadTools).toBeDefined();
     expect(parent.spec.prompt).toBe(
-      `Split the work\n\n${AGENT_NOTE_LINE}\n\n${PARENT_HELPER_NOTE}`,
+      `Split the work\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}\n\n${PARENT_HELPER_NOTE}`,
     );
     const child = await startHelper(b, runId, parent, 'Child', 'Do one part');
     expect(child.spec.canStartHelpers).toBeUndefined();
@@ -159,6 +159,6 @@ describe('P4-H agent tree limits', () => {
     await expect(helper.callLead('start_agent', { role: 'C', task: 'x' })).rejects.toThrow(
       'Only the lead agent can start agents.',
     );
-    expect(helper.spec.prompt).toBe(`Build\n\n${AGENT_NOTE_LINE}`);
+    expect(helper.spec.prompt).toBe(`Build\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}`);
   }, 60_000);
 });

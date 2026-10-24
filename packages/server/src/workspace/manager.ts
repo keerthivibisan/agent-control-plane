@@ -234,6 +234,27 @@ export interface WorkspaceManager {
   /** Commits the helper's pending edits (one commit, attributed to the app) and reports the change. */
   seal(ws: Workspace, options?: { role?: string }): Promise<SealResult>;
   /**
+   * F-1: the worktree's git directories, absolute (`--git-dir`, its private folder under the
+   * repository's `worktrees/`, and `--git-common-dir`, the repository's `.git`), each also as its
+   * real path when that differs. A Full auto helper's sandbox may not write them.
+   */
+  gitDirs(ws: Workspace): Promise<string[]>;
+  /**
+   * F-1: when the helper switched its worktree to another branch (`workspace-branch-changed`),
+   * detaches that worktree's HEAD where it is (`checkout --detach`: no ref moves, files and index
+   * stay), so the other branch is no longer held by it. True when it detached; false when the
+   * worktree is gone, already detached or still on its own branch.
+   */
+  detachForeignBranch(ws: Workspace): Promise<boolean>;
+  /**
+   * F-1, the owner's "Reset to the last reviewed commit": moves the ticket branch from `from` (the
+   * tip the owner saw) back to `recorded` (the app's record) with `update-ref` (compare-and-swap).
+   * Refused when the branch is a long-lived one, is checked out in any worktree (stale entries of
+   * removed worktrees are pruned first), moved again, or `recorded` is gone. A branch already at
+   * `recorded` is left as it is. No other ref is touched.
+   */
+  resetTicketBranch(ref: TicketBranchRef, recorded: string, from: string): Promise<void>;
+  /**
    * Merges the ticket branch tip into the sealed helper branch (`merge --no-ff`, in the helper's
    * own worktree). A conflict is aborted and refused with `merge-conflict` and the file names.
    */
@@ -995,6 +1016,83 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
         );
         const changedFiles = names.split('\0').filter((n) => n !== '').length;
         return { changed: changedFiles > 0, headCommit, changedFiles };
+      });
+    },
+
+    async gitDirs(ws) {
+      const w = await validate(ws);
+      return serial(worktreeKey(w.path), async () => {
+        await requireWorktree(w);
+        const raw = (await out(['rev-parse', '--git-dir', '--git-common-dir'], w.path))
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l !== '');
+        if (raw.length !== 2) {
+          throw new WorkspaceError('git-failed', 'Git did not say where its folders are');
+        }
+        const dirs: string[] = [];
+        for (const dir of raw) {
+          // Relative answers are relative to the worktree folder git ran in.
+          const given = isAbsolute(dir) ? dir : join(w.path, dir);
+          if (!dirs.includes(given)) dirs.push(given);
+          const real = await realpath(given).catch(() => null);
+          if (real !== null && !dirs.includes(real)) dirs.push(real);
+        }
+        return dirs;
+      });
+    },
+
+    async detachForeignBranch(ws) {
+      const w = await validate(ws);
+      return serial(worktreeKey(w.path), async () => {
+        if (!(await exists(w.path))) return false;
+        const head = await probe(['symbolic-ref', '--quiet', 'HEAD'], w.path);
+        if (head === null || head === '' || head === `refs/heads/${w.branch}`) return false;
+        await run(['checkout', '--quiet', '--detach'], w.path);
+        return true;
+      });
+    },
+
+    async resetTicketBranch(ref, recorded, from) {
+      assertBranchName(ref.branch, reservedOf(ref));
+      assertCommit(recorded, 'The last reviewed commit');
+      assertCommit(from, 'The current tip');
+      const { repoRoot } = await repoOf(ref.projectRoot);
+      await serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
+        // Worktrees the app already removed leave entries until pruned; they hold nothing.
+        await probe(['worktree', 'prune'], repoRoot);
+        if (await isCheckedOut(repoRoot, ref.branch)) {
+          throw new WorkspaceError(
+            'ticket-branch-checked-out',
+            `${ref.branch} is checked out in a worktree, so it is not moved; discard the changes whose helpers switched to it first`,
+          );
+        }
+        const tip = await refTip(repoRoot, ref.branch);
+        if (tip === null) {
+          throw new WorkspaceError('ticket-branch-missing', `${ref.branch} no longer exists`);
+        }
+        if (tip === recorded) return;
+        if (tip !== from) {
+          throw new WorkspaceError(
+            'ticket-branch-moved',
+            `${ref.branch} changed again since you looked; look at it once more`,
+          );
+        }
+        if ((await probe(['cat-file', '-e', `${recorded}^{commit}`], repoRoot)) === null) {
+          throw new WorkspaceError(
+            'git-failed',
+            'The last reviewed commit is no longer in the repository',
+          );
+        }
+        try {
+          await run(['update-ref', `refs/heads/${ref.branch}`, recorded, from], repoRoot);
+        } catch {
+          throw new WorkspaceError(
+            'ticket-branch-moved',
+            `${ref.branch} changed again since you looked; look at it once more`,
+          );
+        }
       });
     },
 

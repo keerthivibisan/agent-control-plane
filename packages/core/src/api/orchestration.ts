@@ -195,10 +195,27 @@ export const TicketBranchDtoSchema = z.object({
    * deletes it there and on `origin`, once the branch is merged or discarded.
    */
   localExists: z.boolean().optional(),
+  /**
+   * F-1: the open branch's tip in the project is not `headCommit` (the last commit the app
+   * recorded and reviewed): it was changed outside the app. `tip` is the commit it points at now.
+   * Only on `GET /api/runs/:id/ticket-branch`; absent when it matches, for a closed branch, and
+   * from servers before F-1. POST `/api/runs/:id/ticket-branch/reset` (CSRF, the owner's click
+   * only, `ResetTicketBranchRequest`) moves it back to `headCommit` by compare-and-swap.
+   */
+  movedOutside: z.object({ tip: GitCommitSchema }).optional(),
   createdAt: IsoTimestampSchema,
   updatedAt: IsoTimestampSchema,
 });
 export type TicketBranchDto = z.infer<typeof TicketBranchDtoSchema>;
+
+/**
+ * F-1: "Reset to the last reviewed commit". `from` is the tip the owner saw
+ * (`TicketBranchDto.movedOutside.tip`); the server moves the branch from it to the recorded
+ * `headCommit` with `update-ref` (compare-and-swap) and refuses when the branch is checked out in
+ * any worktree or moved again meanwhile. No other branch is touched.
+ */
+export const ResetTicketBranchRequestSchema = z.object({ from: GitCommitSchema });
+export type ResetTicketBranchRequest = z.infer<typeof ResetTicketBranchRequestSchema>;
 
 export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   budget: RunBudgetSchema,

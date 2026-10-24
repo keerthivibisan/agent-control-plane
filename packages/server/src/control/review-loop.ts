@@ -3,7 +3,11 @@ import type {
   TicketBranchDto,
   TicketBranchReviewDto,
 } from '@acp/core/api';
-import { OpenPullRequestRequestSchema, TicketBranchActionRequestSchema } from '@acp/core/api';
+import {
+  OpenPullRequestRequestSchema,
+  ResetTicketBranchRequestSchema,
+  TicketBranchActionRequestSchema,
+} from '@acp/core/api';
 import type { CheckRun } from '@acp/core';
 import type { TicketBranchRow, WorkspaceRow } from '@acp/db';
 import {
@@ -28,6 +32,7 @@ import {
   type MergeBlocked,
   type Refusal,
   type RunState,
+  type SealFailure,
 } from '@acp/orchestrator';
 import type { z } from 'zod';
 import {
@@ -167,6 +172,15 @@ const BLOCKED_HTTP: Readonly<Record<MergeBlocked['reason'], [number, string]>> =
   'checks-failed': [409, 'checks_failed'],
   failed: [409, 'merge_failed'],
 };
+
+/** F-1: the ticket comment when a helper's folder left its branch (after the role's name). */
+export const HELPER_BRANCH_CHANGED =
+  'The helper switched its folder to another branch, so its work could not be saved. The lead can discard it and start a fresh helper.';
+
+/** F-1: the ticket's app line after the owner reset the ticket branch (app data only). */
+export function resetLine(branch: string, recorded: string, from: string): string {
+  return `${branch} was reset to ${recorded.slice(0, 7)}, the last reviewed commit, by the owner. It had been changed outside the app (it was at ${from.slice(0, 7)}).`;
+}
 
 /** The ticket comment when the ticket branch could not be made (the run is stopped). */
 export function ticketBranchFailed(error: WorkspaceError): string {
@@ -392,11 +406,41 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
 
   // ------------------------------------------------------------------ effects
 
+  /**
+   * F-1: a helper's worktree left its own branch. Its HEAD is detached where it is (no ref moves),
+   * the ticket says why in plain words (app data only), and the change goes to the lead, who can
+   * discard it (`changeSealed` with `failure: 'branch-changed'`). Discarding removes the worktree
+   * and deletes only the helper's own branch.
+   */
+  async function branchChanged(live: LoopLive, agentRunId: string): Promise<void> {
+    const runId = live.state.run.id;
+    ctx.countDiagnostic('helper-branch-changed');
+    try {
+      const ws = await activeWorkspace(live, agentRunId);
+      if (ws !== null && (await ctx.workspaces.detachForeignBranch(ws))) {
+        logger.log('info', 'helper worktree detached from a foreign branch', { runId, agentRunId });
+      }
+    } catch (error) {
+      logger.log('warn', 'helper worktree not detached', {
+        runId,
+        agentRunId,
+        code: codeOf(error),
+      });
+    }
+    const role = roleOf(live, agentRunId) ?? 'A helper';
+    ctx.appComment?.(live, `${role}: ${HELPER_BRANCH_CHANGED}`);
+  }
+
   function sealChange(live: LoopLive, agentRunId: string): void {
     const runId = live.state.run.id;
     ctx.track(
       (async () => {
-        let result: { changed: boolean; headCommit: string | null; changedFiles: number | null };
+        let result: {
+          changed: boolean;
+          headCommit: string | null;
+          changedFiles: number | null;
+          failure?: SealFailure;
+        };
         try {
           const ws = await activeWorkspace(live, agentRunId);
           if (ws === null) {
@@ -417,9 +461,21 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
               : { changed: false, headCommit: null, changedFiles: 0 };
           }
         } catch (error) {
-          // The work is there but could not be committed: the owner looks at it.
           logger.log('warn', 'change seal failed', { runId, agentRunId, code: codeOf(error) });
-          result = { changed: true, headCommit: null, changedFiles: null };
+          if (error instanceof WorkspaceError && error.code === 'workspace-branch-changed') {
+            // F-1: the helper switched its folder to another branch. Nothing is committed; its
+            // folder is detached where it is, so it no longer holds that branch (no ref moves).
+            await branchChanged(live, agentRunId);
+            result = {
+              changed: true,
+              headCommit: null,
+              changedFiles: null,
+              failure: 'branch-changed',
+            };
+          } else {
+            // The work is there but could not be committed: the owner looks at it.
+            result = { changed: true, headCommit: null, changedFiles: null };
+          }
         }
         const applied = ctx.apply(live, (s, c) => changeSealed(s, agentRunId, result, c));
         if (!applied.ok) {
@@ -736,11 +792,14 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     }
     try {
       const review = await ctx.workspaces.reviewTicketBranch(refOf(live, row));
-      if (review.tip !== row.headCommit) {
-        logger.log('warn', 'ticket branch moved outside the app', { runId });
-      }
+      // F-1: say so on the ticket, with the tip it points at now (the owner can reset it).
+      const moved = review.tip !== row.headCommit;
+      if (moved) logger.log('warn', 'ticket branch moved outside the app', { runId });
       return {
         ...base,
+        ticketBranch: moved
+          ? { ...base.ticketBranch, movedOutside: { tip: review.tip } }
+          : base.ticketBranch,
         files: review.files,
         diff: review.diff,
         diffTruncated: review.diffTruncated,
@@ -750,6 +809,47 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       if (error instanceof WorkspaceError) throw workspaceError(error);
       throw error;
     }
+  }
+
+  /**
+   * POST `/api/runs/:id/ticket-branch/reset` (F-1), the owner's "Reset to the last reviewed
+   * commit": the open ticket branch, changed outside the app, goes back to the commit the app
+   * recorded, by compare-and-swap from the tip the owner saw. Refused while a merge into it is under
+   * way, when it is checked out anywhere, or when it moved again. The ticket gets an app line.
+   */
+  async function resetTicketBranch(live: LoopLive, body: unknown): Promise<void> {
+    const input = ResetTicketBranchRequestSchema.parse(body);
+    const runId = live.state.run.id;
+    const row = loop.ticketBranches.getByRun(runId);
+    if (row === undefined || row.state !== 'open') {
+      throw new HttpError(409, 'no_ticket_branch', 'This run has no open ticket branch');
+    }
+    if (live.merges.size > 0) {
+      throw new HttpError(
+        409,
+        'change_busy',
+        'A change is being merged into the ticket branch; try again when it is done',
+      );
+    }
+    if (input.from === row.headCommit) {
+      throw new HttpError(
+        409,
+        'ticket_branch_not_moved',
+        `${row.branch} is already at the last reviewed commit`,
+      );
+    }
+    try {
+      await ctx.workspaces.resetTicketBranch(refOf(live, row), row.headCommit, input.from);
+    } catch (error) {
+      if (error instanceof WorkspaceError) {
+        logger.log('info', 'ticket branch reset refused', { runId, code: error.code });
+        throw workspaceError(error);
+      }
+      throw error;
+    }
+    logger.log('info', 'ticket branch reset to the recorded commit', { runId });
+    ctx.appComment?.(live, resetLine(row.branch, row.headCommit, input.from));
+    ctx.notify?.(live);
   }
 
   /** Every worktree of the run still on disk is released (the ticket branch was settled). */
@@ -1085,6 +1185,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     ownerChangeAction,
     ticketBranchReview,
     ticketBranchAction,
+    resetTicketBranch,
   };
 }
 

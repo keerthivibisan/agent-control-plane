@@ -96,6 +96,11 @@ export function createControlRouter(control: ControlService): Router {
     const dto = await control.ticketBranchAction(param(req.params['id']), req.body);
     res.json(out(TicketBranchReviewDtoSchema, dto));
   });
+  // F-1: the owner resets a ticket branch changed outside the app to the last reviewed commit.
+  router.post('/runs/:id/ticket-branch/reset', csrf, json, async (req, res) => {
+    const dto = await control.resetTicketBranch(param(req.params['id']), req.body);
+    res.json(out(TicketBranchReviewDtoSchema, dto));
+  });
 
   router.post('/approvals/:id', csrf, json, (req, res) => {
     const dto = control.decideApproval(param(req.params['id']), req.body);

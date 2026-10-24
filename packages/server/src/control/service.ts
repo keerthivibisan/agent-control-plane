@@ -386,6 +386,11 @@ export interface ControlService {
    */
   ticketBranchAction(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
   /**
+   * F-1: the owner's "Reset to the last reviewed commit" for a ticket branch changed outside the
+   * app (`ResetTicketBranchRequest`); returns the ticket branch afterwards.
+   */
+  resetTicketBranch(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
+  /**
    * ADR-0025 §4: the owner's Push & open PR for the run's ticket branch (`OpenPullRequestRequest`),
    * or the link to the open one; returns the ticket branch with its pull request.
    */
@@ -1276,7 +1281,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const plugin = await pluginFor(live, project.rootPath, effect);
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
-        const protection = await protectionFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId, ws);
         const briefed = withBriefLines(prompt, briefLines);
         const withCopies = (
           await withAttachments(live, agentRunId, kind, ws.cwd, project.rootPath, briefed)
@@ -1430,7 +1435,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
-        const protection = await protectionFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId, ws);
         const { prompt } = await withAttachments(
           live,
           agentRunId,
@@ -1705,13 +1710,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function protectionFor(
     live: LiveRun,
     agentRunId: string,
+    ws: Workspace,
   ): Promise<AgentProtection | null | undefined> {
     const agent = live.state.agents.find((a) => a.id === agentRunId);
     if (agent === undefined || !hasReviewableChange(agent.kind)) return undefined;
     const launch = agentLaunchMode(live.state, agent);
     if (!launch.sandbox) return undefined;
     try {
-      return { autoMode: launch.autoMode, paths: await fullAutoPaths.specFor(live.state.run.id) };
+      const paths = await fullAutoPaths.specFor(live.state.run.id);
+      // F-1: the repository's git folders stay unwritable for the sandboxed helper; without
+      // them the helper does not start (fail closed), as without its temp folder.
+      const gitDirs = await deps.workspaces.gitDirs(ws);
+      return { autoMode: launch.autoMode, paths: { ...paths, gitDirs } };
     } catch (error) {
       countDiagnostic('full-auto-unavailable');
       logger.log('warn', 'full auto sandbox folder failed', {
@@ -1888,7 +1898,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // for others. Full auto (auto mode plus the sandbox) or the sandbox alone, never both.
     const protection = input.protection;
     if (protection !== undefined && hasReviewableChange(kind)) {
-      const paths = { tempDir: protection.paths.tempDir, denyRead: [...protection.paths.denyRead] };
+      const paths: FullAutoSpec = {
+        tempDir: protection.paths.tempDir,
+        denyRead: [...protection.paths.denyRead],
+        // F-1: the worktree's git folders, which sandboxed commands may not write.
+        ...(protection.paths.gitDirs !== undefined && {
+          gitDirs: [...protection.paths.gitDirs],
+        }),
+      };
       if (protection.autoMode) spec.fullAuto = paths;
       else spec.sandbox = paths;
     }
@@ -2799,6 +2816,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
         appComment: (text) => appComment(live, text),
       });
+      return loop.ticketBranchReview(live);
+    },
+
+    async resetTicketBranch(runId, body) {
+      const live = get(runId);
+      await loop.resetTicketBranch(live, body);
       return loop.ticketBranchReview(live);
     },
 
