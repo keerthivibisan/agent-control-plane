@@ -77,12 +77,12 @@ describe('T-1: the gate never auto-approves a hostile git command', () => {
     expect(verdict('auto', 'npm test').allowed).toBe(true);
   });
 
-  // follow-up: a harness check is matched by its exact command line and auto-approved in
+  // F-2: a harness check is matched by its exact command line and auto-approved in
   // auto-edits and Full auto (`run-harness-check`). The harness file comes from the project, so a
   // check that is itself a branch-changing git command (`git push`, `git checkout`) would run
   // without the owner. The manifest (or this rule) should refuse git write commands as checks.
   knownGap(
-    'follow-up',
+    'F-2',
     'gate',
     'a harness check never auto-approves a branch-changing git command',
     () => {

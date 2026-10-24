@@ -8,7 +8,7 @@ import { it } from 'vitest';
  * wrapper as the server kit's (`packages/server/tests/adversarial/kit.ts`). Synthetic data only.
  */
 export function knownGap(
-  fix: 'F-1' | 'follow-up',
+  fix: 'F-2',
   tag: string,
   title: string,
   body: () => Promise<void> | void,

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
 import {
   RunDetailDtoSchema,
+  TicketBranchReviewDtoSchema,
   TicketDetailDtoSchema,
   type RunDetailDto,
   type TicketBranchDto,
@@ -42,10 +43,10 @@ export const PLAN_STEPS = 1;
  * adversarial.md): it passes while the body fails with a message carrying `[tag]`, and fails
  * (turns red) as soon as the body passes, so the fix that closes the gap has to turn it into a
  * plain `it`. Any other error (a broken setup, a different invariant) still fails the test, which
- * `it.fails` alone would hide. `fix` names what is expected to close it (`F-1` or `follow-up`).
+ * `it.fails` alone would hide. `fix` names what is expected to close it (`F-2` today).
  */
 export function knownGap(
-  fix: 'F-1' | 'follow-up',
+  fix: 'F-2',
   tag: string,
   title: string,
   body: () => Promise<void> | void,
@@ -433,8 +434,9 @@ function changedFiles(repo: string, from: string, to: string): string[] {
  * (d) `[sealed]` every sealed change and the ticket branch hold only files written into a
  *     worktree, never attachment copies or setup outputs;
  * (e) `[bounded]` helper starts stay within `startBound`, and no helper is left running;
- * (f) `[owner-progress]` (with `finish`) the owner can discard every stuck change and then end
- *     the run (discard the ticket branch, or stop it): never a dead end.
+ * (f) `[owner-progress]` (with `finish`) the owner can discard every stuck change, reset a ticket
+ *     branch moved outside the app to its recorded tip (F-1), and then end the run (discard the
+ *     ticket branch, or stop it): never a dead end.
  */
 export async function assertInvariants(sc: Scenario, o: InvariantOptions = {}): Promise<void> {
   const { s, runId, ledger } = sc;
@@ -544,13 +546,38 @@ export async function assertOwnerCanFinish(sc: Scenario): Promise<void> {
   const mainBefore = tipOf(s.repo, 'main');
   let detail = await runDetail(s, runId);
   for (const change of detail.changes ?? []) {
-    if (change.state !== 'needs-owner') continue;
+    // Waiting for the owner, or (F-1) a change whose worktree left its branch: nothing saved.
+    const stuck =
+      change.state === 'needs-owner' || (change.state === 'decision' && change.headCommit === null);
+    if (!stuck) continue;
     const r = await s.post(`/api/runs/${runId}/review`, {
       agentRunId: change.agentRunId,
       action: 'discard',
       reason: 'Synthetic: discarded by the owner.',
     });
     expect(r.status, `[owner-progress] the owner could not discard ${change.role}`).toBe(200);
+  }
+  // F-1: a ticket branch moved outside the app is shown (`movedOutside`), and the owner can reset
+  // it to the last reviewed commit by compare-and-swap from the tip they saw.
+  const review = TicketBranchReviewDtoSchema.safeParse(
+    (await s.get(`/api/runs/${runId}/ticket-branch`)).body,
+  );
+  const moved = review.success ? review.data.ticketBranch.movedOutside : undefined;
+  const actual = tipOf(s.repo, sc.branch);
+  const recorded = review.success ? review.data.ticketBranch : undefined;
+  if (recorded?.state === 'open' && actual !== null && actual !== recorded.headCommit) {
+    expect(moved?.tip, '[owner-progress] a moved ticket branch is not shown as moved').toBe(actual);
+    const r = await s.post(`/api/runs/${runId}/ticket-branch/reset`, { from: actual });
+    expect(r.status, '[owner-progress] the owner could not reset the moved ticket branch').toBe(
+      200,
+    );
+    expect(tipOf(s.repo, sc.branch), '[owner-progress] the reset left the branch moved').toBe(
+      recorded.headCommit,
+    );
+    const after = TicketBranchReviewDtoSchema.parse(
+      (await s.get(`/api/runs/${runId}/ticket-branch`)).body,
+    );
+    expect(after.ticketBranch.movedOutside).toBeUndefined();
   }
   detail = await runDetail(s, runId);
   if (detail.status === 'RUNNING') {

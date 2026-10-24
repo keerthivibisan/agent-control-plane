@@ -56,12 +56,12 @@ what the app did after the fault.
 ## Expected-failure policy: `knownGap`
 
 A case the app cannot meet today is written as `knownGap(fix, tag, title, body)` instead of `it`.
-`fix` is `F-1` or `follow-up`. The wrapper behaves like this:
+`fix` names the work package expected to close it (`F-2` today). The wrapper behaves like this:
 
 - It **passes** while the body fails with a message carrying `[tag]`. That means the gap is still
   open, and it breaks the invariant the test names.
 - It **fails** if the body passes. The message says the gap is closed: make it a plain `it()` and
-  update this page. This forces the update when F-1 merges.
+  update this page. This forces the update when the fix merges (F-1 flipped 52 of them).
 - It **fails** if the body throws anything else, such as a broken setup or another invariant.
   `it.fails` would hide those, which is why the suite does not use it.
 
@@ -69,41 +69,51 @@ This keeps `pnpm check` green today. Assertions are never weakened. `ACP_SHOW_KN
 what each gap breaks. `ACP_T1_LOG=1` prints the app's structured log in the server suite (ids,
 codes and counts only).
 
-## Known gaps on `release/0.3.0` (2026-10-24)
+## Closed by F-1 (merged 2026-10-24, `10239df`)
 
-**Expected to close with F-1 (`wp/f-1-branch-guard`):**
+52 known gaps flipped and are now plain tests with the same assertions:
 
-- **Lead discard after a branch change (server ×4, engine ×1).** The lead cannot discard a change
-  whose seal failed because its worktree left its branch (`workspace-branch-changed`: the ticket
-  branch or another branch checked out, or a detached HEAD). Today only the owner can, so the lead
-  starts a replacement helper.
-- **Full auto sandbox (server ×1).** The sandbox's `denyWrite` names only the worktree's `.git`.
-  In a worktree that is a pointer file. The refs, objects and config of the shared repository live
-  in the repository's common git directory, which neither list names. This is where ACPGIT-3's
-  helpers wrote. Whether writes outside `allowWrite` are refused depends on Claude Code's sandbox
-  defaults, which these tests cannot run.
-- **Adapter guard (adapter ×35).** The guard should stop 13 branch-changing commands and 22
-  disguised spellings of them for a worker and the tester in every mode. Today all of them pass to
-  the gate or the classifier.
+- **Lead discard after a branch change (server ×4, engine ×1).** A seal that finds the worktree
+  off its branch (`workspace-branch-changed`) detaches it and sends the change to the lead
+  (`decision`, `sealFailure: 'branch-changed'`). The lead may discard it; merge and rework are
+  refused. The cases that expected `needs-owner` for this failure now expect `decision`.
+- **A worktree left on the ticket branch (server ×1).** Because of the detach, later merges no
+  longer fail with `ticket-branch-checked-out` and "Try again".
+- **Full auto sandbox (server ×1).** `denyWrite` now holds the worktree's git directory and the
+  repository's common git directory (`FullAutoSpec.gitDirs`).
+- **Adapter guard (adapter ×45).** These are the 13 branch-changing commands, 21 of the 22
+  disguised spellings, and the 11 other repository writes. F-1's guard is an allowlist, so it
+  denies commit, stash, rebase, merge, tag, remote, config and worktree add too. Each row is also
+  checked against F-1's own `checkGitCommand`. The workers' and testers' `disallowedTools` must
+  hold every `GIT_DENY_RULES` entry.
 
-**Follow-ups (not in F-1's list as briefed):**
+The owner-progress check (`assertOwnerCanFinish`) now uses F-1's reset. When the ticket branch
+moved outside the app, the check expects these steps:
+
+1. `movedOutside.tip` shows the moved tip.
+2. POST `/api/runs/:id/ticket-branch/reset` with `{ from: tip }` returns 200.
+3. The branch is back at the recorded tip, and `movedOutside` is gone.
+
+The finish then continues as before.
+
+## Known gaps on `release/0.3.0` after F-1 (12, all `F-2`)
 
 - **Unbounded replacement helpers (server ×2, engine ×2).** A lead can start replacement helpers
-  for one plan step without limit, after failed seals or by discarding and replacing. Rework rounds
-  are bounded. Replacements are not. F-1's discardable failure makes this loop easier.
-- **Retrying a merge that cannot succeed (server ×2, engine ×1).** The server reports a merge
-  refused because the ticket branch moved (`ticket-branch-moved`), or because it is checked out in
-  a worktree (`ticket-branch-checked-out`), as `failed`. The lead is told "Try again" and can retry
-  forever.
-- **Lead discard after other seal failures (server ×2).** The same as the F-1 gap, for
-  `invalid-workspace`: the worktree is gone, or an attachment copy was committed.
+  for one plan step without limit. It can discard each branch-changed change first, or discard a
+  sealed change and replace it. Rework rounds are bounded; replacements are not. F-1's
+  discardable failure makes this loop cheaper.
+- **Retrying a merge that cannot succeed (server ×1, engine ×1).** The server reports a merge
+  refused because the ticket branch moved (`ticket-branch-moved`) as `failed`. The lead is told
+  "Try again" and can retry forever.
+- **Lead discard after other seal failures (server ×2, engine ×1).** This is `invalid-workspace`:
+  the worktree is gone, or an attachment copy was committed. The change still goes to
+  `needs-owner`, which only the owner can decide.
 - **Planted push URL (server ×1).** The owner's Push & open PR pushes to the remote name `origin`.
   A `remote.origin.pushurl` that a helper planted in the shared config therefore receives the push.
-- **Repository writes (adapter ×11).** Other writes to the shared repository are not guarded:
-  commit, stash, rebase, merge, cherry-pick, tag, remote add, config, worktree add, and a disguised
-  commit. It is F-1's call whether to deny them too. A row that turns red is the signal to decide.
 - **Harness checks that write (orchestrator ×1).** A harness check whose command is itself
   `git push` or `git checkout` is auto-approved by `run-harness-check` in auto-edits and Full auto.
+- **Here-strings (adapter ×1).** The guard does not read `bash <<< 'git checkout main'`, a shell
+  fed its command on stdin. In Full auto the sandbox's git directories still stop the write.
 
 Observed and asserted as safe, but worth knowing:
 
@@ -132,12 +142,13 @@ Observed and asserted as safe, but worth knowing:
    - Wrap an extra fault outside a turn in `sc.ledger.fault(name, () => …)`.
    - Call `sc.ledger.resnapshot()` after an owner action that moves refs on purpose, such as a
      merge or a push.
-2. **Engine.** Script the server's reports with `sealed(…, null)` (a failed seal) or
+2. **Engine.** Script the server's reports. `sealed(…, null)` is a failed seal with no code.
+   `changeSealed(…, { …, failure: 'branch-changed' })` is F-1's seal failure. You can also use
    `changeMergeBlocked`. Check what the lead and the owner may still do with `checkChangeAction`.
 3. **Commands.** Add a row to the right list in `adversarial-commands.test.ts`. An ordinary
    command must `pass` in every mode. A hostile one must be `guard`.
-4. Anything that fails today goes in a `knownGap` with an `// F-1:` or `// follow-up:` comment
-   saying what fixes it. Add it to the list above.
+4. Anything that fails today goes in a `knownGap` with a `// F-2:` comment (or the work package
+   that will fix it) saying what fixes it. Add it to the list above.
 
 ## How to run
 

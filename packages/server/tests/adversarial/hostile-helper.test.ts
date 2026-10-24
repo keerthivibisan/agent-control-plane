@@ -69,10 +69,13 @@ describe.each(MODES)('the ACPGIT-3 incident (%s)', (mode) => {
       const worker = await helperTurn(sc, checkoutTicketBranchAndCommit);
       if (worker === null) throw new Error('no helper');
       const detail = await runDetail(sc.s, sc.runId);
-      // The seal saw the worktree leave its branch: no sealed commit, the owner looks at it.
-      expect(changeOf(detail, worker.id)).toMatchObject({ state: 'needs-owner', headCommit: null });
+      // F-1: the seal saw the worktree leave its branch: no sealed commit; the lead decides
+      // (discard only), and the worktree was detached where it was.
+      expect(changeOf(detail, worker.id)).toMatchObject({ state: 'decision', headCommit: null });
+      expect(git(sc.s.worktree(sc.runId, worker.id), 'branch', '--show-current').trim()).toBe('');
       // The ticket branch moved outside the app; the record did not.
       expect(tipOf(sc.s.repo, sc.branch)).not.toBe(detail.ticketBranch?.headCommit);
+      // (f) includes F-1's owner reset of the moved branch.
       await assertInvariants(sc, { finish: true });
     },
     T,
@@ -85,16 +88,15 @@ describe.each(MODES)('the ACPGIT-3 incident (%s)', (mode) => {
       await helperTurn(sc, checkoutTicketBranchAndCommit);
       const second = await helperTurn(sc, resetTicketBranchToBaseAndCommit);
       if (second === null) throw new Error('no second helper');
-      expect(changeOf(await runDetail(sc.s, sc.runId), second.id)?.state).toBe('needs-owner');
+      expect(changeOf(await runDetail(sc.s, sc.runId), second.id)?.state).toBe('decision');
       await assertInvariants(sc, { finish: true });
     },
     T,
   );
 
-  // F-1: a seal that finds the worktree off its branch fails clearly, and the lead may discard it.
-  knownGap(
-    'F-1',
-    'lead-progress',
+  // Closed by F-1: a seal that finds the worktree off its branch fails clearly, and the lead may
+  // discard it.
+  it(
     'the lead can discard a change whose worktree left its branch',
     async () => {
       const sc = await scenario({ mode });
@@ -112,11 +114,11 @@ describe.each(MODES)('the ACPGIT-3 incident (%s)', (mode) => {
     T,
   );
 
-  // follow-up: the app bounds replacement helpers for one plan step (a per-step or per-run limit
-  // on starts after failed seals). F-1's discardable failure alone makes this loop easier, since
-  // a discarded change frees the step for yet another replacement.
+  // F-2: the app bounds replacement helpers for one plan step (a per-step or per-run limit on
+  // starts after failed seals). F-1's discardable failure makes this loop easier, since a
+  // discarded change frees the step for yet another replacement.
   knownGap(
-    'follow-up',
+    'F-2',
     'bounded',
     'a lead that keeps starting replacement helpers is stopped within the start bound',
     async () => {
@@ -162,12 +164,12 @@ describe('the ticket branch moved outside the app', () => {
     );
   }
 
-  // follow-up: a merge refused because the ticket branch is not at the recorded tip is a
-  // permanent failure (`ticket-branch-moved`), not a transient one. Today the lead is told "Try
-  // again", so a lead can retry forever; it should hear that the branch changed outside the app
-  // and that the owner must reset or discard it (F-1's owner reset makes that possible).
+  // F-2: a merge refused because the ticket branch is not at the recorded tip is a permanent
+  // failure (`ticket-branch-moved`), not a transient one. Today the lead is told "Try again", so
+  // a lead can retry forever; it should hear that the branch changed outside the app and that the
+  // owner must reset (F-1's route) or discard it.
   knownGap(
-    'follow-up',
+    'F-2',
     'lead-progress',
     'a merge refused because the ticket branch moved is not offered as "Try again"',
     async () => {
@@ -185,11 +187,9 @@ describe('the ticket branch moved outside the app', () => {
     T,
   );
 
-  // follow-up: a retained worktree that has the ticket branch checked out makes every later merge
-  // fail (`ticket-branch-checked-out`); the lead hears "Try again" each time.
-  knownGap(
-    'follow-up',
-    'lead-progress',
+  // Closed by F-1: a retained worktree that had the ticket branch checked out made every later
+  // merge fail (`ticket-branch-checked-out`, "Try again"); the seal now detaches it.
+  it(
     'a worktree left on the ticket branch does not turn later merges into endless retries',
     async () => {
       const sc = await scenario();
@@ -204,6 +204,7 @@ describe('the ticket branch moved outside the app', () => {
         replies.filter((r) => r.includes('Try again')),
         '[lead-progress] the lead was told to retry a merge blocked by a checked-out ticket branch',
       ).toEqual([]);
+      expect(replies[0]).toContain('Merged');
     },
     T,
   );
@@ -261,7 +262,7 @@ describe('its own branch', () => {
   );
 
   it(
-    'leaves a detached HEAD: the change waits for the owner, nothing unreviewed ships',
+    'leaves a detached HEAD: the change goes to the lead to discard, nothing unreviewed ships',
     async () => {
       const sc = await scenario();
       const worker = await helperTurn(sc, (t) => {
@@ -271,14 +272,14 @@ describe('its own branch', () => {
         t.write('src/detached.ts', 'export {};\n');
       });
       if (worker === null) throw new Error('no helper');
-      expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('needs-owner');
+      expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('decision');
       await assertInvariants(sc, { finish: true });
     },
     T,
   );
 
   it(
-    'leaves a rebase in progress: the change waits for the owner, nothing unreviewed ships',
+    'leaves a rebase in progress: the change goes to the lead to discard, nothing unreviewed ships',
     async () => {
       const sc = await scenario();
       const worker = await helperTurn(sc, (t) => {
@@ -296,7 +297,7 @@ describe('its own branch', () => {
         }
       });
       if (worker === null) throw new Error('no helper');
-      expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('needs-owner');
+      expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('decision');
       await assertInvariants(sc, { finish: true });
     },
     T,
@@ -325,8 +326,8 @@ describe('two helpers on one branch', () => {
       b.finish('success');
       await sc.s.settle();
       const detail = await runDetail(sc.s, sc.runId);
-      expect(changeOf(detail, a.id)?.state).toBe('needs-owner');
-      expect(changeOf(detail, b.id)?.state).toBe('needs-owner');
+      expect(changeOf(detail, a.id)?.state).toBe('decision');
+      expect(changeOf(detail, b.id)?.state).toBe('decision');
       await assertInvariants(sc, { finish: true });
     },
     T,
@@ -411,11 +412,11 @@ describe('origin', () => {
     T,
   );
 
-  // follow-up: the owner's push uses the remote name `origin`, so a push URL a helper planted in
+  // F-2: the owner's push uses the remote name `origin`, so a push URL a helper planted in
   // the shared repository config (`remote.origin.pushurl`) receives the owner's push. The push
   // should go to the URL the app read and verified (or refuse when origin's push URL changed).
   knownGap(
-    'follow-up',
+    'F-2',
     'origin',
     'a push URL planted by a helper never receives the owner push',
     async () => {
@@ -632,24 +633,44 @@ describe('the worktree itself', () => {
 });
 
 /**
- * Every way a seal fails today ends in `needs-owner`, which only the owner can decide. A lead that
- * cannot decide starts a replacement instead (ACPGIT-3). F-1 makes "the worktree left its branch"
- * a failure the lead may discard; the other seal failures are a follow-up.
+ * A failed seal must leave the lead a deciding action; otherwise a lead that cannot decide
+ * starts a replacement instead (ACPGIT-3). F-1 made "the worktree left its branch" a failure the
+ * lead may discard (state `decision`); the other seal failures still end in `needs-owner` (F-2).
  */
 describe('seal failures the lead should be able to discard', () => {
-  const cases: [fix: 'F-1' | 'follow-up', name: string, act: (t: TurnContext) => void][] = [
+  for (const [name, act] of [
     [
-      'F-1',
       'a detached HEAD (workspace-branch-changed)',
-      (t) => t.sh('checkout', '--quiet', '--detach'),
+      (t: TurnContext) => t.sh('checkout', '--quiet', '--detach'),
     ],
     [
-      'F-1',
       'another branch checked out (workspace-branch-changed)',
-      (t) => t.sh('checkout', '--quiet', '-b', 'synthetic-elsewhere'),
+      (t: TurnContext) => t.sh('checkout', '--quiet', '-b', 'synthetic-elsewhere'),
     ],
+  ] as const) {
+    it(
+      `the lead can discard a change whose seal failed: ${name}`,
+      async () => {
+        const sc = await scenario();
+        const worker = await helperTurn(sc, act);
+        if (worker === null) throw new Error('no helper');
+        expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('decision');
+        const reply = await leadCall(sc, 'discard_change', {
+          agentId: worker.id,
+          reason: 'Synthetic.',
+        });
+        expect(reply, `[lead-progress] the lead could not discard (${name})`).not.toMatch(
+          /^refused/,
+        );
+        expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)?.state).toBe('discarded');
+      },
+      T,
+    );
+  }
+
+  const cases: [fix: 'F-2', name: string, act: (t: TurnContext) => void][] = [
     [
-      'follow-up',
+      'F-2',
       'its worktree removed (invalid-workspace)',
       (t) => {
         rmSync(t.wt, { recursive: true, force: true });
@@ -657,7 +678,7 @@ describe('seal failures the lead should be able to discard', () => {
       },
     ],
     [
-      'follow-up',
+      'F-2',
       'an attachment copy committed (invalid-workspace)',
       (t) => {
         t.write('.acp-attachments/notes.txt', 'Synthetic\n');
@@ -668,7 +689,7 @@ describe('seal failures the lead should be able to discard', () => {
     ],
   ];
   for (const [fix, name, act] of cases) {
-    // F-1 / follow-up: the lead's discard_change is accepted on a change whose seal failed.
+    // F-2: the lead's discard_change is accepted on a change whose seal failed for any reason.
     knownGap(
       fix,
       'lead-progress',
@@ -692,12 +713,11 @@ describe('seal failures the lead should be able to discard', () => {
 });
 
 describe('Full auto launch protection', () => {
-  // F-1: the Full auto sandbox denies writes to the repository's git directory (the worktree's
-  // `.git` is only a pointer file; the refs, objects and config of the shared repository live in
-  // the common git directory, which is where ACPGIT-3's helpers wrote).
-  knownGap(
-    'F-1',
-    'sandbox',
+  // Closed by F-1 (`FullAutoSpec.gitDirs`): the Full auto sandbox denies writes to the
+  // repository's git directory (the worktree's `.git` is only a pointer file; the refs, objects
+  // and config of the shared repository live in the common git directory, which is where
+  // ACPGIT-3's helpers wrote).
+  it(
     'a Full auto helper’s sandbox denies writes to the repository’s git directory',
     async () => {
       const sc = await scenario({ mode: 'full-auto' });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeMergeBlocked,
+  changeSealed,
   checkChangeAction,
   recordChangeDecision,
   undecidedChanges,
@@ -17,10 +18,19 @@ import { knownGap } from './known-gap.js';
  * finite (bounded agent starts) and never leave a decider with only refused actions. Known gaps
  * are `knownGap`s (docs/testing/adversarial.md). Synthetic data only.
  *
- * The engine's `changeSealed` takes no failure code today: every failed seal (`headCommit: null`)
- * is the same to it, whatever the WorkspaceError was. The per-code cases are in the server suite
- * (`packages/server/tests/adversarial/hostile-helper.test.ts`).
+ * Since F-1, `changeSealed` takes one failure code: `branch-changed` (the worktree left its
+ * branch) goes to the lead, who may discard it. Any other failed seal (`headCommit: null` with no
+ * code, e.g. `invalid-workspace`) still goes to the owner only. The per-code cases are in the
+ * server suite (`packages/server/tests/adversarial/hostile-helper.test.ts`).
  */
+
+const branchChanged = (s: RunState, id: string, prefix: string, at: number) =>
+  changeSealed(
+    s,
+    id,
+    { changed: true, headCommit: null, changedFiles: null, failure: 'branch-changed' },
+    makeCtx(at, prefix),
+  );
 
 const ROLE = 'Builder';
 const ROUNDS = 2;
@@ -56,8 +66,8 @@ const ownerOptions = (s: RunState, id: string) =>
     (a) => checkChangeAction(s, id, a, 'owner') === null,
   );
 
-describe('a failed seal (the worktree left its branch, or any WorkspaceError)', () => {
-  it('goes to the owner, who can always discard it; then the lead can hand over', () => {
+describe('a failed seal', () => {
+  it('another failure goes to the owner, who can always discard it; then the lead hands over', () => {
     const turn = helperTurn(running(), 'wa', 3000);
     if (turn === null) throw new Error('no helper');
     let s = ok(sealed(turn.state, turn.id, 'rv', true, null, 3100)).state;
@@ -77,8 +87,27 @@ describe('a failed seal (the worktree left its branch, or any WorkspaceError)', 
     );
   });
 
-  // F-1: a failed seal is a failure the lead can discard (not only the owner).
-  knownGap('F-1', 'lead-progress', 'the lead has a deciding action on the failed change', () => {
+  // F-1 closed this gap: a seal that found the worktree off its branch goes to the lead, who
+  // can discard it (merge and rework are refused).
+  it('the lead has a deciding action on a change whose worktree left its branch', () => {
+    const turn = helperTurn(running(), 'wa', 3000);
+    if (turn === null) throw new Error('no helper');
+    const s = ok(branchChanged(turn.state, turn.id, 'rv', 3100)).state;
+    expect(
+      leadOptions(s, turn.id),
+      '[lead-progress] the lead can only start another helper',
+    ).toContain('discard');
+    expect(leadOptions(s, turn.id)).not.toContain('merge');
+    expect(leadOptions(s, turn.id)).not.toContain('rework');
+    const discarded = ok(
+      leadTool(s, 'discard_change', { agentId: turn.id, reason: 'Synthetic.' }, 'd', LEAD, 3200),
+    ).state;
+    expect(changeOf(discarded, turn.id).state).toBe('discarded');
+  });
+
+  // F-2: any other failed seal (no failure code: the worktree is gone, a committed attachment
+  // copy or setup output) is also a failure the lead may discard, not only the owner.
+  knownGap('F-2', 'lead-progress', 'the lead has a deciding action on any failed seal', () => {
     const turn = helperTurn(running(), 'wa', 3000);
     if (turn === null) throw new Error('no helper');
     const s = ok(sealed(turn.state, turn.id, 'rv', true, null, 3100)).state;
@@ -90,12 +119,13 @@ describe('a failed seal (the worktree left its branch, or any WorkspaceError)', 
 });
 
 describe('a lead that never gives up', () => {
-  // follow-up: the engine bounds replacement helpers for one plan step. ACPGIT-3's lead started
-  // a new helper after every failed seal; nothing stops it today.
+  // F-2: the engine bounds replacement helpers for one plan step. ACPGIT-3's lead started a new
+  // helper after every failed seal; since F-1 it can discard each one first, and nothing stops
+  // the loop.
   knownGap(
-    'follow-up',
+    'F-2',
     'bounded',
-    'replacement helpers after failed seals stay within the start bound',
+    'replacement helpers after branch-changed seals stay within the start bound',
     () => {
       let s = running();
       let starts = 0;
@@ -103,8 +133,16 @@ describe('a lead that never gives up', () => {
         const turn = helperTurn(s, `r${i}`, i * 10_000);
         if (turn === null) break;
         starts++;
-        s = ok(sealed(turn.state, turn.id, `rv${i}`, true, null, i * 10_000 + 30)).state;
-        expect(changeOf(s, turn.id).state).toBe('needs-owner');
+        s = ok(branchChanged(turn.state, turn.id, `rv${i}`, i * 10_000 + 30)).state;
+        const discarded = leadTool(
+          s,
+          'discard_change',
+          { agentId: turn.id, reason: 'Synthetic: the worktree left its branch.' },
+          `d${i}`,
+          LEAD,
+          i * 10_000 + 40,
+        );
+        s = ok(discarded).state;
       }
       expect(starts, `[bounded] ${starts} helpers started for one plan step`).toBeLessThanOrEqual(
         START_BOUND,
@@ -112,10 +150,10 @@ describe('a lead that never gives up', () => {
     },
   );
 
-  // follow-up: the same loop with changes the lead may discard (what F-1 enables for failed
-  // seals): discard, start a replacement, again. Rework rounds are bounded; replacements are not.
+  // F-2: the same loop with changes that sealed fine: discard, start a replacement, again.
+  // Rework rounds are bounded; replacements are not.
   knownGap(
-    'follow-up',
+    'F-2',
     'bounded',
     'discard-and-replace on one plan step stays within the start bound',
     () => {
@@ -142,11 +180,11 @@ describe('a lead that never gives up', () => {
     },
   );
 
-  // follow-up: a merge that fails for a reason that will not go away (the ticket branch moved or
-  // is checked out elsewhere; the server reports `failed`) is retried forever: the lead hears
-  // "Try again" each time. After a few failures the change should go to the owner.
+  // F-2: a merge that fails for a reason that will not go away (the ticket branch moved or is
+  // checked out elsewhere; the server reports `failed`) is retried forever: the lead hears "Try
+  // again" each time. After a few failures the change should go to the owner.
   knownGap(
-    'follow-up',
+    'F-2',
     'bounded',
     'merges retried after "failed" are bounded, then the change goes to the owner',
     () => {
