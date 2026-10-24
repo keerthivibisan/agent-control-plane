@@ -2,6 +2,7 @@ import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import {
+  checkGitArgv,
   HarnessCheckSchema,
   HarnessSetupStepSchema,
   type CheckRun,
@@ -109,6 +110,15 @@ export interface CheckRunner {
 /** The plain reason a network step was not run (ADR-0027 §2). */
 export const NETWORK_REFUSED_NOTE =
   'Not run: this step uses the network, and the project setting "Setup may use the network" is off.';
+
+/**
+ * F-2: a check or setup step that is branch-managing git or gh (core's `checkGitArgv`, F-1's
+ * command guard) is never started: a check is recorded `error`, a setup step `refused`.
+ */
+export const BRANCH_CHECK_NOTE =
+  'Not run: this check changes branches; the app owns branches and commits.';
+export const BRANCH_SETUP_NOTE =
+  'Not run: this setup step changes branches; the app owns branches and commits.';
 
 /**
  * The abort reason the check service passes when the app shuts down (WG-F3). Checks it stops are
@@ -324,6 +334,10 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
     if (!HarnessCheckSchema.safeParse(check).success) {
       return finished(base, 'error', null, 0, 'This check is not valid and was not run.');
     }
+    // F-2: never started, wherever it runs (a worktree, a tip checkout, the main branch).
+    if (checkGitArgv(check.argv) !== null) {
+      return finished(base, 'error', null, 0, BRANCH_CHECK_NOTE);
+    }
     return { ...base, ...(await runCommand(check, root, env, signal, 'check')) };
   }
 
@@ -356,6 +370,14 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
         outcome = done('error', null, 0, 'The checkout to prepare does not exist.');
       } else if (!HarnessSetupStepSchema.safeParse(step).success) {
         outcome = done('error', null, 0, 'This setup step is not valid and was not run.');
+      } else if (checkGitArgv(step.argv) !== null) {
+        // F-2: never started; like any refusal, it stops the rest of the setup.
+        outcome = {
+          status: 'refused',
+          exitCode: null,
+          durationMs: 0,
+          outputTail: new OutputTail().finish([BRANCH_SETUP_NOTE]),
+        };
       } else if (step.network === true && !input.networkAllowed) {
         // ADR-0027 §2: never started, so nothing reached the network.
         outcome = {
@@ -409,7 +431,8 @@ function finished(
  */
 export function checksNotRun(
   input: Pick<RunChecksInput, 'checks' | 'projectId' | 'runId' | 'agentRunId'>,
-  failedStep: Pick<SetupRun, 'name' | 'status' | 'exitCode'>,
+  failedStep: Pick<SetupRun, 'name' | 'status' | 'exitCode'> &
+    Partial<Pick<SetupRun, 'outputTail'>>,
   now: () => Date = () => new Date(),
   newId: () => string = randomUUID,
 ): CheckRun[] {
@@ -436,10 +459,14 @@ export function checksNotRun(
 }
 
 /** The plain sentence for a setup step that did not pass (the ticket, the lead, skipped checks). */
-export function setupFailureNote(failed: Pick<SetupRun, 'name' | 'status' | 'exitCode'>): string {
+export function setupFailureNote(
+  failed: Pick<SetupRun, 'name' | 'status' | 'exitCode'> & Partial<Pick<SetupRun, 'outputTail'>>,
+): string {
   const how =
     failed.status === 'refused'
-      ? 'was not run: it uses the network, and "Setup may use the network" is off'
+      ? failed.outputTail?.includes(BRANCH_SETUP_NOTE) === true
+        ? 'was not run: it changes branches, and the app owns branches and commits'
+        : 'was not run: it uses the network, and "Setup may use the network" is off'
       : failed.status === 'timed-out'
         ? 'timed out'
         : failed.status === 'failed'

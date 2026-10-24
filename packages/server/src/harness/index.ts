@@ -12,6 +12,8 @@ export type {
 export { OutputTail, stripTerminalCodes } from './output.js';
 export {
   ChecksShutdown,
+  BRANCH_CHECK_NOTE,
+  BRANCH_SETUP_NOTE,
   NETWORK_REFUSED_NOTE,
   checksNotRun,
   createCheckRunner,

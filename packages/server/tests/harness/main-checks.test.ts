@@ -1,7 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createCheckRunner, createMainChecks } from '../../src/harness/index.js';
+import {
+  BRANCH_CHECK_NOTE,
+  BRANCH_SETUP_NOTE,
+  createCheckRunner,
+  createMainChecks,
+} from '../../src/harness/index.js';
 import { SAFE_GIT_CONFIG } from '../../src/workspace/index.js';
 import { git, makeRepo, spyingGit, tempDir, write } from '../workspace/helpers.js';
 
@@ -239,5 +244,81 @@ describe('createMainChecks with setup steps (ADR-0027)', { timeout: 30_000 }, ()
     });
     expect(allowed.setupRuns.map((r) => r.status)).toEqual(['passed']);
     expect(allowed.results.map((r) => r.status)).toEqual(['passed']);
+  });
+});
+
+/**
+ * F-2: the main branch's "Run checks now" goes through the same runner, so a branch-managing git
+ * check or setup step is never started there either: no branch appears in the owner's repository.
+ */
+describe('createMainChecks with branch-managing steps (F-2)', { timeout: 30_000 }, () => {
+  it('records a branch-managing check as an error and runs the others', async () => {
+    const repo = makeRepo({
+      '.acp/harness.json': JSON.stringify({
+        version: 1,
+        checks: [
+          {
+            id: 'branch',
+            name: 'Branch',
+            argv: ['git', 'branch', 'planted'],
+            timeoutSec: 30,
+            required: true,
+          },
+          {
+            id: 'test',
+            name: 'Unit tests',
+            argv: ['node', 'check.mjs'],
+            timeoutSec: 30,
+            required: true,
+          },
+        ],
+      }),
+      'check.mjs': "console.log('ok');",
+    });
+    const { mainChecks } = setup();
+    const result = await mainChecks.run({ projectRoot: repo, projectId: 'p1' });
+    expect(result.results.map((r) => [r.checkId, r.status])).toEqual([
+      ['branch', 'error'],
+      ['test', 'passed'],
+    ]);
+    expect(result.results[0]?.outputTail).toContain(BRANCH_CHECK_NOTE);
+    expect(git(repo, 'branch', '--list').trim()).toBe('* main');
+  });
+
+  it('refuses a branch-managing setup step and records every check as not run', async () => {
+    const repo = makeRepo({
+      '.acp/harness.json': JSON.stringify({
+        version: 1,
+        setup: [
+          {
+            id: 'switch',
+            name: 'Switch',
+            argv: ['git', 'switch', '-c', 'planted'],
+            timeoutSec: 30,
+          },
+          { id: 'prepare', name: 'Prepare', argv: ['node', 'check.mjs'], timeoutSec: 30 },
+        ],
+        checks: [
+          {
+            id: 'test',
+            name: 'Unit tests',
+            argv: ['node', 'check.mjs'],
+            timeoutSec: 30,
+            required: true,
+          },
+        ],
+      }),
+      'check.mjs': "console.log('ok');",
+    });
+    const { mainChecks } = setup();
+    // With the network switch on: the branch rule never depends on it.
+    const result = await mainChecks.run({ projectRoot: repo, projectId: 'p1', setupNetwork: true });
+    expect(result.setupRuns.map((r) => [r.stepId, r.status])).toEqual([['switch', 'refused']]);
+    expect(result.setupRuns[0]?.outputTail).toContain(BRANCH_SETUP_NOTE);
+    expect(result.results.map((r) => [r.checkId, r.status])).toEqual([['test', 'skipped']]);
+    expect(result.results[0]?.outputTail).toContain(
+      "Not run: Setup step 'Switch' was not run: it changes branches, and the app owns branches and commits.",
+    );
+    expect(git(repo, 'branch', '--list').trim()).toBe('* main');
   });
 });

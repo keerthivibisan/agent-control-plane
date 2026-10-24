@@ -5,6 +5,7 @@ import { SetupRunSchema, type HarnessCheck, type HarnessSetupStep, type SetupRun
 import { describe, expect, it } from 'vitest';
 import {
   ChecksShutdown,
+  BRANCH_SETUP_NOTE,
   NETWORK_REFUSED_NOTE,
   checksNotRun,
   createCheckRunner,
@@ -187,6 +188,46 @@ describe('createCheckRunner().runSetup', { timeout: 30_000 }, () => {
     const allowed = await runner.runSetup({ ...base, root, steps, networkAllowed: true });
     expect(allowed.map((r) => r.status)).toEqual(['passed', 'passed']);
     expect(calls).toHaveLength(2);
+  });
+
+  it('F-2: refuses a branch-managing git step without starting anything; it stops the rest', async () => {
+    for (const argv of [
+      ['git', 'checkout', 'dev'],
+      ['git', 'push', 'origin', 'HEAD'],
+      ['sh', '-c', 'git reset --hard main'],
+      ['gh', 'pr', 'merge', '1'],
+    ]) {
+      const root = checkout();
+      const { spawn: spy, calls } = spyingSpawn();
+      // With the network switch on too: the branch rule never depends on it.
+      const results = await createCheckRunner({ spawn: spy }).runSetup({
+        ...base,
+        networkAllowed: true,
+        root,
+        steps: [step('switch', argv), step('gen', ['node', 'scripts/gen.mjs'])],
+      });
+      expectValid(results);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ status: 'refused', exitCode: null, durationMs: 0 });
+      expect(results[0]?.outputTail).toContain(BRANCH_SETUP_NOTE);
+      expect(calls).toHaveLength(0);
+      expect(existsSync(join(root, 'order.log'))).toBe(false);
+      expect(setupFailureNote(results[0] as SetupRun)).toBe(
+        "Setup step 'Step switch' was not run: it changes branches, and the app owns branches and commits.",
+      );
+    }
+  });
+
+  it('F-2: a reading git step still runs', async () => {
+    const root = checkout();
+    const { spawn: spy, calls } = spyingSpawn();
+    const results = await createCheckRunner({ spawn: spy }).runSetup({
+      ...base,
+      root,
+      steps: [step('version', ['git', '--version'])],
+    });
+    expect(results[0]?.status).toBe('passed');
+    expect(calls).toHaveLength(1);
   });
 
   it('refuses a step whose first word is not a bare command name', async () => {

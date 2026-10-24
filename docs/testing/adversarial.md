@@ -123,7 +123,8 @@ The last 12 known gaps flipped and are now plain tests with the same assertions
   address is refused, and `ext::` and `fd::` are off (`code-host/push-target.ts`).
 - **Harness checks that write (orchestrator ×1).** F-1's command guard (`checkGitCommand`, now in
   `@acp/core`) runs before every allowlist rule, so such a check is never pre-approved. The
-  harness status warns about any check or setup step that is branch-managing git.
+  harness status warns about any check or setup step that is branch-managing git. The app's own
+  runner never starts one: a check is recorded `error`, and a setup step `refused`.
 - **Here-strings (adapter ×1).** The guard reads a shell's input. A here-string or here-document
   fed to a shell is read as a script. A shell that reads a pipe, or input with a command
   substitution, is denied when the command mentions git. `xargs git` with no subcommand is

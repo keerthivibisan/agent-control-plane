@@ -210,8 +210,8 @@ describe('harnessStatusOf', () => {
     );
     expect(r.status.state).toBe('ready');
     expect(r.status.problems).toEqual([
-      "Check 'publish' runs git push. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.",
-      "Setup step 'switch' runs git checkout. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.",
+      "Check 'publish' runs git push. The app owns branches and commits, so it is never run, by the app or an agent; use a command that only reads or tests.",
+      "Setup step 'switch' runs git checkout. The app owns branches and commits, so it is never run, by the app or an agent; use a command that only reads or tests.",
     ]);
     expect(HarnessStatusSchema.safeParse(r.status).success).toBe(true);
   });

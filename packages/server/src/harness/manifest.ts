@@ -129,8 +129,8 @@ export function harnessStatusOf(raw: unknown, checkedAt: string): HarnessReadRes
 
 /**
  * F-2: a check or setup step that is itself branch-managing git (`git push`, `git checkout`), read
- * by F-1's command guard. The state does not change; the owner is told why such a step never runs
- * pre-approved for an agent: the app owns branches and commits.
+ * by F-1's command guard. The state does not change; the owner is told why such a step never runs:
+ * the runner refuses it, and no agent is pre-approved to run it. The app owns branches and commits.
  */
 function gitWarnings(manifest: HarnessManifest): string[] {
   const warn = (subject: string, argv: readonly string[]): string[] => {
@@ -138,7 +138,7 @@ function gitWarnings(manifest: HarnessManifest): string[] {
     return denied === null
       ? []
       : [
-          `${subject} runs ${denied.command}. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.`,
+          `${subject} runs ${denied.command}. The app owns branches and commits, so it is never run, by the app or an agent; use a command that only reads or tests.`,
         ];
   };
   return [
