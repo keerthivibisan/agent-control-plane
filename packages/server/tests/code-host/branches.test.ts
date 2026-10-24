@@ -268,16 +268,23 @@ describe('create a branch', { timeout: TIMEOUT }, () => {
     expect(bareTip(bare, 'dev')).toBe(head(repo));
     expect(dto.branches.find((b) => b.name === 'dev')?.onOrigin).toBe(true);
     const push = calls.find((c) => c.args.includes('push'));
+    // F-2: origin's own address (never the remote name), the exact commit, no ext/fd transports.
     expect(push?.args).toEqual([
       ...SAFE_GIT_CONFIG,
       '-c',
+      'protocol.ext.allow=never',
+      '-c',
+      'protocol.fd.allow=never',
+      '-c',
       'push.recurseSubmodules=no',
       'push',
-      '--set-upstream',
       '--no-verify',
-      'origin',
-      'refs/heads/dev:refs/heads/dev',
+      bare,
+      `${head(repo)}:refs/heads/dev`,
     ]);
+    // What `--set-upstream origin` did: the upstream is origin, not the address.
+    expect(git(repo, 'config', '--get', 'branch.dev.remote').trim()).toBe('origin');
+    expect(git(repo, 'config', '--get', 'branch.dev.merge').trim()).toBe('refs/heads/dev');
     expect(() => readFileSync(join(repo, 'hook-ran'))).toThrow();
   });
 
@@ -319,9 +326,13 @@ describe('create a branch', { timeout: TIMEOUT }, () => {
       expect(call.options.shell).toBe(false);
       expect(call.options.cwd).toBe(repo);
       expect(call.args.slice(0, SAFE_GIT_CONFIG.length)).toEqual([...SAFE_GIT_CONFIG]);
-      for (const sub of ['checkout', 'switch', 'reset', 'fetch', 'update-ref']) {
+      for (const sub of ['checkout', 'switch', 'reset', 'fetch']) {
         expect(call.args).not.toContain(sub);
       }
+      // F-2: the push goes to origin's address, so the app sets the remote-tracking ref itself
+      // (what a push to `origin` did); it never moves any other ref.
+      const at = call.args.indexOf('update-ref');
+      if (at >= 0) expect(call.args[at + 1]).toBe('refs/remotes/origin/dev');
     }
     const branch = calls.find((c) => c.args.includes('branch'));
     expect(branch?.args.slice(SAFE_GIT_CONFIG.length)).toEqual([

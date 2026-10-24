@@ -3,6 +3,7 @@ import type { TicketBranchDto } from '@acp/core/api';
 import { silentLogger, type Logger } from '../logger.js';
 import { GitCommandError, SAFE_GIT_CONFIG, type GitRunner } from '../workspace/index.js';
 import { CodeHostError, MESSAGES } from './errors.js';
+import { originPushUrl, PUSH_CONFIG } from './push-target.js';
 
 /**
  * Where a finished ticket branch still exists, and deleting it (ADR-0025 §9, G-G). Only on the
@@ -11,8 +12,8 @@ import { CodeHostError, MESSAGES } from './errors.js';
  * the project's base). Every git call is an argument array with hooks disabled
  * (`SAFE_GIT_CONFIG`); git's output is only parsed (ref names), never shown or logged.
  *
- * Writes, all on the owner's click: `git push --no-verify origin --delete refs/heads/<b>` when
- * origin has it, `git branch -D <b>` in the project, and, when origin no longer has the branch,
+ * Writes, all on the owner's click: `git push --no-verify <origin's address> --delete
+ * refs/heads/<b>` when origin has it (F-2: the address, never the remote name: `push-target.ts`), `git branch -D <b>` in the project, and, when origin no longer has the branch,
  * removing the stale remote-tracking ref `refs/remotes/origin/<b>` (what `git fetch --prune` would
  * do for that one branch), so "on GitHub" reads stay true without a fetch.
  */
@@ -184,11 +185,17 @@ export function createTicketBranchGit(deps: { git: GitRunner; logger?: Logger })
           throw new CodeHostError('branch_delete_failed', MESSAGES.remoteUnreadable(b));
         }
         if (asked) {
+          // F-2: origin's own address, never the remote name (a planted pushurl is never used).
+          const url = await originPushUrl(deps.git, projectRoot).catch((error: unknown) => {
+            if (!(error instanceof CodeHostError)) throw error;
+            throw new CodeHostError('branch_delete_failed', error.message);
+          });
           try {
             await run(projectRoot, [
+              ...PUSH_CONFIG,
               'push',
               '--no-verify',
-              'origin',
+              url,
               '--delete',
               `refs/heads/${b}`,
             ]);

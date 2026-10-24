@@ -264,9 +264,10 @@ describe('delete (on origin, then in the project)', { timeout: TIMEOUT }, () => 
     expect(git(repo, 'branch', '--list', BRANCH).trim()).toBe('');
     expect(checkoutState(repo)).toEqual(before);
     const args = spy.calls.slice(calls).map((c) => (c.args as string[]).filter((a) => a !== '-c'));
+    // F-2: origin's own address, never the remote name (a planted pushurl is never followed).
     expect(
       args.some((a) =>
-        a.join(' ').endsWith(`push --no-verify origin --delete refs/heads/${BRANCH}`),
+        a.join(' ').endsWith(`push --no-verify ${REMOTE_URL} --delete refs/heads/${BRANCH}`),
       ),
     ).toBe(true);
     expect(args.some((a) => a.join(' ').endsWith(`branch -D ${BRANCH}`))).toBe(true);

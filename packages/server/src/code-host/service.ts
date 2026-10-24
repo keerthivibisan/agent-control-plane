@@ -17,6 +17,7 @@ import { GitCommandError, SAFE_GIT_CONFIG, type GitRunner } from '../workspace/i
 import { createProjectBranches } from './branches.js';
 import { CodeHostError, MESSAGES } from './errors.js';
 import { createGitHubCli, type CodeHostCli, type PullRequestInfo } from './github.js';
+import { originPushUrl, PUSH_CONFIG } from './push-target.js';
 import { parseRemoteUrl, providerOf, repoSlug, type RemoteRepo } from './remote.js';
 import { createCliRunner, type CliRunner } from './runner.js';
 import {
@@ -34,7 +35,9 @@ import {
  *
  * - `status`: `origin`'s host and `owner/name` (never the URL), `gh --version` and
  *   `gh auth status` by exit code, and the default branch from `gh repo view` when logged in.
- * - `push`: `git push --set-upstream origin refs/heads/<b>:refs/heads/<b>`; never forced.
+ * - `push`: `git push <origin's address> <commit>:refs/heads/<b>`, then the tracking ref and the
+ *   upstream (what `--set-upstream origin` did); never forced. F-2: origin's configured address,
+ *   never the remote name, so a planted `remote.origin.pushurl` is never used (`push-target.ts`).
  * - `openPullRequest`: links the open pull request for the branch when it targets the same base,
  *   refuses one that targets another base, else pushes and runs `gh pr create`.
  * - `view`: `gh pr view`.
@@ -170,17 +173,28 @@ export function createCodeHostService(deps: CodeHostServiceDeps): CodeHostServic
 
   async function push(projectRoot: string, name: string): Promise<void> {
     const b = branch(name, 'ticket branch');
+    // F-2: origin's own address, never the remote name (a planted pushurl is never followed).
+    const url = await originPushUrl(deps.git, projectRoot);
+    let commit: string;
+    try {
+      const { stdout } = await deps.git(
+        [...SAFE_GIT_CONFIG, 'rev-parse', '--verify', '--quiet', `refs/heads/${b}^{commit}`],
+        { cwd: projectRoot },
+      );
+      commit = stdout.trim();
+    } catch (error) {
+      if (!(error instanceof GitCommandError)) throw error;
+      throw new CodeHostError('push-rejected', `The project has no branch ${b} to push`);
+    }
     try {
       await deps.git(
         [
           ...SAFE_GIT_CONFIG,
-          '-c',
-          'push.recurseSubmodules=no',
+          ...PUSH_CONFIG,
           'push',
-          '--set-upstream',
           '--no-verify',
-          'origin',
-          `refs/heads/${b}:refs/heads/${b}`,
+          url,
+          `${commit}:refs/heads/${b}`,
         ],
         { cwd: projectRoot },
       );
@@ -195,6 +209,21 @@ export function createCodeHostService(deps: CodeHostServiceDeps): CodeHostServic
         'push-rejected',
         `Git refused to push ${b} to origin: check your access to the repository, or whether origin has commits on ${b} that the app does not (it never forces a push)`,
       );
+    }
+    // What `git push --set-upstream origin` did by itself: a push to an address updates neither
+    // the remote-tracking ref nor the branch's upstream. Both are conveniences: a failure is only
+    // logged (the push itself succeeded).
+    for (const args of [
+      ['update-ref', `refs/remotes/origin/${b}`, commit],
+      ['config', `branch.${b}.remote`, 'origin'],
+      ['config', `branch.${b}.merge`, `refs/heads/${b}`],
+    ]) {
+      try {
+        await deps.git([...SAFE_GIT_CONFIG, ...args], { cwd: projectRoot });
+      } catch (error) {
+        if (!(error instanceof GitCommandError)) throw error;
+        logger.log('info', 'code_host.upstream_not_set', { exitCode: error.exitCode });
+      }
     }
   }
 

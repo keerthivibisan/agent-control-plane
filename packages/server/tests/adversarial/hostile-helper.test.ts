@@ -19,7 +19,6 @@ import {
   goodChange,
   handOver,
   helperTurn,
-  knownGap,
   leadCall,
   leadMerges,
   persistentLead,
@@ -452,12 +451,10 @@ describe('origin', () => {
     T,
   );
 
-  // F-2: the owner's push uses the remote name `origin`, so a push URL a helper planted in
-  // the shared repository config (`remote.origin.pushurl`) receives the owner's push. The push
-  // should go to the URL the app read and verified (or refuse when origin's push URL changed).
-  knownGap(
-    'F-2',
-    'origin',
+  // Closed by F-2: the owner's push used the remote name `origin`, so a push URL a helper planted
+  // in the shared repository config (`remote.origin.pushurl`) received it. The push now goes to
+  // origin's own address (code-host/push-target.ts), never to a push URL.
+  it(
     'a push URL planted by a helper never receives the owner push',
     async () => {
       const sc = await scenario();

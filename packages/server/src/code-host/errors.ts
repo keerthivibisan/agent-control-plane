@@ -125,6 +125,11 @@ export const MESSAGES = {
   notGitRepository: 'The project folder is not a git repository, so it cannot have an origin.',
   remoteAddFailed:
     'The app could not set the repository as origin. Check that you can write to the project folder, then try again.',
+  // F-2: the owner's pushes go to origin's own address only (code-host/push-target.ts).
+  originAddressUnusable:
+    'Origin’s address is not one the app pushes to (an https, ssh or git address of a repository, or a local folder), so nothing was pushed.',
+  pushRewrite:
+    'The project’s git config rewrites origin’s address for pushes only (url.<address>.pushInsteadOf), so the app does not push: a push would not go where origin is fetched from. Remove that setting, then try again.',
   // G-F (ADR-0025 §8).
   branchExists: (name: string) =>
     `The project already has a branch named ${name}. The app never moves an existing branch.`,
