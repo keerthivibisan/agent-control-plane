@@ -1,10 +1,11 @@
 # HANDOFF — Agent Control Plane: state, decisions, and how to continue
 
-> **Resuming v0.2.0 (paused 2026-10-18)? Start at
-> [docs/workflow-graph/RESUME.md](docs/workflow-graph/RESUME.md).** It has where every branch and
-> worktree stands, what is left in order, the owner's branch rules (never touch `main`; release
-> MRs are raised and merged in GitHub), and the release checklist. The rest of this file is
-> older history.
+> **Current work (v0.3.0, release ready 2026-10-25): start at
+> [docs/v0.3.0/STATUS.md](docs/v0.3.0/STATUS.md)** (its last entries say what is left) and
+> [docs/v0.3.0/README.md](docs/v0.3.0/README.md) (the plan and the owner's release steps). The
+> owner's branch rules: never touch `main`; release PRs are raised and merged in GitHub. For
+> v0.2.0's history see [docs/workflow-graph/RESUME.md](docs/workflow-graph/RESUME.md). The rest of
+> this file is older history.
 
 > **Start here.** Updated 2026-10-11 by the coordinator. This file is self-contained: an agent (or a
 > person) outside the original session can continue from it. Read it fully, then `CLAUDE.md` and

@@ -25,7 +25,13 @@ agent sessions. The first provider is Claude Code.
   [docs/ui-refresh/README.md](docs/ui-refresh/README.md)**; status is in
   `docs/ui-refresh/STATUS.md`, with progress files in `docs/ui-refresh/wp/`. Branches come from
   `feature/ui-refresh`, not `main`.
-- **Editable workflow graphs (WG series, v0.2.0): in progress since 2026-10-17** by owner
+- **v0.3.0: release ready 2026-10-25** (released as a PR from `release/0.3.0` by the owner):
+  session names, GitHub and branching, the GitHub-like ticket page, Comments and Conversation,
+  attachments, the harness in the workflow, and the branch safety work (ADR-0024..0027, ADR-0021
+  and -0022 amendments). **Start at [docs/v0.3.0/README.md](docs/v0.3.0/README.md)**; status in
+  `docs/v0.3.0/STATUS.md`. The adversarial suite and how to extend it:
+  [docs/testing/adversarial.md](docs/testing/adversarial.md).
+- **Editable workflow graphs (WG series, v0.2.0): released in v0.2.0**, by owner
   decision (ADR-0023). Each project draws its own agents and review flow from rule-checked
   building blocks, with an approval mode per editing node. **Start at
   [docs/workflow-graph/README.md](docs/workflow-graph/README.md)** (read its "WG-0 refinements");
