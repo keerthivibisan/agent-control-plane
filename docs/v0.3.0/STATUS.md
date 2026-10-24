@@ -441,3 +441,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   **Release prep resumed** on `wp/r-3-b` from `wp/r-3-release`. Then: merge R-3, merge the video
   script (gated, not in the default e2e), re-record the final cuts on the release code (the footer
   must read 0.3.0, not 0.2.0), ask the owner before pushing again.
+- 2026-10-25 **Video paused by the owner** ("okay we pause this for now"). Owner wants for the final:
+  use HyperFrames (https://hyperframes.heygen.com/, `hyperframes` npm 0.8.193, Apache-2.0, ~23 MB +
+  deps; maybe its own Chrome ~150 MB) to compose a polished cut around the real screen recordings;
+  max length 3–3.5 min; add "pick any model per agent" in the workflow editor and the ticket's target
+  and start-from branch settings. Not yet approved: the download (ask again; use the CLI only in a
+  git-ignored folder, never its Claude Code plugin or skills). Script on `wp/v-1-video` (draft 2).
+  Release prep (R-3, `wp/r-3-b`) keeps running unless the owner says otherwise.
