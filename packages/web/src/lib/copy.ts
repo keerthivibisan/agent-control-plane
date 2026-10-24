@@ -3747,7 +3747,7 @@ export const PULL_REQUEST_COPY = {
   refresh: 'Refresh',
   refreshing: 'Refreshing…',
   openNote: (target: string) =>
-    `Review and merge it on GitHub, then press Refresh. The ticket is done once it is merged into ${target}.`,
+    `Merge it here with Merge pull request, or on GitHub and then press Refresh. The ticket is done once it is merged into ${target}.`,
   mergedNote: (target: string) => `Merged into ${target} on GitHub. The ticket is done.`,
   closedNote:
     'Closed on GitHub without merging. You can merge the branch here or open a new pull request.',
