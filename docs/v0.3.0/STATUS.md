@@ -345,3 +345,14 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   ✓ lint ✓ typecheck ✓; tests 495 + 371 + 12 + 237 + 2,322 + 1,188 + 764 (vitest with 2 workers on
   this 8 GB machine) ✓; build ✓; e2e 110/110. Proposed: a lighter "does the branch still exist"
   read than the branch diff.
+- 2026-10-24 **Incident on the owner's ticket ACPGIT-3 (Full auto, sandbox on)**, found through the
+  app's API and read-only git. The ticket asked to "checkout a branch from dev"; the lead's
+  auto-approved plan told a helper to `git checkout -b <ticket branch> dev` and commit. Both helpers
+  switched their worktrees to the ticket branch; one committed `cec7e06`, the next reset the branch
+  to dev and committed `8a06973`. The seals failed (branch changed), both changes went to
+  needs-owner, and the lead looped. The ticket branch no longer matches the app's record; the
+  owner's merge and Push & open PR both refuse (`requireTip`, `verifyTicketBranch`), so nothing
+  unreviewed can ship. Open question: why the Full auto sandbox let git write into the repository's
+  `.git`. **F-1 started** (`wp/f-1-branch-guard`): deny branch-changing git commands for helpers and
+  testers in every mode (hook + rules + sandbox denyWrite on the git dirs), brief and planning
+  wording, a clear failure the lead can discard, and an owner "Reset to the last reviewed commit".
