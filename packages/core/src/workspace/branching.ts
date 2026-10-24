@@ -70,6 +70,11 @@ export const BranchStrategySchema = z.object({
   baseBranch: GitBranchNameSchema,
   /** Where a ticket's work is merged or its pull request is raised, unless the ticket says. */
   defaultTargetBranch: GitBranchNameSchema,
+  /**
+   * ADR-0025 §10: the branch a new ticket branch starts from, unless the ticket says. Absent: the
+   * ticket's target branch (the behaviour before it).
+   */
+  defaultSourceBranch: GitBranchNameSchema.optional(),
   /** E.g. `{type}/{key}-{slug}`. */
   ticketBranchTemplate: BranchTemplateSchema,
   /** `{type}` per ticket type. */
@@ -119,6 +124,8 @@ export function branchStrategyPreset(
 export const TicketBranchPrefsSchema = z.object({
   name: GitBranchNameSchema.optional(),
   target: GitBranchNameSchema.optional(),
+  /** ADR-0025 §10: the branch this ticket's branch starts from; absent: the project's. */
+  from: GitBranchNameSchema.optional(),
 });
 export type TicketBranchPrefs = z.infer<typeof TicketBranchPrefsSchema>;
 
@@ -126,6 +133,7 @@ export type TicketBranchPrefs = z.infer<typeof TicketBranchPrefsSchema>;
 export const TicketBranchPrefsPatchSchema = z.object({
   name: GitBranchNameSchema.nullable().optional(),
   target: GitBranchNameSchema.nullable().optional(),
+  from: GitBranchNameSchema.nullable().optional(),
 });
 export type TicketBranchPrefsPatch = z.infer<typeof TicketBranchPrefsPatchSchema>;
 

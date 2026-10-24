@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PullRequestDtoSchema } from './code-host.js';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { GitBranchNameSchema } from '../workspace/branching.js';
 import {
   AgentRoleKindSchema,
   AgentRunStatusSchema,
@@ -176,6 +177,11 @@ export const TicketBranchDtoSchema = z.object({
   baseBranch: z.string().min(1),
   /** The base branch's commit when the ticket branch was created. */
   baseCommit: GitCommitSchema,
+  /**
+   * ADR-0025 §10: the branch it was created from, when that differs from `baseBranch` (the
+   * target). Absent: created from the target, as before it.
+   */
+  sourceBranch: GitBranchNameSchema.optional(),
   /** The branch tip; it moves only by a server-side compare-and-swap after a merged change. */
   headCommit: GitCommitSchema,
   state: TicketBranchStateSchema,
