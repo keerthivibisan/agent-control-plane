@@ -420,3 +420,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   database before the owner's app next starts. Coordinator: the Branches tip wording and an
   ADR-0025 §10 storage note. Check: tests 531 + 578 + 12 + 240 + 2,436 + 1,201 + 837 ✓; build ✓;
   e2e 111/111. Next: release prep; V-1 recording.
+- 2026-10-24 **Live database backed up before migration 0011**
+  (`backups/acp-before-0011-20261024-225515.sqlite`, at migration 10, integrity ok).
+  **Release prep (R-3) started** (`wp/r-3-release`): no rebase needed (`origin/main` 79c312a is the
+  merge of release/0.2.0, whose tree release/0.3.0 already contains); versions 0.3.0, drop the
+  fontsource dependencies, CHANGELOG [0.3.0] for users, README status and screenshots, PR text and
+  release notes in `.acp-data/`, one full check and e2e.
