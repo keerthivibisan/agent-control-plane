@@ -401,3 +401,5 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     drop the fontsource dependencies, versions, CHANGELOG, README and screenshots, final check,
     PR text and notes in `.acp-data/`; ask the owner who pushes), optional consented real run of
     the branch guard.
+- 2026-10-24 **Resumed by the owner** ("please resume"). F-2 continues on `wp/f-2-b` (the harness
+  runner refusal); V-1 restarts fresh on `wp/v-1-video`. The owner stopped their app; not restarted.
