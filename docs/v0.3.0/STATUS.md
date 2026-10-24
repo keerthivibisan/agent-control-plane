@@ -364,3 +364,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   invariant check (ticket branch, base, origin, sealed contents, termination with bounded agent
   starts, an owner action that always makes progress), engine-level failure loops, and an adapter
   table of shell commands. Tests that fail today are marked to flip when F-1 lands.
+- 2026-10-24 **G-H planned** (owner: an explicit "checkout from" branch at project and ticket
+  level, defaulting to main / the default target). Contract (`defaultSourceBranch`,
+  `TicketBranchPrefs.from`, `TicketBranchDto.sourceBranch`) and ADR-0025 §10 by the coordinator.
+  The agent starts after F-1 merges (both change ticket branch creation).
