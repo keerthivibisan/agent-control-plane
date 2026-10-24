@@ -472,12 +472,31 @@ export function checkChange(
     return refusal('change-busy', 'A merge of this change is already under way.');
   }
   const leadReviews = change.state === 'reviewing' && change.reviewer === 'lead';
+  // F-2: a change that could not be saved waits for the owner, and the lead may discard it.
+  const leadDiscardsUnsaved =
+    by === 'lead' &&
+    action === 'discard' &&
+    change.state === 'needs-owner' &&
+    change.sealFailure !== undefined;
   const decidable =
     change.state === 'decision' ||
     leadReviews ||
+    leadDiscardsUnsaved ||
     (by === 'owner' && (change.state === 'needs-owner' || change.state === 'ready'));
   if (!decidable) {
     return refusal('change-not-decidable', `${agent.role}'s change ${STATE_WORDS[change.state]}.`);
+  }
+  // F-2: the lead never merges or reworks work that could not be saved, whatever the reason.
+  if (
+    by === 'lead' &&
+    change.sealFailure !== undefined &&
+    change.sealFailure !== 'branch-changed' &&
+    (action === 'merge' || action === 'rework')
+  ) {
+    return refusal(
+      'change-not-decidable',
+      `${agent.role}'s work could not be saved, so it cannot be merged or reworked. Discard it with discard_change; the owner also sees it.`,
+    );
   }
   // F-1: the helper's folder left its branch, so nothing was saved to merge or rework.
   if (
@@ -796,6 +815,11 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
   } else if (change.sealFailure === 'branch-changed') {
     lines.push(
       'Not saved: the helper switched its folder to another branch, so its work could not be saved. Discard it; a fresh helper can do the step again.',
+    );
+  } else if (change.sealFailure !== undefined) {
+    // F-2: another failed seal; the owner has it, and the lead may discard it.
+    lines.push(
+      'Not saved: the app could not save this work, so it cannot be merged or reworked. The owner has it; you may discard it.',
     );
   } else if (change.state === 'decision') {
     lines.push('Not saved yet: the helper stopped before finishing; a merge saves it first.');

@@ -170,7 +170,20 @@ const BLOCKED_HTTP: Readonly<Record<MergeBlocked['reason'], [number, string]>> =
   'merge-conflict': [409, 'merge_conflict'],
   'checks-pending': [409, 'checks_running'],
   'checks-failed': [409, 'checks_failed'],
+  'ticket-branch-moved': [409, 'ticket_branch_moved'],
+  'ticket-branch-checked-out': [409, 'ticket_branch_checked_out'],
   failed: [409, 'merge_failed'],
+};
+
+/**
+ * F-2: what the owner reads when their merge of a change could not succeed now. The engine's reply
+ * is written for the lead ("do not try the merge again").
+ */
+const OWNER_BLOCKED: Partial<Record<MergeBlocked['reason'], string>> = {
+  'ticket-branch-moved':
+    'The ticket branch was changed outside the app, so nothing can be merged into it. Reset it to the last reviewed commit first, or discard it.',
+  'ticket-branch-checked-out':
+    'The ticket branch is checked out in another folder, so nothing can be merged into it. Switch that folder to another branch first.',
 };
 
 /** F-1: the ticket comment when a helper's folder left its branch (after the role's name). */
@@ -473,8 +486,14 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
               failure: 'branch-changed',
             };
           } else {
-            // The work is there but could not be committed: the owner looks at it.
-            result = { changed: true, headCommit: null, changedFiles: null };
+            // The work is there but could not be committed: the owner looks at it, and the lead
+            // may discard it (F-2). `invalid-workspace`: the folder is gone, or it committed files
+            // the app never saves (an attachment copy or a setup output).
+            const failure: SealFailure =
+              error instanceof WorkspaceError && error.code === 'invalid-workspace'
+                ? 'invalid-workspace'
+                : 'not-saved';
+            result = { changed: true, headCommit: null, changedFiles: null, failure };
           }
         }
         const applied = ctx.apply(live, (s, c) => changeSealed(s, agentRunId, result, c));
@@ -656,6 +675,14 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       return { kind: 'merged', reply: r.value, overridden: gate.failedRequired };
     } catch (error) {
       logger.log('warn', 'change merge failed', { runId, agentRunId: id, code: codeOf(error) });
+      // F-2: a ticket branch moved outside the app, or checked out in another folder, does not
+      // go away by trying again: the change goes to the owner (F-1's reset frees a moved one).
+      if (error instanceof WorkspaceError && error.code === 'ticket-branch-moved') {
+        return blocked({ reason: 'ticket-branch-moved' });
+      }
+      if (error instanceof WorkspaceError && error.code === 'ticket-branch-checked-out') {
+        return blocked({ reason: 'ticket-branch-checked-out' });
+      }
       return blocked({ reason: 'failed' });
     }
   }
@@ -722,7 +749,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       throw new HttpError(500, 'internal_error', 'The merge did not start');
     if (outcome.kind === 'blocked') {
       const [status, code] = BLOCKED_HTTP[outcome.blocked.reason];
-      throw new HttpError(status, code, outcome.reply);
+      throw new HttpError(status, code, OWNER_BLOCKED[outcome.blocked.reason] ?? outcome.reply);
     }
     if (outcome.kind === 'refused') throw new HttpError(409, 'merge_refused', outcome.reply);
     if (anyway && outcome.kind === 'merged') mergedAnyway(outcome.overridden);

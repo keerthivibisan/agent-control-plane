@@ -70,6 +70,8 @@ export const REFUSAL_CODES = [
   'handed-over',
   /** The ticket branch is still being created after plan approval. */
   'ticket-branch-pending',
+  /** F-2: a plan step's helpers lost every attempt the run allows (discarded or not saved). */
+  'attempts-exhausted',
 ] as const;
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 

@@ -90,12 +90,37 @@ export function ticketBranchCreated(
   });
 }
 
-/** Why the server could not seal a change (F-1). */
-export type SealFailure = 'branch-changed';
+/**
+ * Why the server could not seal a change:
+ * - `branch-changed` (F-1): the helper switched its folder to another branch;
+ * - `invalid-workspace` (F-2): its folder is gone, or it committed files the app never saves
+ *   (an attachment copy or a setup output);
+ * - `not-saved` (F-2): any other failure (also a failed seal reported with no code).
+ */
+export type SealFailure = 'branch-changed' | 'invalid-workspace' | 'not-saved';
 
 /** What the lead is told when a helper's folder left its branch (F-1). */
 export function branchChangedLine(role: string, agentRunId: string): string {
   return `${role} (agentId ${agentRunId}) switched its folder to another branch, so its work could not be saved. Discard its change with discard_change, then start a fresh helper for that step if the work is still needed. Do not ask helpers to run git commands that create, switch, commit, reset or push branches: the app does that.`;
+}
+
+/** Why another failed seal happened, in plain words (F-2). */
+const SEAL_FAILURE_WORDS: Readonly<Record<Exclude<SealFailure, 'branch-changed'>, string>> = {
+  'invalid-workspace':
+    'its folder is gone, or it committed files the app never saves (an attachment copy or a setup output)',
+  'not-saved': 'git could not commit it',
+};
+
+/**
+ * What the lead is told when a change could not be saved for another reason (F-2): the owner has
+ * it, and the lead may discard it (never merge or rework it).
+ */
+export function changeNotSavedLine(
+  role: string,
+  agentRunId: string,
+  failure: Exclude<SealFailure, 'branch-changed'>,
+): string {
+  return `${role}'s change (agentId ${agentRunId}) could not be saved (${SEAL_FAILURE_WORDS[failure]}), so it cannot be reviewed or merged; the owner will look at it. If the step should be done again, discard it with discard_change first.`;
 }
 
 /**
@@ -104,7 +129,9 @@ export function branchChangedLine(role: string, agentRunId: string): string {
  * change that could not be sealed (`changed` with no commit) → `needs-owner`. F-1: a change whose
  * helper switched its folder to another branch (`failure: 'branch-changed'`) goes to the lead
  * (`decision`, with `sealFailure`), who can discard it and start a fresh helper; the owner gets it
- * only when the lead cannot decide.
+ * only when the lead cannot decide. F-2: any other failed seal keeps `sealFailure` too
+ * (`invalid-workspace`, or `not-saved` when no code came), so the lead may discard it while it
+ * waits for the owner.
  */
 export function changeSealed(
   state: RunState,
@@ -149,14 +176,17 @@ export function changeSealed(
       return done;
     }
     if (result.headCommit === null) {
+      // F-2: the owner has it, and the lead may discard it (merge and rework stay refused), so
+      // a lead is never left with only "start another helper".
+      const failure = result.failure ?? 'not-saved';
       change.state = 'needs-owner';
-      notifyLead(
-        d,
-        `${agent.role}'s change could not be saved, so it cannot be reviewed; the owner will look at it.`,
-      );
+      change.sealFailure = failure;
+      notifyLead(d, changeNotSavedLine(agent.role, agent.id, failure));
       return done;
     }
     change.headCommit = result.headCommit;
+    // A rework the owner granted after a failed seal saved it this time (F-2).
+    delete change.sealFailure;
     change.state = 'ready';
     change.readyAt = d.now;
     // ADR-0027 §5: a Checks block on the change runs first; the review waits for its result.
@@ -273,15 +303,39 @@ function toOwner(d: Draft, agent: EngineAgent, change: NonNullable<EngineAgent['
   return `This workflow sends a change whose checks failed before the merge to the owner, who decides; you will get a message when they do.`;
 }
 
-/** Why the server could not merge a change (README §6, `merge_change` steps 3–4). */
+/**
+ * Why the server could not merge a change (README §6, `merge_change` steps 3–4). F-2: the ticket
+ * branch moved outside the app (`ticket-branch-moved`: it is not at the recorded tip) or is
+ * checked out in another folder (`ticket-branch-checked-out`). Neither goes away by trying again.
+ */
 export type MergeBlocked =
   | { reason: 'merge-conflict'; files: readonly string[] }
   | { reason: 'checks-pending' }
   | { reason: 'checks-failed'; failed: readonly string[] }
+  | { reason: 'ticket-branch-moved' }
+  | { reason: 'ticket-branch-checked-out' }
   | { reason: 'failed' };
 
 /** Longest list of file names or check names quoted back. */
 const MAX_LISTED = 100;
+
+/**
+ * F-2: merges of one change that may fail in a row (`failed`, a git failure that may be passing)
+ * before the change goes to the owner, so a lead can never retry a merge forever.
+ */
+export const MAX_FAILED_MERGES = 3;
+
+/** The change waits for the owner after a merge that cannot succeed now (F-2). */
+function mergeToOwner(
+  d: Draft,
+  agent: EngineAgent,
+  change: NonNullable<EngineAgent['change']>,
+  why: string,
+): string {
+  change.state = 'needs-owner';
+  leadActivity(d, `${agent.role}'s change waits for the owner: the merge cannot succeed now`);
+  return `${why} ${agent.role}'s change (agentId ${agent.id}) now waits for the owner; do not try the merge again. You get a message when the owner decides.`;
+}
 
 /**
  * The server could not merge the change: a conflict with the ticket branch, the required checks
@@ -303,6 +357,10 @@ export function changeMergeBlocked(
     change.merging = false;
     const role = agent.role;
     const branch = branchLabel(d);
+    // F-2: a merge that failed for a git reason counts until the change merges or is blocked for
+    // another reason.
+    if (blocked.reason === 'failed') change.failedMerges = (change.failedMerges ?? 0) + 1;
+    else delete change.failedMerges;
     switch (blocked.reason) {
       case 'merge-conflict': {
         const files = blocked.files.slice(0, MAX_LISTED);
@@ -326,7 +384,36 @@ export function changeMergeBlocked(
         }
         return { value: `${text} Ask for rework, discard it, or ask the owner.` };
       }
+      case 'ticket-branch-moved':
+        // F-2: permanent until the owner resets the branch (F-1's reset) or discards it.
+        return {
+          value: mergeToOwner(
+            d,
+            agent,
+            change,
+            `${branch} was changed outside the app (it is not at the last commit the app merged), so nothing can be merged into it. Only the owner can reset it to the last reviewed commit.`,
+          ),
+        };
+      case 'ticket-branch-checked-out':
+        return {
+          value: mergeToOwner(
+            d,
+            agent,
+            change,
+            `${branch} is checked out in another folder, so nothing can be merged into it. Only the owner can free it.`,
+          ),
+        };
       case 'failed':
+        if ((change.failedMerges ?? 0) >= MAX_FAILED_MERGES) {
+          return {
+            value: mergeToOwner(
+              d,
+              agent,
+              change,
+              `The merge of ${role}'s change failed ${change.failedMerges ?? MAX_FAILED_MERGES} times in a row.`,
+            ),
+          };
+        }
         return { value: `The merge of ${role}'s change failed. Try again, or ask the owner.` };
     }
   });

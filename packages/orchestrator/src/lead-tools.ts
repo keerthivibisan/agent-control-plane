@@ -6,6 +6,7 @@ import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
+import { checkStepAttempts } from './step-attempts.js';
 import { submitPlan } from './plan.js';
 import {
   checkNodeInstances,
@@ -231,6 +232,9 @@ export function leadToolCall(
       const node = resolved.node;
       const instanceRefusal = checkNodeInstances(state, node);
       if (instanceRefusal !== null) return { ok: false, refusal: instanceRefusal };
+      // F-2: replacement helpers for a plan step are bounded.
+      const attemptsRefusal = checkStepAttempts(state, node, role);
+      if (attemptsRefusal !== null) return { ok: false, refusal: attemptsRefusal };
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
         // Depth of the new helper: one below its caller; its node must allow helpers of its own.

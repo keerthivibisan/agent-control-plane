@@ -86,6 +86,8 @@ export { reportWork } from './report-tool.js';
 export {
   beginChangeMerge,
   branchChangedLine,
+  changeNotSavedLine,
+  MAX_FAILED_MERGES,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -97,6 +99,7 @@ export {
   ticketBranchCreated,
 } from './change-commands.js';
 export type { MergeBlocked, SealFailure } from './change-commands.js';
+export { checkStepAttempts, stepAttemptLimit, stepAttempts } from './step-attempts.js';
 export {
   CHECK_FAILURE_TAIL_MAX_BYTES,
   agentSetupFailed,

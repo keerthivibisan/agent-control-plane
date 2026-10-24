@@ -34,8 +34,9 @@ import {
 /*
  * The hostile helper catalogue (T-1; docs/testing/adversarial.md). Each case lets a fake helper
  * do, during its turn, what a Bash command the gate let through would do to git or the file
- * system, and then checks the app's invariants (`assertInvariants`). Cases the app cannot meet
- * today are `knownGap`s: they pass while the gap is open and turn red when it closes. Real git in
+ * system, and then checks the app's invariants (`assertInvariants`). A case the app cannot meet
+ * is a `knownGap` (kit.ts): it passes while the gap is open and turns red when it closes. F-2
+ * closed the last ones, so every case here is a plain test. Real git in
  * throwaway repositories, a local bare origin, a fake gh, the fake adapter for every agent.
  * Synthetic data only.
  */
@@ -114,12 +115,10 @@ describe.each(MODES)('the ACPGIT-3 incident (%s)', (mode) => {
     T,
   );
 
-  // F-2: the app bounds replacement helpers for one plan step (a per-step or per-run limit on
-  // starts after failed seals). F-1's discardable failure makes this loop easier, since a
-  // discarded change frees the step for yet another replacement.
-  knownGap(
-    'F-2',
-    'bounded',
+  // Closed by F-2: the app bounds replacement helpers for one plan step (`stepAttemptLimit` lost
+  // attempts per step, and per run). F-1's discardable failure made this loop easier, since a
+  // discarded change freed the step for yet another replacement.
+  it(
     'a lead that keeps starting replacement helpers is stopped within the start bound',
     async () => {
       const sc = await scenario({ mode });
@@ -164,13 +163,11 @@ describe('the ticket branch moved outside the app', () => {
     );
   }
 
-  // F-2: a merge refused because the ticket branch is not at the recorded tip is a permanent
-  // failure (`ticket-branch-moved`), not a transient one. Today the lead is told "Try again", so
-  // a lead can retry forever; it should hear that the branch changed outside the app and that the
-  // owner must reset (F-1's route) or discard it.
-  knownGap(
-    'F-2',
-    'lead-progress',
+  // Closed by F-2: a merge refused because the ticket branch is not at the recorded tip is a
+  // permanent failure (`ticket-branch-moved`), not a transient one. The lead used to be told "Try
+  // again"; now the change goes to the owner, and the lead hears that only the owner can reset
+  // the branch (F-1's route).
+  it(
     'a merge refused because the ticket branch moved is not offered as "Try again"',
     async () => {
       const sc = await scenario();
@@ -183,6 +180,49 @@ describe('the ticket branch moved outside the app', () => {
         replies.filter((r) => r.includes('Try again')),
         '[lead-progress] the lead was told to retry a merge that cannot succeed',
       ).toEqual([]);
+    },
+    T,
+  );
+
+  it(
+    'F-2: the blocked change waits for the owner, who resets the branch and then merges it',
+    async () => {
+      const sc = await scenario();
+      await goodChange(sc);
+      const hostile = await helperTurn(sc, (t) => t.sh('branch', '--force', t.sc.branch, 'main'));
+      if (hostile === null) throw new Error('no helper');
+      const reply = await leadMerges(sc, hostile.id);
+      expect(reply).toContain('Only the owner can reset it');
+      expect(changeOf(await runDetail(sc.s, sc.runId), hostile.id)?.state).toBe('needs-owner');
+      // The owner's merge says what to do first, in the owner's words.
+      const early = await sc.s.post(`/api/runs/${sc.runId}/review`, {
+        agentRunId: hostile.id,
+        action: 'merge',
+      });
+      expect(early.status).toBe(409);
+      expect(early.body).toMatchObject({ error: { code: 'ticket_branch_moved' } });
+      expect(JSON.stringify(early.body)).toContain('Reset it to the last reviewed commit first');
+      // F-1's reset, then the owner's merge of the change goes through.
+      const moved = tipOf(sc.s.repo, sc.branch);
+      const reset = await sc.s.post(`/api/runs/${sc.runId}/ticket-branch/reset`, { from: moved });
+      expect(reset.status).toBe(200);
+      sc.ledger.resnapshot();
+      let merged = await sc.s.post(`/api/runs/${sc.runId}/review`, {
+        agentRunId: hostile.id,
+        action: 'merge',
+      });
+      // A merge onto a new tip starts the checks on the new commit first.
+      for (let i = 0; i < 3 && merged.status === 409; i++) {
+        await sc.s.settle();
+        merged = await sc.s.post(`/api/runs/${sc.runId}/review`, {
+          agentRunId: hostile.id,
+          action: 'merge',
+        });
+      }
+      expect(merged.status).toBe(200);
+      expect(changeOf(await runDetail(sc.s, sc.runId), hostile.id)?.state).toBe('merged');
+      sc.ledger.resnapshot();
+      await assertInvariants(sc, { finish: true });
     },
     T,
   );
@@ -635,7 +675,8 @@ describe('the worktree itself', () => {
 /**
  * A failed seal must leave the lead a deciding action; otherwise a lead that cannot decide
  * starts a replacement instead (ACPGIT-3). F-1 made "the worktree left its branch" a failure the
- * lead may discard (state `decision`); the other seal failures still end in `needs-owner` (F-2).
+ * lead may discard (state `decision`); F-2 lets the lead discard the other seal failures too,
+ * which still wait in `needs-owner` for the owner.
  */
 describe('seal failures the lead should be able to discard', () => {
   for (const [name, act] of [
@@ -668,9 +709,8 @@ describe('seal failures the lead should be able to discard', () => {
     );
   }
 
-  const cases: [fix: 'F-2', name: string, act: (t: TurnContext) => void][] = [
+  const cases: [name: string, act: (t: TurnContext) => void][] = [
     [
-      'F-2',
       'its worktree removed (invalid-workspace)',
       (t) => {
         rmSync(t.wt, { recursive: true, force: true });
@@ -678,7 +718,6 @@ describe('seal failures the lead should be able to discard', () => {
       },
     ],
     [
-      'F-2',
       'an attachment copy committed (invalid-workspace)',
       (t) => {
         t.write('.acp-attachments/notes.txt', 'Synthetic\n');
@@ -688,11 +727,10 @@ describe('seal failures the lead should be able to discard', () => {
       },
     ],
   ];
-  for (const [fix, name, act] of cases) {
-    // F-2: the lead's discard_change is accepted on a change whose seal failed for any reason.
-    knownGap(
-      fix,
-      'lead-progress',
+  for (const [name, act] of cases) {
+    // Closed by F-2: the lead's discard_change is accepted on a change whose seal failed for any
+    // reason (it still waits for the owner, who sees it too).
+    it(
       `the lead can discard a change whose seal failed: ${name}`,
       async () => {
         const sc = await scenario();

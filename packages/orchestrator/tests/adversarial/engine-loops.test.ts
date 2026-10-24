@@ -9,7 +9,6 @@ import {
 import type { MergeBlocked, RunState } from '../../src/index.js';
 import { LEAD, event, makeCtx, ok } from '../helpers.js';
 import { COMMIT, changeOf, finishTurn, leadTool, loopRunning, sealed } from '../loop-helpers.js';
-import { knownGap } from './known-gap.js';
 
 /*
  * Misbehaviour at the engine level (T-1): the server's reports are scripted the way a hostile
@@ -105,9 +104,9 @@ describe('a failed seal', () => {
     expect(changeOf(discarded, turn.id).state).toBe('discarded');
   });
 
-  // F-2: any other failed seal (no failure code: the worktree is gone, a committed attachment
-  // copy or setup output) is also a failure the lead may discard, not only the owner.
-  knownGap('F-2', 'lead-progress', 'the lead has a deciding action on any failed seal', () => {
+  // Closed by F-2: any other failed seal (no failure code: the worktree is gone, a committed
+  // attachment copy or setup output) is also a failure the lead may discard, not only the owner.
+  it('the lead has a deciding action on any failed seal', () => {
     const turn = helperTurn(running(), 'wa', 3000);
     if (turn === null) throw new Error('no helper');
     const s = ok(sealed(turn.state, turn.id, 'rv', true, null, 3100)).state;
@@ -119,99 +118,84 @@ describe('a failed seal', () => {
 });
 
 describe('a lead that never gives up', () => {
-  // F-2: the engine bounds replacement helpers for one plan step. ACPGIT-3's lead started a new
-  // helper after every failed seal; since F-1 it can discard each one first, and nothing stops
-  // the loop.
-  knownGap(
-    'F-2',
-    'bounded',
-    'replacement helpers after branch-changed seals stay within the start bound',
-    () => {
-      let s = running();
-      let starts = 0;
-      for (let i = 1; i <= ATTEMPTS; i++) {
-        const turn = helperTurn(s, `r${i}`, i * 10_000);
-        if (turn === null) break;
-        starts++;
-        s = ok(branchChanged(turn.state, turn.id, `rv${i}`, i * 10_000 + 30)).state;
-        const discarded = leadTool(
-          s,
-          'discard_change',
-          { agentId: turn.id, reason: 'Synthetic: the worktree left its branch.' },
-          `d${i}`,
-          LEAD,
-          i * 10_000 + 40,
-        );
-        s = ok(discarded).state;
-      }
-      expect(starts, `[bounded] ${starts} helpers started for one plan step`).toBeLessThanOrEqual(
-        START_BOUND,
+  // Closed by F-2: the engine bounds replacement helpers for one plan step. ACPGIT-3's lead
+  // started a new helper after every failed seal; since F-1 it can discard each one first, and
+  // now `start_agent` is refused once the step lost `stepAttemptLimit` attempts.
+  it('replacement helpers after branch-changed seals stay within the start bound', () => {
+    let s = running();
+    let starts = 0;
+    for (let i = 1; i <= ATTEMPTS; i++) {
+      const turn = helperTurn(s, `r${i}`, i * 10_000);
+      if (turn === null) break;
+      starts++;
+      s = ok(branchChanged(turn.state, turn.id, `rv${i}`, i * 10_000 + 30)).state;
+      const discarded = leadTool(
+        s,
+        'discard_change',
+        { agentId: turn.id, reason: 'Synthetic: the worktree left its branch.' },
+        `d${i}`,
+        LEAD,
+        i * 10_000 + 40,
       );
-    },
-  );
+      s = ok(discarded).state;
+    }
+    expect(starts, `[bounded] ${starts} helpers started for one plan step`).toBeLessThanOrEqual(
+      START_BOUND,
+    );
+  });
 
-  // F-2: the same loop with changes that sealed fine: discard, start a replacement, again.
-  // Rework rounds are bounded; replacements are not.
-  knownGap(
-    'F-2',
-    'bounded',
-    'discard-and-replace on one plan step stays within the start bound',
-    () => {
-      let s = running();
-      let starts = 0;
-      for (let i = 1; i <= ATTEMPTS; i++) {
-        const turn = helperTurn(s, `r${i}`, i * 10_000);
-        if (turn === null) break;
-        starts++;
-        s = ok(sealed(turn.state, turn.id, `rv${i}`, true, COMMIT, i * 10_000 + 30)).state;
-        const discarded = leadTool(
-          s,
-          'discard_change',
-          { agentId: turn.id, reason: 'Synthetic: try again.' },
-          `d${i}`,
-          LEAD,
-          i * 10_000 + 40,
-        );
-        s = ok(discarded).state;
-      }
-      expect(starts, `[bounded] ${starts} helpers started for one plan step`).toBeLessThanOrEqual(
-        START_BOUND,
+  // Closed by F-2: the same loop with changes that sealed fine: discard, start a replacement,
+  // again. Rework rounds were bounded; replacements now are too.
+  it('discard-and-replace on one plan step stays within the start bound', () => {
+    let s = running();
+    let starts = 0;
+    for (let i = 1; i <= ATTEMPTS; i++) {
+      const turn = helperTurn(s, `r${i}`, i * 10_000);
+      if (turn === null) break;
+      starts++;
+      s = ok(sealed(turn.state, turn.id, `rv${i}`, true, COMMIT, i * 10_000 + 30)).state;
+      const discarded = leadTool(
+        s,
+        'discard_change',
+        { agentId: turn.id, reason: 'Synthetic: try again.' },
+        `d${i}`,
+        LEAD,
+        i * 10_000 + 40,
       );
-    },
-  );
+      s = ok(discarded).state;
+    }
+    expect(starts, `[bounded] ${starts} helpers started for one plan step`).toBeLessThanOrEqual(
+      START_BOUND,
+    );
+  });
 
-  // F-2: a merge that fails for a reason that will not go away (the ticket branch moved or is
-  // checked out elsewhere; the server reports `failed`) is retried forever: the lead hears "Try
-  // again" each time. After a few failures the change should go to the owner.
-  knownGap(
-    'F-2',
-    'bounded',
-    'merges retried after "failed" are bounded, then the change goes to the owner',
-    () => {
-      const turn = helperTurn(running(), 'wa', 3000);
-      if (turn === null) throw new Error('no helper');
-      let s = ok(sealed(turn.state, turn.id, 'rv', true, COMMIT, 3100)).state;
-      let attempts = 0;
-      for (let i = 1; i <= ATTEMPTS; i++) {
-        const r = leadTool(s, 'merge_change', { agentId: turn.id }, `m${i}`, LEAD, 4000 + i * 100);
-        if (!r.ok) break;
-        attempts++;
-        s = ok(
-          changeMergeBlocked(
-            r.state,
-            turn.id,
-            { reason: 'failed' },
-            makeCtx(4050 + i * 100, `b${i}`),
-          ),
-        ).state;
-        if (changeOf(s, turn.id).state === 'needs-owner') break;
-      }
-      expect(
-        attempts,
-        `[bounded] the lead retried a failing merge ${attempts} times`,
-      ).toBeLessThanOrEqual(3);
-    },
-  );
+  // Closed by F-2: a merge that kept failing (`failed`) was retried forever: the lead heard "Try
+  // again" each time. After `MAX_FAILED_MERGES` in a row the change goes to the owner; the
+  // ticket branch moved or checked out elsewhere goes there at once (tests below).
+  it('merges retried after "failed" are bounded, then the change goes to the owner', () => {
+    const turn = helperTurn(running(), 'wa', 3000);
+    if (turn === null) throw new Error('no helper');
+    let s = ok(sealed(turn.state, turn.id, 'rv', true, COMMIT, 3100)).state;
+    let attempts = 0;
+    for (let i = 1; i <= ATTEMPTS; i++) {
+      const r = leadTool(s, 'merge_change', { agentId: turn.id }, `m${i}`, LEAD, 4000 + i * 100);
+      if (!r.ok) break;
+      attempts++;
+      s = ok(
+        changeMergeBlocked(
+          r.state,
+          turn.id,
+          { reason: 'failed' },
+          makeCtx(4050 + i * 100, `b${i}`),
+        ),
+      ).state;
+      if (changeOf(s, turn.id).state === 'needs-owner') break;
+    }
+    expect(
+      attempts,
+      `[bounded] the lead retried a failing merge ${attempts} times`,
+    ).toBeLessThanOrEqual(3);
+  });
 
   for (const blocked of [
     { reason: 'merge-conflict', files: ['src/app.ts'] },

@@ -123,10 +123,18 @@ export interface EngineChange {
   /**
    * F-1: why the change could not be saved. `branch-changed`: the helper switched its folder to
    * another branch, so the app could not seal it. Only a discard (by the lead or the owner) or a
-   * question to the owner is left; merging and rework are refused. Absent otherwise. In memory
-   * with the live run (after a restart the change is `needs-owner`, like every undecided one).
+   * question to the owner is left; merging and rework are refused. F-2: any other failed seal
+   * (`invalid-workspace`: the folder is gone or holds committed files the app never saves;
+   * `not-saved`: another failure) waits for the owner (`needs-owner`), and the lead may discard
+   * it too; the lead may never merge or rework it. Absent otherwise. In memory with the live run
+   * (after a restart the change is `needs-owner`, like every undecided one).
    */
-  sealFailure?: 'branch-changed';
+  sealFailure?: 'branch-changed' | 'invalid-workspace' | 'not-saved';
+  /**
+   * F-2: merges of this change that failed in a row for a git reason (`failed`); at
+   * `MAX_FAILED_MERGES` the change goes to the owner. Absent means none. In memory with the run.
+   */
+  failedMerges?: number;
 }
 
 /**
