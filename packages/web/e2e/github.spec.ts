@@ -15,15 +15,21 @@ import {
   githubFlowStrategy,
   withPullRequestLines,
   type CodeHostKind,
+  BRANCH_DELETE_PATH,
+  MERGE_PR_PATH,
+  ghFinishedScenario,
+  type BranchPresence,
 } from './github-fixtures.js';
 import {
   CSRF,
+  LOOP_BRANCH_PATH,
   LOOP_PROJECT_GRAPH_PATH,
   LOOP_PROJECT_WORKFLOW_PATH,
   LOOP_TICKET_ID,
   PROJECT_ID,
   type LoopScenario,
 } from './review-loop-fixtures.js';
+import { TOTALS_PATH, ticketTotals, type TotalsKind } from './totals-fixtures.js';
 import { fixtureProject } from './ticket-fixtures.js';
 import { setupFixture } from './workflow-fixtures.js';
 
@@ -751,4 +757,164 @@ test('G-F: Start refused for a missing target creates it, then starts once more'
   await expect(fix).toHaveCount(0);
   expect(posts).toEqual([{ name: 'dev', from: 'main', push: true }]);
   expect(starts).toBe(2);
+});
+
+// --- G-G (ADR-0025 §9): Merge pull request and Delete branch; T-A: the ticket badge ------------
+
+type MergeStage = 'open' | 'merged' | 'gone';
+
+/**
+ * Serves the ticket from an open pull request (or already merged with its branch still there):
+ * Merge pull request takes it to merged on GitHub with `afterMerge` presence, Delete branch to
+ * gone everywhere. Each stage has its badge totals (running while open, done once merged).
+ */
+async function serveMerge(
+  page: Page,
+  start: MergeStage,
+  afterMerge: BranchPresence,
+): Promise<{ posts: { path: string; body: unknown }[] }> {
+  const totals = (sc: LoopScenario, kind: TotalsKind): LoopScenario => ({
+    routes: { ...sc.routes, [TOTALS_PATH]: ticketTotals(kind) },
+  });
+  const scenarios: Record<MergeStage, LoopScenario> = {
+    open: totals(ghOpenScenario(false), 'running'),
+    merged: totals(ghFinishedScenario(afterMerge), 'done'),
+    gone: totals(ghFinishedScenario({ localExists: false, headOnOrigin: false }), 'done'),
+  };
+  let stage = start;
+  const posts: { path: string; body: unknown }[] = [];
+  await withFixtureProject(page);
+  await withSetup(page, setupFixture({ branching: githubFlowStrategy() }));
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  await page.route(`**${LOOP_PROJECT_WORKFLOW_PATH}`, (route) =>
+    route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_WORKFLOW_PATH] }),
+  );
+  await page.route(`**${LOOP_PROJECT_GRAPH_PATH}`, (route) =>
+    route.fulfill({ json: scenarios[stage].routes[LOOP_PROJECT_GRAPH_PATH] }),
+  );
+  await page.route(/\/api\/(tickets|runs)\//, async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() !== 'GET') {
+      expect(req.headers()['x-acp-csrf']).toBe(CSRF);
+      posts.push({ path: url.pathname, body: req.postDataJSON() as unknown });
+      if (url.pathname === MERGE_PR_PATH) stage = 'merged';
+      if (url.pathname === BRANCH_DELETE_PATH) stage = 'gone';
+      // The answer carries what git says now, as the server's does.
+      const review = scenarios[stage].routes[LOOP_BRANCH_PATH] as Json | undefined;
+      const detail = scenarios[stage].routes[`/api/tickets/${LOOP_TICKET_ID}`] as Json;
+      await route.fulfill({
+        json: review?.['ticketBranch'] ?? (detail['currentRun'] as Json)['ticketBranch'],
+      });
+      return;
+    }
+    const body = scenarios[stage].routes[url.pathname];
+    if (body === undefined) {
+      await route.fulfill({
+        status: 404,
+        json: { error: { code: 'not_found', message: 'no fixture', requestId: 'e2e' } },
+      });
+      return;
+    }
+    await route.fulfill({ json: body });
+  });
+  return { posts };
+}
+
+test('G-G: Merge pull request with the chosen method and Delete branch; then done, branch deleted', async ({
+  page,
+}) => {
+  const { posts } = await serveMerge(page, 'open', { localExists: false, headOnOrigin: false });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const card = page.getByTestId('ticket-branch');
+  await expect(page.getByTestId('final-step-shortcut')).toHaveText('Merge pull request');
+  const box = card.getByTestId('merge-pr');
+  await expect(box.getByLabel('Merge method')).toHaveValue('merge');
+  await expect(box.getByLabel('Delete branch')).toBeChecked();
+  await box.getByLabel('Merge method').selectOption('squash');
+  await shootPart(page, 'merge-box', 'ticket-branch');
+  await box.getByRole('button', { name: 'Squash and merge' }).click();
+  const confirm = card.getByTestId('merge-confirm');
+  await expect(confirm).toContainText(
+    `Merges #42 into main on GitHub as one squashed commit and deletes ${GH_BRANCH} there and in the project folder. The ticket is done once GitHub reports it merged.`,
+  );
+  // Cancel has the focus: a stray Enter never merges.
+  await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await shootPart(page, 'merge-confirm', 'ticket-branch');
+  await confirm.getByRole('button', { name: 'Confirm squash and merge' }).click();
+
+  await expect(card.getByTestId('branch-state')).toHaveText('Merged into main on GitHub');
+  await expect(page.getByTestId('ticket-stage')).toContainText('Done');
+  await expect(card.getByTestId('branch-deleted')).toHaveText('Branch deleted');
+  await expect(card.getByRole('button', { name: 'Delete branch' })).toHaveCount(0);
+  // The method is remembered for the project, in this browser only.
+  expect(
+    await page.evaluate((id) => window.localStorage.getItem(`acp.merge-method.${id}`), PROJECT_ID),
+  ).toBe('squash');
+  expect(posts).toEqual([
+    { path: PR_REFRESH_PATH, body: {} },
+    { path: MERGE_PR_PATH, body: { method: 'squash', deleteBranch: true } },
+  ]);
+});
+
+test('G-G: Delete branch once merged, while it is still on GitHub and in the project', async ({
+  page,
+}) => {
+  const { posts } = await serveMerge(page, 'merged', { localExists: true, headOnOrigin: true });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const card = page.getByTestId('ticket-branch');
+  await expect(card.getByTestId('branch-state')).toHaveText('Merged into main on GitHub');
+  const del = card.getByRole('button', { name: 'Delete branch' });
+  await expect(del).toBeVisible();
+  await shootPart(page, 'delete-branch', 'ticket-branch');
+  await del.click();
+  const confirm = card.getByTestId('delete-confirm');
+  await expect(confirm).toContainText(
+    `Deletes ${GH_BRANCH} on GitHub and in the project folder. Its commits stay in the ticket’s history here.`,
+  );
+  await shootPart(page, 'delete-confirm', 'ticket-branch');
+  await confirm.getByRole('button', { name: 'Delete branch' }).click();
+  await expect(card.getByTestId('branch-deleted')).toHaveText('Branch deleted');
+  await expect(card.getByRole('button', { name: 'Delete branch' })).toHaveCount(0);
+  expect(posts).toEqual([{ path: BRANCH_DELETE_PATH, body: {} }]);
+});
+
+test('T-A: the ticket badge shows the time taken and the tokens, with details', async ({
+  page,
+}) => {
+  await serveMerge(page, 'merged', { localExists: false, headOnOrigin: false });
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  const badge = page.getByTestId('ticket-totals-badge');
+  await expect(badge.getByTestId('ticket-totals-time')).toHaveText('Took 1h 12m');
+  await expect(badge.getByTestId('ticket-totals-tokens')).toHaveText('1.2M tokens');
+  await expect(badge).toHaveAttribute(
+    'aria-label',
+    'Took 1h 12m, 1,234,567 tokens used. Show details',
+  );
+  await expect(badge).not.toContainText('$');
+  // On the state line, to the right of the state.
+  const stage = await page.getByTestId('ticket-stage').boundingBox();
+  const box = await badge.boundingBox();
+  expect(box !== null && stage !== null && box.x > stage.x).toBe(true);
+  await shootPart(page, 'ticket-badge', 'ticket-header');
+
+  // Keyboard: focus and Enter open the details; Escape closes them.
+  await badge.focus();
+  await page.keyboard.press('Enter');
+  const details = page.getByTestId('ticket-totals-details');
+  await expect(details).toBeVisible();
+  await expect(details.getByTestId('totals-elapsed')).toHaveText('1h 12m');
+  await expect(details.getByTestId('totals-runs')).toContainText('Run 1');
+  await expect(details.getByTestId('totals-total')).toContainText('1,234,567');
+  await expect(details.getByTestId('totals-open-tokens')).toHaveAttribute(
+    'href',
+    `#/p/${PROJECT_ID}/tokens?by=ticket`,
+  );
+  await page.keyboard.press('Escape');
+  await expect(details).toHaveCount(0);
+
+  // A phone: the badge wraps under the state, inside the screen.
+  await page.setViewportSize({ width: 390, height: 900 });
+  const narrow = await badge.boundingBox();
+  expect(narrow !== null && narrow.x >= 0 && narrow.x + narrow.width <= 390).toBe(true);
 });

@@ -6,10 +6,12 @@ import type {
 } from '@acp/core/api';
 import { Button } from '../../components/Button';
 import { AlertIcon } from '../../components/icons';
-import { ticketBranchAction } from '../../lib/api';
-import { REVIEW_LOOP_COPY } from '../../lib/copy';
+import { reviewLoopPaths, reviewLoopSchemas, ticketBranchAction } from '../../lib/api';
+import { MERGE_PR_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
+import { useApiQuery } from '../../lib/query';
 import { useCodeHost } from '../branching/CodeHostCard';
 import { hasNewCommits, pushBlockedReason } from '../branching/code-host';
+import { DeleteTicketBranch, MergePullRequest } from '../branching/MergeAndDelete';
 import { PullRequestInfo, PushAndOpenPr, PushNewCommits } from '../branching/PullRequest';
 import { ActionError, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
@@ -20,7 +22,16 @@ const B = REVIEW_LOOP_COPY.branch;
 const MAX_REASON = 500;
 const MAX_COMMENT = 8000;
 
-export type FinalStepTicket = Pick<TicketDto, 'id' | 'key' | 'title' | 'projectId'>;
+export type FinalStepTicket = Pick<TicketDto, 'id' | 'key' | 'title' | 'projectId'> &
+  Partial<Pick<TicketDto, 'currentRunId'>>;
+
+/**
+ * Merge pull request and Delete branch act on the ticket's current run (the server's rule): only
+ * offered for the run on screen when it is that run.
+ */
+function isCurrentRun(ticket: FinalStepTicket | null, runId: string): ticket is FinalStepTicket {
+  return ticket !== null && ticket.currentRunId === runId;
+}
 
 /**
  * Push & open PR beside the merge, for a run of a ticket (ADR-0025): the project's GitHub status
@@ -52,8 +63,8 @@ function PushAction({
  * a failed required check, with a reason), or Push & open PR for a ticket; Request changes (a
  * comment for the lead; the run goes on); Discard; and Update from the target when it moved. Each
  * asks first; the server checks again. While a pull request is open on GitHub, the merge happens
- * there: only Request changes and Discard stay, with Push new commits when the branch moved on
- * since the last push (G-D).
+ * there: Merge pull request (G-G; off until new commits are pushed), Request changes and Discard,
+ * with Push new commits when the branch moved on since the last push (G-D).
  */
 function Actions({
   run,
@@ -69,9 +80,21 @@ function Actions({
   const act = useTicketAction(ticketBranchAction);
   const checks = checksSummary(review?.checks ?? []);
   const base = branch.baseBranch;
-  const prOpen = branch.pullRequest?.state === 'open';
+  const pr = branch.pullRequest ?? null;
+  const prOpen = pr?.state === 'open';
+  const newCommits = hasNewCommits(branch);
   return (
     <div className="flex flex-col gap-2.5" data-testid="branch-actions">
+      {prOpen && pr !== null && isCurrentRun(ticket, run.id) ? (
+        // G-G (ADR-0025 §9): merge it on GitHub, from here.
+        <MergePullRequest
+          ticket={ticket}
+          branch={branch}
+          pr={pr}
+          blockedReason={newCommits ? MERGE_PR_COPY.needsPush : null}
+          disabled={act.pending}
+        />
+      ) : null}
       {prOpen ? null : checks.kind === 'failed' ? (
         <p
           role="alert"
@@ -104,7 +127,7 @@ function Actions({
       ) : null}
       <div className="flex flex-wrap items-start gap-2">
         {prOpen ? (
-          ticket !== null && branch.pullRequest && hasNewCommits(branch) ? (
+          ticket !== null && branch.pullRequest && newCommits ? (
             <PushNewCommits
               ticketId={ticket.id}
               branch={branch.branch}
@@ -197,8 +220,21 @@ function DiscardOnly({ run, branch }: { run: Pick<RunDetailDto, 'id'>; branch: T
 }
 
 /**
+ * A merged or discarded branch (G-G, ADR-0025 §9): Delete branch while git says it still exists
+ * in the project folder or on GitHub, then "Branch deleted". Where it exists is read with the
+ * combined change (`GET /runs/:id/ticket-branch`, local refs only), as the Files tab reads it.
+ */
+function FinishedBranch({ runId, ticket }: { runId: string; ticket: FinalStepTicket }) {
+  const q = useApiQuery(reviewLoopPaths.ticketBranch(runId), reviewLoopSchemas.ticketBranch);
+  const branch = q.data?.ticketBranch;
+  if (branch === undefined) return null;
+  return <DeleteTicketBranch ticketId={ticket.id} branch={branch} />;
+}
+
+/**
  * The ticket branch card's decision part, kept apart from its evidence (checks, files, diff): the
- * pull request when there is one, then the owner's actions for the card's mode.
+ * pull request when there is one, then the owner's actions for the card's mode (with Merge pull
+ * request while one is open, and Delete branch once the branch is finished; G-G).
  */
 export function BranchFinalStep({
   mode,
@@ -227,6 +263,9 @@ export function BranchFinalStep({
         <Actions run={run} branch={branch} review={review} ticket={ticket} />
       ) : null}
       {mode === 'discard-only' ? <DiscardOnly run={run} branch={branch} /> : null}
+      {mode === 'closed' && isCurrentRun(ticket, run.id) ? (
+        <FinishedBranch runId={run.id} ticket={ticket} />
+      ) : null}
     </>
   );
 }

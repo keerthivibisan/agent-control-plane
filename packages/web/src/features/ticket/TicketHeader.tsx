@@ -8,6 +8,7 @@ import type { PillTone } from '../../components/Pill';
 import { rerunTicket, stopRun, updateTicket } from '../../lib/api';
 import {
   CONTROL_COPY,
+  MERGE_PR_COPY,
   PULL_REQUEST_COPY,
   REVIEW_LOOP_COPY,
   RUN_STATUS_COPY,
@@ -27,6 +28,7 @@ import { checksSummary } from '../review-loop/logic';
 import { StartDialog } from '../review-loop/StartDialog';
 import { useTicketAction } from './actions';
 import { EditIcon } from './icons';
+import { TicketTotalsBadge } from './TicketTotalsBadge';
 import type { TicketBranchReview } from './run-data';
 import { useTicketNav } from './ticket-nav';
 import {
@@ -174,12 +176,13 @@ function RunPicker({
 /**
  * The final step's main action (v0.3.0 D-B), for the header: what the owner would press in the
  * final-step box, or null when nothing waits there. A merge, a merge past a failed required
- * check, or pushing new commits to the open pull request.
+ * check, pushing new commits to the open pull request, or merging it on GitHub (G-G).
  */
 export function finalStepAction(br: TicketBranchReview): string | null {
   if (br.mode !== 'merge' || br.branch === null) return null;
   if (br.branch.pullRequest?.state === 'open') {
-    return hasNewCommits(br.branch) ? PULL_REQUEST_COPY.pushNew : null;
+    // G-G: merged on GitHub from the final step, once the new commits are pushed.
+    return hasNewCommits(br.branch) ? PULL_REQUEST_COPY.pushNew : MERGE_PR_COPY.button.merge;
   }
   const checks = checksSummary(br.query.data?.checks ?? []);
   return checks.kind === 'failed' ? B.mergeAnyway : B.merge(br.branch.baseBranch);
@@ -474,6 +477,8 @@ export function TicketHeader({
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
         <StatePill stage={ticket.stage} />
         <MetaLine detail={detail} run={run} isCurrent={isCurrent} />
+        {/* v0.3.0 T-A: time taken and tokens, at the line's right end (wraps on a phone). */}
+        <TicketTotalsBadge ticket={ticket} />
       </div>
     </header>
   );

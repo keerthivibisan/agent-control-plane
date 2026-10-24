@@ -675,7 +675,12 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(within(card).getByTestId('branch-state').textContent).toBe('Merged into main');
     expect(within(card).queryByTestId('branch-actions')).toBeNull();
     expect(card.textContent).toContain('main is now at e1f2a3b');
-    expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
+    // G-G: the finished branch is read (GET only) to learn whether it still exists, for Delete
+    // branch; unknown here (no answer), so nothing is offered.
+    expect(
+      s.calls.filter((c) => c.path === LOOP_BRANCH_PATH).every((c) => c.method === 'GET'),
+    ).toBe(true);
+    expect(within(card).queryByRole('button', { name: 'Delete branch' })).toBeNull();
   });
 });
 

@@ -3776,6 +3776,135 @@ export const PULL_REQUEST_COPY = {
     'The branch on GitHub has commits the app doesn’t have; it won’t overwrite them.',
 } as const;
 
+// --- Merge pull request and Delete branch (G-G, ADR-0025 §9) -----------------------------------
+//
+// Add-only. GitHub's own words for the merge methods and the button, so the owner sees what they
+// know from GitHub. Merge and delete happen only after the confirmation, which says exactly what.
+
+export type MergeMethodKey = 'merge' | 'squash' | 'rebase';
+
+/** Server codes of a merge or a delete, beyond the pull request's (PULL_REQUEST_COPY.errors). */
+export type BranchActionErrorCode =
+  | 'no_open_pull_request'
+  | 'unpushed_commits'
+  | 'code_host_not_ready'
+  | 'merge_method_not_allowed'
+  | 'pull_request_not_mergeable'
+  | 'merge_failed'
+  | 'branch_not_finished'
+  | 'branch_checked_out'
+  | 'branch_protected'
+  | 'branch_delete_failed';
+
+export const MERGE_PR_COPY = {
+  methodLabel: 'Merge method',
+  methods: {
+    merge: 'Create a merge commit',
+    squash: 'Squash and merge',
+    rebase: 'Rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  /** The main button, as GitHub labels it for each method. */
+  button: {
+    merge: 'Merge pull request',
+    squash: 'Squash and merge',
+    rebase: 'Rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  confirmButton: {
+    merge: 'Confirm merge',
+    squash: 'Confirm squash and merge',
+    rebase: 'Confirm rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  how: {
+    merge: 'with a merge commit',
+    squash: 'as one squashed commit',
+    rebase: 'by rebasing its commits',
+  } satisfies Record<MergeMethodKey, string>,
+  deleteBranch: 'Delete branch',
+  deleteBranchHint: 'On GitHub and in the project folder, once it is merged.',
+  confirm: (n: number, target: string, how: string, branch: string, del: boolean) =>
+    `Merges #${n} into ${target} on GitHub ${how}${
+      del ? ` and deletes ${branch} there and in the project folder` : ''
+    }. The ticket is done once GitHub reports it merged.`,
+  merging: 'Merging…',
+  cancel: 'Cancel',
+  failed: 'The pull request wasn’t merged.',
+  /** After a merge with Delete branch while the project folder is on the ticket branch. */
+  keptLocal: (branch: string) =>
+    `${branch} is still in the project folder: it’s checked out there, so the app left it. Switch to another branch, then use Delete branch.`,
+  needsPush: 'Push the new commits first: GitHub would merge only what it has.',
+  /** Delete branch, once the ticket branch is merged or discarded. */
+  delete: 'Delete branch',
+  deleteQuestion: (branch: string, where: 'both' | 'origin' | 'local', prOpen: number | null) =>
+    `Deletes ${branch} ${
+      where === 'both'
+        ? 'on GitHub and in the project folder'
+        : where === 'origin'
+          ? 'on GitHub'
+          : 'in the project folder'
+    }.${prOpen !== null && where !== 'local' ? ` GitHub closes the open pull request #${prOpen}.` : ''} Its commits stay in the ticket’s history here.`,
+  confirmDelete: 'Delete branch',
+  deleting: 'Deleting…',
+  deleted: 'Branch deleted',
+  deleteFailed: 'The branch wasn’t deleted.',
+  /** The muted fact in the ticket header once the branch is gone everywhere. */
+  headerDeleted: 'branch deleted',
+  errors: {
+    no_open_pull_request:
+      'There’s no open pull request to merge now. Press Refresh to see its state on GitHub.',
+    unpushed_commits:
+      'The ticket branch has commits the pull request doesn’t have yet. Push new commits first, then merge.',
+    code_host_not_ready:
+      'Merging needs the GitHub CLI installed and signed in. Run gh auth login in a terminal, then try again.',
+    merge_method_not_allowed:
+      'This repository doesn’t allow that merge method. Choose another one, or change it in the repository’s settings on GitHub.',
+    pull_request_not_mergeable:
+      'GitHub won’t merge it yet: it has conflicts, needs reviews or passing checks, is a draft or is closed.',
+    merge_failed: 'GitHub didn’t merge it. Look at the pull request on GitHub, then try again.',
+    branch_not_finished: 'The branch isn’t merged or discarded yet, so it can’t be deleted.',
+    branch_checked_out:
+      'The branch is checked out (in the project folder or another worktree). Switch to another branch first.',
+    branch_protected: 'That’s the target or the project’s base branch; the app never deletes it.',
+    branch_delete_failed:
+      'Git couldn’t delete the branch. Check your access to the repository, then try again.',
+  } satisfies Record<BranchActionErrorCode, string>,
+} as const;
+
+// --- The ticket badge: time taken and tokens (v0.3.0 T-A) ---------------------------------------
+//
+// Add-only. No cost: provider-reported costs are never added up (ADR-0014).
+
+export const TICKET_TOTALS_COPY = {
+  took: (d: string) => `Took ${d}`,
+  running: (d: string) => `Running ${d}`,
+  open: (d: string) => `Open for ${d}`,
+  tokens: (n: string) => `${n} tokens`,
+  noTokens: '—',
+  unavailable: 'Usage unavailable',
+  /** The badge's accessible name: the whole sentence. */
+  label: (time: string, tokens: string) => `${time}, ${tokens}. Show details`,
+  tokensSentence: (n: string) => `${n} tokens used`,
+  tokensUnavailable: 'token usage unavailable',
+  title: 'Time and tokens',
+  started: 'Started',
+  finished: 'Finished',
+  notFinished: 'Not finished',
+  elapsed: 'Time taken',
+  elapsedSoFar: 'So far',
+  runs: 'Runs',
+  run: (n: number) => `Run ${n}`,
+  live: 'running',
+  tokenSplit: 'Tokens',
+  input: 'Input',
+  output: 'Output',
+  cacheWrite: 'Cache write',
+  cacheRead: 'Cache read',
+  total: 'Total processed',
+  partial: 'partial',
+  partialTip: 'Some records didn’t report this, so the number is a lower bound.',
+  openTokens: 'Open in Tokens',
+  note: 'Direct usage of this ticket’s agent sessions, as on the Tokens page. No cost is added up.',
+} as const;
+
 // --- Workflow graph editor (WG-D, wp/wg-d-editor; ADR-0023) --------------------------------------
 //
 // Add-only. The Workflow page's editor (blocks, links, templates, problems) and the new-project

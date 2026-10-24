@@ -195,3 +195,48 @@ export function githubFlowStrategy(): Json {
     typeWords: { feature: 'feature', bug: 'fix', chore: 'chore', harness: 'chore' },
   };
 }
+
+// --- G-G (ADR-0025 §9): Merge pull request and Delete branch ------------------------------------
+
+export const MERGE_PR_PATH = `${PR_PATH}/merge`;
+export const BRANCH_DELETE_PATH = `/api/tickets/${LOOP_TICKET_ID}/branch/delete`;
+
+export interface BranchPresence {
+  /** `refs/heads/<branch>` in the project folder. */
+  localExists: boolean;
+  /** The pull request's head branch on origin; null when origin could not be asked. */
+  headOnOrigin: boolean | null;
+}
+
+/** The merged ticket branch as the server answers it, with what git says now. */
+function presentBranch(sc: LoopScenario, presence: BranchPresence): Json {
+  const run = (sc.routes[LOOP_TICKET_PATH] as Json)['currentRun'] as Json;
+  const branch = run['ticketBranch'] as Json;
+  const pr = branch['pullRequest'] as Json | undefined;
+  return {
+    ...branch,
+    localExists: presence.localExists,
+    ...(pr !== undefined && { pullRequest: { ...pr, headOnOrigin: presence.headOnOrigin } }),
+  };
+}
+
+/**
+ * Merged on GitHub, with where the ticket branch still exists: the combined change
+ * (`GET /runs/:id/ticket-branch`, read-only after the merge) carries `localExists` and the pull
+ * request's `headOnOrigin`; the run detail leaves them out, as the server does.
+ */
+export function ghFinishedScenario(presence: BranchPresence): LoopScenario {
+  const sc = ghMergedScenario();
+  const review = ghReviewScenario().routes[LOOP_BRANCH_PATH] as Json;
+  sc.routes[LOOP_BRANCH_PATH] = {
+    ...review,
+    ticketBranch: presentBranch(sc, presence),
+    baseMoved: false,
+  };
+  return sc;
+}
+
+/** What Merge pull request (or Delete branch) answers: the merged branch with its presence. */
+export function ghMergedAnswer(presence: BranchPresence): Json {
+  return presentBranch(ghMergedScenario(), presence);
+}

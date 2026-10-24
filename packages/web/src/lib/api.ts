@@ -97,6 +97,8 @@ import { ConnectRepositoryRequestSchema, CreateRepositoryRequestSchema } from '@
 import { CreateBranchRequestSchema, ProjectBranchesDtoSchema } from '@acp/core/api';
 // Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026).
 import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
+// Merge pull request, Delete branch (G-G, ADR-0025 §9) and the ticket badge (T-A).
+import { MergePullRequestRequestSchema, TicketTotalsDtoSchema } from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -1215,6 +1217,48 @@ export async function openPullRequest(
 export function refreshPullRequest(client: ApiClient, ticketId: string) {
   return controlPost(client, codeHostPaths.refresh(ticketId), {}, codeHostSchemas.branch);
 }
+
+// G-G (ADR-0025 §9), only on the owner's confirmed click: POST …/pull-request/merge with a
+// MergePullRequestRequest merges the open pull request on GitHub (and, with deleteBranch, deletes
+// the branch there and locally); POST /api/tickets/:id/branch/delete deletes the merged or
+// discarded ticket branch on origin and in the project. Both answer the ticket branch with
+// `localExists` and `pullRequest.headOnOrigin`.
+
+export type MergePullRequestRequest = ReturnType<typeof MergePullRequestRequestSchema.parse>;
+
+export const branchActionPaths = {
+  merge: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request/merge`,
+  delete: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/delete`,
+} as const;
+
+export function mergePullRequest(
+  client: ApiClient,
+  ticketId: string,
+  input: MergePullRequestRequest,
+) {
+  const path = branchActionPaths.merge(ticketId);
+  return controlPost(
+    client,
+    path,
+    checked(MergePullRequestRequestSchema, input, path),
+    codeHostSchemas.branch,
+  );
+}
+
+export function deleteTicketBranch(client: ApiClient, ticketId: string) {
+  return controlPost(client, branchActionPaths.delete(ticketId), {}, codeHostSchemas.branch);
+}
+
+// T-A: GET /api/tickets/:id/totals → TicketTotalsDto (time taken and the ticket's tokens, as on
+// the Tokens page; no cost). Under /api/tickets, so the ticket page's refetches include it.
+
+export const ticketTotalsPaths = {
+  totals: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/totals`,
+} as const;
+
+export const ticketTotalsSchemas = {
+  totals: TicketTotalsDtoSchema,
+} as const;
 
 // G-E (ADR-0025 §7): connecting a project from Settings, only on the owner's click and only when
 // the project has no origin yet (409 `origin_exists` otherwise). POST …/code-host/repository with
