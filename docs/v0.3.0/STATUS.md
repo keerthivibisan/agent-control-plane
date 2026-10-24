@@ -436,3 +436,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   squash the WIP, full check and e2e, PR text and release notes in `.acp-data/`.
   **V-1 continues**: the video re-scripted around orchestration (skills and agent files, a BDD
   workflow, the harness as the bar, less supervision).
+- 2026-10-25 **V-1 draft 2 delivered** (the orchestration story with a BDD setup; full 2:44, short
+  1:05; `wp/v-1-video`, commits through `a70d4d7`). The owner approved ("yes go ahead").
+  **Release prep resumed** on `wp/r-3-b` from `wp/r-3-release`. Then: merge R-3, merge the video
+  script (gated, not in the default e2e), re-record the final cuts on the release code (the footer
+  must read 0.3.0, not 0.2.0), ask the owner before pushing again.
