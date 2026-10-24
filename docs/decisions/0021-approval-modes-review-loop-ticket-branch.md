@@ -213,3 +213,28 @@ Owner-reported incident on ACPGIT-3 (helpers switched to, committed to and reset
    - the owner may reset it to the recorded head, by `update-ref <recorded> <seen>`
      (compare-and-swap) after the ticket-branch guard and a worktree prune. This is refused
      while any worktree has it checked out. No other ref moves.
+
+## Amendment 2026-10-24: bounded retries, work that could not be saved (F-2)
+
+From the adversarial suite (T-1); owner request to tighten the tests and close the gaps.
+
+1. A change whose seal failed for any reason keeps why (`sealFailure`): `branch-changed` (F-1),
+   `invalid-workspace` (the folder is gone, or it committed files the app never saves) or
+   `not-saved`. Except for F-1's `branch-changed`, which goes to the lead (`decision`), it
+   waits for the owner (`needs-owner`). The lead may discard any of them and may never merge or
+   rework them. The owner keeps every action.
+2. A lost attempt is a helper whose change was discarded or could not be saved.
+   - A plan step (the helper node a start resolves to, and the role the lead names) may lose
+     `max(2, 1 + maxReworkRounds)` attempts, times the approved plan's steps with that node and
+     role.
+   - A run may lose that many times its approved plan's steps.
+   - Past either, `start_agent` is refused (`attempts-exhausted`) and the lead hands over.
+   - Merged and no-change work never counts.
+3. A merge refused because the ticket branch moved outside the app (`ticket-branch-moved`) or is
+   checked out in another folder (`ticket-branch-checked-out`) sends the change to the owner at
+   once. The lead is told not to retry; only the owner can reset (F-1 §4) or free the branch. A
+   merge that fails for another git reason goes to the owner after three failures in a row.
+4. (Amends F-1's item 1.) The command guard's reader lives in `@acp/core` (`checkGitCommand`).
+   It also reads a shell's input: here-strings and here-documents fed to a shell are read as
+   scripts. A shell reading a pipe or substituted input is denied when the command mentions git.
+   `xargs git` with no subcommand is denied.

@@ -157,6 +157,17 @@ Diffs are still read from git when shown and never stored (ADR-0009).
   shows it ("from release/1.0").
 - The strategy's `baseBranch` stays a protected long-lived branch, as before.
 
+### 11. Where the owner's pushes go (amended 2026-10-24, F-2)
+
+Every push the app makes
+for the owner goes to `origin`'s configured address (`remote.origin.url`), passed as the
+address, never the remote name, so a `remote.origin.pushurl` is never used. That covers Push &
+open PR, a new branch's push, the push after creating a repository, and the delete on origin.
+The address must be a recognised repository address or a local folder, and `ext::` and `fd::`
+are off. A `url.<x>.pushInsteadOf` rewrite of it is refused, and `url.<x>.insteadOf` applies as
+for fetches. After a push, the app sets the remote-tracking ref and the branch's upstream
+(`origin`), as `--set-upstream origin` did.
+
 ## Consequences
 
 - **Network:** the app makes network calls for the first time beyond `claude`, only on the owner's

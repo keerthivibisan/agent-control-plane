@@ -61,3 +61,12 @@ for reasons that have nothing to do with the change.
   places cover per-change, pre-merge and branch-level checking.
 - **Network isolation now:** needs a process sandbox for check commands, which the app does not have
   outside the SDK's own sandbox. Recorded as a follow-up.
+
+## Amendment 2026-10-24: branch-managing checks (F-2)
+
+The command guard runs before the
+`run-harness-check` rule, so a harness check (or any command) that is branch-managing git is
+never pre-approved for an agent, in any mode. The harness status lists a warning for each check
+or setup step that is branch-managing git. The app's own runner never starts one, anywhere it
+runs (agent worktrees, tip checkouts, the main branch). A check is recorded `error`, and a setup
+step `refused`, which stops the rest of the setup.
