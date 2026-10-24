@@ -120,6 +120,13 @@ export interface EngineChange {
    * not raised: the change has not been reviewed yet). Absent means none. In memory with the run.
    */
   checkRounds?: number;
+  /**
+   * F-1: why the change could not be saved. `branch-changed`: the helper switched its folder to
+   * another branch, so the app could not seal it. Only a discard (by the lead or the owner) or a
+   * question to the owner is left; merging and rework are refused. Absent otherwise. In memory
+   * with the live run (after a restart the change is `needs-owner`, like every undecided one).
+   */
+  sealFailure?: 'branch-changed';
 }
 
 /**

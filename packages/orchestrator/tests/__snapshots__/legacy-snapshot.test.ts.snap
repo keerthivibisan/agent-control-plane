@@ -2051,6 +2051,8 @@ You work in your own copy of the project, which already holds the merged change.
 
 The owner reviews and merges your change like the helpers’ changes, after the project’s checks.
 
+The app owns branches and commits. Work only by editing files in this folder; never run git commands that switch, create, commit, reset, merge, rebase, stash, fetch or push. Your work is saved when you finish.
+
 Before you finish, call report_work with 2 to 4 plain sentences on what you did and how you checked it. The owner reads it on the ticket.",
           "role": "Tester",
           "type": "start-agent",
@@ -2748,6 +2750,8 @@ Start the helpers the plan needs with start_agent (at most 2 at once), then call
           "agentRunId": "wc-1",
           "kind": "worker",
           "prompt": "Sub
+
+The app owns branches and commits. Work only by editing files in this folder; never run git commands that switch, create, commit, reset, merge, rebase, stash, fetch or push. Your work is saved when you finish.
 
 Before you finish, call report_work with 2 to 4 plain sentences on what you did and how you checked it. The owner reads it on the ticket.",
           "role": "Child",

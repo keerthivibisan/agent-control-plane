@@ -1,6 +1,6 @@
 import { LEAD_TOOL_NAMES } from '@acp/core';
 import { describe, expect, it } from 'vitest';
-import { leadToolCall } from '../src/index.js';
+import { BRANCH_RULE_LINE, leadToolCall } from '../src/index.js';
 import type { RunState } from '../src/index.js';
 import {
   LEAD,
@@ -68,7 +68,7 @@ describe('lead tool calls', () => {
         agentRunId: 'n-1',
         kind: 'worker',
         role: 'API builder',
-        prompt: 'Build the API',
+        prompt: `Build the API\n\n${BRANCH_RULE_LINE}`,
       },
     ]);
   });

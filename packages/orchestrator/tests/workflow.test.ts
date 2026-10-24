@@ -3,6 +3,7 @@ import type { ProjectWorkflow } from '@acp/core';
 import { RunWorkflowDtoSchema } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
 import {
+  BRANCH_RULE_LINE,
   AGENT_NOTE_LINE,
   SKILLS_PLUGIN_NAME,
   agentEvent,
@@ -282,7 +283,7 @@ describe('skills and models per stage', () => {
       ).effects,
     );
     expect(worker).toMatchObject({
-      prompt: `Add the toggle\n\n${AGENT_NOTE_LINE}\n\nUse the project skill \`acp-skills:frontend\`.`,
+      prompt: `Add the toggle\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}\n\nUse the project skill \`acp-skills:frontend\`.`,
       skills: ['frontend'],
       model: 'claude-haiku',
     });
@@ -375,7 +376,7 @@ describe('agent files per stage (ADR-0019 §6)', () => {
       ).effects,
     );
     expect(worker).toMatchObject({ agent: 'frontend-dev', model: 'claude-haiku' });
-    expect(worker.prompt).toBe(`Add the toggle\n\n${AGENT_NOTE_LINE}`);
+    expect(worker.prompt).toBe(`Add the toggle\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}`);
   });
 
   it('adds nothing without an agent file (absent or null), so the effect is unchanged', () => {

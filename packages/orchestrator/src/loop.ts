@@ -479,6 +479,16 @@ export function checkChange(
   if (!decidable) {
     return refusal('change-not-decidable', `${agent.role}'s change ${STATE_WORDS[change.state]}.`);
   }
+  // F-1: the helper's folder left its branch, so nothing was saved to merge or rework.
+  if (
+    change.sealFailure === 'branch-changed' &&
+    (action === 'merge' || action === 'merge-anyway' || action === 'rework')
+  ) {
+    return refusal(
+      'change-not-decidable',
+      `${agent.role} switched its folder to another branch, so its work could not be saved. Discard its change${by === 'lead' ? ' with discard_change' : ''}; a fresh helper can do the step again.`,
+    );
+  }
   switch (action) {
     case 'merge-anyway':
     case 'merge':
@@ -782,6 +792,10 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
   if (change.headCommit !== null) {
     lines.push(
       `Saved as commit ${change.headCommit}${change.changedFiles !== null ? `; ${change.changedFiles} file(s) changed` : ''}.`,
+    );
+  } else if (change.sealFailure === 'branch-changed') {
+    lines.push(
+      'Not saved: the helper switched its folder to another branch, so its work could not be saved. Discard it; a fresh helper can do the step again.',
     );
   } else if (change.state === 'decision') {
     lines.push('Not saved yet: the helper stopped before finishing; a merge saves it first.');

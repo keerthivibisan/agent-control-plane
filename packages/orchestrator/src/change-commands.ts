@@ -12,6 +12,7 @@ import {
   checkChange,
   isFinalChangeState,
   leadActivity,
+  leadCanDecide,
   notifyLead,
   undecidedChanges,
 } from './loop.js';
@@ -89,15 +90,31 @@ export function ticketBranchCreated(
   });
 }
 
+/** Why the server could not seal a change (F-1). */
+export type SealFailure = 'branch-changed';
+
+/** What the lead is told when a helper's folder left its branch (F-1). */
+export function branchChangedLine(role: string, agentRunId: string): string {
+  return `${role} (agentId ${agentRunId}) switched its folder to another branch, so its work could not be saved. Discard its change with discard_change, then start a fresh helper for that step if the work is still needed. Do not ask helpers to run git commands that create, switch, commit, reset or push branches: the app does that.`;
+}
+
 /**
  * The server sealed a change after `seal-change` (ADR-0021 §3): no change → `no-changes` and the
  * agent SUCCEEDED (FAILED if its turn had failed); a sealed commit → `ready` for a reviewer; a
- * change that could not be sealed (`changed` with no commit) → `needs-owner`.
+ * change that could not be sealed (`changed` with no commit) → `needs-owner`. F-1: a change whose
+ * helper switched its folder to another branch (`failure: 'branch-changed'`) goes to the lead
+ * (`decision`, with `sealFailure`), who can discard it and start a fresh helper; the owner gets it
+ * only when the lead cannot decide.
  */
 export function changeSealed(
   state: RunState,
   agentRunId: string,
-  result: { changed: boolean; headCommit: string | null; changedFiles: number | null },
+  result: {
+    changed: boolean;
+    headCommit: string | null;
+    changedFiles: number | null;
+    failure?: SealFailure;
+  },
   ctx: EngineContext,
 ): EngineResult {
   return onChange(state, agentRunId, ctx, (d, agent) => {
@@ -120,6 +137,17 @@ export function changeSealed(
       return done;
     }
     change.changedFiles = files;
+    if (result.failure === 'branch-changed') {
+      change.sealFailure = 'branch-changed';
+      change.headCommit = null;
+      if (leadCanDecide(d)) {
+        change.state = 'decision';
+        notifyLead(d, branchChangedLine(agent.role, agent.id));
+      } else {
+        change.state = 'needs-owner';
+      }
+      return done;
+    }
     if (result.headCommit === null) {
       change.state = 'needs-owner';
       notifyLead(

@@ -8,7 +8,7 @@ import type {
   WorkflowProgram,
   WorkflowStageId,
 } from '@acp/core';
-import { AGENT_NOTE_LINE } from './agent-note.js';
+import { AGENT_NOTE_LINE, BRANCH_RULE_LINE } from './agent-note.js';
 import { approvedPlan } from './plan-read.js';
 import { programNode, programOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -406,6 +406,8 @@ export function testerBrief(state: BriefView): string {
     (state.integration?.ticketBranch ?? null) === null
       ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
       : 'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes, after the project’s checks.',
+    // F-1: the app owns branches and commits.
+    BRANCH_RULE_LINE,
     // ADR-0026 §3: ticket runs only (the note is a ticket comment).
     (state.run.ticketId ?? null) === null ? null : AGENT_NOTE_LINE,
   ]

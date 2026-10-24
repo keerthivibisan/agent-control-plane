@@ -13,6 +13,7 @@ import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
 import { runLimits } from './limits.js';
+import { PLAN_BRANCH_REFUSAL, planBranchCommand } from './plan-branch-check.js';
 import { isAgentOverBudget } from './policy.js';
 import { hasNamedHelpers, programFullAuto, resolveHelper } from './program.js';
 import { isSeparatePlanner, launchFieldsFor } from './stages.js';
@@ -101,6 +102,14 @@ export function submitPlan(
       return refusal(
         'invalid-input',
         `Step "${coordinatorStep.title}" is given to "${coordinatorStep.role.trim()}". The lead and the planner only coordinate and cannot edit files: give every step the helper role that will do it, then submit the plan again.`,
+      );
+    }
+    // F-1: the app owns branches and commits; checked before anyone (owner or Full auto) approves.
+    const branchStep = planBranchCommand(input.steps);
+    if (branchStep !== null) {
+      return refusal(
+        'invalid-input',
+        `Step "${branchStep.step}" asks a helper to run \`${branchStep.command}\`. ${PLAN_BRANCH_REFUSAL}`,
       );
     }
     // ADR-0023 §7: every step must go to a helper node of the workflow.
@@ -341,6 +350,7 @@ export function ticketPlannerPrompt(
     [
       'You are the planner. Read the code you need; you cannot edit files, run commands or start helpers.',
       `Call submit_plan with a short summary and 1 to 12 steps. Give every step the helper role that will do it (for example "API builder" or "Tests"). The lead only coordinates and cannot edit files, so reading the code and coordinating are not steps, and no step may be given to "${LEAD_ROLE}".`,
+      PLAN_BRANCH_LINE,
       options.fullAuto === true
         ? FULL_AUTO_PLAN_LINE
         : 'If the owner asks for changes, you will get their comment: revise the plan and call submit_plan again.',
@@ -463,6 +473,14 @@ export interface PromptOptions {
   fullAuto?: boolean;
 }
 
+/**
+ * F-1 (2026-10-24, ticket ACPGIT-3): what the lead and the planner are told about branches. The
+ * ticket said "checkout a branch from dev", and the plan told a helper to run `git checkout -b`
+ * and commit; `submitPlan` now refuses such steps (`planBranchCommand`).
+ */
+export const PLAN_BRANCH_LINE =
+  'Never put steps that create, switch, commit, push or reset branches into the plan: the app creates the ticket branch from its target and saves each helper’s work. If the ticket asks for that, say in the plan that the app does it.';
+
 /** The plan-review sentence of a Full auto run's planning brief (ADR-0022). */
 export const FULL_AUTO_PLAN_LINE =
   'This run is in Full auto: your plan is approved automatically when you submit it and the owner reviews the result once, at the end, so make the plan complete and concrete.';
@@ -486,6 +504,7 @@ export function ticketLeadPrompt(
         ? 'Plan first. Read the code you need; edits, commands and helpers are refused until your plan is approved.'
         : 'Plan first. Read the code you need; edits, commands and helpers are refused until the owner approves your plan.',
       `Then call submit_plan with a short summary and 1 to 12 steps. Give every step the helper role that will do it (for example "API builder" or "Tests"). You only coordinate and cannot edit files, so reading the code and coordinating are not steps, and no step may be given to "${LEAD_ROLE}".`,
+      PLAN_BRANCH_LINE,
       fullAuto
         ? FULL_AUTO_PLAN_LINE
         : 'If the owner asks for changes, you will get their comment: revise the plan and call submit_plan again.',

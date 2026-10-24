@@ -17,6 +17,7 @@ export * from './allowlist.js';
 export {
   FULL_AUTO_LEAD_LINE,
   FULL_AUTO_PLAN_LINE,
+  PLAN_BRANCH_LINE,
   HANDOVER_NOTE_LINE,
   LEAD_ROLE,
   approvedPlan,
@@ -30,6 +31,7 @@ export {
   ticketRunPrompts,
 } from './plan.js';
 export type { PlanDecision, PromptOptions } from './plan.js';
+export { branchCommandIn, PLAN_BRANCH_REFUSAL, planBranchCommand } from './plan-branch-check.js';
 export type * from './state.js';
 export { SUMMARY_MAX_CHARS, cleanSummary, formatTokens } from './draft.js';
 export {
@@ -73,10 +75,17 @@ export {
 export type { FollowUpFacts } from './follow-up.js';
 export { CHILD_MANAGEMENT_TOOLS, controlToolsFor, leadToolCall } from './lead-tools.js';
 export { cleanReviewBody } from './review-tool.js';
-export { AGENT_NOTE_LINE, cleanAgentNote, withAgentNoteLine } from './agent-note.js';
+export {
+  AGENT_NOTE_LINE,
+  BRANCH_RULE_LINE,
+  cleanAgentNote,
+  helperBrief,
+  withAgentNoteLine,
+} from './agent-note.js';
 export { reportWork } from './report-tool.js';
 export {
   beginChangeMerge,
+  branchChangedLine,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -87,7 +96,7 @@ export {
   requestTicketChanges,
   ticketBranchCreated,
 } from './change-commands.js';
-export type { MergeBlocked } from './change-commands.js';
+export type { MergeBlocked, SealFailure } from './change-commands.js';
 export {
   CHECK_FAILURE_TAIL_MAX_BYTES,
   agentSetupFailed,

@@ -15,7 +15,7 @@ import {
   mayStartHelpers,
 } from './policy.js';
 import { helperNodeOf, programOf, resolveHelper } from './program.js';
-import { withAgentNoteLine } from './agent-note.js';
+import { helperBrief } from './agent-note.js';
 import { reportWork } from './report-tool.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
@@ -265,7 +265,7 @@ export function leadToolCall(
           kind: 'worker',
           role,
           // ADR-0026 §3: a ticket run's helper ends with its note (`report_work`).
-          ...launchFieldsFor(program, node.id, withAgentNoteLine(task, d.run.ticketId !== null)),
+          ...launchFieldsFor(program, node.id, helperBrief(task, d.run.ticketId !== null)),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),

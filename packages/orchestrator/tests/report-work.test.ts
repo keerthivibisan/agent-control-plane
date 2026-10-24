@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_AGENT_NOTE_CHARS } from '@acp/core';
 import {
+  BRANCH_RULE_LINE,
   AGENT_NOTE_LINE,
   cancelRun,
   cleanAgentNote,
@@ -25,7 +26,7 @@ describe('report_work (ADR-0026 §3)', () => {
     const s0 = loopRunning();
     const started = ok(leadTool(s0, 'start_agent', { role: 'API', task: 'Build the API' }, 'wa'));
     const start = effectsOf(started.effects, 'start-agent')[0];
-    expect(start?.prompt).toBe(`Build the API\n\n${AGENT_NOTE_LINE}`);
+    expect(start?.prompt).toBe(`Build the API\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}`);
     const s = helper(s0, 'API', 'wa');
     expect(controlToolsFor(s, A)).toEqual(['report_work']);
     // Never the lead's, and the lead may not call it.
