@@ -3,6 +3,7 @@ import { CHANGE_REVIEWER_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { gitGuardDenialFor, gitGuardMessage } from './branch-guard.js';
 import { isInside, summarizeToolUse, targetPath } from './summary.js';
 
 /** Name of the lead's in-process MCP server; its tools appear as `mcp__acp__<name>`. */
@@ -385,6 +386,12 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
       return { behavior: 'allow', toolUseID };
     }
     if (isReadOnlyRole(spec.kind)) return { behavior: 'deny', message: DENY_READ_ONLY, toolUseID };
+    // F-1: a branch-managing git command is denied without asking the owner, in every mode: only
+    // the app moves branches (the PreToolUse hook denies it first; this is the gate's layer).
+    const branchCommand = gitGuardDenialFor(toolName, input);
+    if (branchCommand !== null) {
+      return { behavior: 'deny', message: gitGuardMessage(branchCommand), toolUseID };
+    }
     if (options.signal.aborted) return { behavior: 'deny', message: DENY_ABORTED, toolUseID };
     try {
       const decision = await callbacks.requestPermission({

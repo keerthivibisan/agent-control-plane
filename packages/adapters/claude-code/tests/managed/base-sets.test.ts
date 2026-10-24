@@ -6,6 +6,7 @@ import type {
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
+import { GIT_DENY_RULES } from '../../src/managed/branch-guard.js';
 import { createManagedClaudeCode } from '../../src/index.js';
 import {
   agentToolNames,
@@ -195,8 +196,11 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
       const options = optionsFor(spec(kind));
       if (kind === 'planner' || kind === 'reviewer') {
         expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
-      } else {
+      } else if (kind === 'lead') {
         expect(options).not.toHaveProperty('disallowedTools');
+      } else {
+        // F-1: helpers and testers get the branch deny rules.
+        expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
       }
       expect(servers.toolNames).toEqual(control[kind]);
     }

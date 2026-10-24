@@ -17,7 +17,9 @@ import type { Options, SandboxSettings } from '@anthropic-ai/claude-agent-sdk';
  *   `filesystem.denyRead`: the server's list (secrets, the app's data folder, Claude's config);
  *   `filesystem.allowRead` re-opens the worktree and the temp folder, which live inside the app's
  *   data folder; `filesystem.denyWrite` keeps commands off the worktree's `.git` (its pointer to
- *   the repository) and `.claude`, as the Auto edits rule does for edits (ADR-0021);
+ *   the repository) and `.claude`, as the Auto edits rule does for edits (ADR-0021), and (F-1)
+ *   the repository's git folders the server resolved (`gitDirs`), which Claude Code itself makes
+ *   writable for a linked worktree;
  * - no `network` block: sandboxed network access goes through Claude Code's proxy and auto mode's
  *   classifier decides on new hosts (owner decision 2026-10-17; no hard allowlist).
  * The sandbox covers shell commands only. The built-in Read and Edit tools get path-scoped deny
@@ -69,6 +71,16 @@ function protectedPaths(cwd: string): string[] {
   return PROTECTED_DIRS.map((d) => path.join(cwd, d));
 }
 
+/**
+ * F-1: the repository's git directories the server resolved for this worktree (absolute paths
+ * only). Claude Code adds a linked worktree's common git directory to the sandbox's writable
+ * paths on its own (docs/research/f-1-branch-guard-2026-10-24.md), so `git commit` and
+ * `git checkout` could write refs and objects there; denying them keeps every ref with the app.
+ */
+function gitDirsOf(fullAuto: FullAutoSpec): string[] {
+  return (fullAuto.gitDirs ?? []).filter((d) => path.isAbsolute(d));
+}
+
 /** The SDK sandbox block of a Full auto agent (see above). */
 export function fullAutoSandbox(cwd: string, fullAuto: FullAutoSpec): SandboxSettings {
   return {
@@ -78,7 +90,7 @@ export function fullAutoSandbox(cwd: string, fullAuto: FullAutoSpec): SandboxSet
     autoAllowBashIfSandboxed: false,
     filesystem: {
       allowWrite: [cwd, fullAuto.tempDir],
-      denyWrite: protectedPaths(cwd),
+      denyWrite: [...protectedPaths(cwd), ...gitDirsOf(fullAuto)],
       denyRead: [...fullAuto.denyRead],
       allowRead: [cwd, fullAuto.tempDir],
     },
@@ -114,6 +126,7 @@ export function fullAutoDenyRules(cwd: string, fullAuto: FullAutoSpec): string[]
   for (const dir of protectedPaths(cwd)) {
     rules.push(`Edit(${rulePath(dir)})`, `Edit(${rulePath(dir)}/**)`);
   }
+  for (const dir of gitDirsOf(fullAuto)) rules.push(`Edit(${rulePath(dir)}/**)`);
   return rules;
 }
 

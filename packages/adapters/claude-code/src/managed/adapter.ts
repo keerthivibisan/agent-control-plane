@@ -11,6 +11,7 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { applyProtection, classifyStartupError, launchProtectionOf } from './full-auto.js';
 import type { LaunchProtection } from './full-auto.js';
+import { GIT_DENY_RULES, gitGuardHooks } from './branch-guard.js';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
@@ -169,6 +170,12 @@ export function buildOptions(
     options.skills = [...plugin.skills];
   }
   if (spec.followUp !== undefined) applyFollowUp(options, spec, spec.followUp.resumeSessionId);
+  // F-1: a worker or tester never manages branches, in any approval mode. The hook runs before
+  // Claude Code's permission pipeline (auto mode included); the deny rules are a second layer.
+  if (spec.followUp === undefined && (spec.kind === 'worker' || spec.kind === 'tester')) {
+    options.hooks = gitGuardHooks();
+    options.disallowedTools = [...(options.disallowedTools ?? []), ...GIT_DENY_RULES];
+  }
   // A rework turn (ADR-0021 §3) resumes the helper's own session in its own worktree, never
   // forked, with the same role tools; its input closes after the turn like any helper's. Without a
   // session to resume it starts fresh, with the comments in the prompt.

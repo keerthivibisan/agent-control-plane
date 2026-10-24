@@ -111,6 +111,13 @@ export interface FullAutoSpec {
   tempDir: string;
   /** Absolute paths sandboxed commands may not read (secrets, the app's data, Claude's config). */
   denyRead: readonly string[];
+  /**
+   * F-1: the agent's worktree's git directories (its private `--git-dir` and the repository's
+   * `--git-common-dir`, absolute and resolved through symlinks), which sandboxed commands and the
+   * file tools may not write: only the app commits and moves refs. Claude Code itself makes a
+   * linked worktree's common git directory writable in the sandbox. Absent from servers before F-1.
+   */
+  gitDirs?: readonly string[];
 }
 
 /**
