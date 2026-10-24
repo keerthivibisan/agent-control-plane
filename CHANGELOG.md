@@ -7,6 +7,149 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
+GitHub and a ticket page that reads like a pull request. Connect a project to GitHub from
+Settings, choose how ticket branches are named and where they start, then push the finished
+ticket branch, open a pull request and merge it, all from the ticket. The ticket page now has
+Comments, Agents, Files changed, Checks and Conversation tabs, with a review view like GitHub's.
+Your harness can prepare each helper's copy of the project and run checks at the points you
+choose in the workflow. Helpers and testers can no longer manage branches in any mode: the app
+owns branches and commits. The app has a new GitHub-like look with Light, Dark and System themes.
+The database is upgraded when the app first starts; back it up first (see Upgrading), because
+0.2.0 cannot open it afterwards.
+
+### Added
+
+- GitHub, through your own `gh` login
+  - Settings has a GitHub card. It shows whether the GitHub CLI (`gh`) is installed and signed
+    in, and tells you what to run in your terminal if not. The app never reads or stores a token.
+  - From the same card, create a new repository on GitHub or connect an existing one as the
+    project's `origin`, and optionally push the current branch. A remote you already have is never
+    changed.
+  - On a finished ticket, **Push & open PR** pushes the ticket branch and opens a pull request
+    against its target. The ticket shows the pull request, its state and a link. **Push new
+    commits** appears when the branch has commits the pull request does not have yet.
+  - **Merge pull request** merges it from the ticket, as a merge, a squash or a rebase, with
+    **Delete branch** ticked by default. When GitHub reports the pull request merged, the ticket
+    moves to Done.
+  - **Delete branch** removes a merged or discarded ticket branch, on GitHub first and then the
+    local copy. It never deletes the target or a branch that is checked out.
+  - Nothing is pushed or opened without your click, and nothing is sent on a timer: an open pull
+    request is read when you open the ticket or click Refresh.
+- Branching strategies
+  - Choose GitHub flow, Git flow or Custom in Settings → Branches: the base branch, the default
+    target, and a name template such as `{type}/{key}-{slug}`, with a live preview.
+    Projects without a strategy keep `acp/<KEY>`.
+  - Each ticket can set its own branch name, target and "Start from" branch in New ticket or on
+    the ticket page. "Start ticket branches from" sets the project's default.
+  - Settings lists the project's local branches and can create a new one from any branch, without
+    switching your checkout, and optionally push it. A ticket whose target or start branch is
+    missing offers to create it in one click.
+  - At the end of a ticket, choose to merge into its target locally or to push and open a pull
+    request.
+- The ticket page, like a pull request
+  - A header with the title, state and branch → target, the merge box at the top of Comments,
+    and a sidebar with the branch, pull request, run options and labels.
+  - **Comments**, the first tab: the description, your comments and the lead's summary of the
+    whole ticket, which later runs update. Comments show paragraphs, lists, code and links; HTML is
+    shown as text.
+  - **Agents:** the run's live workflow and every agent of the run.
+  - **Files changed:** a review view like GitHub's, with a file tree, unified or side-by-side
+    diffs with syntax colours, "Viewed" checkboxes and comments on lines. **Review changes** sends
+    your line comments back as rework notes. "Changes from" shows all changes or one helper's.
+    After a merge it stays readable, from the recorded commits.
+  - **Checks:** setup runs and check results, grouped by where they ran.
+  - **Conversation:** a timeline of what happened, filterable by who: runs and plans, each
+    helper's and tester's note, reviews and decisions, the run's facts, merges and pull requests.
+    Your reviews from Files changed appear here as "You reviewed".
+  - A badge at the right of the header shows how long the ticket took and how many tokens it used,
+    for example "Took 1h 12m · 1.2M tokens", or "Running 14m" while it runs.
+- Attachments
+  - Attach files to a ticket or a comment: images, text, Markdown, CSV, JSON, PDF, zip and gzip,
+    up to 10 MB each and 50 per ticket. Images are previewed.
+  - Agents get read-only copies and their brief lists them by name. The copies are never
+    committed.
+- Notes from every agent
+  - Each helper and tester writes a short note of what it did and how it checked it. The lead
+    writes a summary of the whole ticket in Comments, in plain past tense, like a teammate.
+- The harness in your workflow
+  - Setup steps in `.acp/harness.json` (at most 5), such as installing dependencies. They run in
+    each helper's and tester's own copy before it starts, and in a fresh copy before checks; never
+    in your project folder, and not for agents that only read.
+  - A step that downloads things says so, and runs only while "Setup may use the network" is on
+    for the project (off by default).
+  - Folders a step creates, such as `node_modules`, are never added to a change or a commit.
+  - Labels on checks (for example `fast` and `full`) let a Checks block pick a group.
+  - Checks blocks in the workflow: on each helper's change before its review, before the lead's
+    merge (always there, as before), and on the ticket branch. Each chooses which checks run and
+    what happens on failure: back to the helper (up to 5 rounds), the lead decides, or ask you.
+  - The Harness page shows the setup steps, the labels, where each check runs, and **Run setup and
+    checks now** on the main branch.
+- Session names
+  - Sessions the app starts are named when they start, for example "WEB-12 · Frontend helper", and
+    Claude Code records the same name.
+  - Sessions without a title show the helper's type and task, or their branch and start time,
+    never "Untitled". The Tokens page uses the same names.
+- A run summary on the ticket after each run: the lead's note, with the run's facts under Details,
+  and a line when you merge.
+- Themes: Light, Dark or System, in the top bar and in Settings → Appearance.
+
+### Changed
+
+- A GitHub-like look: a blue accent, green primary buttons, a dark top bar, and GitHub's diff
+  colours. The logo keeps its own colours.
+- The app uses your system's fonts. Inter and JetBrains Mono are no longer bundled.
+- A roomier shell: larger text, a 56-pixel top bar with the logo and "ACP" on the left and the
+  search in the centre, and a wider sidebar with its own open and close button (⌘B still works).
+- The Workflow editor is easier to read: clearer routing, highlighted valid targets when you link
+  blocks, a link chooser, a legend and a grouped problems list.
+- The workflow's Checks block is now configurable, and can also sit on each change and on the ticket
+  branch. Existing workflows keep exactly one block before the lead's merge with all required
+  checks, as before.
+- Ticket branches are named by the project's strategy and start from the ticket's "Start from"
+  branch, else the project's, else the target.
+- Links to the old separate review pages now open the ticket's Files changed tab.
+
+### Fixed
+
+- When a ticket branch was changed outside the app, the lead could keep trying to merge into it.
+  Such a change now goes to you at once, and the ticket offers **Reset to the last reviewed
+  commit**.
+- The Tokens page listed untitled sessions as "Session 1a2b3c4d". It now uses the same names as
+  the Sessions page.
+
+### Security
+
+- Helpers and testers can no longer create, switch, commit to, reset, merge, rebase, stash, fetch
+  or push branches, in any approval mode, including Full auto. The app owns branches and commits.
+- In Full auto, the operating-system sandbox no longer lets a helper write to the repository's
+  git folders.
+- A plan with steps that run branch or commit commands is refused before anyone approves it, and
+  the app's harness runner never runs a check or setup step that manages branches.
+- Your pushes go only to `origin`'s own address. A planted push address in the repository's
+  settings is ignored or refused, and the repository's own push hooks never run from the app.
+- Retries are bounded. A plan step, and a run, may lose only a few helper attempts before the lead
+  must hand over, so a run cannot restart helpers without end.
+- A ticket branch moved outside the app can't be merged or pushed until you reset it to the last
+  reviewed commit, so nothing unreviewed ships.
+- Attachments are served only by the local server, as downloads with strict content types. HTML
+  and SVG are refused.
+
+### Upgrading
+
+- Back up your database before the first start: stop the app, then copy
+  `~/.agent-control-plane/acp.sqlite` (or the one in your `ACP_DATA_DIR`), with its `-wal` and
+  `-shm` files if they exist, somewhere safe.
+- On first start, 0.3.0 upgrades the database in four additive steps (migrations 0008 to 0011):
+  ticket branch settings and pull requests; comment kinds, agent notes and attachments; setup runs
+  and where checks ran; and the ticket's start branch. Your projects, tickets and runs keep
+  working.
+- After that, 0.2.0 cannot open the database. To go back, restore the backup.
+- The GitHub features need the GitHub CLI, `gh`, installed and signed in (`gh auth login`).
+  Everything else works without it.
+- Run `pnpm install` after updating: the bundled fonts were removed.
+
 ## [0.2.0] - 2026-10-21
 
 Your own workflow for each project. Draw which agents work on a ticket and how they review each
@@ -243,7 +386,8 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/keerthivibisan/agent-control-plane/releases/tag/v0.0.1
