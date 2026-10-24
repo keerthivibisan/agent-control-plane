@@ -336,3 +336,12 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   name), then release prep.
 - 2026-10-24 **Resumed by the owner** ("resume"). A new agent continues G-G and T-A on `wp/g-g-2`
   from `wp/g-g-merge-totals`; the owner's app was restarted on `release/0.3.0`.
+- 2026-10-24 **G-G and T-A merged** (`312cd71`). Merge pull request from the ticket (merge, squash
+  or rebase; `gh pr merge --repo` run from a temp folder; Delete branch ticked by default), Delete
+  branch once merged or discarded (never the base, target or a checked-out branch; GitHub first,
+  then the local copy), and the ticket badge ("Took 1h 12m · 1.2M tokens" or "Running 14m", with
+  run times and the token split; no cost, per the owner). `finishedAt` is the latest run end (no
+  done time is stored). Coordinator: the open-PR note now mentions Merge pull request. Checks: format
+  ✓ lint ✓ typecheck ✓; tests 495 + 371 + 12 + 237 + 2,322 + 1,188 + 764 (vitest with 2 workers on
+  this 8 GB machine) ✓; build ✓; e2e 110/110. Proposed: a lighter "does the branch still exist"
+  read than the branch diff.
