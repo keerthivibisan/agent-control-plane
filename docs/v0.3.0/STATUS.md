@@ -356,3 +356,11 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   `.git`. **F-1 started** (`wp/f-1-branch-guard`): deny branch-changing git commands for helpers and
   testers in every mode (hook + rules + sandbox denyWrite on the git dirs), brief and planning
   wording, a clear failure the lead can discard, and an owner "Reset to the last reviewed commit".
+- 2026-10-24 **Owner: "tighten our unit test cases so we can identify these type of issues".**
+  F-1 also gets a deterministic plan check (a plan step with branch or commit commands is refused).
+  **T-1 started** (`wp/t-1-adversarial`, tests only): hostile fake helpers in real temp repos
+  (checkout/commit/reset the ticket branch, move dev/main, push, edit .git, stash/rebase, detached
+  HEAD, writes outside the worktree, two helpers on one branch, staging outputs), one reusable
+  invariant check (ticket branch, base, origin, sealed contents, termination with bounded agent
+  starts, an owner action that always makes progress), engine-level failure loops, and an adapter
+  table of shell commands. Tests that fail today are marked to flip when F-1 lands.
