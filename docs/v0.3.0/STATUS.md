@@ -379,3 +379,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   ADR-0022 amended. Golden traces changed only by the brief text (proved). Coordinator check:
   format ✓ lint ✓ typecheck ✓; tests 498 + 497 + 12 + 237 + 2,378 + 1,192 + 775 ✓; build ✓;
   e2e 110/110. Not yet seen in a real run (needs consent).
+- 2026-10-24 **T-1 merged** (`2901a2c`): the adversarial suite (`docs/testing/adversarial.md`).
+  Hostile fake helpers in real temp repos, one invariant check (ticket branch, base, origin, sealed
+  contents, bounded starts, owner progress, with the F-1 reset), engine failure loops and simulator
+  invariants over the templates and generated graphs, and an adapter command table checked against
+  F-1's guard. 52 of 63 known gaps flipped to plain tests with F-1; 12 remain as `knownGap` for
+  F-2 (they turn red when fixed). Coordinator check: tests 498 + 563 + 12 + 237 + 2,421 + 1,192 +
+  809 ✓; build ✓; e2e 110/110. F-2 started.
