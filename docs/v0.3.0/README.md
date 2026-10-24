@@ -127,7 +127,7 @@ Owner decisions, 2026-10-22: "everything is there but not clear"; the answers we
 | D-C | Workflow editor clarity in the new style: blocks, links, legend, panel                                                                                                                                                                                                                             | D-0   |
 | D-V | e2e, both themes, a final screenshot review with the owner                                                                                                                                                                                                                                         | all   |
 
-## Part 4: Comments, Conversation, attachments, shell polish (C series), in progress
+## Part 4: Comments, Conversation, attachments, shell polish (C series), done
 
 These are the owner's decisions from 2026-10-22, to go into 0.3.0:
 
@@ -189,7 +189,7 @@ These are the owner's decisions from 2026-10-22, to go into 0.3.0:
 e2e once per merge). Back up the live database before migration 0009. C-A, C-B and C-S can run in
 parallel after C-0.
 
-## Part 5: the harness in the workflow (H series, ADR-0027), in progress
+## Part 5: the harness in the workflow (H series, ADR-0027), done
 
 **Owner request (2026-10-23):** "we are not able to introduce harness in orchestration graph, so we
 need to plan how are we going to bring in harness", then "write the plan with setup step included",
@@ -374,3 +374,27 @@ back up the live database before migration 0010).
   says why.
 - Old harness files and old graphs behave exactly as in 0.3.0 (golden traces).
 - No conversation content stored; check and setup output stays the redacted last 16 KiB.
+
+## Release (R-3)
+
+Release prep is on `wp/r-3-b` (progress in [wp/R-3.md](wp/R-3.md)): every `package.json` at
+`0.3.0` (the app's footer reads "Server 0.3.0"), the unused `@fontsource-variable` fonts removed,
+the CHANGELOG `[0.3.0] - 2026-10-25` entry, the README and its screenshots (sample data only), and
+the PR text and release notes in `.acp-data/` (git-ignored): `pr-v0.3.0.md` and
+`release-notes-v0.3.0.md`.
+
+`origin/main` is `79c312a`, the merge of `release/0.2.0`, and `release/0.3.0` already contains its
+tree, so no rebase onto `main` is needed.
+
+### Owner steps
+
+1. After the coordinator merges R-3 into `release/0.3.0`, push it:
+   `git push origin release/0.3.0`.
+2. Optional: run CI on `release/0.3.0` by hand (Actions → CI → Run workflow).
+3. Raise the PR `release/0.3.0` → `main` in GitHub, with the title and body from
+   `.acp-data/pr-v0.3.0.md`, and merge it there.
+4. Restart your app on the new `main`. If it has not yet started on a build with migration 0011,
+   back up the live database first (a backup at migration 10 exists from 2026-10-24); 0.2.0 cannot
+   open the database afterwards.
+5. Tag the merge commit on `main` as `v0.3.0` and create the GitHub release from that tag, with the
+   text in `.acp-data/release-notes-v0.3.0.md`.
