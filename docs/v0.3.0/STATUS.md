@@ -334,3 +334,5 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   machine) and e2e, merge, restart the app. Still to do for 0.3.0 after that: small follow-ups
   (the Create action in "Start with options", the branch picker in New ticket, the ⌘K "Run checks"
   name), then release prep.
+- 2026-10-24 **Resumed by the owner** ("resume"). A new agent continues G-G and T-A on `wp/g-g-2`
+  from `wp/g-g-merge-totals`; the owner's app was restarted on `release/0.3.0`.
