@@ -174,8 +174,13 @@ The same steps, with copy buttons, are on the **Data health → Connection** pag
    and the lead starts helper agents. In Full auto, the plan is approved for you.
 6. **Follow the run.** The ticket page shows every agent, each change and its review, and anything
    that needs your decision.
-7. **Merge once.** When the run is done, review the combined change and its checks, then merge the
-   ticket branch into main.
+7. **Merge once.** When the run is done, review the combined change on **Files changed** and its
+   checks, then merge the ticket branch into its target, or push it and open a pull request.
+
+**GitHub is optional.** Pull requests need the GitHub CLI, `gh`, installed and signed in on this
+computer (`gh auth login`). The app uses that login and never reads or stores a token. Connect or
+create the project's repository in its **Settings** (the GitHub card), and choose a branching
+strategy under **Branches**. Everything else works without `gh`.
 
 **Managed runs need Claude Code's sign-in.** The app starts Claude Code through the Claude Agent
 SDK, which uses your own Claude Code login (or API key) on this computer. Runs use your account and

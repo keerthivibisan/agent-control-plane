@@ -1,7 +1,7 @@
 # Architecture
 
-> Status: **implemented through v0.1.0**, with v0.2.0's editable workflow graphs in preparation
-> (ADR-0023). This document began as the agreed design for Phase 1; where a section says
+> Status: the code is at **v0.3.0**. Features added since v0.1.0 (editable workflow graphs, GitHub,
+> the ticket page and the harness in the workflow) are described in ADR-0023 to ADR-0027. This document began as the agreed design for Phase 1; where a section says
 > **[planned]**, it is not built yet. The current feature list is in the README and CHANGELOG.
 
 ## 1. Shape: a modular monolith (ADR-0002)
