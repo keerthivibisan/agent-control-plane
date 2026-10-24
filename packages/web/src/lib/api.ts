@@ -79,6 +79,8 @@ import {
   TicketBranchActionRequestSchema,
   TicketBranchReviewDtoSchema,
 } from '@acp/core/api';
+// F-1: reset a ticket branch changed outside the app.
+import { ResetTicketBranchRequestSchema } from '@acp/core/api';
 // Workflow graph editor (WG-D, ADR-0023).
 import {
   UpdateWorkflowGraphRequestSchema,
@@ -1169,6 +1171,23 @@ export async function ticketBranchAction(
     client,
     path,
     checked(TicketBranchActionRequestSchema, input, path),
+    TicketBranchReviewDtoSchema,
+  );
+}
+
+// F-1: POST /api/runs/:id/ticket-branch/reset (CSRF; the owner's click only) with
+// `{ from }`, the tip the owner saw (`ticketBranch.movedOutside.tip`): the server moves the branch
+// back to the last reviewed commit by compare-and-swap and answers with the TicketBranchReviewDto.
+export const ticketBranchResetPath = (runId: string): string =>
+  `${API_BASE}/runs/${enc(runId)}/ticket-branch/reset`;
+
+/** "Reset to the last reviewed commit" for a ticket branch changed outside the app. */
+export async function resetTicketBranch(client: ApiClient, runId: string, from: string) {
+  const path = ticketBranchResetPath(runId);
+  return controlPost(
+    client,
+    path,
+    checked(ResetTicketBranchRequestSchema, { from }, path),
     TicketBranchReviewDtoSchema,
   );
 }

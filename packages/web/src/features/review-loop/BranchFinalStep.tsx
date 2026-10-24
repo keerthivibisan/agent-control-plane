@@ -16,6 +16,7 @@ import { PullRequestInfo, PushAndOpenPr, PushNewCommits } from '../branching/Pul
 import { ActionError, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
 import { checksSummary, type TicketBranchMode } from './logic';
+import { MovedOutsideBanner } from './MovedOutsideBanner';
 import { ReasonForm } from './ReasonForm';
 
 const B = REVIEW_LOOP_COPY.branch;
@@ -254,8 +255,13 @@ export function BranchFinalStep({
   showPullRequest?: boolean;
 }) {
   const pr = branch.pullRequest ?? null;
+  // F-1: only the combined-change read (`review`) says whether the branch moved outside the app.
+  const movedOutside = review?.ticketBranch.movedOutside ?? branch.movedOutside;
   return (
     <>
+      {mode !== 'closed' ? (
+        <MovedOutsideBanner runId={run.id} branch={{ ...branch, movedOutside }} />
+      ) : null}
       {pr !== null && showPullRequest ? (
         <PullRequestInfo pr={pr} ticketId={ticket?.id ?? null} />
       ) : null}

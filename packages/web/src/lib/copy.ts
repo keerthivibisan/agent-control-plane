@@ -4461,3 +4461,21 @@ export const HARNESS_BLOCKS_COPY = {
       code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
   },
 } as const;
+
+/**
+ * F-1: the ticket branch was changed outside the app (a commit the app did not record, for
+ * example a helper that committed on it), and the owner's reset to the last reviewed commit.
+ */
+export const BRANCH_GUARD_COPY = {
+  movedOutside: (branch: string, now: string, reviewed: string) =>
+    `${branch} was changed outside the app (now ${now}, last reviewed ${reviewed})`,
+  movedHint:
+    'Merging or pushing is refused until it is back at the last reviewed commit. Resetting moves only this branch; the commits made outside the app stay in git’s reflog.',
+  reset: 'Reset to the last reviewed commit',
+  confirmReset: (branch: string, reviewed: string) =>
+    `Move ${branch} back to ${reviewed}, the last commit the app reviewed? Nothing else changes.`,
+  confirmResetButton: 'Reset branch',
+  cancel: 'Cancel',
+  working: 'Resetting…',
+  failed: 'The branch was not reset',
+} as const;
