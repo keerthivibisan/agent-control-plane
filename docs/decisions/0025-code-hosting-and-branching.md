@@ -143,6 +143,20 @@ Diffs are still read from git when shown and never stored (ADR-0009).
 - **With "Delete branch" on a merge:** GitHub deletes the head branch, and the app deletes its local
   ticket branch as above.
 
+### 10. Where a ticket branch starts (amended 2026-10-24, owner: "we need to bring in a explicit option we configure from which branch we should checkout at project level and ticket level. By default it will point to the main / default target branch")
+
+- **Settings:** the project's strategy gains `defaultSourceBranch` ("Start ticket branches from";
+  absent: the ticket's target) and a ticket gains `branch.from` (absent: the project's).
+- **Creating:** at plan approval the ticket branch is created from the tip of its source branch
+  (`from`, else the project's, else the target), never switching the checkout. A missing source is
+  refused plainly, with the Create branch action (§8).
+- **Merging back:** unchanged. The owner merges into the target; when the target is not an
+  ancestor of the ticket branch (it started from another branch), the local merge asks to update
+  the branch from the target first. A pull request is raised against the target as before.
+- **Shown:** the ticket branch records its source when it differs from the target, and the ticket
+  shows it ("from release/1.0").
+- The strategy's `baseBranch` stays a protected long-lived branch, as before.
+
 ## Consequences
 
 - **Network:** the app makes network calls for the first time beyond `claude`, only on the owner's
