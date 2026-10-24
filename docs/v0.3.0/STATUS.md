@@ -456,3 +456,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   `.acp-data/{pr,release-notes}-v0.3.0.md`. AGENTS.md and HANDOFF.md point at v0.3.0.
   **Release ready.** Waiting for the owner: push `release/0.3.0` again, open the PR, merge, tag.
   The video's final cut waits (HyperFrames download not yet approved).
+- 2026-10-25 **Pushed `release/0.3.0` to GitHub at `c02d7ec`** (owner: "can we release now"). The
+  owner raises the PR release/0.3.0 → main with `.acp-data/pr-v0.3.0.md`, merges it in GitHub,
+  tags v0.3.0 on main and publishes the release from `.acp-data/release-notes-v0.3.0.md`.
