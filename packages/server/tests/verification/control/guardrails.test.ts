@@ -127,9 +127,13 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
         if (kind === 'worker') {
           await ask(options, 'Read', { file_path: join(cwd, 'README.md') });
           await ask(options, 'mcp__acp__start_agent', { role: 'Nested', task: 'x' });
+          // F-1: a branch-managing git command is denied at once, without asking the owner.
+          await ask(options, 'Bash', { command: 'git push' });
+          answers.set('git push', answers.get('Bash') ?? 'none');
+          answers.delete('Bash');
           // These three park until the owner answers; they are not awaited.
           void ask(options, 'Write', { file_path: join(cwd, 'new.txt'), content: 'x' });
-          void ask(options, 'Bash', { command: 'git push' });
+          void ask(options, 'Bash', { command: 'npm test' });
           void ask(options, 'Glob', { pattern: '*', path: '/etc' });
         }
         while (!(await input.next()).done) {
@@ -169,7 +173,10 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
       );
       expect(answers.get('Read')).toBe('allow');
       expect(answers.get('mcp__acp__start_agent')).toBe('deny');
+      // F-1: `git push` was denied without an approval; only the three below wait.
+      expect(answers.get('git push')).toBe('deny');
       expect(run.approvals.map((a) => a.toolName).sort()).toEqual(['Bash', 'Glob', 'Write']);
+      expect(run.approvals.every((a) => a.status === 'pending')).toBe(true);
       // Nothing was allowed by default: the parked requests have no answer yet.
       for (const tool of ['Write', 'Bash', 'Glob']) expect(answers.has(tool)).toBe(false);
       expect(run.agents.find((a) => a.kind === 'worker')?.status).toBe('WAITING_APPROVAL');
