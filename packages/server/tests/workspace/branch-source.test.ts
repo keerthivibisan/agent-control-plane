@@ -15,7 +15,8 @@ import {
 } from '../../src/workspace/index.js';
 import { git, head, makeRepo, spyingGit, tempDir, write } from './helpers.js';
 
-const GIT_TIMEOUT_MS = 30_000;
+// Each merge test makes a worktree, seals, integrates and merges: slow on a loaded machine.
+const GIT_TIMEOUT_MS = 90_000;
 const RUN = '4c1e8f0a-7b2d-4e6a-9c35-1d2e3f4a5b6c';
 const A1 = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
 

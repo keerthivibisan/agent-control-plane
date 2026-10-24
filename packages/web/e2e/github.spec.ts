@@ -918,3 +918,89 @@ test('T-A: the ticket badge shows the time taken and the tokens, with details', 
   const narrow = await badge.boundingBox();
   expect(narrow !== null && narrow.x >= 0 && narrow.x + narrow.width <= 390).toBe(true);
 });
+
+// --- G-H (ADR-0025 §10): where ticket branches start ---------------------------------------------
+
+test('G-H: Settings saves where ticket branches start; New ticket starts one from its own branch', async ({
+  page,
+  request,
+}) => {
+  const demoId = await demoApi(request);
+  await withFixtureProject(page);
+  const puts = await withSetup(
+    page,
+    setupFixture({ branching: { ...githubFlowStrategy(), defaultTargetBranch: 'dev' } }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: fixtureProject() }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/context-candidates`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  const branchPosts = await withBranches(page, ['main', 'dev', 'release/1.0']);
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+
+  // Settings: "Same as the target branch" first and chosen; release/1.0 picked and saved.
+  const strategy = page.getByTestId('settings-branching');
+  const from = strategy.getByLabel('Start ticket branches from');
+  await expect(from).toHaveValue('');
+  await expect(from.locator('option').first()).toHaveText('Same as the target branch (dev)');
+  await from.selectOption('release/1.0');
+  await expect(strategy.getByTestId('branching-source-missing')).toHaveCount(0);
+  await shootPart(page, 'branching-source', 'branching-source');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  expect(puts).toHaveLength(1);
+  expect(puts[0]).toMatchObject({
+    branching: { defaultTargetBranch: 'dev', defaultSourceBranch: 'release/1.0' },
+  });
+
+  // New ticket: "Start from" follows the project's, offers the local branches, and creates a
+  // typed branch the folder doesn't have (from the ticket's target).
+  await page.route(`**/api/board?projectId=${PROJECT_ID}`, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set('projectId', demoId);
+    const real = (await (await route.fetch({ url: url.toString() })).json()) as Json;
+    const stages = ['BACKLOG', 'READY', 'WORKING', 'NEEDS_YOU', 'IN_REVIEW', 'DONE'];
+    await route.fulfill({
+      json: {
+        ...real,
+        project: { ...(real['project'] as object), ...fixtureProject() },
+        projectKey: 'WEB',
+        columns: stages.map((stage) => ({ stage, tickets: [] })),
+      },
+    });
+  });
+  const posts: Json[] = [];
+  await page.route(`**/api/projects/${PROJECT_ID}/tickets`, async (route) => {
+    const body = route.request().postDataJSON() as Json;
+    posts.push(body);
+    await route.fulfill({ status: 201, json: createdTicket(body) });
+  });
+  await page.goto(`/#/p/${PROJECT_ID}/board`);
+  await page.getByRole('button', { name: 'New ticket' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New ticket' });
+  await dialog.getByLabel('Title').fill('Release notes');
+  await dialog.getByTestId('run-options-more').locator('summary').click();
+  const start = dialog.getByLabel('Start from');
+  await expect(start).toHaveAttribute('placeholder', 'Project default (release/1.0)');
+  await dialog.getByLabel('Target branch').fill('main');
+  await start.fill('hotfix/base');
+  const missing = dialog.getByTestId('ticket-branch-from-missing');
+  await expect(missing).toContainText('hotfix/base isn’t a branch in the project folder yet.');
+  await missing.getByLabel('Also push to GitHub').uncheck();
+  await shootPart(page, 'new-ticket-from', 'new-ticket');
+  await missing.getByRole('button', { name: 'Create hotfix/base from main' }).click();
+  await expect(dialog.getByTestId('ticket-branch-from-missing-created')).toHaveText(
+    'Created hotfix/base.',
+  );
+  await dialog.getByRole('button', { name: 'Create ticket' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(branchPosts).toEqual([{ name: 'hotfix/base', from: 'main' }]);
+  expect(posts).toHaveLength(1);
+  expect(posts[0]).toMatchObject({
+    title: 'Release notes',
+    branch: { target: 'main', from: 'hotfix/base' },
+  });
+});
