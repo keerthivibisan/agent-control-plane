@@ -33,7 +33,8 @@ import { fakeQuery, idle } from './fake-query.js';
  *
  * Expected: every git command that changes branches, refs, the shared repository or a remote is
  * `guard` for a worker and the tester in every mode, however it is spelled; ordinary commands are
- * `pass` (the guard must not over-block). A row the guard misses is a `knownGap`. Synthetic only.
+ * `pass` (the guard must not over-block). A row the guard misses would be a `knownGap` (the server
+ * kit's `knownGap`; F-2 closed the last one). Synthetic only.
  */
 
 const realQuery = vi.hoisted(() => ({
@@ -264,13 +265,32 @@ const ORDINARY: readonly string[] = [
   'ls -la',
   'cat README.md',
   'grep -rn checkout src',
+  // F-2: input fed to a command that is not a shell is data, not a script.
+  "grep -c checkout <<< 'git checkout main is in the notes'",
+  "cat > notes.md <<'EOF'\nThe tests pass.\nEOF",
+  'npm test 2>&1 | tee test.log',
+  'echo hello | bash',
 ];
 
 /**
- * Spellings F-1's guard does not read yet. A here-string feeds the command to a shell on stdin,
- * which the guard does not parse. In Full auto the sandbox's git directories still stop the write.
+ * F-2: a shell that reads its script from its input: a here-string (`<<<`), a here-document, a
+ * pipe, or `xargs` that supplies git's subcommand. The guard reads the here-string and the
+ * here-document as a script, and denies a shell's piped or substituted input when the command
+ * mentions git (what it will read cannot be known).
  */
-const NOT_YET_GUARDED: readonly string[] = ["bash <<< 'git checkout main'"];
+const SHELL_INPUT: readonly string[] = [
+  "sh <<<'git push origin HEAD'",
+  'bash <<< "git reset --hard main"',
+  'bash <<EOF\ngit checkout main\nEOF',
+  "bash <<-'EOF'\n\tgit switch main\n\tEOF",
+  "echo 'git checkout main' | bash",
+  "printf 'git push origin HEAD' | sh -s",
+  "sh -c 'eval \"$(cat)\"' <<< 'git checkout main'",
+  'bash <<< "$(echo git checkout main)"',
+  "source /dev/stdin <<< 'git checkout main'",
+  "xargs git <<< 'checkout main'",
+  'echo checkout main | xargs git',
+];
 
 describe('T-1: shell commands for a worker or the tester, in every mode', () => {
   for (const command of ORDINARY) {
@@ -281,21 +301,13 @@ describe('T-1: shell commands for a worker or the tester, in every mode', () => 
     });
   }
 
-  for (const command of [...BRANCH_CHANGING, ...DISGUISED, ...REPOSITORY_WRITES]) {
-    if (NOT_YET_GUARDED.includes(command)) continue;
+  // F-2 closed the here-string gap (`bash <<< 'git checkout main'`, in DISGUISED): it is a plain
+  // row now, with the same assertion.
+  for (const command of [...BRANCH_CHANGING, ...DISGUISED, ...REPOSITORY_WRITES, ...SHELL_INPUT]) {
     it(`the guard denies ${JSON.stringify(command)}`, async () => {
       const wrong = await mismatches(command, 'guard');
       expect(wrong, `[guard] not stopped by the app: ${wrong.join('; ')}`).toEqual([]);
       expect(checkGitCommand(command)).not.toBeNull();
-    });
-  }
-
-  for (const command of NOT_YET_GUARDED) {
-    // F-2: the guard reads a shell's here-string (`<<<`) and here-document input, or denies a
-    // shell that reads its command from stdin.
-    knownGapAsync('F-2', 'guard', `the guard denies ${JSON.stringify(command)}`, async () => {
-      const wrong = await mismatches(command, 'guard');
-      expect(wrong, `[guard] not stopped by the app: ${wrong.join('; ')}`).toEqual([]);
     });
   }
 
@@ -362,25 +374,3 @@ describe('T-1: reading roles never run a shell command', () => {
     });
   }
 });
-
-/** `knownGap` (see packages/server/tests/adversarial/kit.ts) for this package's tests. */
-function knownGapAsync(fix: 'F-2', tag: string, title: string, body: () => Promise<void>): void {
-  it(`[known gap, ${fix}] ${title}`, async () => {
-    let failure: Error | undefined;
-    try {
-      await body();
-    } catch (error) {
-      failure = error instanceof Error ? error : new Error('a non-Error was thrown');
-    }
-    if (failure === undefined) {
-      throw new Error(
-        `This known gap (${fix}, [${tag}]) is closed now: make "${title}" a plain it() and ` +
-          'update docs/testing/adversarial.md.',
-      );
-    }
-    if (!failure.message.includes(`[${tag}]`)) throw failure;
-    if (process.env['ACP_SHOW_KNOWN_GAPS'] === '1') {
-      console.warn(`known gap (${fix}) ${title}:\n  ${failure.message.split('\n')[0] ?? ''}`);
-    }
-  });
-}
