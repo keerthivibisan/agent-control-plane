@@ -403,3 +403,12 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
     the branch guard.
 - 2026-10-24 **Resumed by the owner** ("please resume"). F-2 continues on `wp/f-2-b` (the harness
   runner refusal); V-1 restarts fresh on `wp/v-1-video`. The owner stopped their app; not restarted.
+- 2026-10-24 **F-2 merged** (`a71c965`): no known adversarial gaps left. Bounded helper attempts
+  per plan step and run (`attempts-exhausted`); merges blocked by a moved or checked-out ticket
+  branch go to the owner at once (no "Try again"); every seal failure is discardable by the lead,
+  never mergeable; the owner's pushes go to origin's own address (a planted pushurl is ignored, a
+  pushInsteadOf is refused); the guard reads here-strings and here-documents, lives in core and runs
+  before the harness-check rule; the app's runner never runs a branch-managing check or setup step.
+  ADR-0021, -0017, -0027 and -0025 amended. Coordinator check: tests 531 + 578 + 12 + 237 + 2,436 +
+  1,192 + 824 ✓; build ✓; e2e 110/110. Follow-up: checks that run git inside their own scripts are
+  not visible to the guard. **G-H started.**
