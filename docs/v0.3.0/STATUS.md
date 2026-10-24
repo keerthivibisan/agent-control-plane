@@ -412,3 +412,11 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   ADR-0021, -0017, -0027 and -0025 amended. Coordinator check: tests 531 + 578 + 12 + 237 + 2,436 +
   1,192 + 824 ✓; build ✓; e2e 110/110. Follow-up: checks that run git inside their own scripts are
   not visible to the guard. **G-H started.**
+- 2026-10-24 **G-H merged** (`bb10abd`): a ticket branch starts from the ticket's "Start from",
+  else the project's "Start ticket branches from", else its target; never switching the checkout;
+  a missing source is refused (`source_branch_missing`) with the one-click Create (also in the
+  Start with options dialog); the header shows "· from <source>"; New ticket has the branch
+  pickers. **Migration 0011** (`ticket_branches.source_branch`, additive): back up the live
+  database before the owner's app next starts. Coordinator: the Branches tip wording and an
+  ADR-0025 §10 storage note. Check: tests 531 + 578 + 12 + 240 + 2,436 + 1,201 + 837 ✓; build ✓;
+  e2e 111/111. Next: release prep; V-1 recording.
