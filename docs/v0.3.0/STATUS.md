@@ -426,3 +426,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   merge of release/0.2.0, whose tree release/0.3.0 already contains); versions 0.3.0, drop the
   fontsource dependencies, CHANGELOG [0.3.0] for users, README status and screenshots, PR text and
   release notes in `.acp-data/`, one full check and e2e.
+- 2026-10-24 **Pushed `release/0.3.0` to GitHub** (owner: "push to github"), at `2a8401e`, after
+  replacing local absolute paths in four progress files. The release-prep commits (R-3) will need
+  one more push. `main` untouched; the owner raises the PR in GitHub.
