@@ -2,7 +2,6 @@ import { GIT_READ_ONLY_SUBCOMMANDS } from '@acp/core';
 import type { ApprovalMode } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { allowlistTarget, evaluateAllowlist } from '../../src/index.js';
-import { knownGap } from './known-gap.js';
 
 /*
  * T-1: the server gate's own rules (ADR-0021 §2) against the commands a hostile helper might
@@ -77,27 +76,40 @@ describe('T-1: the gate never auto-approves a hostile git command', () => {
     expect(verdict('auto', 'npm test').allowed).toBe(true);
   });
 
-  // F-2: a harness check is matched by its exact command line and auto-approved in
-  // auto-edits and Full auto (`run-harness-check`). The harness file comes from the project, so a
-  // check that is itself a branch-changing git command (`git push`, `git checkout`) would run
-  // without the owner. The manifest (or this rule) should refuse git write commands as checks.
-  knownGap(
-    'F-2',
-    'gate',
-    'a harness check never auto-approves a branch-changing git command',
-    () => {
-      const checks = [
-        { id: 'push', argv: ['git', 'push', 'origin', 'HEAD'] },
-        { id: 'switch', argv: ['git', 'checkout', 'main'] },
-      ];
-      for (const mode of ['auto-edits', 'full-auto'] as const) {
-        for (const command of ['git push origin HEAD', 'git checkout main']) {
-          expect(
-            verdict(mode, command, checks).allowed,
-            `[gate] ${mode} auto-approved the harness check ${command}`,
-          ).toBe(false);
-        }
+  // Closed by F-2: a harness check is matched by its exact command line and auto-approved in
+  // auto-edits and Full auto (`run-harness-check`). The harness file comes from the project, so
+  // F-1's command guard now runs before that rule: a check that is itself a branch-changing git
+  // command (`git push`, `git checkout`) is never pre-approved.
+  it('a harness check never auto-approves a branch-changing git command', () => {
+    const checks = [
+      { id: 'push', argv: ['git', 'push', 'origin', 'HEAD'] },
+      { id: 'switch', argv: ['git', 'checkout', 'main'] },
+    ];
+    for (const mode of ['auto-edits', 'full-auto'] as const) {
+      for (const command of ['git push origin HEAD', 'git checkout main']) {
+        expect(
+          verdict(mode, command, checks).allowed,
+          `[gate] ${mode} auto-approved the harness check ${command}`,
+        ).toBe(false);
       }
-    },
-  );
+    }
+  });
+
+  it('F-2: the guard runs before every rule, and reading harness checks still pass', () => {
+    const checks = [
+      { id: 'push', argv: ['git', 'push', 'origin', 'HEAD'] },
+      { id: 'diff', argv: ['git', 'diff', '--stat'] },
+    ];
+    for (const mode of ['auto-edits', 'auto', 'full-auto'] as const) {
+      expect(verdict(mode, 'git push origin HEAD', checks)).toEqual({
+        allowed: false,
+        reason: 'The app owns branches and commits, so git push is never pre-approved.',
+      });
+      expect(verdict(mode, 'git diff --stat', checks)).toEqual({
+        allowed: true,
+        rule: 'run-harness-check',
+        checkId: 'diff',
+      });
+    }
+  });
 });

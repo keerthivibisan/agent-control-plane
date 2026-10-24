@@ -1,6 +1,7 @@
 import { lstat, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  checkGitArgv,
   HARNESS_MANIFEST_PATH,
   HarnessManifestSchema,
   type HarnessManifest,
@@ -17,6 +18,9 @@ import { realDirectory, resolveInside } from './paths.js';
  * - invalid: the file is unreadable, not JSON, or fails `HarnessManifestSchema`;
  * - partial: valid, but no check is required, so nothing would block a merge;
  * - ready: valid with at least one required check.
+ *
+ * Ready and partial manifests also list a warning for each check or setup step that is itself
+ * branch-managing git (F-2, read by F-1's command guard).
  */
 
 /** A manifest is a short JSON file; anything bigger is refused before parsing. */
@@ -109,15 +113,38 @@ export function harnessStatusOf(raw: unknown, checkedAt: string): HarnessReadRes
     status: {
       state: hasRequired ? 'ready' : 'partial',
       checkedAt,
-      problems: hasRequired
-        ? []
-        : ['No check is marked as required, so a failing check never blocks a merge.'],
+      problems: [
+        ...(hasRequired
+          ? []
+          : ['No check is marked as required, so a failing check never blocks a merge.']),
+        ...gitWarnings(manifest),
+      ].slice(0, MAX_PROBLEMS),
       checks,
       // ADR-0027 §1: the setup steps as declared (empty when the file has none).
       setup: (manifest.setup ?? []).map((step) => ({ ...step })),
     },
     manifest,
   };
+}
+
+/**
+ * F-2: a check or setup step that is itself branch-managing git (`git push`, `git checkout`), read
+ * by F-1's command guard. The state does not change; the owner is told why such a step never runs
+ * pre-approved for an agent: the app owns branches and commits.
+ */
+function gitWarnings(manifest: HarnessManifest): string[] {
+  const warn = (subject: string, argv: readonly string[]): string[] => {
+    const denied = checkGitArgv(argv);
+    return denied === null
+      ? []
+      : [
+          `${subject} runs ${denied.command}. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.`,
+        ];
+  };
+  return [
+    ...manifest.checks.flatMap((c) => warn(`Check '${c.id}'`, c.argv)),
+    ...(manifest.setup ?? []).flatMap((s) => warn(`Setup step '${s.id}'`, s.argv)),
+  ];
 }
 
 const FIELD_LABELS: Readonly<Record<string, string>> = {

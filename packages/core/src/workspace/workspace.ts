@@ -578,7 +578,10 @@ export type HarnessState = z.infer<typeof HarnessStateSchema>;
 export const HarnessStatusSchema = z.object({
   state: HarnessStateSchema,
   checkedAt: IsoTimestampSchema,
-  /** Plain sentences, e.g. "Check 'test' needs a timeout." Empty when ready. */
+  /**
+   * Plain sentences, e.g. "Check 'test' needs a timeout." Empty when ready, except F-2's warnings
+   * (a check or setup step that is branch-managing git).
+   */
   problems: z.array(z.string().min(1)),
   /** The manifest's checks as declared, so the settings card can show each command and time limit. */
   checks: z.array(HarnessCheckSchema),

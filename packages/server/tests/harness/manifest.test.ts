@@ -191,4 +191,28 @@ describe('harnessStatusOf', () => {
     const r = harnessStatusOf({ version: 1, checks: [check()] }, '2026-10-13T10:00:00.000Z');
     expect(r.status.state).toBe('ready');
   });
+
+  it('F-2: warns when a check or setup step is branch-managing git; reading git is fine', () => {
+    const r = harnessStatusOf(
+      {
+        version: 1,
+        checks: [
+          check(),
+          check({ id: 'publish', argv: ['git', 'push', 'origin', 'HEAD'] }),
+          check({ id: 'diff', argv: ['git', 'diff', '--exit-code'] }),
+        ],
+        setup: [
+          { id: 'switch', name: 'Switch', argv: ['git', 'checkout', 'dev'], timeoutSec: 30 },
+          { id: 'install', name: 'Install', argv: ['pnpm', 'install'], timeoutSec: 30 },
+        ],
+      },
+      '2026-10-13T10:00:00.000Z',
+    );
+    expect(r.status.state).toBe('ready');
+    expect(r.status.problems).toEqual([
+      "Check 'publish' runs git push. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.",
+      "Setup step 'switch' runs git checkout. The app owns branches and commits, so agents are never allowed to run it without you; use a command that only reads or tests.",
+    ]);
+    expect(HarnessStatusSchema.safeParse(r.status).success).toBe(true);
+  });
 });
