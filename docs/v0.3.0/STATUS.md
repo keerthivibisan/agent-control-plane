@@ -429,3 +429,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-24 **Pushed `release/0.3.0` to GitHub** (owner: "push to github"), at `2a8401e`, after
   replacing local absolute paths in four progress files. The release-prep commits (R-3) will need
   one more push. `main` untouched; the owner raises the PR in GitHub.
+- 2026-10-24 **Release prep paused by the owner** ("we can stop the release prep and work fully on
+  the video"). `wp/r-3-release` (worktree `agent-aa43ef27eba10a0a9`) has `da73b8b` (drop the
+  fontsource deps), `4cb8fdf` (version 0.3.0) and a WIP commit (CHANGELOG, README, new screenshots,
+  release docs; not checked; it had rebased onto the pushed release branch). To resume: finish,
+  squash the WIP, full check and e2e, PR text and release notes in `.acp-data/`.
+  **V-1 continues**: the video re-scripted around orchestration (skills and agent files, a BDD
+  workflow, the harness as the bar, less supervision).
