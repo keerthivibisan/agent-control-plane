@@ -96,3 +96,23 @@ export function createBranchErrorText(error: ApiError): string | null {
 export function isTargetMissing(error: ApiError | null): boolean {
   return error?.kind === 'http' && error.code === 'target_branch_missing';
 }
+
+/** ADR-0025 §10: whether a failed Start was refused because its start branch is missing. */
+export function isSourceMissing(error: ApiError | null): boolean {
+  return error?.kind === 'http' && error.code === 'source_branch_missing';
+}
+
+/**
+ * The branch a refused Start needs (G-F's fix, G-H generalised): the target for
+ * `target_branch_missing`, the start branch for `source_branch_missing` (the ticket's `from`, else
+ * the project's), in the server's order. Null for any other error, or when it can't be told.
+ */
+export function missingStartBranch(
+  error: ApiError | null,
+  branch: TicketBranchPrefs | undefined,
+  strategy: BranchStrategy | undefined,
+): string | null {
+  if (isTargetMissing(error)) return startTarget(branch, strategy);
+  if (isSourceMissing(error)) return branch?.from ?? strategy?.defaultSourceBranch ?? null;
+  return null;
+}

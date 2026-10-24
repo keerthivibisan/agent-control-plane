@@ -16,6 +16,7 @@ import {
   draftFromPrefs,
   hasTicketBranchErrors,
   projectBranchName,
+  projectSource,
   projectTarget,
   ticketBranchPatch,
   validateTicketBranch,
@@ -53,17 +54,34 @@ export function targetPlaceholder(defaults: BranchDefaults | null): string {
 }
 
 /**
- * G-F (ADR-0025 §8): the target field as a combobox of the project's local branches (a native
- * `<datalist>`, so any name can still be typed), and when the typed branch doesn't exist yet,
- * "Create it" right under it.
+ * G-H (ADR-0025 §10): where an empty "Start from" follows, in words: the project's start branch,
+ * else the target branch.
  */
-function TargetCombobox({
+export function sourceWord(defaults: BranchDefaults | null): string | null {
+  if (defaults === null) return null;
+  return projectSource(defaults.strategy) ?? C.fromTarget;
+}
+
+/** The "Start from" placeholder: "Project default (release/1.0)" or "(the target branch)". */
+export function sourcePlaceholder(defaults: BranchDefaults | null): string {
+  return C.projectDefault(sourceWord(defaults));
+}
+
+/**
+ * G-F (ADR-0025 §8): a branch field as a combobox of the project's local branches (a native
+ * `<datalist>`, so any name can still be typed), and when the typed branch doesn't exist yet,
+ * "Create it" right under it. G-H uses it for "Start from" too.
+ */
+function BranchCombobox({
   projectId,
   value,
   onChange,
   error,
   placeholder,
   preferredBase,
+  label,
+  hint,
+  testId,
 }: {
   projectId: string;
   value: string;
@@ -71,6 +89,10 @@ function TargetCombobox({
   error: string | undefined;
   placeholder: string | null;
   preferredBase: string | undefined;
+  label: string;
+  hint: string;
+  /** `ticket-branch-target` gives `…-input` and `…-missing`. */
+  testId: string;
 }) {
   const id = useId();
   const branches = useProjectBranches(projectId);
@@ -78,7 +100,7 @@ function TargetCombobox({
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className={labelClass}>
-        {C.target}
+        {label}
       </label>
       <input
         id={id}
@@ -91,7 +113,7 @@ function TargetCombobox({
         aria-invalid={error !== undefined ? true : undefined}
         aria-describedby={error !== undefined ? `${id}-hint ${id}-error` : `${id}-hint`}
         className={inputClass('font-mono')}
-        data-testid="ticket-branch-target-input"
+        data-testid={`${testId}-input`}
       />
       <datalist id={`${id}-list`} aria-label={B.targetListLabel}>
         {(branches.data?.branches ?? []).map((b) => (
@@ -99,7 +121,7 @@ function TargetCombobox({
         ))}
       </datalist>
       <span id={`${id}-hint`} className={hintClass}>
-        {C.targetHint}
+        {hint}
       </span>
       {error !== undefined ? (
         <span id={`${id}-error`} role="alert" className="text-caption font-medium text-danger">
@@ -111,7 +133,7 @@ function TargetCombobox({
           projectId={projectId}
           name={typed}
           preferredBase={preferredBase}
-          testId="ticket-branch-target-missing"
+          testId={`${testId}-missing`}
           direct
         />
       ) : null}
@@ -120,15 +142,17 @@ function TargetCombobox({
 }
 
 /**
- * The two fields (ADR-0025 §4), validated as typed. Placeholders show what an empty field
- * follows: the name the project would give and its target branch. With `projectId` (a ticket's
- * branch settings), the target offers the project's local branches and can create a missing one.
+ * The fields (ADR-0025 §4, §10), validated as typed. Placeholders show what an empty field
+ * follows: the name the project would give, its target branch and where it starts. With
+ * `projectId` (a ticket's branch settings, New ticket), the target and "Start from" offer the
+ * project's local branches and can create a missing one.
  */
 export function TicketBranchInputs({
   draft,
   onChange,
   namePlaceholder,
   targetPlaceholder,
+  fromPlaceholder,
   projectId,
   preferredBase,
 }: {
@@ -136,6 +160,8 @@ export function TicketBranchInputs({
   onChange: (next: TicketBranchDraft) => void;
   namePlaceholder: string | null;
   targetPlaceholder: string | null;
+  /** G-H: what an empty "Start from" follows ("Project default (…)"). */
+  fromPlaceholder?: string | null | undefined;
   projectId?: string | undefined;
   /** Where a created target starts by default when it exists: the strategy's base branch. */
   preferredBase?: string | undefined;
@@ -163,13 +189,40 @@ export function TicketBranchInputs({
           mono
         />
       ) : (
-        <TargetCombobox
+        <BranchCombobox
           projectId={projectId}
           value={draft.target}
           onChange={(v) => onChange({ ...draft, target: v })}
           error={errors.target}
           placeholder={targetPlaceholder}
           preferredBase={preferredBase}
+          label={C.target}
+          hint={C.targetHint}
+          testId="ticket-branch-target"
+        />
+      )}
+      {projectId === undefined ? (
+        <TextField
+          label={C.from}
+          hint={C.fromHint}
+          error={errors.from}
+          value={draft.from}
+          onChange={(v) => onChange({ ...draft, from: v })}
+          placeholder={fromPlaceholder ?? undefined}
+          mono
+        />
+      ) : (
+        <BranchCombobox
+          projectId={projectId}
+          value={draft.from}
+          onChange={(v) => onChange({ ...draft, from: v })}
+          error={errors.from}
+          placeholder={fromPlaceholder ?? null}
+          // A missing start branch starts, by default, from the target the ticket goes back to.
+          preferredBase={draft.target.trim() || preferredBase}
+          label={C.from}
+          hint={C.fromHint}
+          testId="ticket-branch-from"
         />
       )}
     </div>
@@ -214,6 +267,7 @@ export function TicketBranchSection({
   const fixed = created !== null && created.state !== 'discarded';
   const name = defaults === null ? null : projectBranchName(defaults.strategy, ticket);
   const target = targetWord(defaults);
+  const source = sourceWord(defaults);
   const errors = draft === null ? {} : validateTicketBranch(draft);
 
   return (
@@ -253,6 +307,14 @@ export function TicketBranchSection({
               {created.baseBranch}
             </dd>
           </div>
+          {created.sourceBranch !== undefined ? (
+            <div className={ROW}>
+              <dt className={LABEL}>{C.actualFrom}</dt>
+              <dd className="min-w-0 font-mono break-all" data-testid="ticket-branch-actual-from">
+                {created.sourceBranch}
+              </dd>
+            </div>
+          ) : null}
         </dl>
       ) : (
         <dl className="flex flex-col gap-2">
@@ -266,6 +328,12 @@ export function TicketBranchSection({
             <dt className={LABEL}>{C.target}</dt>
             <dd className="flex min-w-0" data-testid="ticket-branch-target">
               <Value own={ticket.branch?.target} fallback={target} />
+            </dd>
+          </div>
+          <div className={ROW}>
+            <dt className={LABEL}>{C.from}</dt>
+            <dd className="flex min-w-0" data-testid="ticket-branch-from">
+              <Value own={ticket.branch?.from} fallback={source} />
             </dd>
           </div>
         </dl>
@@ -296,6 +364,7 @@ export function TicketBranchSection({
               onChange={setDraft}
               namePlaceholder={name}
               targetPlaceholder={targetPlaceholder(defaults)}
+              fromPlaceholder={sourcePlaceholder(defaults)}
               projectId={ticket.projectId}
               preferredBase={defaults?.strategy?.baseBranch}
             />

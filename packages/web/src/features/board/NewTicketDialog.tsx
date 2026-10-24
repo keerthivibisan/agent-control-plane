@@ -16,6 +16,7 @@ import { ActionError } from '../control/bits';
 import { RunOptionsFields, useProjectRunDefaults } from '../review-loop/RunOptions';
 import {
   TicketBranchInputs,
+  sourcePlaceholder,
   targetPlaceholder,
   useBranchDefaults,
 } from '../branching/TicketBranchFields';
@@ -229,6 +230,10 @@ export function NewTicketDialog({
                     })
               }
               targetPlaceholder={targetPlaceholder(branchDefaults)}
+              // G-H (G-F's follow-up): the target and "Start from" offer the local branches.
+              fromPlaceholder={sourcePlaceholder(branchDefaults)}
+              projectId={projectId}
+              preferredBase={branchDefaults?.strategy?.baseBranch}
             />
           }
         />

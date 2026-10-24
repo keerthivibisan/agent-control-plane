@@ -286,6 +286,7 @@ function Board({ projectId }: { projectId: string }) {
           projectId={projectId}
           ticketKey={startWith.key}
           ticketOptions={startWith.runOptions}
+          ticketBranch={startWith.branch}
           kind="start"
           pending={startOptions.pending}
           error={startOptions.error}

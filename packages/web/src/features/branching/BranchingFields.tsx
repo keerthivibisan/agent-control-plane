@@ -2,10 +2,10 @@ import { isSafeBranchName } from '@acp/core';
 import { useId } from 'react';
 import { BranchIcon } from '../review-loop/icons';
 import { InfoTip } from '../../components/InfoTip';
-import { labelClass } from '../../components/Input';
+import { Select, hintClass, labelClass } from '../../components/Input';
 import { BRANCHING_COPY, TICKET_TYPE_COPY, type BranchingChoiceKey } from '../../lib/copy';
 import { ChoiceCards, TextField } from '../project-setup/fields';
-import { MissingBranchNote } from './Branches';
+import { MissingBranchNote, useProjectBranches } from './Branches';
 import {
   BRANCHING_CHOICES,
   TICKET_TYPES,
@@ -54,9 +54,73 @@ function Preview({ draft, projectKey }: { draft: BranchingDraft; projectKey: str
 }
 
 /**
+ * ADR-0025 §10 (G-H): "Start ticket branches from", a choice of the project folder's branches with
+ * "Same as the target branch" first (the default, saved as no start branch). A saved branch the
+ * folder doesn't list stays offered, marked, so opening Settings never changes it.
+ */
+function SourceBranchField({
+  projectId,
+  value,
+  target,
+  error,
+  onChange,
+}: {
+  projectId: string;
+  value: string;
+  target: string;
+  error: string | undefined;
+  onChange: (v: string) => void;
+}) {
+  const id = useId();
+  const branches = useProjectBranches(projectId);
+  const dto = branches.data;
+  const names = (dto?.branches ?? []).map((b) => b.name);
+  const typed = value.trim();
+  const unlisted = typed !== '' && !names.includes(typed);
+  const known = dto !== undefined && !dto.truncated;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className={labelClass}>
+        {C.sourceBranch}
+      </label>
+      <Select
+        id={id}
+        value={typed}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error !== undefined ? true : undefined}
+        aria-describedby={error !== undefined ? `${id}-hint ${id}-error` : `${id}-hint`}
+        className="font-mono"
+        data-testid="branching-source-select"
+      >
+        <option value="">
+          {target === '' ? C.sourceSameAsTarget : C.sourceSameAsTargetNamed(target)}
+        </option>
+        {unlisted ? (
+          <option value={typed}>{known ? C.sourceNotListed(typed) : typed}</option>
+        ) : null}
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </Select>
+      <span id={`${id}-hint`} className={hintClass}>
+        {C.sourceBranchHint}
+      </span>
+      {error !== undefined ? (
+        <span id={`${id}-error`} role="alert" className="text-caption font-medium text-danger">
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * A project's branching strategy (ADR-0025 §3): the choice, the base and default target branches,
- * the ticket branch name with its tokens and a live preview, and a word per ticket type. For the
- * settings page and the new-project wizard; saving is the caller's (the setup PUT's `branching`).
+ * (in Settings, §10) where ticket branches start, the ticket branch name with its tokens and a
+ * live preview, and a word per ticket type. For the settings page and the new-project wizard;
+ * saving is the caller's (the setup PUT's `branching`).
  */
 export function BranchingFields({
   draft,
@@ -83,6 +147,7 @@ export function BranchingFields({
   const set = (patch: Partial<BranchingDraft>) => onChange({ ...draft, ...patch });
   const base = draft.baseBranch.trim();
   const target = draft.defaultTargetBranch.trim();
+  const source = draft.defaultSourceBranch.trim();
   /** A warning only for a name that is valid as typed (else the field's own error shows). */
   const missingNote = (value: string, error: string | undefined, testId: string, from?: string) =>
     projectId !== undefined && error === undefined && isSafeBranchName(value) ? (
@@ -141,6 +206,26 @@ export function BranchingFields({
                 ? null
                 : missingNote(target, errors.defaultTargetBranch, 'branching-target-missing', base)}
             </div>
+            {projectId !== undefined ? (
+              <div className="flex min-w-0 flex-col gap-3" data-testid="branching-source">
+                <SourceBranchField
+                  projectId={projectId}
+                  value={draft.defaultSourceBranch}
+                  target={target}
+                  error={errors.defaultSourceBranch}
+                  onChange={(v) => set({ defaultSourceBranch: v })}
+                />
+                {/* A name warned about above already has its own note. */}
+                {source === '' || source === base || source === target
+                  ? null
+                  : missingNote(
+                      source,
+                      errors.defaultSourceBranch,
+                      'branching-source-missing',
+                      target,
+                    )}
+              </div>
+            ) : null}
           </div>
           <TextField
             label={C.template}

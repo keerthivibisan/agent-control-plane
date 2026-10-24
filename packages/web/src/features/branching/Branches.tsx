@@ -35,9 +35,9 @@ import {
   defaultBase,
   isMissing,
   isTargetMissing,
+  missingStartBranch,
   newBranchError,
   shortCommit,
-  startTarget,
 } from './branch-list';
 
 /**
@@ -395,9 +395,10 @@ export function MissingBranchNote({
 }
 
 /**
- * The Start refusal's fix (ADR-0025 §8): when Start was refused with `target_branch_missing`,
- * "Create <target> from <base>"; once created, `onRetry` runs exactly once (the caller starts the
- * ticket again, visibly). If the branch exists by now (made in a terminal), "Start again" instead.
+ * The Start refusal's fix (ADR-0025 §8): when Start was refused with `target_branch_missing`, or
+ * (G-H, §10) `source_branch_missing` for the branch the ticket branch starts from, "Create <name>
+ * from <base>"; once created, `onRetry` runs exactly once (the caller starts the ticket again,
+ * visibly). If the branch exists by now (made in a terminal), "Start again" instead.
  */
 export function MissingTargetFix({
   projectId,
@@ -412,12 +413,13 @@ export function MissingTargetFix({
   error: ApiError | null;
   onRetry: () => void;
 }) {
-  const branches = useProjectBranches(isTargetMissing(error) ? projectId : null);
+  const target = missingStartBranch(error, ticketBranch, strategy);
+  const branches = useProjectBranches(target === null ? null : projectId);
   /** The refusal already retried: one Start again per refusal, never a second on its own. */
   const retriedFor = useRef<ApiError | null>(null);
-  const target = startTarget(ticketBranch, strategy);
   // The retried Start clears the error, so the fix goes away with it; the caller shows the start.
-  if (!isTargetMissing(error) || target === null) return null;
+  if (target === null) return null;
+  const kind = isTargetMissing(error) ? 'target' : 'source';
   const retry = () => {
     if (retriedFor.current === error) return;
     retriedFor.current = error;
@@ -429,6 +431,7 @@ export function MissingTargetFix({
       className="flex flex-col gap-3 rounded-control border border-line bg-sunken px-3 py-3"
       data-testid="start-fix"
       data-target={target}
+      data-kind={kind}
     >
       {exists ? (
         <div className="flex flex-wrap items-center gap-3">
@@ -439,7 +442,9 @@ export function MissingTargetFix({
         </div>
       ) : (
         <>
-          <p className="break-words">{C.missing.text(target)}</p>
+          <p className="break-words">
+            {kind === 'target' ? C.missing.text(target) : C.sourceMissing(target)}
+          </p>
           <CreateNamedBranch
             projectId={projectId}
             name={target}

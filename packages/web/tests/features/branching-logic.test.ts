@@ -169,32 +169,58 @@ describe('branching strategy: the template and the preview', () => {
 
 describe('a ticket’s own branch', () => {
   it('empty fields follow the project: left out on create, null on a change', () => {
-    expect(ticketBranchCreate({ name: ' ', target: '' })).toBeUndefined();
-    expect(ticketBranchCreate({ name: 'spike/search', target: '' })).toEqual({
+    expect(ticketBranchCreate({ name: ' ', target: '', from: '' })).toBeUndefined();
+    expect(ticketBranchCreate({ name: 'spike/search', target: '', from: '' })).toEqual({
       name: 'spike/search',
     });
-    expect(ticketBranchCreate({ name: '', target: 'release/2.0' })).toEqual({
+    expect(ticketBranchCreate({ name: '', target: 'release/2.0', from: '' })).toEqual({
       target: 'release/2.0',
     });
-    expect(ticketBranchPatch({ name: '', target: '' })).toBeNull();
-    expect(ticketBranchPatch({ name: 'spike/search', target: ' ' })).toEqual({
+    // G-H: the start branch alone is a setting too.
+    expect(ticketBranchCreate({ name: '', target: '', from: ' release/1.0 ' })).toEqual({
+      from: 'release/1.0',
+    });
+    expect(ticketBranchPatch({ name: '', target: '', from: '' })).toBeNull();
+    expect(ticketBranchPatch({ name: 'spike/search', target: ' ', from: '' })).toEqual({
       name: 'spike/search',
       target: null,
+      from: null,
     });
-    // Both forms are what the PATCH accepts.
-    for (const branch of [null, { name: 'spike/search', target: null }]) {
+    expect(ticketBranchPatch({ name: '', target: '', from: 'dev' })).toEqual({
+      name: null,
+      target: null,
+      from: 'dev',
+    });
+    // Every form is what the PATCH accepts.
+    for (const branch of [
+      null,
+      { name: 'spike/search', target: null },
+      { name: null, target: null, from: 'dev' },
+    ]) {
       expect(UpdateTicketRequestSchema.safeParse({ branch }).success).toBe(true);
     }
   });
 
   it('validates as typed; empty is fine', () => {
-    expect(validateTicketBranch({ name: '', target: '' })).toEqual({});
-    expect(validateTicketBranch({ name: 'my branch', target: 'refs/heads/main' })).toEqual({
+    expect(validateTicketBranch({ name: '', target: '', from: '' })).toEqual({});
+    expect(
+      validateTicketBranch({ name: 'my branch', target: 'refs/heads/main', from: '-dev' }),
+    ).toEqual({
       name: E.branch,
       target: E.branch,
+      from: E.branch,
     });
-    expect(draftFromPrefs({ target: 'develop' })).toEqual({ name: '', target: 'develop' });
-    expect(draftFromPrefs(undefined)).toEqual({ name: '', target: '' });
+    expect(draftFromPrefs({ target: 'develop' })).toEqual({
+      name: '',
+      target: 'develop',
+      from: '',
+    });
+    expect(draftFromPrefs({ from: 'release/1.0' })).toEqual({
+      name: '',
+      target: '',
+      from: 'release/1.0',
+    });
+    expect(draftFromPrefs(undefined)).toEqual({ name: '', target: '', from: '' });
   });
 
   it('the project’s name and target: the strategy’s, or acp/<KEY> and the folder’s branch', () => {

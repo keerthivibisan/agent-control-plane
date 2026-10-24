@@ -311,7 +311,7 @@ describe('the strategy form and a ticket’s target', () => {
   it('the ticket target offers the local branches and creates a typed one', async () => {
     const server = branchServer(branches(['main', 'develop'], { current: 'main' }), 'no-remote');
     function Ticket() {
-      const [draft, setDraft] = useState<TicketBranchDraft>({ name: '', target: '' });
+      const [draft, setDraft] = useState<TicketBranchDraft>({ name: '', target: '', from: '' });
       return (
         <TicketBranchInputs
           draft={draft}

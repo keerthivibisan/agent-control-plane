@@ -309,6 +309,9 @@ describe('ticket page: a review-loop run at work', () => {
     // The header names the branch and its target.
     expect(screen.getByTestId('pr-line-branch').textContent).toBe(LOOP_BRANCH);
     expect(screen.getByTestId('pr-line-target').textContent).toBe('main');
+    // G-H: a branch that started from its target says nothing more.
+    expect(screen.queryByTestId('pr-line-from')).toBeNull();
+    expect(screen.queryByTestId('ticket-branch-actual-from')).toBeNull();
     expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
     // Files changed shows all changes on the branch, open, into its target (C-D).
     openTab(/Files changed/);
@@ -317,6 +320,33 @@ describe('ticket page: a review-loop run at work', () => {
     expect(within(head).getByTestId('files-branch').textContent).toBe(`${LOOP_BRANCH}intomain`);
     expect(await screen.findByTestId('review-files')).toBeTruthy();
     expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(true);
+  });
+
+  it('G-H: the header and Branch say where a branch that did not start at its target started', async () => {
+    const sc = loopWorkingScenario();
+    const run = RunDetailDtoSchema.parse(sc.routes[LOOP_RUN_PATH]);
+    if (run.ticketBranch === undefined || run.ticketBranch === null) throw new Error('no branch');
+    const ticketBranch = { ...run.ticketBranch, sourceBranch: 'release/1.0' };
+    sc.routes[LOOP_RUN_PATH] = {
+      ...(sc.routes[LOOP_RUN_PATH] as Record<string, unknown>),
+      ticketBranch,
+    };
+    // The ticket's own copy of its current run (the sidebar's Branch reads it).
+    const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
+    sc.routes[LOOP_TICKET_PATH] = {
+      ...detail,
+      currentRun: { ...(detail['currentRun'] as Record<string, unknown>), ticketBranch },
+    };
+    render(sc);
+    const line = await screen.findByTestId('pr-line');
+    expect(within(line).getByTestId('pr-line-branch').textContent).toBe(LOOP_BRANCH);
+    expect(within(line).getByTestId('pr-line-target').textContent).toBe('main');
+    expect(within(line).getByTestId('pr-line-from').textContent).toBe('release/1.0');
+    expect(line.textContent).toContain('from');
+    expect(line.textContent).toContain('Starts from');
+    expect((await screen.findByTestId('ticket-branch-actual-from')).textContent).toBe(
+      'release/1.0',
+    );
   });
 
   it('a change card shows the decisions with the reviewer’s findings, and the diff', async () => {

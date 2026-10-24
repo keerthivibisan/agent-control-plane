@@ -19,7 +19,7 @@ import {
 } from '../../lib/copy';
 import { href } from '../../lib/router';
 import { hasNewCommits } from '../branching/code-host';
-import { projectBranchName, projectTarget } from '../branching/ticket-branch';
+import { projectBranchName, projectTarget, startSource } from '../branching/ticket-branch';
 import { MissingTargetFix } from '../branching/Branches';
 import { useBranchDefaults } from '../branching/TicketBranchFields';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
@@ -121,6 +121,7 @@ function StartButton({
           projectId={ticket.projectId}
           ticketKey={ticket.key}
           ticketOptions={ticket.runOptions}
+          ticketBranch={ticket.branch}
           kind={kind}
           pending={withOptions.pending}
           error={withOptions.error}
@@ -285,6 +286,13 @@ function MetaLine({
     (defaults === null
       ? null
       : (projectTarget(defaults.strategy) ?? TICKET_BRANCH_COPY.currentBranch));
+  // G-H (ADR-0025 §10): "· from release/1.0" when the branch starts somewhere else than its
+  // target: as created, or as planned before the run creates it.
+  const plannedSource =
+    created !== null
+      ? (created.sourceBranch ?? null)
+      : startSource(ticket.branch, defaults?.strategy);
+  const source = plannedSource !== null && plannedSource !== target ? plannedSource : null;
   const merged = (run?.changes ?? []).filter((c) => c.state === 'merged').length;
   const waiting = run?.approvals.filter((a) => a.status === 'pending').length ?? 0;
   const facts: { key: string; node: ReactNode }[] = [];
@@ -338,6 +346,14 @@ function MetaLine({
               <span aria-hidden="true">→</span>
               <span className="sr-only">{H.into}</span>
               <Code testId="pr-line-target">{target}</Code>
+            </>
+          ) : null}
+          {source !== null ? (
+            <>
+              <Sep />
+              <span aria-hidden="true">{H.from}</span>
+              <span className="sr-only">{H.fromLabel}</span>
+              <Code testId="pr-line-from">{source}</Code>
             </>
           ) : null}
           {created === null ? <InfoTip tip={H.plannedTip} label={H.branchLabel} /> : null}

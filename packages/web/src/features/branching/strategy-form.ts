@@ -31,6 +31,8 @@ export interface BranchingDraft {
   choice: BranchingChoiceKey;
   baseBranch: string;
   defaultTargetBranch: string;
+  /** ADR-0025 §10: "Start ticket branches from"; empty: the same as the target branch. */
+  defaultSourceBranch: string;
   template: string;
   typeWords: Record<TicketType, string>;
 }
@@ -38,6 +40,7 @@ export interface BranchingDraft {
 export interface BranchingErrors {
   baseBranch?: string;
   defaultTargetBranch?: string;
+  defaultSourceBranch?: string;
   template?: string;
   typeWords?: Partial<Record<TicketType, string>>;
 }
@@ -49,6 +52,7 @@ function fields(strategy: BranchStrategy): Omit<BranchingDraft, 'choice'> {
   return {
     baseBranch: strategy.baseBranch,
     defaultTargetBranch: strategy.defaultTargetBranch,
+    defaultSourceBranch: strategy.defaultSourceBranch ?? '',
     template: strategy.ticketBranchTemplate,
     typeWords: { ...strategy.typeWords },
   };
@@ -70,7 +74,8 @@ export function draftFromStrategy(
 
 /**
  * Switching the choice: GitHub flow and Git flow put in their own values; Custom and None keep
- * what is there (Custom starts from the strategy the owner had).
+ * what is there (Custom starts from the strategy the owner had). The start branch is no part of a
+ * preset, so the owner's choice stays.
  */
 export function chooseStrategy(
   draft: BranchingDraft,
@@ -78,7 +83,11 @@ export function chooseStrategy(
   defaultBranch = 'main',
 ): BranchingDraft {
   if (choice === 'github-flow' || choice === 'git-flow') {
-    return { choice, ...fields(branchStrategyPreset(choice, defaultBranch)) };
+    return {
+      choice,
+      ...fields(branchStrategyPreset(choice, defaultBranch)),
+      defaultSourceBranch: draft.defaultSourceBranch,
+    };
   }
   return { ...draft, choice };
 }
@@ -113,6 +122,9 @@ export function validateBranching(draft: BranchingDraft): BranchingErrors {
   if (base) errors.baseBranch = base;
   const target = branchError(draft.defaultTargetBranch);
   if (target) errors.defaultTargetBranch = target;
+  // Empty is "Same as the target branch".
+  const source = draft.defaultSourceBranch.trim();
+  if (source !== '' && !isSafeBranchName(source)) errors.defaultSourceBranch = E.branch;
   const template = templateError(draft.template);
   if (template) errors.template = template;
   const words: Partial<Record<TicketType, string>> = {};
@@ -127,6 +139,7 @@ export function hasBranchingErrors(errors: BranchingErrors): boolean {
   return (
     errors.baseBranch !== undefined ||
     errors.defaultTargetBranch !== undefined ||
+    errors.defaultSourceBranch !== undefined ||
     errors.template !== undefined ||
     Object.keys(errors.typeWords ?? {}).length > 0
   );
@@ -140,10 +153,14 @@ export function draftToStrategy(draft: BranchingDraft): BranchingResult {
   if (draft.choice === 'none') return { ok: true, branching: null };
   const errors = validateBranching(draft);
   if (hasBranchingErrors(errors)) return { ok: false, errors };
+  const target = draft.defaultTargetBranch.trim();
+  const source = draft.defaultSourceBranch.trim();
   const parsed = BranchStrategySchema.safeParse({
     preset: draft.choice,
     baseBranch: draft.baseBranch.trim(),
-    defaultTargetBranch: draft.defaultTargetBranch.trim(),
+    defaultTargetBranch: target,
+    // The target's own name is the same as none: saved without it.
+    ...(source !== '' && source !== target && { defaultSourceBranch: source }),
     ticketBranchTemplate: draft.template.trim(),
     typeWords: Object.fromEntries(TICKET_TYPES.map((t) => [t, draft.typeWords[t].trim()])),
   });
@@ -159,6 +176,7 @@ export function sameBranching(a: BranchingDraft, b: BranchingDraft): boolean {
   return (
     a.baseBranch.trim() === b.baseBranch.trim() &&
     a.defaultTargetBranch.trim() === b.defaultTargetBranch.trim() &&
+    a.defaultSourceBranch.trim() === b.defaultSourceBranch.trim() &&
     a.template.trim() === b.template.trim() &&
     TICKET_TYPES.every((t) => a.typeWords[t].trim() === b.typeWords[t].trim())
   );

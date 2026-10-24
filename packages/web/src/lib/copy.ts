@@ -1973,6 +1973,9 @@ export const TICKET_PAGE_COPY = {
     into: 'into',
     branchLabel: 'Branch',
     targetLabel: 'Target',
+    /** G-H: "feature/WEB-21 → dev · from release/1.0". */
+    from: 'from',
+    fromLabel: 'Starts from',
     plannedTip:
       'The name this ticket’s branch will get. The run creates the branch when it starts; change it in Branch on the right.',
     agents: (n: number) => countOf(n, 'agent', 'agents'),
@@ -3466,6 +3469,15 @@ export const BRANCHING_COPY = {
   targetBranch: 'Default target branch',
   targetBranchHint:
     'Where a ticket’s work is merged, or its pull request opened, unless the ticket says otherwise.',
+  /** ADR-0025 §10 (G-H): where new ticket branches start. */
+  sourceBranch: 'Start ticket branches from',
+  sourceBranchHint:
+    'New ticket branches start at the latest commit of this branch, unless the ticket says otherwise. The work still goes back to the target branch.',
+  sourceSameAsTarget: 'Same as the target branch',
+  /** "Same as the target branch (dev)". */
+  sourceSameAsTargetNamed: (target: string) => `Same as the target branch (${target})`,
+  /** A saved start branch the project folder doesn't list (still offered, with a warning). */
+  sourceNotListed: (name: string) => `${name} (not in the project folder)`,
   template: 'Ticket branch name',
   templateHint:
     'Use {key} for the ticket number (required), {slug} for words from its title and {type} for its type’s word.',
@@ -3639,6 +3651,13 @@ export const TICKET_BRANCH_COPY = {
   created: 'The run created this branch. Its name and target stay as they are for this run.',
   actualBranch: 'Name',
   actualTarget: 'Target',
+  /** ADR-0025 §10 (G-H): the branch the ticket's branch starts from. */
+  from: 'Start from',
+  fromHint: 'The branch this ticket’s branch starts from. Leave empty for the project’s.',
+  /** What an empty "Start from" follows when the project names no start branch. */
+  fromTarget: 'the target branch',
+  actualFrom: 'Started from',
+  fromListLabel: 'Local branches',
 } as const;
 
 /** The refusals of creating a branch (G-F), worded by the web. */
@@ -3702,6 +3721,9 @@ export const PROJECT_BRANCHES_COPY = {
     code_host_unavailable: 'This server can’t read the project’s branches.',
     invalid_request: 'The app couldn’t send that. Check the name, then try again.',
   } satisfies Record<ProjectBranchErrorCode, string>,
+  /** G-H: Start refused because the start branch is missing (`source_branch_missing`). */
+  sourceMissing: (name: string) =>
+    `${name}, which this ticket’s branch starts from, isn’t a branch in the project folder yet. Create it, and the ticket starts again.`,
   /** Start refused because the target is missing (`target_branch_missing`). */
   missing: {
     text: (target: string) =>
