@@ -368,3 +368,14 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   level, defaulting to main / the default target). Contract (`defaultSourceBranch`,
   `TicketBranchPrefs.from`, `TicketBranchDto.sourceBranch`) and ADR-0025 §10 by the coordinator.
   The agent starts after F-1 merges (both change ticket branch creation).
+- 2026-10-24 **F-1 merged** (`10239df`): helpers and testers never manage branches. A Bash guard
+  (default-deny for git beyond reading and file-only changes; aliases, `-c`, `GIT_*`, wrappers,
+  `sh -c`, chains and subshells parsed) as a PreToolUse hook, the gate and deny rules, in every
+  mode; Full auto's sandbox denies writes to the worktree's git dir and common dir (Claude Code
+  0.3.296 adds the common dir to the writable paths by itself; research note); briefs and planning
+  wording; `submit_plan` refuses steps with branch or commit commands; a worktree that left its
+  branch fails clearly and the lead may discard it; a ticket branch moved outside the app shows on
+  the ticket with an owner "Reset to the last reviewed commit" (compare-and-swap). ADR-0021 and
+  ADR-0022 amended. Golden traces changed only by the brief text (proved). Coordinator check:
+  format ✓ lint ✓ typecheck ✓; tests 498 + 497 + 12 + 237 + 2,378 + 1,192 + 775 ✓; build ✓;
+  e2e 110/110. Not yet seen in a real run (needs consent).
