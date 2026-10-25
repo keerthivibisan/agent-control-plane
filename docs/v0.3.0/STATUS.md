@@ -476,3 +476,8 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   "Drag. Review. Merge."). Full ~2:00, short ~0:40. Attention: a muted-first 3-second hook,
   music + sound effects, faster pacing, contrast and numbers, formats per channel (16:9, 4:5, a
   15 s loop), a LinkedIn posting plan. Waiting for the owner's choices on music and formats.
+- 2026-10-25 **Video draft 7 started** (`wp/v-1-d` from `wp/v-1-c`). Owner: music generated
+  without large downloads (no MusicGen/torch); the newer HyperFrames npm package (~60–80 MB) may be
+  downloaded for its offline sound effects; all four formats (16:9 full ~2:00, 4:5 LinkedIn ~0:40,
+  16:9 short ~0:40, 15 s hook loop). Music: a bed composed in code and rendered with ffmpeg (ours,
+  no licence), swappable later for a HeyGen or CC0 track.
