@@ -175,14 +175,24 @@ function Footer({ stream, collapsed }: { stream: StreamState; collapsed: boolean
           <span className={collapsed ? 'sr-only' : 'truncate'}>{connection.word}</span>
         </span>
       </ShellTooltip>
-      <span data-testid="server-status" className={text}>
-        {health.data
-          ? `Server ${health.data.version} · ${health.data.mode} mode`
-          : unreachable
-            ? 'Server not reachable'
-            : health.error
-              ? 'Server error'
-              : 'Checking the server…'}
+      <span className={`flex min-w-0 items-center gap-1.5 ${collapsed ? 'flex-col' : ''}`}>
+        <span data-testid="server-status" className={text}>
+          {health.data
+            ? `Server ${health.data.version} · ${health.data.mode} mode`
+            : unreachable
+              ? 'Server not reachable'
+              : health.error
+                ? 'Server error'
+                : 'Checking the server…'}
+        </span>
+        {/* Owner request 2026-10-25: the app is in beta, said next to its version. */}
+        <span
+          data-testid="beta-badge"
+          title="Agent Control Plane is in beta: expect changes"
+          className="shrink-0 rounded-full border border-warning/40 bg-warning-soft px-1.5 text-micro leading-4 font-semibold tracking-wide text-warning"
+        >
+          BETA
+        </span>
       </span>
       {stream.invalidNotices > 0 ? (
         <span className={`text-danger ${text}`} title={stream.lastInvalidNotice ?? ''}>
