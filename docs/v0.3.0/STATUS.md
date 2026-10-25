@@ -459,3 +459,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-25 **Pushed `release/0.3.0` to GitHub at `c02d7ec`** (owner: "can we release now"). The
   owner raises the PR release/0.3.0 → main with `.acp-data/pr-v0.3.0.md`, merges it in GitHub,
   tags v0.3.0 on main and publishes the release from `.acp-data/release-notes-v0.3.0.md`.
+- 2026-10-25 **V-1 continued from the owner's terminal session** (its agent stopped on a session
+  limit after rendering). Branch `wp/v-1-c` (worktree `agent-a61767e1817a6c203`): drafts 3–6 with
+  HyperFrames and the `af_heart` voice; the coordinator committed the draft 6 sync fix (`34aff48`;
+  each voice line starts 0.1 s after its action). Cuts (git-ignored):
+  `.acp-data/demo-video/hf/acp-intro-full.mp4` 177.0 s and `acp-intro-short.mp4` 60.0 s, sent to the
+  owner. The live database is now at migration 11 (the owner started the app on 0.3.0); the BETA
+  badge (`f0c09a4`) is on release/0.3.0, not yet pushed.
