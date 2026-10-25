@@ -481,3 +481,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   downloaded for its offline sound effects; all four formats (16:9 full ~2:00, 4:5 LinkedIn ~0:40,
   16:9 short ~0:40, 15 s hook loop). Music: a bed composed in code and rendered with ffmpeg (ours,
   no licence), swappable later for a HeyGen or CC0 track.
+- 2026-10-25 **Video paused by the owner** ("pause the video work for now we can continue it
+  soon"). The draft 7 agent was stopped early: `wp/v-1-d` (worktree `agent-a276b7fe632d6c7e5`) is
+  only draft 6 rebased onto release/0.3.0 (head `310a4fc`, with the BETA badge in the app); no draft 7
+  changes yet, nothing uncommitted, no downloads made. To resume: a new agent continues on
+  `wp/v-1-d` with the draft 7 brief (story, attention rules, music composed in code with ffmpeg,
+  the HyperFrames npm package for offline sound effects, four formats). Keep the HyperFrames desktop
+  app open for the voice. BETA badge pushed: release/0.3.0 at `4c5da4b` on GitHub.
