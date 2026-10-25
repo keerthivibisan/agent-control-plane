@@ -466,3 +466,13 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   `.acp-data/demo-video/hf/acp-intro-full.mp4` 177.0 s and `acp-intro-short.mp4` 60.0 s, sent to the
   owner. The live database is now at migration 11 (the owner started the app on 0.3.0); the BETA
   badge (`f0c09a4`) is on release/0.3.0, not yet pushed.
+- 2026-10-25 **Video draft 7 planned, not started** (owner: "still a little boring"; open or end
+  with completing tickets by dragging them on the board; the workflow config part is too long;
+  plan how to get people's attention). Verified: dragging a Ready ticket to Planning starts its run
+  and the card then moves by itself up to In review; the owner merges to Done. Plan: a hook (drag
+  3 tickets, sped-up cards gliding, "Zero babysitting") → setup once (skills 8 s, the finished flow
+  with highlight pulses ~15 s instead of building it, the harness 6 s) → proof (live agents, a
+  finding fixed, checks, side by side) → control (models, modes, branches) → payoff (all Done,
+  "Drag. Review. Merge."). Full ~2:00, short ~0:40. Attention: a muted-first 3-second hook,
+  music + sound effects, faster pacing, contrast and numbers, formats per channel (16:9, 4:5, a
+  15 s loop), a LinkedIn posting plan. Waiting for the owner's choices on music and formats.
