@@ -3,15 +3,16 @@
 Coordinator-owned. Plan: [README.md](README.md). Decision:
 [ADR-0028](../decisions/0028-agent-effort-optional-checks-finish-block.md).
 
-| WP  | Title                                         | Status      | Branch                | Merged    |
-| --- | --------------------------------------------- | ----------- | --------------------- | --------- |
-| P-0 | ADR-0028, contract, plan                      | done        |                       |           |
-| P-A | Core, engine, server, adapter                 | done        | `wp/p-a-core`         | `b34062c` |
-| P-B | Web                                           | done        | `wp/p-b-web`          | `307d5a7` |
-| P-C | Smooth linking in the editor                  | done        | `wp/p-c-linking`      | `ced2192` |
-| P-D | Lost helper sessions while the owner reviews  | done        | `wp/p-d-session-loss` | `6b54381` |
-| P-O | Open-source readiness, docs and agent context | done        | `wp/p-o-open-source`  | `1ed05ad` |
-| P-V | Verification and release prep                 | in progress |                       |           |
+| WP  | Title                                               | Status | Branch                | Merged    |
+| --- | --------------------------------------------------- | ------ | --------------------- | --------- |
+| P-0 | ADR-0028, contract, plan                            | done   |                       |           |
+| P-A | Core, engine, server, adapter                       | done   | `wp/p-a-core`         | `b34062c` |
+| P-B | Web                                                 | done   | `wp/p-b-web`          | `307d5a7` |
+| P-C | Smooth linking in the editor                        | done   | `wp/p-c-linking`      | `ced2192` |
+| P-D | Lost helper sessions while the owner reviews        | done   | `wp/p-d-session-loss` | `6b54381` |
+| P-R | Docs refresh: package READMEs, specs, comment paths | done   | `wp/p-r-docs-refresh` | `37cd00d` |
+| P-O | Open-source readiness, docs and agent context       | done   | `wp/p-o-open-source`  | `1ed05ad` |
+| P-V | Verification and release prep                       | done   |                       |           |
 
 ## Log
 
@@ -56,3 +57,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-26 CI: runs for `main`, `dev/*` and `release/*` (pull requests and pushes), plus an
   `e2e` job for `main` only (owner decisions).
 - 2026-10-26 P-V: version 0.3.1, CHANGELOG [0.3.1] with the known issue, roadmap.
+- 2026-10-26 P-R merged (`37cd00d`): the seven package READMEs, specs up to v0.3.1, old plan paths
+  in code comments (comments only; applied migrations untouched). Links 327/327 ✓; lint,
+  typecheck and the touched packages' tests ✓ (P-R). Follow-up for v0.3.2: two unused SDK
+  dependencies in `@acp/adapter-claude-code` (a lockfile change).
+- 2026-10-26 P-V done: full check ✓ (5,966 tests) and e2e 117/117 on `87d7194`; after P-R
+  (Markdown and comments only) format ✓ and build ✓. Release ready; push waits for the owner.
