@@ -3,13 +3,15 @@
 Coordinator-owned. Plan: [README.md](README.md). Decision:
 [ADR-0028](../decisions/0028-agent-effort-optional-checks-finish-block.md).
 
-| WP  | Title                         | Status      | Branch           | Merged    |
-| --- | ----------------------------- | ----------- | ---------------- | --------- |
-| P-0 | ADR-0028, contract, plan      | done        |                  |           |
-| P-A | Core, engine, server, adapter | done        | `wp/p-a-core`    | `b34062c` |
-| P-B | Web                           | done        | `wp/p-b-web`     | `307d5a7` |
-| P-C | Smooth linking in the editor  | in progress | `wp/p-c-linking` |           |
-| P-V | Verification and release prep | not started |                  |           |
+| WP  | Title                                         | Status      | Branch                | Merged    |
+| --- | --------------------------------------------- | ----------- | --------------------- | --------- |
+| P-0 | ADR-0028, contract, plan                      | done        |                       |           |
+| P-A | Core, engine, server, adapter                 | done        | `wp/p-a-core`         | `b34062c` |
+| P-B | Web                                           | done        | `wp/p-b-web`          | `307d5a7` |
+| P-C | Smooth linking in the editor                  | in progress | `wp/p-c-linking`      |           |
+| P-D | Lost helper sessions while the owner reviews  | in progress | `wp/p-d-session-loss` |           |
+| P-O | Open-source readiness, docs and agent context | in progress | `wp/p-o-open-source`  |           |
+| P-V | Verification and release prep                 | in progress |                       |           |
 
 ## Log
 
@@ -26,3 +28,12 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   (unchecked; the Link to… menu was half done). Resume from that branch.
 - 2026-10-26 P-C resumed by the owner: a new agent continues from the WIP commit on
   `wp/p-c-linking`.
+- 2026-10-26 Owner report: after the lead escalates a helper's change, the helper's session is lost
+  a few minutes later and the ticket has to be cancelled and redone. P-D investigates and fixes it.
+  The coordinator's read-only look at the live database found no recorded failure (runs ended
+  cancelled, or `NEEDS_REVIEW` on a server restart); the approval timeout (15 min) and run timeout
+  (2 h) don't match "a few minutes".
+- 2026-10-26 Owner request: open-source readiness for a LinkedIn post (README, architecture, agent
+  context, contributing, remove unwanted files, readiness audit). P-O started. Branch scan: no
+  private paths or real secrets; git history on `main` has the local user name in 12 commits'
+  worktree paths (owner decision: rewrite history or not, before making the repo public).
