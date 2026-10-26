@@ -1,6 +1,6 @@
 {
   "name": "@acp/server",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "The Agent Control Plane server: REST API, SSE, ingestion pipeline, managed runs, git and GitHub.",
   "license": "MIT",

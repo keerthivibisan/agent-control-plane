@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.3.0" src="https://img.shields.io/badge/version-0.3.0-171717">
+  <img alt="Version 0.3.1" src="https://img.shields.io/badge/version-0.3.1-171717">
   <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-171717">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-171717">
   <img alt="Node 22" src="https://img.shields.io/badge/node-22-171717">

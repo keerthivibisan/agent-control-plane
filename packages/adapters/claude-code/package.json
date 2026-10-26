@@ -1,6 +1,6 @@
 {
   "name": "@acp/adapter-claude-code",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Claude Code adapter: session, subagent and hook observation, and managed runs over the Claude Agent SDK.",
   "license": "MIT",

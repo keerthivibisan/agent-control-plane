@@ -9,7 +9,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | P-A | Core, engine, server, adapter                 | done        | `wp/p-a-core`         | `b34062c` |
 | P-B | Web                                           | done        | `wp/p-b-web`          | `307d5a7` |
 | P-C | Smooth linking in the editor                  | done        | `wp/p-c-linking`      | `ced2192` |
-| P-D | Lost helper sessions while the owner reviews  | in progress | `wp/p-d-session-loss` |           |
+| P-D | Lost helper sessions while the owner reviews  | done        | `wp/p-d-session-loss` | `6b54381` |
 | P-O | Open-source readiness, docs and agent context | done        | `wp/p-o-open-source`  | `1ed05ad` |
 | P-V | Verification and release prep                 | in progress |                       |           |
 
@@ -48,3 +48,11 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   the git-history decision, private vulnerability reporting and repo topics in GitHub.
 - 2026-10-26 Owner decisions: CI runs on pull requests, including forks (`ci:` commit);
   the git history stays as it is (the local user name in 12 old commits is accepted).
+- 2026-10-26 P-D merged (`6b54381`): the run timeout no longer counts time waiting only for the
+  owner and ends waiting helpers cleanly; a rework whose session is gone starts a new one in the
+  same worktree; `CLAUDE_CODE_EXIT_AFTER_STOP_DELAY` is not passed to agents. Live metadata
+  (read-only) has a run cancelled at exactly 2.0 h with an agent timed out. Full check ✓; e2e
+  117/117; links 249/249. The restart case is planned for v0.3.2 (ADR-0029, proposed).
+- 2026-10-26 CI: runs for `main`, `dev/*` and `release/*` (pull requests and pushes), plus an
+  `e2e` job for `main` only (owner decisions).
+- 2026-10-26 P-V: version 0.3.1, CHANGELOG [0.3.1] with the known issue, roadmap.
