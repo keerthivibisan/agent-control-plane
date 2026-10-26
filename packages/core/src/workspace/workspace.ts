@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from './node-id.js';
+import { BranchStrategySchema, TicketBranchPrefsSchema } from './branching.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
 import {
@@ -26,6 +27,11 @@ export const MAX_CHECK_OUTPUT_BYTES = 16 * 1024;
 export const HARNESS_MANIFEST_PATH = '.acp/harness.json';
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'lowercase letters, digits and dashes');
+
+/** ADR-0027 limits on the harness file. */
+export const MAX_SETUP_STEPS = 5;
+export const MAX_SETUP_OUTPUTS = 10;
+export const MAX_CHECK_LABELS = 5;
 
 /** A repo-relative path: no absolute paths, no `..` segments, no backslashes. */
 export const RepoRelativePathSchema = z
@@ -91,10 +97,20 @@ export const TicketSchema = z.object({
   get runOptions() {
     return TicketRunOptionsSchema.optional();
   },
+  /**
+   * ADR-0025: the ticket's own branch name and target branch. Absent (or an absent field) follows
+   * the project's branching strategy.
+   */
+  branch: TicketBranchPrefsSchema.optional(),
 });
 export type Ticket = z.infer<typeof TicketSchema>;
 
-export const TicketCommentAuthorSchema = z.enum(['owner', 'lead', 'reviewer']);
+/**
+ * Who wrote a ticket comment. `app` (ADR-0024): Agent Control Plane itself, for the run summary it
+ * composes from data it already records (the plan, each change, checks, the ticket branch, tokens)
+ * and for the line it adds after the owner's merge. Never conversation content.
+ */
+export const TicketCommentAuthorSchema = z.enum(['owner', 'lead', 'reviewer', 'app']);
 export const TicketCommentSchema = z.object({
   id: z.string().min(1),
   ticketId: z.string().min(1),
@@ -481,6 +497,15 @@ export const ProjectAgentSetupSchema = z.object({
   /** Approval mode and command allowlist (ADR-0021). Absent on setups saved before it. */
   approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
+  /**
+   * ADR-0025: how tickets name, start and finish their branches. Absent: the behaviour before it
+   * (`acp/<KEY>` from the project's current branch).
+   */
+  branching: BranchStrategySchema.optional(),
+  /**
+   * ADR-0027 §2: setup steps that declare `network: true` may run. Owner-only; absent means off.
+   */
+  setupNetwork: z.boolean().optional(),
   updatedAt: IsoTimestampSchema,
 });
 export type ProjectAgentSetup = z.infer<typeof ProjectAgentSetupSchema>;
@@ -503,8 +528,30 @@ export const HarnessCheckSchema = z.object({
   cwd: RepoRelativePathSchema.optional(),
   timeoutSec: z.number().int().min(1).max(1800),
   required: z.boolean(),
+  /** ADR-0027 §4: groups a Checks block can select, e.g. `fast`, `full`. */
+  labels: z.array(slug).max(MAX_CHECK_LABELS).optional(),
 });
 export type HarnessCheck = z.infer<typeof HarnessCheckSchema>;
+
+/**
+ * A setup step (ADR-0027 §1): prepares a fresh worktree or check checkout (install dependencies,
+ * generate code) with the same policy as a check: an argument list, no shell, a time limit.
+ */
+export const HarnessSetupStepSchema = z.object({
+  id: slug,
+  name: z.string().trim().min(1).max(80),
+  argv: CheckArgvSchema,
+  cwd: RepoRelativePathSchema.optional(),
+  timeoutSec: z.number().int().min(1).max(1800),
+  /**
+   * ADR-0027 §2: the step downloads things. It runs only while the project's `setupNetwork` is on;
+   * the app does not isolate it from the network either way.
+   */
+  network: z.boolean().optional(),
+  /** ADR-0027 §3: folders the step creates; never staged in a change or committed. */
+  outputs: z.array(RepoRelativePathSchema).max(MAX_SETUP_OUTPUTS).optional(),
+});
+export type HarnessSetupStep = z.infer<typeof HarnessSetupStepSchema>;
 
 /** `.acp/harness.json` (version-controlled in the project; ADR-0017). */
 export const HarnessManifestSchema = z
@@ -512,11 +559,16 @@ export const HarnessManifestSchema = z
     version: z.literal(1),
     description: z.string().max(2000).optional(),
     checks: z.array(HarnessCheckSchema).min(1).max(20),
+    /** ADR-0027 §1: run in order before an editing agent starts and before checks in a checkout. */
+    setup: z.array(HarnessSetupStepSchema).max(MAX_SETUP_STEPS).optional(),
     context: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES).optional(),
     notes: z.string().max(4000).optional(),
   })
   .refine((m) => new Set(m.checks.map((c) => c.id)).size === m.checks.length, {
     message: 'check ids must be unique',
+  })
+  .refine((m) => new Set((m.setup ?? []).map((s) => s.id)).size === (m.setup ?? []).length, {
+    message: 'setup step ids must be unique',
   });
 export type HarnessManifest = z.infer<typeof HarnessManifestSchema>;
 
@@ -526,10 +578,15 @@ export type HarnessState = z.infer<typeof HarnessStateSchema>;
 export const HarnessStatusSchema = z.object({
   state: HarnessStateSchema,
   checkedAt: IsoTimestampSchema,
-  /** Plain sentences, e.g. "Check 'test' needs a timeout." Empty when ready. */
+  /**
+   * Plain sentences, e.g. "Check 'test' needs a timeout." Empty when ready, except F-2's warnings
+   * (a check or setup step that is branch-managing git).
+   */
   problems: z.array(z.string().min(1)),
   /** The manifest's checks as declared, so the settings card can show each command and time limit. */
   checks: z.array(HarnessCheckSchema),
+  /** ADR-0027: the manifest's setup steps as declared. Absent from servers before it. */
+  setup: z.array(HarnessSetupStepSchema).optional(),
 });
 export type HarnessStatus = z.infer<typeof HarnessStatusSchema>;
 
@@ -547,6 +604,10 @@ export const CheckRunStatusSchema = z.enum([
   'interrupted',
 ]);
 export type CheckRunStatus = z.infer<typeof CheckRunStatusSchema>;
+
+/** Where a check run belongs (ADR-0027 §5); `main` is "Run checks now" on the main branch. */
+export const CheckRunPlaceSchema = z.enum(['change', 'merge', 'branch', 'main']);
+export type CheckRunPlace = z.infer<typeof CheckRunPlaceSchema>;
 
 export const CheckRunSchema = z.object({
   id: z.string().min(1),
@@ -568,8 +629,46 @@ export const CheckRunSchema = z.object({
    * `check_runs.commit_sha`). Null or absent for check runs recorded before it.
    */
   commit: GitCommitSchema.nullable().optional(),
+  /**
+   * ADR-0027 §5: where the check ran: a Checks block on a change, before the lead's merge, on the
+   * ticket branch, or "Run checks now" on main. Absent on rows from before it.
+   */
+  place: CheckRunPlaceSchema.optional(),
+  /** The Checks block (graph node id) that ran it; null for "Run checks now" and older rows. */
+  blockNodeId: z.string().min(1).nullable().optional(),
 });
 export type CheckRun = z.infer<typeof CheckRunSchema>;
+
+/** How a setup step ended (ADR-0027 §1). `refused`: a network step while `setupNetwork` is off. */
+export const SetupRunStatusSchema = z.enum([
+  'passed',
+  'failed',
+  'timed-out',
+  'error',
+  'refused',
+  'interrupted',
+]);
+export type SetupRunStatus = z.infer<typeof SetupRunStatusSchema>;
+
+/** One setup step's run in a worktree or check checkout (ADR-0027 §1; migration 0010). */
+export const SetupRunSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  /** Null for "Run setup and checks now" on main. */
+  runId: z.string().min(1).nullable(),
+  /** The editing agent whose worktree it prepared; null for a check checkout. */
+  agentRunId: z.string().min(1).nullable(),
+  stepId: slug,
+  name: z.string().min(1),
+  status: SetupRunStatusSchema,
+  exitCode: z.number().int().nullable(),
+  durationMs: z.number().int().nonnegative(),
+  /** Last ≤ 16 KiB of combined output, redacted (as for checks). */
+  outputTail: z.string().max(MAX_CHECK_OUTPUT_BYTES),
+  startedAt: IsoTimestampSchema,
+  commit: GitCommitSchema.nullable(),
+});
+export type SetupRun = z.infer<typeof SetupRunSchema>;
 
 /**
  * The notes v0.1.0 (and 0.2.0 before WG-F3) stored for a check the app's shutdown stopped, as

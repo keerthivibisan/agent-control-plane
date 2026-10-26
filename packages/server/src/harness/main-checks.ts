@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
-import type { CheckRun, HarnessStatus } from '@acp/core';
+import type { CheckRun, HarnessStatus, SetupRun } from '@acp/core';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
 import {
   GitCommandError,
@@ -13,7 +13,7 @@ import {
 import { HarnessError } from './errors.js';
 import { readHarness } from './manifest.js';
 import { realDirectory } from './paths.js';
-import type { CheckRunner } from './runner.js';
+import { checksNotRun, type CheckRunner } from './runner.js';
 
 /**
  * "Run checks now" on the main branch (README §5.4, ADR-0017 §3). The owner's working tree is
@@ -21,6 +21,9 @@ import type { CheckRunner } from './runner.js';
  * under `<dataDir>/harness-checks/<id>`, the manifest is read from that commit, the checks run
  * there, and the worktree is removed afterwards, whatever happened. Git calls use the workspace
  * manager's runner and safety config (no hooks, no fsmonitor, no submodules).
+ *
+ * ADR-0027 §1: the manifest's setup steps run in that checkout first; when one does not pass,
+ * every check is recorded as not run, with the reason.
  */
 
 export interface MainChecksDeps {
@@ -38,6 +41,10 @@ export interface RunOnMainInput {
   projectId: string;
   signal?: AbortSignal;
   onResult?: (result: CheckRun) => void;
+  /** ADR-0027 §2: the project's "Setup may use the network" switch (absent: off). */
+  setupNetwork?: boolean;
+  /** Called as each setup step finishes. */
+  onSetupResult?: (result: SetupRun) => void;
 }
 
 export interface MainChecksResult {
@@ -47,6 +54,8 @@ export interface MainChecksResult {
   commit: string;
   /** Empty when the manifest at that commit is missing or invalid. */
   results: CheckRun[];
+  /** ADR-0027: the setup steps tried before the checks, in order (empty without any). */
+  setupRuns: SetupRun[];
 }
 
 export interface MainChecks {
@@ -121,7 +130,40 @@ export function createMainChecks(deps: MainChecksDeps): MainChecks {
       }
       try {
         const harness = await readHarness(path, deps.now ? { now: deps.now } : {});
-        if (harness.manifest === null) return { status: harness.status, commit, results: [] };
+        if (harness.manifest === null) {
+          return { status: harness.status, commit, results: [], setupRuns: [] };
+        }
+        const steps = harness.manifest.setup ?? [];
+        const setupRuns =
+          steps.length === 0
+            ? []
+            : await deps.runner.runSetup({
+                root: path,
+                steps,
+                networkAllowed: input.setupNetwork === true,
+                projectId: input.projectId,
+                runId: null,
+                agentRunId: null,
+                commit,
+                ...(input.signal ? { signal: input.signal } : {}),
+                ...(input.onSetupResult ? { onResult: input.onSetupResult } : {}),
+              });
+        const failedStep = setupRuns.find((r) => r.status !== 'passed');
+        if (failedStep !== undefined) {
+          const results = checksNotRun(
+            {
+              checks: harness.manifest.checks,
+              projectId: input.projectId,
+              runId: null,
+              agentRunId: null,
+            },
+            failedStep,
+            deps.now,
+            newId,
+          );
+          for (const r of results) input.onResult?.(r);
+          return { status: harness.status, commit, results, setupRuns };
+        }
         const results = await deps.runner.run({
           root: path,
           checks: harness.manifest.checks,
@@ -131,7 +173,7 @@ export function createMainChecks(deps: MainChecksDeps): MainChecks {
           ...(input.signal ? { signal: input.signal } : {}),
           ...(input.onResult ? { onResult: input.onResult } : {}),
         });
-        return { status: harness.status, commit, results };
+        return { status: harness.status, commit, results, setupRuns };
       } finally {
         await removeCheckout(repoRoot, path);
       }

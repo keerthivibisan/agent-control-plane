@@ -1,7 +1,14 @@
 import type { HarnessState } from '@acp/core';
-import type { CheckRunDto, TicketCardDto, TicketDto } from '@acp/core/api';
+import {
+  UpdateProjectSetupRequestSchema,
+  type CheckRunDto,
+  type HarnessStatusDto,
+  type ProjectAgentSetupDto,
+  type TicketCardDto,
+  type TicketDto,
+} from '@acp/core/api';
 import type { PillTone } from '../../components/Pill';
-import type { ApiError } from '../../lib/api';
+import type { ApiError, UpdateProjectSetupRequest } from '../../lib/api';
 import { HARNESS_PAGE_COPY } from '../../lib/copy';
 
 /** Pure helpers for the Harness page, unit-tested in tests/features/harness-logic.test.ts. */
@@ -104,4 +111,40 @@ export function groupMainRuns(rows: readonly CheckRunDto[]): MainRun[] {
 export function runErrorText(error: ApiError): string {
   const known = error.code === null ? undefined : HARNESS_PAGE_COPY.runs.errors[error.code];
   return known ?? HARNESS_PAGE_COPY.runs.failed;
+}
+
+// ---------------------------------------------------------------- setup (ADR-0027)
+
+/** The harness file's setup steps; none for a server from before ADR-0027. */
+export function setupSteps(
+  harness: Pick<HarnessStatusDto, 'setup'>,
+): NonNullable<HarnessStatusDto['setup']> {
+  return harness.setup ?? [];
+}
+
+/** "Run setup and checks now" once the harness has setup steps, else "Run checks now". */
+export function hasSetup(harness: Pick<HarnessStatusDto, 'setup'> | undefined): boolean {
+  return harness !== undefined && setupSteps(harness).length > 0;
+}
+
+/**
+ * The setup PUT body that turns "Setup may use the network" on or off and keeps everything else:
+ * the saved limits, model and context files as they are, and no `approvals`, `allowlist` or
+ * `branching`, which the server then keeps (absent means unchanged). Null when the saved setup
+ * would not pass the request's own schema (it always does for a setup the server sent).
+ */
+export function networkRequest(
+  setup: ProjectAgentSetupDto,
+  on: boolean,
+): UpdateProjectSetupRequest | null {
+  const parsed = UpdateProjectSetupRequestSchema.safeParse({
+    projectKey: setup.projectKey,
+    maxConcurrentHelpers: setup.maxConcurrentHelpers,
+    maxDepth: setup.maxDepth,
+    defaultBudgetTokensPerAgent: setup.defaultBudgetTokensPerAgent,
+    model: setup.model,
+    contextFiles: [...setup.contextFiles],
+    setupNetwork: on,
+  });
+  return parsed.success ? parsed.data : null;
 }

@@ -6,6 +6,7 @@ import type {
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
+import { GIT_DENY_RULES } from '../../src/managed/branch-guard.js';
 import {
   classifyStartupError,
   createManagedClaudeCode,
@@ -104,6 +105,8 @@ const EXPECTED_SANDBOX = {
 
 /** Every deny-read path except the data folder (it holds the worktree), then `.git`, `.claude`. */
 const EXPECTED_DENY_RULES = [
+  // F-1: the branch deny rules come first, for every helper and tester.
+  ...GIT_DENY_RULES,
   ...DENY_READ.filter((p) => p !== DATA).flatMap((p) => [`Read(/${p}/**)`, `Edit(/${p}/**)`]),
   `Edit(/${CWD}/.git)`,
   `Edit(/${CWD}/.git/**)`,
@@ -167,7 +170,7 @@ describe('SDK options of a Full auto helper or tester (ADR-0022)', () => {
     const { call } = await run(plain, [init(), result()]);
     expect(call?.options.permissionMode).toBe('default');
     expect(call?.options).not.toHaveProperty('sandbox');
-    expect(call?.options).not.toHaveProperty('disallowedTools');
+    expect(call?.options.disallowedTools).toEqual([...GIT_DENY_RULES]);
   });
 
   it('without an injected environment, TMPDIR is added to the inherited one', async () => {

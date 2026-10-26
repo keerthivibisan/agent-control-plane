@@ -190,8 +190,20 @@ export function agentBranch(
 
 // --- Redesign roles and stages (R-H; ADR-0019) ----------------------------------------------------
 
-/** The id of the ticket's comments block, so "N findings in the comments below" can scroll to it. */
+/** The id of the Comments tab's thread (v0.3.0 C-B: people's comments and the lead's summary). */
 export const COMMENTS_ID = 'ticket-comments';
+
+/**
+ * The id of the Conversation tab's timeline (v0.3.0 C-B), so "N findings from the reviewer" can
+ * bring it into view.
+ */
+export const ACTIVITY_ID = 'ticket-activity';
+
+/** The Comments tab's "Waiting for you" part, for the header's "N requests wait for you". */
+export const NEEDS_YOU_ID = 'ticket-needs-you';
+
+/** The Comments tab's final-step box, for the final step's main action in the header. */
+export const FINAL_STEP_ID = 'ticket-final-step';
 
 /** Roles that work in their own git worktree: helpers and the tester. The rest only read. */
 export function hasWorktree(kind: AgentRoleKind): boolean {

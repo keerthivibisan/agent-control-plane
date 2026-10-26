@@ -582,20 +582,11 @@ describe('ticket branch (ADR-0021 §4)', () => {
     expect(() => ticketBranchName('WEB-12', 1.5)).toThrow(RangeError);
   });
 
-  it('accepts only acp/<KEY> and acp/<KEY>-r<n>', () => {
-    for (const ok of ['acp/WEB-12', 'acp/AB-1', 'acp/ABCDEF-999-r3']) {
+  it('accepts acp/<KEY> names and, since ADR-0025, any safe branch name', () => {
+    for (const ok of ['acp/WEB-12', 'acp/AB-1', 'acp/ABCDEF-999-r3', 'main', 'feature/WEB-12-x']) {
       expect(TicketBranchNameSchema.safeParse(ok).success, ok).toBe(true);
     }
-    for (const bad of [
-      'main',
-      'acp/web-12',
-      'acp/WEB-0',
-      'acp/WEB-12-r0',
-      'acp/A-1',
-      'acp/WEB-12/x',
-      'acp/run-1/agent-2',
-      'refs/heads/acp/WEB-12',
-    ]) {
+    for (const bad of ['refs/heads/acp/WEB-12', 'HEAD', '-x', 'acp/WEB 12', 'acp/../x']) {
       expect(TicketBranchNameSchema.safeParse(bad).success, bad).toBe(false);
     }
   });
@@ -709,7 +700,9 @@ describe('review-loop DTOs', () => {
   it('parse a ticket branch, a change card and the final merge view', () => {
     expect(TicketBranchDtoSchema.parse(branch).branch).toBe('acp/WEB-12');
     expect(TicketBranchDtoSchema.safeParse({ ...branch, state: 'closed' }).success).toBe(false);
-    expect(TicketBranchDtoSchema.safeParse({ ...branch, branch: 'main' }).success).toBe(false);
+    expect(TicketBranchDtoSchema.safeParse({ ...branch, branch: 'refs/heads/x' }).success).toBe(
+      false,
+    );
     expect(ChangeReviewDtoSchema.parse(change).reviews).toHaveLength(2);
     expect(ChangeReviewDtoSchema.safeParse({ ...change, state: 'approved' }).success).toBe(false);
     expect(

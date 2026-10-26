@@ -7,6 +7,7 @@ import type {
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
+import { GIT_DENY_RULES } from '../../src/managed/branch-guard.js';
 import { createManagedClaudeCode } from '../../src/index.js';
 import { agentFileHeading } from '../../src/managed/adapter.js';
 import {
@@ -153,7 +154,7 @@ describe('agent file tools only narrow (ADR-0019 §6)', () => {
   it('sets the SDK tools base set to the listed built-ins for a worker', () => {
     const options = optionsFor(spec('worker', { profile: profile(['Read', 'Grep', 'Edit']) }));
     expect(options.tools).toEqual(['Read', 'Grep', 'Edit']);
-    expect(options).not.toHaveProperty('disallowedTools');
+    expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
   });
 
   it('keeps a reviewer read-only even when its file lists Bash and Edit', async () => {

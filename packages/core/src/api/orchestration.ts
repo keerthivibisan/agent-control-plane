@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { PullRequestDtoSchema } from './code-host.js';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { GitBranchNameSchema } from '../workspace/branching.js';
 import {
   AgentRoleKindSchema,
   AgentRunStatusSchema,
@@ -175,15 +177,45 @@ export const TicketBranchDtoSchema = z.object({
   baseBranch: z.string().min(1),
   /** The base branch's commit when the ticket branch was created. */
   baseCommit: GitCommitSchema,
+  /**
+   * ADR-0025 §10: the branch it was created from, when that differs from `baseBranch` (the
+   * target). Absent: created from the target, as before it.
+   */
+  sourceBranch: GitBranchNameSchema.optional(),
   /** The branch tip; it moves only by a server-side compare-and-swap after a merged change. */
   headCommit: GitCommitSchema,
   state: TicketBranchStateSchema,
   /** The base branch's commit after the owner's merge; null until merged. */
   mergedCommit: GitCommitSchema.nullable(),
+  /** ADR-0025: the pull request raised for this branch, if any. Absent from servers before it. */
+  pullRequest: PullRequestDtoSchema.nullable().optional(),
+  /**
+   * ADR-0025 §9: whether the ticket branch still exists in the project (`refs/heads`). Absent from
+   * servers before it. POST `/api/tickets/:id/branch/delete` (CSRF; the owner's click only)
+   * deletes it there and on `origin`, once the branch is merged or discarded.
+   */
+  localExists: z.boolean().optional(),
+  /**
+   * F-1: the open branch's tip in the project is not `headCommit` (the last commit the app
+   * recorded and reviewed): it was changed outside the app. `tip` is the commit it points at now.
+   * Only on `GET /api/runs/:id/ticket-branch`; absent when it matches, for a closed branch, and
+   * from servers before F-1. POST `/api/runs/:id/ticket-branch/reset` (CSRF, the owner's click
+   * only, `ResetTicketBranchRequest`) moves it back to `headCommit` by compare-and-swap.
+   */
+  movedOutside: z.object({ tip: GitCommitSchema }).optional(),
   createdAt: IsoTimestampSchema,
   updatedAt: IsoTimestampSchema,
 });
 export type TicketBranchDto = z.infer<typeof TicketBranchDtoSchema>;
+
+/**
+ * F-1: "Reset to the last reviewed commit". `from` is the tip the owner saw
+ * (`TicketBranchDto.movedOutside.tip`); the server moves the branch from it to the recorded
+ * `headCommit` with `update-ref` (compare-and-swap) and refuses when the branch is checked out in
+ * any worktree or moved again meanwhile. No other branch is touched.
+ */
+export const ResetTicketBranchRequestSchema = z.object({ from: GitCommitSchema });
+export type ResetTicketBranchRequest = z.infer<typeof ResetTicketBranchRequestSchema>;
 
 export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   budget: RunBudgetSchema,

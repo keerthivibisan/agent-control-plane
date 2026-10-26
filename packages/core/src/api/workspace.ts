@@ -3,9 +3,17 @@ import { AbsolutePathSchema } from '../domain/project.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
+import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
+import { AttachmentDtoSchema } from './activity.js';
+import {
+  BranchStrategySchema,
+  TicketBranchPrefsPatchSchema,
+  TicketBranchPrefsSchema,
+} from '../workspace/branching.js';
 import {
   ApprovalModeSchema,
   CheckRunSchema,
+  SetupRunSchema,
   HarnessStatusSchema,
   ProjectAgentSetupSchema,
   ProjectAllowlistSchema,
@@ -40,9 +48,20 @@ export const HarnessStatusDtoSchema = HarnessStatusSchema;
 export type HarnessStatusDto = z.infer<typeof HarnessStatusDtoSchema>;
 export const CheckRunDtoSchema = CheckRunSchema;
 export type CheckRunDto = z.infer<typeof CheckRunDtoSchema>;
+export const SetupRunDtoSchema = SetupRunSchema;
+export type SetupRunDto = z.infer<typeof SetupRunDtoSchema>;
 export const TicketDtoSchema = TicketSchema.extend({ stage: TicketStageSchema });
 export type TicketDto = z.infer<typeof TicketDtoSchema>;
-export const TicketCommentDtoSchema = TicketCommentSchema;
+/**
+ * ADR-0026: `kind` says which tab the comment belongs on (derived by the server for older rows), and
+ * `attachments` are the files attached to it. Both absent from servers before 0.3.0.
+ */
+export const TicketCommentDtoSchema = TicketCommentSchema.extend({
+  kind: TicketCommentKindSchema.optional(),
+  /** For an agent's note: the agent run that wrote it, so the page can name the agent. */
+  agentRunId: z.string().min(1).nullable().optional(),
+  attachments: z.array(AttachmentDtoSchema).optional(),
+});
 export type TicketCommentDto = z.infer<typeof TicketCommentDtoSchema>;
 export const TicketPlanDtoSchema = TicketPlanSchema;
 export type TicketPlanDto = z.infer<typeof TicketPlanDtoSchema>;
@@ -84,6 +103,8 @@ export const TicketDetailDtoSchema = z.object({
   plans: z.array(TicketPlanDtoSchema),
   comments: z.array(TicketCommentDtoSchema),
   checks: z.array(CheckRunDtoSchema),
+  /** ADR-0027: the current run's setup runs, oldest first. Absent from servers before it. */
+  setupRuns: z.array(SetupRunDtoSchema).optional(),
 });
 export type TicketDetailDto = z.infer<typeof TicketDetailDtoSchema>;
 
@@ -119,6 +140,10 @@ export const UpdateProjectSetupRequestSchema = z.object({
   /** ADR-0021. Absent: the stored approvals are kept (or, for an older setup, still none). */
   approvals: ProjectApprovalsSchema.optional(),
   contextFiles: z.array(RepoRelativePathSchema).max(MAX_CONTEXT_FILES),
+  /** ADR-0025. Absent: the stored strategy is kept; `null` removes it (the behaviour before it). */
+  branching: BranchStrategySchema.nullable().optional(),
+  /** ADR-0027 §2. Absent: the stored switch is kept (off when never set). */
+  setupNetwork: z.boolean().optional(),
 });
 /**
  * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own
@@ -139,6 +164,8 @@ export const CreateTicketRequestSchema = z.object({
   labels: z.array(TicketLabelSchema).max(10).default([]),
   /** RL-H: the ticket's own run options; absent (or an absent field) follows the project. */
   runOptions: TicketRunOptionsSchema.optional(),
+  /** ADR-0025: the ticket's own branch name and target branch; absent follows the project. */
+  branch: TicketBranchPrefsSchema.optional(),
 });
 /**
  * A change to a ticket's run options (RL-H): a value sets that option for the ticket, `null` puts
@@ -159,12 +186,24 @@ export const UpdateTicketRequestSchema = z
     labels: z.array(TicketLabelSchema).max(10),
     /** RL-H: see `TicketRunOptionsPatchSchema`; `null` puts every option back to the project's. */
     runOptions: TicketRunOptionsPatchSchema.nullable(),
+    /** ADR-0025: see `TicketBranchPrefsPatchSchema`; `null` puts both back to the project's. */
+    branch: TicketBranchPrefsPatchSchema.nullable(),
   })
   .partial();
 export const MoveTicketRequestSchema = z.object({
   status: z.enum(['BACKLOG', 'READY', 'CANCELLED']),
 });
-export const TicketCommentRequestSchema = z.object({ body: z.string().trim().min(1).max(8000) });
+export const TicketCommentRequestSchema = z.object({
+  body: z.string().trim().min(1).max(8000),
+  /** ADR-0026: attachments uploaded first (`POST …/attachments`), now attached to this comment. */
+  attachmentIds: z.array(z.string().min(1)).max(10).optional(),
+  /**
+   * What the owner's text is (ADR-0026 §1, owner decision 2026-10-22): `comment` (the default) is
+   * for the Comments tab; `review` is a review sent from Files changed, shown on Conversation as
+   * "You reviewed".
+   */
+  kind: z.enum(['comment', 'review']).optional(),
+});
 export const PlanDecisionRequestSchema = z
   .object({
     decision: z.enum(['approve', 'request-changes']),

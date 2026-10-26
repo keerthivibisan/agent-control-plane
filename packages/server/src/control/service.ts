@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -8,6 +9,7 @@ import {
   isPathInside,
   LeadToolInputs,
   type AgentRoleKind,
+  type Attachment,
   type FullAutoSpec,
   type ManagedAgentEvent,
   type ManagedAgentSpec,
@@ -38,6 +40,7 @@ import {
   type RunWorkflowDto,
   type RunWorkflowGraphDto,
   type StreamNoticeDto,
+  type TicketBranchDto,
   type TicketBranchReviewDto,
 } from '@acp/core/api';
 import {
@@ -48,8 +51,10 @@ import {
   type WorkspaceRow,
 } from '@acp/db';
 import {
+  AGENT_NOTE_LINE,
   agentDepth,
   agentEvent,
+  agentSetupFailed,
   agentLaunchMode,
   allowlistTarget,
   cancelRun,
@@ -100,11 +105,14 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
+import type { WorktreeSetup, WorktreeSetupInput } from '../board/checks.js';
+import type { CodeHostService } from '../code-host/index.js';
 import { HttpError, notFound } from '../errors.js';
 import { errorFields, type Logger } from '../logger.js';
 import {
   WorkspaceError,
   type GitRunner,
+  type LineCounts,
   type Workspace,
   type WorkspaceManager,
 } from '../workspace/index.js';
@@ -140,6 +148,19 @@ import {
 } from './review-loop.js';
 import { reviewCounts, toChangeReviewDtos, toTicketBranchDto } from './review-loop-dto.js';
 import { hasReviewableChange, isReadOnlyRole } from './roles.js';
+import { TICKET_SUMMARY_SO_FAR, createRunSummaries, endTrigger } from './run-summary.js';
+import {
+  ATTACHMENTS_DIR,
+  createAttachmentFiles,
+  type AttachmentFiles,
+} from '../attachments/files.js';
+import {
+  AGENT_ATTACHMENTS_DIR,
+  RUN_ATTACHMENTS_DIR,
+  attachmentsBrief,
+  placeAgentCopies,
+} from '../attachments/agent-copies.js';
+import { agentName } from './session-names.js';
 import { createRunStore, type RunStore } from './store.js';
 import { workspaceFromRow } from './workspaces.js';
 
@@ -234,6 +255,11 @@ export interface ControlWorkspaceHooks {
   allowlist?: (projectId: string, policy?: ProjectApprovals) => Promise<AllowlistContext | null>;
   /** ADR-0021: the harness checks per commit (the merge gate and the checks it starts). */
   commitChecks?: CommitChecksHooks;
+  /**
+   * ADR-0027 §1: runs the project's setup steps in a new helper's or tester's worktree before it
+   * starts. Not called for rework turns (the worktree is set up), nor for reading roles.
+   */
+  setupWorktree?: (input: WorktreeSetupInput) => Promise<WorktreeSetup>;
   reviewGate?: (runId: string, agentRunId: string) => ReviewGate;
   /** The owner merged although a required check failed; `reason` is their own text. */
   mergedAnyway?: (input: {
@@ -296,6 +322,8 @@ export interface ControlServiceDeps {
   csrfToken?: string;
   /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
   workspace?: ControlWorkspaceHooks;
+  /** ADR-0025: the owner's push and pull requests; omitted, those routes answer 404. */
+  codeHost?: CodeHostService;
   /** The reviewer's temporary checkouts (ADR-0019); defaults to `<dataDir>/review-checkouts`. */
   reviewCheckouts?: ReviewCheckouts;
   /** The run-scoped skills plugins (ADR-0019 §4); defaults to `<dataDir>/runs/<runId>/…`. */
@@ -311,6 +339,8 @@ export interface ControlServiceDeps {
   claudeDir?: string;
   /** Full auto's per-run temp folders and deny-read list; defaults to `<dataDir>/sandbox-tmp`. */
   fullAutoPaths?: FullAutoPaths;
+  /** ADR-0026 §4: the attachments' bytes; defaults to `<dataDir>/attachments`. */
+  attachmentFiles?: AttachmentFiles;
 }
 
 export interface ControlCounters {
@@ -325,6 +355,8 @@ export interface ControlCounters {
 export interface ControlService {
   readonly enabled: boolean;
   readonly csrfToken: string;
+  /** ADR-0026 §4: the attachments' bytes in the app's data folder (the board serves them). */
+  readonly attachmentFiles: AttachmentFiles;
   /** Orphan worktree cleanup and the sweep timer; call once before serving requests. */
   start(): Promise<void>;
   /** Aborts every running agent without recording anything; restart recovery handles them. */
@@ -353,6 +385,22 @@ export interface ControlService {
    * discard or update from the base branch; returns the ticket branch afterwards.
    */
   ticketBranchAction(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
+  /**
+   * F-1: the owner's "Reset to the last reviewed commit" for a ticket branch changed outside the
+   * app (`ResetTicketBranchRequest`); returns the ticket branch afterwards.
+   */
+  resetTicketBranch(runId: string, body: unknown): Promise<TicketBranchReviewDto>;
+  /**
+   * ADR-0025 §4: the owner's Push & open PR for the run's ticket branch (`OpenPullRequestRequest`),
+   * or the link to the open one; returns the ticket branch with its pull request.
+   */
+  openPullRequest(
+    runId: string,
+    body: unknown,
+    ticket: { key: string; title: string },
+  ): Promise<TicketBranchDto>;
+  /** ADR-0025: reads the pull request's state now; merged on GitHub completes the run. */
+  refreshPullRequest(runId: string): Promise<TicketBranchDto>;
   /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
   createTicketRun(input: TicketRunInput): RunDetailDto;
   /**
@@ -411,6 +459,46 @@ interface LiveRun {
   checkTargets: Map<string, string>;
 }
 
+/** The most checks an editing agent's brief lists by name and command (ADR-0027 §4). */
+const BRIEF_MAX_CHECKS = 10;
+
+/** One argument list as the agent would type it (arguments with spaces or quotes are quoted). */
+function commandLine(argv: readonly string[]): string {
+  return argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a))).join(' ');
+}
+
+/**
+ * ADR-0027 §4: one to three short lines for an editing agent's first brief, only when the project
+ * has a harness file: the setup steps that ran (names) and the checks it may run (names and the
+ * exact commands; the allowlist pre-approves exactly those, per the run's approval mode).
+ */
+export function setupBriefLines(setup: Extract<WorktreeSetup, { ok: true }>): string[] {
+  if (!setup.hasHarness) return [];
+  const lines: string[] = [];
+  if (setup.ran.length > 0) {
+    lines.push(`The project's setup already ran in your copy: ${setup.ran.join(', ')}.`);
+  }
+  const checks = setup.checks.slice(0, BRIEF_MAX_CHECKS);
+  if (checks.length > 0) {
+    const list = checks.map(
+      (c) => `${c.name} (\`${commandLine(c.argv)}\`${c.cwd !== undefined ? ` in ${c.cwd}` : ''})`,
+    );
+    lines.push(
+      `You may run the project's checks with exactly these commands: ${list.join('; ')}${setup.checks.length > checks.length ? '; and more in .acp/harness.json' : ''}.`,
+    );
+  }
+  return lines;
+}
+
+/** The brief with `lines` added, before the closing note line when it ends with one. */
+function withBriefLines(prompt: string, lines: readonly string[]): string {
+  if (lines.length === 0) return prompt;
+  const block = lines.join('\n');
+  if (!prompt.endsWith(AGENT_NOTE_LINE)) return `${prompt}\n\n${block}`;
+  const head = prompt.slice(0, prompt.length - AGENT_NOTE_LINE.length).trimEnd();
+  return `${head}\n\n${block}\n\n${AGENT_NOTE_LINE}`;
+}
+
 /** What `launch` needs from a `start-agent` effect. */
 interface LaunchInput {
   agentRunId: string;
@@ -428,6 +516,8 @@ interface LaunchInput {
   rework?: { resumeSessionId: string | null } | undefined;
   /** ADR-0021: what a reviewer reviews. */
   reviewScope?: 'change' | 'final' | undefined;
+  /** ADR-0026 §4: the lead's or planner's attachment copies, readable without asking. */
+  readOnlyDirs?: string[] | undefined;
   /**
    * ADR-0022, ADR-0023 §5: a helper's or tester's sandbox paths, with auto mode (its block runs
    * Full auto) or without (a Full auto block a ticket or run tightened).
@@ -460,6 +550,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     deps.reviewCheckouts ?? createReviewCheckouts({ dataDir: deps.dataDir, git: deps.git, logger });
   const skillsPlugins = deps.skillsPlugins ?? createSkillsPlugins({ dataDir: deps.dataDir });
   const agentProfiles = deps.agentProfiles ?? createAgentProfiles();
+  const attachmentFiles =
+    deps.attachmentFiles ?? createAttachmentFiles({ root: join(deps.dataDir, ATTACHMENTS_DIR) });
   const fullAutoPaths =
     deps.fullAutoPaths ??
     createFullAutoPaths({
@@ -516,9 +608,87 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     apply: (live, command) => apply(live as LiveRun, command),
     workspaceFor: (live, row) => workspaceFor(live as LiveRun, row),
     ...(deps.flushIngestion !== undefined && { flushIngestion: deps.flushIngestion }),
+    appComment: (live, text) => appComment(live as LiveRun, text),
+    ...(deps.codeHost !== undefined && { codeHost: deps.codeHost }),
+    notify: (live) => notify('runs-changed', live as LiveRun),
     track,
     countDiagnostic: (code) => countDiagnostic(code),
   });
+
+  /**
+   * ADR-0024 §3: one comment by author `app` on the run's ticket (app data only: branch names,
+   * commit ids, counts, pull request numbers), followed by the board's notice.
+   */
+  function appComment(live: LiveRun, text: string): void {
+    const ticketId = live.state.run.ticketId;
+    if (ticketId === null) return;
+    try {
+      store.workspaceRepos.comments.insert({
+        ticketId,
+        runId: live.state.run.id,
+        author: 'app',
+        body: text,
+        // ADR-0026: a one-line event (a merge, a pull request) on the Conversation tab.
+        kind: 'system',
+      });
+    } catch (error) {
+      logger.log('error', 'app comment not stored', {
+        runId: live.state.run.id,
+        ...errorFields(error),
+      });
+    }
+  }
+
+  /** ADR-0024 §3: the run summary comments, composed from the app's own records. */
+  const summaries = createRunSummaries({
+    store,
+    logger,
+    publish: deps.publish,
+    lastEventId: () => deps.repos.events.maxId() ?? 0,
+    lineCounts: (live) => lineCountsOf(live as LiveRun),
+    track,
+    countDiagnostic: (code) => countDiagnostic(code),
+  });
+
+  /**
+   * The files and lines of each change, where git can tell (ADR-0024 §3): a loop change from its
+   * sealed commit in the project's repository (its worktree may be gone), a legacy change from
+   * its worktree while it is still there. Never rejects; an unknown count is left out.
+   */
+  async function lineCountsOf(live: LiveRun): Promise<Map<string, LineCounts>> {
+    const out = new Map<string, LineCounts>();
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    if (project === undefined) return out;
+    const loopRun = live.state.integration !== undefined;
+    for (const row of store.repos.workspaces.listForRun(live.state.run.id)) {
+      try {
+        if (loopRun) {
+          const head = store.loopRepos.workspaceChanges.getByAgentRun(row.agentRunId)?.headCommit;
+          if (head === undefined || head === null || row.baseCommit === null) continue;
+          const counts = await deps.workspaces.lineCounts(project.rootPath, row.baseCommit, head);
+          if (counts !== null) out.set(row.agentRunId, counts);
+        } else if (row.state === 'active') {
+          const ws = await workspaceFor(live, row);
+          const { files } = await deps.workspaces.changes(ws, { maxDiffBytes: 1 });
+          const text = files.filter((f) => f.additions !== null && f.deletions !== null);
+          const sum = (pick: (f: (typeof files)[number]) => number | null) =>
+            text.length === 0 ? null : text.reduce((n, f) => n + (pick(f) ?? 0), 0);
+          out.set(row.agentRunId, {
+            files: files.length,
+            additions: sum((f) => f.additions),
+            deletions: sum((f) => f.deletions),
+          });
+        }
+      } catch (error) {
+        logger.log('info', 'change line counts unavailable', {
+          runId: live.state.run.id,
+          agentRunId: row.agentRunId,
+          ...errorFields(error),
+        });
+      }
+    }
+    return out;
+  }
 
   function track<T>(promise: Promise<T>): void {
     const p = promise.catch((error: unknown) => {
@@ -705,6 +875,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // publishes the ticket notice.
           logger.log('info', 'review comment stored', { runId, agentRunId: effect.agentRunId });
           break;
+        case 'agent-note':
+          // ADR-0026 §3: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'agent note stored', { runId, agentRunId: effect.agentRunId });
+          break;
         case 'start-follow-up':
           startFollowUp(live, effect);
           break;
@@ -727,6 +901,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'discard-change':
           loop.discardChange(live, effect.agentRunId);
           break;
+        // ADR-0027 §5: Checks blocks, run by the check service, results back to the engine.
+        case 'run-change-checks':
+          loop.runChangeChecks(live, effect);
+          break;
+        case 'run-branch-checks':
+          loop.runBranchChecks(live);
+          break;
         case 'change-round':
         case 'change-comment':
           // Stored in the same transaction as the state (RunStore.commit); no text is logged.
@@ -734,6 +915,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           break;
         case 'remove-review-checkout':
           removeReviewCheckout(live, effect.agentRunId);
+          break;
+        case 'handover-summary':
+          // ADR-0024 §3: composed from the records once this transition is committed.
+          summaries.schedule(live, { kind: 'handover', note: effect.note });
           break;
         case 'plan-submitted':
         case 'plan-decided':
@@ -788,6 +973,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (status !== prev.run.status) {
       logger.log('info', 'run status changed', { runId: live.state.run.id, status });
     }
+    // ADR-0024 §3: a facts-only summary when a run ends without a handover (or a legacy run
+    // reaches review). The handover's own comes from its effect.
+    const ended = endTrigger(prev, live.state);
+    if (ended !== null) summaries.schedule(live, ended);
     const before = new Map(prev.agents.map((a) => [a.id, a]));
     for (const agent of live.state.agents) {
       const was = before.get(agent.id);
@@ -900,12 +1089,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return;
     }
     const kind = effect.kind;
-    const base = { agentRunId, kind, prompt: effect.prompt, model: effect.model };
+    const base = {
+      agentRunId,
+      kind,
+      prompt: kind === 'lead' ? withTicketSummary(live, effect.prompt) : effect.prompt,
+      model: effect.model,
+    };
     if (kind === 'lead' || kind === 'planner') {
       if (
         hooks.agentSetup === undefined &&
         effect.skills === undefined &&
-        effect.agent === undefined
+        effect.agent === undefined &&
+        ticketAttachments(live).length === 0
       ) {
         launch(live, { ...base, cwd: project.rootPath, setup: NO_SETUP });
         return;
@@ -916,9 +1111,27 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
+          // ADR-0026 §4: the lead's and planner's copies are outside the owner's checkout (the
+          // run's folder), readable without asking (`readOnlyDirs`).
+          const copies = await withAttachments(
+            live,
+            agentRunId,
+            kind,
+            project.rootPath,
+            project.rootPath,
+            base.prompt,
+          );
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
-          launch(live, { ...base, cwd: project.rootPath, setup, plugin, agentFile });
+          launch(live, {
+            ...base,
+            prompt: copies.prompt,
+            readOnlyDirs: copies.readOnlyDirs,
+            cwd: project.rootPath,
+            setup,
+            plugin,
+            agentFile,
+          });
         })(),
       );
       return;
@@ -938,10 +1151,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const setup = await setupFor(live);
           const plugin = await pluginFor(live, project.rootPath, effect);
           const agentFile = await agentFileFor(live, project.rootPath, effect);
-          const prompt =
+          const brief =
             effect.reviewScope === 'change'
               ? await changeReviewerPrompt(live, agentRunId, effect.prompt)
               : effect.prompt;
+          const { prompt } = await withAttachments(
+            live,
+            agentRunId,
+            kind,
+            checkout.cwd,
+            project.rootPath,
+            brief,
+          );
           live.starting.delete(agentRunId);
           if (!stillStarting(live, agentRunId)) return;
           launch(live, {
@@ -1018,11 +1239,53 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           return;
         }
         live.workspaces.set(agentRunId, ws);
+        // ADR-0027 §1: the project's setup runs in the new worktree before the agent starts.
+        let briefLines: string[] = [];
+        if (hooks.setupWorktree !== undefined) {
+          const prepared = await hooks
+            .setupWorktree({
+              runId,
+              agentRunId,
+              projectId: project.id,
+              cwd: ws.cwd,
+              commit: ws.baseCommit,
+            })
+            .catch((error: unknown): WorktreeSetup => {
+              logger.log('warn', 'worktree setup failed', {
+                runId,
+                agentRunId,
+                ...errorFields(error),
+              });
+              return { ok: false, reason: 'The project setup could not run.' };
+            });
+          if (!prepared.ok) {
+            live.starting.delete(agentRunId);
+            live.pendingSends.delete(agentRunId);
+            const role = live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'A helper';
+            logger.log('info', 'agent not started: setup did not pass', { runId, agentRunId });
+            defer(() => {
+              const failure = {
+                reason: prepared.reason,
+                ...(prepared.outputTail !== undefined && { outputTail: prepared.outputTail }),
+              };
+              const applied = apply(live, (s, c) => agentSetupFailed(s, agentRunId, failure, c));
+              // The ticket says why too (app data: the step's name and how it ended).
+              if (applied.ok) appComment(live, `${role} did not start: ${prepared.reason}`);
+              maybeCompleteCancellation(live);
+            });
+            return;
+          }
+          briefLines = setupBriefLines(prepared);
+        }
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, project.rootPath, effect);
         // From the owner's checkout (`project.rootPath`), never the helper's own worktree.
         const agentFile = await agentFileFor(live, project.rootPath, effect);
-        const protection = await protectionFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId, ws);
+        const briefed = withBriefLines(prompt, briefLines);
+        const withCopies = (
+          await withAttachments(live, agentRunId, kind, ws.cwd, project.rootPath, briefed)
+        ).prompt;
         live.starting.delete(agentRunId);
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
@@ -1033,7 +1296,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         launch(live, {
           ...base,
-          prompt,
+          prompt: withCopies,
           cwd: ws.cwd,
           setup,
           plugin,
@@ -1043,6 +1306,80 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         });
       })(),
     );
+  }
+
+  /** The owner's attachments on the run's ticket (ADR-0026 §4); none for a run without one. */
+  function ticketAttachments(live: LiveRun): Attachment[] {
+    const ticketId = live.state.run.ticketId;
+    return ticketId === null ? [] : store.workspaceRepos.attachments.listForTicket(ticketId);
+  }
+
+  /**
+   * The run's folder of attachment copies (ADR-0026 §4), or one agent's folder in it: the lead
+   * and the planner each get their own.
+   */
+  function runAttachmentsDir(runId: string, agentRunId?: string): string {
+    const all = join(deps.dataDir, 'runs', runId, RUN_ATTACHMENTS_DIR);
+    return agentRunId === undefined ? all : join(all, agentRunId);
+  }
+
+  /**
+   * ADR-0026 §4: places read-only copies of the ticket's attachments for one agent (see
+   * `attachments/agent-copies.ts`) and adds their names and paths to its brief. Never inside the
+   * owner's checkout. The lead and the planner read the owner's checkout in place, so theirs go
+   * in the run's folder (one per agent), which they may read without asking (`readOnlyDirs`). A
+   * failure to copy never blocks the start: the brief simply has no attachments.
+   */
+  async function withAttachments(
+    live: LiveRun,
+    agentRunId: string,
+    kind: AgentRoleKind,
+    cwd: string,
+    projectRoot: string,
+    prompt: string,
+  ): Promise<{ prompt: string; readOnlyDirs?: string[] }> {
+    const list = ticketAttachments(live);
+    if (list.length === 0) return { prompt };
+    const inRunFolder = kind === 'lead' || kind === 'planner';
+    const dir = inRunFolder
+      ? runAttachmentsDir(live.state.run.id, agentRunId)
+      : join(cwd, AGENT_ATTACHMENTS_DIR);
+    if (isPathInside(projectRoot, dir)) return { prompt };
+    try {
+      const copies = await placeAgentCopies(attachmentFiles, list, dir, {
+        gitignore: !inRunFolder,
+      });
+      const brief = attachmentsBrief(copies);
+      if (brief === '') return { prompt };
+      return {
+        prompt: `${prompt}\n\n${brief}`,
+        ...(inRunFolder && { readOnlyDirs: [dir] }),
+      };
+    } catch (error) {
+      countDiagnostic('attachments-unavailable');
+      logger.log('warn', 'attachment copies failed', {
+        runId: live.state.run.id,
+        kind,
+        ...errorFields(error),
+      });
+      return { prompt };
+    }
+  }
+
+  /**
+   * ADR-0026 §2: a later run's lead starts with the ticket's latest summary from an earlier run,
+   * so the summary it hands over covers the whole ticket. Text the lead wrote for the ticket
+   * (capped at MAX_TICKET_SUMMARY_CHARS), never conversation.
+   */
+  function withTicketSummary(live: LiveRun, prompt: string): string {
+    const ticketId = live.state.run.ticketId;
+    if (ticketId === null) return prompt;
+    const earlier = store.workspaceRepos.comments
+      .listForTicket(ticketId)
+      .filter((c) => c.kind === 'ticket-summary' && c.runId !== live.state.run.id)
+      .at(-1);
+    if (earlier === undefined) return prompt;
+    return `${prompt}\n\n${TICKET_SUMMARY_SO_FAR}\n${earlier.body}`;
   }
 
   /**
@@ -1098,7 +1435,15 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, projectRoot, effect);
         const agentFile = await agentFileFor(live, projectRoot, effect);
-        const protection = await protectionFor(live, agentRunId);
+        const protection = await protectionFor(live, agentRunId, ws);
+        const { prompt } = await withAttachments(
+          live,
+          agentRunId,
+          effect.kind,
+          ws.cwd,
+          projectRoot,
+          effect.prompt,
+        );
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
@@ -1109,7 +1454,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         launch(live, {
           agentRunId,
           kind: effect.kind,
-          prompt: effect.prompt,
+          prompt,
           model: effect.model,
           cwd: ws.cwd,
           setup,
@@ -1365,13 +1710,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function protectionFor(
     live: LiveRun,
     agentRunId: string,
+    ws: Workspace,
   ): Promise<AgentProtection | null | undefined> {
     const agent = live.state.agents.find((a) => a.id === agentRunId);
     if (agent === undefined || !hasReviewableChange(agent.kind)) return undefined;
     const launch = agentLaunchMode(live.state, agent);
     if (!launch.sandbox) return undefined;
     try {
-      return { autoMode: launch.autoMode, paths: await fullAutoPaths.specFor(live.state.run.id) };
+      const paths = await fullAutoPaths.specFor(live.state.run.id);
+      // F-1: the repository's git folders stay unwritable for the sandboxed helper; without
+      // them the helper does not start (fail closed), as without its temp folder.
+      const gitDirs = await deps.workspaces.gitDirs(ws);
+      return { autoMode: launch.autoMode, paths: { ...paths, gitDirs } };
     } catch (error) {
       countDiagnostic('full-auto-unavailable');
       logger.log('warn', 'full auto sandbox folder failed', {
@@ -1385,9 +1735,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   function removeSkillsPlugin(runId: string): void {
     track(
-      skillsPlugins.remove(runId).catch((error: unknown) => {
-        logger.log('warn', 'skills plugin removal failed', { runId, ...errorFields(error) });
-      }),
+      // ADR-0026 §4: the lead's and planner's copies go with the run's other temporary files.
+      rm(runAttachmentsDir(runId), { recursive: true, force: true })
+        .then(() => skillsPlugins.remove(runId))
+        .catch((error: unknown) => {
+          logger.log('warn', 'skills plugin removal failed', { runId, ...errorFields(error) });
+        }),
     );
   }
 
@@ -1474,6 +1827,30 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     return live.setup;
   }
 
+  /** The run's ticket key (`WEB-12`), or null for a run without a ticket. */
+  function ticketKeyOf(state: RunState): string | null {
+    if (state.integration !== undefined) return state.integration.ticketKey;
+    const ticketId = state.run.ticketId;
+    if (ticketId === null) return null;
+    return store.workspaceRepos.tickets.getById(ticketId)?.key ?? null;
+  }
+
+  /** ADR-0024 §1: the session title of an agent the app starts. */
+  function sessionTitle(live: LiveRun, agentRunId: string): string | undefined {
+    try {
+      return agentName({ state: live.state, agentRunId, ticketKey: ticketKeyOf(live.state) })
+        ?.title;
+    } catch (error) {
+      // A name is never worth a failed start: Claude Code titles the session as before.
+      logger.log('warn', 'session title unavailable', {
+        runId: live.state.run.id,
+        agentRunId,
+        ...errorFields(error),
+      });
+      return undefined;
+    }
+  }
+
   function launch(live: LiveRun, input: LaunchInput): void {
     const runId = live.state.run.id;
     const { agentRunId, kind, setup } = input;
@@ -1496,10 +1873,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
-    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers) {
+    // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
+    const title = sessionTitle(live, agentRunId);
+    if (title !== undefined) spec.title = title;
+    // ADR-0026 §3: a ticket run's helpers and tester report their work (`report_work`).
+    const notes = (kind === 'worker' || kind === 'tester') && live.state.run.ticketId !== null;
+    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers || notes) {
       // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
       // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
-      // to its own children, the planner's to submit_plan, the reviewer's to post_review.
+      // to its own children, the planner's to submit_plan, the reviewer's to post_review, a
+      // helper's or tester's to report_work.
       spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
     }
     // A rework turn never starts helpers (ADR-0021 §3).
@@ -1508,13 +1891,21 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     if (input.rework !== undefined) spec.rework = { ...input.rework };
     if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
+    if (input.readOnlyDirs !== undefined) spec.readOnlyDirs = input.readOnlyDirs;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
     if (input.agentFile !== undefined) spec.profile = input.agentFile.profile;
     // ADR-0022, ADR-0023 §5: only helpers and the tester are protected; the adapter ignores it
     // for others. Full auto (auto mode plus the sandbox) or the sandbox alone, never both.
     const protection = input.protection;
     if (protection !== undefined && hasReviewableChange(kind)) {
-      const paths = { tempDir: protection.paths.tempDir, denyRead: [...protection.paths.denyRead] };
+      const paths: FullAutoSpec = {
+        tempDir: protection.paths.tempDir,
+        denyRead: [...protection.paths.denyRead],
+        // F-1: the worktree's git folders, which sandboxed commands may not write.
+        ...(protection.paths.gitDirs !== undefined && {
+          gitDirs: [...protection.paths.gitDirs],
+        }),
+      };
       if (protection.autoMode) spec.fullAuto = paths;
       else spec.sandbox = paths;
     }
@@ -1860,6 +2251,37 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     );
   }
 
+  /**
+   * ADR-0026 §5: a change whose worktree was removed (merged or discarded), from its recorded
+   * commits: the worktree's start (`baseCommit`) to its sealed head. Empty when either is not
+   * recorded or git no longer has it. Computed per request, never stored.
+   */
+  async function recordedChange(
+    live: LiveRun,
+    row: WorkspaceRow,
+  ): Promise<{
+    files: ReviewDto['agents'][number]['files'];
+    diff: string;
+    diffTruncated: boolean;
+  }> {
+    const none = { files: [], diff: '', diffTruncated: false };
+    const head = store.loopRepos.workspaceChanges.getByAgentRun(row.agentRunId)?.headCommit ?? null;
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    if (head === null || row.baseCommit === null || project === undefined) return none;
+    try {
+      const changes = await deps.workspaces.diffCommits(project.rootPath, row.baseCommit, head);
+      return changes ?? none;
+    } catch (error) {
+      if (!(error instanceof WorkspaceError)) throw error;
+      logger.log('warn', 'recorded change unavailable', {
+        runId: live.state.run.id,
+        agentRunId: row.agentRunId,
+        code: error.code,
+      });
+      return none;
+    }
+  }
+
   async function review(runId: string): Promise<ReviewDto> {
     const live = get(runId);
     const agents: ReviewDto['agents'] = [];
@@ -1881,7 +2303,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         state,
       };
       if (row.state === 'removed') {
-        agents.push({ ...base, files: [], diff: '', diffTruncated: false });
+        // ADR-0026 §5: a decided change's worktree is gone; its files come from the recorded
+        // commits while git has them (empty otherwise, and for runs before the review loop).
+        agents.push({ ...base, ...(await recordedChange(live, row)) });
         continue;
       }
       try {
@@ -2010,6 +2434,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       store.commit(state, result.state, []);
       live.state = result.state;
       live.cancellingSince = null;
+      // A run that was being stopped finishes stopping here (ADR-0013 §7): its facts-only
+      // summary, unless it already has one (`endTrigger` is null for NEEDS_REVIEW).
+      const ended = endTrigger(state, result.state);
+      if (ended !== null) summaries.schedule(live, ended);
       logger.log('info', 'run recovered after restart', {
         runId: run.id,
         status: result.state.run.status,
@@ -2021,6 +2449,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   return {
     enabled: deps.enabled,
     csrfToken,
+    attachmentFiles,
 
     async start() {
       // No agent survives a restart: reviewers' checkouts and skills plugins are temporary
@@ -2378,13 +2807,30 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
               runId,
               author: 'owner',
               body: text.slice(0, 8000),
+              kind: 'comment',
             });
           } catch (error) {
             logger.log('error', 'owner comment not stored', { runId, ...errorFields(error) });
           }
         },
+        // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
+        appComment: (text) => appComment(live, text),
       });
       return loop.ticketBranchReview(live);
+    },
+
+    async resetTicketBranch(runId, body) {
+      const live = get(runId);
+      await loop.resetTicketBranch(live, body);
+      return loop.ticketBranchReview(live);
+    },
+
+    openPullRequest(runId, body, ticket) {
+      return loop.openPullRequest(get(runId), body, ticket);
+    },
+
+    refreshPullRequest(runId) {
+      return loop.refreshPullRequest(get(runId));
     },
 
     decidePlan(runId, planId, decision, comment) {

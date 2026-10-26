@@ -59,8 +59,13 @@ describe('lead tools', () => {
         'discard_change',
         'ask_owner',
         'submit_review',
+        // ADR-0026: the helper's and tester's note
+        'report_work',
       ].sort(),
     );
+    expect(LeadToolInputs.report_work.safeParse({ note: 'Added the switch.' }).success).toBe(true);
+    expect(LeadToolInputs.report_work.safeParse({ note: '   ' }).success).toBe(false);
+    expect(LeadToolInputs.report_work.safeParse({ note: 'x'.repeat(601) }).success).toBe(false);
     expect(
       LeadToolInputs.start_agent.safeParse({ role: 'API builder', task: 'Build it' }).success,
     ).toBe(true);

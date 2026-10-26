@@ -2,10 +2,14 @@ import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import {
+  checkGitArgv,
   HarnessCheckSchema,
+  HarnessSetupStepSchema,
   type CheckRun,
   type CheckRunStatus,
   type HarnessCheck,
+  type HarnessSetupStep,
+  type SetupRun,
 } from '@acp/core';
 import { managedAgentEnv } from '../control/env.js';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
@@ -28,6 +32,10 @@ import { realDirectory, resolveInside } from './paths.js';
  * - One check at a time: a runner serialises every `run` call, across runs and projects.
  * - The environment is the server's without `ACP_*` and `GIT_*` (same filter as managed agents).
  * - Only the last 16 KiB of output is kept, redacted (`OutputTail`).
+ *
+ * Setup steps (ADR-0027 §1) run with exactly the same policy and through the same queue: in order,
+ * the first that does not pass stops the rest, and a step that declares `network: true` is
+ * refused (never started) unless the project's "Setup may use the network" switch is on.
  */
 
 /** The spawn options the runner uses; tests assert `shell: false`. */
@@ -73,10 +81,44 @@ export interface RunChecksInput {
   onResult?: (result: CheckRun) => void;
 }
 
+export interface RunSetupInput {
+  /** Absolute path of the worktree or checkout to prepare (manifest paths are relative to it). */
+  root: string;
+  steps: readonly HarnessSetupStep[];
+  /** ADR-0027 §2: the project's `setupNetwork` switch; off refuses a step with `network: true`. */
+  networkAllowed: boolean;
+  projectId: string;
+  runId: string | null;
+  agentRunId: string | null;
+  /** The commit the worktree or checkout is at, recorded with each step. */
+  commit: string | null;
+  signal?: AbortSignal;
+  onResult?: (result: SetupRun) => void;
+}
+
 export interface CheckRunner {
   /** Runs `checks` in order and resolves with one `CheckRun` per check. Never rejects for a check. */
   run(input: RunChecksInput): Promise<CheckRun[]>;
+  /**
+   * ADR-0027 §1: runs the setup steps in order until one does not pass (failed, timed out,
+   * errored, refused, interrupted) and resolves with one `SetupRun` per step that was tried.
+   * Never rejects for a step.
+   */
+  runSetup(input: RunSetupInput): Promise<SetupRun[]>;
 }
+
+/** The plain reason a network step was not run (ADR-0027 §2). */
+export const NETWORK_REFUSED_NOTE =
+  'Not run: this step uses the network, and the project setting "Setup may use the network" is off.';
+
+/**
+ * F-2: a check or setup step that is branch-managing git or gh (core's `checkGitArgv`, F-1's
+ * command guard) is never started: a check is recorded `error`, a setup step `refused`.
+ */
+export const BRANCH_CHECK_NOTE =
+  'Not run: this check changes branches; the app owns branches and commits.';
+export const BRANCH_SETUP_NOTE =
+  'Not run: this setup step changes branches; the app owns branches and commits.';
 
 /**
  * The abort reason the check service passes when the app shuts down (WG-F3). Checks it stops are
@@ -145,27 +187,36 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
     return results;
   }
 
-  async function runOne(
-    check: HarnessCheck,
+  type Outcome = Pick<CheckRun, 'exitCode' | 'durationMs' | 'outputTail'> & {
+    status: 'passed' | 'failed' | 'timed-out' | 'error' | 'interrupted';
+  };
+
+  const done = (
+    status: Outcome['status'],
+    exitCode: number | null,
+    durationMs: number,
+    note: string,
+  ): Outcome => ({ status, exitCode, durationMs, outputTail: new OutputTail().finish([note]) });
+
+  /** One command with the ADR-0017 §3 policy (checks and setup steps alike). */
+  async function runCommand(
+    spec: { argv: readonly string[]; cwd?: string | undefined; timeoutSec: number },
     root: string,
     env: Record<string, string>,
-    base: Omit<CheckRun, 'status' | 'exitCode' | 'durationMs' | 'outputTail'>,
     signal: AbortSignal | undefined,
-  ): Promise<CheckRun> {
-    // Defence in depth: the manifest was validated when read, but the runner never trusts that.
-    const valid = HarnessCheckSchema.safeParse(check);
-    const argv0 = check.argv[0];
-    if (!valid.success || argv0 === undefined || !BARE_COMMAND.test(argv0)) {
-      return finished(base, 'error', null, 0, 'This check is not valid and was not run.');
+    what: string,
+  ): Promise<Outcome> {
+    const argv0 = spec.argv[0];
+    if (argv0 === undefined || !BARE_COMMAND.test(argv0)) {
+      return done('error', null, 0, `This ${what} is not valid and was not run.`);
     }
-    const cwd = await resolveInside(root, check.cwd ?? '.');
+    const cwd = await resolveInside(root, spec.cwd ?? '.');
     if (cwd === null || !(await isDirectory(cwd))) {
-      return finished(
-        base,
+      return done(
         'error',
         null,
         0,
-        `The check's folder (${check.cwd ?? '.'}) does not exist inside the checkout.`,
+        `The ${what}'s folder (${spec.cwd ?? '.'}) does not exist inside the checkout.`,
       );
     }
 
@@ -173,7 +224,7 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
     const tail = new OutputTail();
     let child: ChildProcess;
     try {
-      child = spawn(argv0, check.argv.slice(1), {
+      child = spawn(argv0, spec.argv.slice(1), {
         cwd,
         env,
         shell: false,
@@ -183,10 +234,10 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
       });
     } catch (error) {
       logger.log('warn', 'harness.check_spawn_failed', errorFields(error));
-      return finished(base, 'error', null, 0, `The command '${argv0}' could not be started.`);
+      return done('error', null, 0, `The command '${argv0}' could not be started.`);
     }
 
-    return new Promise<CheckRun>((resolve) => {
+    return new Promise<Outcome>((resolve) => {
       let settled = false;
       let stoppedBy: 'timeout' | 'abort' | null = null;
       let spawnError: (Error & { code?: unknown }) | null = null;
@@ -201,7 +252,7 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
         child.stderr?.destroy();
         const durationMs = Math.max(0, Math.round(performance.now() - started));
         const notes: string[] = [];
-        let status: CheckRunStatus;
+        let status: Outcome['status'];
         let exitCode: number | null = null;
         if (spawnError !== null) {
           status = 'error';
@@ -212,7 +263,7 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
           );
         } else if (stoppedBy === 'timeout') {
           status = 'timed-out';
-          notes.push(`Stopped after ${check.timeoutSec} s: the time limit was reached.`);
+          notes.push(`Stopped after ${spec.timeoutSec} s: the time limit was reached.`);
         } else if (stoppedBy === 'abort' && byShutdown(signal)) {
           status = 'interrupted';
           notes.push('Stopped when the app stopped, so there is no result. It runs again.');
@@ -227,13 +278,13 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
           exitCode = code;
           if (code === null && sig !== null) notes.push(`The command was ended by signal ${sig}.`);
         }
-        resolve({ ...base, status, exitCode, durationMs, outputTail: tail.finish(notes) });
+        resolve({ status, exitCode, durationMs, outputTail: tail.finish(notes) });
       };
 
       const kill = (sig: NodeJS.Signals): void => {
         const pid = child.pid;
         try {
-          // A negative pid signals the whole process group the check leads (detached above).
+          // A negative pid signals the whole process group the command leads (detached above).
           if (posix && pid !== undefined) process.kill(-pid, sig);
           else child.kill(sig);
         } catch {
@@ -264,7 +315,7 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
         }
       });
       child.on('close', (code, sig) => settle(code, sig));
-      timers.push(setTimeout(() => stop('timeout'), check.timeoutSec * 1000));
+      timers.push(setTimeout(() => stop('timeout'), spec.timeoutSec * 1000));
       if (signal !== undefined) {
         if (signal.aborted) stop('abort');
         else signal.addEventListener('abort', onAbort, { once: true });
@@ -272,10 +323,91 @@ export function createCheckRunner(deps: CheckRunnerDeps = {}): CheckRunner {
     });
   }
 
+  async function runOne(
+    check: HarnessCheck,
+    root: string,
+    env: Record<string, string>,
+    base: Omit<CheckRun, 'status' | 'exitCode' | 'durationMs' | 'outputTail'>,
+    signal: AbortSignal | undefined,
+  ): Promise<CheckRun> {
+    // Defence in depth: the manifest was validated when read, but the runner never trusts that.
+    if (!HarnessCheckSchema.safeParse(check).success) {
+      return finished(base, 'error', null, 0, 'This check is not valid and was not run.');
+    }
+    // F-2: never started, wherever it runs (a worktree, a tip checkout, the main branch).
+    if (checkGitArgv(check.argv) !== null) {
+      return finished(base, 'error', null, 0, BRANCH_CHECK_NOTE);
+    }
+    return { ...base, ...(await runCommand(check, root, env, signal, 'check')) };
+  }
+
+  async function setupAll(input: RunSetupInput): Promise<SetupRun[]> {
+    const results: SetupRun[] = [];
+    let root: string | null;
+    try {
+      root = await realDirectory(input.root);
+    } catch {
+      root = null;
+    }
+    const env = managedAgentEnv(deps.env ?? process.env);
+    for (const step of input.steps) {
+      const base = {
+        id: newId(),
+        projectId: input.projectId,
+        runId: input.runId,
+        agentRunId: input.agentRunId,
+        stepId: step.id,
+        name: step.name,
+        startedAt: now().toISOString(),
+        commit: input.commit,
+      };
+      let outcome: Omit<SetupRun, keyof typeof base>;
+      if (input.signal?.aborted === true) {
+        outcome = byShutdown(input.signal)
+          ? done('interrupted', null, 0, 'Not run: the app stopped.')
+          : done('error', null, 0, 'Not run: the run was stopped.');
+      } else if (root === null) {
+        outcome = done('error', null, 0, 'The checkout to prepare does not exist.');
+      } else if (!HarnessSetupStepSchema.safeParse(step).success) {
+        outcome = done('error', null, 0, 'This setup step is not valid and was not run.');
+      } else if (checkGitArgv(step.argv) !== null) {
+        // F-2: never started; like any refusal, it stops the rest of the setup.
+        outcome = {
+          status: 'refused',
+          exitCode: null,
+          durationMs: 0,
+          outputTail: new OutputTail().finish([BRANCH_SETUP_NOTE]),
+        };
+      } else if (step.network === true && !input.networkAllowed) {
+        // ADR-0027 §2: never started, so nothing reached the network.
+        outcome = {
+          status: 'refused',
+          exitCode: null,
+          durationMs: 0,
+          outputTail: new OutputTail().finish([NETWORK_REFUSED_NOTE]),
+        };
+      } else {
+        outcome = await runCommand(step, root, env, input.signal, 'setup step');
+      }
+      const result: SetupRun = { ...base, ...outcome };
+      results.push(result);
+      input.onResult?.(result);
+      // The first step that does not pass stops the setup (ADR-0027 §1).
+      if (result.status !== 'passed') break;
+    }
+    return results;
+  }
+
   return {
     run(input) {
       const next = queue.then(() => runAll(input));
       // The queue continues whatever happens to one call.
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    runSetup(input) {
+      // The same queue as checks: one command at a time across runs and projects.
+      const next = queue.then(() => setupAll(input));
       queue = next.catch(() => undefined);
       return next;
     },
@@ -290,6 +422,59 @@ function finished(
   note: string,
 ): CheckRun {
   return { ...base, status, exitCode, durationMs, outputTail: new OutputTail().finish([note]) };
+}
+
+/**
+ * ADR-0027 §1: the checks of a checkout whose setup did not pass, recorded as not run (`skipped`,
+ * which never counts as a pass) with a plain note saying why. When the app stopped during the
+ * setup they are `interrupted` instead (WG-F3: no result, so the merge gates run them again).
+ */
+export function checksNotRun(
+  input: Pick<RunChecksInput, 'checks' | 'projectId' | 'runId' | 'agentRunId'>,
+  failedStep: Pick<SetupRun, 'name' | 'status' | 'exitCode'> &
+    Partial<Pick<SetupRun, 'outputTail'>>,
+  now: () => Date = () => new Date(),
+  newId: () => string = randomUUID,
+): CheckRun[] {
+  const status = failedStep.status === 'interrupted' ? 'interrupted' : 'skipped';
+  const note = `Not run: ${setupFailureNote(failedStep)}`;
+  return input.checks.map((check) =>
+    finished(
+      {
+        id: newId(),
+        runId: input.runId,
+        agentRunId: input.agentRunId,
+        projectId: input.projectId,
+        checkId: check.id,
+        name: check.name,
+        required: check.required,
+        startedAt: now().toISOString(),
+      },
+      status,
+      null,
+      0,
+      note,
+    ),
+  );
+}
+
+/** The plain sentence for a setup step that did not pass (the ticket, the lead, skipped checks). */
+export function setupFailureNote(
+  failed: Pick<SetupRun, 'name' | 'status' | 'exitCode'> & Partial<Pick<SetupRun, 'outputTail'>>,
+): string {
+  const how =
+    failed.status === 'refused'
+      ? failed.outputTail?.includes(BRANCH_SETUP_NOTE) === true
+        ? 'was not run: it changes branches, and the app owns branches and commits'
+        : 'was not run: it uses the network, and "Setup may use the network" is off'
+      : failed.status === 'timed-out'
+        ? 'timed out'
+        : failed.status === 'failed'
+          ? `failed${failed.exitCode === null ? '' : ` (exit ${failed.exitCode})`}`
+          : failed.status === 'interrupted'
+            ? 'was interrupted'
+            : 'could not run';
+  return `Setup step '${failed.name}' ${how}.`;
 }
 
 async function isDirectory(path: string): Promise<boolean> {

@@ -121,7 +121,7 @@ export function ProjectDefaults({
           ) : null}
         </div>
       </div>
-      <div className="-mx-5 mt-6 -mb-5 flex flex-col gap-3 rounded-b-card border-t border-line bg-sunken/40 px-5 py-3">
+      <div className="-mx-4 mt-6 -mb-4 flex flex-col gap-3 rounded-b-card border-t border-line bg-subtle px-4 py-3">
         {save.error ? (
           <div className="flex flex-col gap-1.5" data-testid="defaults-refusal">
             <p

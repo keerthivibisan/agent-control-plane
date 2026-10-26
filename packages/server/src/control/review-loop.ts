@@ -1,9 +1,20 @@
-import type { ReviewActionRequestSchema, TicketBranchReviewDto } from '@acp/core/api';
-import { TicketBranchActionRequestSchema } from '@acp/core/api';
-import type { WorkspaceRow } from '@acp/db';
+import type {
+  ReviewActionRequestSchema,
+  TicketBranchDto,
+  TicketBranchReviewDto,
+} from '@acp/core/api';
 import {
+  OpenPullRequestRequestSchema,
+  ResetTicketBranchRequestSchema,
+  TicketBranchActionRequestSchema,
+} from '@acp/core/api';
+import type { CheckRun } from '@acp/core';
+import type { TicketBranchRow, WorkspaceRow } from '@acp/db';
+import {
+  CHECK_FAILURE_TAIL_MAX_BYTES,
   beginChangeMerge,
   cancelRun,
+  changeChecksFinished,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -12,20 +23,46 @@ import {
   recordChangeDecision,
   recordTicketBranchDecision,
   requestTicketChanges,
+  programOf,
   ticketBranchCreated,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
+  type FailedCheck,
   type MergeBlocked,
   type Refusal,
   type RunState,
+  type SealFailure,
 } from '@acp/orchestrator';
 import type { z } from 'zod';
+import {
+  CodeHostError,
+  codeHostHttpError,
+  withPresence,
+  type CodeHostService,
+} from '../code-host/index.js';
 import { HttpError } from '../errors.js';
+import { branchSpec, changeSpec, mergeSpec, type CheckSpec } from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
-import { WorkspaceError, type Workspace, type WorkspaceManager } from '../workspace/index.js';
+import {
+  WorkspaceError,
+  legacyTicketBranchPlan,
+  strategyProtectedNames,
+  ticketBranchPlan,
+  type TicketBranchPlan,
+  type TicketBranchRef,
+  type Workspace,
+  type WorkspaceManager,
+} from '../workspace/index.js';
 import { refusalError, workspaceError } from './errors.js';
 import { toTicketBranchDto } from './review-loop-dto.js';
+import {
+  isRunSummaryComment,
+  mergeLine,
+  pullRequestMergeLine,
+  pullRequestOpenedLine,
+  tally,
+} from './run-summary.js';
 import type { RunStore } from './store.js';
 
 /**
@@ -34,7 +71,9 @@ import type { RunStore } from './store.js';
  *
  * - `seal-change`: commit the helper's worktree, then `changeSealed`; the sealed commit's checks
  *   start at once;
- * - `create-ticket-branch`: `acp/<KEY>` (or `-r<n>`) at plan approval, then `ticketBranchCreated`;
+ * - `create-ticket-branch`: at plan approval, named by the ticket or the project's branching
+ *   strategy (`acp/<KEY>` without one; `-r<n>` when taken) and created from its target branch
+ *   (ADR-0025), then `ticketBranchCreated`;
  * - `merge-change`: seal → integrate with the ticket tip (no difference: no-changes; a conflict:
  *   refused with the file names) → the required checks on that commit (or start them) → advance
  *   the ticket branch by compare-and-swap → `recordChangeDecision`, and release the worktree;
@@ -65,12 +104,17 @@ export interface LoopLive {
 
 type Applied<T> = { ok: true; value: T } | { ok: false; refusal: Refusal };
 
-/** The commit-checks hooks (the board's check service, ADR-0021 checks per commit). */
+/**
+ * The commit-checks hooks (the board's check service, ADR-0021 checks per commit). `spec`
+ * (ADR-0027 §5) says which checks run and gate at that place; absent, the merge block's for a
+ * change and the ticket branch's for the tip.
+ */
 export interface CommitChecksHooks {
   gate(
     runId: string,
     agentRunId: string | null,
     commit: string,
+    spec?: CheckSpec,
   ): Promise<{
     passed: boolean;
     failedRequired: readonly string[];
@@ -85,7 +129,10 @@ export interface CommitChecksHooks {
       commit: string;
       requiredPassed: boolean;
       failed: readonly string[];
+      results?: readonly CheckRun[];
     }) => void,
+    spec?: CheckSpec,
+    options?: { skipPassed?: boolean },
   ): void;
 }
 
@@ -100,6 +147,12 @@ export interface ReviewLoopContext {
     command: (state: RunState, c: EngineContext) => EngineResult<T>,
   ): Applied<T>;
   workspaceFor(live: LoopLive, row: WorkspaceRow): Promise<Workspace>;
+  /** ADR-0024 §3 style app comment on the run's ticket (app data only); absent in some tests. */
+  appComment?: (live: LoopLive, text: string) => void;
+  /** ADR-0025: pushes and pull requests; absent where the server has none (some tests). */
+  codeHost?: CodeHostService;
+  /** Tells the clients the run's ticket branch changed without an engine transition. */
+  notify?: (live: LoopLive) => void;
   /** Awaited before a worktree goes, so its transcript is ingested first. */
   flushIngestion?: () => Promise<void>;
   track(promise: Promise<unknown>): void;
@@ -117,8 +170,38 @@ const BLOCKED_HTTP: Readonly<Record<MergeBlocked['reason'], [number, string]>> =
   'merge-conflict': [409, 'merge_conflict'],
   'checks-pending': [409, 'checks_running'],
   'checks-failed': [409, 'checks_failed'],
+  'ticket-branch-moved': [409, 'ticket_branch_moved'],
+  'ticket-branch-checked-out': [409, 'ticket_branch_checked_out'],
   failed: [409, 'merge_failed'],
 };
+
+/**
+ * F-2: what the owner reads when their merge of a change could not succeed now. The engine's reply
+ * is written for the lead ("do not try the merge again").
+ */
+const OWNER_BLOCKED: Partial<Record<MergeBlocked['reason'], string>> = {
+  'ticket-branch-moved':
+    'The ticket branch was changed outside the app, so nothing can be merged into it. Reset it to the last reviewed commit first, or discard it.',
+  'ticket-branch-checked-out':
+    'The ticket branch is checked out in another folder, so nothing can be merged into it. Switch that folder to another branch first.',
+};
+
+/** F-1: the ticket comment when a helper's folder left its branch (after the role's name). */
+export const HELPER_BRANCH_CHANGED =
+  'The helper switched its folder to another branch, so its work could not be saved. The lead can discard it and start a fresh helper.';
+
+/** F-1: the ticket's app line after the owner reset the ticket branch (app data only). */
+export function resetLine(branch: string, recorded: string, from: string): string {
+  return `${branch} was reset to ${recorded.slice(0, 7)}, the last reviewed commit, by the owner. It had been changed outside the app (it was at ${from.slice(0, 7)}).`;
+}
+
+/** The ticket comment when the ticket branch could not be made (the run is stopped). */
+export function ticketBranchFailed(error: WorkspaceError): string {
+  return `The ticket branch was not created, so the run was stopped: ${error.message}.`.replace(
+    /\.\.$/,
+    '.',
+  );
+}
 
 function codeOf(error: unknown): string {
   return error instanceof WorkspaceError ? error.code : errorFields(error).errorName;
@@ -132,6 +215,31 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     const root = ctx.projectRoot(live.state.run.projectId);
     if (root === undefined) throw new WorkspaceError('not-a-git-repo', 'The project is gone');
     return root;
+  }
+
+  /**
+   * ADR-0025: the ticket branch's name, target and source (§10) from the ticket's own settings
+   * and the project's strategy, read now (at plan approval). A run without a ticket, or whose
+   * ticket is gone, keeps the legacy plan for its key.
+   */
+  function planFor(live: LoopLive, ticketKey: string): TicketBranchPlan {
+    const ticketId = live.state.run.ticketId;
+    const ticket = ticketId === null ? undefined : store.workspaceRepos.tickets.getById(ticketId);
+    if (ticket === undefined || ticket.key !== ticketKey) return legacyTicketBranchPlan(ticketKey);
+    const strategy = store.workspaceRepos.projectSetup.get(live.state.run.projectId)?.branching;
+    const branch = loop.ticketBranchPrefs.get(ticket.id);
+    return ticketBranchPlan(strategy, { ...ticket, ...(branch !== undefined && { branch }) });
+  }
+
+  /** The recorded ticket branch as the manager's ref, with the project's long-lived names. */
+  function refOf(live: LoopLive, row: TicketBranchRow): TicketBranchRef {
+    const strategy = store.workspaceRepos.projectSetup.get(live.state.run.projectId)?.branching;
+    return {
+      projectRoot: projectRootOf(live),
+      branch: row.branch,
+      baseBranch: row.baseBranch,
+      protectedNames: strategyProtectedNames(strategy),
+    };
   }
 
   function roleOf(live: LoopLive, agentRunId: string): string | undefined {
@@ -165,34 +273,187 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     }
   }
 
-  /** Starts the required checks on `commit`; only the latest started commit's result reports. */
-  function startChecks(live: LoopLive, agentRunId: string | null, commit: string): void {
+  /** The run's compiled program, or null (a stored graph the validator refuses: old defaults). */
+  function programFor(live: LoopLive) {
+    try {
+      return programOf(live.state);
+    } catch {
+      return null;
+    }
+  }
+
+  /** ADR-0027 §5: the merge block's checks (`merge_change`, and the early run on a seal). */
+  function mergeChecks(live: LoopLive): CheckSpec {
+    return mergeSpec(programFor(live));
+  }
+
+  /** ADR-0027 §5: the ticket branch's checks (the owner's merge, the branch block). */
+  function branchChecks(live: LoopLive): CheckSpec {
+    return branchSpec(programFor(live));
+  }
+
+  /**
+   * Starts the merge block's checks on `commit` (the ticket branch's for the tip); only the
+   * latest started commit's result reports.
+   */
+  function startChecks(
+    live: LoopLive,
+    agentRunId: string | null,
+    commit: string,
+    options: { skipPassed?: boolean } = {},
+  ): void {
     const checks = ctx.commitChecks();
     if (checks === undefined) return;
     const runId = live.state.run.id;
     if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
-    checks.start(runId, agentRunId, commit, (result) => {
-      if (agentRunId === null) return; // the ticket tip: the owner sees it with the branch
-      if (live.checkTargets.get(agentRunId) !== commit) return; // superseded by a newer commit
-      live.checkTargets.delete(agentRunId);
-      const applied = ctx.apply(live, (s, c) => checksFinished(s, agentRunId, result, c));
+    const spec = agentRunId === null ? branchChecks(live) : mergeChecks(live);
+    checks.start(
+      runId,
+      agentRunId,
+      commit,
+      (result) => {
+        if (agentRunId === null) return; // the ticket tip: the owner sees it with the branch
+        if (live.checkTargets.get(agentRunId) !== commit) return; // superseded by a newer commit
+        live.checkTargets.delete(agentRunId);
+        const applied = ctx.apply(live, (s, c) =>
+          checksFinished(
+            s,
+            agentRunId,
+            { commit: result.commit, requiredPassed: result.requiredPassed, failed: result.failed },
+            c,
+          ),
+        );
+        if (!applied.ok) {
+          logger.log('info', 'checks result not recorded', {
+            runId,
+            agentRunId,
+            code: applied.refusal.code,
+          });
+        }
+      },
+      spec,
+      options,
+    );
+  }
+
+  /** The last `max` UTF-8 bytes of a check's (already redacted) output. */
+  function tailBytes(text: string, max: number): string {
+    const buf = Buffer.from(text, 'utf8');
+    if (buf.length <= max) return text;
+    // Skip continuation bytes so the cut never splits a character.
+    let start = buf.length - max;
+    while (start < buf.length && ((buf[start] ?? 0) & 0xc0) === 0x80) start++;
+    return buf.subarray(start).toString('utf8');
+  }
+
+  /**
+   * ADR-0027 §5, `run-change-checks`: the change's Checks block on its sealed commit, in the
+   * helper's worktree; the result (with each failing check's last 4 KiB) goes to the engine. A
+   * pass also starts the merge block's early run on that commit (checks that already passed on it
+   * are not run again), as a seal without a block does.
+   */
+  function runChangeChecks(
+    live: LoopLive,
+    effect: Extract<EngineEffect, { type: 'run-change-checks' }>,
+  ): void {
+    const runId = live.state.run.id;
+    const id = effect.agentRunId;
+    const report = (passed: boolean, failed: FailedCheck[]): void => {
+      const applied = ctx.apply(live, (s, c) =>
+        changeChecksFinished(s, id, { commit: effect.commit, passed, failed }, c),
+      );
       if (!applied.ok) {
-        logger.log('info', 'checks result not recorded', {
+        logger.log('info', 'change checks result not recorded', {
           runId,
-          agentRunId,
+          agentRunId: id,
           code: applied.refusal.code,
         });
+        return;
       }
-    });
+      logger.log('info', 'change checks finished', { runId, agentRunId: id, passed });
+      if (passed) startChecks(live, id, effect.commit, { skipPassed: true });
+    };
+    const checks = ctx.commitChecks();
+    if (checks === undefined) {
+      // Without a check service nothing can fail. Reported after this effect is carried out,
+      // never from inside the transition that asked for it.
+      ctx.track(Promise.resolve().then(() => report(true, [])));
+      return;
+    }
+    checks.start(
+      runId,
+      id,
+      effect.commit,
+      (result) => {
+        if (result.requiredPassed) {
+          report(true, []);
+          return;
+        }
+        const byName = new Map((result.results ?? []).map((r) => [r.name, r]));
+        const failed = result.failed.map((name): FailedCheck => {
+          const r = byName.get(name);
+          return r === undefined
+            ? { name, status: 'skipped', exitCode: null, outputTail: 'No result: it did not run.' }
+            : {
+                name,
+                status: r.status,
+                exitCode: r.exitCode,
+                outputTail: tailBytes(r.outputTail, CHECK_FAILURE_TAIL_MAX_BYTES),
+              };
+        });
+        report(false, failed);
+      },
+      changeSpec(effect.blockNodeId, effect.select),
+    );
+  }
+
+  /**
+   * ADR-0027 §5, `run-branch-checks`: the Checks block on the ticket branch, on its recorded tip
+   * (a fresh checkout, setup first). Nothing waits for it; the owner's merge gate reads it.
+   */
+  function runBranchChecks(live: LoopLive): void {
+    const row = loop.ticketBranches.getByRun(live.state.run.id);
+    if (row === undefined || row.state !== 'open') return;
+    startChecks(live, null, row.headCommit, { skipPassed: true });
   }
 
   // ------------------------------------------------------------------ effects
+
+  /**
+   * F-1: a helper's worktree left its own branch. Its HEAD is detached where it is (no ref moves),
+   * the ticket says why in plain words (app data only), and the change goes to the lead, who can
+   * discard it (`changeSealed` with `failure: 'branch-changed'`). Discarding removes the worktree
+   * and deletes only the helper's own branch.
+   */
+  async function branchChanged(live: LoopLive, agentRunId: string): Promise<void> {
+    const runId = live.state.run.id;
+    ctx.countDiagnostic('helper-branch-changed');
+    try {
+      const ws = await activeWorkspace(live, agentRunId);
+      if (ws !== null && (await ctx.workspaces.detachForeignBranch(ws))) {
+        logger.log('info', 'helper worktree detached from a foreign branch', { runId, agentRunId });
+      }
+    } catch (error) {
+      logger.log('warn', 'helper worktree not detached', {
+        runId,
+        agentRunId,
+        code: codeOf(error),
+      });
+    }
+    const role = roleOf(live, agentRunId) ?? 'A helper';
+    ctx.appComment?.(live, `${role}: ${HELPER_BRANCH_CHANGED}`);
+  }
 
   function sealChange(live: LoopLive, agentRunId: string): void {
     const runId = live.state.run.id;
     ctx.track(
       (async () => {
-        let result: { changed: boolean; headCommit: string | null; changedFiles: number | null };
+        let result: {
+          changed: boolean;
+          headCommit: string | null;
+          changedFiles: number | null;
+          failure?: SealFailure;
+        };
         try {
           const ws = await activeWorkspace(live, agentRunId);
           if (ws === null) {
@@ -213,9 +474,27 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
               : { changed: false, headCommit: null, changedFiles: 0 };
           }
         } catch (error) {
-          // The work is there but could not be committed: the owner looks at it.
           logger.log('warn', 'change seal failed', { runId, agentRunId, code: codeOf(error) });
-          result = { changed: true, headCommit: null, changedFiles: null };
+          if (error instanceof WorkspaceError && error.code === 'workspace-branch-changed') {
+            // F-1: the helper switched its folder to another branch. Nothing is committed; its
+            // folder is detached where it is, so it no longer holds that branch (no ref moves).
+            await branchChanged(live, agentRunId);
+            result = {
+              changed: true,
+              headCommit: null,
+              changedFiles: null,
+              failure: 'branch-changed',
+            };
+          } else {
+            // The work is there but could not be committed: the owner looks at it, and the lead
+            // may discard it (F-2). `invalid-workspace`: the folder is gone, or it committed files
+            // the app never saves (an attachment copy or a setup output).
+            const failure: SealFailure =
+              error instanceof WorkspaceError && error.code === 'invalid-workspace'
+                ? 'invalid-workspace'
+                : 'not-saved';
+            result = { changed: true, headCommit: null, changedFiles: null, failure };
+          }
         }
         const applied = ctx.apply(live, (s, c) => changeSealed(s, agentRunId, result, c));
         if (!applied.ok) {
@@ -233,7 +512,12 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
           files: result.changedFiles,
         });
         if (!result.changed) await release(live, agentRunId);
-        else if (result.headCommit !== null) startChecks(live, agentRunId, result.headCommit);
+        else if (result.headCommit !== null) {
+          // ADR-0027 §5: a change with a Checks block runs it first (`run-change-checks`); the
+          // merge block's early run follows its pass.
+          const change = live.state.agents.find((a) => a.id === agentRunId)?.change;
+          if (change?.blockChecks !== 'pending') startChecks(live, agentRunId, result.headCommit);
+        }
       })(),
     );
   }
@@ -254,7 +538,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         try {
           const created = await ctx.workspaces.createTicketBranch(
             projectRootOf(live),
-            ticketKey,
+            planFor(live, ticketKey),
             // An open ticket branch of another run keeps its name, even if git lost it.
             (name) => loop.ticketBranches.getOpenByBranch(name) !== undefined,
           );
@@ -265,6 +549,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
             baseBranch: created.baseBranch,
             baseCommit: created.baseCommit,
             headCommit: created.baseCommit,
+            // ADR-0025 §10: recorded only when the branch did not start from its target.
+            ...(created.sourceBranch !== undefined && { sourceBranch: created.sourceBranch }),
           });
           branch = created.branch;
         } catch (error) {
@@ -275,6 +561,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
             runId,
             code: codeOf(error),
           });
+          // ADR-0025: say why on the ticket (app data only: the workspace manager's message).
+          if (error instanceof WorkspaceError) ctx.appComment?.(live, ticketBranchFailed(error));
           ctx.apply(live, cancelRun);
           return false;
         }
@@ -321,7 +609,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       if (ws === null || branch === undefined || branch.state !== 'open') {
         return blocked({ reason: 'failed' });
       }
-      const ref = { projectRoot: projectRootOf(live), branch: branch.branch };
+      const ref = refOf(live, branch);
       const role = roleOf(live, id);
       // A stopped helper's unsealed work is sealed first; a sealed change is unchanged.
       await ctx.workspaces.seal(ws, role === undefined ? {} : { role });
@@ -346,7 +634,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         return { kind: 'no-changes', reply: r.value, overridden: [] };
       }
       const commit = integrated.commit;
-      const gate = (await ctx.commitChecks()?.gate(runId, id, commit)) ?? {
+      const gate = (await ctx.commitChecks()?.gate(runId, id, commit, mergeChecks(live))) ?? {
         passed: true,
         failedRequired: [],
         missing: [],
@@ -389,6 +677,14 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       return { kind: 'merged', reply: r.value, overridden: gate.failedRequired };
     } catch (error) {
       logger.log('warn', 'change merge failed', { runId, agentRunId: id, code: codeOf(error) });
+      // F-2: a ticket branch moved outside the app, or checked out in another folder, does not
+      // go away by trying again: the change goes to the owner (F-1's reset frees a moved one).
+      if (error instanceof WorkspaceError && error.code === 'ticket-branch-moved') {
+        return blocked({ reason: 'ticket-branch-moved' });
+      }
+      if (error instanceof WorkspaceError && error.code === 'ticket-branch-checked-out') {
+        return blocked({ reason: 'ticket-branch-checked-out' });
+      }
       return blocked({ reason: 'failed' });
     }
   }
@@ -455,10 +751,33 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       throw new HttpError(500, 'internal_error', 'The merge did not start');
     if (outcome.kind === 'blocked') {
       const [status, code] = BLOCKED_HTTP[outcome.blocked.reason];
-      throw new HttpError(status, code, outcome.reply);
+      throw new HttpError(status, code, OWNER_BLOCKED[outcome.blocked.reason] ?? outcome.reply);
     }
     if (outcome.kind === 'refused') throw new HttpError(409, 'merge_refused', outcome.reply);
     if (anyway && outcome.kind === 'merged') mergedAnyway(outcome.overridden);
+  }
+
+  /**
+   * ADR-0025 §9 (G-G): whether the branch still exists in the project and on origin, from local
+   * refs only (no network), so the final step can offer Delete branch. Left out when no code
+   * host is wired or the refs cannot be read.
+   */
+  async function withBranchPresence(
+    live: LoopLive,
+    row: TicketBranchRow,
+  ): Promise<TicketBranchDto> {
+    const dto = toTicketBranchDto(row);
+    if (ctx.codeHost === undefined) return dto;
+    try {
+      const presence = await ctx.codeHost.ticketBranchPresence(
+        projectRootOf(live),
+        row.branch,
+        'tracking',
+      );
+      return withPresence(dto, presence);
+    } catch {
+      return dto;
+    }
   }
 
   /** GET `/api/runs/:id/ticket-branch`: the combined change the owner merges once. */
@@ -476,21 +795,40 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       );
     }
     const checks = loop.checkCommits.latestForCommit(runId, null, row.headCommit);
-    const base = { runId, ticketBranch: toTicketBranchDto(row), checks };
+    const base = { runId, ticketBranch: await withBranchPresence(live, row), checks };
     if (row.state !== 'open') {
-      return { ...base, files: [], diff: '', diffTruncated: false, baseMoved: false };
+      // ADR-0026 §5: read-only after a merge (or a discard), from the recorded commits; the
+      // diff is computed again on each request and never stored.
+      let changes;
+      try {
+        changes = await ctx.workspaces.diffCommits(
+          projectRootOf(live),
+          row.baseCommit,
+          row.headCommit,
+        );
+      } catch (error) {
+        if (error instanceof WorkspaceError) throw workspaceError(error);
+        throw error;
+      }
+      if (changes === null) {
+        throw new HttpError(
+          410,
+          'diff_unavailable',
+          "This branch's commits are no longer in the repository, so its files are no longer available",
+        );
+      }
+      return { ...base, ...changes, baseMoved: false };
     }
     try {
-      const review = await ctx.workspaces.reviewTicketBranch({
-        projectRoot: projectRootOf(live),
-        branch: row.branch,
-        baseBranch: row.baseBranch,
-      });
-      if (review.tip !== row.headCommit) {
-        logger.log('warn', 'ticket branch moved outside the app', { runId });
-      }
+      const review = await ctx.workspaces.reviewTicketBranch(refOf(live, row));
+      // F-1: say so on the ticket, with the tip it points at now (the owner can reset it).
+      const moved = review.tip !== row.headCommit;
+      if (moved) logger.log('warn', 'ticket branch moved outside the app', { runId });
       return {
         ...base,
+        ticketBranch: moved
+          ? { ...base.ticketBranch, movedOutside: { tip: review.tip } }
+          : base.ticketBranch,
         files: review.files,
         diff: review.diff,
         diffTruncated: review.diffTruncated,
@@ -500,6 +838,47 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
       if (error instanceof WorkspaceError) throw workspaceError(error);
       throw error;
     }
+  }
+
+  /**
+   * POST `/api/runs/:id/ticket-branch/reset` (F-1), the owner's "Reset to the last reviewed
+   * commit": the open ticket branch, changed outside the app, goes back to the commit the app
+   * recorded, by compare-and-swap from the tip the owner saw. Refused while a merge into it is under
+   * way, when it is checked out anywhere, or when it moved again. The ticket gets an app line.
+   */
+  async function resetTicketBranch(live: LoopLive, body: unknown): Promise<void> {
+    const input = ResetTicketBranchRequestSchema.parse(body);
+    const runId = live.state.run.id;
+    const row = loop.ticketBranches.getByRun(runId);
+    if (row === undefined || row.state !== 'open') {
+      throw new HttpError(409, 'no_ticket_branch', 'This run has no open ticket branch');
+    }
+    if (live.merges.size > 0) {
+      throw new HttpError(
+        409,
+        'change_busy',
+        'A change is being merged into the ticket branch; try again when it is done',
+      );
+    }
+    if (input.from === row.headCommit) {
+      throw new HttpError(
+        409,
+        'ticket_branch_not_moved',
+        `${row.branch} is already at the last reviewed commit`,
+      );
+    }
+    try {
+      await ctx.workspaces.resetTicketBranch(refOf(live, row), row.headCommit, input.from);
+    } catch (error) {
+      if (error instanceof WorkspaceError) {
+        logger.log('info', 'ticket branch reset refused', { runId, code: error.code });
+        throw workspaceError(error);
+      }
+      throw error;
+    }
+    logger.log('info', 'ticket branch reset to the recorded commit', { runId });
+    ctx.appComment?.(live, resetLine(row.branch, row.headCommit, input.from));
+    ctx.notify?.(live);
   }
 
   /** Every worktree of the run still on disk is released (the ticket branch was settled). */
@@ -515,6 +894,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     body: unknown,
     notes: {
       ownerComment: (text: string) => void;
+      /** ADR-0024 §3: the app's own line after the owner's merge (author `app`). */
+      appComment?: (text: string) => void;
     },
   ): Promise<void> {
     const input = TicketBranchActionRequestSchema.parse(body);
@@ -533,11 +914,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     if (row === undefined || row.state !== 'open') {
       throw new HttpError(409, 'no_ticket_branch', 'This run has no open ticket branch');
     }
-    const ref = {
-      projectRoot: projectRootOf(live),
-      branch: row.branch,
-      baseBranch: row.baseBranch,
-    };
+    const ref = refOf(live, row);
     try {
       switch (input.action) {
         case 'discard': {
@@ -572,7 +949,9 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         }
         case 'merge':
         case 'merge-anyway': {
-          const gate = (await ctx.commitChecks()?.gate(runId, null, row.headCommit)) ?? {
+          const gate = (await ctx
+            .commitChecks()
+            ?.gate(runId, null, row.headCommit, branchChecks(live))) ?? {
             passed: true,
             failedRequired: [],
             missing: [],
@@ -610,6 +989,13 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
           }
           const merged = await ctx.workspaces.mergeTicketBranch(ref, row.headCommit);
           loop.ticketBranches.markMerged(runId, merged.commit);
+          // Before the run completes, so the board's notice for it already shows the line.
+          notes.appComment?.(
+            mergeLine(row.branch, row.baseBranch, merged.commit, {
+              tipChecks: tally(loop.checkCommits.latestForCommit(runId, null, row.headCommit)),
+              anyway: input.action === 'merge-anyway',
+            }),
+          );
           const r = ctx.apply(live, (s, c) => recordTicketBranchDecision(s, 'merged', c));
           if (!r.ok) throw refusalError(r.refusal);
           if (input.action === 'merge-anyway') {
@@ -635,8 +1021,192 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     }
   }
 
+  // ------------------------------------------------------------------ pull requests (ADR-0025)
+
+  function codeHostOrThrow(): CodeHostService {
+    if (ctx.codeHost === undefined) {
+      throw new HttpError(404, 'code_host_unavailable', 'Pull requests are not available here');
+    }
+    return ctx.codeHost;
+  }
+
+  function codeHostFailed(live: LoopLive, error: unknown): never {
+    if (error instanceof CodeHostError) {
+      ctx.countDiagnostic(`code-host-${error.code}`);
+      logger.log('info', 'code host refused', { runId: live.state.run.id, code: error.code });
+      throw codeHostHttpError(error);
+    }
+    if (error instanceof WorkspaceError) throw workspaceError(error);
+    throw error;
+  }
+
+  /**
+   * The pull request's body (ADR-0025 §2): the lead's latest ticket summary (ADR-0026 §2), then the
+   * ticket's latest run summary comment (ADR-0024, the facts), this run's first, then one line
+   * saying where it came from. The owner sees both on the ticket before clicking.
+   */
+  function pullRequestBody(live: LoopLive, ticketKey: string, title: string): string {
+    const ticketId = live.state.run.ticketId;
+    const comments = ticketId === null ? [] : store.workspaceRepos.comments.listForTicket(ticketId);
+    const summaries = comments.filter(
+      (c) => c.kind === 'run-facts' || (c.kind === null && isRunSummaryComment(c)),
+    );
+    const summary =
+      summaries.filter((c) => c.runId === live.state.run.id).at(-1) ?? summaries.at(-1);
+    const ticketSummary = comments.filter((c) => c.kind === 'ticket-summary').at(-1);
+    const parts = [ticketSummary?.body.trim(), summary?.body.trim()].filter(
+      (p): p is string => p !== undefined && p !== '',
+    );
+    const text = parts.length === 0 ? `${ticketKey}: ${title}` : parts.join('\n\n');
+    return `${text}\n\nOpened from Agent Control Plane`;
+  }
+
+  /**
+   * POST `/api/tickets/:id/branch/pull-request` (ADR-0025 §4), the owner's Push & open PR: when
+   * the owner could merge (REVIEW, every change decided, no agent working), the recorded ticket
+   * branch, at its recorded tip, is pushed to `origin` and a pull request is opened against its
+   * target (or the open one for it is linked). Clicked again after the branch moved (new changes
+   * merged after "Request changes"), it pushes the new tip (fast-forward only, never forced) and
+   * returns the same pull request. No checks gate it: the pull request is reviewed on the host;
+   * the local merge keeps its gate.
+   */
+  async function openPullRequest(
+    live: LoopLive,
+    body: unknown,
+    ticket: { key: string; title: string },
+  ): Promise<TicketBranchDto> {
+    const input = OpenPullRequestRequestSchema.parse(body ?? {});
+    const codeHost = codeHostOrThrow();
+    const runId = live.state.run.id;
+    const check = checkTicketBranchAction(live.state, 'merge');
+    if (check !== null) throw refusalError(check);
+    const row = loop.ticketBranches.getByRun(runId);
+    if (row === undefined || row.state !== 'open') {
+      throw new HttpError(409, 'no_ticket_branch', 'This run has no open ticket branch');
+    }
+    const ref = refOf(live, row);
+    let opened;
+    try {
+      // The recorded branch, never another, and only at the tip the app recorded.
+      await ctx.workspaces.verifyTicketBranch(ref, row.headCommit);
+      opened = await codeHost.openPullRequest(ref.projectRoot, {
+        head: row.branch,
+        base: row.baseBranch,
+        title: (input.title ?? `${ticket.key}: ${ticket.title}`).slice(0, 200),
+        body: pullRequestBody(live, ticket.key, ticket.title),
+        draft: input.draft ?? false,
+      });
+    } catch (error) {
+      codeHostFailed(live, error);
+    }
+    const pr = opened.pullRequest;
+    const updated = loop.ticketBranches.setPullRequest(runId, {
+      provider: 'github',
+      number: pr.number,
+      url: pr.url,
+      state: pr.state,
+      // Verified above: the branch was at the recorded tip when it was pushed.
+      pushedCommit: row.headCommit,
+    });
+    ctx.appComment?.(
+      live,
+      pullRequestOpenedLine(row.branch, row.baseBranch, pr.number, opened.created),
+    );
+    logger.log('info', 'pull request opened', {
+      runId,
+      number: pr.number,
+      created: opened.created,
+    });
+    if (pr.state === 'merged') await settleMergedPullRequest(live, pr.number, pr.mergeCommit);
+    ctx.notify?.(live);
+    const final = loop.ticketBranches.getByRun(runId) ?? updated;
+    if (final === undefined)
+      throw new HttpError(500, 'internal_error', 'The ticket branch is gone');
+    return toTicketBranchDto(final);
+  }
+
+  /**
+   * POST `/api/tickets/:id/branch/pull-request/refresh` (ADR-0025 §2): reads the pull request's
+   * state now, on the owner's request (nothing polls). When GitHub reports it merged and the run
+   * waits for the owner's merge, the ticket branch is recorded as merged and the run completes,
+   * so the ticket becomes Done; otherwise only the state is recorded.
+   */
+  async function refreshPullRequest(live: LoopLive): Promise<TicketBranchDto> {
+    const codeHost = codeHostOrThrow();
+    const runId = live.state.run.id;
+    const row = loop.ticketBranches.getByRun(runId);
+    const recorded = row?.pullRequest ?? null;
+    if (row === undefined || recorded === null) {
+      throw new HttpError(409, 'no_pull_request', 'No pull request was opened for this ticket');
+    }
+    let pr;
+    try {
+      pr = await codeHost.view(projectRootOf(live), recorded.number);
+    } catch (error) {
+      codeHostFailed(live, error);
+    }
+    loop.ticketBranches.setPullRequest(runId, {
+      provider: recorded.provider,
+      number: pr.number,
+      url: pr.url,
+      state: pr.state,
+    });
+    logger.log('info', 'pull request read', { runId, number: pr.number, state: pr.state });
+    if (pr.state === 'merged' && row.state === 'open') {
+      await settleMergedPullRequest(live, pr.number, pr.mergeCommit);
+    }
+    ctx.notify?.(live);
+    const final = loop.ticketBranches.getByRun(runId);
+    if (final === undefined)
+      throw new HttpError(500, 'internal_error', 'The ticket branch is gone');
+    return toTicketBranchDto(final);
+  }
+
+  /**
+   * GitHub merged the pull request: the ticket branch is merged (at the host's merge commit, or
+   * the pushed tip) and the run completes, as after the owner's local merge. A run that is not
+   * waiting for the owner's merge (changes requested since, or stopped) keeps its branch open;
+   * the pull request's state shows what happened.
+   */
+  async function settleMergedPullRequest(
+    live: LoopLive,
+    number: number,
+    mergeCommit: string | null,
+  ): Promise<void> {
+    const runId = live.state.run.id;
+    const row = loop.ticketBranches.getByRun(runId);
+    if (row === undefined || row.state !== 'open') return;
+    const check = checkTicketBranchAction(live.state, 'merge');
+    if (check !== null) {
+      logger.log('info', 'pull request merged; run not waiting for the merge', {
+        runId,
+        code: check.code,
+      });
+      return;
+    }
+    const commit = mergeCommit ?? row.headCommit;
+    loop.ticketBranches.markMerged(runId, commit);
+    ctx.appComment?.(
+      live,
+      pullRequestMergeLine(number, row.baseBranch, commit, {
+        tipChecks: tally(loop.checkCommits.latestForCommit(runId, null, row.headCommit)),
+      }),
+    );
+    const r = ctx.apply(live, (s, c) => recordTicketBranchDecision(s, 'merged', c));
+    if (!r.ok) {
+      logger.log('error', 'pull request merge not recorded', { runId, code: r.refusal.code });
+      return;
+    }
+    await releaseAll(live);
+    logger.log('info', 'ticket branch merged via pull request', { runId, number });
+  }
+
   return {
+    openPullRequest,
+    refreshPullRequest,
     sealChange,
+    runChangeChecks,
+    runBranchChecks,
     createTicketBranch,
     mergeChange,
     discardChange,
@@ -644,6 +1214,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     ownerChangeAction,
     ticketBranchReview,
     ticketBranchAction,
+    resetTicketBranch,
   };
 }
 

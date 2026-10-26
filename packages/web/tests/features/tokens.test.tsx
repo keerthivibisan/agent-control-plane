@@ -162,7 +162,8 @@ describe('TokensPage (R-F)', () => {
       '#/sessions/sess-aaaaaaaa-1',
     );
     expect(row('sess-aaaaaaaa-1').textContent).toContain('~$1.25');
-    expect(row('sess-bbbbbbbb-2').textContent).toContain('Untitled session');
+    // Only the id is known for an untitled session here: it is named by it, never "Untitled".
+    expect(within(row('sess-bbbbbbbb-2')).getByRole('link').textContent).toBe('Session sess-bbb');
     // No snapshot and a snapshot without a cost both read "Not reported", never $0.
     for (const id of ['sess-bbbbbbbb-2', 'sess-cccccccc-3']) {
       const cost = within(row(id)).getByTestId('cost');
@@ -176,6 +177,38 @@ describe('TokensPage (R-F)', () => {
     // Costs are per session only: nothing on the page adds them up.
     expect(screen.queryByText(/\$2\.50|~\$1\.25.*~\$1\.25/)).toBeNull();
     expect(within(table).getAllByRole('row')).toHaveLength(4);
+  });
+
+  it('names sessions as the session list does when the server sends the fields (ADR-0024)', async () => {
+    const base = projectTokens();
+    const [first, second] = base.bySession;
+    if (first === undefined || second === undefined) throw new Error('fixture');
+    const data = {
+      ...base,
+      bySession: [
+        {
+          ...first,
+          title: null,
+          firstSeenAt: '2026-10-16T09:00:00.000Z',
+          gitBranch: null,
+          agentType: null,
+          managed: {
+            runId: 'r-1',
+            agentRunId: 'a-1',
+            ticketKey: 'WEB-12',
+            kind: 'worker' as const,
+            label: 'Frontend helper',
+          },
+        },
+        { ...second, firstSeenAt: '2026-10-16T09:00:00.000Z', gitBranch: 'main', agentType: null },
+      ],
+    };
+    renderPage('', { [PATH]: data });
+    const table = await screen.findByRole('table', { name: 'Tokens by session' });
+    const link = (id: string) =>
+      within(table.querySelector(`[data-row="${id}"]`) as HTMLElement).getByRole('link');
+    expect(link('sess-aaaaaaaa-1').textContent).toBe('WEB-12 · Frontend helper');
+    expect(link('sess-bbbbbbbb-2').textContent).toMatch(/^Session on main · /);
   });
 
   it('switches breakdowns through the address', async () => {

@@ -451,7 +451,6 @@ export const OVERVIEW_COPY = {
   },
   sessions: (n: number) => countOf(n, 'session', 'sessions'),
   folders: (n: number) => countOf(n, 'folder', 'folders'),
-  untitled: 'Untitled session',
   noProject: 'No project',
   lastActivity: 'Last activity',
   noActivity: 'No activity yet',
@@ -679,9 +678,6 @@ export const HEALTH_COPY = {
 } as const;
 // --- Sessions list and session detail (phase 2, wp/ui-sessions) ---------------------------------
 // Wording for `#/sessions` and `#/sessions/:id`. Add-only: other screens add their own sections.
-
-/** What an untitled session is called. Never left blank. */
-export const UNTITLED_SESSION = 'Untitled session';
 
 /** "Helper agent: Explore", or "Helper agent" when Claude Code did not report a type. */
 export function helperAgentLabel(agentType: string | null): string {
@@ -1115,9 +1111,6 @@ export const CONTROL_COPY = {
       renamed: 'Renamed',
     },
     diff: 'The changes, line by line',
-    diffEmpty: 'No line-by-line changes to show.',
-    truncated:
-      'Only the start of the changes is shown: they are too large to show in full. Every changed file is listed above.',
     merge: 'Merge',
     discard: 'Discard',
     confirmMerge: (role: string, base: string) =>
@@ -1770,7 +1763,7 @@ export const TICKET_COPY = {
     helperNone: 'No helpers yet',
     helpersWorking: (n: number) => `${formatCount(n)} working`,
     reviewerComments: (n: number) =>
-      `${formatCount(n)} ${n === 1 ? 'finding' : 'findings'} from the reviewer in the comments below`,
+      `${formatCount(n)} ${n === 1 ? 'finding' : 'findings'} from the reviewer in the conversation`,
     held: {
       title: (stage: string) => `${stage} is waiting for you`,
       text: (stage: string) =>
@@ -1954,6 +1947,117 @@ export const TICKET_COPY = {
   },
 } as const;
 
+// --- The ticket page as a pull request page (v0.3.0 D-B) ---------------------------------------
+// Add-only. The header, the four tabs, the timeline, the final-step box and the sidebar. The
+// words inside each part (plan, comments, checks, branch, pull request) stay in their own sections.
+
+export const TICKET_PAGE_COPY = {
+  tabs: {
+    label: 'Ticket sections',
+    conversation: 'Conversation',
+    agents: 'Agents',
+    files: 'Files changed',
+    checks: 'Checks',
+    /** The count after a tab's name, for screen readers: "Files changed, 4". */
+    count: (n: number) => formatCount(n),
+  },
+  header: {
+    edit: 'Edit',
+    editLabel: 'Edit the title',
+    titleLabel: 'Title',
+    save: 'Save',
+    saving: 'Saving…',
+    cancel: 'Cancel',
+    failed: 'The title wasn’t saved.',
+    /** "feature/WEB-21-saved-searches → main". */
+    into: 'into',
+    branchLabel: 'Branch',
+    targetLabel: 'Target',
+    /** G-H: "feature/WEB-21 → dev · from release/1.0". */
+    from: 'from',
+    fromLabel: 'Starts from',
+    plannedTip:
+      'The name this ticket’s branch will get. The run creates the branch when it starts; change it in Branch on the right.',
+    agents: (n: number) => countOf(n, 'agent', 'agents'),
+    /** The final step's main action in the header goes down to the final-step box. */
+    goTo: (action: string) => `${action}: go to the final step`,
+    needsYouTip: 'Show what waits for you',
+  },
+  conversation: {
+    needsYou: 'Waiting for you',
+    timeline: 'Timeline',
+    description: 'Description',
+    created: 'Created',
+    editLabel: 'Edit the description',
+    runStarted: (n: number) => `Run ${formatCount(n)} started`,
+    showRun: 'Show this run',
+    shownRun: 'Shown on this page',
+    plan: (v: number) => `Plan version ${formatCount(v)}`,
+    showPlan: 'Show the plan',
+  },
+  finalStep: {
+    title: 'Final step',
+    waiting: 'The agents are still working',
+    ready: (target: string) => `Ready to merge into ${target}`,
+    blocked: 'A required check failed on the tip',
+    baseMoved: (target: string) => `${target} moved since this branch started`,
+    prOpen: (n: number) => `Pull request #${n} is open on GitHub`,
+    stopped: 'This run has stopped',
+    merged: 'The ticket’s work is merged',
+    discarded: 'The ticket branch was discarded',
+    checks: (passed: number, total: number) =>
+      `${formatCount(passed)} of ${formatCount(total)} ${total === 1 ? 'check' : 'checks'} passed on the tip`,
+    checksFailed: (n: number) =>
+      `${countOf(n, 'required check', 'required checks')} failed on the tip`,
+    checksStopped: 'The checks on the tip didn’t finish',
+    checksNone: 'No checks have run on the tip yet',
+    prNote: 'Its link, state and Refresh are in Pull request on the right.',
+  },
+  sidebar: {
+    label: 'About this ticket',
+    pullRequest: 'Pull request',
+    noPullRequest: 'None yet. You can open one in the final step.',
+    labels: 'Labels',
+    noLabels: 'None',
+    type: 'Type',
+    priority: 'Priority',
+    thisRun: 'This run',
+    noRun: 'Not started yet.',
+    runOf: (n: number, total: number) => `Run ${formatCount(n)} of ${formatCount(total)}`,
+    started: 'Started',
+    budget: 'Budget tokens used',
+    budgetTip:
+      'Budget tokens are the app’s own count of what this run’s agents used, against each agent’s limit. Every agent counts once.',
+    approvals: 'Approvals',
+    sessions: 'Sessions',
+    noSessions: 'No Claude Code sessions yet.',
+    sessionOf: (role: string) => `${role}’s session`,
+    details: 'Details',
+  },
+  files: {
+    branchTitle: 'Ticket branch',
+    reviewAll: 'Review all files',
+    reviewAllTip: 'Opens every file of the ticket branch on one page, with comments on lines.',
+    changesTitle: 'Changes in this run',
+    changesNone: 'No changes yet. Each helper’s change shows here once it has one.',
+    filesChanged: 'Files changed',
+    filesChangedFor: (role: string) => `Files changed by the ${role}`,
+    open: 'Open',
+    openFor: (role: string) => `Open the ${role}’s change`,
+    noRun: 'Nothing has changed yet. Changes show here once a run has them.',
+    helpersTitle: 'Changes of each helper',
+  },
+  checks: {
+    tipTitle: 'Checks on the tip',
+    changesTitle: 'Checks on each change',
+    noRun: 'No checks yet. They run on each change and on the ticket branch.',
+    none: 'No agent in this run changes files, so no checks run.',
+  },
+  agents: {
+    noRun: 'No agents yet. They appear here once the run starts.',
+  },
+} as const;
+
 // --- Shell, All projects and the command palette (redesign R-A, wp/r-a-shell) ------------------
 // Add-only. Page WPs add their own sections below; nav labels for their pages live here.
 
@@ -1973,6 +2077,8 @@ export const SHELL_COPY = {
     },
     allProjects: 'All projects',
     health: 'Data health',
+    /** The heading over All projects and Data health (v0.3.0 D-0, owner request). */
+    workspace: 'Workspace',
   },
   switcher: {
     button: (name: string) => `Project: ${name}. Switch project`,
@@ -1988,9 +2094,16 @@ export const SHELL_COPY = {
     open: 'Search or jump to…',
     shortcut: '⌘K',
   },
+  /** The theme menu (v0.3.0 D-0): in the top bar and in Settings. */
   theme: {
     label: (word: string) => `Theme: ${word}. Change theme`,
-    tip: 'Change theme: system → light → dark',
+    tip: 'Theme',
+    menu: 'Theme',
+    options: { light: 'Light', dark: 'Dark', system: 'System' },
+    /** What System follows, under its name. */
+    systemHint: 'Follows your computer',
+    settingsTitle: 'Appearance',
+    settingsText: 'How the app looks in this browser.',
   },
   health: {
     tabs: 'Data health sections',
@@ -2749,12 +2862,18 @@ export const PAGES_REFRESH_COPY = {
 export const SHELL_FRAME_COPY = {
   /** The top bar's trail: the project switcher, then the page. */
   breadcrumb: 'Breadcrumb',
+  // The toggle at the top of the sidebar (v0.3.0 D-0, the owner's words).
   sidebar: {
-    collapse: 'Collapse sidebar',
-    expand: 'Expand sidebar',
+    collapse: 'Hide sidebar',
+    expand: 'Show sidebar',
   },
   /** The sidebar toggle's shortcut as the keyboard labels it (⌘ on Apple keyboards). */
   sidebarShortcut: (mac: boolean) => (mac ? '⌘B' : 'Ctrl+B'),
+  /**
+   * The short name next to the logo in the top bar (v0.3.0 C-S, the owner's words). The full name
+   * (`APP_NAME`) is its tooltip and, with "home", the link's accessible name.
+   */
+  shortName: 'ACP',
 } as const;
 
 // --- Review loop: approval modes, Start dialog, change cards, ticket branch (RL-D, wp/rl-d-web) --
@@ -3037,8 +3156,9 @@ export const REVIEW_LOOP_COPY = {
   },
   branch: {
     title: 'Ticket branch',
-    tip: 'Every change the lead merges lands on this branch, never on main. You merge the branch into main once, at the end; main changes only on your click, as a clean fast-forward.',
-    description: 'Every merged change lands here. You merge it into main once.',
+    tip: 'Every change the lead merges lands on this branch, never on its target (main, for example). At the end you merge the branch into the target once, as a clean fast-forward, or push it and open a pull request on GitHub. The target changes only on your click.',
+    description:
+      'Every merged change lands here. At the end you merge it once, or open a pull request.',
     state: {
       open: 'Open',
       merged: 'Merged',
@@ -3290,6 +3410,521 @@ export const TICKET_OPTIONS_COPY = {
     changed: (n: number) =>
       `${countOf(n, 'choice differs', 'choices differ')} from this ticket’s settings, for this run only.`,
   },
+} as const;
+
+// --- Branching strategies and GitHub (G-B, wp/g-b-web; ADR-0025) --------------------------------
+//
+// Add-only. Project settings' Branches and GitHub cards, a ticket's own branch and target, and the
+// ticket branch card's final step (merge here, or Push & open PR). Plain owner words: the GitHub
+// CLI is named because the owner installs it; tokens, refs and remotes are not.
+
+import type { BranchStrategyPreset } from '@acp/core';
+import type { PullRequestState } from '@acp/core/api';
+
+/** A project's choice in Settings: a preset, or no strategy (the `acp/<KEY>` behaviour). */
+export type BranchingChoiceKey = BranchStrategyPreset | 'none';
+
+/** Why the app can't reach GitHub for a project, in the order the owner should fix it. */
+export type CodeHostProblemKey = 'no-remote' | 'no-cli' | 'not-logged-in';
+
+/** The server's error codes for Push & open PR and Refresh (ADR-0025). */
+export type PullRequestErrorCode =
+  | 'gh-not-installed'
+  | 'gh-not-logged-in'
+  | 'no-github-remote'
+  | 'push-rejected'
+  | 'pr-exists-elsewhere'
+  | 'timeout'
+  | 'gh-failed';
+
+export const BRANCHING_COPY = {
+  card: {
+    title: 'Branches',
+    description: 'How ticket branches are named, where they start and where the work goes back.',
+    tip: 'Each ticket’s work happens on its own branch, created when you approve the plan: from the branch you choose to start from, or from its target branch. A change here applies to plans you approve from now on.',
+  },
+  choiceLabel: 'Branching strategy',
+  choices: {
+    'github-flow': {
+      word: 'GitHub flow',
+      text: 'Tickets branch from your main branch and go back to it, usually through a pull request.',
+    },
+    'git-flow': {
+      word: 'Git flow',
+      text: 'Tickets branch from develop and go back to develop. Releases are made from develop.',
+    },
+    custom: {
+      word: 'Custom',
+      text: 'Your own branches and your own branch names.',
+    },
+    none: {
+      word: 'None, keep acp/<KEY>',
+      text: 'As before: each ticket branches from the branch your project folder is on.',
+    },
+  } satisfies Record<BranchingChoiceKey, { word: string; text: string }>,
+  noneNote: (key: string) =>
+    `Ticket branches are named like acp/${key}-12. They start from the branch your project folder is on, and you merge them back into it.`,
+  baseBranch: 'Base branch',
+  baseBranchHint: 'The long-lived branch new work starts from, for example main or develop.',
+  targetBranch: 'Default target branch',
+  targetBranchHint:
+    'Where a ticket’s work is merged, or its pull request opened, unless the ticket says otherwise.',
+  /** ADR-0025 §10 (G-H): where new ticket branches start. */
+  sourceBranch: 'Start ticket branches from',
+  sourceBranchHint:
+    'New ticket branches start at the latest commit of this branch, unless the ticket says otherwise. The work still goes back to the target branch.',
+  sourceSameAsTarget: 'Same as the target branch',
+  /** "Same as the target branch (dev)". */
+  sourceSameAsTargetNamed: (target: string) => `Same as the target branch (${target})`,
+  /** A saved start branch the project folder doesn't list (still offered, with a warning). */
+  sourceNotListed: (name: string) => `${name} (not in the project folder)`,
+  template: 'Ticket branch name',
+  templateHint:
+    'Use {key} for the ticket number (required), {slug} for words from its title and {type} for its type’s word.',
+  locked: 'Set by the strategy. Choose Custom to change it.',
+  typeWords: 'Word for each ticket type',
+  typeWordsHint: 'What {type} becomes in a branch name.',
+  preview: 'Preview',
+  previewTip: 'Names for two example tickets. A name already taken gets -r1, -r2 and so on.',
+  previewUnavailable: 'Fix the name above to see a preview.',
+  /** The example tickets of the preview. */
+  sample: { feature: 'Add saved searches', bug: 'Login fails on Safari' },
+  errors: {
+    branch: 'Use letters, digits, “.”, “_”, “-” and “/”, for example main or release/2.0.',
+    branchMissing: 'Enter a branch name.',
+    templateMissing: 'Enter a name, for example {type}/{key}-{slug}.',
+    templateTooLong: 'Keep it under 120 characters.',
+    templateToken: (tokens: string) => `Only {key}, {slug} and {type} work here, not ${tokens}.`,
+    templateNeedsKey: 'Include {key}, so every ticket gets its own branch.',
+    templateInvalid:
+      'This doesn’t give a valid branch name. Around the tokens, use letters, digits, “.”, “_”, “-” and “/”.',
+    typeWord: 'Lowercase letters, digits and “-”, starting with a letter (up to 20).',
+  },
+  /** The new-project wizard's collapsed section. */
+  wizardSummary: 'Branching strategy (optional)',
+} as const;
+
+export const CODE_HOST_COPY = {
+  title: 'GitHub',
+  description: 'Push a ticket’s branch and open a pull request from the ticket.',
+  tip: 'The app uses your own GitHub CLI login (gh) and the project’s origin remote. It never stores a token, and it pushes or opens a pull request only when you click.',
+  checking: 'Checking GitHub…',
+  connected: (repo: string) => `Connected to GitHub: ${repo}`,
+  word: { connected: 'Connected', notConnected: 'Not connected' },
+  defaultBranch: 'Default branch on GitHub',
+  problems: {
+    'no-remote':
+      'This project has no GitHub remote. Add one named origin with the repository’s address, then check again.',
+    'no-cli':
+      'The GitHub CLI isn’t installed. Install the GitHub CLI (gh) and run gh auth login, then check again.',
+    'not-logged-in':
+      'The GitHub CLI isn’t signed in. Run gh auth login in a terminal, then check again.',
+  } satisfies Record<CodeHostProblemKey, string>,
+  recheck: 'Check again',
+  rechecking: 'Checking…',
+  loadFailed: 'GitHub couldn’t be checked.',
+} as const;
+
+/** The refusals of connecting a project from Settings (G-E), worded by the web. */
+export type CodeHostConnectErrorCode =
+  | 'origin_exists'
+  | 'code_host_not_ready'
+  | 'invalid_repository'
+  | 'repository_create_failed'
+  | 'not_a_git_repository'
+  | 'invalid_request'
+  | 'gh-failed';
+
+/** G-E (ADR-0025 §7): connecting a project to GitHub from its Settings card. */
+export const CODE_HOST_CONNECT_COPY = {
+  /** Connected: "Connected to GitHub:" then the `owner/name` link. */
+  connectedLead: 'Connected to GitHub:',
+  newTab: '(opens in a new tab)',
+  install: {
+    message:
+      'The GitHub CLI (gh) isn’t installed. The app uses it to create repositories and open pull requests with your own GitHub login.',
+    brew: 'On a Mac with Homebrew, run this in a terminal:',
+    command: 'brew install gh',
+    other: 'On other systems, follow the steps at',
+    site: 'cli.github.com',
+    siteUrl: 'https://cli.github.com',
+    then: 'Then sign in with gh auth login, and check again.',
+  },
+  login: {
+    message: 'The GitHub CLI isn’t signed in.',
+    run: 'Run this in a terminal:',
+    command: 'gh auth login',
+    why: 'You sign in to GitHub yourself, in the terminal: the app never handles your GitHub credentials.',
+    then: 'When it says you’re logged in, check again.',
+  },
+  copyCommand: 'command',
+  connect: {
+    message:
+      'This project isn’t on GitHub yet. Create a repository for it, or connect one you already have.',
+    choose: 'How to connect',
+    create: 'Create a new repository',
+    existing: 'Connect an existing repository',
+  },
+  create: {
+    name: 'Repository name',
+    nameHint: 'Letters, digits, dots, dashes and underscores.',
+    owner: 'Owner',
+    ownerPlaceholder: 'Your account',
+    ownerHint: 'Leave empty for your own account, or enter an organization you belong to.',
+    visibility: 'Visibility',
+    private: 'Private',
+    privateHint: 'Only you and the people you add can see it.',
+    public: 'Public',
+    publicHint: 'Anyone on the internet can see it.',
+    push: 'Push the current branch now',
+    /** G-F: the same, once the project's branches say which branch it is. */
+    pushNamed: (branch: string) => `Push ${branch} now`,
+    pushHint:
+      'Sends the branch the project folder is on, so GitHub has your code. A branch without commits is not pushed.',
+    /** "Creates github.com/you/web-app as a private repository and sets it as origin." */
+    summary: (
+      owner: string | null,
+      name: string,
+      visibility: 'private' | 'public',
+      push: boolean,
+      /** G-F: the branch that is pushed, when known. */
+      branch?: string | null,
+    ) =>
+      `Creates github.com/${owner ?? 'you'}/${name} as a ${visibility} repository and sets it as origin${push ? `, then pushes ${branch ?? 'the current branch'}` : ''}.`,
+    button: 'Create repository',
+    busy: 'Creating…',
+    errors: {
+      nameMissing: 'Enter a name.',
+      name: 'Use letters, digits, dots, dashes and underscores, up to 100. Not “.”, “..” or a name ending in .git.',
+      owner: 'Use the account or organization name: letters, digits and single dashes, up to 39.',
+    },
+  },
+  existing: {
+    label: 'Repository',
+    hint: 'owner/name, or its GitHub address.',
+    placeholder: 'owner/name or https://github.com/owner/name',
+    /** "Connects github.com/acme/widgets as origin, over HTTPS." */
+    summary: (owner: string, name: string, protocol: 'https' | 'ssh') =>
+      `Connects github.com/${owner}/${name} as origin, over ${protocol === 'ssh' ? 'SSH' : 'HTTPS'}. Nothing is pushed.`,
+    invalid: 'Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+    button: 'Connect',
+    busy: 'Connecting…',
+  },
+  errors: {
+    origin_exists:
+      'This project already has a remote named origin, so nothing was changed. Check again to see it.',
+    code_host_not_ready:
+      'The GitHub CLI isn’t ready: it’s missing or not signed in. Check again for the steps.',
+    invalid_repository:
+      'That isn’t a GitHub repository. Use owner/name, https://github.com/owner/name or git@github.com:owner/name.git.',
+    repository_create_failed:
+      'GitHub refused to create the repository: it may already exist, or the name is not allowed.',
+    not_a_git_repository: 'The project folder isn’t a git repository, so it can’t have an origin.',
+    invalid_request: 'The app couldn’t send that. Check the fields, then try again.',
+    'gh-failed':
+      'The GitHub CLI reported a problem. Try again; if it keeps failing, run gh auth status in a terminal.',
+  } satisfies Record<CodeHostConnectErrorCode, string>,
+  failed: 'That didn’t work.',
+  done: 'Connected. GitHub is set up for this project.',
+} as const;
+
+export const TICKET_BRANCH_COPY = {
+  title: 'Branch',
+  note: 'Where this ticket’s work goes. Empty fields follow the project.',
+  name: 'Branch name',
+  nameHint: 'Leave empty for the name the project gives.',
+  target: 'Target branch',
+  targetHint: 'Where the work is merged or the pull request goes. Leave empty for the project’s.',
+  /** "Project default (feature/WEB-12-add-saved-searches)". */
+  projectDefault: (value: string | null) =>
+    value === null ? 'Project default' : `Project default (${value})`,
+  /** The target without a strategy: the branch the project folder is on. */
+  currentBranch: 'the project folder’s branch',
+  own: 'This ticket',
+  edit: 'Change',
+  editLabel: 'Change the branch settings',
+  save: 'Save',
+  saving: 'Saving…',
+  cancel: 'Cancel',
+  failed: 'The branch settings weren’t saved.',
+  /** Once the run has created the branch. */
+  created: 'The run created this branch. Its name and target stay as they are for this run.',
+  actualBranch: 'Name',
+  actualTarget: 'Target',
+  /** ADR-0025 §10 (G-H): the branch the ticket's branch starts from. */
+  from: 'Start from',
+  fromHint: 'The branch this ticket’s branch starts from. Leave empty for the project’s.',
+  /** What an empty "Start from" follows when the project names no start branch. */
+  fromTarget: 'the target branch',
+  actualFrom: 'Started from',
+  fromListLabel: 'Local branches',
+} as const;
+
+/** The refusals of creating a branch (G-F), worded by the web. */
+export type ProjectBranchErrorCode =
+  | 'branch_exists'
+  | 'base_branch_missing'
+  | 'no_origin'
+  | 'invalid_branch_name'
+  | 'not_a_git_repository'
+  | 'code_host_unavailable'
+  | 'invalid_request';
+
+/** G-F (ADR-0025 §8): a project's local branches, and creating one on the owner's click. */
+export const PROJECT_BRANCHES_COPY = {
+  card: {
+    title: 'Local branches',
+    description: 'The branches in the project folder. Create one here to use it as a target.',
+    tip: 'Read from git when you open this page; the app doesn’t fetch. A new branch starts at the tip of the branch you pick. The project folder stays on its branch and no file changes.',
+  },
+  loading: 'Reading the branches…',
+  loadFailed: 'The branches couldn’t be read.',
+  refresh: 'Refresh',
+  refreshing: 'Refreshing…',
+  empty: 'This project has no branches yet. Make a first commit in the project folder.',
+  /** "12 branches" over the list. */
+  count: (n: number) => `${n} ${n === 1 ? 'branch' : 'branches'}`,
+  truncated: 'Only the first 500 branches are shown.',
+  listLabel: 'Local branches',
+  current: 'Current',
+  currentTip: 'The project folder is on this branch.',
+  onOrigin: (github: boolean) => (github ? 'On GitHub' : 'On origin'),
+  onOriginTip: 'origin has a branch of this name (as of your last fetch).',
+  commitLabel: (commit: string) => `Commit ${commit}`,
+  newTitle: 'New branch',
+  name: 'Name',
+  nameHint: 'For example dev, release/2.0 or feature/search.',
+  nameMissing: 'Enter a branch name.',
+  nameExists: 'A branch with this name already exists.',
+  from: 'From',
+  fromHint: 'The new branch starts at this branch’s latest commit.',
+  /** The push checkbox: "Also push to GitHub", or to origin when it isn't on GitHub. */
+  push: (github: boolean) => (github ? 'Also push to GitHub' : 'Also push to origin'),
+  pushHint: 'Sends the new branch to origin right after it is created.',
+  create: 'Create branch',
+  /** The one-click form: "Create dev from main". */
+  createFrom: (name: string, from: string) => `Create ${name} from ${from}`,
+  busy: 'Creating…',
+  /** Read out once the branch exists. */
+  created: (name: string, pushed: boolean) =>
+    pushed ? `Created ${name} and pushed it to origin.` : `Created ${name}.`,
+  noBase: 'There is no local branch to start from yet.',
+  failed: 'The branch wasn’t created.',
+  errors: {
+    branch_exists: 'A branch with this name already exists, so nothing was changed.',
+    base_branch_missing:
+      'The branch to start from isn’t in the project folder any more. Refresh and pick another.',
+    no_origin:
+      'This project has no origin remote, so the branch can’t be pushed. Create it without pushing.',
+    invalid_branch_name: 'Git doesn’t accept this name. Try a simpler one, for example dev.',
+    not_a_git_repository: 'The project folder isn’t a git repository, so it has no branches.',
+    code_host_unavailable: 'This server can’t read the project’s branches.',
+    invalid_request: 'The app couldn’t send that. Check the name, then try again.',
+  } satisfies Record<ProjectBranchErrorCode, string>,
+  /** G-H: Start refused because the start branch is missing (`source_branch_missing`). */
+  sourceMissing: (name: string) =>
+    `${name}, which this ticket’s branch starts from, isn’t a branch in the project folder yet. Create it, and the ticket starts again.`,
+  /** Start refused because the target is missing (`target_branch_missing`). */
+  missing: {
+    text: (target: string) =>
+      `${target} isn’t a branch in the project folder yet. Create it, and the ticket starts again.`,
+    exists: (target: string) => `${target} exists now.`,
+    startAgain: 'Start again',
+  },
+  /** The strategy form's warning under a branch field. */
+  strategyMissing: (name: string) => `${name} isn’t a branch in the project folder yet.`,
+  createIt: 'Create it',
+  /** The ticket's target field. */
+  targetListLabel: 'Local branches',
+  targetMissing: (name: string) => `${name} isn’t a branch in the project folder yet.`,
+} as const;
+
+export const PULL_REQUEST_COPY = {
+  push: 'Push & open PR',
+  confirm: (branch: string, target: string) =>
+    `Push ${branch} to origin and open a pull request against ${target} on GitHub. The pull request description is this ticket’s run summary.`,
+  titleLabel: 'Pull request title',
+  titleMissing: 'Enter a title.',
+  titleTooLong: 'Keep it under 200 characters.',
+  draft: 'Open it as a draft',
+  draftHint: 'GitHub doesn’t ask for reviews until you mark it ready.',
+  confirmButton: 'Push & open PR',
+  pushing: 'Pushing…',
+  cancel: 'Cancel',
+  /** Why Push & open PR can't be used now; the button stays, disabled, with this under it. */
+  blocked: {
+    checking: 'Checking GitHub…',
+    'no-remote': 'Needs a GitHub remote: this project’s origin isn’t on GitHub.',
+    'no-cli': 'Needs the GitHub CLI: install gh, then run gh auth login.',
+    'not-logged-in': 'Needs you signed in to GitHub: run gh auth login in a terminal.',
+    unknown: 'GitHub couldn’t be checked, so pushing is off. Check it in the project’s settings.',
+  } satisfies Record<CodeHostProblemKey | 'checking' | 'unknown', string>,
+  number: (n: number) => `Pull request #${n}`,
+  newTab: '(opens in a new tab)',
+  state: { open: 'Open', merged: 'Merged', closed: 'Closed' } satisfies Record<
+    PullRequestState,
+    string
+  >,
+  checked: 'Checked',
+  refresh: 'Refresh',
+  refreshing: 'Refreshing…',
+  openNote: (target: string) =>
+    `Merge it here with Merge pull request, or on GitHub and then press Refresh. The ticket is done once it is merged into ${target}.`,
+  mergedNote: (target: string) => `Merged into ${target} on GitHub. The ticket is done.`,
+  closedNote:
+    'Closed on GitHub without merging. You can merge the branch here or open a new pull request.',
+  mergedOnGitHub: (target: string) => `Merged into ${target} on GitHub`,
+  errors: {
+    'gh-not-installed':
+      'The GitHub CLI isn’t installed. Install the GitHub CLI (gh) and run gh auth login, then try again.',
+    'gh-not-logged-in':
+      'The GitHub CLI isn’t signed in. Run gh auth login in a terminal, then try again.',
+    'no-github-remote': 'This project has no GitHub remote named origin. Add it, then try again.',
+    'push-rejected':
+      'GitHub refused the push, usually because the branch there has commits this one doesn’t. Look at the branch on GitHub, then try again.',
+    'pr-exists-elsewhere':
+      'This branch already has a pull request on GitHub against another branch. Close it there, then try again.',
+    timeout: 'GitHub didn’t answer in time. Check your internet connection, then try again.',
+    'gh-failed':
+      'The GitHub CLI reported a problem. Try again; if it keeps failing, run gh auth status in a terminal.',
+  } satisfies Record<PullRequestErrorCode, string>,
+  failed: 'That didn’t work.',
+  refreshFailed: 'The pull request couldn’t be checked.',
+  /** G-D: the ticket branch moved on since the last push while its pull request is open. */
+  pushNew: 'Push new commits',
+  confirmPushNew: (branch: string, n: number) =>
+    `Push the new commits on ${branch} to the open pull request #${n}.`,
+  pushNewRejected:
+    'The branch on GitHub has commits the app doesn’t have; it won’t overwrite them.',
+} as const;
+
+// --- Merge pull request and Delete branch (G-G, ADR-0025 §9) -----------------------------------
+//
+// Add-only. GitHub's own words for the merge methods and the button, so the owner sees what they
+// know from GitHub. Merge and delete happen only after the confirmation, which says exactly what.
+
+export type MergeMethodKey = 'merge' | 'squash' | 'rebase';
+
+/** Server codes of a merge or a delete, beyond the pull request's (PULL_REQUEST_COPY.errors). */
+export type BranchActionErrorCode =
+  | 'no_open_pull_request'
+  | 'unpushed_commits'
+  | 'code_host_not_ready'
+  | 'merge_method_not_allowed'
+  | 'pull_request_not_mergeable'
+  | 'merge_failed'
+  | 'branch_not_finished'
+  | 'branch_checked_out'
+  | 'branch_protected'
+  | 'branch_delete_failed';
+
+export const MERGE_PR_COPY = {
+  methodLabel: 'Merge method',
+  methods: {
+    merge: 'Create a merge commit',
+    squash: 'Squash and merge',
+    rebase: 'Rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  /** The main button, as GitHub labels it for each method. */
+  button: {
+    merge: 'Merge pull request',
+    squash: 'Squash and merge',
+    rebase: 'Rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  confirmButton: {
+    merge: 'Confirm merge',
+    squash: 'Confirm squash and merge',
+    rebase: 'Confirm rebase and merge',
+  } satisfies Record<MergeMethodKey, string>,
+  how: {
+    merge: 'with a merge commit',
+    squash: 'as one squashed commit',
+    rebase: 'by rebasing its commits',
+  } satisfies Record<MergeMethodKey, string>,
+  deleteBranch: 'Delete branch',
+  deleteBranchHint: 'On GitHub and in the project folder, once it is merged.',
+  confirm: (n: number, target: string, how: string, branch: string, del: boolean) =>
+    `Merges #${n} into ${target} on GitHub ${how}${
+      del ? ` and deletes ${branch} there and in the project folder` : ''
+    }. The ticket is done once GitHub reports it merged.`,
+  merging: 'Merging…',
+  cancel: 'Cancel',
+  failed: 'The pull request wasn’t merged.',
+  /** After a merge with Delete branch while the project folder is on the ticket branch. */
+  keptLocal: (branch: string) =>
+    `${branch} is still in the project folder: it’s checked out there, so the app left it. Switch to another branch, then use Delete branch.`,
+  needsPush: 'Push the new commits first: GitHub would merge only what it has.',
+  /** Delete branch, once the ticket branch is merged or discarded. */
+  delete: 'Delete branch',
+  deleteQuestion: (branch: string, where: 'both' | 'origin' | 'local', prOpen: number | null) =>
+    `Deletes ${branch} ${
+      where === 'both'
+        ? 'on GitHub and in the project folder'
+        : where === 'origin'
+          ? 'on GitHub'
+          : 'in the project folder'
+    }.${prOpen !== null && where !== 'local' ? ` GitHub closes the open pull request #${prOpen}.` : ''} Its commits stay in the ticket’s history here.`,
+  confirmDelete: 'Delete branch',
+  deleting: 'Deleting…',
+  deleted: 'Branch deleted',
+  deleteFailed: 'The branch wasn’t deleted.',
+  /** The muted fact in the ticket header once the branch is gone everywhere. */
+  headerDeleted: 'branch deleted',
+  errors: {
+    no_open_pull_request:
+      'There’s no open pull request to merge now. Press Refresh to see its state on GitHub.',
+    unpushed_commits:
+      'The ticket branch has commits the pull request doesn’t have yet. Push new commits first, then merge.',
+    code_host_not_ready:
+      'Merging needs the GitHub CLI installed and signed in. Run gh auth login in a terminal, then try again.',
+    merge_method_not_allowed:
+      'This repository doesn’t allow that merge method. Choose another one, or change it in the repository’s settings on GitHub.',
+    pull_request_not_mergeable:
+      'GitHub won’t merge it yet: it has conflicts, needs reviews or passing checks, is a draft or is closed.',
+    merge_failed: 'GitHub didn’t merge it. Look at the pull request on GitHub, then try again.',
+    branch_not_finished: 'The branch isn’t merged or discarded yet, so it can’t be deleted.',
+    branch_checked_out:
+      'The branch is checked out (in the project folder or another worktree). Switch to another branch first.',
+    branch_protected: 'That’s the target or the project’s base branch; the app never deletes it.',
+    branch_delete_failed:
+      'Git couldn’t delete the branch. Check your access to the repository, then try again.',
+  } satisfies Record<BranchActionErrorCode, string>,
+} as const;
+
+// --- The ticket badge: time taken and tokens (v0.3.0 T-A) ---------------------------------------
+//
+// Add-only. No cost: provider-reported costs are never added up (ADR-0014).
+
+export const TICKET_TOTALS_COPY = {
+  took: (d: string) => `Took ${d}`,
+  running: (d: string) => `Running ${d}`,
+  open: (d: string) => `Open for ${d}`,
+  tokens: (n: string) => `${n} tokens`,
+  noTokens: '—',
+  unavailable: 'Usage unavailable',
+  /** The badge's accessible name: the whole sentence. */
+  label: (time: string, tokens: string) => `${time}, ${tokens}. Show details`,
+  tokensSentence: (n: string) => `${n} tokens used`,
+  tokensUnavailable: 'token usage unavailable',
+  title: 'Time and tokens',
+  started: 'Started',
+  finished: 'Finished',
+  notFinished: 'Not finished',
+  elapsed: 'Time taken',
+  elapsedSoFar: 'So far',
+  runs: 'Runs',
+  run: (n: number) => `Run ${n}`,
+  live: 'running',
+  tokenSplit: 'Tokens',
+  input: 'Input',
+  output: 'Output',
+  cacheWrite: 'Cache write',
+  cacheRead: 'Cache read',
+  total: 'Total processed',
+  partial: 'partial',
+  partialTip: 'Some records didn’t report this, so the number is a lower bound.',
+  openTokens: 'Open in Tokens',
+  note: 'Direct usage of this ticket’s agent sessions, as on the Tokens page. No cost is added up.',
 } as const;
 
 // --- Workflow graph editor (WG-D, wp/wg-d-editor; ADR-0023) --------------------------------------
@@ -3584,4 +4219,285 @@ export const WORKFLOW_GRAPH_COPY = {
     buildOwnHint: 'Starts from today’s setup. Change it on the Workflow page after setup.',
     failed: 'The workflow wasn’t saved. Try again, or set it up later on the Workflow page.',
   },
+} as const;
+
+// --- Session names and run summaries (v0.3.0, S-B; ADR-0024) ------------------------------------
+// How the app names a session (lib/session-name.ts) and shows the comments it writes itself.
+
+export const SESSION_NAME_COPY = {
+  /** The marker on a session Agent Control Plane started for a ticket or a run. */
+  startedByApp: 'Started by Agent Control Plane',
+  startedByAppTip:
+    'Agent Control Plane started this session for a ticket or a run. It is named after the ticket and the agent’s part in the workflow.',
+  /** Link after the marker on the session's own page. */
+  openTicket: (key: string) => `Open ${key}`,
+  openRun: 'Open the run',
+  /** A session without a name, on a known branch: "Session on main · Oct 21, 9:00 AM". */
+  onBranch: (branch: string, started: string) => `Session on ${branch} · ${started}`,
+  /** A session without a name or a branch: "Session started Oct 21, 9:00 AM". */
+  started: (started: string) => `Session started ${started}`,
+} as const;
+
+export const RUN_SUMMARY_COPY = {
+  /** Who wrote it: the app itself, from what it recorded during the run. */
+  author: 'Agent Control Plane',
+  authorTip:
+    'Written by Agent Control Plane from what it recorded during the run, with the lead agent’s note when it left one.',
+  title: 'Run summary',
+  /** A later handover's summary of the same run. */
+  updatedTitle: 'Run summary (updated)',
+  /** Whose words the comment's text is, when the lead left a note: "Lead · Run summary". */
+  lead: 'Lead',
+  /** The disclosure over the facts the app recorded. */
+  details: 'Details',
+  /** "Run 2", when the comment belongs to a run of this ticket. */
+  ofRun: (n: number) => `Run ${formatCount(n)}`,
+  /** The words around the parts of "Merged acp/WEB-12 into main at 1a2b3c4". */
+  merge: { merged: 'Merged', into: 'into', at: 'at' },
+  /**
+   * The words around the pull request lines (G-D): "Merged via pull request #12 into develop at
+   * 1a2b3c4", "Pushed feature/WEB-12 and opened pull request #12 into develop", "Pushed
+   * feature/WEB-12; pull request #12 into develop was already open".
+   */
+  pullRequest: {
+    mergedVia: (n: number) => `Merged via pull request #${n} into`,
+    pushed: 'Pushed',
+    opened: (n: number) => `and opened pull request #${n} into`,
+    linked: (n: number) => `; pull request #${n} into`,
+    alreadyOpen: 'was already open',
+  },
+} as const;
+
+// --- The harness in the workflow (v0.3.0 part 5, H-D; ADR-0027) ---------------------------------
+// Add-only. The Workflow editor's Checks blocks, the Harness page's setup steps and network switch,
+// and the ticket's Checks tab grouped by block. Plain owner words: checks, setup, the lead, you.
+
+import type {
+  CheckBlockPlace,
+  CheckFailureRoute,
+  CheckRunPlace,
+  CheckSelection,
+  SetupRunStatus,
+} from '@acp/core';
+
+const PLACE_WORDS = {
+  change: 'On each change',
+  merge: 'Before the lead’s merge',
+  branch: 'On the ticket branch',
+} as const satisfies Record<CheckBlockPlace, string>;
+
+export const SETUP_STATUS_COPY: Readonly<Record<SetupRunStatus, ControlStatusCopy>> = {
+  passed: { word: 'Passed', tip: 'The step finished without an error.', tone: 'passed' },
+  failed: { word: 'Failed', tip: 'The step finished with an error.', tone: 'problem' },
+  'timed-out': {
+    word: 'Took too long',
+    tip: 'The step ran past its time limit and was stopped.',
+    tone: 'problem',
+  },
+  error: {
+    word: "Couldn't run",
+    tip: "The step couldn't be started, for example because its command isn't installed.",
+    tone: 'problem',
+  },
+  refused: {
+    word: 'Not run: needs the network',
+    tip: 'This step uses the network, and “Setup may use the network” is off for this project. Turn it on on the Harness page, then try again.',
+    tone: 'problem',
+  },
+  interrupted: {
+    word: 'Stopped',
+    tip: 'The app stopped before this step finished, so it has no result.',
+    tone: 'stopped',
+  },
+};
+
+export const HARNESS_BLOCKS_COPY = {
+  places: PLACE_WORDS,
+  placeHints: {
+    change: 'Runs on a helper’s or tester’s change before it is reviewed.',
+    merge:
+      'Runs on each change merged with the ticket branch, before the lead merges it. Every workflow has this block.',
+    branch: 'Runs on the ticket branch after every change, before you merge it into main.',
+  } satisfies Record<CheckBlockPlace, string>,
+  /** The block's kind on the canvas and in its panel; the merge block keeps its old word. */
+  kinds: {
+    change: 'Checks on a change',
+    merge: 'Checks',
+    branch: 'Checks on the branch',
+  } satisfies Record<CheckBlockPlace, string>,
+  kindText: {
+    change: 'Runs the chosen checks on a helper’s or tester’s change before its review.',
+    merge:
+      'Runs the chosen checks on each change before the lead merges it into the ticket branch.',
+    branch: 'Runs the chosen checks on the ticket branch before you merge it into main.',
+  } satisfies Record<CheckBlockPlace, string>,
+  newLabels: { change: 'Change checks', branch: 'Branch checks' },
+  palette: {
+    group: 'Checks',
+    items: { change: 'Checks on a change', branch: 'Checks on the branch' },
+    hints: {
+      change: 'Runs checks on a helper’s change before its review. Linked from a helper.',
+      branch: 'Runs checks on the ticket branch. Added just before your merge.',
+    },
+    noEditors: 'Add a helper or a tester first: these checks run on their changes.',
+    allChecked: 'Every helper and tester already has checks on its change.',
+    branchFull: 'The workflow already has checks on the branch; it can have only one.',
+  },
+  chip: {
+    required: 'Required',
+    ids: (n: number) => countOf(n, 'check'),
+    labels: (labels: readonly string[]) => labels.join(' · '),
+    runs: 'Runs: ',
+  },
+  panel: {
+    nameHint: 'What the canvas and the ticket call this block, for example “Fast checks”.',
+    place: 'Where it runs',
+    mandatory:
+      'Every workflow has this block, so no change merges without checks. It can’t be moved or removed.',
+    branchTaken:
+      'The workflow already has checks on the ticket branch, so this one stays on a change.',
+    noEditors: 'Add a helper or a tester to run checks on a change.',
+    checks: {
+      for: (role: string) => `Checks the changes of “${role}”.`,
+      unlinked:
+        'Not linked to a helper yet. Link a helper or tester to this block with a “Next step” link.',
+    },
+    select: 'Which checks',
+    selectKinds: {
+      required: 'All required checks',
+      ids: 'Pick checks',
+      labels: 'By label',
+    } satisfies Record<CheckSelection['kind'], string>,
+    selectHints: {
+      required: 'Every check the harness file marks as required.',
+      ids: 'Only the checks you tick.',
+      labels: 'Every check that has one of the labels you choose, for example “fast”.',
+    } satisfies Record<CheckSelection['kind'], string>,
+    runs: (names: readonly string[]) =>
+      names.length === 0
+        ? 'No check matches yet, so this block runs nothing.'
+        : `Runs: ${names.join(', ')}.`,
+    noHarness:
+      'This project has no readable harness file yet, so there are no checks to pick from. They come from .acp/harness.json.',
+    openHarness: 'Open the Harness page',
+    checksLegend: 'Checks to run',
+    checksHint: (max: number) => `Up to ${formatCount(max)} checks.`,
+    labelsLegend: 'Labels',
+    labelsHint: (max: number) => `Up to ${formatCount(max)} labels. Checks with any of them run.`,
+    noLabels: 'No check in the harness file has a label yet.',
+    labelChecks: (n: number) => countOf(n, 'check'),
+    required: 'Required',
+    missingCheck: (id: string) => `“${id}” is not in the harness file any more.`,
+    missingLabel: (label: string) => `No check has the label “${label}” any more.`,
+    remove: (name: string) => `Remove ${name}`,
+    empty: (label: string) => `“${label}”: pick at least one check or label.`,
+    failure: 'When a check fails',
+    failures: {
+      lead: 'The lead decides',
+      owner: 'Ask me',
+      helper: 'Back to the helper',
+    } satisfies Record<CheckFailureRoute, string>,
+    failureHints: {
+      lead: 'The lead is told which checks failed and decides what to do.',
+      owner: 'The change waits for you.',
+      helper:
+        'The change goes back to its helper with the failing checks’ names and the end of their output. The lead is told each round.',
+    } satisfies Record<CheckFailureRoute, string>,
+    branchFailure: 'On the ticket branch a failure waits for you: you decide when you merge.',
+    rounds: 'Rounds back to the helper',
+    roundsHint:
+      'How often a failing change goes back to the helper. After the last round the lead decides.',
+    roundsValue: (n: number) => (n === 0 ? 'No rounds' : countOf(n, 'round')),
+    noReworkLink:
+      'This block has no rework link back to its helper yet, so the change can’t go back.',
+  },
+  harness: {
+    run: 'Run setup and checks now',
+    running: 'Running setup and checks…',
+    runTip:
+      'Runs the setup steps, then every check, on a temporary copy of the main branch’s last commit. Your files are not changed.',
+    setup: {
+      title: 'Setup',
+      description: 'Prepares a fresh copy of the project before agents and checks start.',
+      tip: 'Each step runs directly, without a shell, in a helper’s or tester’s own copy and in each temporary copy the checks use, never in your project folder. Reading agents never run setup. A failed step stops that start.',
+      label: 'Setup steps',
+      step: 'Step',
+      command: 'Command',
+      timeLimit: 'Time limit',
+      creates: 'Creates',
+      createsTip:
+        'Folders the step creates. They are never part of a change, a commit or your project folder.',
+      network: 'Uses the network',
+      networkTip:
+        'This step downloads things. It runs only while “Setup may use the network” is on.',
+      none: 'No setup steps',
+      noneText:
+        'A fresh copy has nothing installed. If checks need dependencies, add a “setup” list to .acp/harness.json.',
+    },
+    network: {
+      label: 'Setup may use the network',
+      hint: 'Off by default. While it is off, setup steps marked “Uses the network” do not run, and the ticket says why. The app does not cut steps off from the network: this switch is your consent.',
+      on: 'On',
+      off: 'Off',
+      saving: 'Saving…',
+      failed: 'The switch wasn’t saved.',
+      blocked: (n: number) =>
+        `${countOf(n, 'setup step')} ${n === 1 ? 'uses' : 'use'} the network and won’t run while this is off.`,
+      noneUses: 'No setup step uses the network.',
+    },
+    latestSetup: {
+      title: 'Latest setup on the main branch',
+      none: 'No setup has run on the main branch yet.',
+      label: 'Setup results',
+    },
+    where: {
+      column: 'Where it runs',
+      labels: 'Labels',
+      tip: 'The Checks blocks in this project’s workflow that run this check.',
+      none: 'Not in the workflow',
+      block: (place: string, label: string) => `${place}: ${label}`,
+    },
+  },
+  ticket: {
+    setupTitle: 'Setup',
+    setupTip:
+      'The harness setup steps, run in each helper’s or tester’s own copy before it starts and in each temporary copy before checks.',
+    setupFor: (role: string) => `For ${role}`,
+    setupForChecks: 'For the checks',
+    groups: {
+      change: PLACE_WORDS.change,
+      merge: PLACE_WORDS.merge,
+      branch: PLACE_WORDS.branch,
+      main: 'Run now on the main branch',
+    } satisfies Record<CheckRunPlace, string>,
+    groupTips: {
+      change: 'Checks blocks on each helper’s change, before its review.',
+      merge: 'The checks on each change before the lead merges it into the ticket branch.',
+      branch: 'The checks on the ticket branch’s tip; your merge into main counts these.',
+      main: 'Run setup and checks now, on the main branch.',
+    } satisfies Record<CheckRunPlace, string>,
+    output: 'Output (last part)',
+    noOutput: 'No output.',
+    took: (text: string) => `took ${text}`,
+    exitCode: (code: number | null) =>
+      code === null ? 'No exit code reported' : `Exit code ${formatCount(code)}`,
+  },
+} as const;
+
+/**
+ * F-1: the ticket branch was changed outside the app (a commit the app did not record, for
+ * example a helper that committed on it), and the owner's reset to the last reviewed commit.
+ */
+export const BRANCH_GUARD_COPY = {
+  movedOutside: (branch: string, now: string, reviewed: string) =>
+    `${branch} was changed outside the app (now ${now}, last reviewed ${reviewed})`,
+  movedHint:
+    'Merging or pushing is refused until it is back at the last reviewed commit. Resetting moves only this branch; the commits made outside the app stay in git’s reflog.',
+  reset: 'Reset to the last reviewed commit',
+  confirmReset: (branch: string, reviewed: string) =>
+    `Move ${branch} back to ${reviewed}, the last commit the app reviewed? Nothing else changes.`,
+  confirmResetButton: 'Reset branch',
+  cancel: 'Cancel',
+  working: 'Resetting…',
+  failed: 'The branch was not reset',
 } as const;

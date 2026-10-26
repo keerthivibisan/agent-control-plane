@@ -13,8 +13,8 @@ export interface Column<T> {
 }
 
 /**
- * A calm, dense table: no zebra stripes, hairline row dividers, a quiet header band. Below 1024px (Tailwind `lg`)
- * each row becomes a small card with "Label: value" lines, from the same DOM (CSS only), so there
+ * A calm, dense table (GitHub-like): no zebra stripes, a border between rows, a `subtle` header
+ * band. Below 1024px (Tailwind `lg`) each row becomes a small card with "Label: value" lines, from the same DOM (CSS only), so there
  * is one row element per item at every width.
  *
  * `rowAttributes` adds `data-*` attributes to a row (e.g. `data-session-id`) for tests and links.
@@ -42,12 +42,12 @@ export function DataTable<T>({
   return (
     <table aria-label={label} className="block w-full border-collapse text-left lg:table">
       <thead className="hidden lg:table-header-group">
-        <tr className="border-b border-line bg-sunken/50">
+        <tr className="border-b border-line bg-subtle">
           {columns.map((c) => (
             <th
               key={c.key}
               scope="col"
-              className={`h-9 px-3 py-2 text-caption font-medium whitespace-nowrap text-dim first:pl-5 last:pr-5 ${c.align === 'right' ? 'text-right' : ''}`}
+              className={`h-10 px-3 py-2 text-caption font-semibold whitespace-nowrap text-dim first:pl-5 last:pr-5 ${c.align === 'right' ? 'text-right' : ''}`}
             >
               {c.header ?? c.label}
             </th>
@@ -62,7 +62,7 @@ export function DataTable<T>({
               key={key}
               {...rowAttributes?.(row)}
               data-selected={selectedKey === key ? 'true' : undefined}
-              className={`block rounded-control border border-line px-3 py-2 lg:table-row lg:rounded-none lg:border-0 lg:border-b lg:px-0 lg:py-0 lg:transition-colors lg:last:border-b-0 ${
+              className={`block rounded-control border border-line px-3 py-2 lg:table-row lg:rounded-none lg:border-0 lg:border-b lg:border-line-muted lg:px-0 lg:py-0 lg:transition-colors lg:last:border-b-0 ${
                 selectedKey === key ? 'bg-accent-soft' : 'lg:hover:bg-hover'
               }`}
             >

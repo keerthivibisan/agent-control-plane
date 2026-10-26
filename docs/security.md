@@ -95,7 +95,9 @@
   into a clean base branch.
 - **Requests:** local-only guard plus a CSRF token (`X-ACP-CSRF`) on mutating control-panel routes.
 - **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
-  (ADR-0015); never worker conversation content. Logs never include chat text.
+  (ADR-0015); never worker conversation content. Logs never include chat text. Later phases add
+  the owner-facing ticket text of ADR-0016, ADR-0019 and ADR-0021 (plans, review findings, the
+  lead's change notes) and, with ADR-0024, the run summary comments (below).
 - Later (P3-G): validation command allowlist with timeouts; bounded retries.
 
 ### Approval modes per workflow block (ADR-0023) [implemented in the server, db and adapter, WG-C]
@@ -126,5 +128,80 @@
   automatic switch is on and no ticket or run mode is stricter than Full auto.
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
+
+### Session names and run summaries (ADR-0024) [implemented in the server and adapter, v0.3.0 S-A]
+
+- **Session titles.** Every agent the app starts gets a title built from app data only: the
+  ticket key and its workflow block's label (`WEB-12 · Frontend helper`, a change reviewer
+  `WEB-12 · Change reviewer → Frontend helper`), or `Run · <role>` without a ticket, at most 120
+  characters. No prompt, ticket, task, chat or lead-chosen role text goes into it. The adapter
+  passes it to the Agent SDK's `title` option, and Claude Code writes it into its own session
+  record; the app never writes under `~/.claude`. A resumed session (a follow-up, a rework turn)
+  gets none and keeps its own.
+- **`SessionSummaryDto.managed`** carries ids, the ticket key, the role kind and the same label.
+- **Run summary comments (author `app`).** Stored as ticket comments, like the plan and the review
+  findings (ADR-0016, ADR-0021). The facts are composed from records only: block labels, counts
+  (steps, files, lines added and removed, rework rounds, budget tokens), states and decisions,
+  branch names, and the names of the project's harness checks with their results. They never hold
+  prompts, replies, tasks, plan text, findings, file names, diffs or tool output.
+- **The lead's handover note** (`request_review.summary`, review-loop runs only) is the one free
+  text in a summary: owner-facing text the lead writes for the ticket, redacted (rule 4) and capped
+  at 1,500 characters by the engine, then stored as the summary's main text (after a
+  `From the lead:` line, before the facts under `Details:`; v0.3.0 S-C). Legacy runs ignore it.
+  Logs say only that a summary was stored, its trigger, and whether a note was there.
+- **The merge line** (`Merged acp/<KEY> into <base> at <short commit>; checks passed on the tip
+(2).`) holds branch names, a commit id and the tip checks' results and names only. After a merge
+  past a failed check it says `(merged anyway, with a reason)`; the owner's reason stays the
+  owner's own comment and is never repeated in it.
+
+### Branching strategies and GitHub (ADR-0025) [implemented in the server and db, v0.3.0 G-A]
+
+- **Network.** The app reaches the network beyond the SDK's `claude` only on the owner's request,
+  and only the project's own `origin` (`git push`) and GitHub through the owner's `gh` login.
+  Nothing runs on a timer: a pull request's state is read when the owner opens the ticket or
+  clicks Refresh (the web calls the refresh route). The code host status route runs `gh` when the
+  owner views it.
+- **Commands.** Beside `git` and the SDK's `claude`, the server may run `gh` (ADR-0013 as amended):
+  `execFile` with argument arrays, never a shell; `--flag=value` for every text value (a title
+  starting with `--` stays a title); a time limit per command (10 s to 60 s; `git push` 120 s);
+  `GH_PROMPT_DISABLED=1`, `GIT_TERMINAL_PROMPT=0`, no pager, colour or update notices; inherited
+  `GIT_*` variables dropped. `git push` disables hooks (`core.hooksPath=/dev/null`, `--no-verify`)
+  and is never forced: `<commit>:refs/heads/<b>`, then the tracking ref and the upstream that
+  `--set-upstream origin` would set. **F-2:** every push for the owner (and the delete on origin)
+  goes to `origin`'s configured address, passed as the address, never as the remote name, so a
+  `remote.origin.pushurl` planted in the shared config is never used. The address must parse as a
+  repository address or be a local folder; `ext::` and `fd::` are off; a
+  `url.<x>.pushInsteadOf` rule that would rewrite it is refused (`code-host/push-target.ts`).
+  `url.<x>.insteadOf` still applies, as it does to the owner's own fetches. The pull request's
+  body goes through a temporary file (mode 600, removed after the call).
+- **The `gh` login.** The app never reads, stores or sends a token. `gh --version` and `gh auth
+status --hostname=github.com` are judged by their exit code only; their output is dropped
+  unread. Of `gh repo view`, `gh pr list` and `gh pr view` the app reads only the named JSON fields
+  (Zod-validated). The CLI's stderr is never kept, logged or returned; git's push stderr is not
+  logged either (only its exit code). Errors are seven plain codes with the app's own words:
+  `gh-not-installed`, `gh-not-logged-in`, `no-github-remote`, `push-rejected`,
+  `pr-exists-elsewhere`, `timeout`, `gh-failed`. A canary test checks no token-like output reaches
+  a response or a log line.
+- **The remote.** `origin`'s configured URL is parsed into the host and `owner/name`; the URL (which
+  may hold a user or a token) is never returned, stored or logged. Every `gh` call names the
+  repository as `--repo=owner/name`, so `gh` never picks another remote.
+- **What is published.** Only on the owner's Push & open PR click (CSRF), and only when the owner
+  could merge the run (REVIEW, every change decided, no agent working): the ticket branch the
+  database records for the run, at the tip the app recorded (refused if it moved outside the app),
+  and a pull request whose title is `<KEY>: <ticket title>` (or the owner's) and whose body is the
+  ticket's latest run summary comment (ADR-0024; the owner sees it on the ticket first) plus
+  "Opened from Agent Control Plane". Agents have no tool for any of it.
+- **The ticket-branch guard.** Every operation on a ticket branch (create, advance, update from the
+  target, merge, discard, push) acts only on the branch recorded for the run, and refuses a name
+  that is the run's target, `main`, `master`, a strategy branch (`develop` in Git flow), `origin`'s
+  default branch as the repository knows it (`refs/remotes/origin/HEAD`), or (when it would change
+  the branch) the project's checked-out branch. Names are checked with `GitBranchNameSchema`.
+- **The local merge into the target.** When the target is the checked-out branch, its tree must
+  be clean and it is fast-forwarded as before. When it is checked out nowhere, only its ref moves,
+  by compare-and-swap (`update-ref <new> <old>`), and no working tree is touched; checked out in
+  another worktree, the merge is refused. Never forced.
+- **Stored.** A ticket's own branch name and target, and per ticket branch the pull request's
+  provider, number, URL, state, check time and the last pushed commit (migration 0008). No token,
+  user or remote URL.
 
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).

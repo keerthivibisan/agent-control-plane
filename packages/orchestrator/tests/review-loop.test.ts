@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_NOTE_LINE,
+  HANDOVER_NOTE_LINE,
   VIEW_CHANGE_MAX_BYTES,
   agentEvent,
   beginChangeMerge,
@@ -134,6 +136,8 @@ describe('plan approval and the ticket branch', () => {
     expect(text).toContain('request_review once every change is decided');
     // RL-F: a lead that just ended its turn here waited for the run timeout.
     expect(text).toContain('nothing goes on until you call it');
+    // ADR-0024 §3: the lead is asked for a short handover note.
+    expect(text).toContain(HANDOVER_NOTE_LINE);
   });
 
   it('separate planner mode: the branch comes before the lead starts', () => {
@@ -180,6 +184,18 @@ describe('plan approval and the ticket branch', () => {
     const r1 = ok(ticketBranchCreated(approved, 'acp/WEB-12-r1', makeCtx())).state;
     expect(r1.integration?.ticketBranch).toBe('acp/WEB-12-r1');
     expect(refused(ticketBranchCreated(r1, BRANCH, makeCtx()))).toBe('invalid-input');
+  });
+
+  it('ADR-0025: accepts a name from a branching strategy or the ticket, never main or unsafe', () => {
+    const approved = ok(approve()).state;
+    for (const bad of ['master', 'acp/WEB-12-rx', '-D', 'a..b', 'refs/heads/x', 'HEAD']) {
+      expect(refused(ticketBranchCreated(approved, bad, makeCtx())), bad).toBe('invalid-input');
+    }
+    const named = ok(ticketBranchCreated(approved, 'feature/WEB-12-dark-mode', makeCtx())).state;
+    expect(named.integration?.ticketBranch).toBe('feature/WEB-12-dark-mode');
+    expect(
+      ok(ticketBranchCreated(approved, 'hotfix/login-r2', makeCtx())).state.integration,
+    ).toMatchObject({ ticketBranch: 'hotfix/login-r2' });
   });
 });
 
@@ -643,7 +659,9 @@ describe('the lead’s decisions', () => {
     expect(agentOf(r.state, LEAD).latestActivity).toBe(
       'Asked API builder to rework its change (round 1)',
     );
-    expect(controlToolsFor(r.state, A)).toEqual([]);
+    expect(controlToolsFor(r.state, A)).toEqual(['report_work']);
+    // ADR-0026 §3: the rework turn asks for a new note (it replaces the earlier one).
+    expect(start?.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
     // Round 1: started, finished, sealed, reviewed again.
     let t = ok(
       event(r.state, A, { type: 'started', providerSessionId: `sess-${A}`, model: null }, 6000),

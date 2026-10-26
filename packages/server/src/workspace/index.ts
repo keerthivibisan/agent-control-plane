@@ -11,6 +11,7 @@ export type {
   CreateOptions,
   CreatedTicketBranch,
   IntegrateResult,
+  LineCounts,
   SealResult,
   TicketBranchRef,
   TicketBranchReview,
@@ -28,3 +29,10 @@ export { GitCommandError, WorkspaceError } from './errors.js';
 export type { WorkspaceErrorCode } from './errors.js';
 export type { ChangedFile } from './diff.js';
 export { isSafeId } from './ids.js';
+export {
+  ALWAYS_PROTECTED,
+  legacyTicketBranchPlan,
+  strategyProtectedNames,
+  ticketBranchPlan,
+} from './ticket-branch-plan.js';
+export type { TicketBranchPlan } from './ticket-branch-plan.js';

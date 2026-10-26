@@ -350,3 +350,28 @@ describe('projectTokens (R-F)', () => {
     expect(thrown(() => get({ from: 'yesterday' }))).toBeInstanceOf(DbError);
   });
 });
+
+describe('ticketTokens (v0.3.0 T-A, the ticket badge)', () => {
+  it('equals the Tokens page’s byTicket row for each ticket, nulls kept null', () => {
+    const t = get();
+    for (const id of [fx.tickets.web1, fx.tickets.web2]) {
+      const row = t.byTicket.find((r) => r.ticketId === id);
+      const one = fx.q.ticketTokens(fx.store.projectId, id);
+      expect(one).toEqual({ totals: row?.totals, headline: row?.headline });
+    }
+    expect(fx.q.ticketTokens(fx.store.projectId, fx.tickets.web1)?.totals.tokens).toEqual(
+      tokens(9, 81, 26, 801),
+    );
+    // WEB-2 has a run but no observed usage: every category unavailable, never 0.
+    expect(fx.q.ticketTokens(fx.store.projectId, fx.tickets.web2)?.headline).toEqual({
+      newWork: null,
+      totalProcessed: null,
+      cacheReuseShare: null,
+    });
+  });
+
+  it('an unknown ticket has no records; an unknown project is undefined', () => {
+    expect(fx.q.ticketTokens(fx.store.projectId, 'no-such-ticket')?.totals.recordCount).toBe(0);
+    expect(fx.q.ticketTokens('no-such-project', fx.tickets.web1)).toBeUndefined();
+  });
+});

@@ -232,20 +232,24 @@ describe("the owner's final merge", { timeout: GIT_TIMEOUT_MS }, () => {
     expect(review).toMatchObject({ tip, baseHead: tb.baseCommit, baseMoved: false });
     expect(review.files.map((f) => f.path)).toEqual(['one.txt']);
     const result = await manager.mergeTicketBranch(ref, tip);
-    expect(result).toEqual({ commit: tip, previousBaseCommit: tb.baseCommit, branchDeleted: true });
+    expect(result).toEqual({
+      commit: tip,
+      previousBaseCommit: tb.baseCommit,
+      branchDeleted: true,
+      movedCheckout: true,
+    });
     expect(head(repo)).toBe(tip);
     expect(readFileSync(join(repo, 'one.txt'), 'utf8')).toBe('1\n');
     expect(branches(repo)).not.toContain('acp/WEB-1');
   });
 
-  it('refuses a dirty tree, another branch, a moved tip and a moved base', async () => {
+  it('refuses a dirty tree on the target, a moved tip and a moved base', async () => {
     const { manager, repo, ref, tip } = await merged();
     write(repo, 'README.md', 'dirty\n');
     expect(await code(manager.mergeTicketBranch(ref, tip))).toBe('base-dirty');
     git(repo, 'checkout', '--quiet', '--', 'README.md');
-    git(repo, 'checkout', '--quiet', '-b', 'other');
-    expect(await code(manager.mergeTicketBranch(ref, tip))).toBe('base-branch-changed');
-    git(repo, 'checkout', '--quiet', 'main');
+    // ADR-0025: another checked-out branch no longer refuses the merge; branching.test.ts covers
+    // the compare-and-swap of a target that is not checked out.
     expect(await code(manager.mergeTicketBranch(ref, 'f'.repeat(40)))).toBe('ticket-branch-moved');
     write(repo, 'main.txt', 'm\n');
     git(repo, 'add', '--all');
@@ -380,3 +384,102 @@ describe(
     });
   },
 );
+
+describe(
+  'attachment copies never reach a commit (ADR-0026 §4)',
+  { timeout: GIT_TIMEOUT_MS },
+  () => {
+    it('leaves them out even when the agent removed their .gitignore and staged one', async () => {
+      const { manager, w1 } = await loopSetup();
+      write(w1.path, 'fixed.txt', 'ok\n');
+      write(w1.path, '.acp-attachments/notes.txt', 'owner notes\n');
+      git(w1.path, 'add', '--force', '--', '.acp-attachments/notes.txt');
+      const sealed = await manager.seal(w1);
+      expect(sealed).toMatchObject({ changed: true, changedFiles: 1 });
+      expect(git(w1.path, 'ls-tree', '-r', '--name-only', sealed.headCommit)).not.toContain(
+        '.acp-attachments',
+      );
+    });
+
+    it('refuses a branch where the agent committed a copy itself', async () => {
+      const { manager, w1 } = await loopSetup();
+      write(w1.path, '.acp-attachments/notes.txt', 'owner notes\n');
+      git(w1.path, 'add', '--force', '--', '.acp-attachments/notes.txt');
+      git(w1.path, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'x');
+      git(w1.path, 'rm', '-r', '--cached', '--quiet', '--', '.acp-attachments');
+      expect(await code(manager.seal(w1))).toBe('invalid-workspace');
+    });
+  },
+);
+
+/** A harness file whose one setup step creates `deps/` and `gen/out` (ADR-0027 §3). */
+const HARNESS_WITH_OUTPUTS = JSON.stringify({
+  version: 1,
+  setup: [
+    {
+      id: 'install',
+      name: 'Install',
+      argv: ['node', 'install.mjs'],
+      timeoutSec: 60,
+      outputs: ['deps', './gen/out'],
+    },
+  ],
+  checks: [
+    { id: 'test', name: 'Test', argv: ['node', 'test.mjs'], timeoutSec: 60, required: true },
+  ],
+});
+
+describe('setup outputs never reach a commit (ADR-0027 §3)', { timeout: GIT_TIMEOUT_MS }, () => {
+  it('leaves them out of the seal, even staged by the agent, and of the pending check', async () => {
+    const { manager, w1 } = await loopSetup({
+      'README.md': 'hello\n',
+      '.acp/harness.json': HARNESS_WITH_OUTPUTS,
+    });
+    // What the setup made is never pending, so the worktree is still at its sealed head.
+    write(w1.path, 'deps/lib/index.js', 'module.exports = 1;\n');
+    write(w1.path, 'gen/out/types.d.ts', 'export {};\n');
+    expect(await manager.sealedHead(w1)).toBe(head(w1.path));
+    write(w1.path, 'fixed.txt', 'ok\n');
+    write(w1.path, 'gen/kept.txt', 'not an output\n');
+    git(w1.path, 'add', '--force', '--', 'deps/lib/index.js');
+    const sealed = await manager.seal(w1);
+    expect(sealed).toMatchObject({ changed: true, changedFiles: 2 });
+    const tree = git(w1.path, 'ls-tree', '-r', '--name-only', sealed.headCommit);
+    expect(tree).toContain('fixed.txt');
+    expect(tree).toContain('gen/kept.txt');
+    expect(tree).not.toContain('deps/');
+    expect(tree).not.toContain('gen/out');
+    // Still on disk for the agent's own checks; only kept out of git.
+    expect(existsSync(join(w1.path, 'deps/lib/index.js'))).toBe(true);
+    expect(await manager.sealedHead(w1)).toBe(sealed.headCommit);
+  });
+
+  it("reads the owner's harness file too, for a project in a subfolder", async () => {
+    const { manager } = setup();
+    const project = join(makeRepo({ 'apps/web/a.txt': 'a\n' }), 'apps', 'web');
+    // The owner's checkout declares outputs it has not committed.
+    write(project, '.acp/harness.json', HARNESS_WITH_OUTPUTS);
+    const ws = await manager.create(project, RUN, A1);
+    write(ws.cwd, 'deps/x.js', 'x\n');
+    write(ws.cwd, 'b.txt', 'b\n');
+    const sealed = await manager.seal(ws);
+    expect(sealed).toMatchObject({ changed: true, changedFiles: 1 });
+    const tree = git(ws.path, 'ls-tree', '-r', '--name-only', sealed.headCommit);
+    expect(tree).toContain('apps/web/b.txt');
+    expect(tree).not.toContain('deps/');
+  });
+
+  it('refuses a branch where the agent committed an output itself', async () => {
+    const { manager, w1 } = await loopSetup({
+      'README.md': 'hello\n',
+      '.acp/harness.json': HARNESS_WITH_OUTPUTS,
+    });
+    write(w1.path, 'deps/lib/index.js', 'module.exports = 1;\n');
+    git(w1.path, 'add', '--force', '--', 'deps/lib/index.js');
+    git(w1.path, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'x');
+    git(w1.path, 'rm', '-r', '--cached', '--quiet', '--', 'deps');
+    const error = await refusal(manager.seal(w1));
+    expect(error.code).toBe('invalid-workspace');
+    expect(error.message).toContain('setup outputs are never committed');
+  });
+});

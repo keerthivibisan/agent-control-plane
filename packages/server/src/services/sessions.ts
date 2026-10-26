@@ -18,6 +18,7 @@ import type {
 import { z } from 'zod';
 import { badRequest, notFound } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../http/cursor.js';
+import type { ManagedSessionNames } from './managed-sessions.js';
 import { statusOf, toReportedCostDto, toUsageTotalsDto, type Page } from './mappers.js';
 
 export const SessionListQuerySchema = z.object({
@@ -60,6 +61,8 @@ export interface SessionsServiceDeps {
   queries: Queries;
   now: () => Date;
   thresholds: SessionStatusThresholds;
+  /** ADR-0024 §2: names the sessions the app started (`SessionSummaryDto.managed`). */
+  managed?: ManagedSessionNames;
 }
 
 export function toEventDto(stored: StoredEvent): EventDto {
@@ -97,8 +100,10 @@ export function createSessionsService(deps: SessionsServiceDeps): SessionsServic
     const usage = queries.directUsageBySession(ids);
     const models = queries.modelsBySession(ids);
     const children = queries.childCountBySession(ids);
+    const managed = deps.managed?.of(rows);
     const now = deps.now();
     return rows.map((row) => {
+      const app = managed?.get(row.id);
       const direct = usage.get(row.id);
       if (direct === undefined) throw new Error('directUsageBySession omitted a requested id');
       return {
@@ -124,6 +129,7 @@ export function createSessionsService(deps: SessionsServiceDeps): SessionsServic
         lastAttentionAt: row.lastAttentionAt,
         directUsage: toUsageTotalsDto(direct),
         childCount: children.get(row.id) ?? 0,
+        ...(app !== undefined && { managed: app }),
       };
     });
   }

@@ -5,7 +5,7 @@ import { TICKET_COPY } from '../../lib/copy';
 
 /*
  * The state drawn around a live workflow block (the version 1 stages and the run's graph): a ring
- * while it works or waits for you, and the state's word on top. Working is the brand's lime;
+ * while it works or waits for you, and the state's word on top. Working is the accent;
  * warning and danger only for the real states (DESIGN.md, "Agent views").
  */
 
@@ -20,13 +20,13 @@ export const STATE_TONE: Record<WorkflowStageState, PillTone> = {
 };
 
 // A 1.5px state outline just outside the square node, with a soft halo; the graph's own
-// background (`canvas`) shows between them. Working is the brand's lime (an olive line with a lime
-// halo on ivory, lime on graphite); warning and danger only for the real states.
+// background (`canvas`) shows between them. Working is the accent (an accent line with a soft
+// accent halo); warning and danger only for the real states.
 export const STATE_RING: Record<WorkflowStageState, string> = {
   off: '',
   waiting: '',
   active:
-    'outline-[1.5px] outline-offset-2 outline-accent-fill-edge outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_45%,transparent)] dark:shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_14%,transparent)]',
+    'outline-[1.5px] outline-offset-2 outline-accent-fill-edge outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_22%,transparent)] dark:shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-accent-fill)_14%,transparent)]',
   'needs-you':
     'outline-[1.5px] outline-offset-2 outline-warning outline-solid shadow-[0_0_0_6px_color-mix(in_srgb,var(--color-warning)_14%,transparent)]',
   done: '',

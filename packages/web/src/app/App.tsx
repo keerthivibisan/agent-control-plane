@@ -19,7 +19,8 @@ import { href, useRoute, type Route } from '../lib/router';
 import { browserEventSource, useEventStream, type EventSourceFactory } from '../lib/useEventStream';
 import { HealthScreen } from './HealthScreen';
 import { isProjectPageAvailable } from './project-pages';
-import { LegacyRedirect } from './Redirect';
+import { LegacyRedirect, RedirectTo } from './Redirect';
+import { reviewTarget } from './redirects';
 import { Shell } from './Shell';
 
 function NotFound() {
@@ -83,6 +84,9 @@ function Screen({ route }: { route: Route }) {
       return <ProjectScreen route={route} />;
     case 'ticket':
       return <TicketPage key={route.id} id={route.id} />;
+    case 'review':
+      // D-A's review pages became the ticket's Files changed tab (C-D): old links land there.
+      return <RedirectTo hash={reviewTarget(route)} />;
     case 'run':
       // Phase 3 runs without a ticket keep their page (chat, approvals, review) until
       // "Quick ticket" replaces ad-hoc runs; `runId` null is the start page.

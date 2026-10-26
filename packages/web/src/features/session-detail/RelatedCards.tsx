@@ -8,7 +8,7 @@ import type { QueryState } from '../../lib/query-store';
 import { EMPTY, GLOSSARY, SESSION_DETAIL_COPY, SESSIONS_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 import { FamilyTree } from '../sessions/FamilyTree';
-import { sessionName } from '../sessions/session-bits';
+import { sessionName } from '../../lib/session-name';
 
 const COPY = SESSION_DETAIL_COPY.related;
 

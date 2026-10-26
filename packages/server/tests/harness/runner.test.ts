@@ -10,6 +10,7 @@ import {
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import {
+  BRANCH_CHECK_NOTE,
   ChecksShutdown,
   createCheckRunner,
   type CheckSpawnFn,
@@ -97,6 +98,43 @@ function expectValid(results: CheckRun[]): void {
 
 // Real child processes: allow for a heavily loaded machine instead of the 5 s default.
 describe('createCheckRunner', { timeout: 30_000 }, () => {
+  // F-2: the same runner serves agent worktrees, tip checkouts and the main branch's "Run checks
+  // now" (no run, no agent); a branch-managing check is never started in any of them.
+  for (const where of [
+    { name: 'an agent worktree', runId: 'r1', agentRunId: 'a1' },
+    { name: 'a tip checkout', runId: 'r1', agentRunId: null },
+    { name: 'the main branch', runId: null, agentRunId: null },
+  ]) {
+    it(`F-2: never starts a branch-managing git or gh check (${where.name})`, async () => {
+      const root = checkout();
+      const { spawn: spy, calls } = spyingSpawn();
+      const results = await createCheckRunner({ spawn: spy, newId: ids }).run({
+        projectId: 'p1',
+        runId: where.runId,
+        agentRunId: where.agentRunId,
+        root,
+        checks: [
+          check('push', ['git', 'push', 'origin', 'HEAD']),
+          check('switch', ['sh', '-c', 'git checkout main']),
+          check('merge', ['gh', 'pr', 'merge', '1']),
+          check('version', ['git', '--version']),
+          check('pass', ['node', 'scripts/pass.mjs']),
+        ],
+      });
+      expectValid(results);
+      expect(results.map((r) => r.status)).toEqual(['error', 'error', 'error', 'passed', 'passed']);
+      for (const r of results.slice(0, 3)) {
+        expect(r).toMatchObject({ exitCode: null, durationMs: 0 });
+        expect(r.outputTail).toContain(BRANCH_CHECK_NOTE);
+      }
+      // Only the reading git check and the node check were started.
+      expect(calls.map((c) => [c.file, ...c.args])).toEqual([
+        ['git', '--version'],
+        ['node', 'scripts/pass.mjs'],
+      ]);
+    });
+  }
+
   it('runs checks in order with argv and no shell, and reports pass and fail', async () => {
     const root = checkout();
     const { spawn: spy, calls } = spyingSpawn();

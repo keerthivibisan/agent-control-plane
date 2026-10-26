@@ -1,4 +1,5 @@
 import {
+  CheckRunPlaceSchema,
   CheckRunSchema,
   CheckRunStatusSchema,
   MAX_CHECK_OUTPUT_BYTES,
@@ -55,15 +56,23 @@ interface CheckRunDbRow {
   duration_ms: number;
   output_tail: string;
   started_at: string;
+  /** Migration 0010 (ADR-0027); absent on older schemas. */
+  place?: string | null;
+  block_node_id?: string | null;
 }
 
 const T = 'check_runs';
-const COLUMNS = `id, project_id, run_id, agent_run_id, check_id, name, required, status, exit_code,
+const BASE_COLUMNS = `id, project_id, run_id, agent_run_id, check_id, name, required, status, exit_code,
   duration_ms, output_tail, started_at`;
 /** Any length on the way in: the repository keeps only the tail. */
 const AnyText = textParser(0, Number.MAX_SAFE_INTEGER);
 
 function toCheckRun(row: CheckRunDbRow): CheckRun {
+  // ADR-0027: where it ran; rows from before migration 0010 have neither field.
+  const place =
+    row.place === undefined || row.place === null
+      ? {}
+      : { place: row.place, blockNodeId: row.block_node_id ?? null };
   return parseStored(
     CheckRunSchema,
     {
@@ -79,6 +88,7 @@ function toCheckRun(row: CheckRunDbRow): CheckRun {
       durationMs: row.duration_ms,
       outputTail: row.output_tail,
       startedAt: row.started_at,
+      ...place,
     },
     T,
     '*',
@@ -95,8 +105,15 @@ function tailOf(text: string): string {
 
 export function createCheckRunsRepository(ctx: RepositoryContext): CheckRunsRepository {
   const c = ctx.connection;
+  // Migration 0010 (ADR-0027) added `place` and `block_node_id`; this repository still works on
+  // older schemas (the upgrade tests store rows before the migration that adds them).
+  const hasPlace = (c.pragma(`table_info(${T})`) as { name: string }[]).some(
+    (col) => col.name === 'place',
+  );
+  const COLUMNS = hasPlace ? `${BASE_COLUMNS}, place, block_node_id` : BASE_COLUMNS;
   const insert = c.prepare(
-    `INSERT INTO ${T} (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ${COLUMNS}`,
+    `INSERT INTO ${T} (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasPlace ? ', ?, ?' : ''})
+     RETURNING ${COLUMNS}`,
   );
   const runProject = c.prepare('SELECT project_id FROM orchestration_runs WHERE id = ?').pluck();
   const byId = c.prepare(`SELECT ${COLUMNS} FROM ${T} WHERE id = ?`);
@@ -138,6 +155,16 @@ export function createCheckRunsRepository(ctx: RepositoryContext): CheckRunsRepo
           throw new DbError('invalid_input', 'check run project is not the run project');
         }
       }
+      const place =
+        valid.place === undefined
+          ? null
+          : parseInput(CheckRunPlaceSchema, valid.place, 'check place');
+      if (place === null && valid.blockNodeId !== undefined && valid.blockNodeId !== null) {
+        throw new DbError('invalid_input', "a check run's block needs its place");
+      }
+      const placeValues = hasPlace
+        ? [place, place === null ? null : (valid.blockNodeId ?? null)]
+        : [];
       return guardWrite('check run', () =>
         toCheckRun(
           insert.get(
@@ -153,6 +180,7 @@ export function createCheckRunsRepository(ctx: RepositoryContext): CheckRunsRepo
             valid.durationMs,
             valid.outputTail,
             toStoredTimestamp(valid.startedAt, 'check startedAt'),
+            ...placeValues,
           ) as CheckRunDbRow,
         ),
       );

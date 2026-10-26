@@ -7,7 +7,8 @@ import { GLOSSARY, helperAgentsText, SESSIONS_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { buildFamily, type FamilyMember } from './family';
-import { sessionName, TokenSummary } from './session-bits';
+import { nameSession, sessionName } from '../../lib/session-name';
+import { SessionNameExtra, TokenSummary } from './session-bits';
 
 const COPY = SESSIONS_COPY.family;
 
@@ -36,17 +37,16 @@ function MemberCard({
 }) {
   const s = m.session;
   const current = s.id === currentProps.id;
+  const naming = nameSession(s);
   return (
     <div
       data-testid={`family-member-${s.id}`}
       data-current={current ? 'true' : undefined}
       // Square, like every agent node (DESIGN.md, "Agent views"): the session outlined has the
-      // brand's lime ring, a top-level session an ink frame, the others a hairline.
+      // accent ring, a top-level session an ink frame, the others a hairline.
       className={`relative max-w-xl rounded-[2px] border bg-panel px-4 py-3 shadow-card transition-colors ${
         current
-          ? `ring-3 ring-accent-fill/55 dark:ring-accent-fill/25 ${
-              top ? 'border-ink' : 'border-accent-fill-edge'
-            }`
+          ? `ring-3 ring-accent/25 ${top ? 'border-ink' : 'border-accent-fill-edge'}`
           : top
             ? 'border-ink/70 hover:border-ink'
             : 'border-line hover:border-line-strong'
@@ -59,10 +59,11 @@ function MemberCard({
           aria-current={current ? 'page' : undefined}
           className="min-w-0 flex-1 truncate font-medium text-ink no-underline after:absolute after:inset-0 after:rounded-[2px] hover:underline"
         >
-          {sessionName(s)}
+          {naming.name}
         </a>
         <StatusBadge status={s.status} withTip={false} />
       </div>
+      <SessionNameExtra naming={naming} />
       <div className="mt-1 text-caption">
         <TokenSummary usage={s.directUsage} withCache={false} compact={false} />
       </div>

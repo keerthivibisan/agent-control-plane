@@ -19,8 +19,22 @@ export interface ManagedAgentSpec {
   cwd: string;
   /** First user message. Further messages go through `send`. */
   prompt: string;
+  /**
+   * Absolute folders outside `cwd` that the agent may READ without asking the owner (ADR-0026 §4:
+   * the read-only copies of the owner's attachments that a lead or planner gets in the run's data
+   * folder). Reads only: it never allows an edit or a command, and never widens a role's tools.
+   */
+  readOnlyDirs?: readonly string[];
   /** Resolved model id, or null for the provider default. */
   model: string | null;
+  /**
+   * ADR-0024: the session's display title, set when the session starts (the Agent SDK's `title`
+   * option, which also skips Claude Code's automatic title request), e.g. `WEB-12 · Frontend
+   * helper`. App data only (ticket key and block or role names), at most `MAX_SESSION_TITLE`
+   * characters. Absent: Claude Code titles the session as before. Ignored for follow-ups, whose
+   * resumed session keeps its title.
+   */
+  title?: string;
   /** Lead only: the fixed tool set (ADR-0012). Workers never get these tools (depth 1). */
   leadTools?: LeadToolHandler;
   /**
@@ -97,6 +111,13 @@ export interface FullAutoSpec {
   tempDir: string;
   /** Absolute paths sandboxed commands may not read (secrets, the app's data, Claude's config). */
   denyRead: readonly string[];
+  /**
+   * F-1: the agent's worktree's git directories (its private `--git-dir` and the repository's
+   * `--git-common-dir`, absolute and resolved through symlinks), which sandboxed commands and the
+   * file tools may not write: only the app commits and moves refs. Claude Code itself makes a
+   * linked worktree's common git directory writable in the sandbox. Absent from servers before F-1.
+   */
+  gitDirs?: readonly string[];
 }
 
 /**

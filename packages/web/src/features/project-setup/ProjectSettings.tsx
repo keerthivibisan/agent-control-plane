@@ -5,9 +5,20 @@ import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { AlertIcon, CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
 import { ApprovalsIcon } from '../review-loop/icons';
+import { BranchesCard } from '../branching/Branches';
+import { BranchingFields } from '../branching/BranchingFields';
+import { CodeHostCard, useCodeHost } from '../branching/CodeHostCard';
+import {
+  draftFromStrategy,
+  draftToStrategy,
+  hasBranchingErrors,
+  sameBranching,
+  validateBranching,
+} from '../branching/strategy-form';
 import { labelClass } from '../../components/Input';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
+import { ThemeChoice } from '../../components/ThemeSwitch';
 import {
   isProjectSetupPath,
   paths,
@@ -16,7 +27,7 @@ import {
   schemas,
   updateProjectSetup,
 } from '../../lib/api';
-import { PROJECT_SETUP_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
+import { BRANCHING_COPY, PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SHELL_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
 import type { QueryState } from '../../lib/query-store';
 import { href } from '../../lib/router';
@@ -77,7 +88,14 @@ function SettingsForm({
   const [justSaved, setJustSaved] = useState(false);
   const invalidate = useMemo(() => isProjectSetupPath(project.id), [project.id]);
   const save = useSetupAction(updateProjectSetup, invalidate);
-  const dirty = !sameSettings(draft, saved);
+  // ADR-0025: the branching strategy, saved with the rest; GitHub's default branch (when the code
+  // host could tell) is where the presets start.
+  const host = useCodeHost(project.id);
+  const savedBranching = useMemo(() => draftFromStrategy(setup.branching), [setup]);
+  const [branching, setBranching] = useState(savedBranching);
+  const branchErrors = validateBranching(branching);
+  const branchingChanged = !sameBranching(branching, savedBranching);
+  const dirty = !sameSettings(draft, saved) || branchingChanged;
 
   const change = (patch: Partial<SetupDraft>) => {
     setJustSaved(false);
@@ -87,12 +105,16 @@ function SettingsForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const r = draftToRequest({ ...draftFromSetup(setup), ...draft }, candidates.data);
+    const b = draftToStrategy(branching);
     if (!r.ok) {
       setErrors(r.errors);
       return;
     }
     setErrors({});
-    if ((await save.run(project.id, r.request)) !== null) setJustSaved(true);
+    if (!b.ok) return;
+    // Absent keeps the stored strategy; `null` removes it (None).
+    const request = branchingChanged ? { ...r.request, branching: b.branching } : r.request;
+    if ((await save.run(project.id, request)) !== null) setJustSaved(true);
   };
 
   return (
@@ -141,9 +163,31 @@ function SettingsForm({
           candidates={candidates}
         />
       </Card>
+      <Card
+        title={BRANCHING_COPY.card.title}
+        tip={BRANCHING_COPY.card.tip}
+        description={BRANCHING_COPY.card.description}
+        testId="settings-branching"
+      >
+        <BranchingFields
+          draft={branching}
+          errors={branchErrors}
+          onChange={(next) => {
+            setJustSaved(false);
+            setBranching(next);
+          }}
+          projectKey={draft.projectKey}
+          defaultBranch={host.data?.defaultBranch ?? undefined}
+          projectId={project.id}
+        />
+      </Card>
       <ActionError error={save.error} message={S.saveFailed} />
       <div className="flex flex-wrap items-center gap-3" data-testid="settings-save">
-        <Button type="submit" variant="primary" disabled={!dirty || save.pending}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={!dirty || save.pending || hasBranchingErrors(branchErrors)}
+        >
           {save.pending ? S.saving : S.save}
         </Button>
         {dirty ? (
@@ -152,6 +196,7 @@ function SettingsForm({
               variant="quiet"
               onClick={() => {
                 setDraft(saved);
+                setBranching(savedBranching);
                 setErrors({});
               }}
               disabled={save.pending}
@@ -226,6 +271,8 @@ function SettingsBody({ project }: { project: ProjectDto }) {
         <QueryView query={setup}>
           {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
         </QueryView>
+        <CodeHostCard projectId={id} />
+        <BranchesCard projectId={id} />
         <Card title={S.elsewhere.title} testId="settings-elsewhere">
           <ul className="-my-3 flex flex-col divide-y divide-line">
             <MovedRow
@@ -252,6 +299,13 @@ function SettingsBody({ project }: { project: ProjectDto }) {
               testId="settings-harness-link"
             />
           </ul>
+        </Card>
+        <Card
+          title={SHELL_COPY.theme.settingsTitle}
+          description={SHELL_COPY.theme.settingsText}
+          testId="settings-appearance"
+        >
+          <ThemeChoice />
         </Card>
         <Card title={S.danger} testId="settings-danger" className="border-danger/30">
           <p className="flex items-start gap-2.5 rounded-control border border-danger/20 bg-danger-soft/50 px-3 py-2.5 text-dim">

@@ -15,7 +15,8 @@ import { useApiQuery } from '../../lib/query';
 import { href } from '../../lib/router';
 import { ActivityFeed } from './ActivityFeed';
 import { CostBySession } from './CostBySession';
-import { sessionName, SessionRows } from './SessionRows';
+import { sessionName } from '../../lib/session-name';
+import { SessionRows } from './SessionRows';
 
 /** The four everyday statuses always show; "Unknown" only when some session has it. */
 const MAIN_STATUSES: readonly SessionStatus[] = ['active', 'idle', 'stale', 'ended'];

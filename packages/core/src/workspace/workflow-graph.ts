@@ -147,8 +147,54 @@ export const PlanApprovalGateSchema = z.object({
   ...NodeBase,
   auto: z.boolean(),
 });
-/** The project's required harness checks; a change merges into the ticket branch only after them. */
-export const ChecksGateSchema = z.object({ type: z.literal('checks'), ...NodeBase });
+/**
+ * Where a Checks block runs (ADR-0027 §5):
+ * - `change`: on a helper's or tester's sealed change, before its review (wired from it with a
+ *   `flow` edge);
+ * - `merge`: on the change integrated with the ticket tip, before the lead's merge (one per graph,
+ *   mandatory: the block before ADR-0027);
+ * - `branch`: on the ticket branch tip after every change, before the owner's merge (in the final
+ *   chain).
+ */
+export const CheckBlockPlaceSchema = z.enum(['change', 'merge', 'branch']);
+export type CheckBlockPlace = z.infer<typeof CheckBlockPlaceSchema>;
+
+const checkSlug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
+
+/** Which of the harness file's checks a block runs: the required ones, a list, or labels. */
+export const CheckSelectionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('required') }),
+  z.object({ kind: z.literal('ids'), ids: z.array(checkSlug).min(1).max(20) }),
+  z.object({ kind: z.literal('labels'), labels: z.array(checkSlug).min(1).max(5) }),
+]);
+export type CheckSelection = z.infer<typeof CheckSelectionSchema>;
+
+/**
+ * Where a failed block sends the work (ADR-0027 §5): the lead decides, the owner is asked, or the
+ * helper reworks it (a `rework` edge from the block to that helper, `maxRounds`).
+ */
+export const CheckFailureRouteSchema = z.enum(['lead', 'owner', 'helper']);
+export type CheckFailureRoute = z.infer<typeof CheckFailureRouteSchema>;
+
+/** The failure routes each place allows; the first is the default. */
+export const CHECK_FAILURE_ROUTES: Readonly<Record<CheckBlockPlace, readonly CheckFailureRoute[]>> =
+  Object.freeze({
+    change: ['lead', 'owner', 'helper'],
+    merge: ['lead', 'owner'],
+    branch: ['owner'],
+  });
+
+/**
+ * The project's harness checks (ADR-0017, ADR-0027). Absent fields mean the block before ADR-0027:
+ * before the lead's merge, every required check, the lead decides.
+ */
+export const ChecksGateSchema = z.object({
+  type: z.literal('checks'),
+  ...NodeBase,
+  place: CheckBlockPlaceSchema.optional(),
+  select: CheckSelectionSchema.optional(),
+  onFailure: CheckFailureRouteSchema.optional(),
+});
 /** Every change is decided and the ticket branch holds the merged work. */
 export const TicketMergeGateSchema = z.object({ type: z.literal('ticket-merge'), ...NodeBase });
 /** The owner merges the ticket branch into the base branch, once. */
@@ -333,12 +379,22 @@ export const GraphIssueCodeSchema = z.enum([
   'cycle',
   'unreachable',
   'not-assigned',
+  // Checks blocks (ADR-0027 §5)
+  'check-block-input',
+  'many-check-blocks',
+  'check-failure-route',
+  'check-rework',
   // warnings
   'missing-skill',
   'missing-agent-file',
   'full-auto-plan-manual',
   'plan-auto-without-full-auto',
   'instances-over-limit',
+  // warnings about a block's selection against the harness file (ADR-0027 §4, §5)
+  'unknown-check',
+  'unknown-check-label',
+  'no-checks-selected',
+  'merge-skips-required',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -473,6 +529,53 @@ export interface CompileContext {
 }
 
 /**
+ * A Checks block as the engine runs it (ADR-0027 §5), its settings with the defaults filled in
+ * (`checkBlockOf`). Which checks it runs is `checksForBlock(manifest, select)`, against the harness
+ * file of the checkout it runs in.
+ */
+export interface ProgramCheckBlock {
+  nodeId: WorkflowNodeId;
+  label: string;
+  select: CheckSelection;
+  onFailure: CheckFailureRoute;
+}
+
+/** The block before the lead's merge: one per graph; `onFailure` is `lead` or `owner`. */
+export interface ProgramMergeCheckBlock extends ProgramCheckBlock {
+  place: 'merge';
+}
+
+/** The block on the ticket branch, before the owner's merge; `onFailure` is `owner`. */
+export interface ProgramBranchCheckBlock extends ProgramCheckBlock {
+  place: 'branch';
+  /**
+   * How many of `finalStages` come before it on the final chain: it runs on the tip after the
+   * last change and after `finalStages[0 .. afterStages - 1]`, before the rest.
+   */
+  afterStages: number;
+}
+
+/** A block on an editing node's sealed change, before its review. */
+export interface ProgramChangeCheckBlock extends ProgramCheckBlock {
+  place: 'change';
+  /**
+   * `onFailure: 'helper'`: how often the block may send the change back (its rework edge's rounds,
+   * not replaced by the run's review rounds); null for the other routes.
+   */
+  maxRounds: number | null;
+}
+
+/** Every Checks block of a run (ADR-0027 §5). */
+export interface ProgramCheckBlocks {
+  /** Old graphs: the `checks` node with `{ kind: 'required' }` and `lead`. */
+  merge: ProgramMergeCheckBlock;
+  /** Null without a block on the ticket branch (every old graph). */
+  branch: ProgramBranchCheckBlock | null;
+  /** Each editing node's change block, by the editing node's id; absent for a node without one. */
+  change: Readonly<Record<WorkflowNodeId, ProgramChangeCheckBlock>>;
+}
+
+/**
  * A valid graph compiled for one run (ADR-0023 §4). Built in memory when a run is created or
  * loaded, from the run's snapshot of the graph, and never stored.
  */
@@ -489,4 +592,6 @@ export interface WorkflowProgram {
   finalStages: readonly (ProgramFinalReviewerNode | ProgramTesterNode)[];
   /** Every editing node's mode for this run. */
   nodeModes: Readonly<Record<WorkflowNodeId, EffectiveNodeMode>>;
+  /** The Checks blocks (ADR-0027 §5). */
+  checkBlocks: ProgramCheckBlocks;
 }

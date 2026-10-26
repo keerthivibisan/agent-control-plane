@@ -535,6 +535,20 @@ export class Draft {
         ...(branch !== null ? { ticketBranch: branch } : {}),
       });
     }
+    // ADR-0027 §5: the Checks block on the ticket branch sits after `afterStages` final stages;
+    // it runs on the tip as the next stage starts (the last position is the owner's merge,
+    // whose tip checks the server runs when the run reaches review).
+    const branchBlock = loop === undefined ? null : this.program().checkBlocks.branch;
+    if (
+      branchBlock !== null &&
+      this.program().finalStages.findIndex((n) => n.id === node.id) === branchBlock.afterStages
+    ) {
+      this.effects.push({
+        type: 'run-branch-checks',
+        blockNodeId: branchBlock.nodeId,
+        select: branchBlock.select,
+      });
+    }
     const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
     const loopFields =
       loop === undefined

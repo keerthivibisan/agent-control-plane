@@ -1,6 +1,6 @@
 {
   "name": "agent-control-plane",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Local-first control plane for observing, orchestrating, and improving AI-assisted software development.",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "dev": "pnpm --parallel --filter @acp/server --filter @acp/web run dev",
     "test": "pnpm -r --if-present run test",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

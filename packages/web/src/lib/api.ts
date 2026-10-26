@@ -71,18 +71,36 @@ import {
 import { RunWorkflowDtoSchema } from '@acp/core/api';
 // Live run graph and the blocks' modes for the run options (WG-E, ADR-0023).
 import { RunWorkflowGraphDtoSchema } from '@acp/core/api';
+// The harness in the workflow: setup runs on main (H-D, ADR-0027).
+import { SetupRunDtoSchema } from '@acp/core/api';
 // Review loop: Start overrides and the ticket branch (RL-D, ADR-0021).
 import {
   StartTicketRequestSchema,
   TicketBranchActionRequestSchema,
   TicketBranchReviewDtoSchema,
 } from '@acp/core/api';
+// F-1: reset a ticket branch changed outside the app.
+import { ResetTicketBranchRequestSchema } from '@acp/core/api';
 // Workflow graph editor (WG-D, ADR-0023).
 import {
   UpdateWorkflowGraphRequestSchema,
   ValidateWorkflowGraphResultDtoSchema,
   WorkflowGraphDtoSchema,
 } from '@acp/core/api';
+// Code hosting and branching (G-B, ADR-0025).
+import {
+  CodeHostStatusDtoSchema,
+  OpenPullRequestRequestSchema,
+  TicketBranchDtoSchema,
+} from '@acp/core/api';
+// Connecting a project to GitHub from Settings (G-E, ADR-0025 §7).
+import { ConnectRepositoryRequestSchema, CreateRepositoryRequestSchema } from '@acp/core/api';
+// A project's branches: list and create (G-F, ADR-0025 §8).
+import { CreateBranchRequestSchema, ProjectBranchesDtoSchema } from '@acp/core/api';
+// Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026).
+import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
+// Merge pull request, Delete branch (G-G, ADR-0025 §9) and the ticket badge (T-A).
+import { MergePullRequestRequestSchema, TicketTotalsDtoSchema } from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -181,6 +199,25 @@ export interface ApiClient {
   ): Promise<T>;
   /** DELETE answered by 204 No Content (redesign R-D: `DELETE /api/projects/:id/skills/:name`). */
   delete(path: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<void>;
+  /**
+   * A POST whose body is the bytes themselves, not JSON (v0.3.0 C-B, ADR-0026: an attachment's
+   * upload), sent with `contentType` as its `Content-Type`.
+   */
+  postRaw<T>(
+    path: string,
+    data: Blob,
+    contentType: string,
+    schema: Schema<T>,
+    headers?: Record<string, string>,
+  ): Promise<T>;
+}
+
+/** A request body sent as it is (`postRaw`), apart from the JSON bodies of every other call. */
+class RawBody {
+  constructor(
+    readonly data: Blob,
+    readonly contentType: string,
+  ) {}
 }
 
 /** The "schema" of a 204 response: no body at all. */
@@ -203,14 +240,20 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
   ): Promise<T> {
     let res: Response;
     try {
+      const raw = body instanceof RawBody ? body : null;
       const init: RequestInit = {
         method,
         headers:
           body === undefined
             ? { accept: 'application/json', ...extraHeaders }
-            : { accept: 'application/json', 'content-type': 'application/json', ...extraHeaders },
+            : {
+                accept: 'application/json',
+                'content-type': raw !== null ? raw.contentType : 'application/json',
+                ...extraHeaders,
+              },
       };
-      if (body !== undefined) init.body = JSON.stringify(body);
+      if (raw !== null) init.body = raw.data;
+      else if (body !== undefined) init.body = JSON.stringify(body);
       if (signal) init.signal = signal;
       res = await fetchImpl(path, init);
     } catch (e) {
@@ -282,6 +325,8 @@ export function createApiClient(fetchImpl: FetchLike = (i, init) => fetch(i, ini
       request('PATCH', path, schema, body, signal, headers),
     delete: (path, signal, headers) =>
       request('DELETE', path, NoContentSchema, undefined, signal, headers),
+    postRaw: (path, data, contentType, schema, headers) =>
+      request('POST', path, schema, new RawBody(data, contentType), undefined, headers),
   };
 }
 
@@ -1128,4 +1173,251 @@ export async function ticketBranchAction(
     checked(TicketBranchActionRequestSchema, input, path),
     TicketBranchReviewDtoSchema,
   );
+}
+
+// F-1: POST /api/runs/:id/ticket-branch/reset (CSRF; the owner's click only) with
+// `{ from }`, the tip the owner saw (`ticketBranch.movedOutside.tip`): the server moves the branch
+// back to the last reviewed commit by compare-and-swap and answers with the TicketBranchReviewDto.
+export const ticketBranchResetPath = (runId: string): string =>
+  `${API_BASE}/runs/${enc(runId)}/ticket-branch/reset`;
+
+/** "Reset to the last reviewed commit" for a ticket branch changed outside the app. */
+export async function resetTicketBranch(client: ApiClient, runId: string, from: string) {
+  const path = ticketBranchResetPath(runId);
+  return controlPost(
+    client,
+    path,
+    checked(ResetTicketBranchRequestSchema, { from }, path),
+    TicketBranchReviewDtoSchema,
+  );
+}
+
+// --- Code hosting: GitHub status, Push & open PR (G-B, ADR-0025) ---------------------------------
+//
+// GET /api/projects/:id/code-host → CodeHostStatusDto (the server asks `gh` by exit code only).
+// POST /api/tickets/:id/branch/pull-request (CSRF; the owner's click only) with an
+// OpenPullRequestRequest pushes the ticket branch to origin and opens a pull request against its
+// target; POST …/pull-request/refresh reads the pull request's state again. Both answer with the
+// ticket branch, `pullRequest` filled in. Nothing here runs on a timer.
+
+export type OpenPullRequestRequest = ReturnType<typeof OpenPullRequestRequestSchema.parse>;
+
+export const codeHostPaths = {
+  status: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host`,
+  /** G-E: create the repository on GitHub and set it as origin. */
+  repository: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host/repository`,
+  /** G-E: set an existing GitHub repository as origin. */
+  remote: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-host/remote`,
+  pullRequest: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request`,
+  refresh: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request/refresh`,
+} as const;
+
+export const codeHostSchemas = {
+  status: CodeHostStatusDtoSchema,
+  branch: TicketBranchDtoSchema,
+} as const;
+
+/** Push & open PR: only from the owner's confirmed click on the ticket branch card. */
+export async function openPullRequest(
+  client: ApiClient,
+  ticketId: string,
+  input: OpenPullRequestRequest,
+) {
+  const path = codeHostPaths.pullRequest(ticketId);
+  return controlPost(
+    client,
+    path,
+    checked(OpenPullRequestRequestSchema, input, path),
+    codeHostSchemas.branch,
+  );
+}
+
+/** Refresh: reads the pull request's state on GitHub again. */
+export function refreshPullRequest(client: ApiClient, ticketId: string) {
+  return controlPost(client, codeHostPaths.refresh(ticketId), {}, codeHostSchemas.branch);
+}
+
+// G-G (ADR-0025 §9), only on the owner's confirmed click: POST …/pull-request/merge with a
+// MergePullRequestRequest merges the open pull request on GitHub (and, with deleteBranch, deletes
+// the branch there and locally); POST /api/tickets/:id/branch/delete deletes the merged or
+// discarded ticket branch on origin and in the project. Both answer the ticket branch with
+// `localExists` and `pullRequest.headOnOrigin`.
+
+export type MergePullRequestRequest = ReturnType<typeof MergePullRequestRequestSchema.parse>;
+
+export const branchActionPaths = {
+  merge: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/pull-request/merge`,
+  delete: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/branch/delete`,
+} as const;
+
+export function mergePullRequest(
+  client: ApiClient,
+  ticketId: string,
+  input: MergePullRequestRequest,
+) {
+  const path = branchActionPaths.merge(ticketId);
+  return controlPost(
+    client,
+    path,
+    checked(MergePullRequestRequestSchema, input, path),
+    codeHostSchemas.branch,
+  );
+}
+
+export function deleteTicketBranch(client: ApiClient, ticketId: string) {
+  return controlPost(client, branchActionPaths.delete(ticketId), {}, codeHostSchemas.branch);
+}
+
+// T-A: GET /api/tickets/:id/totals → TicketTotalsDto (time taken and the ticket's tokens, as on
+// the Tokens page; no cost). Under /api/tickets, so the ticket page's refetches include it.
+
+export const ticketTotalsPaths = {
+  totals: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/totals`,
+} as const;
+
+export const ticketTotalsSchemas = {
+  totals: TicketTotalsDtoSchema,
+} as const;
+
+// G-E (ADR-0025 §7): connecting a project from Settings, only on the owner's click and only when
+// the project has no origin yet (409 `origin_exists` otherwise). POST …/code-host/repository with
+// a CreateRepositoryRequest creates the repository with the owner's `gh` login and sets it as
+// origin (and pushes the current branch when asked); POST …/code-host/remote with a
+// ConnectRepositoryRequest sets an existing one as origin. Both answer the new CodeHostStatusDto.
+
+export type CreateRepositoryRequest = ReturnType<typeof CreateRepositoryRequestSchema.parse>;
+export type ConnectRepositoryRequest = ReturnType<typeof ConnectRepositoryRequestSchema.parse>;
+
+export function createCodeHostRepository(
+  client: ApiClient,
+  projectId: string,
+  input: CreateRepositoryRequest,
+) {
+  const path = codeHostPaths.repository(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(CreateRepositoryRequestSchema, input, path),
+    codeHostSchemas.status,
+  );
+}
+
+export function connectCodeHostRepository(
+  client: ApiClient,
+  projectId: string,
+  input: ConnectRepositoryRequest,
+) {
+  const path = codeHostPaths.remote(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(ConnectRepositoryRequestSchema, input, path),
+    codeHostSchemas.status,
+  );
+}
+
+// --- A project's branches (G-F, ADR-0025 §8) ----------------------------------------------------
+//
+// GET /api/projects/:id/branches → ProjectBranchesDto: the local branches, read from git when
+// asked (no fetch), with the current one and which are on origin. POST the same path (CSRF; the
+// owner's click only) with a CreateBranchRequest creates `name` at the tip of the local `from`
+// without switching the checkout, and pushes it when asked; it answers the new list. Refusals:
+// 409 `branch_exists`, 404 `base_branch_missing`, 409 `no_origin`, 422 `invalid_branch_name`.
+
+export type CreateBranchRequest = ReturnType<typeof CreateBranchRequestSchema.parse>;
+
+export const branchPaths = {
+  list: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/branches`,
+} as const;
+
+export const branchSchemas = {
+  list: ProjectBranchesDtoSchema,
+} as const;
+
+export function createProjectBranch(
+  client: ApiClient,
+  projectId: string,
+  input: CreateBranchRequest,
+) {
+  const path = branchPaths.list(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(CreateBranchRequestSchema, input, path),
+    branchSchemas.list,
+  );
+}
+
+// --- Comments, Conversation and attachments (v0.3.0 C-B, ADR-0026) -----------------------------
+//
+// GET /api/tickets/:id/activity → TicketActivityDto (the Conversation tab, oldest first).
+// GET /api/tickets/:id/attachments → AttachmentDto[]; POST the same path (CSRF) with the file's
+// bytes as the body, its type as `Content-Type` and its name, URI-encoded, in `X-Attachment-Name`
+// (optional `?commentId=`) → AttachmentDto. DELETE /api/attachments/:id (CSRF) → 204. Each
+// attachment's bytes are at its `contentUrl` (`/api/attachments/:id/content`).
+
+/** The header that carries an uploaded file's name (URI-encoded). */
+export const ATTACHMENT_NAME_HEADER = 'X-Attachment-Name';
+
+export const activityPaths = {
+  activity: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/activity`,
+  attachments: (ticketId: string) => `${API_BASE}/tickets/${enc(ticketId)}/attachments`,
+  attachment: (id: string) => `${API_BASE}/attachments/${enc(id)}`,
+} as const;
+
+export const activitySchemas = {
+  activity: TicketActivityDtoSchema,
+  attachments: AttachmentDtoSchema.array(),
+  attachment: AttachmentDtoSchema,
+} as const;
+
+/**
+ * Uploads one file to the ticket (or to an existing comment with `commentId`). The caller checks
+ * the size, type and name first (`features/attachments/limits.ts`); the server checks them again.
+ */
+export async function uploadAttachment(
+  client: ApiClient,
+  ticketId: string,
+  file: { data: Blob; name: string; mimeType: string },
+  commentId?: string,
+) {
+  const path = withQuery(activityPaths.attachments(ticketId), { commentId });
+  const send = async (fresh: boolean) =>
+    client.postRaw(path, file.data, file.mimeType, activitySchemas.attachment, {
+      [CSRF_HEADER]: await csrfToken(client, fresh),
+      [ATTACHMENT_NAME_HEADER]: encodeURIComponent(file.name),
+    });
+  try {
+    return await send(false);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 403) return send(true);
+    throw e;
+  }
+}
+
+/** Removes an attachment the owner added (the file and its row). */
+export function deleteAttachment(client: ApiClient, attachmentId: string) {
+  return controlDelete(client, activityPaths.attachment(attachmentId));
+}
+
+// --- The harness in the workflow (v0.3.0 H-D, ADR-0027) ----------------------------------------
+//
+// Served by H-B: GET /api/projects/:id/harness/setup-runs → SetupRunDto[], the latest setup runs
+// on the main branch ("Run setup and checks now"), oldest first; a server from before it answers
+// 404, read as none (`isSetupRunsUnavailable`). "Run setup and checks now" is the same POST
+// …/harness/checks as before (`runHarnessChecks`); the switch "Setup may use the network" is the
+// setup PUT's `setupNetwork` (`updateProjectSetup`). Both paths are under …/harness and …/setup,
+// so `isProjectSetupPath` refetches them.
+
+export const harnessSetupPaths = {
+  setupRuns: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/harness/setup-runs`,
+} as const;
+
+export const harnessSetupSchemas = {
+  setupRuns: SetupRunDtoSchema.array(),
+} as const;
+
+/** A 404: the server has no setup runs route (before ADR-0027), so there are none to show. */
+export function isSetupRunsUnavailable(error: ApiError | null): boolean {
+  return error !== null && error.kind === 'http' && error.status === 404;
 }

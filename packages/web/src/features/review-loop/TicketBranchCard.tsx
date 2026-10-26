@@ -1,26 +1,23 @@
 import type { RunDetailDto, TicketBranchDto, TicketBranchReviewDto } from '@acp/core/api';
-import { Button } from '../../components/Button';
+import { ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { DiffSection } from '../../components/diff';
 import { ErrorNotice } from '../../components/ErrorNotice';
-import { AlertIcon } from '../../components/icons';
 import { Pill, type PillTone } from '../../components/Pill';
 import { LoadingBlock } from '../../components/Skeleton';
-import { reviewLoopPaths, reviewLoopSchemas, ticketBranchAction } from '../../lib/api';
-import { REVIEW_LOOP_COPY } from '../../lib/copy';
+import { reviewLoopPaths, reviewLoopSchemas } from '../../lib/api';
+import { PULL_REQUEST_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
-import { ActionError, ConfirmAction } from '../control/bits';
-import { DiffView } from '../control/ReviewPanel';
-import { useTicketAction } from '../ticket/actions';
+import { href } from '../../lib/router';
+import { REVIEW_PAGE_COPY } from '../review/copy';
 import { Files } from '../ticket/ChangesTab';
 import { CheckRow } from '../ticket/ChecksTab';
 import { BranchIcon } from './icons';
-import { checksSummary, latestChecks, shortCommit, ticketBranchMode } from './logic';
-import { ReasonForm } from './ReasonForm';
+import { BranchFinalStep, type FinalStepTicket } from './BranchFinalStep';
+import { latestChecks, shortCommit, ticketBranchMode } from './logic';
 
 const B = REVIEW_LOOP_COPY.branch;
-const MAX_REASON = 500;
-const MAX_COMMENT = 8000;
 
 const STATE_TONE: Record<TicketBranchDto['state'], PillTone> = {
   open: 'accent',
@@ -54,156 +51,33 @@ function Combined({ review }: { review: TicketBranchReviewDto }) {
         <Files files={review.files} />
       )}
       {review.files.length > 0 || review.diff.length > 0 ? (
-        <Details summary={B.diff} testId="branch-diff">
-          <DiffView diff={review.diff} truncated={review.diffTruncated} />
-        </Details>
+        <DiffSection
+          summary={B.diff}
+          diff={review.diff}
+          truncated={review.diffTruncated}
+          files={review.files.map((f) => f.path)}
+          testId="branch-diff"
+        />
       ) : null}
     </div>
   );
 }
 
 /**
- * The owner's one merge (ADR-0021 §4): Merge into main (or merge anyway past a failed required
- * check, with a reason), Request changes (a comment for the lead; the run goes on), Discard, and
- * Update from main when main moved. Each asks first; the server checks again.
- */
-function Actions({
-  run,
-  branch,
-  review,
-}: {
-  run: Pick<RunDetailDto, 'id'>;
-  branch: TicketBranchDto;
-  review: TicketBranchReviewDto | undefined;
-}) {
-  const act = useTicketAction(ticketBranchAction);
-  const checks = checksSummary(review?.checks ?? []);
-  const base = branch.baseBranch;
-  return (
-    <div className="flex flex-col gap-2.5" data-testid="branch-actions">
-      {checks.kind === 'failed' ? (
-        <p
-          role="alert"
-          className="rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger"
-          data-testid="branch-blocked"
-        >
-          {B.blocked(checks.failing.map((c) => c.name).join(', '))}
-        </p>
-      ) : checks.kind === 'stopped' ? (
-        <p role="note" className="text-caption text-dim" data-testid="branch-checks-stopped">
-          {B.checksStopped}
-        </p>
-      ) : null}
-      {review?.baseMoved === true ? (
-        <div
-          role="note"
-          className="flex flex-wrap items-center gap-3 rounded-control border border-warning/30 bg-warning-soft px-3 py-2"
-          data-testid="branch-base-moved"
-        >
-          <AlertIcon size={15} className="shrink-0 text-warning" />
-          <span className="min-w-0 flex-1 text-caption">{B.baseMoved(base)}</span>
-          <Button
-            size="sm"
-            disabled={act.pending}
-            onClick={() => void act.run(run.id, { action: 'update-from-base' })}
-          >
-            {act.pending ? B.working : B.update(base)}
-          </Button>
-        </div>
-      ) : null}
-      <div className="flex flex-wrap items-start gap-2">
-        {checks.kind === 'failed' ? (
-          <ReasonForm
-            openLabel={B.mergeAnyway}
-            title={B.mergeAnywayTitle}
-            label={B.reasonLabel}
-            hint={B.reasonHint}
-            placeholder={B.reasonPlaceholder}
-            max={MAX_REASON}
-            tooLong={B.reasonTooLong(MAX_REASON)}
-            submitLabel={B.confirmMergeAnyway}
-            cancelLabel={B.cancel}
-            pendingLabel={B.working}
-            pending={act.pending}
-            tone="danger"
-            testId="branch-merge-anyway"
-            onConfirm={(reason) => act.run(run.id, { action: 'merge-anyway', reason })}
-          />
-        ) : (
-          <ConfirmAction
-            label={B.merge(base)}
-            question={B.confirmMerge(branch.branch, base)}
-            confirmLabel={B.confirmMergeButton}
-            cancelLabel={B.cancel}
-            pendingLabel={B.working}
-            pending={act.pending}
-            disabled={review?.baseMoved === true}
-            danger={false}
-            primary
-            onConfirm={() => act.run(run.id, { action: 'merge' })}
-          />
-        )}
-        <ReasonForm
-          openLabel={B.requestChanges}
-          title={B.requestTitle}
-          label={B.requestTitle}
-          hint={B.requestHint}
-          placeholder={B.requestPlaceholder}
-          max={MAX_COMMENT}
-          tooLong={B.requestTooLong(MAX_COMMENT)}
-          submitLabel={B.sendRequest}
-          cancelLabel={B.cancel}
-          pendingLabel={B.working}
-          pending={act.pending}
-          testId="branch-request-changes"
-          onConfirm={(comment) => act.run(run.id, { action: 'request-changes', comment })}
-        />
-        <ConfirmAction
-          label={B.discard}
-          question={B.confirmDiscard(branch.branch)}
-          confirmLabel={B.confirmDiscardButton}
-          cancelLabel={B.cancel}
-          pendingLabel={B.working}
-          pending={act.pending}
-          onConfirm={() => act.run(run.id, { action: 'discard' })}
-        />
-      </div>
-      <ActionError error={act.error} message={B.failed} />
-    </div>
-  );
-}
-
-/** A stopped run's open branch can only be discarded (README §5 "Stops"). */
-function DiscardOnly({ run, branch }: { run: Pick<RunDetailDto, 'id'>; branch: TicketBranchDto }) {
-  const act = useTicketAction(ticketBranchAction);
-  return (
-    <div className="flex flex-col gap-2" data-testid="branch-actions">
-      <p className="text-caption text-dim">{B.discardOnly}</p>
-      <ConfirmAction
-        label={B.discard}
-        question={B.confirmDiscard(branch.branch)}
-        confirmLabel={B.confirmDiscardButton}
-        cancelLabel={B.cancel}
-        pendingLabel={B.working}
-        pending={act.pending}
-        onConfirm={() => act.run(run.id, { action: 'discard' })}
-      />
-      <ActionError error={act.error} message={B.failed} />
-    </div>
-  );
-}
-
-/**
- * The run's ticket branch `acp/<KEY>` (ADR-0021 §4): where every merged change lands, with the
- * owner's single merge into main at the end. While agents work it only says so; at REVIEW it loads
- * the combined change (`GET /runs/:id/ticket-branch`) and offers the final actions.
+ * The run's ticket branch (ADR-0021 §4; named by the project's strategy since ADR-0025): where
+ * every merged change lands, with the owner's single final step at the end, a merge into the
+ * target or a pull request on GitHub. While agents work it only says so; at REVIEW it loads the
+ * combined change (`GET /runs/:id/ticket-branch`) and offers the final step (`BranchFinalStep`).
  */
 export function TicketBranchCard({
   run,
   branch,
+  ticket = null,
 }: {
   run: Pick<RunDetailDto, 'id' | 'status' | 'changes'>;
   branch: TicketBranchDto;
+  /** The run's ticket, for Push & open PR; null for a run without one. */
+  ticket?: FinalStepTicket | null;
 }) {
   const mode = ticketBranchMode(run, branch);
   const live = mode === 'merge' || mode === 'discard-only';
@@ -219,11 +93,30 @@ export function TicketBranchCard({
       description={B.description}
       testId="ticket-branch"
       actions={
-        <span data-testid="branch-state" data-state={branch.state}>
-          <Pill tone={STATE_TONE[branch.state]}>
-            {branch.state === 'merged' ? B.mergedInto(branch.baseBranch) : B.state[branch.state]}
-          </Pill>
-        </span>
+        <>
+          {ticket !== null && branch.state === 'open' ? (
+            <ButtonLink
+              size="sm"
+              href={href.ticketFiles({
+                projectId: ticket.projectId,
+                ticketId: ticket.id,
+                runId: run.id,
+              })}
+              data-testid="branch-review-files"
+            >
+              {REVIEW_PAGE_COPY.entry.branch}
+            </ButtonLink>
+          ) : null}
+          <span data-testid="branch-state" data-state={branch.state}>
+            <Pill tone={STATE_TONE[branch.state]}>
+              {branch.state !== 'merged'
+                ? B.state[branch.state]
+                : branch.pullRequest?.state === 'merged'
+                  ? PULL_REQUEST_COPY.mergedOnGitHub(branch.baseBranch)
+                  : B.mergedInto(branch.baseBranch)}
+            </Pill>
+          </span>
+        </>
       }
       className={mode === 'merge' ? 'border-accent-fill-edge/50' : ''}
     >
@@ -258,8 +151,7 @@ export function TicketBranchCard({
         </dl>
         {mode === 'waiting' ? <p className="text-dim">{B.waiting}</p> : null}
         {/* The decision first, the evidence (checks, files, diff) under it. */}
-        {mode === 'merge' ? <Actions run={run} branch={branch} review={q.data} /> : null}
-        {mode === 'discard-only' ? <DiscardOnly run={run} branch={branch} /> : null}
+        <BranchFinalStep mode={mode} run={run} branch={branch} review={q.data} ticket={ticket} />
         {live ? (
           q.data !== undefined ? (
             <Combined review={q.data} />

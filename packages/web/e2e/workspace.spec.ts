@@ -63,6 +63,11 @@ async function act(
   return out;
 }
 
+/** One of the ticket page's tabs (v0.3.0 D-B), not the side panel's. */
+function ticketTab(page: Page, name: RegExp) {
+  return page.getByRole('tablist', { name: 'Ticket sections' }).getByRole('tab', { name });
+}
+
 async function shoot(page: Page, name: string, fullPage = true): Promise<void> {
   if (SHOTS === undefined) return;
   for (const width of [1440, 1024]) {
@@ -149,12 +154,16 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await nav.getByRole('link', { name: 'Workflow' }).click();
   await expect(page.getByTestId('graph-editor')).toBeVisible();
   const panel = page.getByRole('complementary', { name: 'Block settings' });
-  await page.getByRole('button', { name: 'Add Planner' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Planner/ }).click();
   await expect(page.getByTestId('block-plan')).toHaveAttribute('data-kind', 'planner');
-  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Final reviewer/ }).click();
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'code-review');
   await panel.getByTestId('skills-field').getByLabel('code-review').check();
   await panel.getByRole('combobox', { name: 'Agent file' }).selectOption('reviewer');
+  // A block or link is selected: the header's Problems button shows the list again.
+  await page.getByTestId('problems-button').click();
   await expect(page.getByTestId('issues').getByTestId('issues-none')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
@@ -172,7 +181,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.getByTestId('block-done')).toBeInViewport({ ratio: 1 });
   const doneBox = await page.getByTestId('block-done').boundingBox();
-  const controlsBox = await page.locator('.react-flow__controls').boundingBox();
+  const controlsBox = await page.getByTestId('zoom-controls').boundingBox();
   if (doneBox === null || controlsBox === null) throw new Error('no Done block or controls');
   const apart =
     controlsBox.x + controlsBox.width <= doneBox.x ||
@@ -231,6 +240,8 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   });
   const card = page.getByTestId('plan-card');
   await expect(card).toContainText('Add the field and check the code at checkout');
+  // v0.3.0 D-B: the plan is on Comments (C-B), the graph and the chat on Agents.
+  await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-plan-approval')).toHaveAttribute(
     'data-state',
     'needs-you',
@@ -245,6 +256,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   ).toBeVisible();
   await expect(planPanel).not.toContainText('lead agent');
   await shoot(page, 'plan-review');
+  await ticketTab(page, /Comments/).click();
   // Request changes: the comment reaches the planner, which writes version 2.
   const change = 'Also limit the code to 20 characters.';
   await card.getByLabel('What should change?').fill(change);
@@ -272,6 +284,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   });
   const helper = await agentOf(request, (a) => a.kind === 'worker');
   await act(request, helper.id, 'started');
+  await ticketTab(page, /Agents/).click();
   await expect(page.getByRole('article', { name: 'Builder' })).toBeVisible();
   await expect(page.getByTestId('live-block-helpers')).toHaveAttribute('data-state', 'active');
   await shoot(page, 'working');
@@ -283,6 +296,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await act(request, lead.id, 'call-lead', { name: 'request_review', input: {} });
 
   // ---- Review & merge: the owner merges the helper's change.
+  await ticketTab(page, /Comments/).click();
   const reviewItem = page
     .getByTestId('review-list')
     .getByRole('listitem')
@@ -316,10 +330,15 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
     name: 'post_review',
     input: { text: 'The discount field has no limit on its length.' },
   });
-  const comment = page.getByTestId('comments').locator('[data-author="reviewer"]');
+  // The findings are on Conversation (v0.3.0 C-B, ADR-0026).
+  await ticketTab(page, /Conversation/).click();
+  const comment = page
+    .getByTestId('activity')
+    .locator('[data-type="review"][data-author="reviewer"]');
   await expect(comment).toContainText('The discount field has no limit on its length.');
-  await expect(comment.getByTestId('comment-author')).toHaveText('Reviewer');
+  await expect(comment.getByTestId('comment-author')).toHaveText('Code reviewer');
   await act(request, reviewer.id, 'finish');
+  await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'done');
   await expect(page.getByRole('button', { name: 'About status Done' })).toBeVisible();
   // R-R visual: the run completed, so the Done node is lit, and the lead the engine closed when
@@ -334,7 +353,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await shoot(page, 'done');
 
   // ---- Follow-up: the ended lead answers a question; the page updates with no reload.
-  expect(page.url()).toBe(ticketUrl);
+  expect(page.url().split('?')[0]).toBe(ticketUrl);
   // The agent tree's card; the live graph has a button with the same name on the block.
   await page
     .getByRole('button', { name: 'Show the Lead in the side panel' })
@@ -357,7 +376,7 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   // No reload: the run stream's notice brings the box back.
   await expect(box).toBeEnabled();
   await expect(side.getByRole('status')).toHaveCount(0);
-  expect(page.url()).toBe(ticketUrl);
+  expect(page.url().split('?')[0]).toBe(ticketUrl);
 
   // The board shows the ticket in Done.
   await nav.getByRole('link', { name: 'Board' }).click();

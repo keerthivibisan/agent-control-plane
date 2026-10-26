@@ -44,7 +44,7 @@ describe('Button and fields', () => {
     );
     const b = screen.getByRole('button', { name: 'Save' });
     expect(b.getAttribute('type')).toBe('button');
-    expect(b.className).toContain('bg-accent-fill');
+    expect(b.className).toContain('bg-primary');
     expect(buttonClass('danger')).toContain('text-danger');
     expect(buttonClass()).toContain('h-8');
   });
@@ -68,7 +68,7 @@ describe('Button and fields', () => {
     expect(container.innerHTML).not.toMatch(/#[0-9a-f]{3,6}\b/i);
   });
 
-  it('BrandMark is the Control Core: a lime centre, four nodes, a smaller grid when small', () => {
+  it('BrandMark is the Control Core: an accent centre, four nodes, a smaller grid when small', () => {
     const { container, rerender } = render(<BrandMark size={32} />);
     const svg = container.querySelector('svg');
     expect(svg?.getAttribute('viewBox')).toBe('0 0 48 48');
@@ -89,6 +89,10 @@ describe('Button and fields', () => {
     expect(container.querySelector('.sr-only')).toBeNull();
     rerender(<BrandLogo hideName />);
     expect(container.textContent).toBe('Agent Control Plane');
+    expect(container.querySelector('.sr-only')?.textContent).toBe('Agent Control Plane');
+    // C-S: a short name shows instead; the full name stays for screen readers.
+    rerender(<BrandLogo shortName="ACP" />);
+    expect(container.querySelector('[aria-hidden="true"]:not(svg)')?.textContent).toBe('ACP');
     expect(container.querySelector('.sr-only')?.textContent).toBe('Agent Control Plane');
   });
 });

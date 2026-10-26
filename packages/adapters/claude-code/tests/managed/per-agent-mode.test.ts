@@ -6,6 +6,7 @@ import type {
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
+import { GIT_DENY_RULES } from '../../src/managed/branch-guard.js';
 import { buildOptions } from '../../src/managed/adapter.js';
 import {
   createManagedClaudeCode,
@@ -133,7 +134,7 @@ describe('a Full auto node tightened by a ticket keeps the sandbox in default mo
       const o = calls[0]?.options;
       expect(o?.permissionMode).toBe('default');
       expect(o?.sandbox).toEqual(fullAutoSandbox(s.cwd, PATHS));
-      expect(o?.disallowedTools).toEqual(fullAutoDenyRules(s.cwd, PATHS));
+      expect(o?.disallowedTools).toEqual([...GIT_DENY_RULES, ...fullAutoDenyRules(s.cwd, PATHS)]);
       expect(o?.env).toEqual({ ...ENV, TMPDIR: TMP });
       noSecrets(o);
       // A default-mode session is what it asked for: it runs (no auto-mode check applies).
@@ -184,7 +185,7 @@ describe('a Full auto node tightened by a ticket keeps the sandbox in default mo
           allowRead: [s.cwd, TMP],
         },
       });
-      expect(o.disallowedTools).toEqual(fullAutoDenyRules(s.cwd, PATHS));
+      expect(o.disallowedTools).toEqual([...GIT_DENY_RULES, ...fullAutoDenyRules(s.cwd, PATHS)]);
       expect(o.env).toEqual({ ...ENV, TMPDIR: TMP });
       // Our gate still decides each request: `canUseTool` stays.
       expect(typeof o.canUseTool).toBe('function');

@@ -11,6 +11,7 @@ import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { applyProtection, classifyStartupError, launchProtectionOf } from './full-auto.js';
 import type { LaunchProtection } from './full-auto.js';
+import { GIT_DENY_RULES, gitGuardHooks } from './branch-guard.js';
 import { createLeadToolServer } from './lead-tools.js';
 import { mapSdkMessage } from './messages.js';
 import type { MapperState, TurnResult } from './messages.js';
@@ -124,8 +125,9 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
  * SDK options for one agent (ADR-0012, ADR-0013, ADR-0019). Never `bypassPermissions`; no
  * settings files load; `strictMcpConfig` keeps every MCP server except ours out. Ours carries the
  * role's tools (`managedToolNames`): the lead's set, the planner's `submit_plan`, the reviewer's
- * `post_review`, or child management for a worker with `canStartHelpers`; other workers and the
- * tester get none. The built-in `tools` base set is the role's (`agentToolNames`, ADR-0019 §7).
+ * `post_review`, a worker's and the tester's `report_work` (ADR-0026 §3), plus child management
+ * for a worker with `canStartHelpers`; only when the server passes a handler (`leadTools`). The
+ * built-in `tools` base set is the role's (`agentToolNames`, ADR-0019 §7).
  * Exported for tests.
  */
 export function buildOptions(
@@ -168,6 +170,12 @@ export function buildOptions(
     options.skills = [...plugin.skills];
   }
   if (spec.followUp !== undefined) applyFollowUp(options, spec, spec.followUp.resumeSessionId);
+  // F-1: a worker or tester never manages branches, in any approval mode. The hook runs before
+  // Claude Code's permission pipeline (auto mode included); the deny rules are a second layer.
+  if (spec.followUp === undefined && (spec.kind === 'worker' || spec.kind === 'tester')) {
+    options.hooks = gitGuardHooks();
+    options.disallowedTools = [...(options.disallowedTools ?? []), ...GIT_DENY_RULES];
+  }
   // A rework turn (ADR-0021 §3) resumes the helper's own session in its own worktree, never
   // forked, with the same role tools; its input closes after the turn like any helper's. Without a
   // session to resume it starts fresh, with the comments in the prompt.
@@ -176,6 +184,11 @@ export function buildOptions(
     options.resume = resume;
     options.forkSession = false;
   }
+  // ADR-0024 §1: the session's title, set at launch (it also skips Claude Code's automatic title
+  // request). Never for a session that is resumed (a follow-up, or a rework turn resuming the
+  // helper's session): it keeps its own title, and the SDK ignores the option there anyway.
+  const title = spec.title?.trim() ?? '';
+  if (title !== '' && options.resume === undefined) options.title = title;
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
   // A copy, so a later change to the caller's object never reaches a running agent.

@@ -12,6 +12,8 @@ import type { TicketDto } from '@acp/core/api';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Details } from '../../components/Details';
+import { Dialog } from '../../components/Dialog';
+import { InfoTip } from '../../components/InfoTip';
 import { hintClass, inputClass, labelClass } from '../../components/Input';
 import { updateTicket, workflowGraphPaths, workflowGraphSchemas } from '../../lib/api';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
@@ -145,11 +147,14 @@ export function RunOptionsFields({
   onChange,
   defaults,
   collapse = false,
+  more,
 }: {
   value: TicketRunOptions;
   onChange: (next: TicketRunOptions) => void;
   defaults: RunDefaults | null;
   collapse?: boolean;
+  /** More fields under "More options" with `collapse` (New ticket's branch, ADR-0025). */
+  more?: ReactNode;
 }) {
   const set = (patch: TicketRunOptions) => onChange(compactRunOptions({ ...value, ...patch }));
   const blocks = defaults?.blocks;
@@ -219,7 +224,10 @@ export function RunOptionsFields({
       ) : null}
       {collapse ? (
         <Details summary={C.more} testId="run-options-more" defaultOpen={hasReviewOptions(value)}>
-          {review}
+          <div className="flex flex-col gap-4">
+            {review}
+            {more}
+          </div>
         </Details>
       ) : (
         review
@@ -260,29 +268,31 @@ export function TicketRunOptionsSection({
   const own = compactRunOptions(ticket.runOptions);
   const S = C.section;
 
+  // v0.3.0 D-B: in the ticket page's sidebar, a label over each value, and Change edits them in
+  // a dialog (the three selects need more room than the sidebar has).
+  const row = 'flex min-w-0 flex-col gap-0.5';
+  const label = 'text-caption text-dim';
   return (
     <div className="flex flex-col gap-2" data-testid="ticket-run-options">
-      <div className="flex min-h-7 items-center gap-2">
+      <div className="flex min-h-7 items-center gap-1">
         <h3 className={heading}>{S.title}</h3>
-        {draft === null ? (
-          <Button
-            variant="quiet"
-            size="sm"
-            className="ml-auto"
-            aria-label={S.editLabel}
-            onClick={() => {
-              save.reset();
-              setDraft(own);
-            }}
-          >
-            {S.edit}
-          </Button>
-        ) : null}
+        <InfoTip tip={S.note} label={S.title} />
+        <Button
+          variant="quiet"
+          size="sm"
+          className="ml-auto"
+          aria-label={S.editLabel}
+          onClick={() => {
+            save.reset();
+            setDraft(own);
+          }}
+        >
+          {S.edit}
+        </Button>
       </div>
-      <p className="text-caption text-dim">{S.note}</p>
-      {draft === null ? (
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
-          <dt className="text-dim">{L.rowLabel}</dt>
+      <dl className="flex flex-col gap-2">
+        <div className={row}>
+          <dt className={label}>{L.rowLabel}</dt>
           <dd data-testid="run-option-mode">
             {own.approvalMode === undefined ? (
               <span className="text-dim">{L.noLimitOption}</span>
@@ -290,14 +300,18 @@ export function TicketRunOptionsSection({
               <OptionValue own={M.word[own.approvalMode]} word={null} />
             )}
           </dd>
-          <dt className="text-dim">{C.reviewer}</dt>
+        </div>
+        <div className={row}>
+          <dt className={label}>{C.reviewer}</dt>
           <dd data-testid="run-option-reviewer">
             <OptionValue
               own={own.reviewer === undefined ? undefined : R.reviewerWord[own.reviewer]}
               word={defaults === null ? null : R.reviewerWord[defaults.reviewer]}
             />
           </dd>
-          <dt className="text-dim">{C.rounds}</dt>
+        </div>
+        <div className={row}>
+          <dt className={label}>{C.rounds}</dt>
           <dd data-testid="run-option-rounds">
             <OptionValue
               own={
@@ -306,29 +320,40 @@ export function TicketRunOptionsSection({
               word={defaults === null ? null : C.roundsValue(defaults.maxReworkRounds)}
             />
           </dd>
-        </dl>
-      ) : (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save.run(ticket.id, { runOptions: runOptionsPatch(draft) }).then((done) => {
-              if (done !== null) setDraft(null);
-            });
+        </div>
+      </dl>
+      {draft !== null ? (
+        <Dialog
+          title={S.title}
+          description={S.note}
+          onClose={() => {
+            if (!save.pending) setDraft(null);
           }}
+          testId="ticket-run-options-dialog"
+          wide
         >
-          <RunOptionsFields value={draft} onChange={setDraft} defaults={defaults} />
-          <div className="flex gap-2">
-            <Button type="submit" variant="primary" disabled={save.pending}>
-              {save.pending ? S.saving : S.save}
-            </Button>
-            <Button onClick={() => setDraft(null)} disabled={save.pending}>
-              {S.cancel}
-            </Button>
-          </div>
-          <ActionError error={save.error} message={S.failed} />
-        </form>
-      )}
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save.run(ticket.id, { runOptions: runOptionsPatch(draft) }).then((done) => {
+                if (done !== null) setDraft(null);
+              });
+            }}
+          >
+            <RunOptionsFields value={draft} onChange={setDraft} defaults={defaults} />
+            <ActionError error={save.error} message={S.failed} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button onClick={() => setDraft(null)} disabled={save.pending}>
+                {S.cancel}
+              </Button>
+              <Button type="submit" variant="primary" disabled={save.pending}>
+                {save.pending ? S.saving : S.save}
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

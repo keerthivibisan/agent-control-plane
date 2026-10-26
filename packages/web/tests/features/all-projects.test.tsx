@@ -98,7 +98,8 @@ describe('All projects: across your projects (the former Overview)', () => {
     expect(within(row).getByText('Running')).toBeTruthy();
     expect(within(row).getByRole('time')).toBeTruthy();
     const untitled = running.querySelector('[data-session-id="s-untitled"]') as HTMLElement;
-    expect(untitled.textContent).toContain('Untitled session');
+    expect(untitled.textContent).toContain('Session on main · ');
+    expect(untitled.textContent).not.toContain('Untitled');
     expect(untitled.textContent).toContain('No project');
 
     const waiting = screen.getByTestId('needs-attention');

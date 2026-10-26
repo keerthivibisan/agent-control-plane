@@ -142,23 +142,31 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   page,
 }) => {
   const loop = await serveLoop(page, 'working');
-  await page.goto(`/${TICKET_HASH}`);
+  // v0.3.0 D-B, C-B: the changes are on Files changed, the agents on Agents, the rest on Comments.
+  const tab = (name: RegExp) =>
+    page.getByRole('tablist', { name: 'Ticket sections' }).getByRole('tab', { name });
+  await page.goto(`/${TICKET_HASH}?tab=files`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Saved searches');
 
   // Working: the API builder reworks its change; the Search UI's change is in review.
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview.getByTestId('change-state')).toHaveText([
-    /Rework round 1 of 2/,
-    /In review/,
-  ]);
-  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Auto edits');
+  // C-D: "Changes from" on Files changed lists each change with its state.
+  await page.getByTestId('change-picker').click();
+  const menu = page.getByRole('menu', { name: 'Show changes from' });
+  await expect(menu.getByTestId('change-state')).toHaveText([/Rework round 1 of 2/, /In review/]);
+  await page.keyboard.press('Escape');
+  await tab(/Comments/).click();
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Auto edits');
+  await expect(page.getByTestId('owner-decision')).toHaveCount(0);
+  await tab(/Agents/).click();
   await expect(page.getByTestId('review-counts')).toHaveText('1 in review · 1 in rework');
   await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'waiting');
   await expect(page.getByTestId('agent-canvas')).toContainText(
     'Asked a helper to rework its change',
   );
-  await expect(page.getByTestId('owner-decision')).toHaveCount(0);
-  await overview.getByTestId('change-row').first().getByRole('button', { name: 'Open' }).click();
+  await tab(/Files changed/).click();
+  await page.getByTestId('change-picker').click();
+  await menu.getByRole('menuitemradio', { name: /API builder/ }).click();
+  await page.getByRole('button', { name: 'Open API builder in Agents' }).click();
   const panel = page.getByTestId('side-panel');
   await expect(panel.getByTestId('change-finding')).toContainText('Cap pageSize at 100');
   await shoot(page, 'working');
@@ -166,6 +174,7 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   // The engine moves on: the reworked change is merged; the lead asks about the other one.
   loop.advance('needs-you');
   await page.reload();
+  await tab(/Comments/).click();
   const need = page.getByTestId('changes-need-you');
   await expect(need).toContainText('1 change needs your decision');
   await need.getByRole('button', { name: 'Open' }).click();
@@ -179,13 +188,20 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   // The owner discards it: the run comes to REVIEW with the ticket branch to merge.
   await card.getByRole('button', { name: 'Discard', exact: true }).click();
   await card.getByRole('button', { name: 'Discard change' }).click();
+  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'needs-you');
+  await tab(/Checks/).click();
+  await expect(page.getByTestId('branch-checks')).toBeVisible();
+  await tab(/Files changed/).click();
+  // All changes: the ticket branch, open, in the review UI.
+  await page.getByTestId('change-picker').click();
+  await menu.getByRole('menuitemradio', { name: /All changes/ }).click();
+  await expect(page.getByTestId('files-state')).toHaveText('Open');
+  await expect(page.getByTestId('review-files')).toBeVisible();
+  await shootPart(page, 'ticket-branch', 'files-tab');
+  await tab(/Comments/).click();
   const branch = page.getByTestId('ticket-branch');
   await expect(branch.getByRole('button', { name: 'Merge into main' })).toBeVisible();
-  await expect(branch.getByTestId('branch-checks')).toBeVisible();
   await expect(page.getByTestId('changes-need-you')).toHaveCount(0);
-  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'needs-you');
-  await branch.getByTestId('branch-diff').locator('summary').click();
-  await shootPart(page, 'ticket-branch', 'ticket-branch');
   await shoot(page, 'review');
 
   // The final merge, once, after a confirmation.
@@ -193,8 +209,9 @@ test('the full loop: rework, a lead question, the owner’s discard, the final m
   await expect(branch.getByTestId('confirm')).toContainText(`Merge ${LOOP_BRANCH} into main?`);
   await branch.getByRole('button', { name: 'Merge', exact: true }).click();
   await expect(branch.getByTestId('branch-state')).toHaveText('Merged into main');
-  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
+  await tab(/Agents/).click();
+  await expect(page.getByTestId('live-owner-merge')).toHaveAttribute('data-state', 'done');
   await shoot(page, 'done');
 
   expect(loop.posts).toEqual([

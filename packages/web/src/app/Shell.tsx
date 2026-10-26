@@ -8,7 +8,7 @@ import { useApiQuery } from '../lib/query';
 import { href, navigate, routeProjectId, type Route } from '../lib/router';
 import type { StreamState } from '../lib/useEventStream';
 import { readLastProject, rememberLastProject, validLastProject } from './last-project';
-import { pageKey } from './nav';
+import { fullWidth, pageKey } from './nav';
 import { PageTransition } from './PageTransition';
 import { ShellTooltipProvider } from './ShellTooltip';
 import { Sidebar } from './Sidebar';
@@ -30,14 +30,15 @@ function usePaletteShortcut(toggle: () => void) {
 }
 
 /**
- * App frame (DESIGN.md, "Layout"): a top bar (brand, the project / page trail with the project
- * switcher, ⌘K, theme), the project sidebar (the project's pages, then All projects and Data
- * health; the full list or an icon rail, toggled with its button or ⌘B/Ctrl+B and remembered per
- * browser, the rail by default at 1280px and below; the live-connection dot at the bottom), the
- * demo banner and the page.
+ * App frame (DESIGN.md, "Layout"): a dark top bar (the brand and "ACP" on the left, the ⌘K search
+ * in the centre, the project / page trail with the project switcher and the theme menu on the
+ * right), the side navigation (Project: the project's pages; Workspace: All projects and Data
+ * health; the full list or an icon rail, toggled with the chevron on the sidebar or ⌘B/Ctrl+B and
+ * remembered per browser, the rail by default at 1280px and below; the connection and server
+ * status at the bottom), the demo banner and the page.
  *
- * The bar is 48px: the shell sets `--spacing-topbar` for everything under it (the sticky sidebar
- * and demo banner use it), so they follow without a token change.
+ * The bar is 56px, the `--spacing-topbar` token (index.css), which the sticky sidebar, the demo
+ * banner and the pages' sticky parts read.
  */
 export function Shell({
   route,
@@ -75,12 +76,11 @@ export function Shell({
 
   return (
     <ShellTooltipProvider>
-      <div className="flex min-h-full flex-col [--spacing-topbar:3rem]">
+      <div className="flex min-h-full flex-col">
         <TopBar
           route={route}
           projects={projects.data}
           currentId={contextId}
-          collapsed={sidebar.collapsed}
           onOpenPalette={() => setPaletteOpen(true)}
         />
         <div className="flex min-h-0 flex-1">
@@ -93,7 +93,12 @@ export function Shell({
           />
           <div className="flex min-w-0 flex-1 flex-col">
             <DemoBanner mode={mode} />
-            <main className="mx-auto w-full max-w-content min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 wide:px-10">
+            <main
+              className={`mx-auto w-full min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 ${
+                // C-D: Files changed uses the whole width, like GitHub's.
+                fullWidth(route, window.location.hash) ? 'wide:px-8' : 'max-w-content wide:px-10'
+              }`}
+            >
               <PageTransition pageKey={pageKey(route)}>
                 {unreachable && health.error ? <ErrorNotice error={health.error} /> : children}
               </PageTransition>

@@ -34,18 +34,21 @@ export function TextField({
   tip,
   className = '',
   inputClassName = '',
+  readOnly = false,
 }: {
   label: string;
   hint: ReactNode;
   error?: string | undefined;
   value: string;
   onChange: (v: string) => void;
-  placeholder?: string;
+  placeholder?: string | undefined;
   mono?: boolean;
   numeric?: boolean;
   tip?: string;
   className?: string;
   inputClassName?: string;
+  /** Shown but fixed (a preset's value); still read and focusable. */
+  readOnly?: boolean;
 }) {
   const id = useId();
   return (
@@ -61,13 +64,14 @@ export function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
         inputMode={numeric ? 'numeric' : undefined}
         spellCheck={mono ? false : undefined}
         autoComplete="off"
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(`${id}-hint`, `${id}-error`, error)}
         className={inputClass(
-          `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${inputClassName}`,
+          `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${readOnly ? 'read-only:bg-sunken read-only:text-dim' : ''} ${inputClassName}`,
         )}
       />
       <span id={`${id}-hint`} className={hintClass}>

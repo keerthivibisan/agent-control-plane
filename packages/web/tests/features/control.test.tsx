@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../../src/app/App';
+import { DIFF_COPY } from '../../src/components/diff/copy';
 import { ControlPanel } from '../../src/features/control/ControlPanel';
 import { createApiClient, type FetchLike } from '../../src/lib/api';
 import { QueryStore } from '../../src/lib/query-store';
@@ -352,24 +353,18 @@ describe('control panel: a run', () => {
     expect(r.textContent).toContain('Waiting for your review');
     expect(r.textContent).toContain('2 changed files');
     expect(r.textContent).toContain('tests/settings.test.ts');
-    expect(within(r).getByText('2 lines added')).toBeTruthy();
-    const diff = within(r).getByTestId('diff');
-    const kinds = [...diff.querySelectorAll('[data-kind]')].map((l) => l.getAttribute('data-kind'));
-    expect(kinds).toEqual([
-      'file',
-      'meta',
-      'hunk',
-      'add',
-      'add',
-      'file',
-      'hunk',
-      'context',
-      'del',
-      'add',
-      'context',
-    ]);
+    // In the file list (and again in the diff viewer's own file headers).
+    expect(within(r).getAllByText('2 lines added').length).toBeGreaterThan(0);
+    // G-D: the shared diff viewer (components/diff), open while the change waits for review.
+    const diff = within(r).getByTestId('diff-viewer');
+    expect(
+      within(diff)
+        .getAllByTestId('diff-file')
+        .map((f) => f.dataset.path),
+    ).toEqual(['tests/settings.test.ts', 'src/settings.tsx']);
+    expect(diff.textContent).toContain("return 'new';");
     expect(diff.textContent).not.toContain('index ');
-    expect(within(r).getByTestId('diff-truncated').textContent).toMatch(/too large/);
+    expect(within(r).getByTestId('diff-truncated').textContent).toBe(DIFF_COPY.truncated);
   });
 
   it('merges only after confirming, and shows a refusal with its reason', async () => {

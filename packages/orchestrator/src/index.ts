@@ -17,6 +17,8 @@ export * from './allowlist.js';
 export {
   FULL_AUTO_LEAD_LINE,
   FULL_AUTO_PLAN_LINE,
+  PLAN_BRANCH_LINE,
+  HANDOVER_NOTE_LINE,
   LEAD_ROLE,
   approvedPlan,
   decidePlan,
@@ -29,12 +31,15 @@ export {
   ticketRunPrompts,
 } from './plan.js';
 export type { PlanDecision, PromptOptions } from './plan.js';
+export { branchCommandIn, PLAN_BRANCH_REFUSAL, planBranchCommand } from './plan-branch-check.js';
 export type * from './state.js';
 export { SUMMARY_MAX_CHARS, cleanSummary, formatTokens } from './draft.js';
 export {
   FULL_AUTO_FAILURE_ACTIVITY,
   agentEvent,
+  HANDOVER_NOTE_MAX_CHARS,
   cancelRun,
+  cleanHandoverNote,
   completeCancellation,
   createRun,
   decideApproval,
@@ -55,6 +60,7 @@ export type {
   ApprovalDecisionOptions,
   CreateRunInput,
   RequestPermissionOptions,
+  RequestReviewOptions,
 } from './commands.js';
 export {
   FOLLOW_UP_PREFACE,
@@ -70,7 +76,18 @@ export type { FollowUpFacts } from './follow-up.js';
 export { CHILD_MANAGEMENT_TOOLS, controlToolsFor, leadToolCall } from './lead-tools.js';
 export { cleanReviewBody } from './review-tool.js';
 export {
+  AGENT_NOTE_LINE,
+  BRANCH_RULE_LINE,
+  cleanAgentNote,
+  helperBrief,
+  withAgentNoteLine,
+} from './agent-note.js';
+export { reportWork } from './report-tool.js';
+export {
   beginChangeMerge,
+  branchChangedLine,
+  changeNotSavedLine,
+  MAX_FAILED_MERGES,
   changeMergeBlocked,
   changeSealed,
   checkChangeAction,
@@ -81,7 +98,15 @@ export {
   requestTicketChanges,
   ticketBranchCreated,
 } from './change-commands.js';
-export type { MergeBlocked } from './change-commands.js';
+export type { MergeBlocked, SealFailure } from './change-commands.js';
+export { checkStepAttempts, stepAttemptLimit, stepAttempts } from './step-attempts.js';
+export {
+  CHECK_FAILURE_TAIL_MAX_BYTES,
+  agentSetupFailed,
+  changeChecksFinished,
+  failureDetails,
+} from './check-blocks.js';
+export type { ChangeChecksResult, FailedCheck, SetupFailure } from './check-blocks.js';
 export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,
@@ -97,15 +122,18 @@ export { deriveRunWorkflow, deriveRunWorkflowGraph } from './run-workflow.js';
 export {
   agentLaunchMode,
   agentNodeId,
+  changeCheckBlockOf,
   editingNodeOf,
   effectiveMode,
   helperNodeLines,
   helperNodeOf,
   programFullAuto,
+  programNode,
   programOf,
   resolveHelper,
   reviewRouteOf,
   runGraphOf,
+  testerNodeOf,
 } from './program.js';
 export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';
 export { helperBriefLines } from './briefs.js';

@@ -1,6 +1,7 @@
 import type {
   AgentRoleKind,
   AgentRun,
+  CheckSelection,
   AllowRule,
   ApprovalKindSchema,
   ApprovalStatus,
@@ -106,6 +107,34 @@ export interface EngineChange {
    * like `verdict`.
    */
   reviewerRounds?: number;
+  /**
+   * ADR-0027 §5: the result of the Checks block on this change's sealed commit, while the block
+   * runs (`pending`) and after it. Absent when the change's node flows into no block (every graph
+   * from before ADR-0027) and after each new seal until the block starts. A `pending` change waits
+   * in `ready` and gets no reviewer.
+   */
+  blockChecks?: 'pending' | 'passed' | 'failed';
+  /**
+   * ADR-0027 §5, "back to the helper": how often the change's Checks block sent it back for
+   * rework. Counted against the block's `maxRounds`, apart from the review's rounds (`round` is
+   * not raised: the change has not been reviewed yet). Absent means none. In memory with the run.
+   */
+  checkRounds?: number;
+  /**
+   * F-1: why the change could not be saved. `branch-changed`: the helper switched its folder to
+   * another branch, so the app could not seal it. Only a discard (by the lead or the owner) or a
+   * question to the owner is left; merging and rework are refused. F-2: any other failed seal
+   * (`invalid-workspace`: the folder is gone or holds committed files the app never saves;
+   * `not-saved`: another failure) waits for the owner (`needs-owner`), and the lead may discard
+   * it too; the lead may never merge or rework it. Absent otherwise. In memory with the live run
+   * (after a restart the change is `needs-owner`, like every undecided one).
+   */
+  sealFailure?: 'branch-changed' | 'invalid-workspace' | 'not-saved';
+  /**
+   * F-2: merges of this change that failed in a row for a git reason (`failed`); at
+   * `MAX_FAILED_MERGES` the change goes to the owner. Absent means none. In memory with the run.
+   */
+  failedMerges?: number;
 }
 
 /**
@@ -275,7 +304,9 @@ export interface EngineContext {
 /**
  * What the server must do after persisting the new state, in this order. The engine never performs
  * I/O itself. Effects carry ids and engine-generated text only, except `send-to-agent`/`start-agent`
- * (the owner's chat, a lead's message or task for a worker) and `chat-message` (ADR-0015).
+ * (the owner's chat, a lead's message or task for a worker), `chat-message` (ADR-0015) and the
+ * owner-facing notes kept as ticket comments (`review-comment`, `change-comment`,
+ * `handover-summary`, `agent-note`).
  */
 export type EngineEffect =
   | {
@@ -385,6 +416,25 @@ export type EngineEffect =
   /** The change was discarded: remove the helper's worktree (idempotent). */
   | { type: 'discard-change'; agentRunId: string }
   /**
+   * ADR-0027 §5: the change's Checks block. Run `checksForBlock(manifest, select)` on `commit` (the
+   * sealed change) in the helper's own worktree, store each result with place `change` and
+   * `blockNodeId`, then report with `changeChecksFinished`. The change's review waits for it.
+   */
+  | {
+      type: 'run-change-checks';
+      agentRunId: string;
+      commit: string;
+      blockNodeId: WorkflowNodeId;
+      select: CheckSelection;
+    }
+  /**
+   * ADR-0027 §5: the final chain reached the Checks block on the ticket branch (after its
+   * `afterStages` final stages). Run the required checks and the block's selection on the ticket
+   * branch's recorded tip in a fresh checkout (setup first), with place `branch`. Nothing waits for
+   * the result: the owner's merge gate reads it (and runs the checks again on a newer tip).
+   */
+  | { type: 'run-branch-checks'; blockNodeId: WorkflowNodeId; select: CheckSelection }
+  /**
    * The `change_reviews` row for (agentRunId, round), emitted whenever it changes: the reviewer is
    * assigned, the verdict arrives, or the round is decided. Upsert by (agentRunId, round).
    */
@@ -437,6 +487,19 @@ export type EngineEffect =
     }
   /** End the follow-up turn under way (budget reached, the owner's Stop, Stop all). */
   | { type: 'abort-follow-up'; agentRunId: string }
+  /**
+   * ADR-0024 §3: the lead handed a review-loop run over (`request_review`). The server composes
+   * the run summary comment (author `app`) from its own records, then adds `note`: the lead's
+   * `request_review.summary`, redacted and capped at 1,500 characters, or null without one.
+   * Legacy runs never emit it (their facts summary follows the run's move to REVIEW).
+   */
+  | { type: 'handover-summary'; note: string | null }
+  /**
+   * ADR-0026 §3: a helper's or tester's `report_work` note, redacted and capped at
+   * `MAX_AGENT_NOTE_CHARS`. Stored with the transition as the agent run's one ticket comment of
+   * kind `agent-note` (a later note replaces it).
+   */
+  | { type: 'agent-note'; agentRunId: string; body: string }
   /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */

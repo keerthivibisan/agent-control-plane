@@ -1,52 +1,24 @@
 import type { ProjectDto } from '@acp/core/api';
-import type { ComponentType } from 'react';
 import { BrandLogo } from '../components/BrandMark';
-import { MonitorIcon, MoonIcon, SearchIcon, SunIcon, type IconProps } from '../components/icons';
-import { SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
+import { SearchIcon } from '../components/icons';
+import { ThemeMenu } from '../components/ThemeSwitch';
+import { ticketPaths, ticketSchemas } from '../lib/api';
+import { APP_NAME, SHELL_COPY, SHELL_FRAME_COPY } from '../lib/copy';
+import { useApiQuery } from '../lib/query';
 import { href, type Route } from '../lib/router';
-import { useTheme, type ThemePreference } from '../lib/theme';
-import { crumbsFor } from './nav';
+import { crumbsFor, routeTicketId } from './nav';
 import { ProjectSwitcher } from './ProjectSwitcher';
 import { ShellTooltip } from './ShellTooltip';
-import { sidebarWidthClass } from './Sidebar';
 
-const THEME_ICON: Record<ThemePreference, ComponentType<IconProps>> = {
-  system: MonitorIcon,
-  light: SunIcon,
-  dark: MoonIcon,
-};
-const THEME_WORD: Record<ThemePreference, string> = {
-  system: 'System',
-  light: 'Light',
-  dark: 'Dark',
-};
-
-function ThemeToggle() {
-  const theme = useTheme();
-  const Icon = THEME_ICON[theme.preference];
-  const word =
-    theme.preference === 'system'
-      ? `System (${theme.resolved === 'dark' ? 'dark' : 'light'})`
-      : THEME_WORD[theme.preference];
-  return (
-    <ShellTooltip content={SHELL_COPY.theme.tip} side="bottom" align="end" describe>
-      <button
-        type="button"
-        onClick={theme.cycle}
-        aria-label={SHELL_COPY.theme.label(word)}
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
-      >
-        <Icon size={16} />
-      </button>
-    </ShellTooltip>
-  );
-}
+/** The top bar's bordered icon button (the theme menu), like GitHub's. */
+const headerIconButton =
+  'inline-flex size-9 shrink-0 items-center justify-center rounded-control border border-header-line text-header-dim transition-colors hover:bg-header-hover hover:text-header-ink';
 
 /** A slanted hairline between crumbs (no text, so it adds nothing to the bar's words). */
 function Slash() {
   return (
     <li aria-hidden="true" className="flex h-5 w-3 shrink-0 items-center justify-center">
-      <span className="h-4 w-px rotate-[18deg] bg-line-strong" />
+      <span className="h-4 w-px rotate-[18deg] bg-header-dim/60" />
     </li>
   );
 }
@@ -60,9 +32,15 @@ function Breadcrumbs({
   projects: readonly ProjectDto[] | undefined;
   currentId: string | null;
 }) {
-  const crumbs = crumbsFor(route, currentId);
+  // The ticket page reads the same address, so this shares its cached answer (no second request).
+  const ticketId = routeTicketId(route);
+  const ticket = useApiQuery(
+    ticketId !== null ? ticketPaths.ticket(ticketId) : null,
+    ticketSchemas.detail,
+  );
+  const crumbs = crumbsFor(route, currentId, ticket.data?.ticket.key ?? null);
   return (
-    <nav aria-label={SHELL_FRAME_COPY.breadcrumb} className="flex min-w-0 flex-1 items-center">
+    <nav aria-label={SHELL_FRAME_COPY.breadcrumb} className="flex min-w-0 items-center">
       <ol className="flex min-w-0 items-center gap-1">
         <li className="min-w-0 shrink">
           <ProjectSwitcher projects={projects} currentId={currentId} route={route} />
@@ -81,13 +59,13 @@ function CrumbItem({ label, to }: { label: string; to: string | null }) {
       <Slash />
       <li className="flex min-w-0 shrink-[2] items-center">
         {to === null ? (
-          <span aria-current="page" className="truncate px-1.5 font-medium text-ink">
+          <span aria-current="page" className="truncate px-1.5 font-semibold text-header-ink">
             {label}
           </span>
         ) : (
           <a
             href={to}
-            className="truncate rounded-control px-1.5 py-1 text-dim no-underline transition-colors hover:bg-hover hover:text-ink"
+            className="truncate rounded-control px-1.5 py-1 text-header-dim no-underline transition-colors hover:bg-header-hover hover:text-header-ink"
           >
             {label}
           </a>
@@ -98,61 +76,72 @@ function CrumbItem({ label, to }: { label: string; to: string | null }) {
 }
 
 /**
- * The top bar (DESIGN.md, "Layout"): the brand cell over the sidebar, the trail (project
- * switcher, then the page), the ⌘K search and the theme toggle.
+ * The top bar (DESIGN.md, "Layout"; v0.3.0 C-S), 56px and dark in both themes like GitHub's
+ * header, in three parts:
+ * - left: the Control Core and the short name "ACP", linking home (the full name is the tooltip
+ *   and the link's name);
+ * - centre: the ⌘K search, wide and centred on the bar (the two sides share the rest equally, so
+ *   it stays in the middle); on a narrow screen an icon button;
+ * - right: the trail (the project switcher, then the page) and the theme menu.
+ *
+ * The sidebar toggle is on the sidebar itself (`SidebarToggle`).
  */
 export function TopBar({
   route,
   projects,
   currentId,
-  collapsed,
   onOpenPalette,
 }: {
   route: Route;
   projects: readonly ProjectDto[] | undefined;
   currentId: string | null;
-  /** The sidebar is the icon rail: the brand cell narrows with it. */
-  collapsed: boolean;
   onOpenPalette: () => void;
 }) {
   return (
     <header
       aria-label={SHELL_COPY.topBar.label}
-      className="sticky top-0 z-30 flex h-topbar items-center border-b border-line bg-canvas/85 backdrop-blur-md"
+      data-topbar=""
+      className="sticky top-0 z-30 flex h-topbar items-center gap-2 border-b border-header-line bg-header px-3 text-header-ink sm:px-4 md:gap-4"
     >
-      <div
-        className={`flex h-full items-center border-r border-line bg-sidebar ${sidebarWidthClass(collapsed)} ${
-          collapsed ? 'justify-center' : 'px-4'
-        }`}
-      >
-        <a
-          href={href.home()}
-          aria-label={SHELL_COPY.topBar.home}
-          className="flex min-w-0 items-center rounded-control text-ink no-underline"
-        >
-          <BrandLogo size={24} hideName={collapsed} />
-        </a>
-      </div>
-      <div className="flex min-w-0 flex-1 items-center gap-2 px-3 wide:px-4">
-        <Breadcrumbs route={route} projects={projects} currentId={currentId} />
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={onOpenPalette}
-            data-testid="open-palette"
-            aria-keyshortcuts="Meta+K Control+K"
-            className="flex h-8 items-center gap-2 rounded-control border border-line bg-panel pr-1 pl-2.5 text-dim shadow-card transition-colors hover:border-line-strong hover:text-ink"
+      <div className="flex shrink-0 items-center md:min-w-0 md:flex-1 md:basis-0">
+        <ShellTooltip content={APP_NAME} side="bottom" align="start">
+          <a
+            href={href.home()}
+            aria-label={SHELL_COPY.topBar.home}
+            className="flex min-w-0 items-center rounded-control py-1 text-header-ink no-underline"
           >
-            <SearchIcon size={15} />
-            <span className="hidden w-40 truncate text-left md:inline lg:w-52">
-              {SHELL_COPY.palette.open}
-            </span>
-            <kbd className="rounded-[4px] border border-line bg-sunken px-1.5 font-sans text-micro leading-5 text-dim">
-              {SHELL_COPY.palette.shortcut}
-            </kbd>
-          </button>
-          <ThemeToggle />
-        </div>
+            <BrandLogo size={28} shortName={SHELL_FRAME_COPY.shortName} />
+          </a>
+        </ShellTooltip>
+      </div>
+      {/* The search: 320px at md, 448px from lg, 544px from xl and 640px from 1440px. */}
+      <div className="ml-auto flex shrink-0 justify-center md:ml-0 md:w-80 md:shrink lg:w-[28rem] xl:w-[34rem] min-[90rem]:w-[40rem]">
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          data-testid="open-palette"
+          aria-keyshortcuts="Meta+K Control+K"
+          className="flex size-9 items-center justify-center gap-2 rounded-control border border-header-line text-header-dim transition-colors hover:border-header-dim hover:text-header-ink md:w-full md:justify-start md:pr-1.5 md:pl-3"
+        >
+          <SearchIcon size={16} className="shrink-0" />
+          <span className="sr-only min-w-0 flex-1 truncate text-left md:not-sr-only">
+            {SHELL_COPY.palette.open}
+          </span>
+          <kbd className="hidden rounded-[4px] border border-header-line px-1.5 font-sans text-micro leading-5 text-header-dim md:inline">
+            {SHELL_COPY.palette.shortcut}
+          </kbd>
+        </button>
+      </div>
+      <div className="flex min-w-0 items-center justify-end gap-2 md:flex-1 md:basis-0">
+        <Breadcrumbs route={route} projects={projects} currentId={currentId} />
+        <ThemeMenu
+          className={`${headerIconButton} aria-expanded:bg-header-hover aria-expanded:text-header-ink`}
+          wrap={(button) => (
+            <ShellTooltip content={SHELL_COPY.theme.tip} side="bottom" align="end" describe>
+              {button}
+            </ShellTooltip>
+          )}
+        />
       </div>
     </header>
   );

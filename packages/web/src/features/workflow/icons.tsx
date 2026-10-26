@@ -1,7 +1,9 @@
 import {
   ArrowLeft,
   Bot,
+  CircleAlert,
   CircleCheck,
+  CircleHelp,
   ClipboardList,
   Compass,
   FileText,
@@ -9,13 +11,17 @@ import {
   GitBranch,
   GitCommitHorizontal,
   GitMerge,
+  List,
   Lock,
+  Maximize,
   MousePointerClick,
   ScanSearch,
   Trash,
   UserCheck,
   Users,
   X,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from 'lucide-react';
 import type { IconProps } from '../../components/icons';
@@ -55,6 +61,13 @@ export const RemoveIcon = icon(X, 'RemoveIcon');
 export const FileIcon = icon(FileText, 'FileIcon');
 export const CommitIcon = icon(GitCommitHorizontal, 'CommitIcon');
 export const DeleteIcon = icon(Trash, 'DeleteIcon');
+/** v0.3.0 D-C: the editor's problem marker, canvas tools and legend. */
+export const ErrorIcon = icon(CircleAlert, 'ErrorIcon');
+export const HelpIcon = icon(CircleHelp, 'HelpIcon');
+export const LegendIcon = icon(List, 'LegendIcon');
+export const FitIcon = icon(Maximize, 'FitIcon');
+export const ZoomInIcon = icon(ZoomIn, 'ZoomInIcon');
+export const ZoomOutIcon = icon(ZoomOut, 'ZoomOutIcon');
 
 /** One icon per agent role, so a node reads at a glance (the role's word is always next to it). */
 export const ROLE_ICON: Record<WorkflowRole, ReturnType<typeof icon>> = {

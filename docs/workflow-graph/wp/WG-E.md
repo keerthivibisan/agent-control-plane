@@ -187,6 +187,6 @@
 8. **Next:** WG-C serves the endpoints; then WG-V runs the live graph against the real server for
    each template and scenario.
 
-Screenshots (git-ignored): `/Users/grootan/Desktop/acp-wg-e/.acp-data/screens/`
+Screenshots (git-ignored): `<the WG-E worktree>/.acp-data/screens/`
 `ticket-live-graph-{1440,1024}-{light,dark}.png`, `ticket-live-graph-page-*`,
 `ticket-start-limit-{light,dark}.png`.

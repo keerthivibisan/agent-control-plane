@@ -1,3 +1,4 @@
+import { AGENT_NOTE_LINE } from '@acp/orchestrator';
 // Synthetic temp git repos, skill folders and the scripted fake adapter only (R-G Part 2).
 // Never the Agent SDK, never the real ~/.claude.
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -183,7 +184,9 @@ describe('post-merge stages: reviewer and tester (ADR-0019)', () => {
     // The tester works in its own worktree from main, and its change is reviewed and merged.
     const tester = agentOf(s, 'tester');
     expect(tester.spec.cwd).toBe(s.worktree(runId, tester.id));
-    expect(tester.spec.leadTools).toBeUndefined();
+    // ADR-0026 §3: the tester's one control-plane tool is report_work.
+    expect(tester.spec.leadTools).toBeDefined();
+    expect(tester.spec.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
     expect(readFileSync(join(tester.spec.cwd, 'src', 'theme.ts'), 'utf8')).toContain('dark');
     expect(await runWorkflow(s, runId)).toMatchObject({
       'code-review': 'done',

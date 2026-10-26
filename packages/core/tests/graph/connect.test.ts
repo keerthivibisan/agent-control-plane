@@ -1,6 +1,7 @@
 // canConnect: the edge-type matrix the editor checks on every drag (ADR-0023 §3, README §2,
-// WG-0 refinements 1–3). Every (from type, to type, edge type) triple is asserted against the
-// explicit table below, with and without a planner. Synthetic data only.
+// WG-0 refinements 1–3, ADR-0027 §5 for the Checks blocks' places). Every (from type, to type,
+// edge type) triple is asserted against the explicit table below, with and without a planner.
+// Synthetic data only.
 import { describe, expect, it } from 'vitest';
 import {
   WORKFLOW_EDGE_TYPES,
@@ -23,6 +24,8 @@ const VARIANTS = [
   'ticket',
   'plan-approval',
   'checks',
+  'change-checks',
+  'branch-checks',
   'ticket-merge',
   'owner-merge',
   'done',
@@ -65,6 +68,10 @@ function node(variant: Variant, id: string): WorkflowNode {
       return { type: variant, id, label, ...AGENT, skills: [], approvalMode: null };
     case 'plan-approval':
       return { type: variant, id, label, auto: false };
+    case 'change-checks':
+      return { type: 'checks', id, label, place: 'change' };
+    case 'branch-checks':
+      return { type: 'checks', id, label, place: 'branch', onFailure: 'owner' };
     default:
       return { type: variant, id, label };
   }
@@ -101,10 +108,15 @@ function allowedTable(withPlanner: boolean): Set<string> {
   add('flow', ['checks'], ['ticket-merge']);
   add('flow', ['ticket-merge', ...FINAL], [...FINAL, 'owner-merge']);
   add('flow', ['owner-merge'], ['done']);
+  // ADR-0027 §5: a change block takes an editing node's change; a branch block sits in the final
+  // chain (never one branch block straight to another)
+  add('flow', EDITORS, ['change-checks']);
+  add('flow', ['ticket-merge', ...FINAL], ['branch-checks']);
+  add('flow', ['branch-checks'], [...FINAL, 'owner-merge']);
   add('assigns', ['lead'], ['helper', 'helper-pool']);
   add('review', EDITORS, ['change-reviewer', 'lead']);
   add('findings', ['change-reviewer'], ['lead']);
-  add('rework', ['change-reviewer', 'lead'], EDITORS);
+  add('rework', ['change-reviewer', 'lead', 'change-checks'], EDITORS);
   add('merge', ['lead'], ['checks']);
   return new Set(rows);
 }
@@ -142,6 +154,28 @@ describe('canConnect: the edge-type matrix', () => {
       code: 'edge-not-allowed',
       message: containing('"helper helper-a" cannot flow to "checks checks-b"'),
     });
+  });
+
+  it('reads a block without a place as the block before the merge', () => {
+    const graph = matrixGraph(false);
+    const explicit: WorkflowGraph = {
+      ...graph,
+      nodes: [...graph.nodes, { type: 'checks', id: 'merge-x', label: 'Merge', place: 'merge' }],
+    };
+    for (const [from, to, type] of [
+      ['lead-a', 'merge-x', 'merge'],
+      ['merge-x', 'ticket-merge-a', 'flow'],
+    ] as const) {
+      expect(canConnect(explicit, from, to, type)).toEqual({ ok: true });
+    }
+    expect(canConnect(explicit, 'helper-a', 'merge-x', 'flow').ok).toBe(false);
+    expect(canConnect(explicit, 'merge-x', 'helper-a', 'rework').ok).toBe(false);
+  });
+
+  it('explains a refused Checks block link', () => {
+    const result = canConnect(matrixGraph(false), 'lead-a', 'change-checks-b', 'merge');
+    expect(result).toMatchObject({ ok: false, code: 'edge-not-allowed' });
+    if (!result.ok) expect(result.message).toContain('through the Checks block before the merge');
   });
 
   it('tells the owner why the plan path changed with a planner', () => {

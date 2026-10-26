@@ -24,7 +24,10 @@ export type WorkspaceErrorCode =
   | 'merge-conflict'
   /** Git refused the fast-forward in the project (e.g. an untracked file would be overwritten). */
   | 'merge-failed'
-  /** ADR-0021: not a valid `acp/<KEY>` ticket branch name, or a commit id that is not one. */
+  /**
+   * ADR-0021, ADR-0025: not a safe ticket branch name, a long-lived branch (the target, `main`,
+   * `master`, a strategy branch, `origin`'s default), or a commit id that is not one.
+   */
   | 'invalid-ticket-branch'
   /** ADR-0021: the ticket branch no longer exists in the repository. */
   | 'ticket-branch-missing'
@@ -36,8 +39,14 @@ export type WorkspaceErrorCode =
   | 'not-fast-forward'
   /** ADR-0021: the helper's copy has edits that were not sealed (committed) before integrating. */
   | 'workspace-unsealed'
-  /** ADR-0021: no free `acp/<KEY>` or `acp/<KEY>-r<n>` name was found. */
+  /** ADR-0021: no free ticket branch name (the name, `-r1` … `-r99`) was found. */
   | 'ticket-branch-exists'
+  /** ADR-0025: the ticket's target branch does not exist in the project's repository. */
+  | 'target-branch-missing'
+  /** ADR-0025 §10: the branch the ticket branch starts from does not exist in the repository. */
+  | 'source-branch-missing'
+  /** ADR-0025: the target is checked out in another worktree, so its ref is not moved. */
+  | 'target-checked-out'
   | 'git-failed';
 
 export class WorkspaceError extends Error {

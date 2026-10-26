@@ -220,7 +220,7 @@ export const EDGE_STYLE: Record<
   { stroke: string; width: number; dash?: string; opacity?: number }
 > = {
   flow: { stroke: 'var(--color-dim)', width: 1.75 },
-  // The ink, not the accent: lime marks only what is working or selected (DESIGN.md).
+  // The ink, not the accent: it marks only what is working or selected (DESIGN.md).
   loop: { stroke: 'var(--color-ink)', width: 1.75 },
   off: { stroke: 'var(--color-line-strong)', width: 1.25, dash: '2 4', opacity: 0.9 },
   bypass: { stroke: 'var(--color-dim)', width: 1.5, dash: '7 5' },

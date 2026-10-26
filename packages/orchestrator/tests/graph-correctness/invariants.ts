@@ -2,6 +2,7 @@ import { isModeWithin } from '@acp/core';
 import type { ApprovalMode, WorkflowNode } from '@acp/core';
 import {
   approvedPlan,
+  changeCheckBlockOf,
   effectiveMode,
   leadRoundsUsed,
   programOf,
@@ -124,6 +125,32 @@ export function stepInvariants(step: StepRecord): string[] {
       if ((change.reviewerRounds ?? 0) >= limit) {
         out.push(`the reviewer reworked ${a.role} past its ${limit} rounds`);
       }
+    }
+  }
+
+  // 6. ADR-0027 §5: a change's Checks block runs before its review, and sends it back at most
+  //    `maxRounds` times (only with "back to the helper").
+  for (const a of after.agents) {
+    const c = a.change;
+    if (c === undefined) continue;
+    const was = agent(before, a.id)?.change;
+    if (c.blockChecks === 'pending' && c.state === 'reviewing' && was?.state !== 'reviewing') {
+      out.push(`${a.role}'s change was reviewed before its Checks block finished`);
+    }
+    const rounds = c.checkRounds ?? 0;
+    if (rounds > (was?.checkRounds ?? 0)) {
+      const block = changeCheckBlockOf(program, a);
+      if (block?.onFailure !== 'helper')
+        out.push(`${a.role} was sent back by a block without the helper route`);
+      else if (rounds > (block.maxRounds ?? 0)) {
+        out.push(`${a.role}'s Checks block reworked it past its ${block.maxRounds ?? 0} rounds`);
+      }
+    }
+  }
+  for (const e of effectsOf(effects, 'run-change-checks')) {
+    const a = agent(after, e.agentRunId);
+    if (a === undefined || changeCheckBlockOf(program, a)?.nodeId !== e.blockNodeId) {
+      out.push(`checks of the wrong block on ${a?.role ?? 'an unknown agent'}`);
     }
   }
 

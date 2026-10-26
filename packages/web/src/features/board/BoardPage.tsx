@@ -23,6 +23,8 @@ import { useBoardAction } from './actions';
 import { BoardColumns } from './BoardColumns';
 import { BoardIcon, CheckCircleIcon, PlusIcon } from './icons';
 import { StartDialog } from '../review-loop/StartDialog';
+import { MissingTargetFix } from '../branching/Branches';
+import { useBranchDefaults } from '../branching/TicketBranchFields';
 import { boardColumns, moveRequest, ticketCount, type BoardPick, type MoveTarget } from './moves';
 import { NewTicketDialog } from './NewTicketDialog';
 
@@ -108,6 +110,9 @@ function Board({ projectId }: { projectId: string }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [failed, setFailed] = useState<string | null>(null);
+  /** G-F: the ticket whose Start was refused, for the "create the target branch" fix. */
+  const [startFailed, setStartFailed] = useState<TicketCardDto | null>(null);
+  const branchDefaults = useBranchDefaults(projectId);
 
   const loaded = board.data !== undefined;
 
@@ -127,8 +132,10 @@ function Board({ projectId }: { projectId: string }) {
       setFailed(
         request.kind === 'start' ? C.move.startFailed(ticket.key) : C.move.failed(ticket.key),
       );
+      setStartFailed(request.kind === 'start' ? ticket : null);
       return;
     }
+    setStartFailed(null);
     setFeedback({
       tone: 'ok',
       text:
@@ -220,8 +227,17 @@ function Board({ projectId }: { projectId: string }) {
         </p>
       ) : null}
       {failed ? (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col gap-3">
           <ActionError error={move.error ?? start.error} message={failed} />
+          {startFailed !== null ? (
+            <MissingTargetFix
+              projectId={projectId}
+              ticketBranch={startFailed.branch}
+              strategy={branchDefaults?.strategy}
+              error={start.error}
+              onRetry={() => void perform(startFailed, 'PLANNING')}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -270,6 +286,7 @@ function Board({ projectId }: { projectId: string }) {
           projectId={projectId}
           ticketKey={startWith.key}
           ticketOptions={startWith.runOptions}
+          ticketBranch={startWith.branch}
           kind="start"
           pending={startOptions.pending}
           error={startOptions.error}

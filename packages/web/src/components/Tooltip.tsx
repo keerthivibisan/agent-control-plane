@@ -79,7 +79,7 @@ export function useTooltip(content: ReactNode) {
               top: pos.y,
               transform: pos.below ? 'translateX(-50%)' : 'translate(-50%, -100%)',
             }}
-            className="pointer-events-none z-[60] block w-max max-w-72 animate-fade-in rounded-control border border-transparent bg-ink px-2.5 py-1.5 text-caption leading-[1.125rem] font-normal tracking-normal text-canvas normal-case shadow-pop dark:border-line-strong dark:bg-panel-raised dark:text-ink"
+            className="pointer-events-none z-[60] block w-max max-w-72 animate-fade-in rounded-control bg-tooltip px-2 py-1 text-caption leading-[1.125rem] font-normal tracking-normal text-tooltip-ink normal-case shadow-pop"
           >
             {content}
           </span>,

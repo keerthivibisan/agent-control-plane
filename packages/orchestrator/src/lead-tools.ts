@@ -6,6 +6,7 @@ import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
+import { checkStepAttempts } from './step-attempts.js';
 import { submitPlan } from './plan.js';
 import {
   checkNodeInstances,
@@ -15,6 +16,8 @@ import {
   mayStartHelpers,
 } from './policy.js';
 import { helperNodeOf, programOf, resolveHelper } from './program.js';
+import { helperBrief } from './agent-note.js';
+import { reportWork } from './report-tool.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
 import {
@@ -61,7 +64,7 @@ export const CHILD_MANAGEMENT_TOOLS: readonly LeadToolName[] = Object.freeze([
 const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>> = Object.freeze({
   planner: 'The planner can only submit the plan (submit_plan).',
   reviewer: 'The reviewer can only post its findings (post_review).',
-  tester: 'The tester has no control-plane tools.',
+  tester: 'The tester can only report its work (report_work).',
 });
 
 /**
@@ -71,8 +74,8 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
  *   (ADR-0021) only in a run with the review loop;
  * - planner: `submit_plan`; reviewer: `post_review`; change reviewer: `submit_review`;
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
- *   rework turn (ADR-0021);
- * - tester: none.
+ *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3);
+ * - tester: `report_work` in a ticket run, else none.
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
   const agent = state.agents.find((a) => a.id === agentRunId);
@@ -84,6 +87,7 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
         (n) =>
           n !== 'post_review' &&
           n !== 'submit_review' &&
+          n !== 'report_work' &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
@@ -91,12 +95,13 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
       return ['submit_plan'];
     case 'reviewer':
       return isChangeReviewer(agent) ? ['submit_review'] : ['post_review'];
-    case 'worker':
-      return agent.change === undefined && mayStartHelpers(state, agent)
-        ? CHILD_MANAGEMENT_TOOLS
-        : [];
+    case 'worker': {
+      const children =
+        agent.change === undefined && mayStartHelpers(state, agent) ? CHILD_MANAGEMENT_TOOLS : [];
+      return state.run.ticketId === null ? children : [...children, 'report_work'];
+    }
     case 'tester':
-      return [];
+      return state.run.ticketId === null ? [] : ['report_work'];
   }
 }
 
@@ -125,6 +130,25 @@ export function leadToolCall(
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
   const loop = state.integration !== undefined;
+  if (call.name === 'report_work') {
+    // ADR-0026 §3: the helper's and tester's note; nobody else has it.
+    if (caller.kind !== 'worker' && caller.kind !== 'tester') {
+      return {
+        ok: false,
+        refusal: refusal(
+          'not-lead',
+          isChangeReviewer(caller)
+            ? 'A change reviewer can only submit its review (submit_review).'
+            : caller.kind === 'lead'
+              ? 'Only helpers and the tester report their work.'
+              : NOT_YOUR_TOOL[caller.kind],
+        ),
+      };
+    }
+    const parsed = LeadToolInputs.report_work.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return reportWork(state, caller.id, parsed.data.note, ctx);
+  }
   if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
     // reviewer's (ADR-0021) is submit_review.
@@ -208,6 +232,9 @@ export function leadToolCall(
       const node = resolved.node;
       const instanceRefusal = checkNodeInstances(state, node);
       if (instanceRefusal !== null) return { ok: false, refusal: instanceRefusal };
+      // F-2: replacement helpers for a plan step are bounded.
+      const attemptsRefusal = checkStepAttempts(state, node, role);
+      if (attemptsRefusal !== null) return { ok: false, refusal: attemptsRefusal };
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
         // Depth of the new helper: one below its caller; its node must allow helpers of its own.
@@ -241,7 +268,8 @@ export function leadToolCall(
           agentRunId: id,
           kind: 'worker',
           role,
-          ...launchFieldsFor(program, node.id, task),
+          // ADR-0026 §3: a ticket run's helper ends with its note (`report_work`).
+          ...launchFieldsFor(program, node.id, helperBrief(task, d.run.ticketId !== null)),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),
@@ -347,7 +375,7 @@ export function leadToolCall(
       const parsed = LeadToolInputs.request_review.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
       return withReply(
-        requestReview(state, ctx),
+        requestReview(state, ctx, { summary: parsed.data.summary }),
         loop
           ? 'Handed over. The final review and tests, if the project runs them, work on the ticket branch and their findings come to you. Then the owner merges the ticket branch.'
           : 'The owner can now review the changes.',

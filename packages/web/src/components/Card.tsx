@@ -2,9 +2,10 @@ import { useId, type ReactNode } from 'react';
 import { InfoTip } from './InfoTip';
 
 /**
- * The basic surface: a soft rounded card. With a `title` it becomes a labelled region (so tests and
- * screen readers can find it by name), with an optional one-line description, an info tip on the
- * title, and actions on the right.
+ * The basic surface, GitHub's Box: a 6px-radius bordered box. With a `title` (or `actions`) it gets
+ * a header row on `subtle` and becomes a labelled region (so tests and screen readers can find it
+ * by name), with an optional one-line description, an info tip on the title, and actions on the
+ * right.
  */
 export function Card({
   title,
@@ -28,8 +29,8 @@ export function Card({
 }) {
   const titleId = useId();
   const hasHeader = title !== undefined || actions !== undefined;
-  // DESIGN.md: 20px padding, 12px between the header and the body.
-  const body = padded ? `px-5 pb-5 ${hasHeader ? 'pt-3' : 'pt-5'}` : hasHeader ? 'pt-3' : '';
+  // DESIGN.md v3, "Cards": GitHub's Box. A header row on `subtle` with a divider, a 16px body.
+  const body = padded ? 'p-4' : '';
   return (
     <section
       aria-labelledby={title !== undefined ? titleId : undefined}
@@ -37,7 +38,7 @@ export function Card({
       className={`min-w-0 rounded-card border border-line bg-panel shadow-card ${className}`}
     >
       {hasHeader ? (
-        <header className="flex flex-wrap items-start gap-x-3 gap-y-1 px-5 pt-4">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-t-[calc(var(--radius-card)-1px)] border-b border-line bg-subtle px-4 py-3">
           <div className="min-w-0 flex-1">
             {title !== undefined ? (
               <h2 className="flex items-center gap-1 text-title font-semibold">

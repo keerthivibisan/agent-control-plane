@@ -42,3 +42,12 @@ before merge. Running a project's checks means running project code.
 
 Checks run project code with the owner's privileges, inside worktrees. Mitigations: the manifest is in
 the reviewed repository; argv only; timeouts; filtered environment; visible output; owner merge only.
+
+## Amendment 2026-10-24: branch-managing checks (F-2)
+
+The command guard runs before the
+`run-harness-check` rule, so a harness check (or any command) that is branch-managing git is
+never pre-approved for an agent, in any mode. The harness status lists a warning for each check
+or setup step that is branch-managing git. The app's own runner never starts one, anywhere it
+runs (agent worktrees, tip checkouts, the main branch). A check is recorded `error`, and a setup
+step `refused`, which stops the rest of the setup.

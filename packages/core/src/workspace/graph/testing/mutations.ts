@@ -1,9 +1,11 @@
 import { HARD_MAX_HELPERS } from '../../workspace.js';
 import type {
+  CheckFailureRoute,
   GraphIssueCode,
   WorkflowEdge,
   WorkflowGraph,
   WorkflowNode,
+  WorkflowNodeId,
   WorkflowNodeType,
 } from '../../workflow-graph.js';
 import { RESERVED_HELPER_LABELS } from '../validate.js';
@@ -11,6 +13,7 @@ import {
   addEdge,
   addNode,
   chainIds,
+  changeBlockOf,
   changeReviewers,
   editorNodes,
   finalStageNodes,
@@ -18,7 +21,9 @@ import {
   freshId,
   helperNodes,
   leadId,
+  mergeBlock,
   nodesOfType,
+  pickOptional,
   removeEdges,
   removeNode,
   reviewTargetOf,
@@ -94,6 +99,31 @@ function addFinalReviewer(graph: WorkflowGraph): { graph: WorkflowGraph; id: str
   };
 }
 
+/** Adds a Checks block; `inputs` flow into it (change blocks only). */
+function addBlock(
+  graph: WorkflowGraph,
+  place: 'change' | 'merge' | 'branch',
+  opts: { inputs?: readonly WorkflowNodeId[]; onFailure?: CheckFailureRoute } = {},
+): { graph: WorkflowGraph; id: string } {
+  const id = freshId(graph, `${place}-checks`);
+  let g = addNode(graph, {
+    type: 'checks',
+    id,
+    label: 'More checks',
+    place,
+    ...(opts.onFailure !== undefined ? { onFailure: opts.onFailure } : {}),
+  });
+  for (const input of opts.inputs ?? []) g = addEdge(g, { type: 'flow', from: input, to: id });
+  return { graph: g, id };
+}
+
+/** An editing node without a change block, else any editing node, else null. */
+function pickEditor(graph: WorkflowGraph, rng: GraphRng): WorkflowNodeId | null {
+  const editors = editorNodes(graph);
+  const free = editors.filter((n) => changeBlockOf(graph, n.id) === undefined);
+  return pickId(free.length > 0 ? free : editors, rng);
+}
+
 function removeOne(graph: WorkflowGraph, rng: GraphRng, match: (e: WorkflowEdge) => boolean) {
   const candidates = graph.edges.filter(match);
   if (candidates.length === 0) return null;
@@ -106,7 +136,8 @@ function deleteNodeOfType(type: WorkflowNodeType): GraphMutation {
     name: `delete the ${type} block`,
     expectedCode: 'missing-node',
     apply: (graph) => {
-      const node = firstOfType(graph, type);
+      // Checks: the mandatory block before the lead's merge (other blocks may be removed freely).
+      const node = type === 'checks' ? mergeBlock(graph) : firstOfType(graph, type);
       return node === undefined ? null : removeNode(graph, node.id);
     },
   };
@@ -170,7 +201,7 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
     name: 'link to a block that does not exist',
     expectedCode: 'edge-unknown-node',
     apply: (graph) => {
-      const checks = firstOfType(graph, 'checks');
+      const checks = mergeBlock(graph);
       return checks === undefined
         ? null
         : addEdge(graph, { type: 'flow', from: checks.id, to: freshId(graph, 'ghost') });
@@ -279,10 +310,10 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
   },
   // ------------------------------------------------------------ forbidden edges
   forbidden('a helper flows to the checks', (g, rng) =>
-    edgeBetween('flow', pickId(helperNodes(g), rng), idOf(firstOfType(g, 'checks'))),
+    edgeBetween('flow', pickId(helperNodes(g), rng), idOf(mergeBlock(g))),
   ),
   forbidden('a change reviewer merges', (g, rng) =>
-    edgeBetween('merge', pickId(changeReviewers(g), rng), idOf(firstOfType(g, 'checks'))),
+    edgeBetween('merge', pickId(changeReviewers(g), rng), idOf(mergeBlock(g))),
   ),
   forbidden('a tester sends findings to the lead', (g, rng) =>
     edgeBetween('findings', pickId(nodesOfType(g, 'tester'), rng), leadId(g)),
@@ -425,7 +456,7 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
     name: 'cut the checks from the ticket merge',
     expectedCode: 'merge-path',
     apply: (graph, rng) => {
-      const checks = idOf(firstOfType(graph, 'checks'));
+      const checks = idOf(mergeBlock(graph));
       return removeOne(graph, rng, (e) => e.type === 'flow' && e.from === checks);
     },
   },
@@ -516,6 +547,164 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
       const id = freshId(graph, 'named');
       const g = addNode(graph, helper(id, 'Lonely helper'));
       return addEdge(g, { type: 'review', from: id, to: leadId(g) });
+    },
+  },
+  // ------------------------------------------------------------ Checks blocks (ADR-0027 §5)
+  // Appended last, so the mutants above stay the same for a seed.
+  {
+    name: 'add a second Checks block before the merge',
+    expectedCode: 'too-many-nodes',
+    apply: (graph) => addBlock(graph, 'merge').graph,
+  },
+  {
+    name: 'add a second Checks block on the ticket branch',
+    expectedCode: 'too-many-nodes',
+    apply: (graph) => {
+      let g = graph;
+      while (g.nodes.filter((n) => n.type === 'checks' && n.place === 'branch').length < 2) {
+        g = addBlock(g, 'branch').graph;
+      }
+      return g;
+    },
+  },
+  {
+    name: 'a Checks block on the ticket branch off the line',
+    expectedCode: 'final-chain',
+    apply: (graph) => addBlock(graph, 'branch').graph,
+  },
+  {
+    name: 'a change Checks block nothing flows into',
+    expectedCode: 'check-block-input',
+    apply: (graph) => addBlock(graph, 'change').graph,
+  },
+  {
+    name: 'a helper flows into two change Checks blocks',
+    expectedCode: 'many-check-blocks',
+    apply: (graph, rng) => {
+      const editor = pickId(editorNodes(graph), rng);
+      if (editor === null) return null;
+      const first = addBlock(graph, 'change', { inputs: [editor] }).graph;
+      return addBlock(first, 'change', { inputs: [editor] }).graph;
+    },
+  },
+  {
+    name: 'a failure route the block’s place does not allow',
+    expectedCode: 'check-failure-route',
+    apply: (graph, rng) => {
+      const block = mergeBlock(graph);
+      if (rng.bool() || block === undefined) {
+        const { graph: g, id } = addBlock(graph, 'branch', { onFailure: 'lead' });
+        // on the chain, right before your merge, so only the route is wrong
+        const into = g.edges.find(
+          (e) => e.type === 'flow' && g.nodes.find((n) => n.id === e.to)?.type === 'owner-merge',
+        );
+        if (into === undefined) return g;
+        const rewired = removeEdges(g, (e) => e.id === into.id);
+        return addEdge(addEdge(rewired, { type: 'flow', from: into.from, to: id }), {
+          type: 'flow',
+          from: id,
+          to: into.to,
+        });
+      }
+      return updateNode(graph, block.id, (n) =>
+        n.type === 'checks' ? { ...n, onFailure: 'helper' } : n,
+      );
+    },
+  },
+  {
+    name: 'back to the helper without a rework link',
+    expectedCode: 'check-rework',
+    apply: (graph, rng) => {
+      const editor = pickEditor(graph, rng);
+      return editor === null
+        ? null
+        : addBlock(graph, 'change', { inputs: [editor], onFailure: 'helper' }).graph;
+    },
+  },
+  {
+    name: 'a rework link from a Checks block that does not send work back',
+    expectedCode: 'check-rework',
+    apply: (graph, rng) => {
+      const editor = pickEditor(graph, rng);
+      if (editor === null) return null;
+      const onFailure = pickOptional<CheckFailureRoute>(rng, ['lead', 'owner']);
+      const { graph: g, id } = addBlock(graph, 'change', {
+        inputs: [editor],
+        ...(onFailure !== undefined ? { onFailure } : {}),
+      });
+      return addEdge(g, { type: 'rework', from: id, to: editor, maxRounds: rng.int(6) });
+    },
+  },
+  {
+    name: 'a change Checks block sends back a node it does not check',
+    expectedCode: 'check-rework',
+    apply: (graph, rng) => {
+      const editors = editorNodes(graph);
+      if (editors.length === 0) return null;
+      const target = rng.pick(editors).id;
+      const others = editors.filter((n) => n.id !== target);
+      const input = others.length > 0 ? rng.pick(others).id : null;
+      const { graph: g, id } = addBlock(graph, 'change', {
+        inputs: input === null ? [] : [input],
+        onFailure: 'helper',
+      });
+      let out = addEdge(g, { type: 'rework', from: id, to: target, maxRounds: 1 });
+      if (input !== null) out = addEdge(out, { type: 'rework', from: id, to: input, maxRounds: 1 });
+      return out;
+    },
+  },
+  {
+    name: 'the lead merges through a change Checks block',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const editor = pickEditor(graph, rng);
+      if (editor === null) return null;
+      const { graph: g, id } = addBlock(graph, 'change', { inputs: [editor] });
+      return addEdge(g, { type: 'merge', from: leadId(g), to: id });
+    },
+  },
+  {
+    name: 'a change Checks block flows to the ticket merge',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const editor = pickEditor(graph, rng);
+      const ticketMerge = idOf(firstOfType(graph, 'ticket-merge'));
+      if (editor === null || ticketMerge === null) return null;
+      const { graph: g, id } = addBlock(graph, 'change', { inputs: [editor] });
+      return addEdge(g, { type: 'flow', from: id, to: ticketMerge });
+    },
+  },
+  {
+    name: 'the lead or a reviewer flows to a change Checks block',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const editor = pickEditor(graph, rng);
+      if (editor === null) return null;
+      const { graph: g, id } = addBlock(graph, 'change', { inputs: [editor] });
+      const from = pickId([...changeReviewers(g), ...finalStageNodes(g)], rng) ?? leadId(g);
+      const tester = g.nodes.find((n) => n.id === from)?.type === 'tester';
+      return addEdge(g, { type: 'flow', from: tester ? leadId(g) : from, to: id });
+    },
+  },
+  {
+    name: 'a helper flows to the Checks block on the ticket branch',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const helperId = pickId(helperNodes(graph), rng);
+      if (helperId === null) return null;
+      const { graph: g, id } = addBlock(graph, 'branch');
+      return addEdge(g, { type: 'flow', from: helperId, to: id });
+    },
+  },
+  {
+    name: 'the Checks block before the merge sends work back',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const block = idOf(mergeBlock(graph));
+      const editor = pickId(editorNodes(graph), rng);
+      return block === null || editor === null
+        ? null
+        : addEdge(graph, { type: 'rework', from: block, to: editor, maxRounds: 1 });
     },
   },
 ]);

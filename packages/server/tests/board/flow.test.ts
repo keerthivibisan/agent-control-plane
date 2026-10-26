@@ -8,6 +8,7 @@ import {
   RunDetailDtoSchema,
   TicketDetailDtoSchema,
 } from '@acp/core/api';
+import { AGENT_NOTE_LINE, BRANCH_RULE_LINE } from '@acp/orchestrator';
 import { createRunStore } from '../../src/control/store.js';
 import { PARENT_HELPER_NOTE } from '../../src/control/service.js';
 import { expectError } from '../control/helpers.js';
@@ -357,15 +358,18 @@ describe('cancel, context and depth 2', () => {
     if (parent === undefined) throw new Error('no parent');
     expect(parent.spec.canStartHelpers).toBe(true);
     expect(parent.spec.leadTools).toBeDefined();
-    expect(parent.spec.prompt).toBe(`Split the work\n\n${PARENT_HELPER_NOTE}`);
+    expect(parent.spec.prompt).toBe(
+      `Split the work\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}\n\n${PARENT_HELPER_NOTE}`,
+    );
     parent.started();
     await parent.callLead('start_agent', { role: 'Child', task: 'Do one part' });
     await s.settle();
     const child = s.fake.workers()[1];
     if (child === undefined) throw new Error('no child');
     expect(child.spec.canStartHelpers).toBeUndefined();
-    expect(child.spec.leadTools).toBeUndefined();
-    expect(child.spec.prompt).toBe('Do one part');
+    // ADR-0026 §3: a ticket run's helper has the note tool (and only that, per the adapter).
+    expect(child.spec.leadTools).toBeDefined();
+    expect(child.spec.prompt).toBe(`Do one part\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}`);
     child.started();
     child.finish('success');
     await s.settle();
@@ -384,7 +388,11 @@ describe('cancel, context and depth 2', () => {
     await s.settle();
     const worker = s.fake.workers()[0];
     expect(worker?.spec.canStartHelpers).toBeUndefined();
-    expect(worker?.spec.leadTools).toBeUndefined();
+    // ADR-0026 §3: only `report_work`: the engine refuses the child tools (depth 1).
+    expect(worker?.spec.leadTools).toBeDefined();
+    await expect(worker?.spec.leadTools?.('start_agent', { role: 'C', task: 'x' })).rejects.toThrow(
+      'Only the lead agent can start agents.',
+    );
   });
 });
 

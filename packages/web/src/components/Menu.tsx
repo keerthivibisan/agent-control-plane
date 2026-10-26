@@ -3,7 +3,7 @@ import { useState, type MouseEvent, type ReactElement, type ReactNode } from 're
 
 /** The floating surface menus and popovers share. */
 export const floatingClass =
-  'z-50 rounded-card border border-line bg-panel-raised text-ink shadow-pop data-[state=open]:animate-pop-in';
+  'z-50 rounded-overlay border border-line bg-panel-raised text-ink shadow-pop data-[state=open]:animate-pop-in';
 
 /**
  * A menu button (Radix DropdownMenu): `role="menu"` with `menuitem`s; ArrowDown, Enter or Space on
@@ -60,7 +60,7 @@ export function Menu({
           loop={loop}
           data-testid={testId}
           {...(label ? { 'aria-label': label, 'aria-labelledby': undefined } : {})}
-          className={`${floatingClass} flex min-w-56 flex-col p-1 focus:outline-none ${className}`}
+          className={`${floatingClass} flex min-w-56 flex-col p-2 focus:outline-none ${className}`}
         >
           {children}
         </RadixMenu.Content>
@@ -70,7 +70,7 @@ export function Menu({
 }
 
 const itemClass =
-  'flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover';
+  'flex cursor-default items-center gap-2 rounded-control px-2 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover';
 
 /** One choice in a `Menu`. `tone="danger"` for a destructive one (cancel, delete). */
 export function MenuItem({
@@ -109,14 +109,14 @@ export function MenuItem({
 /** A small heading over a group of items. */
 export function MenuLabel({ children }: { children: ReactNode }) {
   return (
-    <RadixMenu.Label className="px-2.5 pt-2 pb-1 text-caption font-medium text-dim">
+    <RadixMenu.Label className="px-2 pt-1.5 pb-1 text-caption font-semibold text-dim">
       {children}
     </RadixMenu.Label>
   );
 }
 
 export function MenuSeparator() {
-  return <RadixMenu.Separator className="-mx-1 my-1 h-px bg-line" />;
+  return <RadixMenu.Separator className="-mx-2 my-2 h-px bg-line" />;
 }
 
 export const MenuGroup = RadixMenu.Group;

@@ -5,6 +5,7 @@ import {
   resolveRunOptions,
   type ApprovalMode,
   type ChangeReviewerMode,
+  type TicketBranchPrefs,
   type TicketRunOptions,
 } from '@acp/core';
 import type { StartTicketRequest } from '@acp/core/api';
@@ -14,6 +15,8 @@ import { Dialog } from '../../components/Dialog';
 import { LoadingBlock } from '../../components/Skeleton';
 import type { ApiError } from '../../lib/api';
 import { REVIEW_LOOP_COPY, TICKET_OPTIONS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
+import { MissingTargetFix } from '../branching/Branches';
+import { useBranchDefaults } from '../branching/TicketBranchFields';
 import { ActionError } from '../control/bits';
 import { ChoiceCards, NumberChoice } from '../project-setup/fields';
 import { projectRunDefaults, runLimitNoEffect, startRequest, type StartChoice } from './logic';
@@ -58,11 +61,17 @@ export function StartDialog({
   onStart,
   onClose,
   ticketOptions,
+  ticketBranch,
 }: {
   projectId: string;
   ticketKey: string;
   /** RL-H: the ticket's own run options; absent ones follow the project. */
   ticketOptions?: TicketRunOptions | undefined;
+  /**
+   * G-H (G-F's follow-up): the ticket's own branch settings, so a Start refused for a missing
+   * target or start branch offers to create it here too, then starts again with these options.
+   */
+  ticketBranch?: TicketBranchPrefs | undefined;
   kind: 'start' | 'rerun';
   pending: boolean;
   error: ApiError | null;
@@ -72,6 +81,7 @@ export function StartDialog({
   // WG-F: the project's graph answers for every project (the version 1 route 409s for a graph).
   const q = useProjectGraph(projectId);
   const blocks = useBlockModes(projectId);
+  const branchDefaults = useBranchDefaults(projectId);
   const [picked, setPicked] = useState<Partial<StartChoice>>({});
   const [pickedMode, setPickedMode] = useState<ModeChoice | null>(null);
   const name = useId();
@@ -183,6 +193,13 @@ export function StartDialog({
           </>
         )}
         <ActionError error={error} message={REVIEW_LOOP_COPY.start.failed} />
+        <MissingTargetFix
+          projectId={projectId}
+          ticketBranch={ticketBranch}
+          strategy={branchDefaults?.strategy}
+          error={error}
+          onRetry={() => onStart(request)}
+        />
         <div className="-mx-5 -mb-5 flex flex-wrap items-center gap-2 rounded-b-card border-t border-line bg-sunken/40 px-5 py-3">
           <span className="mr-auto text-caption text-dim" data-testid="start-dialog-summary">
             {defaults === null

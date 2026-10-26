@@ -1,5 +1,8 @@
 import {
+  AttachmentNameSchema,
   HARNESS_TICKET_TEMPLATE,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_TICKET,
   TICKET_STAGES,
   WorkflowGraphInvalidError,
   approvalsOf,
@@ -9,12 +12,16 @@ import {
   ticketStage,
   tightenMode,
   validateWorkflowGraph,
+  type Attachment,
   type CheckRun,
+  type SetupRun,
   type CompileContext,
   type ProjectAgentSetup,
   type RunBudget,
   type RunStatus,
   type Ticket,
+  type TicketBranchPrefs,
+  type TicketBranchPrefsPatch,
   type TicketRunOptions,
   type TicketStage,
   type TokenCounts,
@@ -22,7 +29,10 @@ import {
   type WorkflowProgram,
 } from '@acp/core';
 import {
+  ConnectRepositoryRequestSchema,
+  CreateBranchRequestSchema,
   CreateRepoProjectRequestSchema,
+  CreateRepositoryRequestSchema,
   CreateTicketRequestSchema,
   MoveTicketRequestSchema,
   PlanDecisionRequestSchema,
@@ -37,15 +47,22 @@ import {
   type RunDetailDto,
   type StreamNoticeDto,
   type TicketCardDto,
+  type CodeHostStatusDto,
+  type ProjectBranchesDto,
+  type TicketBranchDto,
+  type AttachmentDto,
+  type TicketActivityDto,
   type TicketCommentDto,
   type TicketDetailDto,
   type TicketDto,
   type TicketRunOptionsPatch,
+  type TicketTotalsDto,
 } from '@acp/core/api';
 import {
   MAX_PAGE_SIZE,
   createOrchestrationRepositories,
   createRedesignRepositories,
+  createHarnessRepositories,
   createReviewLoopRepositories,
   createWorkspaceRepositories,
   type AcpDatabase,
@@ -64,22 +81,68 @@ import {
   type RunLimits,
   type RunState,
 } from '@acp/orchestrator';
-import { managedDisabled } from '../control/errors.js';
+import { CodeHostError, codeHostHttpError, type CodeHostService } from '../code-host/index.js';
+import { managedDisabled, workspaceError } from '../control/errors.js';
 import { toRunSummary } from '../control/mappers.js';
-import { withPlanDeciders } from '../control/store.js';
+import { createRunStore, withPlanDeciders, type RunStore } from '../control/store.js';
 import { countsAsHelper } from '../control/roles.js';
 import type { ControlService, ControlWorkspaceHooks } from '../control/service.js';
 import { HttpError, notFound } from '../errors.js';
 import { HarnessError, listContextCandidates } from '../harness/index.js';
-import type { Logger } from '../logger.js';
+import { errorFields, type Logger } from '../logger.js';
 import type { ProjectsService } from '../services/projects.js';
-import type { GitRunner } from '../workspace/index.js';
+import {
+  WorkspaceError,
+  ticketBranchPlan,
+  type GitRunner,
+  type WorkspaceManager,
+} from '../workspace/index.js';
 import type { CheckService } from './checks.js';
+import { buildTicketActivity } from './activity.js';
+import { attachmentDbError, toAttachmentDto, toCommentDto, toCommentDtos } from './comments.js';
+import { allowedMimeType, contentMatches, sha256Of } from '../attachments/content.js';
 import { createRepository } from './create-repo.js';
 import { dbConflict, harnessError } from './errors.js';
 import type { ProjectHarness } from './harness.js';
 import { ensureSetup, legacyAllowlistOf } from './setup.js';
 import { effectiveWorkflow, projectRunDefaults } from '../workflow/graph.js';
+import { createTicketTokens } from '../tokens/service.js';
+import {
+  createTicketBranchActions,
+  type TicketBranchCodeHost,
+  type TicketBranchContext,
+} from './ticket-branch-actions.js';
+import { buildTicketTotals } from './ticket-totals.js';
+
+/** What `POST /api/tickets/:id/attachments` received (ADR-0026 §4). */
+export interface AttachmentUpload {
+  /** The request's `Content-Type`: the declared type, checked against the allowlist. */
+  contentType: string | undefined;
+  /** `X-Attachment-Name`, URI-encoded. */
+  name: string | undefined;
+  /** `?commentId=`: attach to this comment of the ticket. */
+  commentId: string | undefined;
+  bytes: Uint8Array;
+}
+
+/** The decoded `X-Attachment-Name`, or a 400. */
+function attachmentName(header: string | undefined): string {
+  let decoded: string | undefined;
+  try {
+    decoded = header === undefined ? undefined : decodeURIComponent(header);
+  } catch {
+    decoded = undefined;
+  }
+  const parsed = AttachmentNameSchema.safeParse(decoded);
+  if (!parsed.success) {
+    throw new HttpError(
+      400,
+      'invalid_attachment_name',
+      'X-Attachment-Name must be a plain file name (URI-encoded, no folders)',
+    );
+  }
+  return parsed.data;
+}
 
 /**
  * The project's workflow graph cannot run (ADR-0023 §3): the run is not created. The message is
@@ -115,6 +178,8 @@ export interface BoardService {
   runMainChecks(projectId: string): Promise<CheckRun[]>;
   /** Past "Run checks now" results on the main branch, newest first (R-E's history). */
   mainCheckHistory(projectId: string, limit?: number): CheckRun[];
+  /** ADR-0027: the setup runs before "Run checks now" on main, newest first. */
+  mainSetupHistory(projectId: string, limit?: number): SetupRun[];
   createHarnessTicket(projectId: string): Promise<TicketDto>;
   contextCandidates(projectId: string): Promise<ContextCandidateDto[]>;
   board(projectId: string): Promise<BoardDto>;
@@ -126,9 +191,40 @@ export interface BoardService {
   /** `body`: `StartTicketRequest` (ADR-0021 per-run overrides); empty uses the project's. */
   startTicket(ticketId: string, body?: unknown): Promise<TicketDetailDto>;
   addComment(ticketId: string, body: unknown): TicketCommentDto;
+  /** ADR-0026 §1: the Conversation tab's timeline, built from records. */
+  activity(ticketId: string): TicketActivityDto;
+  /**
+   * ADR-0026 §4: stores one attachment of the owner's on the ticket (or one of its comments) after
+   * checking its type, name, size and content.
+   */
+  uploadAttachment(ticketId: string, input: AttachmentUpload): Promise<AttachmentDto>;
+  listAttachments(ticketId: string): AttachmentDto[];
+  /** The stored row and the file to serve. */
+  attachmentContent(id: string): { attachment: Attachment; path: string };
+  deleteAttachment(id: string): Promise<void>;
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
+  /** ADR-0025: what the app can do with the project's `origin` (`gh` by exit code only). */
+  codeHostStatus(projectId: string): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §7: creates the repository on GitHub and sets it as `origin` (the owner's click). */
+  createCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §7: sets an existing GitHub repository as `origin` (the owner's click). */
+  connectCodeHostRepository(projectId: string, body: unknown): Promise<CodeHostStatusDto>;
+  /** ADR-0025 §8: the project's local branches, read from git now (no fetch). */
+  projectBranches(projectId: string): Promise<ProjectBranchesDto>;
+  /** ADR-0025 §8: creates (and, if asked, pushes) a local branch on the owner's click. */
+  createProjectBranch(projectId: string, body: unknown): Promise<ProjectBranchesDto>;
+  /** ADR-0025 §4: Push & open PR for the ticket's current run's ticket branch. */
+  openPullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** ADR-0025: reads the pull request's state now (the owner's view or Refresh). */
+  refreshPullRequest(ticketId: string): Promise<TicketBranchDto>;
+  /** ADR-0025 §9: merges the open pull request on GitHub (the owner's click), then reads it. */
+  mergePullRequest(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** ADR-0025 §9: deletes the finished ticket branch on origin and in the project. */
+  deleteTicketBranch(ticketId: string, body: unknown): Promise<TicketBranchDto>;
+  /** v0.3.0 T-A: how long the ticket took and its tokens (no cost). */
+  ticketTotals(ticketId: string): TicketTotalsDto;
   /** What the control service calls back into (ticket status, notices, checks, merge record). */
   controlHooks(): ControlWorkspaceHooks;
 }
@@ -145,6 +241,17 @@ export interface BoardServiceDeps {
   now: () => Date;
   publish: (notice: StreamNoticeDto) => void;
   logger: Logger;
+  /**
+   * ADR-0025: checks a ticket's branch plan (its target and source exist locally, its name is not
+   * a long-lived branch) before the run starts. Omitted in tests that do not use git.
+   */
+  ticketBranches?: Pick<WorkspaceManager, 'checkTicketBranchPlan'>;
+  /** ADR-0025: the code host status; omitted, its route answers `code_host_unavailable`. */
+  codeHost?: Pick<
+    CodeHostService,
+    'status' | 'createRepository' | 'connectRepository' | 'branches' | 'createBranch'
+  > &
+    TicketBranchCodeHost;
   /**
    * Tests only: start ticket runs without the review loop, as runs started before ADR-0021 did, so
    * the legacy flow those runs keep stays covered. Production never sets it.
@@ -196,6 +303,26 @@ export function patchRunOptions(
   });
 }
 
+/**
+ * A ticket's branch settings after an update (ADR-0025, §10 for `from`): a value sets the field,
+ * `null` puts it back to the project's, an absent field is kept; `null` for the whole patch clears
+ * them all.
+ */
+export function patchBranchPrefs(
+  current: TicketBranchPrefs | undefined,
+  patch: TicketBranchPrefsPatch | null,
+): TicketBranchPrefs {
+  if (patch === null) return {};
+  const name = patch.name === null ? undefined : (patch.name ?? current?.name);
+  const target = patch.target === null ? undefined : (patch.target ?? current?.target);
+  const from = patch.from === null ? undefined : (patch.from ?? current?.from);
+  return {
+    ...(name !== undefined && { name }),
+    ...(target !== undefined && { target }),
+    ...(from !== undefined && { from }),
+  };
+}
+
 export function createBoardService(deps: BoardServiceDeps): BoardService {
   const { logger } = deps;
   const ws: WorkspaceRepositories = createWorkspaceRepositories(deps.db, { now: deps.now });
@@ -204,8 +331,34 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   });
   const redesign = createRedesignRepositories(deps.db, { now: deps.now });
   const loop = createReviewLoopRepositories(deps.db, { now: deps.now });
+  /** ADR-0027: setup runs (migration 0010). */
+  const harnessRepos = createHarnessRepositories(deps.db, { now: deps.now });
+  /** Reads run states for the activity timeline (made on first use). */
+  let runStore: RunStore | undefined;
 
   // ------------------------------------------------------------------ helpers
+
+  /** ADR-0025 §9 (G-G): merging the pull request and deleting the ticket branch. */
+  const branchActions = createTicketBranchActions({
+    refreshPullRequest: (runId) => deps.control.refreshPullRequest(runId),
+    peek: (runId) => deps.control.peek(runId),
+    branchOf: (runId) => loop.ticketBranches.getByRun(runId),
+    logger,
+  });
+  /** v0.3.0 T-A: the Tokens page's `byTicket` numbers for one ticket. */
+  const ticketTokens = createTicketTokens(deps.db);
+
+  async function branchContext(ticket: Ticket, runId: string): Promise<TicketBranchContext> {
+    const p = project(ticket.projectId);
+    const setup = await setupFor(ticket.projectId).catch(() => undefined);
+    return { runId, projectRoot: p.rootPath, strategy: setup?.branching };
+  }
+
+  /** The DTO with `localExists` and `headOnOrigin` from local refs, when a code host is wired. */
+  async function present(ticket: Ticket, dto: TicketBranchDto): Promise<TicketBranchDto> {
+    if (deps.codeHost === undefined) return dto;
+    return branchActions.present(deps.codeHost, project(ticket.projectId).rootPath, dto);
+  }
 
   function project(projectId: string) {
     const p = deps.repos.projects.getById(projectId);
@@ -213,7 +366,24 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     return p;
   }
 
-  /** The ticket with its own run options (RL-H, migration 0007). */
+  function requireCodeHost(): NonNullable<BoardServiceDeps['codeHost']> {
+    if (deps.codeHost === undefined) {
+      throw new HttpError(404, 'code_host_unavailable', 'Code hosting is not available here');
+    }
+    return deps.codeHost;
+  }
+
+  /** A code host call with its refusals as the `ErrorDto` (codes and the app's own words). */
+  async function codeHostCall<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error instanceof CodeHostError) throw codeHostHttpError(error);
+      throw error;
+    }
+  }
+
+  /** The ticket with its own run options (RL-H, 0007) and branch settings (ADR-0025, 0008). */
   function ticketOrThrow(ticketId: string): Ticket {
     const t = ws.tickets.getById(ticketId);
     if (t === undefined) throw notFound(`Ticket ${ticketId} not found`);
@@ -223,14 +393,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   function withRunOptions(
     ticket: Ticket,
     options: TicketRunOptions | undefined = loop.ticketRunOptions.get(ticket.id),
+    branch: TicketBranchPrefs | undefined = loop.ticketBranchPrefs.get(ticket.id),
   ): Ticket {
-    return loop.ticketRunOptions.withOptions(ticket, options);
+    return loop.ticketBranchPrefs.withPrefs(
+      loop.ticketRunOptions.withOptions(ticket, options),
+      branch,
+    );
   }
 
-  /** The project's tickets, each with its own run options, in number order. */
+  /** The project's tickets, each with its own run options and branch settings, in number order. */
   function ticketsOf(projectId: string): Ticket[] {
     const options = loop.ticketRunOptions.listForProject(projectId);
-    return ws.tickets.listForProject(projectId).map((t) => withRunOptions(t, options.get(t.id)));
+    const branches = loop.ticketBranchPrefs.listForProject(projectId);
+    return ws.tickets
+      .listForProject(projectId)
+      .map((t) => withRunOptions(t, options.get(t.id), branches.get(t.id)));
   }
 
   async function setupFor(projectId: string): Promise<ProjectAgentSetup> {
@@ -302,8 +479,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   }
 
   function toTicketDto(ticket: Ticket, run = runView(ticket.currentRunId)): TicketDto {
-    // A ticket read here carries its run options already; one from a status write gets them now.
-    const full = ticket.runOptions === undefined ? withRunOptions(ticket) : ticket;
+    // A ticket read here carries its own settings already; one from a status write gets them now.
+    const full =
+      ticket.runOptions === undefined || ticket.branch === undefined
+        ? withRunOptions(ticket)
+        : ticket;
     return { ...full, stage: stageOf(ticket, run) };
   }
 
@@ -361,9 +541,16 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       runs,
       currentRun,
       plans: plansWithDeciders(ticketId),
-      comments: ws.comments.listForTicket(ticketId),
+      // ADR-0026: each with its kind (derived for older comments) and attachments.
+      comments: toCommentDtos(
+        ws.comments.listForTicket(ticketId),
+        ws.attachments.listForTicket(ticketId),
+      ),
       // With each result's commit (ADR-0021), so a change card shows only its own commit's.
       checks: ticket.currentRunId === null ? [] : loop.checkCommits.listForRun(ticket.currentRunId),
+      // ADR-0027: the current run's setup runs (agents' worktrees and check checkouts).
+      setupRuns:
+        ticket.currentRunId === null ? [] : harnessRepos.setupRuns.listForRun(ticket.currentRunId),
     };
   }
 
@@ -432,6 +619,33 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     };
   }
 
+  /**
+   * ADR-0025: a ticket whose branch has a target or a source (§10; its own or the strategy's) or
+   * its own name is checked before the run starts, so a missing target or source is refused now
+   * (`target_branch_missing`, `source_branch_missing`), not at plan approval. A ticket with none
+   * keeps the behaviour before ADR-0025 (checked at plan approval).
+   */
+  async function checkBranchPlan(ticket: Ticket, setup: ProjectAgentSetup): Promise<void> {
+    const plan = ticketBranchPlan(setup.branching, ticket);
+    if (deps.ticketBranches === undefined) return;
+    if (plan.target === null && plan.source === null && ticket.branch?.name === undefined) return;
+    try {
+      await deps.ticketBranches.checkTicketBranchPlan(project(ticket.projectId).rootPath, plan);
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw workspaceError(error);
+      throw error;
+    }
+  }
+
+  /** The ticket's current run, for its ticket branch (ADR-0021 §4, ADR-0025). */
+  function currentRunOf(ticket: Ticket): string {
+    if (!deps.control.enabled) throw managedDisabled();
+    if (ticket.currentRunId === null) {
+      throw new HttpError(409, 'no_ticket_branch', 'The ticket has no run with a ticket branch');
+    }
+    return ticket.currentRunId;
+  }
+
   /** Re-read: the ticket may have moved while the setup was read. */
   function checkUnchanged(ticket: Ticket): void {
     const fresh = ticketOrThrow(ticket.id);
@@ -481,9 +695,18 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           next.integration === undefined ? undefined : loop.ticketBranches.getByRun(runId);
         if (next.integration === undefined) deps.checks.runOnReview(runId);
         else if (tip !== undefined && tip.state === 'open') {
-          deps.checks.startOnCommit(runId, null, tip.headCommit, () => {
-            notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
-          });
+          // The ticket branch's checks (ADR-0027 §5: required and the branch block's selection);
+          // those that already passed on this tip (the branch block ran there) are not rerun.
+          deps.checks.startOnCommit(
+            runId,
+            null,
+            tip.headCommit,
+            () => {
+              notice('tickets-changed', { projectId: next.run.projectId, ticketId, runId });
+            },
+            undefined,
+            { skipPassed: true },
+          );
         }
       }
       if (changed && (status === 'CANCELLING' || status === 'CANCELLED' || status === 'FAILED')) {
@@ -515,10 +738,12 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     allowlist: (projectId, policy) => deps.harness.allowlist(projectId, policy),
     reviewGate: (runId, agentRunId) => deps.checks.gate(runId, agentRunId),
     commitChecks: {
-      gate: (runId, agentRunId, commit) => deps.checks.gateForCommit(runId, agentRunId, commit),
-      start: (runId, agentRunId, commit, onFinished) =>
-        deps.checks.startOnCommit(runId, agentRunId, commit, onFinished),
+      gate: (runId, agentRunId, commit, spec) =>
+        deps.checks.gateForCommit(runId, agentRunId, commit, spec),
+      start: (runId, agentRunId, commit, onFinished, spec, options) =>
+        deps.checks.startOnCommit(runId, agentRunId, commit, onFinished, spec, options),
     },
+    setupWorktree: (input) => deps.checks.setupWorktree(input),
 
     mergedAnyway({ runId, role, reason, failedChecks }) {
       // The owner's reason is their own text (ADR-0016): kept on the ticket, for the record.
@@ -527,7 +752,14 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       const body =
         `Merged ${role}'s changes although required checks did not pass ` +
         `(${failedChecks.join(', ')}). Reason: ${reason}`;
-      ws.comments.insert({ ticketId, runId, author: 'owner', body: body.slice(0, 8000) });
+      // ADR-0026: a decision note (Conversation), not a comment for the Comments tab.
+      ws.comments.insert({
+        ticketId,
+        runId,
+        author: 'owner',
+        body: body.slice(0, 8000),
+        kind: 'note',
+      });
       const t = ws.tickets.getById(ticketId);
       if (t !== undefined) notice('tickets-changed', { projectId: t.projectId, ticketId, runId });
     },
@@ -588,13 +820,21 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         (input.approvals !== undefined
           ? legacyAllowlistOf(input.approvals)
           : (stored?.allowlist ?? { editInOwnWorktree: false, runHarnessChecks: false }));
+      // ADR-0025: an absent strategy keeps the stored one; `null` removes it.
+      const { branching: branchingInput, setupNetwork: networkInput, ...rest } = input;
+      const branching =
+        branchingInput === undefined ? stored?.branching : (branchingInput ?? undefined);
+      // ADR-0027 §2: an absent switch keeps the stored one (off when never set).
+      const setupNetwork = networkInput ?? stored?.setupNetwork;
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
           planFirst: true,
-          ...input,
+          ...rest,
           allowlist,
           ...(approvals !== undefined && { approvals }),
+          ...(branching !== undefined && { branching }),
+          ...(setupNetwork !== undefined && { setupNetwork }),
         });
         notice('projects-changed', { projectId });
         return saved;
@@ -602,6 +842,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         throw dbConflict(error, 'Another project already uses this project key') ?? error;
       }
     },
+
+    mainSetupHistory: (projectId, limit = 50) => deps.checks.mainSetupHistory(projectId, limit),
 
     mainCheckHistory(projectId, limit = 50) {
       project(projectId); // 404 for an unknown project
@@ -674,8 +916,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       project(projectId);
       const input = CreateTicketRequestSchema.parse(body);
       await setupFor(projectId);
-      // RL-H: the ticket and its own run options are stored together.
-      const ticket = loop.ticketRunOptions.insert({ projectId, ...input });
+      // RL-H, ADR-0025: the ticket, its own run options and branch settings are stored together.
+      const ticket = loop.ticketBranchPrefs.insert({ projectId, ...input });
       notice('tickets-changed', { projectId, ticketId: ticket.id });
       return toTicketDto(ticket);
     },
@@ -699,6 +941,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
             ticketId,
             patchRunOptions(current.runOptions, input.runOptions),
           );
+        }
+        // ADR-0025: only branches made later see the change; an existing ticket branch keeps its
+        // name, target and source.
+        if (input.branch !== undefined) {
+          loop.ticketBranchPrefs.set(ticketId, patchBranchPrefs(current.branch, input.branch));
         }
       });
       notice('tickets-changed', { projectId: current.projectId, ticketId });
@@ -756,6 +1003,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         throw new HttpError(409, 'run_in_progress', 'The ticket already has a run in progress');
       }
       const setup = await setupFor(ticket.projectId);
+      if (deps.legacyTicketRuns !== true) await checkBranchPlan(ticket, setup);
       const { limits, budget } = runSettingsFromSetup(setup);
       // Snapshotted with the run: later project changes never reach it (ADR-0021 §1).
       const projectApprovals = approvalsOf(setup);
@@ -845,9 +1093,149 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     addComment(ticketId, body) {
       const ticket = ticketOrThrow(ticketId);
       const input = TicketCommentRequestSchema.parse(body);
-      const comment = ws.comments.insert({ ticketId, author: 'owner', body: input.body });
+      // ADR-0026 §4: files uploaded first are attached with the comment, all or none.
+      const ids = input.attachmentIds ?? [];
+      let added;
+      try {
+        added = withTransaction(deps.db, () => {
+          const stored = ws.comments.insert({
+            ticketId,
+            author: 'owner',
+            body: input.body,
+            kind: input.kind ?? 'comment',
+          });
+          return {
+            comment: stored,
+            attachments:
+              ids.length === 0 ? [] : ws.attachments.attachToComment(ticketId, stored.id, ids),
+          };
+        });
+      } catch (error) {
+        throw attachmentDbError(error) ?? error;
+      }
+      const { comment, attachments } = added;
       notice('tickets-changed', { projectId: ticket.projectId, ticketId });
-      return comment;
+      return toCommentDto(comment, attachments);
+    },
+
+    activity(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      runStore ??= createRunStore({ db: deps.db, now: deps.now });
+      const store = runStore;
+      const runs = orch.runs
+        .list({ ticketId, limit: MAX_PAGE_SIZE })
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0))
+        .map((run) => {
+          let state: RunState | undefined;
+          try {
+            state = deps.control.peek(run.id) ?? store.load(run.id);
+          } catch (error) {
+            // A run the engine cannot rebuild still shows, with role words for its agents.
+            logger.log('warn', 'activity: run state unavailable', {
+              runId: run.id,
+              ...errorFields(error),
+            });
+          }
+          return {
+            run,
+            state,
+            reviews: loop.changeReviews.listForRun(run.id),
+            branch: loop.ticketBranches.getByRun(run.id),
+            workspaces: orch.workspaces.listForRun(run.id),
+          };
+        });
+      return buildTicketActivity({
+        ticketId,
+        ticketKey: ticket.key,
+        runs,
+        plans: plansWithDeciders(ticketId),
+        comments: ws.comments.listForTicket(ticketId),
+      });
+    },
+
+    async uploadAttachment(ticketId, input) {
+      const ticket = ticketOrThrow(ticketId);
+      const mimeType = allowedMimeType(input.contentType);
+      if (mimeType === null) {
+        throw new HttpError(
+          415,
+          'attachment_type_not_allowed',
+          'This file type cannot be attached (images, text, Markdown, CSV, JSON, PDF, zip or gzip)',
+        );
+      }
+      const name = attachmentName(input.name);
+      const bytes = input.bytes;
+      if (bytes.byteLength === 0) throw new HttpError(400, 'empty_attachment', 'The file is empty');
+      if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+        throw new HttpError(413, 'payload_too_large', 'Request body is too large');
+      }
+      if (!contentMatches(mimeType, bytes)) {
+        throw new HttpError(
+          415,
+          'attachment_content_mismatch',
+          `The file's content is not ${mimeType}`,
+        );
+      }
+      if (ws.attachments.countForTicket(ticketId) >= MAX_ATTACHMENTS_PER_TICKET) {
+        throw new HttpError(
+          409,
+          'attachment_conflict',
+          `A ticket has at most ${MAX_ATTACHMENTS_PER_TICKET} attachments`,
+        );
+      }
+      const commentId = input.commentId ?? null;
+      if (commentId !== null && ws.comments.getById(commentId)?.ticketId !== ticketId) {
+        throw new HttpError(404, 'comment_not_found', 'No such comment on this ticket');
+      }
+      const sha256 = sha256Of(bytes);
+      const files = deps.control.attachmentFiles;
+      await files.put(sha256, bytes);
+      let stored: Attachment;
+      try {
+        stored = ws.attachments.insert({
+          ticketId,
+          commentId,
+          name,
+          mimeType,
+          sizeBytes: bytes.byteLength,
+          sha256,
+        });
+      } catch (error) {
+        if (ws.attachments.countBySha256(sha256) === 0) await files.remove(sha256);
+        throw attachmentDbError(error) ?? error;
+      }
+      // Sizes and types only: never the name or the content.
+      logger.log('info', 'attachment stored', { ticketId, sizeBytes: stored.sizeBytes });
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId });
+      return toAttachmentDto(stored);
+    },
+
+    listAttachments(ticketId) {
+      ticketOrThrow(ticketId);
+      return ws.attachments.listForTicket(ticketId).map(toAttachmentDto);
+    },
+
+    attachmentContent(id) {
+      const attachment = ws.attachments.getById(id);
+      if (attachment === undefined) {
+        throw new HttpError(404, 'attachment_not_found', `Attachment ${id} not found`);
+      }
+      return { attachment, path: deps.control.attachmentFiles.pathOf(attachment.sha256) };
+    },
+
+    async deleteAttachment(id) {
+      const removed = ws.attachments.delete(id);
+      if (removed === undefined) {
+        throw new HttpError(404, 'attachment_not_found', `Attachment ${id} not found`);
+      }
+      // Content-addressed: the file goes once no row points at it.
+      if (ws.attachments.countBySha256(removed.sha256) === 0) {
+        await deps.control.attachmentFiles.remove(removed.sha256);
+      }
+      const ticket = ws.tickets.getById(removed.ticketId);
+      if (ticket !== undefined) {
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId: ticket.id });
+      }
     },
 
     decidePlan(ticketId, planId, body) {
@@ -861,7 +1249,13 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       deps.control.decidePlan(plan.runId, planId, input.decision, input.comment);
       // The engine only sends the comment to the lead; it is kept on the ticket (ADR-0016).
       if (input.comment !== undefined) {
-        ws.comments.insert({ ticketId, planId, author: 'owner', body: input.comment });
+        ws.comments.insert({
+          ticketId,
+          planId,
+          author: 'owner',
+          body: input.comment,
+          kind: 'comment',
+        });
       }
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId: plan.runId });
       return detail(ticketId);
@@ -873,6 +1267,89 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     },
 
     runAgentChecks: (runId, agentRunId) => deps.checks.runForAgent(runId, agentRunId),
+
+    async codeHostStatus(projectId) {
+      const p = project(projectId);
+      return requireCodeHost().status(p.rootPath);
+    },
+
+    async createCodeHostRepository(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const input = CreateRepositoryRequestSchema.parse(body);
+      return codeHostCall(() => host.createRepository(p.rootPath, input));
+    },
+
+    async connectCodeHostRepository(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const { repository } = ConnectRepositoryRequestSchema.parse(body);
+      return codeHostCall(() => host.connectRepository(p.rootPath, repository));
+    },
+
+    async projectBranches(projectId) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      return codeHostCall(() => host.branches(p.rootPath));
+    },
+
+    async createProjectBranch(projectId, body) {
+      const p = project(projectId);
+      const host = requireCodeHost();
+      const input = CreateBranchRequestSchema.parse(body);
+      return codeHostCall(() => host.createBranch(p.rootPath, input));
+    },
+
+    async openPullRequest(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const dto = await deps.control.openPullRequest(runId, body, ticket);
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      return present(ticket, dto);
+    },
+
+    async refreshPullRequest(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const dto = await deps.control.refreshPullRequest(runId);
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      return present(ticket, dto);
+    },
+
+    async mergePullRequest(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const host = requireCodeHost();
+      try {
+        return await branchActions.merge(host, await branchContext(ticket, runId), body);
+      } finally {
+        // Also after a refusal: GitHub may have merged it, and Refresh shows what happened.
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      }
+    },
+
+    async deleteTicketBranch(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const runId = currentRunOf(ticket);
+      const host = requireCodeHost();
+      try {
+        return await branchActions.remove(host, await branchContext(ticket, runId), body);
+      } finally {
+        notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
+      }
+    },
+
+    ticketTotals(ticketId) {
+      const ticket = ticketOrThrow(ticketId);
+      const usage = ticketTokens(ticket.projectId, ticket.id);
+      if (usage === undefined) throw notFound(`Project ${ticket.projectId} not found`);
+      return buildTicketTotals({
+        ticket,
+        runs: orch.runs.list({ ticketId, limit: MAX_PAGE_SIZE }),
+        usage,
+        now: deps.now(),
+      });
+    },
 
     controlHooks: () => hooks,
   };

@@ -33,7 +33,18 @@ export interface AgentRunSessionsRepository {
   listForAgentRun(agentRunId: string): AgentRunSessionRow[];
   /** Which agent runs a provider session belongs to (managed-session linking, ADR-0008). */
   findByProviderSession(provider: ProviderId, providerSessionId: string): AgentRunSessionRow[];
+  /**
+   * The links of many provider sessions at once (ADR-0024 §2: naming the sessions the app started
+   * in session lists), oldest first. Unknown ids are left out.
+   */
+  listForProviderSessions(
+    provider: ProviderId,
+    providerSessionIds: readonly string[],
+  ): AgentRunSessionRow[];
 }
+
+/** Ids per `IN (…)` query, well under SQLite's bound-parameter limit. */
+const IN_CHUNK = 400;
 
 interface LinkDbRow {
   agent_run_id: string;
@@ -106,6 +117,23 @@ export function createAgentRunSessionsRepository(
     },
     findByProviderSession(provider, providerSessionId) {
       return (forSession.all(provider, providerSessionId) as LinkDbRow[]).map(toLink);
+    },
+    listForProviderSessions(provider, providerSessionIds) {
+      const valid = parseInput(ProviderIdSchema, provider, 'provider');
+      const ids = [...new Set(providerSessionIds)].filter((id) => id.length > 0);
+      const out: AgentRunSessionRow[] = [];
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const chunk = ids.slice(i, i + IN_CHUNK);
+        const marks = chunk.map(() => '?').join(', ');
+        const rows = c
+          .prepare(
+            `${SELECT} WHERE l.provider = ? AND l.provider_session_id IN (${marks})
+             ORDER BY l.created_at, l.rowid`,
+          )
+          .all(valid, ...chunk) as LinkDbRow[];
+        out.push(...rows.map(toLink));
+      }
+      return out;
     },
   };
 }

@@ -10,14 +10,32 @@ export type {
   ReadContextOptions,
 } from './context.js';
 export { OutputTail, stripTerminalCodes } from './output.js';
-export { ChecksShutdown, createCheckRunner } from './runner.js';
+export {
+  ChecksShutdown,
+  BRANCH_CHECK_NOTE,
+  BRANCH_SETUP_NOTE,
+  NETWORK_REFUSED_NOTE,
+  checksNotRun,
+  createCheckRunner,
+  setupFailureNote,
+} from './runner.js';
 export type {
   CheckRunner,
   CheckRunnerDeps,
   CheckSpawnFn,
   CheckSpawnOptions,
   RunChecksInput,
+  RunSetupInput,
 } from './runner.js';
+export {
+  MAIN_SPEC,
+  branchSpec,
+  changeSpec,
+  checksToGate,
+  checksToRun,
+  mergeSpec,
+} from './blocks.js';
+export type { CheckSpec } from './blocks.js';
 export { createMainChecks } from './main-checks.js';
 export type {
   MainChecks,

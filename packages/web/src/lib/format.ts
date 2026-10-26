@@ -1,5 +1,3 @@
-import type { SessionSummaryDto } from '@acp/core/api';
-
 const integer = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 const usd = new Intl.NumberFormat('en-US', {
@@ -90,11 +88,6 @@ export function shortId(id: string): string {
 /** Display form of an id for the ShortId component: always at most 8 characters. */
 export function idPrefix(id: string): string {
   return id.slice(0, 8);
-}
-
-/** What to call a session: its title, else its subagent type, else an explicit "untitled". */
-export function sessionLabel(s: Pick<SessionSummaryDto, 'title' | 'agentType'>): string {
-  return s.title ?? s.agentType ?? 'untitled session';
 }
 
 /** Last path segment, used to suggest a project name for a discovered root. */

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
+import { GitBranchNameSchema } from '../workspace/branching.js';
+import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
 
 /**
  * Managed orchestration domain (Phase 3; docs/orchestration-lifecycle.md, ADR-0012..0015).
@@ -117,10 +119,11 @@ export const GitCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit id
 /** The run's ticket branch (ADR-0021 §4): `open` until the owner merges or discards it. */
 export const TicketBranchStateSchema = z.enum(['open', 'merged', 'discarded']);
 export type TicketBranchState = z.infer<typeof TicketBranchStateSchema>;
-/** `acp/<KEY>` for a ticket's first branch, `acp/<KEY>-r<n>` when that name is already taken. */
-export const TicketBranchNameSchema = z
-  .string()
-  .regex(/^acp\/[A-Z]{2,6}-[1-9]\d*(-r[1-9]\d*)?$/, 'acp/<TICKET-KEY> or acp/<TICKET-KEY>-r<n>');
+/**
+ * A ticket branch's name. Before ADR-0025 always `acp/<KEY>` (or `acp/<KEY>-r<n>`); now any safe
+ * branch name, from the project's branching strategy or the ticket's own name.
+ */
+export const TicketBranchNameSchema = GitBranchNameSchema;
 
 /**
  * The ticket branch name for `ticketKey` (e.g. `WEB-12`). Attempt 0 is `acp/WEB-12`; the server
@@ -129,6 +132,8 @@ export const TicketBranchNameSchema = z
  */
 export function ticketBranchName(ticketKey: string, attempt = 0): string {
   if (!Number.isInteger(attempt) || attempt < 0) throw new RangeError('attempt must be 0 or more');
+  // The legacy name (no branching strategy): a ticket key, as before ADR-0025.
+  if (!/^[A-Z]{2,6}-[1-9]\d*$/.test(ticketKey)) throw new RangeError('not a ticket key');
   return TicketBranchNameSchema.parse(
     attempt === 0 ? `acp/${ticketKey}` : `acp/${ticketKey}-r${attempt}`,
   );
@@ -183,6 +188,9 @@ export const AgentRunSchema = z.object({
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
 
+/** Most characters in a managed session's title (`ManagedAgentSpec.title`, ADR-0024). */
+export const MAX_SESSION_TITLE = 120;
+
 /** Inputs of the lead agent's tools (ADR-0012). The engine validates every call (ADR-0013). */
 export const LeadToolInputs = {
   start_agent: z.object({
@@ -204,7 +212,15 @@ export const LeadToolInputs = {
    * the review loop (ADR-0021 §3): every change is decided, so the final stages and the owner's
    * single merge of the ticket branch follow.
    */
-  request_review: z.object({}),
+  request_review: z.object({
+    /**
+     * ADR-0024 §3 as amended by ADR-0026 §2: the lead's summary of the whole ticket so far, 3 to 6
+     * short past-tense sentences like a teammate's comment, no code. Review-loop runs keep it as
+     * the lead's `ticket-summary` comment (at most `MAX_TICKET_SUMMARY_CHARS`); the app's facts
+     * are a separate `run-facts` comment. Optional: without it there is no new summary.
+     */
+    summary: z.string().trim().min(1).max(1500).optional(),
+  }),
   /** Plan-first (ADR-0016): the lead's proposed plan; helpers can't start until it is approved. */
   submit_plan: z.object({
     summary: z.string().trim().min(1).max(2000),
@@ -259,6 +275,12 @@ export const LeadToolInputs = {
     verdict: ChangeVerdictSchema,
     findings: z.string().trim().min(1).max(8000),
   }),
+  /**
+   * ADR-0026 §3: a helper's or tester's "what I did" note, 2 to 4 plain sentences, stored as a
+   * ticket comment of kind `agent-note` with its agent run; a later call replaces it. Only `worker`
+   * and `tester` get this tool; the engine refuses it from anyone else.
+   */
+  report_work: z.object({ note: z.string().trim().min(1).max(MAX_AGENT_NOTE_CHARS) }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
@@ -301,6 +323,7 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   discard_change: "Discarded a helper's change",
   ask_owner: 'Asked the owner about a change',
   submit_review: 'Submitted a change review',
+  report_work: 'Reported its work',
 });
 
 function isLeadToolName(name: string): name is LeadToolName {

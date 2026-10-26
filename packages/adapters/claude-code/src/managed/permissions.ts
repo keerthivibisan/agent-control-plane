@@ -3,6 +3,7 @@ import { CHANGE_REVIEWER_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
 import type { AgentRoleKind, LeadToolName, ManagedAgentSpec, ManagedCallbacks } from '@acp/core';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { gitGuardDenialFor, gitGuardMessage } from './branch-guard.js';
 import { isInside, summarizeToolUse, targetPath } from './summary.js';
 
 /** Name of the lead's in-process MCP server; its tools appear as `mcp__acp__<name>`. */
@@ -32,13 +33,23 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 ];
 
 /**
+ * The helper's and tester's note tool (ADR-0026 §3): `report_work`, their "what I did" note on the
+ * ticket. The server gives them a handler only in a ticket run; the engine refuses it elsewhere.
+ */
+export const AGENT_NOTE_TOOL_NAMES: readonly LeadToolName[] = ['report_work'];
+
+/**
  * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
- * B) and `submit_review` (ADR-0021 §3). That includes the five change tools of the review loop
- * (`view_change`, `merge_change`, `request_rework`, `discard_change`, `ask_owner`); the engine
- * refuses them in a run without the loop, and refuses the reviewers' tools from anyone else.
+ * B) and `submit_review` (ADR-0021 §3), and the helpers' `report_work` (ADR-0026 §3). That
+ * includes the five change tools of the review loop (`view_change`, `merge_change`,
+ * `request_rework`, `discard_change`, `ask_owner`); the engine refuses them in a run without the
+ * loop, and refuses the other roles' tools from anyone else.
  */
 export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.filter(
-  (name) => name !== 'post_review' && !CHANGE_REVIEWER_TOOL_NAMES.includes(name),
+  (name) =>
+    name !== 'post_review' &&
+    !CHANGE_REVIEWER_TOOL_NAMES.includes(name) &&
+    !AGENT_NOTE_TOOL_NAMES.includes(name),
 );
 
 /** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */
@@ -61,8 +72,9 @@ export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewSc
  * - lead: the lead's set (every lead tool except `post_review`);
  * - planner: `submit_plan`; reviewer: `post_review`, or `submit_review` for a change reviewer
  *   (`reviewScope: 'change'`, ADR-0021);
- * - worker: the child-management subset with `canStartHelpers`, else none (depth 1);
- * - tester: none (it is a worker that never starts helpers).
+ * - worker: `report_work` (ADR-0026 §3), plus the child-management subset with
+ *   `canStartHelpers` (depth 2);
+ * - tester: `report_work` (it is a worker that never starts helpers).
  * The adapter builds the MCP server and `canUseTool` from this one list, so the two cannot
  * disagree. The engine checks every call again (`leadToolCall`).
  */
@@ -77,9 +89,11 @@ export function managedToolNames(spec: ManagedAgentSpec): readonly LeadToolName[
     case 'reviewer':
       return isChangeReviewer(spec) ? CHANGE_REVIEWER_ROLE_TOOL_NAMES : REVIEWER_TOOL_NAMES;
     case 'worker':
-      return spec.canStartHelpers === true ? HELPER_PARENT_TOOL_NAMES : [];
+      return spec.canStartHelpers === true
+        ? [...HELPER_PARENT_TOOL_NAMES, ...AGENT_NOTE_TOOL_NAMES]
+        : AGENT_NOTE_TOOL_NAMES;
     case 'tester':
-      return [];
+      return AGENT_NOTE_TOOL_NAMES;
   }
 }
 
@@ -237,9 +251,10 @@ const DENY_ROLE_TOOL: Readonly<Record<'planner' | 'reviewer', string>> = {
 };
 export const DENY_CHANGE_REVIEWER_TOOL = 'The change reviewer can only submit its review.';
 
-export const DENY_WORKER_LEAD_TOOL = 'Worker agents cannot use the control-plane tools.';
+export const DENY_WORKER_LEAD_TOOL =
+  'Worker agents can only report their work (report_work); they cannot use the other control-plane tools.';
 export const DENY_HELPER_LEAD_TOOL =
-  'Helper agents can only start, list, message, stop and check their own helpers.';
+  'Helper agents can only start, list, message, stop and check their own helpers, and report their work.';
 export const DENY_NOT_YOUR_TOOL = 'This control-plane tool is not available to this agent.';
 export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
@@ -269,15 +284,24 @@ function fromLeadServer(options: CanUseToolOptions): boolean {
   return server === undefined || (server.source === 'sdk' && server.name === LEAD_MCP_SERVER_NAME);
 }
 
+/**
+ * A read-only tool whose target is inside the agent's folder, or inside one of the folders it may
+ * also read (`spec.readOnlyDirs`, ADR-0026 §4: its attachment copies).
+ */
 function readsOnlyInside(
   toolName: string,
   input: Record<string, unknown>,
-  cwd: string,
+  spec: ManagedAgentSpec,
   options: CanUseToolOptions,
 ): boolean {
   if (!READ_ONLY_TOOLS.has(toolName) || options.blockedPath !== undefined) return false;
   const target = targetPath(input);
-  return target === null || isInside(path.resolve(cwd, target), cwd);
+  if (target === null) return true;
+  const resolved = path.resolve(spec.cwd, target);
+  return (
+    isInside(resolved, spec.cwd) ||
+    (spec.readOnlyDirs ?? []).some((dir) => path.isAbsolute(dir) && isInside(resolved, dir))
+  );
 }
 
 /**
@@ -311,6 +335,7 @@ function outsideSetMessage(spec: ManagedAgentSpec, toolName: string): string {
  * - a `Skill` call is allowed, without asking, only for one of the run's plugin skills
  *   (`isRunSkillCall`); any other skill name or input shape is denied;
  * - a read-only role (planner, reviewer) is denied anything else without asking (ADR-0019);
+ * - a read in one of `spec.readOnlyDirs` (the lead's or planner's attachment copies) is allowed;
  * - everything else (an edit or `Bash` of a worker or tester, a lead's read outside its folder)
  *   asks the owner through `callbacks.requestPermission`, with a redacted summary.
  * A rejected or failed request, or an aborted agent, is a deny: the callback never throws. Tool
@@ -333,7 +358,7 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
           ? DENY_CHANGE_REVIEWER_TOOL
           : kind === 'planner' || kind === 'reviewer'
             ? DENY_ROLE_TOOL[kind]
-            : ownTools.size > 0
+            : spec.canStartHelpers === true && kind === 'worker'
               ? DENY_HELPER_LEAD_TOOL
               : DENY_WORKER_LEAD_TOOL;
         return { behavior: 'deny', message, toolUseID };
@@ -357,10 +382,16 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
           : { behavior: 'deny', message: DENY_SKILL, toolUseID };
       }
     }
-    if (readsOnlyInside(toolName, input, spec.cwd, options)) {
+    if (readsOnlyInside(toolName, input, spec, options)) {
       return { behavior: 'allow', toolUseID };
     }
     if (isReadOnlyRole(spec.kind)) return { behavior: 'deny', message: DENY_READ_ONLY, toolUseID };
+    // F-1: a branch-managing git command is denied without asking the owner, in every mode: only
+    // the app moves branches (the PreToolUse hook denies it first; this is the gate's layer).
+    const branchCommand = gitGuardDenialFor(toolName, input);
+    if (branchCommand !== null) {
+      return { behavior: 'deny', message: gitGuardMessage(branchCommand), toolUseID };
+    }
     if (options.signal.aborted) return { behavior: 'deny', message: DENY_ABORTED, toolUseID };
     try {
       const decision = await callbacks.requestPermission({
@@ -389,7 +420,7 @@ function followUpGate(spec: ManagedAgentSpec): CanUseTool {
   const allowed: ReadonlySet<string> = new Set(followUpToolNames(spec));
   return (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
-    if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec.cwd, options)) {
+    if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec, options)) {
       return Promise.resolve({ behavior: 'allow', toolUseID });
     }
     return Promise.resolve({ behavior: 'deny', message: DENY_FOLLOW_UP, toolUseID });

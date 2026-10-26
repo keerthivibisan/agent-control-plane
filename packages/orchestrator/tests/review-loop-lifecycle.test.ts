@@ -82,7 +82,8 @@ describe('the handover (request_review)', () => {
     expect(r.state.integration?.handedOver).toBe(true);
     expect(r.state.run.status).toBe('REVIEW');
     expect(statusOf(r.state, LEAD)).toBe('RUNNING');
-    expect(r.effects).toEqual([]);
+    // ADR-0024 §3: the server writes the run summary; no note was given.
+    expect(r.effects).toEqual([{ type: 'handover-summary', note: null }]);
     expect(refused(leadTool(r.state, 'request_review', {}))).toBe('run-not-active');
     expect(deriveRunWorkflow(r.state).stages.find((x) => x.stage === 'orchestrate')?.state).toBe(
       'done',
@@ -96,8 +97,8 @@ describe('the handover (request_review)', () => {
     expect(s.run.status).toBe('RUNNING');
     expect(statusOf(s, LEAD)).toBe('RUNNING');
     expect(agentOf(s, 'h-1')).toMatchObject({ kind: 'reviewer', stage: 'code-review' });
-    expect(types(h.effects)).toEqual(['create-review-checkout', 'start-agent']);
-    expect(h.effects[0]).toEqual({
+    expect(types(h.effects)).toEqual(['handover-summary', 'create-review-checkout', 'start-agent']);
+    expect(h.effects[1]).toEqual({
       type: 'create-review-checkout',
       agentRunId: 'h-1',
       ticketBranch: BRANCH,
@@ -429,7 +430,7 @@ describe('depth 2', () => {
     expect(effectsOf(r.effects, 'seal-change').map((e) => e.agentRunId)).toEqual(['wc-1', 'wp-1']);
     // The lead decides both changes.
     expect(ok(leadTool(r.state, 'view_change', { agentId: 'wc-1' })).value).toContain('Child');
-    expect(controlToolsFor(r.state, 'wp-1')).toEqual([]);
+    expect(controlToolsFor(r.state, 'wp-1')).toEqual(['report_work']);
   });
 
   it('a parent’s rework turn cannot start helpers; stopping a parent keeps a waiting child', () => {
@@ -442,7 +443,7 @@ describe('depth 2', () => {
     );
     s = rework.state;
     expect(effectsOf(rework.effects, 'start-agent')[0]).not.toHaveProperty('canStartHelpers');
-    expect(controlToolsFor(s, 'wp-1')).toEqual([]);
+    expect(controlToolsFor(s, 'wp-1')).toEqual(['report_work']);
     expect(refused(leadTool(s, 'start_agent', { role: 'C', task: 'x' }, 'x', 'wp-1'))).toBe(
       'depth-exceeded',
     );

@@ -96,11 +96,19 @@ function server(sc: LoopScenario, routes: RouteTable = {}) {
 type Server = ReturnType<typeof server>;
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
 
-function render(sc: LoopScenario, routes: RouteTable = {}) {
+/** The ticket page on a tab (v0.3.0 D-B: the address's `?tab=`, Comments without one, C-B). */
+function render(
+  sc: LoopScenario,
+  routes: RouteTable = {},
+  tab?: 'agents' | 'files' | 'checks' | 'conversation',
+) {
   const s = server(sc, routes);
+  window.location.hash = tab ? `#?tab=${tab}` : '';
   renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, s);
   return s;
 }
+
+const openTab = (name: RegExp) => fireEvent.click(screen.getByRole('tab', { name }));
 
 /** A scenario whose run detail is changed by `edit` (in the ticket and the run route). */
 function withRun(
@@ -119,13 +127,17 @@ function withRun(
 }
 
 const panel = () => screen.getByTestId('side-panel');
+/**
+ * Files changed's "Changes from" lists every change; with one chosen, "Open in Agents" shows it in
+ * the Agents tab's side panel.
+ */
 async function openChange(role: string) {
-  const overview = await screen.findByTestId('changes-overview');
-  const row = within(overview)
-    .getAllByTestId('change-row')
-    .find((r) => r.textContent?.includes(role));
-  if (!row) throw new Error(`no change row ${role}`);
-  fireEvent.click(within(row).getByRole('button', { name: 'Open' }));
+  fireEvent.click(await screen.findByRole('tab', { name: /Files changed/ }));
+  fireEvent.click(await screen.findByTestId('change-picker'));
+  const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+  fireEvent.click(within(menu).getByRole('menuitemradio', { name: new RegExp(role) }));
+  fireEvent.click(await screen.findByRole('button', { name: `Open ${role} in Agents` }));
+  expect(screen.getByRole('tab', { name: /Agents/ }).getAttribute('aria-selected')).toBe('true');
   return within(panel()).findByTestId('change-card');
 }
 
@@ -261,34 +273,80 @@ describe('words and rules', () => {
 
 describe('ticket page: a review-loop run at work', () => {
   it('lists each change with its state, checks and rounds; no owner buttons while the lead decides', async () => {
-    render(loopWorkingScenario());
-    const overview = await screen.findByTestId('changes-overview');
-    const rows = within(overview).getAllByTestId('change-row');
+    render(loopWorkingScenario(), {}, 'files');
+    // Files changed's "Changes from" lists every change with its state and checks (C-D).
+    fireEvent.click(await screen.findByTestId('change-picker'));
+    const menu = await screen.findByRole('menu', { name: 'Show changes from' });
+    const rows = within(menu).getAllByTestId('change-option');
     expect(rows.map((r) => within(r).getByTestId('change-state').dataset.state)).toEqual([
       'rework',
       'reviewing',
     ]);
     expect(rows[0]?.textContent).toContain('Rework round 1 of 2');
     expect(rows[0]?.textContent).toContain('1 required check failed');
-    expect(rows[0]?.textContent).toContain('Rework ×1');
     expect(rows[1]?.textContent).toContain('In review');
     expect(rows[1]?.textContent).toContain('2 of 2 checks passed');
-    expect(screen.queryByTestId('changes-need-you')).toBeNull();
+    // Chosen, the head says its round and rework, and the address names it.
+    fireEvent.click(rows[0] as HTMLElement);
+    const head = await screen.findByTestId('files-change');
+    expect(head.textContent).toContain('Rework ×1');
+    expect(window.location.hash).toContain(`tab=files&change=${L_API}`);
     expect(screen.queryByTestId('owner-decision')).toBeNull();
-    // The run's approval mode is in the summary.
-    expect(screen.getByTestId('run-approval-mode').textContent).toBe('Approvals: Auto edits');
+    // Comments: nothing waits for you; the run's approval mode is in the sidebar.
+    openTab(/Comments/);
+    expect(screen.queryByTestId('changes-need-you')).toBeNull();
+    expect(screen.getByTestId('run-approval-mode').textContent).toBe('Auto edits');
     // The legacy review list is not shown for a review-loop run.
     expect(screen.queryByTestId('review-list')).toBeNull();
   });
 
-  it('the ticket branch says it waits while agents work, without loading the diff', async () => {
-    const s = render(loopWorkingScenario());
+  it('the ticket branch says it waits while agents work; only Files changed reads its diff', async () => {
+    const s = render(loopWorkingScenario(), { [LOOP_BRANCH_PATH]: ticketBranchReview() });
     const card = await screen.findByTestId('ticket-branch');
-    expect(within(card).getByTestId('branch-name').textContent).toBe(LOOP_BRANCH);
     expect(within(card).getByTestId('branch-state').dataset.state).toBe('open');
     expect(card.textContent).toContain('You can merge once every change is decided');
     expect(within(card).queryByTestId('branch-actions')).toBeNull();
+    // The header names the branch and its target.
+    expect(screen.getByTestId('pr-line-branch').textContent).toBe(LOOP_BRANCH);
+    expect(screen.getByTestId('pr-line-target').textContent).toBe('main');
+    // G-H: a branch that started from its target says nothing more.
+    expect(screen.queryByTestId('pr-line-from')).toBeNull();
+    expect(screen.queryByTestId('ticket-branch-actual-from')).toBeNull();
     expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
+    // Files changed shows all changes on the branch, open, into its target (C-D).
+    openTab(/Files changed/);
+    const head = await screen.findByTestId('files-head');
+    expect(within(head).getByTestId('files-state').dataset.state).toBe('open');
+    expect(within(head).getByTestId('files-branch').textContent).toBe(`${LOOP_BRANCH}intomain`);
+    expect(await screen.findByTestId('review-files')).toBeTruthy();
+    expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(true);
+  });
+
+  it('G-H: the header and Branch say where a branch that did not start at its target started', async () => {
+    const sc = loopWorkingScenario();
+    const run = RunDetailDtoSchema.parse(sc.routes[LOOP_RUN_PATH]);
+    if (run.ticketBranch === undefined || run.ticketBranch === null) throw new Error('no branch');
+    const ticketBranch = { ...run.ticketBranch, sourceBranch: 'release/1.0' };
+    sc.routes[LOOP_RUN_PATH] = {
+      ...(sc.routes[LOOP_RUN_PATH] as Record<string, unknown>),
+      ticketBranch,
+    };
+    // The ticket's own copy of its current run (the sidebar's Branch reads it).
+    const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
+    sc.routes[LOOP_TICKET_PATH] = {
+      ...detail,
+      currentRun: { ...(detail['currentRun'] as Record<string, unknown>), ticketBranch },
+    };
+    render(sc);
+    const line = await screen.findByTestId('pr-line');
+    expect(within(line).getByTestId('pr-line-branch').textContent).toBe(LOOP_BRANCH);
+    expect(within(line).getByTestId('pr-line-target').textContent).toBe('main');
+    expect(within(line).getByTestId('pr-line-from').textContent).toBe('release/1.0');
+    expect(line.textContent).toContain('from');
+    expect(line.textContent).toContain('Starts from');
+    expect((await screen.findByTestId('ticket-branch-actual-from')).textContent).toBe(
+      'release/1.0',
+    );
   });
 
   it('a change card shows the decisions with the reviewer’s findings, and the diff', async () => {
@@ -358,7 +416,7 @@ describe('ticket page: a review-loop run at work', () => {
   });
 
   it('a helper waiting for review says so, and "Latest" words control tools', async () => {
-    render(loopWorkingScenario());
+    render(loopWorkingScenario(), {}, 'agents');
     const canvas = await screen.findByTestId('agent-canvas');
     expect(canvas.textContent).toContain('Waiting for review');
     // The lead's raw "mcp__acp__request_rework" reads as core's label.
@@ -472,14 +530,37 @@ describe('ticket page: a change that needs the owner', () => {
 describe('ticket page: the owner’s merge of the ticket branch', () => {
   it('loads the combined change: the tip’s checks, the files and the diff', async () => {
     render(loopReviewScenario());
+    // Comments: the final step, with the tip's checks in one line.
     const card = await screen.findByTestId('ticket-branch');
-    expect(await within(card).findByTestId('branch-checks')).toBeTruthy();
-    expect(within(card).getByText('3 changed files')).toBeTruthy();
-    expect(within(card).getByTestId('branch-diff')).toBeTruthy();
-    expect(within(card).getByRole('button', { name: 'Merge into main' })).toBeTruthy();
+    expect(await within(card).findByRole('button', { name: 'Merge into main' })).toBeTruthy();
+    expect(card.textContent).toContain('Ready to merge into main');
+    expect(card.textContent).toContain('2 of 2 checks passed on the tip');
     expect(within(card).queryByTestId('branch-blocked')).toBeNull();
     // No change waits for the owner any more.
     expect(screen.queryByTestId('changes-need-you')).toBeNull();
+    // The header offers the same main action; it goes to the final step.
+    expect(screen.getByTestId('final-step-shortcut').textContent).toBe('Merge into main');
+    // Files changed: the combined change in the review UI; Checks: the tip's checks.
+    openTab(/Files changed/);
+    const files = await screen.findByTestId('review-files');
+    expect(within(files).getByTestId('review-summary-line').textContent).toContain(
+      '2 files changed',
+    );
+    expect(screen.getByTestId('tab-count-files').textContent).toBe('3');
+    openTab(/Checks/);
+    expect(within(screen.getByTestId('tip-checks')).getByTestId('branch-checks')).toBeTruthy();
+  });
+
+  it('the header’s main action opens Comments at the final step', async () => {
+    render(loopReviewScenario(), {}, 'checks');
+    const shortcut = await screen.findByTestId('final-step-shortcut');
+    expect(shortcut.getAttribute('aria-label')).toBe('Merge into main: go to the final step');
+    fireEvent.click(shortcut);
+    expect(screen.getByRole('tab', { name: /Comments/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('ticket-branch')));
+    expect(window.location.hash).not.toContain('tab=');
   });
 
   it('Merge into main asks first, then posts the action', async () => {
@@ -527,15 +608,15 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
   // WG-F3: a check the app's shutdown stopped is not a failure; the server runs it again on merge.
   for (const stopped of ['interrupted', 'legacy'] as const) {
     it(`a tip check the app stopped (${stopped}) reads as stopped and leaves Merge`, async () => {
-      const s = render(loopReviewScenario({ stopped }));
-      const card = await screen.findByTestId('ticket-branch');
-      const row = within(await within(card).findByTestId('branch-checks')).getByTestId(
-        'check-test',
-      );
+      const s = render(loopReviewScenario({ stopped }), {}, 'checks');
+      const row = within(await screen.findByTestId('branch-checks')).getByTestId('check-test');
       expect(row.querySelector('[data-check-status]')?.getAttribute('data-check-status')).toBe(
         'interrupted',
       );
       expect(within(row).getByText('Stopped')).toBeTruthy();
+      openTab(/Comments/);
+      const card = await screen.findByTestId('ticket-branch');
+      await within(card).findByTestId('branch-checks-stopped');
       expect(within(card).queryByTestId('branch-blocked')).toBeNull();
       expect(within(card).getByTestId('branch-checks-stopped').textContent).toContain(
         'They run again when you merge.',
@@ -624,7 +705,12 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(within(card).getByTestId('branch-state').textContent).toBe('Merged into main');
     expect(within(card).queryByTestId('branch-actions')).toBeNull();
     expect(card.textContent).toContain('main is now at e1f2a3b');
-    expect(s.calls.some((c) => c.path === LOOP_BRANCH_PATH)).toBe(false);
+    // G-G: the finished branch is read (GET only) to learn whether it still exists, for Delete
+    // branch; unknown here (no answer), so nothing is offered.
+    expect(
+      s.calls.filter((c) => c.path === LOOP_BRANCH_PATH).every((c) => c.method === 'GET'),
+    ).toBe(true);
+    expect(within(card).queryByRole('button', { name: 'Delete branch' })).toBeNull();
   });
 });
 
@@ -702,7 +788,7 @@ describe('the live graph’s review-loop additions', () => {
   });
 
   it('on the page: review counts, waiting helpers, and the merge gate’s state', async () => {
-    render(loopNeedsYouScenario());
+    render(loopNeedsYouScenario(), {}, 'agents');
     const counts = await screen.findByTestId('review-counts');
     expect(counts.textContent).toBe('1 for you · 1 merged');
     expect(screen.getByTestId('helpers-waiting-review').textContent).toBe('1 in review');
@@ -710,12 +796,12 @@ describe('the live graph’s review-loop additions', () => {
   });
 
   it('the merge gate waits for you at review and is done once merged', async () => {
-    render(loopReviewScenario());
+    render(loopReviewScenario(), {}, 'agents');
     expect((await screen.findByTestId('live-owner-merge')).dataset.state).toBe('needs-you');
   });
 
   it('the merge gate is done once merged', async () => {
-    render(loopDoneScenario());
+    render(loopDoneScenario(), {}, 'agents');
     expect((await screen.findByTestId('live-owner-merge')).dataset.state).toBe('done');
   });
 });
@@ -846,11 +932,11 @@ describe('ticket page: a Full auto run (ADR-0022)', () => {
 
   it('names the mode and shows the plan as approved automatically', async () => {
     render(fullAuto());
-    expect((await screen.findByTestId('run-approval-mode')).textContent).toBe(
-      'Approvals: Full auto',
-    );
-    const history = await screen.findByTestId('plan-history');
-    expect(within(history).getByText('Approved automatically (Full auto)')).toBeTruthy();
+    expect((await screen.findByTestId('run-approval-mode')).textContent).toBe('Full auto');
+    // Plan versions are on Conversation (C-B).
+    openTab(/Conversation/);
+    const plan = await screen.findByTestId('timeline-plan');
+    expect(within(plan).getByText('Approved automatically (Full auto)')).toBeTruthy();
   });
 
   it('the Approvals tab says Claude Code’s auto mode makes the decisions', async () => {

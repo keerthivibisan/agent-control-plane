@@ -5,7 +5,8 @@
 // - layer 4: every small graph (legal and illegal) is refused by the validator exactly when compile
 //   throws, and every structural error code is the reason for some refusal (no dead rules).
 // The simulator-backed soundness and completeness checks are WG-B's. A failure prints its seed
-// and graph. Synthetic data only.
+// and graph. Layer 3 also runs seeds with the Checks block moves (ADR-0027 §5, H-A). Synthetic
+// data only.
 import { describe, expect, it } from 'vitest';
 import {
   GRAPH_MUTATIONS,
@@ -23,6 +24,8 @@ import {
 } from '../../src/index.js';
 
 const SEEDS = 2000;
+/** Seeds generated with the Checks block moves too (`checkBlocks: true`). */
+const CHECK_SEEDS = 600;
 const ctx: CompileContext = {
   projectMode: 'auto-edits',
   approvalCeilings: [],
@@ -35,6 +38,10 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
   'full-auto-plan-manual',
   'plan-auto-without-full-auto',
   'instances-over-limit',
+  'unknown-check',
+  'unknown-check-label',
+  'no-checks-selected',
+  'merge-skips-required',
 ];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
 const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};
@@ -103,10 +110,17 @@ function agreementFailures(graph: WorkflowGraph): string[] {
 }
 
 describe('layer 3: generated valid graphs and their mutants', () => {
-  const graphs = Array.from({ length: SEEDS }, (_, i) => ({
-    seed: i + 1,
-    graph: generateValidGraph(i + 1),
-  }));
+  // `seed` labels the graph and seeds its mutants' rng; check-block graphs use seeds from 100001.
+  const graphs = [
+    ...Array.from({ length: SEEDS }, (_, i) => ({
+      seed: i + 1,
+      graph: generateValidGraph(i + 1),
+    })),
+    ...Array.from({ length: CHECK_SEEDS }, (_, i) => ({
+      seed: 100_001 + i,
+      graph: generateValidGraph(100_001 + i, { checkBlocks: true }),
+    })),
+  ];
   const seenCodes = new Set<GraphIssueCode>();
 
   it('createGraphRng is seeded and stays in range', () => {
@@ -124,6 +138,15 @@ describe('layer 3: generated valid graphs and their mutants', () => {
   it('is deterministic for a seed', () => {
     expect(generateValidGraph(42)).toEqual(generateValidGraph(42));
     expect(generateValidGraph(42)).not.toEqual(generateValidGraph(43));
+    const withChecks = generateValidGraph(42, { checkBlocks: true, moves: 30 });
+    expect(withChecks).toEqual(generateValidGraph(42, { checkBlocks: true, moves: 30 }));
+  });
+
+  it('keeps every seed’s graph without the Checks block moves (no Checks block fields)', () => {
+    for (const { seed, graph } of graphs.slice(0, SEEDS)) {
+      const checks = graph.nodes.filter((n) => n.type === 'checks');
+      expect(checks, `seed ${seed}`).toEqual([{ type: 'checks', id: 'checks', label: 'Checks' }]);
+    }
   });
 
   it(`accepts and compiles every generated graph (${SEEDS} seeds)`, () => {
@@ -159,6 +182,18 @@ describe('layer 3: generated valid graphs and their mutants', () => {
       for (const route of [...program.helpers.map((h) => h.review)]) {
         seen.add(route.by === 'lead' ? 'route a' : route.then === 'lead' ? 'route b' : 'route c');
       }
+      const { merge, branch, change } = program.checkBlocks;
+      if (merge.onFailure === 'owner') seen.add('merge checks ask me');
+      if (merge.select.kind !== 'required') seen.add('merge checks narrowed');
+      if (branch !== null) seen.add('branch checks');
+      if (branch !== null && branch.afterStages > 0) seen.add('branch checks after a final stage');
+      const blocks = Object.entries(change);
+      if (blocks.length > 0) seen.add('change checks');
+      if (blocks.some(([, b]) => b.onFailure === 'helper')) seen.add('change checks to the helper');
+      if (blocks.some(([id]) => program.finalStages.some((s) => s.id === id)))
+        seen.add('tester change checks');
+      if (new Set(blocks.map(([, b]) => b.nodeId)).size < blocks.length)
+        seen.add('one change block for two nodes');
     }
     expect([...seen].sort()).toEqual(
       [
@@ -175,6 +210,14 @@ describe('layer 3: generated valid graphs and their mutants', () => {
         'route a',
         'route b',
         'route c',
+        'merge checks ask me',
+        'merge checks narrowed',
+        'branch checks',
+        'branch checks after a final stage',
+        'change checks',
+        'change checks to the helper',
+        'tester change checks',
+        'one change block for two nodes',
       ].sort(),
     );
   });
@@ -204,7 +247,7 @@ describe('layer 3: generated valid graphs and their mutants', () => {
     expect(
       GRAPH_MUTATIONS.filter((m) => (applied.get(m.name) ?? 0) === 0).map((m) => m.name),
     ).toEqual([]);
-  });
+  }, 60_000);
 
   it('canConnect and the validator agree on every edge of every generated and mutated graph', () => {
     const failures: string[] = [];
@@ -222,7 +265,7 @@ describe('layer 3: generated valid graphs and their mutants', () => {
       }
     }
     expect(failures.slice(0, 3)).toEqual([]);
-  });
+  }, 60_000);
 
   describe('layer 4: every small graph', () => {
     const small = [...enumerateSmallGraphs()];

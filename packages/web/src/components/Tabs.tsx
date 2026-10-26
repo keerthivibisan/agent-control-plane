@@ -69,11 +69,15 @@ export function TabList({
   );
 }
 
-/** The underline tab look, shared by `Tab` (selected: Radix `data-state`) and `LinkTab`. */
+/**
+ * The underline tab look (GitHub's UnderlineNav), shared by `Tab` (selected: Radix `data-state`)
+ * and `LinkTab`: a hover fill on the label, and on the selected tab `ink` text over a 2px accent
+ * bar on the list's bottom border (the weight stays the same, so tabs never shift).
+ */
 const tabClass =
-  'relative -mb-px inline-flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-0.5 font-medium whitespace-nowrap text-dim no-underline transition-colors hover:text-ink';
+  'relative -mb-px inline-flex h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2 font-medium whitespace-nowrap text-dim no-underline transition-colors before:absolute before:inset-x-0 before:top-1.5 before:bottom-1.5 before:-z-10 before:rounded-control before:transition-colors hover:text-ink hover:before:bg-hover focus-visible:-outline-offset-2 isolate';
 
-const tabListClass = 'flex min-w-0 items-center gap-4 overflow-x-auto border-b border-line';
+const tabListClass = 'flex min-w-0 items-center gap-1 overflow-x-auto border-b border-line';
 
 export function Tab({
   value,

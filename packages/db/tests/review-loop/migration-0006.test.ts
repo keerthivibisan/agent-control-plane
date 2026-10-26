@@ -14,6 +14,7 @@ import {
 } from '../../src/index.js';
 import { tempDir } from '../helpers.js';
 import {
+  legacyComment,
   setupInput,
   setupWorkspace,
   ticketWithRun,
@@ -112,7 +113,7 @@ const count = (db: AcpDatabase, table: string) =>
 
 describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
   it('ships as version 6 after untouched 0001-0005', () => {
-    // 0007 (RL-H) follows; the first six stay as shipped.
+    // 0007 (RL-H) and 0008 (ADR-0025) follow; the first six stay as shipped.
     expect(SHIPPED.slice(0, 6).map((m) => [m.version, m.name])).toEqual([
       [1, 'observability'],
       [2, 'orchestration'],
@@ -134,7 +135,8 @@ describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
         .get(table) as string;
       expect(sql, table).toMatch(/\)\s*STRICT$/);
     }
-    expect(columns(db, 'ticket_branches')).toEqual([
+    // 0008 (ADR-0025) rebuilt the table with the same columns first, then the pull request's.
+    expect(columns(db, 'ticket_branches').slice(0, 10)).toEqual([
       'run_id',
       'project_id',
       'branch',
@@ -184,7 +186,8 @@ describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
     const third = ticketWithRun(store, 'Third').run;
     const bad = (row: Record<string, string | null>) =>
       insertBranch(db, { runId: third.id, projectId, branch: 'acp/WEB-3', ...row });
-    expect(() => bad({ branch: 'main' })).toThrow(/CHECK/);
+    // 0008 (ADR-0025) dropped the `acp/*` name check: names are checked in Zod, and the server's
+    // guard refuses long-lived branches (migration-0008.test.ts covers the length check left).
     expect(() => bad({ baseCommit: 'HEAD' })).toThrow(/CHECK/);
     expect(() => bad({ headCommit: 'ABCDEF1' })).toThrow(/CHECK/);
     expect(() => bad({ headCommit: 'abc12' })).toThrow(/CHECK/);
@@ -361,7 +364,7 @@ describe('migration 0006_review_loop (RL-0, ADR-0021)', () => {
       summary: 'Edit src/app.ts',
     });
     store.orch.approvals.decide(approval.id, 'approved');
-    store.ws.comments.insert({ ticketId: ticket.id, author: 'owner', body: 'Before 0006' });
+    legacyComment(store.db, ticket.id, 'Before 0006');
     const before = v5.connection
       .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
       .all();

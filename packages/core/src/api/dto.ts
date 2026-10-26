@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
 import { ProjectSchema } from '../domain/project.js';
 import { ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
@@ -98,6 +99,20 @@ export const SessionSummaryDtoSchema = z.object({
   directUsage: UsageTotalsDtoSchema,
   /** Direct subagent children (verified edges only). */
   childCount: count,
+  /**
+   * ADR-0024: the managed agent run that started this session, when Agent Control Plane started it.
+   * Its name (`label`) is app data: the workflow block's label or the agent's role. Absent for
+   * sessions the app did not start, and from servers before 0.3.0.
+   */
+  managed: z
+    .object({
+      runId: z.string().min(1),
+      agentRunId: z.string().min(1),
+      ticketKey: z.string().min(1).nullable(),
+      kind: AgentRoleKindSchema,
+      label: z.string().min(1).max(120),
+    })
+    .optional(),
 });
 export type SessionSummaryDto = z.infer<typeof SessionSummaryDtoSchema>;
 

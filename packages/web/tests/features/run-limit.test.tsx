@@ -9,7 +9,7 @@ import {
   directLoopScenario,
   projectGraphDto,
 } from '../../e2e/live-graph-fixtures';
-import { LOOP_TICKET_ID } from '../../e2e/review-loop-fixtures';
+import { L_API, LOOP_TICKET_ID } from '../../e2e/review-loop-fixtures';
 import { projectGraph } from '../../e2e/ticket-fixtures';
 import { roundSentence } from '../../src/features/review-loop/ChangeCard';
 import {
@@ -20,7 +20,7 @@ import {
   runLimitNoEffect,
 } from '../../src/features/review-loop/logic';
 import { StartDialog } from '../../src/features/review-loop/StartDialog';
-import { TicketInfo } from '../../src/features/ticket/TicketInfo';
+import { TicketSidebar } from '../../src/features/ticket/Sidebar';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { CSRF, PROJECT_ID, ticketDetail, ticketDto } from '../fixtures/board';
 import { fakeServer, renderWithApi, type RouteTable } from '../helpers';
@@ -229,7 +229,7 @@ describe('the ticket’s Run options: a limit', () => {
 
   it('shows No limit, and the note for a limit looser than every block', async () => {
     renderWithApi(
-      <TicketInfo detail={ticketDetail(ticket)} shownRunId={null} onShowRun={() => {}} />,
+      <TicketSidebar detail={ticketDetail(ticket)} run={undefined} isCurrent />,
       server(careful),
     );
     const section = screen.getByTestId('ticket-run-options');
@@ -238,24 +238,26 @@ describe('the ticket’s Run options: a limit', () => {
       'No limit: each block’s own mode',
     );
     fireEvent.click(within(section).getByRole('button', { name: 'Change run options' }));
-    const mode = within(section).getByLabelText('Approval mode: at most');
+    // v0.3.0 D-B: the sidebar's Change edits in a dialog.
+    const form = screen.getByTestId('ticket-run-options-dialog');
+    const mode = within(form).getByLabelText('Approval mode: at most');
     expect(
-      within(section).getByText(
+      within(form).getByText(
         'A limit for this ticket’s runs: blocks set to a stricter mode keep it, and it can’t loosen any block.',
       ),
     ).toBeTruthy();
     // The note needs the project's graph.
     await waitFor(() => {
       fireEvent.change(mode, { target: { value: 'auto' } });
-      expect(within(section).getByTestId('mode-no-effect').textContent).toBe(
+      expect(within(form).getByTestId('mode-no-effect').textContent).toBe(
         'No block in this workflow is set looser than Auto edits, so “at most Auto” changes nothing.',
       );
     });
-    expect(within(section).queryByTestId('approvals-warning')).toBeNull();
+    expect(within(form).queryByTestId('approvals-warning')).toBeNull();
     fireEvent.change(mode, { target: { value: 'manual' } });
-    expect(within(section).queryByTestId('mode-no-effect')).toBeNull();
-    expect(within(section).getByText(/Lead reviews sends every change to the lead/)).toBeTruthy();
-    expect(within(section).getByText(/Replaces every rework limit in the workflow/)).toBeTruthy();
+    expect(within(form).queryByTestId('mode-no-effect')).toBeNull();
+    expect(within(form).getByText(/Lead reviews sends every change to the lead/)).toBeTruthy();
+    expect(within(form).getByText(/Replaces every rework limit in the workflow/)).toBeTruthy();
   });
 });
 
@@ -296,16 +298,14 @@ describe('change cards: the review agent’s direct rework (route c)', () => {
 
   it('shows the direct rounds on the change and its row', async () => {
     const sc = directLoopScenario();
+    // One change on the Files changed tab ("Changes from", v0.3.0 C-D).
+    window.location.hash = `#?tab=files&change=${L_API}`;
     renderWithApi(<TicketPage id={LOOP_TICKET_ID} />, fakeServer(sc.routes));
-    const overview = await screen.findByTestId('changes-overview');
-    const row = within(overview)
-      .getAllByTestId('change-row')
-      .find((r) => r.textContent?.includes('API helper'));
-    if (row === undefined) throw new Error('no row');
+    const row = await screen.findByTestId('files-change');
     expect(within(row).getByTestId('change-direct-badge').textContent).toBe('Direct rework ×1');
     // The lead sent nothing back, so there is no lead rework badge.
     expect(within(row).queryByText(/^Rework ×/)).toBeNull();
-    fireEvent.click(within(row).getByRole('button', { name: 'Open' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open API helper in Agents' }));
     const card = await within(screen.getByTestId('side-panel')).findByTestId('change-card');
     expect(within(card).getByTestId('change-direct-rounds').textContent).toContain(
       'Review agent: 1 direct rework round',

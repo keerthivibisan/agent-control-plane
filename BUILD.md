@@ -11,6 +11,7 @@ How to build Agent Control Plane and check it the same way CI does. To run the a
 | Node.js                 | 22.x, at least 22.12 (`.nvmrc` pins 22.21.1) | `node --version`                                 |
 | pnpm                    | 10.26.x (`packageManager` pins 10.26.1)      | `pnpm --version`                                 |
 | git                     | any recent version                           | `git --version`                                  |
+| GitHub CLI (`gh`)       | only for the GitHub features, signed in      | `gh auth status`                                 |
 | C/C++ build tools       | only if `better-sqlite3` has to compile      | see below                                        |
 | Chromium for Playwright | only for the browser end-to-end tests        | `pnpm --filter @acp/web exec playwright install` |
 
@@ -77,7 +78,7 @@ It runs, in order and stopping at the first failure:
 1. `pnpm format:check` (Prettier);
 2. `pnpm lint` (ESLint, type-aware, with the package boundary rules, zero warnings);
 3. `pnpm typecheck` (`tsc --noEmit` in every package, including the e2e specs);
-4. `pnpm test` (Vitest in every package, about 3,900 tests);
+4. `pnpm test` (Vitest in every package, about 5,800 tests);
 5. `pnpm build`.
 
 Run it before every commit and push.
@@ -142,9 +143,9 @@ ACP_README_SHOTS=1 ACP_E2E_PORT=7931 pnpm --filter @acp/web test:e2e -c e2e/read
 ```
 
 It starts only the demo server and overwrites the PNGs in `docs/images/` (1440 pixels wide; the
-board and the ticket page also in the dark theme). Everything in them is sample data: the demo
-projects and sessions, plus synthetic tickets, runs, workflow, skills and token figures served by
-the spec. Look at every image before you commit it.
+board, the ticket page, its Agents tab and Files changed also in the dark theme). Everything in
+them is sample data: the demo projects and sessions, plus synthetic tickets, runs, workflow,
+branches, a connected GitHub repository, skills and token figures served by the spec. Look at every image before you commit it.
 
 ## CI
 

@@ -1,6 +1,7 @@
 import type { AgentRunDto, ReviewDto } from '@acp/core/api';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
+import { DiffSection } from '../../components/diff';
 import { Pill } from '../../components/Pill';
 import { QueryView } from '../../components/QueryView';
 import { controlPaths, controlSchemas, reviewAction } from '../../lib/api';
@@ -9,53 +10,12 @@ import { formatCount } from '../../lib/format';
 import { useApiQuery } from '../../lib/query';
 import { useControlAction } from './actions';
 import { ActionError, ConfirmAction } from './bits';
-import { diffLines, isAgentLive, type DiffLineKind } from './run-state';
+import { isAgentLive } from './run-state';
 
 const C = CONTROL_COPY.review;
 
 type AgentReview = ReviewDto['agents'][number];
 type ChangedFile = AgentReview['files'][number];
-
-const LINE: Record<DiffLineKind, string> = {
-  file: 'mt-3 first:mt-0 border-b border-line bg-panel px-3 py-1.5 font-sans font-semibold text-ink',
-  hunk: 'px-3 py-0.5 text-dim bg-sunken',
-  add: 'px-3 bg-success/10 text-ink',
-  del: 'px-3 bg-danger/10 text-ink',
-  context: 'px-3 text-ink',
-  meta: 'px-3 italic text-dim',
-};
-
-/** A unified diff, readable: file headings, green added and red removed lines (+/− kept). */
-export function DiffView({ diff, truncated }: { diff: string; truncated: boolean }) {
-  const lines = diffLines(diff);
-  return (
-    <div className="flex flex-col gap-2">
-      {lines.length === 0 ? (
-        <p className="text-dim">{C.diffEmpty}</p>
-      ) : (
-        <pre
-          className="max-h-[28rem] overflow-auto rounded-control border border-line bg-canvas py-1 font-mono text-caption leading-5"
-          data-testid="diff"
-        >
-          {lines.map((l, i) => (
-            <div key={i} className={`${LINE[l.kind]} min-w-max whitespace-pre`} data-kind={l.kind}>
-              {l.text.length > 0 ? l.text : ' '}
-            </div>
-          ))}
-        </pre>
-      )}
-      {truncated ? (
-        <p
-          role="note"
-          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2 text-caption"
-          data-testid="diff-truncated"
-        >
-          {C.truncated}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 function FileRow({ f }: { f: ChangedFile }) {
   return (
@@ -122,9 +82,14 @@ function AgentReviewCard({
         </div>
       )}
       {review.files.length > 0 || review.diff.length > 0 ? (
-        <Details summary={C.diff} defaultOpen={pending}>
-          <DiffView diff={review.diff} truncated={review.diffTruncated} />
-        </Details>
+        <DiffSection
+          summary={C.diff}
+          diff={review.diff}
+          truncated={review.diffTruncated}
+          files={review.files.map((f) => f.path)}
+          defaultOpen={pending}
+          testId="review-diff"
+        />
       ) : null}
       {pending ? (
         stillWorking ? (

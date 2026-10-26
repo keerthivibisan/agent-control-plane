@@ -6,6 +6,7 @@ import type {
   ChangeState,
   OrchestrationRun,
 } from '@acp/core';
+import { AGENT_NOTE_LINE } from './agent-note.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import { cleanSummary } from './summary.js';
@@ -70,7 +71,7 @@ function liveOfNode(view: LoopView, agent: EngineAgent): number {
 }
 
 /** The helper's node has room for one more live agent (testers: no per-node limit). */
-function nodeHasRoom(view: LoopView, agent: EngineAgent): boolean {
+export function nodeHasRoom(view: LoopView, agent: EngineAgent): boolean {
   const node = editingNodeOf(programOf(view), agent);
   if (node === undefined || node.type === 'tester') return true;
   return liveOfNode(view, agent) < node.maxInstances;
@@ -99,10 +100,13 @@ function freshChange(
   round: number,
   turnFailed: boolean,
   reviewerRounds: number | undefined,
+  checkRounds?: number,
 ): EngineChange {
   return {
     // The rounds a change reviewer sent back stay counted for the whole change (ADR-0023 §4).
     ...(reviewerRounds !== undefined ? { reviewerRounds } : {}),
+    // So do the rounds its Checks block sent back (ADR-0027 §5).
+    ...(checkRounds !== undefined ? { checkRounds } : {}),
     state: 'sealing',
     round,
     verdict: null,
@@ -185,7 +189,12 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
   );
   agent.awaitingHelpers = false;
   d.setAgentStatus(agent, 'AWAITING_REVIEW');
-  agent.change = freshChange(agent.change?.round ?? 0, turnFailed, agent.change?.reviewerRounds);
+  agent.change = freshChange(
+    agent.change?.round ?? 0,
+    turnFailed,
+    agent.change?.reviewerRounds,
+    agent.change?.checkRounds,
+  );
   d.effects.push({ type: 'seal-change', agentRunId: agent.id });
 }
 
@@ -197,7 +206,12 @@ export function enterReview(d: Draft, agent: EngineAgent, turnFailed: boolean): 
  */
 export function stoppedWithoutReview(agent: EngineAgent): void {
   agent.change = {
-    ...freshChange(agent.change?.round ?? 0, false, agent.change?.reviewerRounds),
+    ...freshChange(
+      agent.change?.round ?? 0,
+      false,
+      agent.change?.reviewerRounds,
+      agent.change?.checkRounds,
+    ),
     state: 'decision',
   };
 }
@@ -273,16 +287,19 @@ function handoverPromptText(d: Draft, changes: readonly EngineAgent[]): string {
   const branch = branchLabel(d);
   const decided = `Every change is decided (${merged} merged into ${branch}, ${count('discarded')} discarded, ${count('no-changes')} with no changes) and no helper is working.`;
   if (merged > 0) {
-    return `${decided} Hand over with request_review, or start helpers with start_agent for work that is still missing.`;
+    return `${decided} Hand over with request_review (with your summary), or start helpers with start_agent for work that is still missing.`;
   }
-  return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review.`;
+  return `${decided} Nothing was merged, so ${branch} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review (with your summary).`;
 }
 
-/** Changes waiting for a reviewer, oldest first (ties: the agent's creation order). */
+/**
+ * Changes waiting for a reviewer, oldest first (ties: the agent's creation order). A change whose
+ * Checks block still runs waits for its result (ADR-0027 §5).
+ */
 function readyQueue(d: Draft): EngineAgent[] {
   return changeAgents(d)
     .map((a, i) => ({ a, i }))
-    .filter(({ a }) => a.change?.state === 'ready')
+    .filter(({ a }) => a.change?.state === 'ready' && a.change.blockChecks !== 'pending')
     .sort(
       (x, y) => (x.a.change?.readyAt ?? '').localeCompare(y.a.change?.readyAt ?? '') || x.i - y.i,
     )
@@ -455,12 +472,41 @@ export function checkChange(
     return refusal('change-busy', 'A merge of this change is already under way.');
   }
   const leadReviews = change.state === 'reviewing' && change.reviewer === 'lead';
+  // F-2: a change that could not be saved waits for the owner, and the lead may discard it.
+  const leadDiscardsUnsaved =
+    by === 'lead' &&
+    action === 'discard' &&
+    change.state === 'needs-owner' &&
+    change.sealFailure !== undefined;
   const decidable =
     change.state === 'decision' ||
     leadReviews ||
+    leadDiscardsUnsaved ||
     (by === 'owner' && (change.state === 'needs-owner' || change.state === 'ready'));
   if (!decidable) {
     return refusal('change-not-decidable', `${agent.role}'s change ${STATE_WORDS[change.state]}.`);
+  }
+  // F-2: the lead never merges or reworks work that could not be saved, whatever the reason.
+  if (
+    by === 'lead' &&
+    change.sealFailure !== undefined &&
+    change.sealFailure !== 'branch-changed' &&
+    (action === 'merge' || action === 'rework')
+  ) {
+    return refusal(
+      'change-not-decidable',
+      `${agent.role}'s work could not be saved, so it cannot be merged or reworked. Discard it with discard_change; the owner also sees it.`,
+    );
+  }
+  // F-1: the helper's folder left its branch, so nothing was saved to merge or rework.
+  if (
+    change.sealFailure === 'branch-changed' &&
+    (action === 'merge' || action === 'merge-anyway' || action === 'rework')
+  ) {
+    return refusal(
+      'change-not-decidable',
+      `${agent.role} switched its folder to another branch, so its work could not be saved. Discard its change${by === 'lead' ? ' with discard_change' : ''}; a fresh helper can do the step again.`,
+    );
   }
   switch (action) {
     case 'merge-anyway':
@@ -555,6 +601,8 @@ function reworkPrompt(
       : null,
     `Work in the same copy of the project as before. Your task was: ${agent.task ?? '(no task text)'}`,
     'When you are done, end your turn: your change is reviewed again.',
+    // ADR-0026 §3: loop runs are ticket runs; the new note replaces the earlier one.
+    AGENT_NOTE_LINE,
   ]
     .filter((l) => l !== null)
     .join('\n\n');
@@ -699,7 +747,11 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
 export function waitingLines(view: LoopView): string[] {
   return undecidedChanges(view).map((a) => {
     const state = a.change?.state ?? 'sealing';
-    return `- ${a.role} (agentId ${a.id}): ${STATE_WORDS[state]}`;
+    const words =
+      state === 'ready' && a.change?.blockChecks === 'pending'
+        ? 'is being checked (its Checks block)'
+        : STATE_WORDS[state];
+    return `- ${a.role} (agentId ${a.id}): ${words}`;
   });
 }
 
@@ -715,7 +767,7 @@ function utf8Bytes(text: string): number {
 }
 
 /** The longest prefix of `text` that fits in `max` UTF-8 bytes (never splits a character). */
-function cutUtf8(text: string, max: number): string {
+export function cutUtf8(text: string, max: number): string {
   let n = 0;
   let end = 0;
   for (const ch of text) {
@@ -760,6 +812,15 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
     lines.push(
       `Saved as commit ${change.headCommit}${change.changedFiles !== null ? `; ${change.changedFiles} file(s) changed` : ''}.`,
     );
+  } else if (change.sealFailure === 'branch-changed') {
+    lines.push(
+      'Not saved: the helper switched its folder to another branch, so its work could not be saved. Discard it; a fresh helper can do the step again.',
+    );
+  } else if (change.sealFailure !== undefined) {
+    // F-2: another failed seal; the owner has it, and the lead may discard it.
+    lines.push(
+      'Not saved: the app could not save this work, so it cannot be merged or reworked. The owner has it; you may discard it.',
+    );
   } else if (change.state === 'decision') {
     lines.push('Not saved yet: the helper stopped before finishing; a merge saves it first.');
   }
@@ -777,6 +838,11 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
       : change.checks === 'pending'
         ? 'running'
         : change.checks;
+  if (change.blockChecks !== undefined) {
+    lines.push(
+      `Checks on the change (its Checks block): ${change.blockChecks === 'pending' ? 'running' : change.blockChecks}${(change.checkRounds ?? 0) > 0 ? `, after ${change.checkRounds} check rework round(s)` : ''}.`,
+    );
+  }
   lines.push(`Required checks: ${checks}.`);
   if (change.conflictFiles.length > 0) {
     lines.push(`Conflicting files on the last merge attempt: ${change.conflictFiles.join(', ')}.`);

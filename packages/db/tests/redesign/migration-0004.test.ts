@@ -13,7 +13,7 @@ import {
   openDatabase,
 } from '../../src/index.js';
 import { tempDir } from '../helpers.js';
-import { setupInput, setupWorkspace, ticketWithRun } from '../workspace/setup.js';
+import { legacyComment, setupInput, setupWorkspace, ticketWithRun } from '../workspace/setup.js';
 
 const SHIPPED = loadMigrations(DEFAULT_MIGRATIONS_DIR);
 const OLD = ['0001_observability.sql', '0002_orchestration.sql', '0003_workspace.sql'];
@@ -61,7 +61,7 @@ describe('migration 0004_redesign (R-G)', () => {
       summary: 'Edit src/app.ts',
     });
     store.orch.approvals.decide(approval.id, 'approved');
-    store.ws.comments.insert({ ticketId: ticket.id, author: 'owner', body: 'Before 0004' });
+    legacyComment(store.db, ticket.id, 'Before 0004');
     const v3Checksums = v3.connection
       .prepare('SELECT version, checksum FROM schema_migrations ORDER BY version')
       .all();

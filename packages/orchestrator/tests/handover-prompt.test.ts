@@ -56,7 +56,7 @@ describe('the hand-over prompt', () => {
       ),
     );
     expect(prompts(decided)).toEqual([
-      `${PROMPT} (1 merged into ${BRANCH}, 0 discarded, 0 with no changes) and no helper is working. Hand over with request_review, or start helpers with start_agent for work that is still missing.`,
+      `${PROMPT} (1 merged into ${BRANCH}, 0 discarded, 0 with no changes) and no helper is working. Hand over with request_review (with your summary), or start helpers with start_agent for work that is still missing.`,
     ]);
     expect(decided.state.handoverPrompted).toBe(true);
     // Later commands at the same idle point do not repeat it.
@@ -90,7 +90,7 @@ describe('the hand-over prompt', () => {
     s = discard.state;
     const reviewerDone = ok(agentEvent(s, RA, finished, makeCtx(6000)));
     expect(prompts(reviewerDone)).toEqual([
-      `${PROMPT} (0 merged into ${BRANCH}, 1 discarded, 0 with no changes) and no helper is working. Nothing was merged, so ${BRANCH} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review.`,
+      `${PROMPT} (0 merged into ${BRANCH}, 1 discarded, 0 with no changes) and no helper is working. Nothing was merged, so ${BRANCH} has none of the ticket's work yet. Start helpers with start_agent for the work that is still missing, or hand over the empty branch with request_review (with your summary).`,
     ]);
   });
 

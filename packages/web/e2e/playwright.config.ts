@@ -76,6 +76,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // v0.3.0 C-B (ADR-0026): Comments, Conversation and attachments, routes from fixtures.
+      name: 'ticket-activity',
+      testMatch: 'ticket-activity.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       // Redesign R-A: the project-first shell (and its screenshots) on the demo server.
       name: 'shell',
       testMatch: 'shell.spec.ts',
@@ -85,6 +91,12 @@ export default defineConfig({
       // Redesign R-E: the Harness page with synthetic harness and check routes (page.route).
       name: 'harness',
       testMatch: 'harness.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      // v0.3.0 H-D (ADR-0027): the Checks blocks in the editor and the Harness page's setup.
+      name: 'harness-blocks',
+      testMatch: 'harness-blocks.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
@@ -114,6 +126,32 @@ export default defineConfig({
       // RL-D (ADR-0021): the review loop on the demo server's built UI, routes from fixtures.
       name: 'review-loop',
       testMatch: 'review-loop.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      // v0.3.0 S-B (ADR-0024): session names and the run summary card, routes from fixtures.
+      name: 'session-names',
+      testMatch: 'session-names.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      // v0.3.0 G-C (ADR-0025 §6): the shared diff viewer in the review loop's cards, routes from
+      // fixtures, Shiki for real.
+      name: 'diff-viewer',
+      testMatch: 'diff-viewer.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      // v0.3.0 D-A: the review pages (Files changed, line comments, Review changes), routes from
+      // fixtures, the owner's decisions captured.
+      name: 'review-page',
+      testMatch: 'review-page.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
+      // v0.3.0 G-B (ADR-0025): branching strategies and GitHub, routes from fixtures.
+      name: 'github',
+      testMatch: 'github.spec.ts',
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     // --- R-V: every page of the new UI on the demo server (navigation, redirects, screenshots).

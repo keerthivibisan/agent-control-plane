@@ -4,11 +4,8 @@ import { RelativeTime } from '../../components/RelativeTime';
 import { StatusBadge } from '../../components/StatusBadge';
 import { helperAgentsText, OVERVIEW_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
-
-/** What to call a session in plain words: its title, else its helper-agent type. */
-export function sessionName(s: Pick<SessionSummaryDto, 'title' | 'agentType'>): string {
-  return s.title ?? s.agentType ?? OVERVIEW_COPY.untitled;
-}
+import { nameSession } from '../../lib/session-name';
+import { SessionNameExtra } from '../sessions/session-bits';
 
 /**
  * A friendly one-line session: name (link), project and helper-agent count, status, and a time on
@@ -24,6 +21,7 @@ function SessionRow({
   time: ReactNode;
 }) {
   const helpers = helperAgentsText(session.childCount);
+  const naming = nameSession(session);
   const context = [projectName ?? OVERVIEW_COPY.noProject, helpers].filter(Boolean).join(' · ');
   return (
     <li
@@ -35,9 +33,10 @@ function SessionRow({
           href={href.session(session.id)}
           className="block truncate font-medium text-ink no-underline hover:text-accent hover:underline"
         >
-          {sessionName(session)}
+          {naming.name}
         </a>
         <div className="truncate text-caption text-dim">{context}</div>
+        <SessionNameExtra naming={naming} />
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5">
         <StatusBadge status={session.status} withTip={false} />

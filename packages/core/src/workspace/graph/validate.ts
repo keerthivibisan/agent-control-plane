@@ -1,6 +1,8 @@
-import type { ApprovalMode } from '../workspace.js';
+import type { ApprovalMode, HarnessManifest } from '../workspace.js';
 import { HARD_MAX_HELPERS } from '../workspace.js';
+import { checkSelectionIssues } from '../harness-select.js';
 import {
+  CHECK_FAILURE_ROUTES,
   NODE_CAPABILITIES,
   WORKFLOW_NODE_TYPES,
   isAgentNode,
@@ -11,7 +13,14 @@ import {
   type WorkflowGraph,
   type WorkflowNode,
   type WorkflowNodeId,
+  type WorkflowNodeOf,
 } from '../workflow-graph.js';
+import {
+  CHECK_FAILURE_ROUTE_NAMES,
+  CHECK_PLACE_NAMES,
+  checkBlockOf,
+  isCheckBlockAt,
+} from './check-blocks.js';
 import { checkConnection } from './connect.js';
 import {
   NODE_TYPE_NAMES,
@@ -36,6 +45,11 @@ export interface ValidateGraphContext {
   maxConcurrentHelpers?: number;
   /** The project's approval mode, used for editing nodes without their own (mode warnings). */
   projectMode?: ApprovalMode;
+  /**
+   * The project's harness file, or null when it has none: each Checks block's selection is
+   * checked against it (`checkSelectionIssues`, warnings only). Absent: not checked.
+   */
+  harness?: Pick<HarnessManifest, 'checks'> | null;
 }
 
 /**
@@ -149,8 +163,52 @@ function checkEdges(graph: WorkflowGraph, index: NodeIndex, issues: Issues): Wor
   return valid;
 }
 
+function checksNodes(nodes: readonly WorkflowNode[]): WorkflowNodeOf<'checks'>[] {
+  return nodes.filter((n): n is WorkflowNodeOf<'checks'> => n.type === 'checks');
+}
+
+/**
+ * ADR-0027 §5: exactly one block before the lead's merge (the mandatory block, so no graph merges
+ * a change without checks), at most one on the ticket branch. Change blocks are bounded by the
+ * editing nodes (each flows into at most one, `many-check-blocks`) and the graph's node limit.
+ */
+function checkBlockCounts(graph: WorkflowGraph, issues: Issues): void {
+  const blocks = checksNodes(graph.nodes);
+  const merge = blocks.filter((n) => isCheckBlockAt(n, 'merge'));
+  if (merge.length === 0) {
+    issues.error(
+      'missing-node',
+      blocks.length === 0
+        ? 'The workflow needs a Checks block.'
+        : 'The workflow needs a Checks block before the Lead’s merge, so no change is merged without checks.',
+    );
+  }
+  const extraMerge = merge[1];
+  if (extraMerge !== undefined) {
+    issues.error(
+      'too-many-nodes',
+      blocks.length === merge.length
+        ? `The workflow can have only one Checks block; ${q(extraMerge)} is one too many.`
+        : `The workflow can have only one Checks block before the Lead’s merge; ${q(extraMerge)} is one too many.`,
+      { nodeId: extraMerge.id },
+    );
+  }
+  const extraBranch = blocks.filter((n) => isCheckBlockAt(n, 'branch'))[1];
+  if (extraBranch !== undefined) {
+    issues.error(
+      'too-many-nodes',
+      `The workflow can have only one Checks block on the ticket branch; ${q(extraBranch)} is one too many.`,
+      { nodeId: extraBranch.id },
+    );
+  }
+}
+
 function checkCounts(graph: WorkflowGraph, issues: Issues): void {
   for (const type of WORKFLOW_NODE_TYPES) {
+    if (type === 'checks') {
+      checkBlockCounts(graph, issues);
+      continue;
+    }
     const all = graph.nodes.filter((n) => n.type === type);
     const { minPerGraph, maxPerGraph } = NODE_CAPABILITIES[type];
     if (all.length < minPerGraph) {
@@ -293,6 +351,7 @@ function checkRework(scope: Scope): void {
     const from = index.byId.get(edge.from);
     const to = index.byId.get(edge.to);
     if (from === undefined || to === undefined) continue;
+    if (from.type === 'checks') continue; // a Checks block's rework: `checkCheckBlocks`
     if (from.type === 'lead') {
       if (!leadSeesReviewOf(scope, to.id)) {
         issues.error(
@@ -329,7 +388,8 @@ function checkAssigned({ index, valid, issues }: Scope): void {
 
 function checkMergePath({ graph, valid, issues }: Scope): void {
   const lead = singleOfType(graph, 'lead');
-  const checks = singleOfType(graph, 'checks');
+  const mergeBlocks = graph.nodes.filter((n) => isCheckBlockAt(n, 'merge'));
+  const checks = mergeBlocks.length === 1 ? mergeBlocks[0] : undefined;
   const ticketMerge = singleOfType(graph, 'ticket-merge');
   if (lead !== undefined && checks !== undefined && !has(valid, 'merge', lead.id, checks.id)) {
     issues.error(
@@ -361,7 +421,10 @@ function checkFinalChain({ graph, index, valid, issues }: Scope): void {
     const seen = new Set<WorkflowNodeId>([ticketMerge.id]);
     let current: WorkflowNode = ticketMerge;
     for (;;) {
-      const outs = valid.filter((e) => e.type === 'flow' && e.from === current.id);
+      // A tester's flow to its change block is not a step of the chain.
+      const outs = valid.filter(
+        (e) => e.type === 'flow' && e.from === current.id && !toChangeBlock(index, e),
+      );
       if (outs.length !== 1 || outs[0] === undefined) {
         issues.error(
           'final-chain',
@@ -394,6 +457,12 @@ function checkFinalChain({ graph, index, valid, issues }: Scope): void {
           `${q(node)} is not on the line of steps from ${q(ticketMerge)} to ${q(ownerMerge)}. Final reviewers and testers run only there.`,
           { nodeId: node.id },
         );
+      } else if (isCheckBlockAt(node, 'branch') && !onChain.has(node.id)) {
+        issues.error(
+          'final-chain',
+          `${q(node)} checks the ticket branch, so it belongs on the line of steps from ${q(ticketMerge)} to ${q(ownerMerge)}.`,
+          { nodeId: node.id },
+        );
       }
     }
   }
@@ -406,6 +475,89 @@ function checkFinalChain({ graph, index, valid, issues }: Scope): void {
       'final-chain',
       `${q(ownerMerge)} needs a flow link to ${q(done)}: your merge is the last step of every ticket.`,
       { nodeId: ownerMerge.id },
+    );
+  }
+}
+
+function toChangeBlock(index: NodeIndex, edge: WorkflowEdge): boolean {
+  const to = index.byId.get(edge.to);
+  return to !== undefined && isCheckBlockAt(to, 'change');
+}
+
+/**
+ * The Checks blocks' own rules (ADR-0027 §5), in graph order of the blocks, then of the editing
+ * nodes. Where a block may sit and what may link to it is the edge matrix (`canConnect`); this
+ * checks what needs more than the two ends of one edge:
+ * - `check-failure-route`: the failure route is one the block's place allows
+ *   (`CHECK_FAILURE_ROUTES`);
+ * - `check-block-input`: a change block has at least one helper or tester whose change it checks;
+ * - `check-rework`: a change block sends work back only to a node whose change it checks, and only
+ *   with the route "back to the helper", which needs a rework link to each such node;
+ * - `many-check-blocks`: a helper or tester flows into at most one change block.
+ */
+function checkCheckBlocks({ index, valid, issues }: Scope): void {
+  for (const node of index.unique) {
+    if (node.type !== 'checks') continue;
+    const block = checkBlockOf(node);
+    if (!CHECK_FAILURE_ROUTES[block.place].includes(block.onFailure)) {
+      const allowedRoutes = CHECK_FAILURE_ROUTES[block.place]
+        .map((r) => `"${CHECK_FAILURE_ROUTE_NAMES[r]}"`)
+        .join(' or ');
+      issues.error(
+        'check-failure-route',
+        `${q(node)} runs ${CHECK_PLACE_NAMES[block.place]}, where a failure cannot go "${CHECK_FAILURE_ROUTE_NAMES[block.onFailure]}". Choose ${allowedRoutes}.`,
+        { nodeId: node.id },
+      );
+    }
+    if (block.place !== 'change') continue;
+    const inputs = valid.filter((e) => e.type === 'flow' && e.to === node.id).map((e) => e.from);
+    if (inputs.length === 0) {
+      issues.error(
+        'check-block-input',
+        `No helper or tester flows into ${q(node)}. Link the change of the helper or tester it checks to it, or remove the block.`,
+        { nodeId: node.id },
+      );
+    }
+    const reworks = edgesOfType(valid, 'rework').filter((e) => e.from === node.id);
+    for (const edge of reworks) {
+      const to = index.byId.get(edge.to);
+      if (to === undefined) continue;
+      if (!inputs.includes(to.id)) {
+        issues.error(
+          'check-rework',
+          `${q(node)} can send ${q(to)} back only if it checks ${q(to)}'s change. Add a flow link from ${q(to)} to ${q(node)}, or remove the rework link.`,
+          { edgeId: edge.id },
+        );
+      } else if (block.onFailure !== 'helper') {
+        issues.error(
+          'check-rework',
+          `${q(node)} has a rework link to ${q(to)}, but on a failure "${CHECK_FAILURE_ROUTE_NAMES[block.onFailure]}". Choose "${CHECK_FAILURE_ROUTE_NAMES.helper}", or remove the rework link.`,
+          { edgeId: edge.id },
+        );
+      }
+    }
+    if (block.onFailure !== 'helper') continue;
+    for (const id of inputs) {
+      if (reworks.some((e) => e.to === id)) continue;
+      const from = index.byId.get(id);
+      issues.error(
+        'check-rework',
+        `${q(node)} sends a failed change back to the helper, but has no rework link to ${q(from ?? { label: id })}. Add one (with its rounds), or choose another failure route.`,
+        { nodeId: node.id },
+      );
+    }
+  }
+  for (const node of index.unique) {
+    if (!isEditorNode(node)) continue;
+    const blocks = valid.filter(
+      (e) => e.type === 'flow' && e.from === node.id && toChangeBlock(index, e),
+    );
+    const second = blocks[1];
+    if (second === undefined) continue;
+    issues.error(
+      'many-check-blocks',
+      `${q(node)} flows into ${blocks.length} Checks blocks. Keep one: a block can select every check its change needs.`,
+      { nodeId: node.id, edgeId: second.id },
     );
   }
 }
@@ -564,8 +716,8 @@ function checkInstances(graph: WorkflowGraph, ctx: ValidateGraphContext, issues:
  * Whether a graph may run, as a list of issues (ADR-0023 §3, README §2 and the WG-0 refinements).
  * Any `error` means the graph cannot be saved or started; warnings never block. The order is
  * fixed: ids, edges (in graph order), counts and labels, plan path, review routes, change
- * reviewers, rework, assignment, merge path, final chain, cycles, reachability, then the
- * warnings. Within a rule, issues follow graph order.
+ * reviewers, rework, assignment, merge path, final chain, Checks blocks, cycles, reachability,
+ * then the warnings (the Checks blocks' selection last, when `ctx.harness` is given). Within a rule, issues follow graph order.
  *
  * The graph must already have `WorkflowGraphSchema`'s shape; this checks what the shape cannot.
  * Every path rule reads only the edges that pass `canConnect`, so a refused edge is reported once,
@@ -588,11 +740,13 @@ export function validateWorkflowGraph(
   checkAssigned(scope);
   checkMergePath(scope);
   checkFinalChain(scope);
+  checkCheckBlocks(scope);
   checkCycles(scope);
   checkReachable(scope);
   checkFiles(graph, ctx, issues);
   checkModes(graph, ctx, issues);
   checkInstances(graph, ctx, issues);
+  if (ctx.harness !== undefined) issues.list.push(...checkSelectionIssues(graph, ctx.harness));
   return issues.list;
 }
 

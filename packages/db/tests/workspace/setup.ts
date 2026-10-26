@@ -99,3 +99,16 @@ export const STEPS = [
 export function count(db: AcpDatabase, table: string): number {
   return db.connection.prepare(`SELECT COUNT(*) FROM ${table}`).pluck().get() as number;
 }
+
+/**
+ * An owner comment written with the columns of migrations 0003-0008, for upgrade tests on a
+ * database from before 0009 (the comments repository reads and writes 0009's columns).
+ */
+export function legacyComment(db: AcpDatabase, ticketId: string, body: string): void {
+  db.connection
+    .prepare(
+      `INSERT INTO ticket_comments (id, ticket_id, run_id, plan_id, author, body, created_at)
+       VALUES (?, ?, NULL, NULL, 'owner', ?, '2026-10-13T12:00:00.000Z')`,
+    )
+    .run(`legacy-${body.length}-${ticketId}`, ticketId, body);
+}

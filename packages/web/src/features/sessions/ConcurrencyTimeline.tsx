@@ -6,7 +6,7 @@ import { SESSIONS_COPY, STATUS_COPY } from '../../lib/copy';
 import { formatDuration, formatExactTime } from '../../lib/format';
 import { href } from '../../lib/router';
 import { buildGantt } from './gantt';
-import { sessionName } from './session-bits';
+import { sessionName } from '../../lib/session-name';
 
 const COPY = SESSIONS_COPY.timeline;
 

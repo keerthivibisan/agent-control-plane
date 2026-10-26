@@ -200,11 +200,14 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
   it("denies the lead the reviewers' tools without asking (decision B, ADR-0021)", async () => {
     // ADR-0021: the lead has its five change tools, never post_review or submit_review.
     expect(LEAD_ROLE_TOOL_NAMES).toEqual(
-      LEAD_TOOL_NAMES.filter((n) => n !== 'post_review' && n !== 'submit_review'),
+      LEAD_TOOL_NAMES.filter(
+        (n) => n !== 'post_review' && n !== 'submit_review' && n !== 'report_work',
+      ),
     );
     for (const name of CHANGE_DECISION_TOOL_NAMES) expect(LEAD_ROLE_TOOL_NAMES).toContain(name);
     const { canUseTool, requests } = setup('lead');
-    for (const name of ['post_review', 'submit_review']) {
+    // ADR-0026 §3: nor the helpers' report_work.
+    for (const name of ['post_review', 'submit_review', 'report_work']) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });
@@ -226,9 +229,13 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     ]);
   });
 
-  it('denies a worker every lead tool without asking (depth 1)', async () => {
+  it('denies a worker every lead tool but report_work without asking (depth 1)', async () => {
     const { canUseTool, requests } = setup('worker');
-    for (const name of [...LEAD_TOOL_NAMES, 'unknown']) {
+    // ADR-0026 §3: its note tool, from our server, runs without asking.
+    await expect(
+      canUseTool('mcp__acp__report_work', {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
+    ).resolves.toEqual({ behavior: 'allow', toolUseID: 'toolu_1' });
+    for (const name of [...LEAD_TOOL_NAMES.filter((n) => n !== 'report_work'), 'unknown']) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toEqual({
@@ -261,12 +268,15 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
 describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 amendment)', () => {
   const ours = opts({ mcpServer: { name: 'acp', source: 'sdk' } });
 
-  it('managedToolNames: every tool for the lead, the subset for a parent helper, none otherwise', () => {
+  it('managedToolNames: every tool for the lead, the subset for a parent helper, the note otherwise', () => {
     expect(managedToolNames(spec('lead'))).toEqual(LEAD_ROLE_TOOL_NAMES);
     expect(managedToolNames(spec('lead', false))).toEqual(LEAD_ROLE_TOOL_NAMES);
-    expect(managedToolNames(spec('worker', true))).toEqual(HELPER_PARENT_TOOL_NAMES);
-    expect(managedToolNames(spec('worker', false))).toEqual([]);
-    expect(managedToolNames(spec('worker'))).toEqual([]);
+    expect(managedToolNames(spec('worker', true))).toEqual([
+      ...HELPER_PARENT_TOOL_NAMES,
+      'report_work',
+    ]);
+    expect(managedToolNames(spec('worker', false))).toEqual(['report_work']);
+    expect(managedToolNames(spec('worker'))).toEqual(['report_work']);
     expect(HELPER_PARENT_TOOL_NAMES).toEqual([
       'start_agent',
       'list_agents',
@@ -326,5 +336,67 @@ describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 
       behavior: 'deny',
       message: DENY_WORKER_LEAD_TOOL,
     });
+  });
+});
+
+describe('readOnlyDirs: reads of the attachment copies (ADR-0026 §4)', () => {
+  const COPIES = '/data/runs/r1/attachments/agent-lead';
+
+  function gate(kind: 'lead' | 'planner' | 'reviewer', dirs?: readonly string[]) {
+    const requests: PermissionRequest[] = [];
+    const canUseTool = createCanUseTool(
+      {
+        agentRunId: `agent-${kind}`,
+        kind,
+        cwd: CWD,
+        prompt: 'p',
+        model: null,
+        ...(dirs === undefined ? {} : { readOnlyDirs: dirs }),
+      },
+      {
+        requestPermission(r) {
+          requests.push(r);
+          return Promise.resolve({ allow: false, message: 'no' });
+        },
+      },
+    );
+    return { canUseTool, requests };
+  }
+
+  it('lets the lead and the planner read inside them without asking', async () => {
+    for (const kind of ['lead', 'planner'] as const) {
+      const { canUseTool, requests } = gate(kind, [COPIES]);
+      await expect(
+        canUseTool('Read', { file_path: `${COPIES}/notes.md` }, opts()),
+      ).resolves.toMatchObject({ behavior: 'allow' });
+      await expect(
+        canUseTool('Grep', { pattern: 'x', path: COPIES }, opts()),
+      ).resolves.toMatchObject({ behavior: 'allow' });
+      expect(requests).toEqual([]);
+    }
+  });
+
+  it('allows nothing beside them: a sibling, a way out, a blocked path, or another tool', async () => {
+    const { canUseTool, requests } = gate('lead', [COPIES]);
+    await canUseTool('Read', { file_path: '/data/runs/r1/attachments/agent-other/x' }, opts());
+    await canUseTool('Read', { file_path: `${COPIES}/../../../../etc/passwd` }, opts());
+    await canUseTool('Read', { file_path: `${COPIES}/a.md` }, opts({ blockedPath: COPIES }));
+    expect(requests).toHaveLength(3);
+    // The lead has no edit tool at all: an edit there is denied without asking.
+    await expect(
+      canUseTool('Write', { file_path: `${COPIES}/a.md`, content: 'x' }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    expect(requests).toHaveLength(3);
+  });
+
+  it('ignores a relative folder, and changes nothing without the field', async () => {
+    const relative = gate('planner', ['attachments']);
+    await expect(
+      relative.canUseTool('Read', { file_path: '/elsewhere/attachments/a.md' }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    const none = gate('reviewer');
+    await expect(
+      none.canUseTool('Read', { file_path: `${COPIES}/notes.md` }, opts()),
+    ).resolves.toMatchObject({ behavior: 'deny' });
   });
 });

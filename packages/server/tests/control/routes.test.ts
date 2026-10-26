@@ -10,6 +10,7 @@ import {
   RunDetailDtoSchema,
   RunSummaryDtoSchema,
 } from '@acp/core/api';
+import { BRANCH_RULE_LINE } from '@acp/orchestrator';
 import { z } from 'zod';
 import { git } from '../workspace/helpers.js';
 import { expectError, setupControl } from './helpers.js';
@@ -158,7 +159,8 @@ describe('workers, approvals, review (the M1 flow)', () => {
     expect(worker.spec).toMatchObject({
       kind: 'worker',
       cwd: path,
-      prompt: 'Add a health endpoint',
+      // F-1: every helper brief ends with the branch rule.
+      prompt: `Add a health endpoint\n\n${BRANCH_RULE_LINE}`,
     });
     expect(worker.spec.leadTools).toBeUndefined();
     expect(existsSync(path)).toBe(true);

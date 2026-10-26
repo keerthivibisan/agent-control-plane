@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   BARE_COMMAND_PATTERN,
+  checkGitCommand,
   CommandPatternSchema,
   FORBIDDEN_ALLOWLIST_COMMANDS,
   GIT_READ_ONLY_SUBCOMMANDS,
@@ -256,6 +257,13 @@ export function evaluateAllowlist(input: AllowlistInput): AllowlistVerdict {
     return { allowed: true, rule: 'edit-in-own-worktree' };
   }
 
+  // F-2: F-1's command guard comes before every rule. A harness check comes from the project's
+  // files, so a check that is itself branch-managing git (`git push`, `git checkout`) is never
+  // pre-approved, in any mode; the adapter's guard denies it before the gate in any case.
+  const git = checkGitCommand(target.command);
+  if (git !== null) {
+    return ask(`The app owns branches and commits, so ${git.command} is never pre-approved.`);
+  }
   if (allowed.checks) {
     for (const check of input.checks) {
       const line = checkCommandLine(check.argv);

@@ -230,6 +230,18 @@ null). `stagesUsingSkill` and `stagesUsingAgent` cover `review`.
 4. Require that the required checks passed on this commit, or start them; `checksFinished` then
    messages the lead.
 5. Advance the ticket branch and release the worktree.
+6. **F-2:** a ticket branch moved outside the app (`ticket-branch-moved`) or checked out in
+   another folder (`ticket-branch-checked-out`) sends the change to the owner at once, and the
+   lead is told not to retry (only the owner can reset or free the branch). A merge that fails
+   for a git reason (`failed`) is offered "Try again" until it failed `MAX_FAILED_MERGES` (3)
+   times in a row; then the change goes to the owner.
+
+**Bounds after lost work (F-2):** a change whose seal failed for any reason waits for the owner
+(`needs-owner`, or `decision` for F-1's switched branch), and the lead may discard it, never merge
+or rework it. A helper whose change was discarded or could not be saved is a lost attempt. A plan
+step (its helper node and role) may lose `max(2, 1 + maxReworkRounds)` attempts (times the plan's
+steps with that role), and the run that many times its plan steps; then `start_agent` is refused
+(`attempts-exhausted`) and the lead hands over. Merged and no-change work never counts.
 
 **Checks:** run on each sealed or integrated helper commit, and on the ticket tip at REVIEW (a
 detached temporary checkout), stored with `commit`.

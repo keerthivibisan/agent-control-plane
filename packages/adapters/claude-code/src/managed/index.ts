@@ -37,3 +37,11 @@ export {
   launchProtectionOf,
 } from './full-auto.js';
 export type { LaunchProtection } from './full-auto.js';
+export {
+  checkGitCommand,
+  GIT_DENY_RULES,
+  gitGuardDenialFor,
+  gitGuardHooks,
+  gitGuardMessage,
+} from './branch-guard.js';
+export type { GitGuardDenial } from './branch-guard.js';

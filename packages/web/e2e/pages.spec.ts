@@ -281,8 +281,8 @@ test.describe('U-V', () => {
     expect(await moving).toEqual(['none|1']);
     await expect(h1(page)).toContainText('Tokens');
 
-    // The ticket page's side panel doesn't slide in.
-    await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}`);
+    // The ticket page's side panel (on the Agents tab since D-B) doesn't slide in.
+    await page.goto(`/#/p/${PROJECT_ID}/tickets/${TICKET_ID}?tab=agents`);
     const slide = watch('[data-testid="side-panel"]');
     await expect(page.getByTestId('side-panel')).toBeVisible();
     expect((await slide).every((v) => v.startsWith('none|'))).toBe(true);
@@ -314,11 +314,11 @@ test.describe('U-V', () => {
 
       // The sidebar toggle works from the keyboard and keeps focus.
       const sidebar = page.getByTestId('sidebar');
-      await page.getByRole('button', { name: 'Collapse sidebar' }).focus();
-      await expectFocusRing(page, 'Collapse sidebar');
+      await page.getByRole('button', { name: 'Hide sidebar' }).focus();
+      await expectFocusRing(page, 'Hide sidebar');
       await page.keyboard.press('Enter');
       await expect(sidebar).toHaveAttribute('data-collapsed', 'true');
-      await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(sidebar).not.toHaveAttribute('data-collapsed', 'true');
 

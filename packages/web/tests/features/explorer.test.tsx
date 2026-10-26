@@ -8,9 +8,11 @@ import {
   partialUsage,
   project,
   session,
+  T0,
   tree,
   usageSummary,
 } from '../fixtures/dto';
+import { formatSessionStart } from '../../src/lib/session-name';
 import { paths } from '../../src/lib/api';
 import { fakeServer, renderWithApi } from '../helpers';
 
@@ -46,7 +48,10 @@ describe('Sessions page', () => {
     renderWithApi(<SessionExplorer search={new URLSearchParams()} />, fakeServer(routes));
     expect(await screen.findByRole('heading', { name: 'Sessions', level: 1 })).toBeTruthy();
     await waitFor(() => expect(rowOf('s-1')).toBeTruthy());
-    expect(within(rowOf('s-9')).getByText('Untitled session')).toBeTruthy();
+    // No title, not a helper: named after its branch and start, never "Untitled".
+    expect(
+      within(rowOf('s-9')).getByText(`Session on main · ${formatSessionStart(T0)}`),
+    ).toBeTruthy();
 
     const helperRow = rowOf('s-2');
     expect(within(helperRow).getByText('Helper agent: Explore')).toBeTruthy();

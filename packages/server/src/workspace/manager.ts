@@ -1,13 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, realpath, rm, rmdir, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { TicketBranchNameSchema, ticketBranchName } from '@acp/core';
+import { GitBranchNameSchema, HARNESS_MANIFEST_PATH } from '@acp/core';
 import { z } from 'zod';
 import { errorFields, silentLogger, type Logger } from '../logger.js';
-import { changedFiles, type ChangedFile } from './diff.js';
+import { changedFiles, parseNumstat, type ChangedFile } from './diff.js';
 import { GitCommandError, WorkspaceError } from './errors.js';
+import { AGENT_ATTACHMENTS_DIR } from '../attachments/agent-copies.js';
 import { createGitRunner, type GitRunner } from './git.js';
 import { assertSafeId, branchFor, isSafeId } from './ids.js';
+import { outputPathspecs, readSmallFile, setupOutputsOf } from './setup-outputs.js';
+import {
+  ALWAYS_PROTECTED,
+  legacyTicketBranchPlan,
+  type TicketBranchPlan,
+} from './ticket-branch-plan.js';
 
 /**
  * Git worktrees for managed workers (ADR-0013 §2, §5; orchestration-lifecycle §0).
@@ -19,11 +26,17 @@ import { assertSafeId, branchFor, isSafeId } from './ids.js';
  *   when the project's tree is clean and still on that branch; anything else is a typed refusal.
  * - Every git call disables hooks and fsmonitor, so a repository file can never make git start
  *   another program.
- * - ADR-0021 (review loop): a run's ticket branch `acp/<KEY>` is created from the base branch tip;
+ * - ADR-0021 (review loop): a run's ticket branch is created from its target branch's tip;
  *   helpers start from its tip; a helper's change is sealed (committed), integrated with the tip in
  *   the helper's own worktree, and the ticket branch is moved to it only by compare-and-swap, never
- *   while checked out. The owner merges the ticket branch into the base branch once, as a
- *   fast-forward of a clean tree on that branch.
+ *   while checked out. The owner merges the ticket branch into the target once, as a fast-forward:
+ *   of a clean tree when the target is checked out, else of the target's ref by compare-and-swap.
+ * - ADR-0025: the ticket branch's name comes from the ticket or the project's branching strategy
+ *   (`acp/<KEY>` without one), and its target from the ticket or the strategy (the checked-out
+ *   branch without one). §10: it starts at the tip of its source (the ticket's `from`, else the
+ *   strategy's default source, else the target), which is only read. Every ticket-branch operation refuses a long-lived branch: the run's
+ *   target, `main`, `master`, the strategy's branches, the checked-out branch and `origin`'s
+ *   default branch.
  * - Git operations are serialized per worktree and per repository (U-V: concurrent `git add` in one
  *   worktree collided on its index). A worktree's lock is always taken before its repository's.
  */
@@ -91,20 +104,29 @@ export interface CreateOptions {
   from?: { branch: string; commit: string };
 }
 
-/** A run's ticket branch in the project's repository (ADR-0021 §4). */
+/**
+ * A run's ticket branch in the project's repository (ADR-0021 §4), as the database records it
+ * for the run (`ticket_branches`): the manager acts on no other branch.
+ */
 export interface TicketBranchRef {
   /** The registered project folder (may be a subfolder of its repository). */
   projectRoot: string;
-  /** `acp/<KEY>` or `acp/<KEY>-r<n>` (core's `TicketBranchNameSchema`). */
+  /** The recorded name (core's `TicketBranchNameSchema`). */
   branch: string;
+  /** The recorded target (`base_branch`): created from it, merged into it; never the branch. */
+  baseBranch: string;
+  /** More long-lived names the branch must not be (the project strategy's; ADR-0025). */
+  protectedNames?: readonly string[];
 }
 
 export interface CreatedTicketBranch {
   branch: string;
-  /** The branch the project had checked out; the owner's final merge goes into it. */
+  /** The target branch (ADR-0025) or, without one, the branch the project had checked out. */
   baseBranch: string;
-  /** Its commit at creation; the ticket branch starts there. */
+  /** The source's commit at creation (the target's, without a source); the branch starts there. */
   baseCommit: string;
+  /** ADR-0025 §10: the branch it started from, only when that is not the target. */
+  sourceBranch?: string;
 }
 
 export interface SealResult {
@@ -137,6 +159,11 @@ export interface TicketMergeResult {
   previousBaseCommit: string;
   /** False when the merged ticket branch could not be deleted afterwards (it is fully merged). */
   branchDeleted: boolean;
+  /**
+   * True when the target was the checked-out branch (its clean tree was fast-forwarded); false
+   * when only its ref moved, by compare-and-swap (ADR-0025).
+   */
+  movedCheckout: boolean;
 }
 
 /** A temporary detached checkout of one commit (checks on the ticket branch tip). */
@@ -175,17 +202,34 @@ export interface WorkspaceManager {
   // ------------------------------------------------------------- ADR-0021 ticket branch
 
   /**
-   * Creates `acp/<KEY>` (or the first free `acp/<KEY>-r<n>`) at the project's current HEAD, with
-   * `branch --no-track`. A name that exists in the repository, or that `isTaken` reports (an open
-   * ticket branch the database knows), is skipped.
+   * Creates the ticket branch (ADR-0025 §4) with `branch --no-track` at its source's tip (§10: the
+   * plan's source, else its target), or at the project's current HEAD when the plan has neither
+   * (a ticket key alone is the legacy plan: `acp/<KEY>`). The first free name is taken (`-r<n>`): a name that exists in the repository, or
+   * that `isTaken` reports (an open ticket branch the database knows), is skipped. A missing
+   * local target is refused (`target-branch-missing`), a missing local source too
+   * (`source-branch-missing`), and so is a name that is a long-lived branch.
    */
   createTicketBranch(
     projectRoot: string,
-    ticketKey: string,
+    plan: string | TicketBranchPlan,
     isTaken?: (branch: string) => boolean,
   ): Promise<CreatedTicketBranch>;
+  /**
+   * Before a run starts (ADR-0025): the plan's target and source exist locally and its first name
+   * is not a long-lived branch. Returns the target and the tip the branch would start at (the
+   * source's); refuses like `createTicketBranch`.
+   */
+  checkTicketBranchPlan(
+    projectRoot: string,
+    plan: TicketBranchPlan,
+  ): Promise<{ target: string; commit: string; sourceBranch?: string }>;
   /** The ticket branch's current tip, or null when the branch does not exist. */
   ticketBranchTip(ref: TicketBranchRef): Promise<string | null>;
+  /**
+   * Before the branch is pushed (ADR-0025): the guard passes and the branch is at `expectedTip`,
+   * the tip the app recorded, so nothing changed outside the app is published.
+   */
+  verifyTicketBranch(ref: TicketBranchRef, expectedTip: string): Promise<void>;
   /**
    * The helper branch's tip when its worktree has nothing unsealed (tracked or untracked), else
    * null: checks recorded for a commit must have run on exactly that commit.
@@ -193,6 +237,27 @@ export interface WorkspaceManager {
   sealedHead(ws: Workspace): Promise<string | null>;
   /** Commits the helper's pending edits (one commit, attributed to the app) and reports the change. */
   seal(ws: Workspace, options?: { role?: string }): Promise<SealResult>;
+  /**
+   * F-1: the worktree's git directories, absolute (`--git-dir`, its private folder under the
+   * repository's `worktrees/`, and `--git-common-dir`, the repository's `.git`), each also as its
+   * real path when that differs. A Full auto helper's sandbox may not write them.
+   */
+  gitDirs(ws: Workspace): Promise<string[]>;
+  /**
+   * F-1: when the helper switched its worktree to another branch (`workspace-branch-changed`),
+   * detaches that worktree's HEAD where it is (`checkout --detach`: no ref moves, files and index
+   * stay), so the other branch is no longer held by it. True when it detached; false when the
+   * worktree is gone, already detached or still on its own branch.
+   */
+  detachForeignBranch(ws: Workspace): Promise<boolean>;
+  /**
+   * F-1, the owner's "Reset to the last reviewed commit": moves the ticket branch from `from` (the
+   * tip the owner saw) back to `recorded` (the app's record) with `update-ref` (compare-and-swap).
+   * Refused when the branch is a long-lived one, is checked out in any worktree (stale entries of
+   * removed worktrees are pruned first), moved again, or `recorded` is gone. A branch already at
+   * `recorded` is left as it is. No other ref is touched.
+   */
+  resetTicketBranch(ref: TicketBranchRef, recorded: string, from: string): Promise<void>;
   /**
    * Merges the ticket branch tip into the sealed helper branch (`merge --no-ff`, in the helper's
    * own worktree). A conflict is aborted and refused with `merge-conflict` and the file names.
@@ -209,15 +274,29 @@ export interface WorkspaceManager {
    * `next` contains `expected` and the branch is not checked out in any worktree.
    */
   advanceTicketBranch(ref: TicketBranchRef, expected: string, next: string): Promise<void>;
+  /**
+   * ADR-0026 §5: the change between two recorded commits (`base...head`), read from the project's
+   * repository after its branches are gone (a merged or discarded ticket branch, a merged change).
+   * Null when git no longer has either commit. Nothing is stored.
+   */
+  diffCommits(
+    projectRoot: string,
+    base: string,
+    head: string,
+    options?: { maxDiffBytes?: number },
+  ): Promise<WorkspaceChanges | null>;
   /** The combined change `base...tip` the owner merges, and whether the base moved. */
   reviewTicketBranch(
     ref: TicketBranchRef & { baseBranch: string },
     options?: { maxDiffBytes?: number },
   ): Promise<TicketBranchReview>;
   /**
-   * The owner's single merge (ADR-0021 §4): the project's tree must be clean and on `baseBranch`,
-   * the ticket branch at `expectedTip`, and the base not moved; then `merge --ff-only` and
-   * `branch -d`.
+   * The owner's single merge (ADR-0021 §4) into the ticket's target (`baseBranch`, ADR-0025): the
+   * ticket branch at `expectedTip` and the target not moved past it (a fast-forward only). When
+   * the target is checked out in the project, its tree must be clean, and `merge --ff-only`
+   * moves it; when it is checked out nowhere, its ref moves by compare-and-swap and no working
+   * tree is touched; checked out in another worktree, it is refused. Then the ticket branch is
+   * deleted.
    */
   mergeTicketBranch(
     ref: TicketBranchRef & { baseBranch: string },
@@ -238,6 +317,24 @@ export interface WorkspaceManager {
   removeCheckout(checkout: CommitCheckout): Promise<void>;
   /** On start: removes every temporary commit checkout (none survives a restart). */
   cleanupCheckouts(): Promise<number>;
+  /**
+   * ADR-0024 §3, the run summary: the files and lines one sealed change brought, read from the
+   * project's repository (no worktree needed). When `headCommit` is the merge the review loop made
+   * of the ticket tip into the helper's branch, the change is what that merge adds to the tip (its
+   * second parent); otherwise it is `baseCommit..headCommit`. Line counts leave binary files out
+   * (null when every changed file is binary). Null when git cannot tell (a commit is gone).
+   */
+  lineCounts(
+    projectRoot: string,
+    baseCommit: string,
+    headCommit: string,
+  ): Promise<LineCounts | null>;
+}
+
+export interface LineCounts {
+  files: number;
+  additions: number | null;
+  deletions: number | null;
 }
 
 export interface WorkspaceManagerDeps {
@@ -378,9 +475,96 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     }
   }
 
-  /** Stages everything in the agent's worktree, so new files show up in the review too. */
+  /** Setup outputs declared by the harness file at a worktree's base commit, by commit. */
+  const baseOutputs = new Map<string, readonly string[]>();
+
+  /**
+   * ADR-0027 §3: the setup steps' `outputs` (relative to the project folder) as paths from the
+   * top of the repository: those the harness file at the worktree's base commit declares, and
+   * those of the owner's checkout (whose setup steps are the ones that ran). Never staged.
+   */
+  async function setupOutputs(w: Workspace): Promise<string[]> {
+    const subdir = relative(w.path, w.cwd).split(sep).join('/');
+    const prefix = subdir === '' ? '' : `${subdir}/`;
+    const key = `${w.repoRoot}\0${w.baseCommit}\0${prefix}`;
+    let fromBase = baseOutputs.get(key);
+    if (fromBase === undefined) {
+      fromBase = setupOutputsOf(
+        await probe(['show', `${w.baseCommit}:${prefix}${HARNESS_MANIFEST_PATH}`], w.path),
+      );
+      baseOutputs.set(key, fromBase);
+    }
+    const owner = setupOutputsOf(
+      await readSmallFile(join(w.repoRoot, ...subdir.split('/'), HARNESS_MANIFEST_PATH)),
+    );
+    return [...new Set([...fromBase, ...owner])].map((o) => `${prefix}${o}`);
+  }
+
+  /**
+   * Stages everything in the agent's worktree, so new files show up in the review too, except the
+   * owner's attachment copies (ADR-0026 §4) and the setup steps' outputs (ADR-0027 §3). Their own
+   * `.gitignore` is not enough: the agent may write in its worktree, so it could delete that file
+   * or stage a copy itself. Outputs are unstaged back to HEAD (never removed from the index), so
+   * a folder the repository already tracks is left as it was.
+   */
   async function stageAll(w: Workspace): Promise<void> {
-    await run(['add', '--all'], w.path);
+    const outputs = await setupOutputs(w);
+    await run(
+      [
+        'add',
+        '--all',
+        '--',
+        ':/',
+        `:(top,exclude)${AGENT_ATTACHMENTS_DIR}`,
+        ...outputPathspecs('', outputs, 'top,exclude'),
+      ],
+      w.path,
+    );
+    await run(
+      [
+        'rm',
+        '-r',
+        '--cached',
+        '--quiet',
+        '--ignore-unmatch',
+        '--',
+        `:(top)${AGENT_ATTACHMENTS_DIR}`,
+      ],
+      w.path,
+    );
+    if (outputs.length > 0) {
+      await run(['reset', '--quiet', '--', ...outputPathspecs('', outputs, 'top')], w.path);
+    }
+  }
+
+  /**
+   * Refuses a branch where any commit since the agent's start touched the attachment copies or a
+   * setup output (the agent committed them itself): removing them later would still leave them in
+   * its history.
+   */
+  async function refuseCommittedCopies(w: Workspace, commit: string): Promise<void> {
+    const listed = await out(
+      ['rev-list', `${w.baseCommit}..${commit}`, '--', `:(top)${AGENT_ATTACHMENTS_DIR}`],
+      w.path,
+    );
+    if (listed.trim() !== '') {
+      throw new WorkspaceError(
+        'invalid-workspace',
+        `The agent's branch contains ${AGENT_ATTACHMENTS_DIR}; attachments are never committed`,
+      );
+    }
+    const outputs = await setupOutputs(w);
+    if (outputs.length === 0) return;
+    const touched = await out(
+      ['rev-list', `${w.baseCommit}..${commit}`, '--', ...outputPathspecs('', outputs, 'top')],
+      w.path,
+    );
+    if (touched.trim() !== '') {
+      throw new WorkspaceError(
+        'invalid-workspace',
+        "The agent's branch contains a setup step's output folder; setup outputs are never committed",
+      );
+    }
   }
 
   async function removeIfEmpty(dir: string): Promise<void> {
@@ -431,10 +615,143 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     return { repoRoot, subdir: relative(repoRoot, project) };
   }
 
-  function assertBranchName(branch: string): void {
-    if (!TicketBranchNameSchema.safeParse(branch).success) {
+  /**
+   * The part of the ticket-branch guard (ADR-0025) that needs no repository: a safe branch name
+   * that is not `main`, `master` or one of `reserved` (the run's target, the strategy's branches).
+   */
+  function assertBranchName(branch: string, reserved: readonly string[] = []): void {
+    if (!GitBranchNameSchema.safeParse(branch).success) {
       throw new WorkspaceError('invalid-ticket-branch', 'Not a ticket branch name');
     }
+    if (ALWAYS_PROTECTED.includes(branch) || reserved.includes(branch)) {
+      throw longLived(branch);
+    }
+  }
+
+  function longLived(branch: string): WorkspaceError {
+    return new WorkspaceError(
+      'invalid-ticket-branch',
+      `${branch} is a long-lived branch, never a ticket branch; the app does not act on it`,
+    );
+  }
+
+  const reservedOf = (ref: TicketBranchRef): string[] => [
+    ref.baseBranch,
+    ...(ref.protectedNames ?? []),
+  ];
+
+  /** The branch the project's own checkout is on, or null when detached. */
+  async function currentBranch(repoRoot: string): Promise<string | null> {
+    const name = await probe(['symbolic-ref', '--quiet', '--short', 'HEAD'], repoRoot);
+    return name === null || name === '' ? null : name;
+  }
+
+  /**
+   * `origin`'s default branch as the repository already knows it (`refs/remotes/origin/HEAD`,
+   * set by `git clone`); null when unknown. Local only: never asks the remote.
+   */
+  async function originDefault(repoRoot: string): Promise<string | null> {
+    const ref = await probe(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], repoRoot);
+    const prefix = 'refs/remotes/origin/';
+    if (ref === null || !ref.startsWith(prefix)) return null;
+    const name = ref.slice(prefix.length);
+    return GitBranchNameSchema.safeParse(name).success ? name : null;
+  }
+
+  /**
+   * The ticket-branch guard (ADR-0025, replacing the `acp/<KEY>`-only rule): the recorded branch
+   * is refused when it is the run's target, `main` or `master`, a strategy branch, `origin`'s
+   * default branch, or (`checkedOut`, for operations that change it) the project's checked-out
+   * branch. The caller holds the repository's lock.
+   */
+  async function guardTicketBranch(
+    repoRoot: string,
+    ref: TicketBranchRef,
+    options: { checkedOut: boolean },
+  ): Promise<void> {
+    assertBranchName(ref.branch, reservedOf(ref));
+    if ((await originDefault(repoRoot)) === ref.branch) throw longLived(ref.branch);
+    if (options.checkedOut && (await currentBranch(repoRoot)) === ref.branch) {
+      throw new WorkspaceError(
+        'ticket-branch-checked-out',
+        `${ref.branch} is checked out in the project; switch away from it first`,
+      );
+    }
+  }
+
+  /**
+   * Where a new ticket branch starts (ADR-0025 §4, §10): the target must exist locally (no fetch:
+   * the app never reaches the remote for this), or the checked-out branch stands for it; the
+   * branch starts at the source's tip when the plan names another branch, else the target's.
+   * Only refs are read: the checkout is never switched.
+   */
+  async function startOf(
+    repoRoot: string,
+    plan: TicketBranchPlan,
+  ): Promise<{ baseBranch: string; baseCommit: string; sourceBranch?: string }> {
+    const target = await targetOf(repoRoot, plan);
+    const source = plan.source;
+    if (source === null || source === target.baseBranch) return target;
+    if (!GitBranchNameSchema.safeParse(source).success) {
+      throw new WorkspaceError('invalid-ticket-branch', 'The source is not a valid branch name');
+    }
+    const tip = await refTip(repoRoot, source);
+    if (tip === null || !FULL_COMMIT.test(tip)) {
+      throw new WorkspaceError(
+        'source-branch-missing',
+        `The branch ${source}, which the ticket branch starts from, does not exist in the project yet`,
+      );
+    }
+    return { baseBranch: target.baseBranch, baseCommit: tip, sourceBranch: source };
+  }
+
+  /** The plan's target and its tip, or the checked-out branch's without one. */
+  async function targetOf(
+    repoRoot: string,
+    plan: TicketBranchPlan,
+  ): Promise<{ baseBranch: string; baseCommit: string }> {
+    if (plan.target === null) {
+      const baseBranch = await currentBranch(repoRoot);
+      if (baseBranch === null || baseBranch.startsWith('-')) {
+        throw new WorkspaceError('detached-head', 'The project has no branch checked out');
+      }
+      const baseCommit = await probe(
+        ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'],
+        repoRoot,
+      );
+      if (baseCommit === null || !FULL_COMMIT.test(baseCommit)) {
+        throw new WorkspaceError('no-commits', 'The project has no commits yet');
+      }
+      return { baseBranch, baseCommit };
+    }
+    const target = plan.target;
+    if (!GitBranchNameSchema.safeParse(target).success) {
+      throw new WorkspaceError('invalid-ticket-branch', 'The target is not a valid branch name');
+    }
+    const tip = await refTip(repoRoot, target);
+    if (tip === null || !FULL_COMMIT.test(tip)) {
+      throw new WorkspaceError(
+        'target-branch-missing',
+        `The target branch ${target} does not exist in the project yet`,
+      );
+    }
+    return { baseBranch: target, baseCommit: tip };
+  }
+
+  /** Every name a new ticket branch must not take (the caller holds the repository's lock). */
+  async function reservedFor(
+    repoRoot: string,
+    plan: TicketBranchPlan,
+    target: string,
+  ): Promise<Set<string>> {
+    const names = new Set([...ALWAYS_PROTECTED, ...plan.protectedNames, target]);
+    // The source is a branch the ticket branch is made from, so it is never the ticket branch.
+    if (plan.source !== null) names.add(plan.source);
+    const current = await currentBranch(repoRoot);
+    if (current !== null) names.add(current);
+    const def = await originDefault(repoRoot);
+    if (def !== null) names.add(def);
+    return names;
   }
 
   function assertCommit(commit: string, what: string): void {
@@ -625,30 +942,16 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       return result;
     },
 
-    async createTicketBranch(projectRoot, ticketKey, isTaken = () => false) {
+    async createTicketBranch(projectRoot, planInput, isTaken = () => false) {
+      const plan = typeof planInput === 'string' ? legacyTicketBranchPlan(planInput) : planInput;
       const { repoRoot } = await repoOf(projectRoot);
       return serial(repoKey(repoRoot), async () => {
-        const baseBranch = await probe(['symbolic-ref', '--quiet', '--short', 'HEAD'], repoRoot);
-        if (baseBranch === null || baseBranch === '' || baseBranch.startsWith('-')) {
-          throw new WorkspaceError('detached-head', 'The project has no branch checked out');
-        }
-        const baseCommit = await probe(
-          ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'],
-          repoRoot,
-        );
-        if (baseCommit === null || !FULL_COMMIT.test(baseCommit)) {
-          throw new WorkspaceError('no-commits', 'The project has no commits yet');
-        }
+        const { baseBranch, baseCommit, sourceBranch } = await startOf(repoRoot, plan);
+        const reserved = await reservedFor(repoRoot, plan, baseBranch);
         for (let attempt = 0; attempt < 100; attempt++) {
-          let branch: string;
-          try {
-            branch = ticketBranchName(ticketKey, attempt);
-          } catch {
-            throw new WorkspaceError(
-              'invalid-ticket-branch',
-              'The ticket key gives no branch name',
-            );
-          }
+          const branch = plan.nameFor(attempt);
+          // A long-lived branch is refused, not skipped: the ticket's own name is wrong.
+          if (reserved.has(branch)) throw longLived(branch);
           // A name in use (any branch, or an open ticket branch of another run) is never reused.
           if (isTaken(branch) || (await refTip(repoRoot, branch)) !== null) continue;
           try {
@@ -659,14 +962,44 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
               `Could not create the ticket branch (${errorName(error)})`,
             );
           }
-          return { branch, baseBranch, baseCommit };
+          return {
+            branch,
+            baseBranch,
+            baseCommit,
+            ...(sourceBranch !== undefined && { sourceBranch }),
+          };
         }
         throw new WorkspaceError('ticket-branch-exists', 'No free ticket branch name was found');
       });
     },
 
+    async checkTicketBranchPlan(projectRoot, plan) {
+      const { repoRoot } = await repoOf(projectRoot);
+      return serial(repoKey(repoRoot), async () => {
+        const { baseBranch, baseCommit, sourceBranch } = await startOf(repoRoot, plan);
+        const reserved = await reservedFor(repoRoot, plan, baseBranch);
+        const first = plan.nameFor(0);
+        if (reserved.has(first)) throw longLived(first);
+        return {
+          target: baseBranch,
+          commit: baseCommit,
+          ...(sourceBranch !== undefined && { sourceBranch }),
+        };
+      });
+    },
+
+    async verifyTicketBranch(ref, expectedTip) {
+      assertBranchName(ref.branch, reservedOf(ref));
+      assertCommit(expectedTip, 'The ticket branch tip');
+      const { repoRoot } = await repoOf(ref.projectRoot);
+      await serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: false });
+        await requireTip(repoRoot, ref.branch, expectedTip);
+      });
+    },
+
     async ticketBranchTip(ref) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       const { repoRoot } = await repoOf(ref.projectRoot);
       return refTip(repoRoot, ref.branch);
     },
@@ -676,8 +1009,18 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       return serial(worktreeKey(w.path), async () => {
         await requireWorktree(w);
         // Untracked files too (`--untracked-files=all`): they would be part of a later seal.
+        // ADR-0027 §3: setup outputs are never sealed, so they do not count as pending either.
+        const outputs = await setupOutputs(w);
         const pending = await out(
-          ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+          [
+            'status',
+            '--porcelain=v1',
+            '-z',
+            '--untracked-files=all',
+            ...(outputs.length === 0
+              ? []
+              : ['--', ':/', ...outputPathspecs('', outputs, 'top,exclude')]),
+          ],
           w.path,
         );
         if (pending !== '') return null;
@@ -704,6 +1047,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
           );
         }
         const headCommit = (await out(['rev-parse', '--verify', 'HEAD^{commit}'], w.path)).trim();
+        await refuseCommittedCopies(w, headCommit);
         const names = await out(
           [...DIFF_BASE, '-z', '--name-only', w.baseCommit, headCommit, '--'],
           w.path,
@@ -711,6 +1055,114 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
         const changedFiles = names.split('\0').filter((n) => n !== '').length;
         return { changed: changedFiles > 0, headCommit, changedFiles };
       });
+    },
+
+    async gitDirs(ws) {
+      const w = await validate(ws);
+      return serial(worktreeKey(w.path), async () => {
+        await requireWorktree(w);
+        const raw = (await out(['rev-parse', '--git-dir', '--git-common-dir'], w.path))
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l !== '');
+        if (raw.length !== 2) {
+          throw new WorkspaceError('git-failed', 'Git did not say where its folders are');
+        }
+        const dirs: string[] = [];
+        for (const dir of raw) {
+          // Relative answers are relative to the worktree folder git ran in.
+          const given = isAbsolute(dir) ? dir : join(w.path, dir);
+          if (!dirs.includes(given)) dirs.push(given);
+          const real = await realpath(given).catch(() => null);
+          if (real !== null && !dirs.includes(real)) dirs.push(real);
+        }
+        return dirs;
+      });
+    },
+
+    async detachForeignBranch(ws) {
+      const w = await validate(ws);
+      return serial(worktreeKey(w.path), async () => {
+        if (!(await exists(w.path))) return false;
+        const head = await probe(['symbolic-ref', '--quiet', 'HEAD'], w.path);
+        if (head === null || head === '' || head === `refs/heads/${w.branch}`) return false;
+        await run(['checkout', '--quiet', '--detach'], w.path);
+        return true;
+      });
+    },
+
+    async resetTicketBranch(ref, recorded, from) {
+      assertBranchName(ref.branch, reservedOf(ref));
+      assertCommit(recorded, 'The last reviewed commit');
+      assertCommit(from, 'The current tip');
+      const { repoRoot } = await repoOf(ref.projectRoot);
+      await serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
+        // Worktrees the app already removed leave entries until pruned; they hold nothing.
+        await probe(['worktree', 'prune'], repoRoot);
+        if (await isCheckedOut(repoRoot, ref.branch)) {
+          throw new WorkspaceError(
+            'ticket-branch-checked-out',
+            `${ref.branch} is checked out in a worktree, so it is not moved; discard the changes whose helpers switched to it first`,
+          );
+        }
+        const tip = await refTip(repoRoot, ref.branch);
+        if (tip === null) {
+          throw new WorkspaceError('ticket-branch-missing', `${ref.branch} no longer exists`);
+        }
+        if (tip === recorded) return;
+        if (tip !== from) {
+          throw new WorkspaceError(
+            'ticket-branch-moved',
+            `${ref.branch} changed again since you looked; look at it once more`,
+          );
+        }
+        if ((await probe(['cat-file', '-e', `${recorded}^{commit}`], repoRoot)) === null) {
+          throw new WorkspaceError(
+            'git-failed',
+            'The last reviewed commit is no longer in the repository',
+          );
+        }
+        try {
+          await run(['update-ref', `refs/heads/${ref.branch}`, recorded, from], repoRoot);
+        } catch {
+          throw new WorkspaceError(
+            'ticket-branch-moved',
+            `${ref.branch} changed again since you looked; look at it once more`,
+          );
+        }
+      });
+    },
+
+    async lineCounts(projectRoot, baseCommit, headCommit) {
+      if (!FULL_COMMIT.test(baseCommit) || !FULL_COMMIT.test(headCommit)) return null;
+      try {
+        const { repoRoot } = await repoOf(projectRoot);
+        const parents = (await out(['rev-list', '--parents', '-n', '1', headCommit], repoRoot))
+          .trim()
+          .split(' ');
+        const tip = parents.length === 3 ? parents[2] : undefined;
+        const fromTip =
+          tip !== undefined &&
+          (await test(['merge-base', '--is-ancestor', baseCommit, tip], repoRoot));
+        const from = fromTip && tip !== undefined ? tip : baseCommit;
+        const numstat = await out(
+          [...DIFF_BASE, '-z', '--numstat', from, headCommit, '--'],
+          repoRoot,
+        );
+        const counts = [...parseNumstat(numstat).values()];
+        const text = counts.filter((c) => c.additions !== null && c.deletions !== null);
+        const sum = (pick: (c: (typeof counts)[number]) => number | null) =>
+          text.length === 0 ? null : text.reduce((n, c) => n + (pick(c) ?? 0), 0);
+        return {
+          files: counts.length,
+          additions: sum((c) => c.additions),
+          deletions: sum((c) => c.deletions),
+        };
+      } catch {
+        // A commit the summary names is gone (or the project moved): the lines are unknown.
+        return null;
+      }
     },
 
     async integrate(ws, ticketTip) {
@@ -763,17 +1215,41 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     },
 
     async advanceTicketBranch(ref, expected, next) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       assertCommit(expected, 'The expected tip');
       assertCommit(next, 'The new tip');
       const { repoRoot } = await repoOf(ref.projectRoot);
-      await serial(repoKey(repoRoot), () => advanceIn(repoRoot, ref.branch, expected, next));
+      await serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
+        await advanceIn(repoRoot, ref.branch, expected, next);
+      });
+    },
+
+    async diffCommits(projectRoot, base, head, options = {}) {
+      assertCommit(base, 'The base commit');
+      assertCommit(head, 'The head commit');
+      const { repoRoot } = await repoOf(projectRoot);
+      return serial(repoKey(repoRoot), async () => {
+        for (const commit of [base, head]) {
+          const known = await test(
+            ['rev-parse', '--verify', '--quiet', `${commit}^{commit}`],
+            repoRoot,
+          );
+          if (!known) return null;
+        }
+        return diffRange(
+          repoRoot,
+          `${base}...${head}`,
+          options.maxDiffBytes ?? DEFAULT_MAX_DIFF_BYTES,
+        );
+      });
     },
 
     async reviewTicketBranch(ref, options = {}) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       const { repoRoot } = await repoOf(ref.projectRoot);
       return serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: false });
         const tip = await refTip(repoRoot, ref.branch);
         if (tip === null) {
           throw new WorkspaceError('ticket-branch-missing', `${ref.branch} no longer exists`);
@@ -793,62 +1269,96 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     },
 
     async mergeTicketBranch(ref, expectedTip) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       assertCommit(expectedTip, 'The ticket branch tip');
       if (ref.baseBranch.startsWith('-')) {
         throw new WorkspaceError('base-branch-changed', 'Not a branch name');
       }
       const { repoRoot } = await repoOf(ref.projectRoot);
       return serial(repoKey(repoRoot), async () => {
-        const dirty = await out(
-          ['status', '--porcelain=v1', '-z', '--untracked-files=no'],
-          repoRoot,
-        );
-        if (dirty !== '') {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
+        const target = ref.baseBranch;
+        // ADR-0025: the owner's tree is touched only when it is on the target (as before).
+        const onTarget = (await currentBranch(repoRoot)) === target;
+        if (!onTarget && (await isCheckedOut(repoRoot, target))) {
           throw new WorkspaceError(
-            'base-dirty',
-            'The project has uncommitted changes; commit or stash them, then merge again',
+            'target-checked-out',
+            `${target} is checked out in another worktree; merge it there or switch that worktree away`,
           );
         }
-        const current = await probe(['symbolic-ref', '--quiet', '--short', 'HEAD'], repoRoot);
-        if (current !== ref.baseBranch) {
-          throw new WorkspaceError(
-            'base-branch-changed',
-            `The project is no longer on ${ref.baseBranch}; switch back to it to merge`,
+        if (onTarget) {
+          const dirty = await out(
+            ['status', '--porcelain=v1', '-z', '--untracked-files=no'],
+            repoRoot,
           );
+          if (dirty !== '') {
+            throw new WorkspaceError(
+              'base-dirty',
+              'The project has uncommitted changes; commit or stash them, then merge again',
+            );
+          }
         }
         await requireTip(repoRoot, ref.branch, expectedTip);
-        const baseHead = (
-          await out(['rev-parse', '--verify', `refs/heads/${ref.baseBranch}^{commit}`], repoRoot)
-        ).trim();
+        const baseHead = await refTip(repoRoot, target);
+        if (baseHead === null) {
+          throw new WorkspaceError('base-branch-changed', `${target} no longer exists`);
+        }
         if (!(await test(['merge-base', '--is-ancestor', baseHead, expectedTip], repoRoot))) {
           throw new WorkspaceError(
             'base-moved',
-            `${ref.baseBranch} has new commits since the ticket branch was made; update it from ${ref.baseBranch} first`,
+            `${target} has new commits since the ticket branch was made; update it from ${target} first`,
           );
         }
-        // Fast-forward only: git itself refuses to overwrite anything in the owner's tree.
-        try {
-          await run(['merge', '--quiet', '--ff-only', expectedTip], repoRoot);
-        } catch (error) {
-          throw new WorkspaceError('merge-failed', `Git refused the merge (${errorName(error)})`);
+        if (onTarget) {
+          // Fast-forward only: git itself refuses to overwrite anything in the owner's tree.
+          try {
+            await run(['merge', '--quiet', '--ff-only', expectedTip], repoRoot);
+          } catch (error) {
+            throw new WorkspaceError('merge-failed', `Git refused the merge (${errorName(error)})`);
+          }
+        } else {
+          // Checked out nowhere: move the ref from the head just read, never anything else.
+          try {
+            await run(
+              [
+                'update-ref',
+                '-m',
+                'acp: merge ticket branch',
+                `refs/heads/${target}`,
+                expectedTip,
+                baseHead,
+              ],
+              repoRoot,
+            );
+          } catch {
+            throw new WorkspaceError('base-moved', `${target} changed while it was being merged`);
+          }
         }
         let branchDeleted = true;
         try {
-          await run(['branch', '-d', ref.branch], repoRoot);
+          // Fully merged now (the target is at its tip). `-d` compares with the checked-out
+          // branch, so a target that is not checked out needs `-D`, after the tip is re-checked.
+          await requireTip(repoRoot, ref.branch, expectedTip);
+          await run(['branch', onTarget ? '-d' : '-D', ref.branch], repoRoot);
         } catch (error) {
           branchDeleted = false;
           logger.log('warn', 'workspace.ticket_branch_delete_failed', errorFields(error));
         }
-        return { commit: expectedTip, previousBaseCommit: baseHead, branchDeleted };
+        return {
+          commit: expectedTip,
+          previousBaseCommit: baseHead,
+          branchDeleted,
+          movedCheckout: onTarget,
+        };
       });
     },
 
     async updateTicketFromBase(ref, expectedTip) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       assertCommit(expectedTip, 'The ticket branch tip');
       const { repoRoot, subdir } = await repoOf(ref.projectRoot);
       return serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
         await requireTip(repoRoot, ref.branch, expectedTip);
         const baseHead = await refTip(repoRoot, ref.baseBranch);
         if (baseHead === null) {
@@ -876,10 +1386,11 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
     },
 
     async discardTicketBranch(ref) {
-      assertBranchName(ref.branch);
+      assertBranchName(ref.branch, reservedOf(ref));
       const { repoRoot } = await repoOf(ref.projectRoot);
       await serial(repoKey(repoRoot), async () => {
         if ((await refTip(repoRoot, ref.branch)) === null) return;
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
         if (await isCheckedOut(repoRoot, ref.branch)) {
           throw new WorkspaceError(
             'ticket-branch-checked-out',
@@ -1085,6 +1596,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       );
     }
     let tip = (await out(['rev-parse', '--verify', 'HEAD^{commit}'], w.path)).trim();
+    await refuseCommittedCopies(w, tip);
     if (await test(['diff', '--quiet', w.baseCommit, tip, '--'], w.path)) {
       return { outcome: 'no-changes' };
     }

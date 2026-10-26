@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Copy,
   Folder,
+  GitMerge,
   Inbox,
   Info,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
   Monitor,
   Moon,
   Plus,
+  ScrollText,
   Search,
   Settings,
   ShieldCheck,
@@ -97,3 +99,7 @@ export const ChoreIcon = icon(Wrench, 'ChoreIcon');
 
 // Shared primitives (Dialog).
 export const CloseIcon = icon(X, 'CloseIcon');
+
+// Ticket comments the app writes itself (v0.3.0, ADR-0024): the run summary and the merge line.
+export const RunSummaryIcon = icon(ScrollText, 'RunSummaryIcon');
+export const MergeIcon = icon(GitMerge, 'MergeIcon');

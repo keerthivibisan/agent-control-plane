@@ -8,28 +8,38 @@ import {
   createHarnessTicket,
   harnessHistoryPaths,
   harnessHistorySchemas,
+  harnessSetupPaths,
+  harnessSetupSchemas,
   isBoardPath,
   isProjectSetupPath,
+  isSetupRunsUnavailable,
   projectSetupPaths,
   projectSetupSchemas,
+  workflowGraphPaths,
+  workflowGraphSchemas,
 } from '../../lib/api';
-import { HARNESS_PAGE_COPY } from '../../lib/copy';
+import { HARNESS_BLOCKS_COPY, HARNESS_PAGE_COPY } from '../../lib/copy';
 import { useApiQuery, useQueryStore } from '../../lib/query';
 import { useSetupAction } from '../project-setup/actions';
 import { ChecksCard } from './ChecksCard';
-import { canRunChecks, offerBuild, pickHarnessTicket } from './logic';
+import { canRunChecks, hasSetup, offerBuild, pickHarnessTicket } from './logic';
 import { useMainCheckRuns } from './main-check-runs';
 import { RunsCard } from './RunsCard';
+import { SetupCard } from './SetupCard';
 import { StatusCard } from './StatusCard';
 import { UsageCard } from './UsageCard';
 
 const C = HARNESS_PAGE_COPY;
+const HB = HARNESS_BLOCKS_COPY.harness;
 
 /**
  * `#/p/:projectId/harness` (docs/redesign/README.md §4.4): does the project have a harness, and
  * does it pass? The status from `GET /projects/:id/harness` (read fresh from the project folder),
  * the checks it lists, "Run checks now" on the main branch with every stored run, the
- * "Build the harness" ticket, and where the checks are used.
+ * "Build the harness" ticket, and where the checks are used. Since ADR-0027 (H-D): the setup
+ * steps with the switch "Setup may use the network" and the latest setup runs on main, each
+ * check's labels and the workflow's Checks blocks that run it, and "Run setup and checks now"
+ * once there is setup.
  */
 export function HarnessPage({ projectId, now }: { projectId: string; now?: () => Date }) {
   const store = useQueryStore();
@@ -41,6 +51,15 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
     harnessHistorySchemas.history,
   );
   const runs = useMainCheckRuns(projectId);
+  const setup = useApiQuery(projectSetupPaths.setup(projectId), projectSetupSchemas.setup).data;
+  const graph = useApiQuery(workflowGraphPaths.graph(projectId), workflowGraphSchemas.graph).data
+    ?.graph;
+  const setupRuns = useApiQuery(
+    harnessSetupPaths.setupRuns(projectId),
+    harnessSetupSchemas.setupRuns,
+  );
+  // A server from before ADR-0027 has no setup runs: none, not an error.
+  const latestSetup = setupRuns.data ?? (isSetupRunsUnavailable(setupRuns.error) ? [] : undefined);
 
   const invalidate = useMemo(() => {
     const setup = isProjectSetupPath(projectId);
@@ -54,9 +73,16 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
 
   const runnable = harness.data !== undefined && canRunChecks(harness.data.state);
   const ticket = pickHarnessTicket(tickets.data, build.result);
+  const withSetup = hasSetup(harness.data);
   const runButton = runnable ? (
-    <Button variant="primary" disabled={runs.running} onClick={() => void runs.start()}>
-      {runs.running ? C.runs.running : C.runs.run}
+    <Button
+      variant="primary"
+      disabled={runs.running}
+      onClick={() => void runs.start()}
+      title={withSetup ? HB.runTip : undefined}
+      data-testid="run-checks-now"
+    >
+      {runs.running ? (withSetup ? HB.running : C.runs.running) : withSetup ? HB.run : C.runs.run}
     </Button>
   ) : undefined;
 
@@ -84,7 +110,18 @@ export function HarnessPage({ projectId, now }: { projectId: string; now?: () =>
                 refreshing={harness.fetching}
                 onRefresh={refresh}
               />
-              {hasChecks ? <ChecksCard className="xl:col-span-2" harness={h} /> : null}
+              {canRun && h.setup !== undefined ? (
+                <SetupCard
+                  className="xl:col-span-3"
+                  projectId={projectId}
+                  harness={h}
+                  setup={setup}
+                  latest={latestSetup}
+                />
+              ) : null}
+              {hasChecks ? (
+                <ChecksCard className="xl:col-span-2" harness={h} graph={graph} />
+              ) : null}
               <UsageCard
                 projectId={projectId}
                 className={hasChecks ? 'xl:col-span-1' : 'xl:col-span-3'}

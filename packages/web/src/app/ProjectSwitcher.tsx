@@ -125,22 +125,22 @@ export function ProjectSwitcher({
           type="button"
           aria-label={C.button(label)}
           data-testid="project-switcher"
-          className="flex h-8 max-w-72 min-w-0 items-center gap-2 rounded-control px-1.5 text-ink transition-colors hover:bg-hover aria-expanded:bg-hover"
+          className="flex h-9 max-w-72 min-w-0 items-center gap-2 rounded-control px-2 text-header-ink transition-colors hover:bg-header-hover aria-expanded:bg-header-hover"
         >
           {onAllProjects || !current ? (
-            <span className="flex size-5 shrink-0 items-center justify-center text-dim">
+            <span className="flex size-5 shrink-0 items-center justify-center text-header-dim">
               <GridIcon size={16} />
             </span>
           ) : (
             <ProjectMark name={current.name} size="sm" />
           )}
-          <span className="min-w-0 truncate font-medium">{label}</span>
+          <span className="min-w-0 truncate font-semibold">{label}</span>
           <ChevronsUpDown
             size={14}
             strokeWidth={1.75}
             aria-hidden="true"
             focusable="false"
-            className="shrink-0 text-dim"
+            className="shrink-0 text-header-dim"
           />
         </button>
       </RadixMenu.Trigger>

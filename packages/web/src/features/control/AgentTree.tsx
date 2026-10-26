@@ -20,7 +20,7 @@ import { budgetView, buildAgentTree, isAgentLive, type AgentNode } from './run-s
 const C = CONTROL_COPY.agents;
 const T = CONTROL_COPY.technical;
 
-// Neutral within the budget (lime marks only what works or is selected); warning and danger
+// Neutral within the budget (the accent marks only what works or is selected); warning and danger
 // only for the real states.
 const BAR: Record<ReturnType<typeof budgetView>['level'], string> = {
   ok: 'bg-dim',
@@ -121,7 +121,7 @@ function AgentCard({
     <article
       aria-label={agent.role}
       data-testid={`agent-${agent.id}`}
-      // Square, the lead framed in ink as the controller, a lime top edge while it works
+      // Square, the lead framed in ink as the controller, an accent top edge while it works
       // (DESIGN.md, "Agent views").
       className={`relative flex max-w-2xl flex-col gap-2.5 rounded-[2px] border bg-panel px-4 py-3 transition-colors ${
         lead ? 'border-ink/70 hover:border-ink' : 'border-line hover:border-line-strong'

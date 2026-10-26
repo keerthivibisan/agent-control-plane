@@ -154,6 +154,11 @@ async function shoot(page: Page, name: string, fullPage = true): Promise<void> {
 }
 
 /** A picture of one element (a card), in both themes at each width. */
+/** One of the ticket page's tabs (v0.3.0 D-B), not the side panel's. */
+function ticketTab(page: Page, name: RegExp) {
+  return page.getByRole('tablist', { name: 'Ticket sections' }).getByRole('tab', { name });
+}
+
 async function shootPart(page: Page, name: string, testId: string): Promise<void> {
   if (SHOTS === undefined) return;
   for (const width of [1440, 390]) {
@@ -217,7 +222,8 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
   await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
   await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
-  await page.getByRole('button', { name: 'Add Final reviewer' }).click();
+  await page.getByTestId('add-block').click();
+  await page.getByRole('menuitem', { name: /^Final reviewer/ }).click();
   await expect(page.getByTestId('block-code-review')).toBeVisible();
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
@@ -264,7 +270,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
       .toBe(true);
     return last as Run;
   };
-  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Auto edits');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Auto edits');
 
   // ---- Plan: two steps, each for a helper. The owner approves; the ticket branch is made.
   const leadAgent = await agentOf(request, (a) => a.kind === 'lead');
@@ -305,6 +311,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   const ui = await agentOf(request, (a) => a.id === uiId);
   await act(request, api.id, 'started');
   await act(request, ui.id, 'started');
+  await ticketTab(page, /Agents/).click();
   await expect(page.getByRole('article', { name: 'API builder' })).toBeVisible();
   const edit = await act(request, api.id, 'ask', {
     toolName: 'Write',
@@ -352,11 +359,16 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await lead(request, reviewUi.id, 'submit_review', { verdict: 'rework', findings: FINDING });
   await act(request, reviewUi.id, 'finish');
   await waitRun((r) => r.changes?.every((c) => c.state === 'decision') === true);
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview.getByTestId('change-state')).toHaveText([
+  await ticketTab(page, /Files changed/).click();
+  // C-D: "Changes from" lists each change with its state.
+  const picker = page.getByTestId('change-picker');
+  const changes = page.getByRole('menu', { name: 'Show changes from' });
+  await picker.click();
+  await expect(changes.getByTestId('change-state')).toHaveText([
     'Needs lead decision',
     'Needs lead decision',
   ]);
+  await page.keyboard.press('Escape');
 
   // ---- The lead merges the API builder's change into the ticket branch. A merge waits for
   // the required checks on the merged commit; the lead tries again once they have run.
@@ -383,7 +395,9 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   const rework = await agentOf(request, (a) => a.id === ui.id && a.rework);
   expect(rework.prompt).toContain(REWORK_NOTE);
   await act(request, rework.id, 'started');
-  await expect(overview.getByTestId('change-state').nth(1)).toHaveText('Rework round 1 of 2');
+  await picker.click();
+  await expect(changes.getByTestId('change-state').nth(1)).toHaveText('Rework round 1 of 2');
+  await page.keyboard.press('Escape');
   await act(request, rework.id, 'write', {
     path: 'discount-field.ts',
     content: 'export const field = "<label>Discount code</label><input>";\n',
@@ -422,10 +436,11 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await waitRun((r) => r.changes?.find((c) => c.role === 'Docs writer')?.state === 'decision');
   await lead(request, leadAgent.id, 'ask_owner', { agentId: docs.id, question: QUESTION });
 
+  await ticketTab(page, /Comments/).click();
   const need = page.getByTestId('changes-need-you');
   await expect(need).toContainText('1 change needs your decision');
-  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'waiting');
   await need.getByRole('button', { name: 'Open' }).click();
+  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'waiting');
   const side = page.getByTestId('side-panel');
   const docsCard = side.getByTestId('change-card');
   await expect(docsCard.getByTestId('change-state')).toHaveAttribute('data-state', 'needs-owner');
@@ -450,20 +465,17 @@ test('the review loop: two helpers, review, rework, an owner override, one final
 
   // The UI builder's card: two rounds; the review agent's finding and the lead's note are both
   // kept (ticket comments), each on its own line; rework ×1.
-  await overview
-    .getByTestId('change-row')
-    .filter({ hasText: 'UI builder' })
-    .getByRole('button', { name: 'Open' })
-    .click();
+  await ticketTab(page, /Files changed/).click();
+  await picker.click();
+  await changes.getByRole('menuitemradio', { name: /UI builder/ }).click();
+  await expect(page.getByTestId('files-change')).toContainText('Rework ×1');
+  await page.getByRole('button', { name: 'Open UI builder in Agents' }).click();
   const uiCard = side.getByTestId('change-card');
   await expect(uiCard.getByTestId('change-history').getByRole('listitem')).toHaveText([
     new RegExp(`Round 1.*Review agent asked for rework.*${FINDING}`),
     new RegExp(`Round 1.*Lead sent it back for rework.*${REWORK_NOTE}`),
     /Round 2.*Review agent approved it · Lead merged it/,
   ]);
-  await expect(overview.getByTestId('change-row').filter({ hasText: 'UI builder' })).toContainText(
-    'Rework ×1',
-  );
 
   // The auto-recorded approvals show their rule.
   // The agent tree's card; the live graph has a button with the same name on the block.
@@ -494,33 +506,46 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await waitRun((r) => r.status === 'REVIEW');
 
   // ---- The owner's single merge: the combined diff, the checks on the tip, Merge into main.
-  const branchCard = page.getByTestId('ticket-branch');
-  await expect(branchCard.getByRole('button', { name: 'Merge into main' })).toBeVisible();
+  // v0.3.0 D-B: the checks on Checks, the combined change on Files changed, the merge on
+  // Comments (C-B).
   await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute(
     'data-state',
     'needs-you',
   );
-  await expect(branchCard.getByTestId('branch-checks')).toContainText('Passed');
-  await expect(branchCard).toContainText('discount-api.ts');
-  await expect(branchCard).toContainText('discount-field.ts');
-  await expect(branchCard).toContainText('docs/discount.md');
-  await expect(branchCard).toContainText('3 changes merged');
-  await branchCard.getByTestId('branch-diff').locator('summary').click();
-  await expect(branchCard.getByTestId('branch-diff')).toContainText(DIFF_MARKER);
-  await shootPart(page, 'ticket-branch', 'ticket-branch');
+  await ticketTab(page, /Checks/).click();
+  await expect(page.getByTestId('branch-checks')).toContainText('Passed');
+  await ticketTab(page, /Files changed/).click();
+  // C-D: all changes, the ticket branch, in the review UI.
+  const branchFiles = page.getByTestId('files-tab');
+  await expect(branchFiles.getByTestId('files-head')).toContainText('3 changes merged');
+  const reviewFiles = branchFiles.getByTestId('review-files');
+  await expect(reviewFiles).toContainText('discount-api.ts');
+  await expect(reviewFiles).toContainText('discount-field.ts');
+  await expect(reviewFiles).toContainText('docs/discount.md');
+  await expect(reviewFiles).toContainText(DIFF_MARKER);
+  await shootPart(page, 'ticket-branch', 'files-tab');
+  await ticketTab(page, /Comments/).click();
+  const branchCard = page.getByTestId('ticket-branch');
+  await expect(branchCard.getByRole('button', { name: 'Merge into main' })).toBeVisible();
   await branchCard.getByRole('button', { name: 'Merge into main' }).click();
   await expect(branchCard.getByTestId('confirm')).toContainText('Merge acp/SHOP-1 into main?');
   await branchCard.getByRole('button', { name: 'Merge', exact: true }).click();
   await expect(branchCard.getByTestId('branch-state')).toHaveText('Merged into main');
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
+  await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
   await expect(page.getByTestId('review-counts')).toHaveText('3 merged');
-  await expect(overview.getByTestId('change-state')).toHaveText([
+  await ticketTab(page, /Files changed/).click();
+  // Merged: the same Files changed, read only.
+  await expect(page.getByTestId('files-state')).toHaveText('Merged');
+  await picker.click();
+  await expect(changes.getByTestId('change-state')).toHaveText([
     'Merged into acp/SHOP-1',
     'Merged into acp/SHOP-1',
     'Merged into acp/SHOP-1',
   ]);
+  await page.keyboard.press('Escape');
   await shoot(page, 'done');
   expect((await run()).status).toBe('COMPLETED');
 
@@ -633,7 +658,7 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
       .toBe(true);
     return last as Run;
   };
-  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Full auto');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Full auto');
 
   // ---- The plan is approved automatically: the run goes on, nothing waits for the owner.
   const leadAgent = await agentOf(
@@ -651,7 +676,9 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   const branched = await waitRun((r) => r.ticketBranch?.state === 'open');
   expect(branched.status).toBe('RUNNING');
   await expect(page.getByTestId('plan-card')).toHaveCount(0);
-  await expect(page.getByTestId('plan-history')).toContainText(
+  // Plan versions are on Conversation (v0.3.0 C-B).
+  await ticketTab(page, /Conversation/).click();
+  await expect(page.getByTestId('timeline-plan')).toContainText(
     'Approved automatically (Full auto)',
   );
   await expect
@@ -673,6 +700,7 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
   expect(denied.pending).toBeUndefined();
   expect(denied.decision).toMatchObject({ allow: false });
   // The agent tree's card; the live graph has a button with the same name on the block.
+  await ticketTab(page, /Agents/).click();
   await page
     .getByRole('button', { name: 'Show the Cart builder in the side panel' })
     .and(page.locator(':not([data-testid="live-agent"])'))
@@ -719,13 +747,16 @@ test('Full auto: plan approved automatically, nothing asks, one final merge', as
 
   // ---- No approval ever waited for the owner; the only click is Merge into main.
   expect((await run()).approvals.filter((a) => a.decidedBy === 'owner')).toEqual([]);
-  await expect(page.getByTestId('approvals')).toHaveCount(0);
-  const branchCard = page.getByTestId('ticket-branch');
   // The checks on the tip run first (RL-B); Merge waits for them.
-  await expect(branchCard.getByTestId('branch-checks')).toContainText('Passed', {
+  await ticketTab(page, /Checks/).click();
+  await expect(page.getByTestId('branch-checks')).toContainText('Passed', {
     timeout: 45_000,
   });
-  await expect(branchCard).toContainText('cart-total.ts');
+  await ticketTab(page, /Files changed/).click();
+  await expect(page.getByTestId('review-files')).toContainText('cart-total.ts');
+  await ticketTab(page, /Comments/).click();
+  await expect(page.getByTestId('approvals')).toHaveCount(0);
+  const branchCard = page.getByTestId('ticket-branch');
   await branchCard.getByRole('button', { name: 'Merge into main' }).click();
   await expect(branchCard.getByTestId('confirm')).toContainText('Merge acp/CART-1 into main?');
   await branchCard.getByRole('button', { name: 'Merge', exact: true }).click();
@@ -807,7 +838,7 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   const first = await ticketOf();
   expect(first.ticket.runOptions).toEqual({ approvalMode: 'manual' });
   expect(first.currentRun?.approvalMode).toBe('manual');
-  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Manual');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Manual');
   const leadAgent = await agentOf(
     request,
     (a) => a.kind === 'lead' && a.prompt.includes('Rename the notes folder'),
@@ -818,10 +849,13 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   const options = page.getByTestId('ticket-run-options');
   await expect(options.getByTestId('run-option-mode')).toHaveText('Manual · This ticket');
   await options.getByRole('button', { name: 'Change run options' }).click();
-  await options
+  // v0.3.0 D-B: the sidebar's Change edits in a dialog.
+  const optionsDialog = page.getByTestId('ticket-run-options-dialog');
+  await optionsDialog
     .getByLabel('Approval mode: at most')
     .selectOption({ label: 'No limit: each block’s own mode' });
-  await options.getByRole('button', { name: 'Save' }).click();
+  await optionsDialog.getByRole('button', { name: 'Save' }).click();
+  await expect(optionsDialog).toHaveCount(0);
   await expect(options.getByTestId('run-option-mode')).toHaveText(
     'No limit: each block’s own mode',
   );
@@ -846,7 +880,7 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
         : null;
     })
     .toBe('full-auto');
-  await expect(page.getByTestId('run-approval-mode')).toHaveText('Approvals: Full auto');
+  await expect(page.getByTestId('run-approval-mode')).toHaveText('Full auto');
   await page.goto(`/#/p/${/#\/p\/([^/]+)\//.exec(page.url())?.[1] ?? ''}/board`);
   await expect(
     page.getByTestId('ticket-card').filter({ hasText: 'NOTES-1' }).getByTestId('card-run-options'),

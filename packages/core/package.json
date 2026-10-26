@@ -1,6 +1,6 @@
 {
   "name": "@acp/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Provider-agnostic domain contracts, schemas, and pure logic for Agent Control Plane.",
   "license": "MIT",

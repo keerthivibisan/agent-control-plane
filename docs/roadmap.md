@@ -3,9 +3,12 @@
 Each phase starts only after the previous phase's acceptance criteria pass. Task-level detail for the
 early phases is in [implementation-plan.md](implementation-plan.md).
 
-**Releases:** v0.0.1 (2026-10-17), v0.1.0 (2026-10-17), and v0.2.0 in preparation: editable
-workflow graphs per project ([docs/workflow-graph/README.md](workflow-graph/README.md), ADR-0023).
-See [CHANGELOG.md](../CHANGELOG.md).
+**Releases:** v0.0.1 (2026-10-17), v0.1.0 (2026-10-17), v0.2.0 (2026-10-21): editable workflow
+graphs per project ([docs/workflow-graph/README.md](workflow-graph/README.md), ADR-0023), and
+v0.3.0 (2026-10-25): GitHub and branching, a pull-request-like ticket page, attachments and agent
+notes, the harness in the workflow, session names and a GitHub-like look
+([docs/v0.3.0/README.md](v0.3.0/README.md), ADR-0024 to ADR-0027). See
+[CHANGELOG.md](../CHANGELOG.md).
 
 | Phase                               | Scope                                                                                                                                                                                                                                                                      | Status                        |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |

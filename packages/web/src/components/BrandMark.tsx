@@ -3,8 +3,8 @@ import { APP_NAME } from '../lib/copy';
 /*
  * The Control Core (README "Brand", docs/brand/): a dominant centre square, four smaller agent
  * nodes at the corners and straight diagonal connectors. The same geometry as the static SVGs in
- * public/brand, drawn here with `currentColor` (graphite on ivory, ivory on graphite: it follows
- * the text color) and the theme's `accent-fill` (signal lime) for the centre, so no color is
+ * public/brand, drawn here with `currentColor` (it follows the text color: white on the dark top
+ * bar) and the theme's `accent-fill` (the accent blue) for the centre, so no color is
  * hard-coded and both themes work.
  *
  * Two constructions, as in the static files: the master on a 48 grid for 20px and up, and a
@@ -49,7 +49,7 @@ export function BrandMark({
   size?: number;
   /** The accessible name when the mark stands alone; without it the mark is decorative. */
   label?: string;
-  /** `accent`: a signal-lime centre. `mono`: one color (`currentColor`). */
+  /** `accent`: an accent-blue centre. `mono`: one color (`currentColor`). */
   tone?: 'accent' | 'mono';
   className?: string;
 }) {
@@ -70,7 +70,7 @@ export function BrandMark({
       <path d={g.lines} fill="none" stroke="currentColor" strokeWidth={w} />
       <path d={g.nodes} fill="currentColor" />
       {tone === 'accent' ? (
-        // Framed in the mark's own color, so the lime centre stays a square on ivory too.
+        // Framed in the mark's own color, so the centre stays a crisp square on any surface.
         <rect
           x={x + w / 2}
           y={y + w / 2}
@@ -88,19 +88,36 @@ export function BrandMark({
 }
 
 /**
- * The mark with the wordmark: the app name, set uppercase in semibold Inter with open tracking
+ * The mark with the wordmark: the app name, set uppercase in the semibold system font with open tracking
  * (CSS only, so the text stays "Agent Control Plane" for screen readers and tests). `hideName`
- * keeps the name for screen readers only (the sidebar's icon rail).
+ * keeps the name for screen readers only (the sidebar's icon rail). `shortName` (the top bar's
+ * "ACP", v0.3.0 C-S) shows instead of the full name, which stays for screen readers.
  */
 export function BrandLogo({
   size = 24,
   hideName = false,
+  shortName,
   className = '',
 }: {
   size?: number;
   hideName?: boolean;
+  shortName?: string;
   className?: string;
 }) {
+  if (shortName !== undefined && !hideName) {
+    return (
+      <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
+        <BrandMark size={size} />
+        <span
+          aria-hidden="true"
+          className="text-title leading-none font-semibold tracking-[0.04em] whitespace-nowrap"
+        >
+          {shortName}
+        </span>
+        <span className="sr-only">{APP_NAME}</span>
+      </span>
+    );
+  }
   return (
     <span className={`flex min-w-0 items-center gap-2.5 ${className}`}>
       <BrandMark size={size} />

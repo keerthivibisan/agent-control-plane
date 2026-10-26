@@ -1,21 +1,22 @@
 import { fileURLToPath } from 'node:url';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-  LOOP_PROJECT_GRAPH_PATH,
-  LOOP_PROJECT_WORKFLOW_PATH,
-  LOOP_TICKET_ID,
-  PROJECT_ID,
-  loopWorkingScenario,
-} from './review-loop-fixtures.js';
+  CODE_HOST_PATH,
+  PROJECT_SETUP_PATH,
+  codeHost,
+  ghReviewScenario,
+  githubFlowStrategy,
+} from './github-fixtures.js';
+import { CSRF, L_API, LOOP_TICKET_ID, PROJECT_ID } from './review-loop-fixtures.js';
+import {
+  demoApi,
+  withBoard,
+  withFixtureProject,
+  withLoopRun,
+  withWorkflow,
+} from './shot-fixtures.js';
 import { fixtureProject } from './ticket-fixtures.js';
-import {
-  WF_CSRF,
-  agentFilesFixture,
-  customGraph,
-  graphDto,
-  setupFixture,
-  workflowFixture,
-} from './workflow-fixtures.js';
+import { WF_CSRF, agentFilesFixture, setupFixture } from './workflow-fixtures.js';
 
 /*
  * The README screenshots, saved to docs/images/. Runs only with ACP_README_SHOTS set and the
@@ -36,19 +37,6 @@ test.skip(SHOTS === undefined, 'README screenshots: set ACP_README_SHOTS=1');
 test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
-
-interface Project {
-  id: string;
-  name: string;
-}
-
-async function demoApi(request: APIRequestContext): Promise<Project> {
-  const res = await request.get('/api/projects');
-  expect(res.ok()).toBe(true);
-  const project = ((await res.json()) as Project[]).find((p) => p.name === 'demo-api');
-  if (project === undefined) throw new Error('demo-api project missing');
-  return project;
-}
 
 interface ShotOptions {
   scheme?: 'light' | 'dark';
@@ -74,143 +62,31 @@ async function shoot(page: Page, name: string, o: ShotOptions = {}): Promise<voi
   await page.screenshot({ path: `${OUT}${name}.png` });
 }
 
-/** The synthetic `web-app` project, listed next to the demo server's own. */
-async function withFixtureProject(page: Page): Promise<void> {
-  await page.route(/\/api\/projects$/, async (route) => {
-    const real = (await (await route.fetch()).json()) as unknown[];
-    await route.fulfill({ json: [...real, fixtureProject()] });
-  });
-}
-
-/** A synthetic board card (invented titles and labels). */
-function card(n: number, stage: string, over: Record<string, unknown> = {}) {
-  const status: Record<string, string> = {
-    BACKLOG: 'BACKLOG',
-    READY: 'READY',
-    WORKING: 'ACTIVE',
-    NEEDS_YOU: 'ACTIVE',
-    IN_REVIEW: 'ACTIVE',
-    DONE: 'DONE',
-  };
-  const active = status[stage] === 'ACTIVE';
-  return {
-    id: `t-readme-${n}`,
-    projectId: PROJECT_ID,
-    key: `WEB-${n}`,
-    title: `Ticket ${n}`,
-    description: 'Sample ticket.',
-    type: 'feature',
-    priority: 'medium',
-    labels: [],
-    status: status[stage],
-    currentRunId: active ? `run-readme-${n}` : null,
-    createdAt: T(n),
-    updatedAt: T(n + 10),
-    stage,
-    activeHelpers: active ? 2 : 0,
-    budgetTokensUsed: active ? 48_200 + n * 1_350 : null,
-    needsYou: stage === 'NEEDS_YOU' ? 1 : 0,
-    latestEstimatedCost: active ? { provenance: 'estimated', value: 0.18 + n / 100 } : null,
-    lastActivityAt: active ? T(n + 12) : null,
-    lastRunOutcome: null,
-    ...over,
-  };
-}
-
-/** The web-app board: the demo server's board shape with synthetic tickets in its columns. */
-async function withBoard(page: Page, demoId: string): Promise<void> {
-  await page.route(`**/api/board?projectId=${PROJECT_ID}`, async (route) => {
-    const url = new URL(route.request().url());
-    url.searchParams.set('projectId', demoId);
-    const real = (await (await route.fetch({ url: url.toString() })).json()) as Record<
-      string,
-      unknown
-    >;
-    const cards = [
-      card(30, 'BACKLOG', { title: 'Export tickets as CSV', type: 'feature', priority: 'low' }),
-      card(31, 'BACKLOG', { title: 'Document the search API', type: 'chore' }),
-      card(27, 'READY', { title: 'Retry failed webhooks', type: 'bug', priority: 'high' }),
-      card(28, 'READY', { title: 'Keyboard shortcuts for the board', labels: ['ui'] }),
-      card(21, 'WORKING', {
-        id: LOOP_TICKET_ID,
-        title: 'Saved searches',
-        priority: 'high',
-        labels: ['search'],
-      }),
-      card(24, 'WORKING', { title: 'Rate limit the public API', priority: 'urgent' }),
-      card(19, 'NEEDS_YOU', { title: 'Rotate the signing keys', labels: ['security'] }),
-      card(17, 'IN_REVIEW', { title: 'Paginate the activity feed', labels: ['api'] }),
-      card(12, 'DONE', { title: 'Dark mode toggle', labels: ['ui', 'settings'] }),
-      card(9, 'DONE', { title: 'Build the harness', type: 'harness' }),
-    ];
-    const stages = ['BACKLOG', 'READY', 'WORKING', 'NEEDS_YOU', 'IN_REVIEW', 'DONE'];
-    await route.fulfill({
+/**
+ * The synthetic project's setup with a GitHub flow strategy and a connected GitHub (`gh` ready),
+ * as github.spec.ts serves it: demo mode has no setup or code host of its own.
+ */
+async function withGitHub(page: Page): Promise<void> {
+  await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: CSRF } }));
+  await page.route(`**${PROJECT_SETUP_PATH}`, (route) =>
+    route.fulfill({ json: { ...setupFixture(), branching: githubFlowStrategy() } }),
+  );
+  await page.route(`**${CODE_HOST_PATH}`, (route) => route.fulfill({ json: codeHost('ready') }));
+  // The project's local branches (GET only: the pictures never create one).
+  const names = ['develop', 'feature/WEB-21-saved-searches', 'main'];
+  await page.route(`**/api/projects/${PROJECT_ID}/branches`, (route) =>
+    route.fulfill({
       json: {
-        ...real,
-        project: { ...(real['project'] as object), ...fixtureProject() },
-        projectKey: 'WEB',
-        stats: { ...(real['stats'] as object), runningRuns: 3, needsYou: 1 },
-        columns: stages.map((stage) => ({
-          stage,
-          tickets: cards.filter((c) => c.stage === stage),
+        current: 'main',
+        hasOrigin: true,
+        truncated: false,
+        branches: names.map((name, i) => ({
+          name,
+          commit: String(i + 1).repeat(40),
+          current: name === 'main',
+          onOrigin: name !== 'develop',
         })),
       },
-    });
-  });
-}
-
-/** The review-loop run's ticket, run, review and workflow routes, from the synthetic fixtures. */
-async function withLoopRun(page: Page): Promise<void> {
-  const scenario = loopWorkingScenario();
-  await page.route(`**${LOOP_PROJECT_WORKFLOW_PATH}`, (route) =>
-    route.fulfill({ json: scenario.routes[LOOP_PROJECT_WORKFLOW_PATH] }),
-  );
-  await page.route(`**${LOOP_PROJECT_GRAPH_PATH}`, (route) =>
-    route.fulfill({ json: scenario.routes[LOOP_PROJECT_GRAPH_PATH] }),
-  );
-  await page.route(/\/api\/(tickets|runs|control)\//, async (route) => {
-    const body = scenario.routes[new URL(route.request().url()).pathname];
-    await (body === undefined
-      ? route.fulfill({
-          status: 404,
-          json: { error: { code: 'not_found', message: 'no fixture', requestId: 'e2e' } },
-        })
-      : route.fulfill({ json: body }));
-  });
-}
-
-/** A workflow with every stage on: a separate planner, the review agent, code review and tests. */
-async function withWorkflow(page: Page): Promise<void> {
-  const dto = {
-    workflow: workflowFixture({
-      plannerMode: 'separate',
-      plan: { skill: 'plan-tickets' },
-      helpers: { agent: 'db-migrator' },
-      codeReview: { enabled: true, skill: 'code-review' },
-      unitTests: { enabled: true, skill: 'unit-tests' },
-    }),
-    setup: setupFixture({ model: 'claude-sonnet-4' }),
-    skills: ['code-review', 'plan-tickets', 'unit-tests'],
-  };
-  await page.route('**/api/control/token', (route) => route.fulfill({ json: { token: WF_CSRF } }));
-  await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) =>
-    route.fulfill({ json: dto }),
-  );
-  await page.route(`**/api/projects/${PROJECT_ID}/agents`, (route) =>
-    route.fulfill({ json: agentFilesFixture() }),
-  );
-  // ADR-0023: the Workflow page is the graph editor, so it reads the project's graph. The
-  // hand-built sample graph (planner, a named helper, the pool with a change reviewer that sends
-  // changes back, a tester) with every skill and agent file it names, so it shows no warnings.
-  await page.route(`**/api/projects/${PROJECT_ID}/workflow-graph`, (route) =>
-    route.fulfill({
-      json: graphDto({
-        graph: customGraph(),
-        stored: 'v2',
-        skills: ['code-review', 'plan-tickets', 'release-notes', 'unit-tests'],
-        agents: ['db-migrator', 'docs-writer', 'test-writer'],
-        updatedAt: '2026-10-21T09:00:00.000Z',
-      }),
     }),
   );
 }
@@ -378,12 +254,11 @@ test('readme: the board', async ({ page, request }) => {
 test('readme: a ticket with a live run and its review loop', async ({ page }) => {
   await withFixtureProject(page);
   await withLoopRun(page);
-  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  // The reworked change on Files changed (C-D), opened in the Agents tab: its card shows the
+  // review agent's findings in the side panel.
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files&change=${L_API}`);
   await expect(h1(page)).toContainText('Saved searches');
-  const overview = page.getByTestId('changes-overview');
-  await expect(overview).toBeVisible();
-  // Open the reworked change: its card shows the review agent's findings in the side panel.
-  await overview.getByTestId('change-row').first().getByRole('button', { name: 'Open' }).click();
+  await page.getByRole('button', { name: 'Open API builder in Agents' }).click();
   await expect(page.getByTestId('side-panel').getByTestId('change-finding')).toBeVisible();
   // The agent tree, the open change card and the changes list, under the run's workflow.
   const agents = page.getByTestId('agent-canvas');
@@ -427,4 +302,60 @@ test('readme: skills and agent files', async ({ page }) => {
   await expect(h1(page)).toContainText('Skills & Agents');
   await expect(page.getByText('plan-tickets').first()).toBeVisible();
   await shoot(page, 'skills');
+});
+
+test('readme: the ticket page, ready for the final step', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-comments')).toHaveAttribute('aria-selected', 'true');
+  await shoot(page, 'ticket');
+  await shoot(page, 'ticket-dark', { scheme: 'dark' });
+});
+
+test('readme: Files changed, the review', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=files`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-files')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('src/search/api.ts').first()).toBeVisible();
+  await shoot(page, 'files-changed');
+  await shoot(page, 'files-changed-dark', { scheme: 'dark' });
+});
+
+test('readme: Conversation', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await withLoopRun(page, ghReviewScenario());
+  await page.goto(`/#/p/${PROJECT_ID}/tickets/${LOOP_TICKET_ID}?tab=conversation`);
+  await expect(h1(page)).toContainText('Saved searches');
+  await expect(page.getByTestId('ticket-tab-conversation')).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await shoot(page, 'conversation');
+});
+
+test('readme: project settings with GitHub and branching', async ({ page }) => {
+  await withFixtureProject(page);
+  await withGitHub(page);
+  await page.route(`**/api/projects/${PROJECT_ID}`, (route) =>
+    route.fulfill({ json: fixtureProject() }),
+  );
+  await page.route(`**/api/projects/${PROJECT_ID}/context-candidates`, (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.goto(`/#/p/${PROJECT_ID}/settings`);
+  await expect(h1(page)).toContainText('Settings');
+  await expect(
+    page.getByTestId('settings-code-host').getByTestId('code-host-message'),
+  ).toBeVisible();
+  await expect(page.getByTestId('branches-list').getByText('develop')).toBeVisible();
+  const branching = page.getByTestId('settings-branching');
+  await expect(branching).toBeVisible();
+  await shoot(page, 'settings-github', { scrollTo: branching, height: 1300 });
 });
