@@ -1,4 +1,5 @@
 import {
+  NO_CHECKS_MESSAGE,
   WorkflowGraphSchema,
   canConnect,
   validateWorkflowGraph,
@@ -175,6 +176,14 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
     expect(removed.edges.some(isDirect)).toBe(
       canConnect(unlinked, 'orchestrate', 'ticket-merge', 'merge').ok,
     );
+    // ADR-0028 §2: without a merge block the lead merges straight into the ticket branch, and the
+    // graph saves with one warning and no error.
+    expect(removed.edges.filter(isDirect).map((e) => e.type)).toEqual(['merge']);
+    const after = validateWorkflowGraph(removed);
+    expect(after.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(after.filter((i) => i.code === 'no-checks')).toEqual([
+      { code: 'no-checks', severity: 'warning', message: NO_CHECKS_MESSAGE },
+    ]);
 
     const back = run(removed, { type: 'add-checks', place: 'merge' });
     const id = back.selection?.id ?? '';
@@ -197,12 +206,14 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
         .filter((i) => i.severity === 'error')
         .map((i) => i.code);
     expect(errors(back.graph)).toEqual(errors(g));
+    expect(errors(back.graph)).toEqual([]);
+    expect(validateWorkflowGraph(back.graph).some((i) => i.code === 'no-checks')).toBe(false);
     // Only one block before the merge.
     expect(run(back.graph, { type: 'add-checks', place: 'merge' }).graph).toBe(back.graph);
   });
 
   it('Add block → Checks offers the three places; the merge block’s panel can remove it', async () => {
-    render(graphDto({ graph: customGraph(), stored: 'v2' }));
+    const { server: s } = render(graphDto({ graph: customGraph(), stored: 'v2' }));
     await screen.findByTestId('graph-editor');
     fireEvent.click(screen.getByTestId('add-block'));
     const merge = screen.getByTestId('palette-checks-merge');
@@ -229,19 +240,32 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
     fireEvent.click(within(panel()).getByRole('button', { name: 'Remove block' }));
     expect(screen.queryByTestId('block-checks')).toBeNull();
     expect(screen.getByTestId('unsaved')).toBeTruthy();
+    // A warning, not an error: Save stays enabled, and the lead merges straight in.
+    expect(screen.getByTestId('problems-button').dataset['errors']).toBe('0');
+    fireEvent.click(screen.getByTestId('problems-button'));
+    expect(screen.getByTestId('issues-warnings').textContent).toContain(NO_CHECKS_MESSAGE);
+    fireEvent.click(screen.getByTestId('save-workflow'));
+    await screen.findByTestId('saved');
+    const put = s.calls.find((c) => c.method === 'PUT' && c.path === GRAPH);
+    const saved = graphOf((put?.body as { graph: unknown }).graph);
+    expect(saved.nodes.some((n) => n.type === 'checks')).toBe(false);
+    expect(
+      saved.edges.filter((e) => e.from === 'orchestrate' && e.to === 'ticket-merge'),
+    ).toMatchObject([{ type: 'merge' }]);
+    expect(validateWorkflowGraph(saved).filter((i) => i.severity === 'error')).toEqual([]);
   });
 
   it('the Problems list shows a warning, not an error, and saving is not blocked by it', () => {
     const warning: EditorIssue = {
       code: 'no-checks',
       severity: 'warning',
-      message: 'No checks: changes merge after review only.',
+      message: NO_CHECKS_MESSAGE,
     };
     expect(hasErrors([warning])).toBe(false);
     rtlRender(<IssuesList issues={[warning]} serverIssues={null} onFocus={() => undefined} />);
     const group = screen.getByTestId('issues-warnings');
     expect(group.textContent).toContain('Warnings (you can still save)');
-    expect(group.textContent).toContain('No checks: changes merge after review only.');
+    expect(group.textContent).toContain(NO_CHECKS_MESSAGE);
     expect(screen.queryByTestId('issues-errors')).toBeNull();
   });
 });

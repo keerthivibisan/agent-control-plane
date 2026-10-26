@@ -17,8 +17,8 @@ import {
  * block and an effort chip on the ticket page's live run graph. With ACP_SCREENSHOT_DIR set, it
  * saves light and dark screenshots at 1440 pixels wide.
  *
- * Removing the last Checks block is a warning, not an error, once core's validation makes Checks
- * blocks optional (ADR-0028 §2, P-A); this spec checks the editor against that rule.
+ * Removing the last Checks block is a warning, not an error (ADR-0028 §2, core's `no-checks`), and
+ * the lead then merges straight into the ticket branch.
  */
 
 const SHOTS = process.env.ACP_SCREENSHOT_DIR;

@@ -6,10 +6,10 @@
 > Finish block"). Web only: the effort select, removable Checks blocks with plain words and the
 > warning, the Finish block in the editor and the live graph.
 
-| Field  | Value                                           |
-| ------ | ----------------------------------------------- |
-| Status | review                                          |
-| Branch | `wp/p-b-web`, from `release/0.3.1` at `5994a8d` |
+| Field  | Value                                                                           |
+| ------ | ------------------------------------------------------------------------------- |
+| Status | review                                                                          |
+| Branch | `wp/p-b-web`, on `wp/p-a-core` at `b2570f2` (from `release/0.3.1` at `5994a8d`) |
 
 ## Done
 
@@ -48,16 +48,15 @@ ticket-merge`, only when both links are allowed). Plain names and texts per plac
 - Live Finish state: Done once `done` is done; else your merge's state when not waiting/off; else
   failed when the ticket merge failed; else waiting.
 
-## Waiting on P-A
+## Against P-A's rules
 
-- Under the current core rules removing the merge block is an error (`missing-node`), so the e2e
-  editor test `effort-finish.spec.ts` › "the editor: …" fails at "data-errors 0" until P-A's
-  validation lands. It passed against a local, uncommitted emulation of the planned rules (checks
-  `minPerGraph` 0, a `no-checks` warning, `merge` lead → ticket-merge). Its "lead → Finish is
-  invalid" check in `workflow.spec.ts` assumes P-A allows `lead → ticket-merge` only without a
-  merge block.
-- If P-A wires "no merge block" differently from a `merge` edge lead → ticket-merge, only
-  `rejoinLeadMerge`/`insertMergeBlock` in `editor/state.ts` need to follow.
+- Built and tested on top of `wp/p-a-core` (`b2570f2`), with the coordinator's leave: the branch
+  is `wp/p-b-web` rebased onto it, to be rebased onto `release/0.3.1` once P-A is merged there.
+- Core's rules as P-A made them: with a merge block the lead merges through it; without one the
+  lead's `merge` edge goes straight to `ticket-merge`; a graph with no Checks block has the
+  `no-checks` warning (`NO_CHECKS_MESSAGE`). The editor follows them only through `canConnect`
+  (`rejoinLeadMerge`, `insertMergeBlock` in `editor/state.ts`); tested both ways (removed: no
+  error, one `no-checks` warning, a direct `merge` edge; added back: no error, no warning).
 
 ## Tests
 
@@ -73,3 +72,5 @@ ticket-merge`, only when both links are allowed). Plain names and texts per plac
 - 2026-10-26: claimed; effort, optional Checks blocks and the Finish block in the editor and the
   live graph (checkpoint 1).
 - 2026-10-26: unit tests; e2e spec and fixes to existing specs; DESIGN.md; status review.
+- 2026-10-26: rebased onto `wp/p-a-core`; tests against the real rules (direct merge edge, the
+  `no-checks` warning); e2e workflow, harness-blocks, ticket, effort-finish all pass.
