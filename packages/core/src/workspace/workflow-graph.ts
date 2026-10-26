@@ -76,10 +76,20 @@ const NodeBase = {
  * can only narrow the node's tools (ADR-0019 amendment). There is no free-text prompt: extra
  * instructions go in the agent file.
  */
+/**
+ * How much reasoning an agent applies (ADR-0028 §1; the Agent SDK's `effort`). Absent: the model's
+ * default. Models without effort support ignore it.
+ */
+export const AgentEffortSchema = z.enum(['low', 'medium', 'high']);
+export type AgentEffort = z.infer<typeof AgentEffortSchema>;
+export const AGENT_EFFORTS = AgentEffortSchema.options;
+
 const AgentConfig = {
   model: z.string().trim().min(1).max(100).nullable(),
   skills: z.array(SkillNameSchema).max(MAX_NODE_SKILLS),
   agent: SkillNameSchema.nullable(),
+  /** ADR-0028 §1. Absent on graphs saved before it: the model's default. */
+  effort: AgentEffortSchema.optional(),
 };
 
 /**
@@ -491,6 +501,8 @@ export interface ProgramAgentNode {
   model: string | null;
   skills: readonly z.infer<typeof SkillNameSchema>[];
   agent: z.infer<typeof SkillNameSchema> | null;
+  /** ADR-0028 §1: absent means the model's default. */
+  effort?: AgentEffort;
 }
 
 export interface ProgramHelperNode extends ProgramAgentNode {
