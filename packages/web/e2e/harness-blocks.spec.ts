@@ -155,7 +155,7 @@ test('the Checks block panel: the merge block, picks, failure routes, new blocks
   // (ADR-0028 §2: every Checks block is optional).
   const merge = page.getByTestId('block-checks');
   await expect(merge.getByTestId('checks-kind')).toHaveText('Checks before merge');
-  await expect(merge.getByTestId('checks-select')).toHaveText('Runs: Required');
+  await expect(merge.getByTestId('checks-select')).toHaveText('Runs: Required checks');
   await merge.click();
   const p = panel(page);
   await expect(p.getByTestId('check-place')).toHaveAttribute('data-place', 'merge');
