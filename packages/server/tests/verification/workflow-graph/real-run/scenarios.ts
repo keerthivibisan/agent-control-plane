@@ -9,10 +9,10 @@ import type { StartTicketRequest } from '@acp/core/api';
 import type { AutopilotScript } from '../autopilot.js';
 
 /*
- * The four WG-V real-run scenarios (docs/workflow-graph/RESUME.md Step 4; README "every review
- * scenario must be expressible"), vitest-free. Each one is a project mode, a stored graph, the
- * ticket the owner writes, the run's own options at Start and, for `--dry-run` only, the script
- * the fake agents follow. Every text is synthetic; the repositories are throwaway.
+ * The four WG-V real-run scenarios (docs/workflow-graph/RESUME.md at tag v0.3.0, Step 4; README
+ * "every review scenario must be expressible"), vitest-free. Each one is a project mode, a stored
+ * graph, the ticket the owner writes, the run's own options at Start and, for `--dry-run` only, the
+ * script the fake agents follow. Every text is synthetic; the repositories are throwaway.
  *
  * Node ids follow core's templates: `orchestrate` is the lead, `helpers` the pool, `review` the
  * change reviewer, `unit-tests` the tester.

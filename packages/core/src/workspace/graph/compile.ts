@@ -58,6 +58,8 @@ function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
     model: node.model,
     skills: [...node.skills],
     agent: node.agent,
+    // ADR-0028 §1: copied only when set, so a block without one compiles as before.
+    ...(node.effort !== undefined ? { effort: node.effort } : {}),
   };
 }
 
@@ -84,7 +86,9 @@ function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
  *   node, the change block it flows into. Settings default as `checkBlockOf` says. A change
  *   block's `maxRounds` is its rework edge's rounds to that node with "back to the helper" (null
  *   otherwise); `ctx.maxReworkRounds` is the review's setting and does not replace it.
- *   An old graph compiles to `{ merge: { required, lead }, branch: null, change: {} }`.
+ *   An old graph compiles to `{ merge: { required, lead }, branch: null, change: {} }`; a graph
+ *   without a block before the merge (ADR-0028 §2) has `merge: null`.
+ * - Agent nodes carry their `effort` only when it is set (ADR-0028 §1).
  */
 export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): WorkflowProgram {
   const errors = validateWorkflowGraph(graph, {
@@ -192,9 +196,9 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
     .filter((n) => usedReviewers.has(n.id))
     .map(agentNode);
 
-  const mergeNode = must(
-    graph.nodes.find((n): n is WorkflowNodeOf<'checks'> => isCheckBlockAt(n, 'merge')),
-    'the Checks block before the merge',
+  // ADR-0028 §2: optional; the validator allows at most one.
+  const mergeNode = graph.nodes.find((n): n is WorkflowNodeOf<'checks'> =>
+    isCheckBlockAt(n, 'merge'),
   );
   const change: Record<WorkflowNodeId, ProgramChangeCheckBlock> = Object.create(null) as Record<
     WorkflowNodeId,
@@ -231,7 +235,7 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
     finalStages,
     nodeModes,
     checkBlocks: {
-      merge: { ...programBlock(mergeNode), place: 'merge' },
+      merge: mergeNode === undefined ? null : { ...programBlock(mergeNode), place: 'merge' },
       branch: branchBlock,
       change,
     },

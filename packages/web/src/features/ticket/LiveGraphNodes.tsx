@@ -4,7 +4,13 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
 import { CheckIcon, TicketIcon } from '../../components/icons';
 import { Tooltip } from '../../components/Tooltip';
-import { AGENT_STATUS_COPY, REVIEW_LOOP_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
+import {
+  AGENT_STATUS_COPY,
+  EFFORT_COPY,
+  FINISH_COPY,
+  REVIEW_LOOP_COPY,
+  WORKFLOW_LIVE_COPY,
+} from '../../lib/copy';
 import { isAgentLive } from '../control/run-state';
 import {
   AgentFileIcon,
@@ -254,6 +260,17 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
           </span>
         </p>
         <div className="flex h-5 min-w-0 items-center gap-1 overflow-hidden">
+          {node.effort !== undefined ? (
+            <Tooltip content={EFFORT_COPY.chipTip} focusable={false} className="shrink-0">
+              <span
+                className={`${TAG} border-line-strong bg-panel text-ink`}
+                data-testid="live-effort"
+                data-effort={node.effort}
+              >
+                {EFFORT_COPY.chip(node.effort)}
+              </span>
+            </Tooltip>
+          ) : null}
           {node.agent !== null ? (
             <span className={`${TAG} border-line-strong bg-sunken text-ink`}>
               <AgentFileIcon size={12} className="shrink-0 text-accent" />
@@ -373,5 +390,61 @@ export function LiveGateBlock({ data }: NodeProps<LiveBlock>) {
   );
 }
 
+/**
+ * The Finish block (ADR-0028 §3): the ticket merge, your merge and Done as one block, "Merge into
+ * <target> or open a pull request", with the run's real target. It waits for you once every
+ * change is in, and turns green with a Done tick at the end.
+ */
+export function LiveFinishBlock({ data }: NodeProps<LiveBlock>) {
+  const { node, state } = data;
+  const done = state === 'done';
+  const text = FINISH_COPY.text(data.target);
+  return (
+    <StateFrame
+      state={state}
+      testId={`live-block-${node.id}`}
+      word={state === 'active' || state === 'needs-you' || state === 'failed'}
+      ring={done ? DONE_RING : STATE_RING[state]}
+    >
+      <div
+        className="relative flex h-full w-full flex-col justify-center gap-0.5 rounded-[2px] border border-line-strong bg-sunken px-3 py-2 text-ink"
+        data-testid={`live-node-${node.id}`}
+        data-kind="finish"
+      >
+        <Handles />
+        <Eyebrow
+          icon={<YouIcon size={13} className="shrink-0" />}
+          left={FINISH_COPY.kind}
+          accent
+          right={
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 text-caption font-medium normal-case ${
+                done ? 'text-success' : 'text-dim'
+              }`}
+              data-testid="live-finish-done"
+              data-done={done ? 'true' : 'false'}
+            >
+              <DoneIcon size={13} className="shrink-0 text-success" />
+              {done ? FINISH_COPY.done : FINISH_COPY.thenDone}
+            </span>
+          }
+        />
+        <span className="truncate font-semibold tracking-[-0.006em]">{FINISH_COPY.title}</span>
+        <span
+          className="truncate text-caption text-dim"
+          title={text}
+          data-testid="live-finish-text"
+        >
+          {text}
+        </span>
+      </div>
+    </StateFrame>
+  );
+}
+
 // Module level: React Flow wants the same object on every render.
-export const liveBlockTypes = { agent: LiveAgentBlock, gate: LiveGateBlock };
+export const liveBlockTypes = {
+  agent: LiveAgentBlock,
+  gate: LiveGateBlock,
+  finish: LiveFinishBlock,
+};

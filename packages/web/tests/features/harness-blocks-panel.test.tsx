@@ -107,15 +107,18 @@ const radios = (legend: string) =>
     .map((r) => r.closest('label')?.textContent ?? '');
 
 describe('Workflow editor: the Checks block panel', () => {
-  it('the block before the lead’s merge: fixed place, no Remove, lead or you decide', async () => {
+  it('the block before the lead’s merge: fixed place, removable, lead or you decide', async () => {
     render();
     await select('checks');
     const place = within(panel()).getByTestId('check-place');
     expect(place.dataset['place']).toBe('merge');
-    expect(within(place).getByTestId('check-place-mandatory').textContent).toContain(
-      'can’t be moved or removed',
+    expect(within(place).getByTestId('check-place-merge').textContent).toContain(
+      'Remove it to merge without checks',
     );
-    expect(within(panel()).queryByRole('button', { name: 'Remove block' })).toBeNull();
+    expect(within(panel()).getByTestId('check-optional').textContent).toContain(
+      'the lead merges each change after its review, with no checks',
+    );
+    expect(within(panel()).getByRole('button', { name: 'Remove block' })).toBeTruthy();
     const routes = radios('When a check fails');
     expect(routes).toHaveLength(2);
     expect(routes[0]).toContain('The lead decides');

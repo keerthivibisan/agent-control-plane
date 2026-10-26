@@ -33,6 +33,7 @@ import {
   withNamedHelper,
   withNodes,
   withoutEdges,
+  withoutNode,
 } from './helpers.js';
 
 const ctx: CompileContext = {
@@ -141,15 +142,13 @@ describe('old graphs (ADR-0027: unchanged in behaviour)', () => {
 });
 
 describe('count rules for Checks blocks', () => {
-  it('missing-node: no block before the merge, even with other blocks', () => {
-    const noMerge = mapNode(
-      withFastChecks(),
-      'checks',
-      (n) => ({ ...n, place: 'branch' }) as typeof n,
+  it('no block before the merge is allowed (ADR-0028 §2); without the lead’s merge link it is merge-path', () => {
+    const noMerge = withoutNode(withFastChecks(), 'checks');
+    expect(errorCodes(noMerge)).not.toContain('missing-node');
+    expect(errors(noMerge).find((i) => i.code === 'merge-path')?.message).toContain(
+      'needs a merge link to "Ticket branch"',
     );
-    expect(errors(noMerge).find((i) => i.code === 'missing-node')?.message).toContain(
-      'before the Lead’s merge',
-    );
+    expect(errorCodes(withEdges(noMerge, e('merge', 'orchestrate', 'ticket-merge')))).toEqual([]);
   });
 
   it('too-many-nodes: a second block before the merge, or on the ticket branch', () => {

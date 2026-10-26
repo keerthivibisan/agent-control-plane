@@ -2,8 +2,9 @@ import { driveScenario } from './flow.js';
 import { SCENARIO_IDS, type ScenarioId } from './scenarios.js';
 
 /*
- * WG-V real-run driver for workflow graphs (docs/workflow-graph/RESUME.md Step 4;
- * docs/workflow-graph/wp/WG-V.md, "Real runs"). One scenario per call. From packages/server:
+ * WG-V real-run driver for workflow graphs (docs/workflow-graph/RESUME.md at tag v0.3.0, Step 4;
+ * docs/workflow-graph/wp/WG-V.md at tag v0.3.0, "Real runs"). One scenario per call. From
+ * packages/server:
  *
  *   # Safe anywhere: the scripted FAKE adapter plays every agent; nothing is spawned.
  *   node --conditions=development --import tsx \

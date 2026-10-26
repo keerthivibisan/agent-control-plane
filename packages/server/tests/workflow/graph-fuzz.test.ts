@@ -20,8 +20,8 @@ import { createRedesignRepositories } from '@acp/db';
 import { setupBoard } from '../board/helpers.js';
 
 /*
- * The API fuzz (docs/workflow-graph/README.md "Graph correctness", layer 3, server part; WG-C):
- * core's seeded generator and mutants through the real routes.
+ * The API fuzz (docs/history/workflow-graph/README.md "Graph correctness", layer 3, server part;
+ * WG-C): core's seeded generator and mutants through the real routes.
  * - Every valid generated graph PUTs 200 and a ticket starts on it (fake managed adapter).
  * - Every mutant PUTs 422 `workflow_invalid`, and a run start refuses it with 409 when it is stored
  *   directly in the database (as an older or hand-edited row could be).

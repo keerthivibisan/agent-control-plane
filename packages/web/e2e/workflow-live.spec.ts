@@ -79,12 +79,11 @@ async function openWorkflow(page: Page, projectId: string): Promise<void> {
   await expect(page.getByTestId('graph-editor')).toBeVisible();
 }
 
-/** Adds a link from the selected block with the block panel's form (the keyboard way). */
+/** Adds a link from the selected block with the block panel's "Link to…" menu (the keyboard way). */
 async function addLink(page: Page, to: string, kind: string): Promise<void> {
-  const form = panel(page).getByTestId('add-link');
-  await form.getByRole('combobox', { name: 'To' }).selectOption(to);
-  await form.getByRole('combobox', { name: 'Kind of link' }).selectOption(kind);
-  await form.getByRole('button', { name: 'Add link' }).click();
+  await panel(page).getByTestId('link-to').click();
+  await page.getByTestId(`link-to-${to}-${kind}`).click();
+  await expect(page.getByTestId('link-to-menu')).toHaveCount(0);
 }
 
 test('a default project: the migrated workflow loads; a saved graph is stored as version 2', async ({

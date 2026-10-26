@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 
 /**
- * Hash routes (no router dependency), project first (docs/redesign/README.md §3):
+ * Hash routes (no router dependency), project first (docs/history/redesign/README.md §3):
  *
  * - `#/p/:projectId/<page>` for the seven project pages, `#/p/:projectId/skills/:name` for one
  *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket (`?tab=files&change=…` is its Files

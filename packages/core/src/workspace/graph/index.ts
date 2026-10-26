@@ -1,4 +1,4 @@
-// Workflow graph logic (ADR-0023, docs/workflow-graph/README.md): pure functions over the
+// Workflow graph logic (ADR-0023, docs/history/workflow-graph/README.md): pure functions over the
 // contract in `../workflow-graph.ts`, shared by the editor, the server and the engine.
 export { canConnect, type ConnectIssueCode, type ConnectResult } from './connect.js';
 export {
@@ -10,6 +10,7 @@ export {
   type CheckBlockConfig,
 } from './check-blocks.js';
 export {
+  NO_CHECKS_MESSAGE,
   RESERVED_HELPER_LABELS,
   isGraphRunnable,
   isReservedHelperLabel,
@@ -37,3 +38,4 @@ export {
 } from './testing/generate.js';
 export { GRAPH_MUTATIONS, type GraphMutation } from './testing/mutations.js';
 export { enumerateSmallGraphs, type EnumeratedGraph } from './testing/enumerate.js';
+export { withoutCheckBlocks } from './testing/graph-ops.js';

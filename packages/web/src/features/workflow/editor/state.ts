@@ -4,6 +4,8 @@ import {
   MAX_GRAPH_NODES,
   NODE_CAPABILITIES,
   canConnect,
+  type AgentEffort,
+  type AgentWorkflowNode,
   type ApprovalMode,
   type CheckBlockPlace,
   type CheckFailureRoute,
@@ -30,12 +32,13 @@ import {
   isEditingBlock,
   type ChecksNode,
 } from '../check-blocks';
+import { finishParts } from '../finish';
 
 /**
- * The graph editor's state (ADR-0023, docs/workflow-graph/README.md §5): the graph being edited,
- * what is selected, and the last refused link. A pure reducer, so every editing rule is tested
- * without React Flow. Whether a link may exist is always core's `canConnect`, the same check the
- * validator and the server run, so the editor can never draw a link the server would refuse.
+ * The graph editor's state (ADR-0023, docs/history/workflow-graph/README.md §5): the graph being
+ * edited, what is selected, and the last refused link. A pure reducer, so every editing rule is
+ * tested without React Flow. Whether a link may exist is always core's `canConnect`, the same check
+ * the validator and the server run, so the editor can never draw a link the server would refuse.
  *
  * Two conveniences keep the forced wiring out of the owner's way, because there is only one valid
  * way to do it:
@@ -79,10 +82,17 @@ export interface NodePatch {
   auto?: boolean;
   /** A Checks block's selection (ADR-0027 §5); its place and failure route have their own actions. */
   select?: CheckSelection;
+  /** An agent block's effort (ADR-0028 §1); null: the model's default (the field is dropped). */
+  effort?: AgentEffort | null;
 }
 
-/** The Checks blocks the menu adds (ADR-0027 §5); the one before the lead's merge is fixed. */
-export type CheckBlockItem = Exclude<CheckBlockPlace, 'merge'>;
+/**
+ * The Checks blocks the menu adds (ADR-0028 §2: every one is optional, so each place can be added
+ * back when the workflow has none there).
+ */
+export type CheckBlockItem = CheckBlockPlace;
+/** The places a block can move between; the block before the lead's merge stays there. */
+export type MovableCheckPlace = Exclude<CheckBlockPlace, 'merge'>;
 
 export type EditorAction =
   /** Load a graph (first load, a template, "restore my earlier setup", a save's answer). */
@@ -92,6 +102,19 @@ export type EditorAction =
   | { type: 'update-node'; id: WorkflowNodeId; patch: NodePatch }
   | { type: 'move-node'; id: WorkflowNodeId; position: NodePosition }
   | { type: 'connect'; from: WorkflowNodeId; to: WorkflowNodeId; edgeType: WorkflowEdgeType }
+  /**
+   * Moves an end of a link (v0.3.1 P-C): the link `id` becomes `from → to` of `edgeType`, checked
+   * with `canConnect` on the graph without it; refused, the link stays where it was.
+   */
+  | {
+      type: 'reconnect';
+      id: string;
+      from: WorkflowNodeId;
+      to: WorkflowNodeId;
+      edgeType: WorkflowEdgeType;
+    }
+  /** Tidy layout (P-C): every block back in the automatic layout (the saved positions go). */
+  | { type: 'tidy' }
   | { type: 'refuse'; message: string }
   | { type: 'dismiss-refusal' }
   | { type: 'remove-edge'; id: string }
@@ -99,7 +122,7 @@ export type EditorAction =
   /** Adds a Checks block on a change (linked from `near` when it may be) or on the branch. */
   | { type: 'add-checks'; place: CheckBlockItem; near?: WorkflowNodeId | undefined }
   /** Moves a Checks block between a change and the branch, rewiring it; never the merge block. */
-  | { type: 'set-check-place'; id: WorkflowNodeId; place: CheckBlockItem }
+  | { type: 'set-check-place'; id: WorkflowNodeId; place: MovableCheckPlace }
   /** A Checks block's failure route; "back to the helper" adds the rework link, others drop it. */
   | { type: 'set-check-failure'; id: WorkflowNodeId; onFailure: CheckFailureRoute }
   | { type: 'select'; selection: Selection }
@@ -124,11 +147,11 @@ function single(graph: WorkflowGraph, type: WorkflowNode['type']): WorkflowNode 
 }
 
 /**
- * The blocks the palette adds can be removed; the lead and the steps are in every workflow, and so
- * is the Checks block before the lead's merge (ADR-0027 §5: mandatory).
+ * The blocks the palette adds can be removed, every Checks block included (ADR-0028 §2: none is
+ * mandatory); the lead and the steps are in every workflow.
  */
 export function isRemovable(node: WorkflowNode): boolean {
-  if (isChecksNode(node)) return checkPlaceOf(node) !== 'merge';
+  if (isChecksNode(node)) return true;
   return (
     node.type === 'planner' ||
     node.type === 'helper' ||
@@ -190,9 +213,9 @@ export function checksAvailability(
   if (graph.nodes.length >= MAX_GRAPH_NODES) {
     return { ok: false, reason: WORKFLOW_GRAPH_COPY.palette.tooManyBlocks(MAX_GRAPH_NODES) };
   }
-  if (place === 'branch') {
-    return checksBlocks(graph).some((b) => checkPlaceOf(b) === 'branch')
-      ? { ok: false, reason: H.branchFull }
+  if (place === 'branch' || place === 'merge') {
+    return checksBlocks(graph).some((b) => checkPlaceOf(b) === place)
+      ? { ok: false, reason: place === 'branch' ? H.branchFull : H.mergeFull }
       : { ok: true };
   }
   if (!graph.nodes.some(isEditingBlock)) return { ok: false, reason: H.noEditors };
@@ -222,6 +245,45 @@ export function allowedEdgeTypes(
   to: WorkflowNodeId,
 ): WorkflowEdgeType[] {
   return EDGE_TYPE_ORDER.filter((t) => canConnect(graph, from, to, t).ok);
+}
+
+/** A link the owner draws on the canvas, as it is stored (the Finish block's steps resolved). */
+export interface LinkOption {
+  from: WorkflowNodeId;
+  to: WorkflowNodeId;
+  types: WorkflowEdgeType[];
+}
+
+/**
+ * The stored ends a link drawn on the canvas stands for (ADR-0028 §3, `finish.ts`): a link to
+ * the Finish block ends on the ticket merge when that is allowed, else on your merge; a link from
+ * the block that feeds the ticket merge may start at the ticket merge (the next step after it).
+ * The first pair `canConnect` allows wins; null when none is allowed.
+ */
+export function resolveLink(
+  graph: WorkflowGraph,
+  from: WorkflowNodeId,
+  to: WorkflowNodeId,
+): LinkOption | null {
+  const parts = finishParts(graph);
+  const tos = parts !== null && to === parts.ownerMerge ? [parts.ticketMerge, to] : [to];
+  const feeds =
+    parts !== null && graph.edges.some((e) => e.from === from && e.to === parts.ticketMerge);
+  const froms = feeds && parts !== null ? [from, parts.ticketMerge] : [from];
+  for (const f of froms) {
+    for (const t of tos) {
+      if (f === t) continue;
+      const types = allowedEdgeTypes(graph, f, t);
+      if (types.length > 0) return { from: f, to: t, types };
+    }
+  }
+  return null;
+}
+
+/** The block a refusal names for a link drawn to `to` (the ticket merge for the Finish block). */
+export function refusalTarget(graph: WorkflowGraph, to: WorkflowNodeId): WorkflowNodeId {
+  const parts = finishParts(graph);
+  return parts !== null && to === parts.ownerMerge ? parts.ticketMerge : to;
 }
 
 const EDGE_TYPE_ORDER: readonly WorkflowEdgeType[] = [
@@ -468,12 +530,38 @@ function newChecksNode(graph: WorkflowGraph, place: CheckBlockItem): ChecksNode 
   const L = HARNESS_BLOCKS_COPY.newLabels;
   return {
     type: 'checks',
-    id: freeId(graph, place === 'change' ? 'change-checks' : 'branch-checks'),
+    id: freeId(graph, `${place}-checks`),
     label: freeLabel(graph, (n) => (n === 1 ? L[place] : `${L[place]} ${n}`)),
     place,
     select: { kind: 'required' },
     onFailure: failureRoutes(place)[0] ?? 'lead',
   };
+}
+
+/**
+ * Puts a block before the lead's merge: `lead → block → ticket merge`, in place of the lead's
+ * merge straight into the ticket branch. Only when both links are allowed, as for a final stage.
+ */
+function insertMergeBlock(graph: WorkflowGraph, block: WorkflowNodeId): WorkflowGraph {
+  const lead = single(graph, 'lead');
+  const ticketMerge = single(graph, 'ticket-merge');
+  if (lead === undefined || ticketMerge === undefined) return graph;
+  const g = unlink(graph, (e) => !(e.from === lead.id && e.to === ticketMerge.id));
+  const first = link(g, 'merge', lead.id, block);
+  const both = link(first, 'flow', block, ticketMerge.id);
+  return both.edges.length === g.edges.length + 2 ? both : graph;
+}
+
+/**
+ * Without a block before the lead's merge, the lead merges straight into the ticket branch: the
+ * link is added when core allows it (ADR-0028 §2), else the problems list says what is missing.
+ */
+function rejoinLeadMerge(graph: WorkflowGraph): WorkflowGraph {
+  const lead = single(graph, 'lead');
+  const ticketMerge = single(graph, 'ticket-merge');
+  if (lead === undefined || ticketMerge === undefined) return graph;
+  if (graph.edges.some((e) => e.from === lead.id && e.to === ticketMerge.id)) return graph;
+  return link(graph, 'merge', lead.id, ticketMerge.id);
 }
 
 function addChecks(
@@ -484,7 +572,12 @@ function addChecks(
   const node = newChecksNode(graph, place);
   const g: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
   return {
-    graph: place === 'branch' ? insertFinalStage(g, node.id) : wireChangeBlock(g, node.id, near),
+    graph:
+      place === 'branch'
+        ? insertFinalStage(g, node.id)
+        : place === 'merge'
+          ? insertMergeBlock(g, node.id)
+          : wireChangeBlock(g, node.id, near),
     id: node.id,
   };
 }
@@ -497,7 +590,7 @@ function replaceNode(graph: WorkflowGraph, node: WorkflowNode): WorkflowGraph {
 function setCheckPlace(
   graph: WorkflowGraph,
   id: WorkflowNodeId,
-  place: CheckBlockItem,
+  place: MovableCheckPlace,
 ): WorkflowGraph {
   const node = nodeOf(graph, id);
   if (!isChecksNode(node) || checkPlaceOf(node) === 'merge' || checkPlaceOf(node) === place) {
@@ -559,6 +652,8 @@ function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
   }
   if (node.type === 'planner' && !g.nodes.some((n) => n.type === 'planner')) {
     g = unwirePlanner(g);
+  } else if (isChecksNode(node) && checkPlaceOf(node) === 'merge') {
+    g = rejoinLeadMerge(g);
   } else if (isFinalStage(node)) {
     const prev = before.length === 1 ? before[0] : undefined;
     const next = after.length === 1 ? after[0] : undefined;
@@ -577,8 +672,23 @@ function addNode(graph: WorkflowGraph, item: PaletteItemKey): { graph: WorkflowG
 
 // ---------------------------------------------------------------- node fields
 
+/** An agent block with the patch's effort: set, or dropped for the model's default. */
+function withEffort<N extends AgentWorkflowNode>(
+  node: N,
+  effort: AgentEffort | null | undefined,
+): N {
+  if (effort === undefined) return node;
+  const { effort: _old, ...rest } = node;
+  return (effort === null ? rest : { ...rest, effort }) as N;
+}
+
 /** Applies the patch's fields that the node's kind has; the others are ignored. */
 export function patchNode(node: WorkflowNode, patch: NodePatch): WorkflowNode {
+  const next = patchFields(node, patch);
+  return 'skills' in next ? withEffort(next, patch.effort) : next;
+}
+
+function patchFields(node: WorkflowNode, patch: NodePatch): WorkflowNode {
   const label = patch.label ?? node.label;
   switch (node.type) {
     case 'planner':
@@ -643,7 +753,7 @@ export function patchNode(node: WorkflowNode, patch: NodePatch): WorkflowNode {
 // ---------------------------------------------------------------- the reducer
 
 /** The selection, while what it names is still in the graph. */
-function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
+export function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
   if (selection === null) return null;
   const exists =
     selection.kind === 'node'
@@ -655,6 +765,39 @@ function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
 /** A change by hand makes the graph `custom` (`WorkflowGraph.template`); moving a block doesn't. */
 function custom(graph: WorkflowGraph): WorkflowGraph {
   return graph.template === 'custom' ? graph : { ...graph, template: 'custom' };
+}
+
+/** The graph with every block in the automatic layout: the same blocks and links, no positions. */
+export function tidyGraph(graph: WorkflowGraph): WorkflowGraph {
+  if (!graph.nodes.some((n) => n.position !== undefined)) return graph;
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => {
+      if (n.position === undefined) return n;
+      const copy = { ...n };
+      delete copy.position;
+      return copy;
+    }),
+  };
+}
+
+/** Moves a link's ends: the same place in the list, a fresh id for its new ends, its rounds kept. */
+function reconnect(
+  graph: WorkflowGraph,
+  id: string,
+  from: WorkflowNodeId,
+  to: WorkflowNodeId,
+  edgeType: WorkflowEdgeType,
+): { graph: WorkflowGraph; edge: WorkflowEdge } | { refusal: string } | null {
+  const old = graph.edges.find((e) => e.id === id);
+  if (old === undefined) return null;
+  const without = unlink(graph, (e) => e.id !== id);
+  const result = canConnect(without, from, to, edgeType);
+  if (!result.ok) return { refusal: result.message };
+  const made = makeEdge(without, edgeType, from, to);
+  const edge =
+    made.type === 'rework' && old.type === 'rework' ? { ...made, maxRounds: old.maxRounds } : made;
+  return { graph: { ...graph, edges: graph.edges.map((e) => (e.id === id ? edge : e)) }, edge };
 }
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -704,6 +847,20 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         selection: { kind: 'edge', id: edge.id },
         refusal: null,
       };
+    }
+    case 'reconnect': {
+      const r = reconnect(g, action.id, action.from, action.to, action.edgeType);
+      if (r === null) return state;
+      if ('refusal' in r) return { ...state, refusal: r.refusal };
+      return {
+        graph: custom(r.graph),
+        selection: { kind: 'edge', id: r.edge.id },
+        refusal: null,
+      };
+    }
+    case 'tidy': {
+      const next = tidyGraph(g);
+      return next === g ? state : { ...state, graph: next };
     }
     case 'refuse':
       return { ...state, refusal: action.message };

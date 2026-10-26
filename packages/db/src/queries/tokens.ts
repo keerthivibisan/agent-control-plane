@@ -14,8 +14,8 @@ import { parseStored, placeholders, toStoredTimestamp } from '../internal/valida
 import { TOTALS_SELECT, toTotals, type TotalsDbRow } from './usage.js';
 
 /*
- * The project Tokens page (docs/redesign/README.md §4.5, `ProjectTokensDto`): new work vs cache
- * reuse for one project, from the same deduplicated usage records as every other view.
+ * The project Tokens page (docs/history/redesign/README.md §4.5, `ProjectTokensDto`): new work vs
+ * cache reuse for one project, from the same deduplicated usage records as every other view.
  *
  * Rules (docs/usage-accounting.md §5–6):
  * - Every group sums DIRECT usage: each usage record belongs to exactly one session (the record is

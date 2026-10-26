@@ -175,12 +175,12 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
     await request.get(`/api/projects/${projectId}/workflow-graph`)
   ).json()) as { stored: string };
   expect(stored.stored).toBe('v2');
-  // R-R visual: at 1440 × 900 the whole flow, Done included, is on screen, and the zoom controls
-  // stay clear of the Done block; Save stays on screen.
+  // R-R visual: at 1440 × 900 the whole flow, the Finish block (with Done) included, is on
+  // screen, and the zoom controls stay clear of it; Save stays on screen.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(page.getByTestId('block-done')).toBeInViewport({ ratio: 1 });
-  const doneBox = await page.getByTestId('block-done').boundingBox();
+  await expect(page.getByTestId('block-owner-merge')).toBeInViewport({ ratio: 1 });
+  const doneBox = await page.getByTestId('block-owner-merge').boundingBox();
   const controlsBox = await page.getByTestId('zoom-controls').boundingBox();
   if (doneBox === null || controlsBox === null) throw new Error('no Done block or controls');
   const apart =
@@ -341,9 +341,10 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-code-review')).toHaveAttribute('data-state', 'done');
   await expect(page.getByRole('button', { name: 'About status Done' })).toBeVisible();
-  // R-R visual: the run completed, so the Done node is lit, and the lead the engine closed when
-  // the review started reads "Finished" (its status stays CANCELLED).
-  await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
+  // R-R visual: the run completed, so the Finish block is lit with its Done tick, and the lead the
+  // engine closed when the review started reads "Finished" (its status stays CANCELLED).
+  await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-finish-done')).toHaveAttribute('data-done', 'true');
   const leadCard = page.getByRole('article', { name: 'Lead' });
   await expect(leadCard.locator('[data-status="CANCELLED"]')).toHaveText('Finished');
   // The helper's branch is the engine's UUID branch, shown short with the full one as its title.

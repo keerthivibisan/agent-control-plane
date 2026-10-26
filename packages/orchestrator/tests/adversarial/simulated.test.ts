@@ -1,4 +1,9 @@
-import { WORKFLOW_TEMPLATE_IDS, generateValidGraph, workflowTemplate } from '@acp/core';
+import {
+  WORKFLOW_TEMPLATE_IDS,
+  generateValidGraph,
+  withoutCheckBlocks,
+  workflowTemplate,
+} from '@acp/core';
 import type { ApprovalMode, WorkflowGraph } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { graphSimConfig } from '../graph-correctness/explore.js';
@@ -45,6 +50,28 @@ describe('adversarial invariants over generated graphs', () => {
       expectClean(
         `seed ${seed} with checks`,
         generateValidGraph(seed, { checkBlocks: true }),
+        'manual',
+      );
+    }
+  }, 240_000);
+});
+
+// ADR-0028 §2 (v0.3.1 P-A): a workflow with no Checks block at all. The lead merges each change
+// after its review; the invariants still hold, every run ends and the owner can finish.
+describe('adversarial invariants without any Checks block', () => {
+  for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const mode of ['auto-edits', 'full-auto'] as const) {
+      it(`${id} without checks (${mode})`, () => {
+        expectClean(`${id} without checks`, withoutCheckBlocks(workflowTemplate(id)), mode);
+      }, 60_000);
+    }
+  }
+
+  it('generated seeds 1-10 that may lose the block before the merge', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      expectClean(
+        `seed ${seed} with optional checks`,
+        generateValidGraph(seed, { optionalChecks: true }),
         'manual',
       );
     }

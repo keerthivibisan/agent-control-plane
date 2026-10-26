@@ -36,7 +36,10 @@ import {
  * - `review`: `helper` | `helper-pool` | `tester` → change reviewer | lead;
  * - `findings`: change reviewer → lead;
  * - `rework`: change reviewer | lead | change block → `helper` | `helper-pool` | `tester`;
- * - `merge`: lead → the block before the lead's merge.
+ * - `merge`: lead → the block before the lead's merge; without one (ADR-0028 §2), lead → the
+ *   ticket merge, so the lead merges straight into the ticket branch after the review. Which of the
+ *   two depends on the graph, like the plan path on the planner: with a block before the merge the
+ *   lead can never bypass it.
  *
  * Which helper a change block may send back, and when, are path rules (`check-rework`), as is a
  * reviewer's rework without its review: the matrix looks at the two ends only.
@@ -61,8 +64,9 @@ function allowed(
   from: WorkflowNode,
   to: WorkflowNode,
   type: WorkflowEdgeType,
-  hasPlanner: boolean,
+  index: Pick<NodeIndex, 'hasPlanner' | 'hasMergeBlock'>,
 ): boolean {
+  const hasPlanner = index.hasPlanner;
   switch (type) {
     case 'flow':
       if (isCheckBlockAt(to, 'change')) return isEditor(from);
@@ -98,7 +102,8 @@ function allowed(
         isEditor(to)
       );
     case 'merge':
-      return from.type === 'lead' && isCheckBlockAt(to, 'merge');
+      if (from.type !== 'lead') return false;
+      return index.hasMergeBlock ? isCheckBlockAt(to, 'merge') : to.type === 'ticket-merge';
   }
 }
 
@@ -110,7 +115,8 @@ const EDGE_RULES: Readonly<Record<WorkflowEdgeType, string>> = Object.freeze({
   findings: 'A change reviewer sends its findings to the Lead.',
   rework:
     'A change reviewer, the Lead or a Checks block on the change sends a helper’s or tester’s change back for rework.',
-  merge: 'Only the Lead merges, through the Checks block before the merge.',
+  merge:
+    'Only the Lead merges, through the Checks block before the merge, or straight into the ticket branch when the workflow has no such block.',
 });
 
 const EDGE_VERBS: Readonly<Record<WorkflowEdgeType, string>> = Object.freeze({
@@ -122,7 +128,16 @@ const EDGE_VERBS: Readonly<Record<WorkflowEdgeType, string>> = Object.freeze({
   merge: 'merge through',
 });
 
-function planHint(from: WorkflowNode, to: WorkflowNode, hasPlanner: boolean): string {
+function edgeHint(
+  from: WorkflowNode,
+  to: WorkflowNode,
+  type: WorkflowEdgeType,
+  index: Pick<NodeIndex, 'hasPlanner' | 'hasMergeBlock'>,
+): string {
+  const hasPlanner = index.hasPlanner;
+  if (type === 'merge' && from.type === 'lead' && to.type === 'ticket-merge') {
+    return ' The workflow has a Checks block before the merge, so the Lead merges through it.';
+  }
   if (hasPlanner && from.type === 'ticket' && to.type === 'lead') {
     return ' With a planner, the ticket goes to the planner first.';
   }
@@ -165,11 +180,11 @@ export function checkConnection(
       message: `${q(from)} cannot be linked to itself.`,
     };
   }
-  if (!allowed(from, to, type, index.hasPlanner)) {
+  if (!allowed(from, to, type, index)) {
     return {
       ok: false,
       code: 'edge-not-allowed',
-      message: `${q(from)} cannot ${EDGE_VERBS[type]} ${q(to)}. ${EDGE_RULES[type]}${planHint(from, to, index.hasPlanner)}`,
+      message: `${q(from)} cannot ${EDGE_VERBS[type]} ${q(to)}. ${EDGE_RULES[type]}${edgeHint(from, to, type, index)}`,
     };
   }
   for (let i = 0; i < upTo; i++) {

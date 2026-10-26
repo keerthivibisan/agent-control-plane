@@ -30,7 +30,7 @@ import {
 } from './skill-names.js';
 
 /**
- * A project's workflow (docs/redesign/README.md §4.2, ADR-0019; ADR-0023 graphs).
+ * A project's workflow (docs/history/redesign/README.md §4.2, ADR-0019; ADR-0023 graphs).
  *
  * - **Version 2, the graph** (`/workflow-graph`): the stored graph, or the version 1 workflow
  *   (stored or the default) migrated with the project's approval mode. A PUT is validated with

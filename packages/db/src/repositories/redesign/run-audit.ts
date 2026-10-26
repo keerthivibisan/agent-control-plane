@@ -23,8 +23,8 @@ import { parseInput, parseStored, parseStoredJson, type Parser } from '../../int
 import { literalParser, nullable } from '../orchestration/shared.js';
 
 /**
- * The 0004 columns on Phase 3 tables (docs/redesign/README.md §7): who decided an approval, a
- * run's snapshot (its limits, and for a ticket run its workflow), and an agent run's workflow
+ * The 0004 columns on Phase 3 tables (docs/history/redesign/README.md §7): who decided an approval,
+ * a run's snapshot (its limits, and for a ticket run its workflow), and an agent run's workflow
  * stage. They live here rather than in the
  * orchestration repositories so the Phase 3 code stays as it shipped; the server's run store
  * writes them in the same transaction as the rows they belong to.

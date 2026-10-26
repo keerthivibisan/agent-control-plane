@@ -1181,7 +1181,7 @@ export interface StageCopy {
   empty: string;
 }
 
-/** Board columns (docs/phase-4/README.md §5.2), in board order. */
+/** Board columns (docs/history/phase-4/README.md §5.2), in board order. */
 export const STAGE_COPY: Readonly<Record<TicketStage, StageCopy>> = {
   BACKLOG: {
     word: 'Backlog',
@@ -1367,7 +1367,9 @@ export const BOARD_COPY = {
 // --- New project wizard and project settings (Phase 4, wp/p4-f-project-setup) ------------------
 import type { CheckRunStatus } from '@acp/core';
 
-/** Harness states (docs/phase-4/README.md §3) as a word, a one-line explanation and a tone. */
+/**
+ * Harness states (docs/history/phase-4/README.md §3) as a word, a one-line explanation and a tone.
+ */
 export const SETUP_HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStatusCopy>> = {
   ready: {
     word: 'Ready',
@@ -2823,8 +2825,8 @@ export const STAGE_AGENT_COPY = {
 // --- The lead's chat after the lead ends (redesign R-J, wp/r-j-web) -----------------------------
 //
 // Add-only. Once a run's lead has ended, an owner message brings it back for one answers-only turn
-// (docs/redesign/README.md §6b, ADR-0020): the line above the box, the wait for the answer, why a
-// chat can't be continued, and the follow-up bubbles.
+// (docs/history/redesign/README.md §6b, ADR-0020): the line above the box, the wait for the answer,
+// why a chat can't be continued, and the follow-up bubbles.
 
 import type { FollowUpUnavailableReason } from '@acp/core/api';
 
@@ -2878,8 +2880,9 @@ export const SHELL_FRAME_COPY = {
 
 // --- Review loop: approval modes, Start dialog, change cards, ticket branch (RL-D, wp/rl-d-web) --
 //
-// Add-only (ADR-0021, docs/review-loop/README.md §7). Words for the approval modes, the review
-// stage, the Start dialog, the change cards, the ticket branch and the live graph's additions.
+// Add-only (ADR-0021, docs/history/review-loop/README.md §7). Words for the approval modes, the
+// review stage, the Start dialog, the change cards, the ticket branch and the live graph's
+// additions.
 
 const MODE_WORDS: Readonly<Record<ApprovalMode, string>> = {
   manual: 'Manual',
@@ -3017,7 +3020,7 @@ export const REVIEW_LOOP_COPY = {
     roundsLine: (n: number) =>
       n === 0 ? 'No rework rounds' : `Up to ${countOf(n, 'rework round', 'rework rounds')}`,
     stageText:
-      'Each helper’s change is reviewed, then the lead merges it into the ticket branch, sends it back for rework or discards it. Required harness checks must pass first. You merge the ticket branch into main once, at the end.',
+      'Each helper’s change is reviewed, then the lead merges it into the ticket branch, sends it back for rework or discards it. Required harness checks must pass first. At the end you merge the ticket branch into its target once, or open a pull request.',
     errorTitle: 'Review agent',
   },
   graph: {
@@ -3027,9 +3030,9 @@ export const REVIEW_LOOP_COPY = {
       n > 0 ? `Rework, up to ${formatCount(n)}×` : 'Rework, only if you allow it',
     ownerMerge: {
       who: 'You',
-      title: 'Merge into main',
-      text: 'Once, for the whole ticket.',
-      tip: 'Every merged change lands on the ticket branch. You merge that branch into main once, at the end, or ask for changes.',
+      title: 'Finish',
+      text: 'Merge or open a pull request, once, for the whole ticket.',
+      tip: 'Every merged change lands on the ticket branch. At the end you merge that branch into its target once, or push it and open a pull request, or ask for changes.',
     },
     counts: {
       waiting: (n: number) => `${formatCount(n)} waiting`,
@@ -3274,7 +3277,7 @@ export const WORKFLOW_LIVE_COPY = {
     } satisfies Record<LiveBlockKind, string>,
     gateTitle: {
       'plan-approval': 'Approve the plan',
-      'owner-merge': 'Merge into main',
+      'owner-merge': 'Finish',
     },
     planAuto: 'Approved automatically',
     planAsks: 'You approve the plan',
@@ -3932,7 +3935,12 @@ export const TICKET_TOTALS_COPY = {
 // Add-only. The Workflow page's editor (blocks, links, templates, problems) and the new-project
 // wizard's template choice. Plain owner words: blocks and links, never nodes, edges or engines.
 
-import type { WorkflowEdgeType, WorkflowNodeType, WorkflowTemplateId } from '@acp/core';
+import type {
+  AgentEffort,
+  WorkflowEdgeType,
+  WorkflowNodeType,
+  WorkflowTemplateId,
+} from '@acp/core';
 
 /** The six blocks the owner can add from the palette. */
 export type PaletteItemKey =
@@ -3944,11 +3952,11 @@ type BlockKindKey = Exclude<WorkflowNodeType, 'reviewer'> | 'reviewer-change' | 
 export const WORKFLOW_GRAPH_COPY = {
   description:
     'The agents that work on a ticket and how they connect. Add blocks, link them, save.',
-  tip: 'Each block is an agent or a step. What a block may do is fixed by its kind: only helpers and the tester change files, each in its own copy of the project, and only the lead merges a change, after the checks. You merge the ticket into main once, at the end. Ticket and run settings can only make an agent more careful, never less.',
+  tip: 'Each block is an agent or a step. What a block may do is fixed by its kind: only helpers and the tester change files, each in its own copy of the project, and only the lead merges a change, after the checks you place before it. At the end you merge the ticket into its target branch or open a pull request. Ticket and run settings can only make an agent more careful, never less.',
   canvasTitle: 'How a ticket flows',
   canvasLabel: 'Workflow editor',
   canvasHint:
-    'Drag a block to move it. Drag from the dot on a block’s right edge to another block’s left edge to link them. Select a block or link and press Delete to remove it.',
+    'Drag a block to move it. Drag from a dot or the edge of a block onto another block to link them, or press Enter on a block’s dot and then on the other block; Shift+F10 lists the links a block can make. Drag the end of a selected link to move it. Select a block or link and press Delete to remove it. Command or Control+Z undoes, with Shift redoes.',
   loading: 'Loading the workflow…',
   kinds: {
     planner: 'Planner',
@@ -3981,14 +3989,15 @@ export const WORKFLOW_GRAPH_COPY = {
     ticket: 'Where every ticket starts.',
     'plan-approval': 'You approve the plan before any helper starts, or ask for changes.',
     checks:
-      'The project’s required checks. A change reaches the ticket branch only after they pass.',
+      'Runs the chosen checks on each change before the lead merges it into the ticket branch.',
     'ticket-merge': 'Every change is decided and the ticket branch holds the merged work.',
-    'owner-merge': 'You merge the ticket branch into main, once, for the whole ticket.',
+    'owner-merge':
+      'You merge the ticket branch into its target or open a pull request, once, for the whole ticket.',
     done: 'The ticket is finished.',
   } satisfies Record<BlockKindKey, string>,
   gateTitle: {
     'plan-approval': 'Approve the plan',
-    'owner-merge': 'Merge into main',
+    'owner-merge': 'Finish',
   },
   readOnly: 'Read-only',
   ownCopy: 'Own copy',
@@ -4052,13 +4061,14 @@ export const WORKFLOW_GRAPH_COPY = {
     merge: 'Merges through',
   } satisfies Record<WorkflowEdgeType, string>,
   edgeText: {
-    flow: 'The order of the steps: the plan, then after the ticket merge the final reviewers and testers, then your merge.',
+    flow: 'The order of the steps: the plan, then after the ticket merge the final reviewers and testers, then the Finish block.',
     assigns: 'The lead may start helpers of this block for the plan’s steps.',
     review: 'Who first reviews this block’s change: a change reviewer or the lead.',
     findings: 'The change reviewer passes its verdict and findings to the lead, who decides.',
     rework:
       'This reviewer or the lead may send the change back to its author, up to a number of rounds. A change reviewer that does this works with the helper directly and keeps the lead informed.',
-    merge: 'The lead merges each change through the required checks.',
+    merge:
+      'The lead merges each reviewed change into the ticket branch, through the Checks block before the merge when the workflow has one.',
   } satisfies Record<WorkflowEdgeType, string>,
   edgeName: (type: string, from: string, to: string) => `${type}: from ${from} to ${to}`,
   rework: (n: number) => `Rework ×${formatCount(n)}`,
@@ -4133,13 +4143,18 @@ export const WORKFLOW_GRAPH_COPY = {
       'The plan is approved without asking you, but only when the ticket or run is set to Full auto: a more careful ticket or run still asks you.',
     remove: 'Remove block',
     fixed: 'Every workflow has this block, so it can’t be removed.',
+    effort: 'Effort',
+    effortHint:
+      'How much the agent thinks before acting: more effort is slower and uses more tokens.',
+    efforts: {
+      default: 'Default (the model decides)',
+      low: 'Low',
+      medium: 'Medium',
+      high: 'High',
+    } satisfies Record<AgentEffort | 'default', string>,
     links: 'Links from this block',
     noLinks: 'No links from this block yet.',
-    addLink: 'Add a link',
-    linkTo: 'To',
-    linkType: 'Kind of link',
     linkToNone: 'No block can be linked from here.',
-    linkAdd: 'Add link',
     removeLink: (name: string) => `Remove link ${name}`,
   },
   edgePanel: {
@@ -4315,36 +4330,50 @@ export const HARNESS_BLOCKS_COPY = {
   places: PLACE_WORDS,
   placeHints: {
     change: 'Runs on a helper’s or tester’s change before it is reviewed.',
-    merge:
-      'Runs on each change merged with the ticket branch, before the lead merges it. Every workflow has this block.',
-    branch: 'Runs on the ticket branch after every change, before you merge it into main.',
+    merge: 'Runs on each change merged with the ticket branch, before the lead merges it.',
+    branch:
+      'Runs on the finished ticket branch after every change, before your final merge or pull request.',
   } satisfies Record<CheckBlockPlace, string>,
-  /** The block's kind on the canvas and in its panel; the merge block keeps its old word. */
+  /** The block's kind on the canvas and in its panel (ADR-0028: plain names for each place). */
   kinds: {
     change: 'Checks on a change',
-    merge: 'Checks',
+    merge: 'Checks before merge',
     branch: 'Checks on the branch',
   } satisfies Record<CheckBlockPlace, string>,
   kindText: {
-    change: 'Runs the chosen checks on a helper’s or tester’s change before its review.',
+    change: 'Runs the chosen checks on a helper’s or tester’s change before it is reviewed.',
     merge:
       'Runs the chosen checks on each change before the lead merges it into the ticket branch.',
-    branch: 'Runs the chosen checks on the ticket branch before you merge it into main.',
+    branch:
+      'Runs the chosen checks on the finished ticket branch before your final merge or pull request.',
   } satisfies Record<CheckBlockPlace, string>,
-  newLabels: { change: 'Change checks', branch: 'Branch checks' },
+  newLabels: { change: 'Change checks', merge: 'Merge checks', branch: 'Branch checks' },
   palette: {
     group: 'Checks',
-    items: { change: 'Checks on a change', branch: 'Checks on the branch' },
+    items: {
+      change: 'Checks on a change',
+      merge: 'Checks before merge',
+      branch: 'Checks on the branch',
+    },
     hints: {
       change: 'Runs checks on a helper’s change before its review. Linked from a helper.',
-      branch: 'Runs checks on the ticket branch. Added just before your merge.',
+      merge: 'Runs checks on each change before the lead merges it. Placed after the lead.',
+      branch: 'Runs checks on the finished ticket branch. Added just before the Finish block.',
     },
     noEditors: 'Add a helper or a tester first: these checks run on their changes.',
     allChecked: 'Every helper and tester already has checks on its change.',
+    mergeFull: 'The workflow already has checks before the merge; it can have only one.',
     branchFull: 'The workflow already has checks on the branch; it can have only one.',
   },
+  /** Every Checks block is optional (ADR-0028 §2): what removing one means, in the panel. */
+  optional: {
+    change: 'Optional. Without it, the change goes straight to its review.',
+    merge: 'Optional. Without it, the lead merges each change after its review, with no checks.',
+    branch: 'Optional. Without it, your final merge or pull request is not gated by checks.',
+  } satisfies Record<CheckBlockPlace, string>,
   chip: {
-    required: 'Required',
+    // "Required checks", not "Required": the block itself is optional (ADR-0028 §2).
+    required: 'Required checks',
     ids: (n: number) => countOf(n, 'check'),
     labels: (labels: readonly string[]) => labels.join(' · '),
     runs: 'Runs: ',
@@ -4352,8 +4381,7 @@ export const HARNESS_BLOCKS_COPY = {
   panel: {
     nameHint: 'What the canvas and the ticket call this block, for example “Fast checks”.',
     place: 'Where it runs',
-    mandatory:
-      'Every workflow has this block, so no change merges without checks. It can’t be moved or removed.',
+    mergePlace: 'This block stays before the lead’s merge. Remove it to merge without checks.',
     branchTaken:
       'The workflow already has checks on the ticket branch, so this one stays on a change.',
     noEditors: 'Add a helper or a tester to run checks on a change.',
@@ -4403,7 +4431,8 @@ export const HARNESS_BLOCKS_COPY = {
       helper:
         'The change goes back to its helper with the failing checks’ names and the end of their output. The lead is told each round.',
     } satisfies Record<CheckFailureRoute, string>,
-    branchFailure: 'On the ticket branch a failure waits for you: you decide when you merge.',
+    branchFailure:
+      'On the ticket branch a failure waits for you: you decide when you merge or open the pull request.',
     rounds: 'Rounds back to the helper',
     roundsHint:
       'How often a failing change goes back to the helper. After the last round the lead decides.',
@@ -4500,4 +4529,48 @@ export const BRANCH_GUARD_COPY = {
   cancel: 'Cancel',
   working: 'Resetting…',
   failed: 'The branch was not reset',
+} as const;
+
+// --- v0.3.1 P-B (ADR-0028): effort per agent, and the Finish block ----------------------------
+
+const EFFORT_WORDS = { low: 'Low', medium: 'Medium', high: 'High' } as const satisfies Record<
+  AgentEffort,
+  string
+>;
+
+/** How an agent block's effort reads on the canvas, the live graph and the agent's details. */
+export const EFFORT_COPY = {
+  word: EFFORT_WORDS,
+  /** The chip on a block: "High effort". Only when the block sets one. */
+  chip: (effort: AgentEffort) => `${EFFORT_WORDS[effort]} effort`,
+  chipTip:
+    'How much the agent thinks before acting, set on this block. More effort is slower and uses more tokens.',
+  /** The agent's Details row. */
+  detail: 'Effort',
+  detailDefault: 'Default (the model decides)',
+} as const;
+
+/** "your target branch" when the target is not known; never "main" unless it is main. */
+function targetWord(target: string | null): string {
+  return target ?? 'your target branch';
+}
+
+/** The Finish block: the end of every flow (ADR-0028 §3). */
+export const FINISH_COPY = {
+  kind: 'You',
+  title: 'Finish',
+  text: (target: string | null) => `Merge into ${targetWord(target)} or open a pull request`,
+  thenDone: 'then Done',
+  done: 'Done',
+  label: (target: string | null) =>
+    `Finish: merge into ${targetWord(target)} or open a pull request, then Done`,
+  panelText: (target: string | null) =>
+    `You finish every ticket: merge it into ${targetWord(target)} here, or push it and open a pull request. Nothing merges without your click.`,
+  stepsTitle: 'What happens here',
+  steps: (target: string | null) => [
+    'Every change is merged into the ticket branch.',
+    `You merge the ticket branch into ${targetWord(target)}, or push it and open a pull request.`,
+    'The ticket is done.',
+  ],
+  fixed: 'Every workflow ends with this block, so it can’t be removed.',
 } as const;

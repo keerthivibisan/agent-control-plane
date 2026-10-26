@@ -50,7 +50,7 @@ export function handleId(kind: 'source' | 'target', side: 'top' | 'bottom', at: 
   return `${kind === 'source' ? 's' : 't'}-${side}-${at}`;
 }
 
-/** The visible handles: links are dragged from `out` (right edge) to `in` (left edge). */
+/** The stored ends of a forward link in a row: `out` (the right connector) and `in` (the left edge). */
 export const OUT_HANDLE = 'out';
 export const IN_HANDLE = 'in';
 

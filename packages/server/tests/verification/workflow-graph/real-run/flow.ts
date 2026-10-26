@@ -35,8 +35,8 @@ import { bootGraphServer, commitFiles, errorCode, ok, type GraphServer } from '.
 import { scenario as scenarioOf, type Scenario, type ScenarioId } from './scenarios.js';
 
 /*
- * One WG-V real-run scenario, end to end (docs/workflow-graph/wp/WG-V.md, task 3). `drive.ts` is
- * the command line around it; the dry-run test calls it directly.
+ * One WG-V real-run scenario, end to end (docs/workflow-graph/wp/WG-V.md at tag v0.3.0, task 3).
+ * `drive.ts` is the command line around it; the dry-run test calls it directly.
  *
  * - Real (`dryRun: false`): every agent is a real `claude` process through the Agent SDK. Only
  *   `drive.ts` calls it that way, and only with ACP_REAL_RUN=1 after the owner's consent.

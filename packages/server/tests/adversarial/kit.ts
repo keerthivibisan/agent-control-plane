@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { expect, it } from 'vitest';
+import type { WorkflowGraph } from '@acp/core';
 import {
   RunDetailDtoSchema,
   TicketBranchReviewDtoSchema,
@@ -170,6 +171,8 @@ export interface ScenarioOptions {
   files?: Record<string, string>;
   /** Extra long-lived branches made at the base tip before the run (e.g. `dev`). */
   branches?: readonly string[];
+  /** The project's workflow graph (default: the project's default workflow). */
+  graph?: WorkflowGraph;
 }
 
 /**
@@ -206,6 +209,12 @@ export async function scenario(o: ScenarioOptions = {}): Promise<Scenario> {
       contextFiles: [],
     };
     expect((await s.send('put', `/api/projects/${s.project.id}/setup`, setup)).status).toBe(200);
+  }
+  if (o.graph !== undefined) {
+    const put = await s.send('put', `/api/projects/${s.project.id}/workflow-graph`, {
+      graph: o.graph,
+    });
+    expect(put.status, JSON.stringify(put.body).slice(0, 400)).toBe(200);
   }
   const ticket = await s.createTicket('Add dark mode');
   expect((await s.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' })).status).toBe(200);

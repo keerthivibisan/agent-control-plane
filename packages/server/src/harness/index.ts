@@ -34,6 +34,7 @@ export {
   checksToGate,
   checksToRun,
   mergeSpec,
+  runsNothing,
 } from './blocks.js';
 export type { CheckSpec } from './blocks.js';
 export { createMainChecks } from './main-checks.js';

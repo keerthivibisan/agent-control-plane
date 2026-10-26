@@ -1,6 +1,6 @@
 # ADR-0018: Project skills written by the app
 
-- **Status:** accepted — owner decision 2026-10-16 (docs/redesign/README.md §2)
+- **Status:** accepted — owner decision 2026-10-16 (docs/history/redesign/README.md §2)
 - **Date:** 2026-10-16
 
 ## Context

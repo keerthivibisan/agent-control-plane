@@ -30,10 +30,10 @@ import { out, param } from './respond.js';
 import { contentDisposition, isInlineType, isTextType } from '../attachments/content.js';
 
 /**
- * Agent Workspace routes (docs/phase-4/README.md §6.3). Thin: parse, call the board service, send
- * the response parsed by its `@acp/core/api` DTO. Every mutation needs the `X-ACP-CSRF` token
- * (ADR-0013 §6), the same per-start token as the control panel. Reads work with managed agents
- * off; starting a ticket or deciding a plan then answers `managed_disabled`.
+ * Agent Workspace routes (docs/history/phase-4/README.md §6.3). Thin: parse, call the board
+ * service, send the response parsed by its `@acp/core/api` DTO. Every mutation needs the
+ * `X-ACP-CSRF` token (ADR-0013 §6), the same per-start token as the control panel. Reads work with
+ * managed agents off; starting a ticket or deciding a plan then answers `managed_disabled`.
  */
 
 const CheckRunListSchema = z.array(CheckRunDtoSchema);

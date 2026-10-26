@@ -57,9 +57,9 @@ import { heldStage, runPlannerMode, stageStates } from './ticket-state';
 const C = TICKET_COPY.workflow;
 
 /*
- * The ticket page's live workflow (docs/redesign/README.md §4.2): R-B's graph and node views,
- * read-only, with each stage's state from `GET /runs/:id/workflow` drawn around its node. The
- * helpers box holds one summary row; the agent tree under the graph shows each helper.
+ * The ticket page's live workflow (docs/history/redesign/README.md §4.2): R-B's graph and node
+ * views, read-only, with each stage's state from `GET /runs/:id/workflow` drawn around its node.
+ * The helpers box holds one summary row; the agent tree under the graph shows each helper.
  */
 
 interface LiveRun {

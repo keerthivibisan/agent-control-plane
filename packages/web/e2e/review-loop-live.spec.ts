@@ -534,7 +534,7 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   await expect(page.getByTestId('ticket-stage')).toContainText('Done');
   await ticketTab(page, /Agents/).click();
   await expect(page.getByTestId('live-block-owner-merge')).toHaveAttribute('data-state', 'done');
-  await expect(page.getByTestId('live-block-done')).toHaveAttribute('data-state', 'done');
+  await expect(page.getByTestId('live-finish-done')).toHaveAttribute('data-done', 'true');
   await expect(page.getByTestId('review-counts')).toHaveText('3 merged');
   await ticketTab(page, /Files changed/).click();
   // Merged: the same Files changed, read only.

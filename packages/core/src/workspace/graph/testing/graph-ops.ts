@@ -223,3 +223,56 @@ export function randomAgentConfig(rng: GraphRng): {
 export function randomMode(rng: GraphRng): ApprovalMode | null {
   return rng.pick<ApprovalMode | null>([null, null, ...APPROVAL_MODES]);
 }
+
+// ---------------------------------------------------------------- optional Checks blocks (ADR-0028 §2)
+
+/**
+ * The graph without its block before the lead's merge: the lead merges straight into the ticket
+ * merge. Null when it has none.
+ */
+export function removeMergeBlock(graph: WorkflowGraph): WorkflowGraph | null {
+  const block = mergeBlock(graph);
+  const ticketMerge = firstOfType(graph, 'ticket-merge');
+  if (block === undefined || ticketMerge === undefined) return null;
+  return addEdge(removeNode(graph, block.id), {
+    type: 'merge',
+    from: leadId(graph),
+    to: ticketMerge.id,
+  });
+}
+
+/**
+ * Adds a block before the lead's merge to a graph without one: the lead's merge goes through it,
+ * and it flows to the ticket merge. Null when the graph already has one.
+ */
+export function addMergeBlock(
+  graph: WorkflowGraph,
+  block: WorkflowNodeOf<'checks'>,
+): WorkflowGraph | null {
+  const ticketMerge = firstOfType(graph, 'ticket-merge');
+  if (mergeBlock(graph) !== undefined || ticketMerge === undefined) return null;
+  const lead = leadId(graph);
+  let g = removeEdges(graph, (e) => e.type === 'merge' && e.from === lead);
+  g = addNode(g, block);
+  g = addEdge(g, { type: 'merge', from: lead, to: block.id });
+  return addEdge(g, { type: 'flow', from: block.id, to: ticketMerge.id });
+}
+
+/**
+ * The graph with no Checks block at all (ADR-0028 §2): the lead merges straight into the ticket
+ * merge, the final chain is joined where a branch block was, and change blocks go with their
+ * links. Test support for the "no checks" variant of the templates.
+ */
+export function withoutCheckBlocks(graph: WorkflowGraph): WorkflowGraph {
+  let g = removeMergeBlock(graph) ?? graph;
+  for (const block of checkBlocksAt(g, 'branch')) {
+    const before = g.edges.find((e) => e.type === 'flow' && e.to === block.id)?.from;
+    const after = g.edges.find((e) => e.type === 'flow' && e.from === block.id)?.to;
+    g = removeNode(g, block.id);
+    if (before !== undefined && after !== undefined) {
+      g = addEdge(g, { type: 'flow', from: before, to: after });
+    }
+  }
+  for (const block of changeBlocks(g)) g = removeNode(g, block.id);
+  return g;
+}

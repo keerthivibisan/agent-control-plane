@@ -22,7 +22,7 @@ describe('layer 2: generated graphs with Checks blocks (seeds 1-60)', () => {
       const graph = generateValidGraph(seed, { checkBlocks: true });
       const blocks = programOf({ graph, graphContext: CONTEXT }).checkBlocks;
       for (const b of Object.values(blocks.change)) routes.add(b.onFailure);
-      routes.add(`merge-${blocks.merge.onFailure}`);
+      routes.add(`merge-${blocks.merge?.onFailure ?? 'none'}`);
       if (blocks.branch !== null) branch++;
     }
     expect(routes.has('helper')).toBe(true);

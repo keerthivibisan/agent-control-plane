@@ -4,7 +4,7 @@ import { TokenValue } from '../../components/TokenValue';
 import { NOT_REPORTED, TOKENS_COPY, formatShare } from '../../lib/copy';
 import type { TokenCategory } from '../../lib/tokens';
 
-/** The categories each headline figure adds up (docs/redesign/README.md §4.5). */
+/** The categories each headline figure adds up (docs/history/redesign/README.md §4.5). */
 export const NEW_WORK_TYPES: readonly TokenCategory[] = ['input', 'output'];
 export const TOTAL_TYPES: readonly TokenCategory[] = [
   'input',

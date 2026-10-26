@@ -5,15 +5,15 @@ detail kept behind collapsed "Details" sections and a "Data health" page (nothin
 reader may not know Claude Code: every screen must make sense to them.
 
 On 2026-10-16 the owner asked for a simpler, **project-first** app: pick a project, then every page
-is about that project (docs/redesign/README.md §3, §5). The Layout and Visual system sections
-below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
+is about that project ([the redesign plan](../../docs/history/redesign/README.md) §3, §5). The
+Layout and Visual system sections below are the binding rules for every page.
 
-> **v3 direction (v0.3.0 part 3, the GitHub-like redesign; owner decisions 2026-10-22, WP D-0):**
+> **v3 direction (v0.3.0 part 3, the GitHub-like redesign; owner decisions 2026-10-22):**
 >
 > - **A GitHub-like look:** GitHub's palette (white and canvas-subtle grey in light, GitHub dark
 >   in dark), 1px borders, 6px radius, one blue accent, a green primary button, a dark top bar in
 >   both themes, "Box" cards with a header row, underline tabs, outlined pill labels;
-> - **the system font stack** (no bundled fonts), 14px body (15px since C-S, below), semibold
+> - **the system font stack** (no bundled fonts), 14px body (15px since the shell polish, below), semibold
 >   headings;
 > - **themes:** Light, Dark and System (follows the computer), remembered per browser, chosen in
 >   the top bar's theme menu or Settings → Appearance, with no flash of the wrong theme on load;
@@ -23,10 +23,10 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 >   around it is GitHub-like. Lime is no longer an accent.
 >
 > Radix for dialogs, menus, tabs, popovers and tooltips, lucide icons and subtle motion that
-> respects reduced motion carry over from v2 (UI refresh, docs/ui-refresh/). The principles below
-> still hold. D-0 replaced the "Visual system" section with the v3 tokens, type and components.
+> respects reduced motion carry over from v2 (UI refresh, docs/history/ui-refresh/). The principles
+> below still hold. v3 replaced the "Visual system" section with its tokens, type and components.
 >
-> **Shell polish (v0.3.0 part 4, WP C-S, owner request 2026-10-22):** bigger and clearer: body
+> **Shell polish (v0.3.0 part 4, owner request 2026-10-22):** bigger and clearer: body
 > 15px with the type scale a step up, a 56px top bar, a 256px sidebar with 36px entries; the
 > sidebar toggle is a chevron on the sidebar itself; the top bar reads logo and "ACP" on the left,
 > a wide centred search, then the project switcher and the theme menu on the right. "Layout" and
@@ -79,7 +79,7 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
   sidebar, the demo banner and the pages' sticky parts read), **dark in both themes** like
   GitHub's header (`header` `#1f2328` light / `#010409` dark, `header-ink` text, `header-dim`
   quieter text, `header-line` borders, `header-hover` fills; `[data-topbar]` gives focus rings the
-  brighter `header-focus` blue, 3:1 or more on it). Three parts (v0.3.0 C-S, owner request
+  brighter `header-focus` blue, 3:1 or more on it). Three parts (v0.3.0, owner request
   2026-10-22); from `md` the left and right parts share the rest of the bar equally
   (`flex-1 basis-0`), so the search stays in the middle:
   - **left:** the Control Core mark (`BrandMark`, 28px, white with the accent centre) and the
@@ -93,7 +93,7 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
   - **right:** the **breadcrumbs**: the project switcher (`ProjectSwitcher.tsx`, 36px: current
     project, a menu of projects with their folders, All projects and New project), a slanted
     hairline, then the page (semibold; on a ticket "Board / WEB-21": Board links to the board and
-    the key is the current page, `aria-current`, not a link, once the ticket is read (C-D)); then
+    the key is the current page, `aria-current`, not a link, once the ticket is read); then
     the **theme menu** (`ThemeMenu`, a 36px bordered icon button, "Theme" below). On a narrow
     screen the page crumb gives way first and the switcher truncates, so the bar never scrolls
     sideways.
@@ -102,19 +102,19 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
   pages from `PROJECT_PAGES`, only the `available` ones) and **Workspace** (**All projects**,
   **Data health**), each a labelled `group`, with a divider between them. Entries are **36px**,
   an 18px icon (`dim`, `ink` on hover) plus a body-size (15px) label (`ink`), a `hover` fill
-  (v0.3.0 C-S). The bottom keeps only the status, as small text: the live-connection dot and
+  (v0.3.0). The bottom keeps only the status, as small text: the live-connection dot and
   word, and the server line.
   - Two widths: the full list (**256px**, `--spacing-sidebar`) or a **60px icon rail**
     (`--spacing-sidebar-collapsed`) whose entries show their label as a tooltip (and keep it as
     screen-reader text); in the rail the section headings are screen-reader text and the divider
     stays.
-  - The **sidebar toggle** (`SidebarToggle`, `data-testid="sidebar-toggle"`; v0.3.0 C-S, owner
+  - The **sidebar toggle** (`SidebarToggle`, `data-testid="sidebar-toggle"`; v0.3.0, owner
     request 2026-10-22: on the sidebar itself, not in the top bar) is a 32px bordered chevron
     button at the sidebar's top right, above the scrolling list so it never scrolls away: **‹**
     when open (hides it), **›** in the rail, centred over the icons (shows it). Its tooltip (to
     the right) is "Hide sidebar ⌘B" / "Show sidebar ⌘B" (Ctrl+B elsewhere), its name "Hide
     sidebar" / "Show sidebar", with `aria-controls`, `aria-expanded` and `aria-keyshortcuts`.
-    (D-0 had put it first in the top bar; before that it was in the sidebar's bottom corner,
+    (v3 first put it in the top bar; before that it was in the sidebar's bottom corner,
     which new users missed.)
   - The toggle or **⌘B** (Ctrl+B elsewhere) switches between them; the choice is remembered in
     this browser (`acp.sidebar` in localStorage, `sidebar-state.ts`). With no choice stored, the
@@ -144,16 +144,16 @@ below are the binding rules for every page WP (R-B, R-D, R-E, R-F, R-H).
 | Route                                      | Page                                                                  |
 | ------------------------------------------ | --------------------------------------------------------------------- |
 | `#/p/:projectId/board`                     | Board                                                                 |
-| `#/p/:projectId/workflow`                  | Workflow (stages, agents, limits; R-B)                                |
-| `#/p/:projectId/skills`, `…/skills/:name`  | Skills & Agents (`?tab=agents` for the Agents tab; R-D)               |
-| `#/p/:projectId/harness`                   | Harness (R-E)                                                         |
-| `#/p/:projectId/tokens`                    | Tokens (R-F: new work vs cache reuse, by session/ticket/role/model)   |
+| `#/p/:projectId/workflow`                  | Workflow (the graph editor, project defaults)                         |
+| `#/p/:projectId/skills`, `…/skills/:name`  | Skills & Agents (`?tab=agents` for the Agents tab)                    |
+| `#/p/:projectId/harness`                   | Harness                                                               |
+| `#/p/:projectId/tokens`                    | Tokens (new work vs cache reuse, by session/ticket/role/model)        |
 | `#/p/:projectId/sessions`                  | Sessions (the sessions list filtered to the project)                  |
 | `#/p/:projectId/settings`                  | Settings                                                              |
 | `#/p/:projectId/tickets/:ticketId`         | Ticket (`?tab=`, `?run=` an earlier run, `?change=` on Files changed) |
-| `…/tickets/:ticketId/files`                | Old link (D-A): redirects to `?tab=files` (keeps `?run=`)             |
-| `…/tickets/:ticketId/changes/:agentRunId`  | Old link (D-A): redirects to `?tab=files&change=:agentRunId`          |
-| `#/p/:projectId/runs/:runId`, `…/runs/new` | A Phase 3 run without a ticket, and its start page                    |
+| `…/tickets/:ticketId/files`                | Old link: redirects to `?tab=files` (keeps `?run=`)                   |
+| `…/tickets/:ticketId/changes/:agentRunId`  | Old link: redirects to `?tab=files&change=:agentRunId`                |
+| `#/p/:projectId/runs/:runId`, `…/runs/new` | A run without a ticket (the control panel), and its start page        |
 | `#/projects`                               | All projects (project cards + "Across your projects")                 |
 | `#/projects/new`                           | New project                                                           |
 | `#/health`, `#/health/connection`          | Data health: Overview, Connection                                     |
@@ -170,15 +170,16 @@ Build links with `href` (`src/lib/router.ts`): `href.projectPage(id, page, param
 `href.ticket({ id, projectId })`, `href.run({ id, projectId })`, `href.skill(id, name)`,
 `href.ticketFiles({ projectId, ticketId, runId? })` and
 `href.ticketChange({ projectId, ticketId, agentRunId, runId? })` (the ticket's Files changed tab,
-all changes or one change, since C-D). Never write hashes by hand.
+all changes or one change). Never write hashes by hand.
 
-### Adding a project page (R-B, R-D, R-E, R-F)
+### Adding a project page
 
 1. Build the page in your `features/<name>/` folder. Start it with `PageHeader` (title = the nav
    label, one short line, `tip` for the longer explanation, the primary action in `actions`).
-2. In `src/app/project-pages.ts`, set your entry's `available: true`.
-3. In `src/app/App.tsx` `ProjectScreen`, replace your `case` (which returns `NotFound`) with your
-   screen, keyed by `projectId`. `route.params` has the query; `route.item` is the `:name` of
+2. In `src/app/project-pages.ts`, add your entry to `PROJECT_PAGES` (in sidebar order) and set
+   `available: true` only once the page works (no placeholder pages, AGENTS.md §3.10).
+3. In `src/app/App.tsx` `ProjectScreen`, add a `case` that returns your screen, keyed by
+   `projectId`. `route.params` has the query; `route.item` is the `:name` of
    `skills/:name`.
 4. Add your copy in your own section of `src/lib/copy.ts`. The nav label is in `SHELL_COPY.nav.pages`.
 
@@ -194,7 +195,7 @@ Enter opens, Esc closes, Tab stays in the field, and focus returns to the opener
 
 ## Visual system (src/index.css, src/components)
 
-v3 (v0.3.0 D-0): GitHub's look (Primer's colors, borders, radius and components), around the
+v3 (v0.3.0): GitHub's look (Primer's colors, borders, radius and components), around the
 Control Core logo. Replaces v2's ivory, graphite and signal-lime palette and its bundled fonts.
 
 **Tokens.** All colors are CSS variables in `@theme` (`src/index.css`); `.dark` only redefines
@@ -260,11 +261,11 @@ primary button 4.5 / 4.6 (hover too); `header-ink` 11.8 / 13.7, `header-dim` 8.3
 "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif`), and the system monospace stack
   (`ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`) for
   ids, keys, numbers in code and paths. Nothing is bundled (v2's Inter and JetBrains Mono
-  `@font-face` rules are gone). One step larger since v0.3.0 C-S (owner request 2026-10-22,
+  `@font-face` rules are gone). One step larger since v0.3.0 (owner request 2026-10-22,
   "bigger and clearer"), set in the `--text-*` tokens so every page follows: body **15/22px**;
   `text-caption` 13/20px (small text); `text-micro` 12/16px (tiny badges and technical lines
   only); `text-title` 17/24px (card and dialog titles, sub-headings); `text-section` 22/30px;
-  `text-page` 26/36px; `text-stat` 26/36px (D-0 had 14, 12, 11, 16, 20, 24 and 24px). Controls
+  `text-page` 26/36px; `text-stat` 26/36px (v3 first had 14, 12, 11, 16, 20, 24 and 24px). Controls
   keep their heights (buttons and fields 32px, pills 20px). Headings are semibold with normal
   tracking. The wordmark is semibold, uppercase, tracked 0.1em (the top bar shows the short name
   "ACP" instead). Tables and `<time>` use tabular numbers; add `tabular-nums` wherever numbers
@@ -360,7 +361,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
 - **Toast:** the app has none; a saved form says so in place (a `role="status"` line).
 - **Errors** (`ErrorNotice`): an alert on `warning-soft` (server unreachable) or `danger-soft`,
   with an icon; tokens only.
-- **Theme** (`components/ThemeSwitch.tsx`, `lib/theme.ts`, v0.3.0 D-0): **Light**, **Dark** or
+- **Theme** (`components/ThemeSwitch.tsx`, `lib/theme.ts`, v0.3.0): **Light**, **Dark** or
   **System** (follows the computer's `prefers-color-scheme`, live: the page switches when the
   computer does).
   - `ThemeMenu`, in the top bar: an icon button showing the current choice's icon (sun, moon,
@@ -381,7 +382,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   for one color. From 20px it uses the master geometry (48 grid), below it the 16-grid one (the
   favicon's). Decorative (`aria-hidden`) unless given a `label`, which makes it `role="img"`.
   `BrandLogo` adds the wordmark: the app name as text, uppercase in CSS only, or screen-reader-only
-  with `hideName`; with `shortName` (the top bar's "ACP", C-S) the short name shows, hidden from
+  with `hideName`; with `shortName` (the top bar's "ACP") the short name shows, hidden from
   screen readers, and the full name stays as screen-reader text. The static files (`public/brand`, `docs/brand`) keep their own
   fixed colors, lime centre included; their rules are in the README, "Brand". The app chrome
   around the logo is GitHub-like since v3. The logo is identity, never decoration: one in the top
@@ -390,9 +391,9 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   `TokensIcon`, …), `IconProps` (`size`, SVG props), 1.75px strokes, `currentColor`,
   `aria-hidden`, so an icon never adds text. Every nav entry has one. `MoveIcon`, `AlertIcon`,
   `FeatureIcon`, `BugIcon`, `ChoreIcon` and `CloseIcon` are there for the board and dialogs.
-- **Diff viewer** (`components/diff`, v0.3.0 G-C, ADR-0025 §6): `DiffSection` (a `Details`-style
+- **Diff viewer** (`components/diff`, v0.3.0, ADR-0025 §6): `DiffSection` (a `Details`-style
   disclosure that draws the viewer only once opened) around `DiffViewer`, used by the change card,
-  the ticket branch card and, since G-D, the control panel's review and the ticket side panel's
+  the ticket branch card, the control panel's review and the ticket side panel's
   Changes tab (the old plain `DiffView` is gone).
   - A summary line; **Unified / Side by side** (`Segmented`, remembered in `acp.diff.view` in
     localStorage, every access guarded, shared by every viewer on the page); **Collapse all /
@@ -406,7 +407,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
     fold behind "Show N hidden lines". Side by side needs 36rem; where the viewer is narrower (the
     side panel beside the agents, a phone; followed with a ResizeObserver) it shows unified, with
     Side by side off (`aria-disabled`, tooltip "Not enough room here") and the saved choice kept
-    for wider places (G-D). Unified wraps long lines.
+    for wider places. Unified wraps long lines.
   - **Diff colors** (`diff.css`, GitHub's, v3): added lines `#dafbe1` / `#2ea04326` (light /
     dark), removed `#ffebe9` / `#f8514926`, changed words `#aceebb` / `#2ea04366` and `#ffcecb` /
     `#f8514966` laid over the line, hunk headers `#ddf4ff` / `#388bfd26`, the empty side of a split
@@ -422,7 +423,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
   - Large diffs: a file over 400 lines, and every file after the first 1,500 lines, waits for
     "Show this file". A diff the server cut says so, marks the cut file, and names the listed
     files after the cut.
-  - **For Files changed (D-A, C-D)**, `DiffFileView` takes optional, additive props; without them
+  - **For Files changed**, `DiffFileView` takes optional, additive props; without them
     it draws exactly as before: `slots` (`gutter` a control at a line's start per side, `below`
     rows under a line per side, one cell per side in split view, `selected` an accent bar on a
     range, `pinned` lines whose fold opens by itself), `headerEnd` (controls at the end of the
@@ -432,8 +433,7 @@ after:inset-0`), with `line-strong` and `shadow-raised` on hover. `StatCard`: on
 ## Agent views (the logo's vocabulary)
 
 The ticket's agent canvas, its live workflow, the Workflow page, the sessions graph, the sessions
-family tree and the legacy control tree draw agents the way the logo does (owner decision, WP
-U-G; the family tree in U-V):
+family tree and the legacy control tree draw agents the way the logo does (owner decision):
 
 - **Square nodes:** agent and stage nodes have a 2px radius (React Flow's
   `--xy-node-border-radius` too); tags on them are square as well. Start and Done stay pills: they
@@ -456,7 +456,7 @@ U-G; the family tree in U-V):
 - Diagrams show only real relationships and states (AGENTS.md rule 1): no decorative nodes or
   lines.
 
-### Review loop (ADR-0021, WP RL-D)
+### Review loop (ADR-0021)
 
 Only a run with the loop (`RunDetailDto.changes` or `.ticketBranch` present) gets these; a run
 from before it renders as it always did (`features/review-loop/logic.ts` `isReviewLoopRun`).
@@ -466,7 +466,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   checked with core's `CommandPatternSchema` as it is typed); Review & merge → reviewer, rework
   rounds 0–5 and the review agent's agent file, model and skill. The graph adds a "Rework" loop
   from Review back to Helpers (it leaves Review off-centre, `out-top-loop`, clear of the plan
-  approval's line) and an **owner-merge gate** ("You · Merge into main") with Done under it.
+  approval's line) and an **owner-merge gate** ("You · Finish", v0.3.1) with Done under it.
 - **Start dialog** (`StartDialog`, shared `Dialog`): from the board's "Start with options…" and
   the ticket page's "Options" button; each choice starts at the project's setting (marked
   "Project setting") and only the changes are sent. Plain Start/Re-run stay one click.
@@ -478,7 +478,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   The live graph's review node shows the run's counts, the gate is ringed `needs-you` at REVIEW
   and `success` once merged, and the helpers row says how many are in review.
 
-### Live run graph and run options as a limit (ADR-0023, WP WG-E)
+### Live run graph and run options as a limit (ADR-0023)
 
 - **Ticket page:** the live workflow draws the run's own graph (`GET /api/runs/:id/workflow-graph`,
   `features/ticket/LiveRunGraph.tsx`), read-only, in the editor's block look: square agent blocks
@@ -494,7 +494,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   every editing block shows a neutral note that it changes nothing. The old widening warnings
   stay only for a server without graphs.
 
-## Session names and run summaries (ADR-0024, WP S-B)
+## Session names and run summaries (ADR-0024)
 
 - **One naming rule** (`src/lib/session-name.ts` `nameSession`, pure, tested per case), used by
   every view that lists or draws sessions: the Sessions list, a session's page, the family tree
@@ -516,7 +516,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
 
 - **Run summary** (ticket comments by author `app`): a card of its own in the comments (`sunken`
   header with the "Run summary" title, the run number and an "Agent Control Plane" tag; the body on
-  `panel`). Since v0.3.0 S-C it reads like a teammate's comment: a summary with a `Details:` line
+  `panel`). Since v0.3.0 it reads like a teammate's comment: a summary with a `Details:` line
   shows the lead's note (or the app's one plain sentence when the lead left none) as normal comment
   text, the header says "Lead · Run summary" when the words are the lead's (just "Run summary"
   otherwise, "(updated)" on a later handover), and the facts sit behind a collapsed "Details"
@@ -527,7 +527,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   acp/WEB-12 into main at 4f2a9c1") is a small line with a merge icon instead of a card. Your, the
   lead's and the reviewer's comments are unchanged.
 
-## Branching and GitHub (ADR-0025, WP G-B)
+## Branching and GitHub (ADR-0025)
 
 - **Settings → Branches** (`features/branching/BranchingFields.tsx`, rules in `strategy-form.ts`):
   the strategy as choice cards (GitHub flow, Git flow, Custom, "None, keep acp/<KEY>"); the base
@@ -562,7 +562,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   error code (`gh-not-installed`, `gh-not-logged-in`, `no-github-remote`, `push-rejected`,
   `pr-exists-elsewhere`, `timeout`, `gh-failed`) reads as a sentence with what to do; the raw error
   stays under Details.
-- **G-D follow-ups:**
+- **Pull request follow-ups:**
   - **Read on opening** (`branching/pull-request-check.tsx`): when the ticket page opens and its
     current branch has an open pull request, the page asks the server to read it once
     (`POST …/pull-request/refresh`), decided on the page's first render: a pull request opened
@@ -579,14 +579,14 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
     opened pull request #N into <target>" (or "…; pull request #N into <target> was already
     open"). Branches and the commit are code; the number is plain text, not a link.
 
-## Files changed: one GitHub review UI (v0.3.0 D-A, C-D)
+## Files changed: one GitHub review UI (v0.3.0)
 
 Owner decisions 2026-10-22: "The code review should be like a code review in GitHub, side by
-side" (D-A), then "we have two different UI for code review and view after; we need a single UI"
-(C-D). The ticket page's **Files changed tab is the review UI** (`features/ticket/FilesTab.tsx`
-over D-A's `features/review/` parts); there is no separate summary table, second diff viewer or
+side", then "we have two different UI for code review and view after; we need a single UI". The
+ticket page's **Files changed tab is the review UI** (`features/ticket/FilesTab.tsx` over the
+`features/review/` parts); there is no separate summary table, second diff viewer or
 review page. The shell drops its 88rem limit while the tab is open (`nav.ts` `fullWidth`), like
-GitHub's. D-A's addresses `…/tickets/:ticketId/files` and `…/changes/:agentRunId` redirect
+GitHub's. The older addresses `…/tickets/:ticketId/files` and `…/changes/:agentRunId` redirect
 (replace) to `?tab=files` and `?tab=files&change=:agentRunId`, keeping `?run=`.
 
 - **Head** (`files-head`): **Changes from** (`ChangePicker.tsx`, a Radix menu of
@@ -652,7 +652,7 @@ GitHub's. D-A's addresses `…/tickets/:ticketId/files` and `…/changes/:agentR
 - Copy lives in `features/review/copy.ts`; the rules (selection, state, "no longer available") in
   `features/review/files-state.ts`; no server change and no new storage.
 
-## Ticket page: Comments, Conversation, attachments (v0.3.0 C-B, ADR-0026)
+## Ticket page: Comments, Conversation, attachments (v0.3.0, ADR-0026)
 
 The ticket page's tabs are **Comments · Agents · Files changed · Checks · Conversation**
 (`ticket-tabs.ts`). Comments is the default (no `?tab=`); `?tab=conversation` opens the last one.
@@ -688,31 +688,34 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   lines; agents' notes, the reviewer's findings (an accent edge and the "Reviewer" label), the
   lead's notes and decisions as boxes; the run facts as the run summary card (ADR-0024's card,
   moved here); merges and pull requests as the small merge line. Links per item: Files changed
-  with that change or all changes chosen (C-D), the pull request (opens on GitHub), the plan. A
+  with that change or all changes chosen, the pull request (opens on GitHub), the plan. A
   server without the route gets the same timeline from the ticket's own runs, plans and comments.
 - **Files changed after a merge:** the same review UI read only, with the purple "Merged" label
   (see "Files changed: one GitHub review UI"); "Files no longer available" when the commits are
   gone.
 - Copy lives in `features/activity/copy.ts`.
 
-## The harness in the workflow (ADR-0027, WP H-D)
+## The harness in the workflow (ADR-0027)
 
-- **Checks blocks on the canvas** are step pills as wide as an agent card (216×40), with a small
-  outlined chip saying what they run ("Required", "2 checks", "fast · full"; read out as "Runs:
-  …"). On a change they sit in the work row next to the helpers; on the branch on the merge chain
-  before your merge. No new link kinds or styles: a change block is reached by a "Next step" link
+- **Checks blocks on the canvas** are steps as wide as an agent card (216×52, since v0.3.1): their
+  place in plain words over their name ("Checks before merge", "Checks on a change", "Checks on
+  the branch"), and a small outlined chip saying what they run ("Required", "2 checks", "fast ·
+  full"; read out as "Runs: …"). On a change they sit in the work row next to the helpers; on the
+  branch on the merge chain before the Finish block. No new link kinds or styles: a change block is reached by a "Next step" link
   and sends work back with a "Rework" link.
 - **Add block** has a third group, **Checks**: "Checks on a change" (linked from the selected
-  helper or tester when it has none, else the first without one) and "Checks on the branch" (one,
-  just before your merge). A full item stays listed with its reason, like the others.
+  helper or tester when it has none, else the first without one), "Checks before merge" (one,
+  between the lead and the ticket branch) and "Checks on the branch" (one, just before the Finish
+  block). A full item stays listed with its reason, like the others.
 - **The Checks block panel** (`editor/CheckBlockFields.tsx`): Name; **Where it runs** (the block
-  before the lead's merge is fixed: a note says every workflow has it, and it has no Remove);
+  before the lead's merge stays in its place; since ADR-0028 it can be removed like any other);
   **Which checks** as choice cards (all required / pick checks / by label) with a checklist of
   the harness's checks (name, id, Required, labels) or label chips (`aria-pressed`), a picked
   name the harness no longer has flagged in the warning tone with a remove button, and a
   "Runs: …" line; **When a check fails** offers only the place's routes in plain words, and
-  "Back to the helper" shows the rounds (0–5) of its rework link. Missing picks are warnings in
-  Problems (code `check-missing`, `check-label-missing`).
+  "Back to the helper" shows the rounds (0–5) of its rework link; a last line says the block is
+  optional and what happens without it. Missing picks are warnings in Problems (code
+  `check-missing`, `check-label-missing`).
 - **Harness page:** a **Setup** card (steps table: name with a warning-tone "Uses the network"
   badge, command, time limit, "Creates" folders) with the **"Setup may use the network"** switch
   (`role="switch"`, its On/Off word next to it, saved at once; the line under it says how many
@@ -723,6 +726,60 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   the lead's merge (rows without a place land here), On the ticket branch, Run now on the main
   branch. Setup and check outputs are native disclosures, open when the step or check did not
   pass; the chevron's turn honours reduced motion.
+
+## Effort, optional checks and the Finish block (ADR-0028, v0.3.1)
+
+- **Effort:** an agent block's panel has an **Effort** select under Model: "Default (the model
+  decides)", Low, Medium, High, with one hint line ("How much the agent thinks before acting: more
+  effort is slower and uses more tokens."). Default leaves the field out of the graph. A block
+  that sets one shows a neutral outlined chip ("High effort") next to its skills on the canvas
+  and on the live graph, and the agent's Details tab has an **Effort** row (from the run's own
+  graph; left out while it is not known).
+- **Checks blocks are optional:** every one has Remove. With none, Problems lists core's warning
+  (under "Warnings (you can still save)"); Save stays enabled.
+- **The Finish block** (`features/workflow/finish.ts`): the editor and the live run graph draw the
+  end of every flow (ticket merge → your merge → Done) as one fixed block on the `subtle` well
+  (editor 320×64, live 300×76): the accent "you" icon, **Finish**, "Merge into <target> or open
+  a pull request" (the project's default target in the editor, the run's target on the ticket
+  page, "your target branch" when unknown; never "main" unless the target is main) and a Done
+  tick on the right ("then Done" in `dim`; "Done" in `success` with the success ring once the
+  ticket is done). It is the `owner-merge` node: links end on it, none starts from it, it has no
+  Remove, and its panel explains the final step in one sentence and three numbered lines.
+  Presentation only: the stored graph keeps the three nodes and their links, a link around a
+  hidden step keeps its own id, and a problem with a hidden step shows on the Finish block.
+
+## Linking blocks in the Workflow editor (v0.3.1)
+
+Every way of linking makes only the links core's `canConnect` allows (`resolveLink`,
+`editor/linking.ts`); the editor never adds its own rule.
+
+- **Start anywhere:** a block a link can start from has a connector on each side: a 14px dot in a
+  28px target (at least 12px and 24px on screen at the usual zoom), hidden until the block is
+  hovered, focused or selected; the right one is always faintly there as a small square. A thin
+  strip along each edge starts a link too. The right connector is a focusable button ("Link from
+  <block>: press Enter, then choose a block"); the others are pointer shortcuts.
+- **While a link is drawn:** a smooth curve in the accent (dashed while there is nowhere to drop
+  it, solid once snapped) with a soft halo. The blocks it may end on take the accent frame and
+  soft ring, the one it would end on now a stronger ring; the others fade to 35%; the other links
+  fade back. It snaps onto the nearest valid block within 80 screen pixels and meets the side
+  facing it. Finished links stay orthogonal.
+- **Drop anywhere on a block** (8px of slop around its border): one fitting kind is made at once;
+  several open the small "What does this link do?" choice by the drop point; none is refused in
+  core's words in the danger note at the canvas's foot.
+- **Click to link:** a click (or Enter) on a connector starts a link; a status note at the top of
+  the canvas says "Linking from <block>: click a highlighted block…" with Cancel; a click (or
+  Enter on a focused block) ends it; Escape cancels.
+- **"Link to…":** the block panel's button and the block's context menu (right-click, the
+  context-menu key or Shift+F10) list only the valid ends, one item per kind that fits, the kind's
+  link sample and name on the right. A Radix menu: arrows, Home/End, typing and Escape.
+- **Move a link's end:** a selected link is drawn above the blocks with a round grip on each end
+  (panel fill, accent ring; accent on hover). Drag a grip to another block: valid blocks glow as
+  above, the link keeps its kind (and rounds) when it fits; an invalid block is refused in core's
+  words and the link stays; a drop on empty canvas snaps it back.
+- **Undo, Redo, Tidy layout:** quiet icon buttons after Add block in the toolbar (⌘Z / ⇧⌘Z, Ctrl
+  on other platforms, outside text fields and dialogs; at most 50 steps; typing in one field is
+  one step). Tidy layout puts every block back in the automatic layout, gliding for 320ms (no
+  glide with reduced motion) and refitting; it is off while the layout is already tidy.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 

@@ -1,6 +1,6 @@
 # Agent SDK: narrowing a managed agent's tools (2026-10-16)
 
-Research for WP R-I (docs/redesign/README.md §6a): how the adapter can apply a project agent file's
+Research for WP R-I (docs/history/redesign/README.md §6a): how the adapter can apply a project agent file's
 `tools` list so it only **narrows** a role's tools. Sources: the Agent SDK TypeScript reference,
 the SDK permissions page, the Claude Code subagents page and the tools reference (code.claude.com
 docs, read 2026-10-16), plus the JSDoc in the installed `@anthropic-ai/claude-agent-sdk` 0.3.296

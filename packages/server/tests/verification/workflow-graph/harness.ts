@@ -10,14 +10,14 @@ import { createFakeManagedAdapter } from '../../control/fake-adapter.js';
 import { git, makeTempDir } from '../control/harness.js';
 
 /*
- * WG-V harness (docs/workflow-graph/wp/WG-V.md). Deliberately free of vitest imports, so the
- * data-copy check and the real-run driver (plain `node --import tsx` scripts) share it with the
- * tests. It starts the real server composition (`startServer`) on 127.0.0.1 with an ephemeral port
- * (never 7420 or 5173), live mode over an EMPTY temp Claude dir and a temp home (so nothing of the
- * owner's ~/.claude is read, listed or even resolved), git isolated from the owner's config with a
- * fixed test identity (skill and agent file commits need one), and an injected managed adapter:
- * the scripted fake, unless a caller passes another one. Neither the Agent SDK nor `claude` ever
- * starts from here.
+ * WG-V harness (docs/workflow-graph/wp/WG-V.md at tag v0.3.0). Deliberately free of vitest imports,
+ * so the data-copy check and the real-run driver (plain `node --import tsx` scripts) share it with
+ * the tests. It starts the real server composition (`startServer`) on 127.0.0.1 with an ephemeral
+ * port (never 7420 or 5173), live mode over an EMPTY temp Claude dir and a temp home (so nothing of
+ * the owner's ~/.claude is read, listed or even resolved), git isolated from the owner's config
+ * with a fixed test identity (skill and agent file commits need one), and an injected managed
+ * adapter: the scripted fake, unless a caller passes another one. Neither the Agent SDK nor
+ * `claude` ever starts from here.
  */
 
 /** Git isolated from the owner's config, with a fixed identity (as the owner's config gives). */

@@ -1,9 +1,14 @@
 {
   "name": "@acp/db",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
-  "description": "SQLite persistence: migrations, repositories, transactions. Owned by work package P1-B.",
+  "description": "SQLite persistence for Agent Control Plane: migrations, repositories, transactions.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keerthivibisan/agent-control-plane.git",
+    "directory": "packages/db"
+  },
   "type": "module",
   "exports": {
     ".": {

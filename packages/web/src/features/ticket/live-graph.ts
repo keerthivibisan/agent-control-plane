@@ -16,9 +16,11 @@ import type {
   WorkflowStageState,
 } from '@acp/core/api';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
-import { WORKFLOW_LIVE_COPY } from '../../lib/copy';
+import { FINISH_COPY, HARNESS_BLOCKS_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
 import { isAgentLive } from '../control/run-state';
 import { reworkRoundsBy } from '../review-loop/logic';
+import { checkPlaceOf, isChecksNode } from '../workflow/check-blocks';
+import { finishParts, finishView, type FinishParts } from '../workflow/finish';
 
 const G = WORKFLOW_LIVE_COPY.graph;
 
@@ -28,6 +30,8 @@ const G = WORKFLOW_LIVE_COPY.graph;
  * its agents, the mode each editing block runs with and the rework counts on the rework links.
  * Pure, so it is tested without a canvas. Blocks are square and links differ by their dashes,
  * never by the accent (DESIGN.md, "Agent views"); the same look as the Workflow page's editor.
+ * The end of the flow is one Finish block (ADR-0028 §3, `features/workflow/finish.ts`): your merge
+ * stands for the ticket merge and Done too, with the run's real target branch.
  */
 
 // ---------------------------------------------------------------- layout
@@ -40,6 +44,10 @@ export const GATE_H = 72;
 /** Ticket and Done are pills: they are not agents. */
 export const END_W = 120;
 export const END_H = 44;
+export const CHECKS_W = 204;
+/** The Finish block: "Finish", "Merge into <target> or open a pull request", then Done. */
+export const FINISH_W = 300;
+export const FINISH_H = 76;
 const COL_GAP = 44;
 const ROW_GAP = 76;
 /** Room between stacked blocks for a rework link's label. */
@@ -58,6 +66,9 @@ export function isGateNode(node: WorkflowNode): boolean {
 
 export function blockSize(node: WorkflowNode): { width: number; height: number } {
   if (node.type === 'ticket' || node.type === 'done') return { width: END_W, height: END_H };
+  if (node.type === 'owner-merge') return { width: FINISH_W, height: FINISH_H };
+  // A Checks block names its place ("Checks before merge"), so it is wider than the other steps.
+  if (node.type === 'checks') return { width: CHECKS_W, height: GATE_H };
   if (isGateNode(node)) return { width: GATE_W, height: GATE_H };
   return { width: AGENT_W, height: AGENT_H };
 }
@@ -92,10 +103,13 @@ function finalChain(graph: WorkflowGraph): WorkflowNode[] {
  *
  *   Ticket → (Planner →) Plan approval
  *   Lead → helpers (stacked) → change reviewers (stacked)
- *   Checks → Ticket branch → final reviewers and testers → Your merge (Done under it)
+ *   Checks → final reviewers and testers → Finish
+ *
+ * The steps the Finish block stands for (the ticket merge and Done) take its position.
  */
 export function layoutLiveGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodePosition> {
   const of = (type: WorkflowNode['type']) => graph.nodes.filter((n) => n.type === type);
+  const finish = finishParts(graph);
   const rows: WorkflowNode[][][] = [
     [of('ticket'), of('planner'), of('plan-approval')],
     [
@@ -103,12 +117,14 @@ export function layoutLiveGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodeP
       [...of('helper'), ...of('helper-pool')],
       graph.nodes.filter((n) => n.type === 'reviewer' && n.scope === 'change'),
     ],
-    [
-      of('checks'),
-      of('ticket-merge'),
-      ...finalChain(graph).map((n) => [n]),
-      [...of('owner-merge'), ...of('done')],
-    ],
+    finish === null
+      ? [
+          of('checks'),
+          of('ticket-merge'),
+          ...finalChain(graph).map((n) => [n]),
+          [...of('owner-merge'), ...of('done')],
+        ]
+      : [of('checks'), ...finalChain(graph).map((n) => [n]), of('owner-merge')],
   ].map((row) => row.filter((cell) => cell.length > 0));
   const positions = new Map<WorkflowNodeId, NodePosition>();
   let top = 0;
@@ -131,12 +147,31 @@ export function layoutLiveGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodeP
     });
     if (row.length > 0) top += rowH + ROW_GAP;
   }
+  const at = finish === null ? undefined : positions.get(finish.ownerMerge);
   graph.nodes.forEach((node, i) => {
-    if (!positions.has(node.id)) {
+    if (at !== undefined && (node.id === finish?.ticketMerge || node.id === finish?.done)) {
+      positions.set(node.id, at);
+    } else if (!positions.has(node.id)) {
       positions.set(node.id, node.position ?? { x: i * (AGENT_W + COL_GAP), y: top });
     }
   });
   return positions;
+}
+
+/**
+ * The Finish block's state from its three steps: done once Done is reached; else your merge's
+ * state while it has one (waiting for you, working, failed); else a failed ticket merge; else
+ * waiting.
+ */
+export function finishState(
+  parts: FinishParts,
+  states: ReadonlyMap<WorkflowNodeId, { state: WorkflowStageState }>,
+): WorkflowStageState {
+  const of = (id: WorkflowNodeId) => states.get(id)?.state ?? 'waiting';
+  if (of(parts.done) === 'done') return 'done';
+  const owner = of(parts.ownerMerge);
+  if (owner !== 'waiting' && owner !== 'off') return owner;
+  return of(parts.ticketMerge) === 'failed' ? 'failed' : 'waiting';
 }
 
 // ---------------------------------------------------------------- blocks
@@ -152,9 +187,11 @@ export interface LiveBlockData {
   sandbox: boolean;
   /** A change reviewer that sends changes back to its helpers itself (review route "direct"). */
   direct: boolean;
+  /** The Finish block's target branch (the run's), null while not known. */
+  target: string | null;
 }
 
-export type LiveBlock = Node<LiveBlockData, 'agent' | 'gate'>;
+export type LiveBlock = Node<LiveBlockData, 'agent' | 'gate' | 'finish'>;
 
 export interface LiveLinkData {
   [key: string]: unknown;
@@ -254,42 +291,50 @@ function handlesFor(
 /** The run's graph as React Flow blocks and links. */
 export function buildLiveGraph(
   dto: RunWorkflowGraphDto,
-  run: Pick<RunDetailDto, 'agents'> & Partial<Pick<RunDetailDto, 'changes'>>,
+  run: Pick<RunDetailDto, 'agents'> & Partial<Pick<RunDetailDto, 'changes' | 'ticketBranch'>>,
 ): LiveGraph {
   const { graph } = dto;
   const positions = layoutLiveGraph(graph);
   const states = new Map(dto.nodes.map((n) => [n.nodeId, n]));
   const direct = directReviewers(graph);
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const counts = reworkCounts(graph, dto.nodes, run.changes ?? []);
+  // As drawn: the Finish block in place of the end steps.
+  const view = finishView(graph);
+  const byId = new Map(view.graph.nodes.map((n) => [n.id, n]));
+  const target = run.ticketBranch?.baseBranch ?? null;
 
-  const nodes = graph.nodes.map((node): LiveBlock => {
+  const nodes = view.graph.nodes.map((node): LiveBlock => {
     const live = states.get(node.id);
     const ids = new Set(live?.agentRunIds ?? []);
     const { width, height } = blockSize(node);
+    const finish = view.finish !== null && node.id === view.finish.ownerMerge;
     return {
       id: node.id,
-      type: isGateNode(node) ? 'gate' : 'agent',
+      type: finish ? 'finish' : isGateNode(node) ? 'gate' : 'agent',
       position: positions.get(node.id) ?? { x: 0, y: 0 },
       width,
       height,
       draggable: false,
       connectable: false,
       selectable: false,
-      ariaLabel: `${kindWord(node)}: ${node.label}`,
+      ariaLabel: finish ? FINISH_COPY.label(target) : `${kindWord(node)}: ${node.label}`,
       data: {
         node,
         // A block the server does not list has not been reached.
-        state: live?.state ?? 'waiting',
+        state:
+          finish && view.finish !== null
+            ? finishState(view.finish, states)
+            : (live?.state ?? 'waiting'),
         agents: run.agents.filter((a) => ids.has(a.id)),
         mode: live?.approvalMode ?? null,
         sandbox: live?.sandbox === true,
         direct: direct.has(node.id),
+        target,
       },
     };
   });
 
-  const edges = graph.edges.map((e): LiveLink => {
+  const edges = view.graph.edges.map((e): LiveLink => {
     const look = LINK_LOOK[e.type];
     const isDirect = e.type === 'rework' && byId.get(e.from)?.type === 'reviewer';
     const reworks = counts.get(e.id) ?? 0;
@@ -303,11 +348,7 @@ export function buildLiveGraph(
       type: 'step',
       selectable: false,
       focusable: false,
-      ariaLabel: G.linkName(
-        G.links[e.type],
-        byId.get(e.from)?.label ?? e.from,
-        byId.get(e.to)?.label ?? e.to,
-      ),
+      ariaLabel: G.linkName(G.links[e.type], labelOf(byId, e.from), labelOf(byId, e.to)),
       className: `live-link-${e.type}${isDirect ? ' live-link-direct' : ''}`,
       markerEnd: { type: MarkerType.ArrowClosed, color: look.stroke, width: 16, height: 16 },
       style: {
@@ -346,8 +387,16 @@ export function buildLiveGraph(
   };
 }
 
-/** The word for a block's kind ("Change reviewer", "You"). */
+/** A block's name in a link's spoken name: the Finish block by its title. */
+function labelOf(byId: ReadonlyMap<string, WorkflowNode>, id: string): string {
+  const node = byId.get(id);
+  if (node === undefined) return id;
+  return node.type === 'owner-merge' ? FINISH_COPY.title : node.label;
+}
+
+/** The word for a block's kind ("Change reviewer", "You", "Checks before merge"). */
 export function kindWord(node: WorkflowNode): string {
+  if (isChecksNode(node)) return HARNESS_BLOCKS_COPY.kinds[checkPlaceOf(node)];
   if (node.type === 'reviewer') {
     return node.scope === 'change' ? G.kinds['reviewer-change'] : G.kinds['reviewer-final'];
   }

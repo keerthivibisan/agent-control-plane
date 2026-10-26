@@ -1,4 +1,5 @@
 import type {
+  AgentEffort,
   AgentRoleKind,
   AgentRun,
   CheckSelection,
@@ -250,6 +251,12 @@ export interface RunState {
    */
   handoverPrompted?: boolean;
   /**
+   * Loop runs (P-D, v0.3.1): time the run spent waiting only for the owner's decision on a change
+   * (`waitsOnlyForOwner`). The run timeout (ADR-0013 §3) does not count it. In memory only, like
+   * the ledger: after a restart the run is NEEDS_REVIEW and never times out again.
+   */
+  ownerWait?: OwnerWait;
+  /**
    * The run's approval mode and command allowlist (ADR-0021 §1), snapshotted at creation; the
    * engine re-checks each pre-approval against it. Absent: the legacy project allowlist.
    */
@@ -267,6 +274,14 @@ export interface RunState {
    * order. Used for the lead's brief of the approved plan. In memory with the live run.
    */
   planStepHelpers?: Readonly<Record<string, readonly WorkflowNodeId[]>>;
+}
+
+/** `RunState.ownerWait`: the run's waits for the owner so far. */
+export interface OwnerWait {
+  /** When the current wait began (UTC ISO), or null while the run is not waiting. */
+  since: string | null;
+  /** The length of the waits that already ended, in milliseconds. */
+  totalMs: number;
 }
 
 /** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
@@ -341,6 +356,12 @@ export type EngineEffect =
        * (`resolveAgentModel`). A missing or unsafe file never blocks the start.
        */
       agent?: string;
+      /**
+       * ADR-0028 §1: the node's reasoning effort, present only when its block sets one (absent:
+       * the model's default). Rework turns of the node carry it too. The server copies it into
+       * `ManagedAgentSpec.effort`.
+       */
+      effort?: AgentEffort;
       /**
        * A rework turn (ADR-0021 §3): the helper works again in its own worktree on the comments in
        * `prompt`, resuming `resumeSessionId` (null: a fresh session). Never with `canStartHelpers`.
@@ -474,8 +495,8 @@ export type EngineEffect =
   /**
    * A follow-up turn of the ended lead (ADR-0020): resume its saved session `resumeSessionId` in
    * the project root, answers-only (read-only tools, no control tools), for this one message.
-   * `prompt` is the app's preface plus the owner's message. `model` and `agent` are the lead's
-   * stage model and agent file, as for its `start-agent` (no skills: answers only).
+   * `prompt` is the app's preface plus the owner's message. `model`, `agent` and `effort` are the
+   * lead's stage model, agent file and effort, as for its `start-agent` (no skills: answers only).
    */
   | {
       type: 'start-follow-up';
@@ -484,6 +505,8 @@ export type EngineEffect =
       prompt: string;
       model?: string;
       agent?: string;
+      /** ADR-0028 §1: the lead node's effort, when its block sets one. */
+      effort?: AgentEffort;
     }
   /** End the follow-up turn under way (budget reached, the owner's Stop, Stop all). */
   | { type: 'abort-follow-up'; agentRunId: string }
@@ -516,7 +539,9 @@ export type EngineEffect =
         | 'follow-up-session-changed'
         | 'follow-up-over-budget'
         /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
-        | 'full-auto-unavailable';
+        | 'full-auto-unavailable'
+        /** P-D: a rework turn could not resume the helper's session and started a new one. */
+        | 'rework-session-replaced';
       agentRunId: string;
     };
 

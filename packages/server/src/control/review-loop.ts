@@ -42,7 +42,13 @@ import {
   type CodeHostService,
 } from '../code-host/index.js';
 import { HttpError } from '../errors.js';
-import { branchSpec, changeSpec, mergeSpec, type CheckSpec } from '../harness/index.js';
+import {
+  branchSpec,
+  changeSpec,
+  mergeSpec,
+  runsNothing,
+  type CheckSpec,
+} from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
 import {
   WorkspaceError,
@@ -66,8 +72,9 @@ import {
 import type { RunStore } from './store.js';
 
 /**
- * The server half of the review loop (ADR-0021 §3–§4, docs/review-loop/README.md §6). The engine
- * decides; this module carries out its git effects with the workspace manager and reports back:
+ * The server half of the review loop (ADR-0021 §3–§4, docs/history/review-loop/README.md §6). The
+ * engine decides; this module carries out its git effects with the workspace manager and
+ * reports back:
  *
  * - `seal-change`: commit the helper's worktree, then `changeSealed`; the sealed commit's checks
  *   start at once;
@@ -305,8 +312,10 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     const checks = ctx.commitChecks();
     if (checks === undefined) return;
     const runId = live.state.run.id;
-    if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
     const spec = agentRunId === null ? branchChecks(live) : mergeChecks(live);
+    // ADR-0028 §2: no Checks block at this place: nothing runs, so nothing reports back either.
+    if (runsNothing(spec)) return;
+    if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
     checks.start(
       runId,
       agentRunId,

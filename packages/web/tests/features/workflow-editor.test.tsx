@@ -18,7 +18,7 @@ import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../hel
 /*
  * WG-D: the Workflow page on the graph editor (ADR-0023), against a fake server answering the new
  * routes with the shared synthetic fixtures. React Flow draws the blocks; the editing goes through
- * the palette, the block panel's fields and "Add a link" (the keyboard way to link two blocks), so
+ * the palette, the block panel's fields and "Link to…" (the keyboard way to link two blocks), so
  * no drag is needed here. Dragging and a refused drop are covered in e2e (workflow.spec.ts).
  */
 
@@ -102,16 +102,10 @@ async function select(id: string) {
   await waitFor(() => expect(panel().querySelector(`[data-node="${id}"]`)).not.toBeNull());
 }
 
-/** Adds a link from the selected block with the panel's "Add a link" form. */
+/** Adds a link from the selected block with the panel's "Link to…" menu (v0.3.1 P-C). */
 function addLink(to: string, kind: string) {
-  const form = within(panel()).getByTestId('add-link');
-  fireEvent.change(within(form).getByRole('combobox', { name: 'To' }), {
-    target: { value: to },
-  });
-  fireEvent.change(within(form).getByRole('combobox', { name: 'Kind of link' }), {
-    target: { value: kind },
-  });
-  fireEvent.click(within(form).getByRole('button', { name: 'Add link' }));
+  fireEvent.click(within(panel()).getByTestId('link-to'));
+  fireEvent.click(screen.getByTestId(`link-to-${to}-${kind}`));
 }
 
 describe('Workflow page: the graph editor', () => {
@@ -421,6 +415,48 @@ describe('Workflow page: the graph editor', () => {
       'You have unsaved changes to the workflow. Leave without saving them?',
     );
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('"Link to…" lists only the blocks core allows; Undo and Redo (buttons and keys)', async () => {
+    render();
+    await screen.findByTestId('graph-editor');
+    addBlock(/^Named helper/);
+    await select('orchestrate');
+    fireEvent.click(within(panel()).getByTestId('link-to'));
+    const menu = screen.getByTestId('link-to-menu');
+    const items = within(menu)
+      .getAllByRole('menuitem')
+      .map((i) => i.dataset.testid);
+    // The new helper takes two kinds from the lead; the existing helpers and checks are linked
+    // already, and the ticket is never an end.
+    expect(items).toEqual(['link-to-helper-1-assigns', 'link-to-helper-1-rework']);
+    fireEvent.click(screen.getByTestId('link-to-helper-1-assigns'));
+    await waitFor(() => expect(screen.queryByTestId('link-to-menu')).toBeNull());
+    expect(within(panel()).getByTestId('edge-panel').dataset.type).toBe('assigns');
+
+    const undo = screen.getByTestId('undo');
+    const redo = screen.getByTestId('redo');
+    expect(redo.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(undo);
+    expect(screen.queryByTestId('edge-panel')).toBeNull();
+    expect(redo.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(redo);
+    await select('orchestrate');
+    expect(within(panel()).getByTestId('node-links').textContent).toContain('Helper 1');
+    // ⌘Z / Ctrl+Z outside a text field; back past the added block to the saved graph.
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: 'z', metaKey: true });
+    expect(screen.queryByTestId('block-helper-1')).toBeNull();
+    expect(screen.queryByTestId('unsaved')).toBeNull();
+    expect(undo.hasAttribute('disabled')).toBe(true);
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true, shiftKey: true });
+    expect(screen.getByTestId('block-helper-1')).toBeTruthy();
+    expect(screen.getByTestId('unsaved')).toBeTruthy();
+    // In a text field the key is the field's own undo.
+    await select('helper-1');
+    const name = within(panel()).getByRole('textbox', { name: 'Name' });
+    fireEvent.keyDown(name, { key: 'z', metaKey: true });
+    expect(screen.getByTestId('block-helper-1')).toBeTruthy();
   });
 });
 

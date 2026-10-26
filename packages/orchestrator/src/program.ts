@@ -25,9 +25,9 @@ import { runLimits } from './limits.js';
 import type { EngineAgent, RunIntegration, RunLimits } from './state.js';
 
 /**
- * The run's compiled workflow program (ADR-0023 §4, docs/workflow-graph/README.md §3). Every
- * stage decision of the engine reads it: who plans, which helper nodes exist with their launch
- * fields, modes and review routes, and the final stages in order.
+ * The run's compiled workflow program (ADR-0023 §4, docs/history/workflow-graph/README.md §3).
+ * Every stage decision of the engine reads it: who plans, which helper nodes exist with their
+ * launch fields, modes and review routes, and the final stages in order.
  *
  * A run with a graph snapshot (`RunState.graph`) compiles it with its `graphContext`. A version 1
  * run (no graph) migrates its workflow snapshot with `migrateWorkflowV1`, with the run's own
@@ -124,6 +124,15 @@ function compiled(view: ProgramView): Compiled {
 /** The run's compiled program (memoized; throws only for a stored graph the validator refuses). */
 export function programOf(view: ProgramView): WorkflowProgram {
   return compiled(view).program;
+}
+
+/**
+ * ADR-0028 §2: whether the run's workflow has a Checks block before the lead's merge. Without
+ * one the lead merges a change after its review: no checks run on it, and none gate its merge.
+ * Every version 1 run and every graph from before ADR-0028 has one.
+ */
+export function hasMergeChecks(view: ProgramView): boolean {
+  return programOf(view).checkBlocks.merge !== null;
 }
 
 /** The graph the run follows: its snapshot, or its version 1 workflow migrated. */

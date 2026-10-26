@@ -30,9 +30,26 @@ export const EDITOR_COPY = {
     how: 'How this works',
     howSentences: [
       'Each block is an agent or a step, and its kind fixes what it may do.',
-      'Drag from the dot on a block’s right edge to another block to link them; only allowed links can be made.',
+      'Drag from any edge or dot of a block onto another block (or click a dot, then the block) to link them; only allowed links light up.',
       'Fix the problems, then press Save: nothing changes until you do.',
     ],
+    undo: 'Undo',
+    redo: 'Redo',
+    undoTitle: (keys: string) => `Undo (${keys})`,
+    redoTitle: (keys: string) => `Redo (${keys})`,
+    tidy: 'Tidy layout',
+    tidyTitle: 'Put every block back in the automatic layout',
+    tidyDone: 'Already tidy: every block is in the automatic layout',
+  },
+  linkTo: {
+    button: 'Link to…',
+    title: (label: string) => `Link ${label} to…`,
+    none: 'No block can be linked from here',
+  },
+  clickLink: {
+    hint: (label: string) =>
+      `Linking from ${label}: click a highlighted block to link it, or press Escape.`,
+    cancel: 'Cancel',
   },
   zoom: {
     label: 'Zoom',
@@ -79,6 +96,7 @@ export const EDITOR_COPY = {
         .join(', '),
     more: (n: number) => `and ${countOf(n, 'more')}`,
     validTarget: 'Can link here',
+    linkFrom: (label: string) => `Link from ${label}: press Enter, then choose a block`,
   },
   chooser: {
     title: 'What does this link do?',

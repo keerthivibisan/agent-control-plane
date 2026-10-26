@@ -134,9 +134,11 @@ function removeOne(graph: WorkflowGraph, rng: GraphRng, match: (e: WorkflowEdge)
 function deleteNodeOfType(type: WorkflowNodeType): GraphMutation {
   return {
     name: `delete the ${type} block`,
-    expectedCode: 'missing-node',
+    // ADR-0028 §2: a Checks block is optional, but deleting the block before the merge without
+    // giving the lead a merge link to the ticket merge breaks the merge path.
+    expectedCode: type === 'checks' ? 'merge-path' : 'missing-node',
     apply: (graph) => {
-      // Checks: the mandatory block before the lead's merge (other blocks may be removed freely).
+      // Checks: the block before the lead's merge (other blocks may be removed freely).
       const node = type === 'checks' ? mergeBlock(graph) : firstOfType(graph, type);
       return node === undefined ? null : removeNode(graph, node.id);
     },
@@ -337,8 +339,11 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
   forbidden('a helper flows to your merge', (g, rng) =>
     edgeBetween('flow', pickId(helperNodes(g), rng), idOf(firstOfType(g, 'owner-merge'))),
   ),
+  // ADR-0028 §2: forbidden only past a block before the merge; without one it is the merge path.
   forbidden('the lead merges into the ticket merge directly', (g) =>
-    edgeBetween('merge', leadId(g), idOf(firstOfType(g, 'ticket-merge'))),
+    mergeBlock(g) === undefined
+      ? null
+      : edgeBetween('merge', leadId(g), idOf(firstOfType(g, 'ticket-merge'))),
   ),
   forbidden('a change reviewer sends findings to a helper', (g, rng) =>
     edgeBetween('findings', pickId(changeReviewers(g), rng), pickId(helperNodes(g), rng)),
@@ -554,7 +559,15 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
   {
     name: 'add a second Checks block before the merge',
     expectedCode: 'too-many-nodes',
-    apply: (graph) => addBlock(graph, 'merge').graph,
+    apply: (graph) => {
+      let g = graph;
+      while (
+        g.nodes.filter((n) => n.type === 'checks' && (n.place ?? 'merge') === 'merge').length < 2
+      ) {
+        g = addBlock(g, 'merge').graph;
+      }
+      return g;
+    },
   },
   {
     name: 'add a second Checks block on the ticket branch',
@@ -705,6 +718,27 @@ export const GRAPH_MUTATIONS: readonly GraphMutation[] = Object.freeze([
       return block === null || editor === null
         ? null
         : addEdge(graph, { type: 'rework', from: block, to: editor, maxRounds: 1 });
+    },
+  },
+  // ------------------------------------------------------------ optional checks (ADR-0028 §2)
+  // Appended last, so the mutants above stay the same for a seed.
+  {
+    name: 'add a Checks block before the merge without the lead merging through it',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph) => {
+      if (mergeBlock(graph) !== undefined) return null;
+      const ticketMerge = idOf(firstOfType(graph, 'ticket-merge'));
+      if (ticketMerge === null) return null;
+      const { graph: g, id } = addBlock(graph, 'merge');
+      return addEdge(g, { type: 'flow', from: id, to: ticketMerge });
+    },
+  },
+  {
+    name: 'the lead merges into the ticket branch without its merge link',
+    expectedCode: 'merge-path',
+    apply: (graph, rng) => {
+      if (mergeBlock(graph) !== undefined) return null;
+      return removeOne(graph, rng, (e) => e.type === 'merge');
     },
   },
 ]);

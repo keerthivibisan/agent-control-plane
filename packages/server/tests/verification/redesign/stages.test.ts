@@ -33,9 +33,9 @@ import {
 } from './harness.js';
 
 /*
- * R-V: the redesign's workflow end to end over HTTP (docs/redesign/README.md §4.2, §6a; ADR-0019).
- * One ticket goes through every stage with the owner's own skills and agent files, written and
- * committed through the Skills & Agents routes:
+ * R-V: the redesign's workflow end to end over HTTP (docs/history/redesign/README.md §4.2, §6a;
+ * ADR-0019). One ticket goes through every stage with the owner's own skills and agent files,
+ * written and committed through the Skills & Agents routes:
  *
  *   separate planner (skill `planning`, agent file `plan-style`) → plan review → lead (agent file
  *   `lead-style`) → one helper → review & merge → final code review (agent file `strict-reviewer`,

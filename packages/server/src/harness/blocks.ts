@@ -19,6 +19,13 @@ import type {
  *   run (without a branch block every check runs, as before); only the required checks gate the
  *   owner's merge, as before (ADR-0027 §6): the branch block's other picks are shown, not enforced;
  * - main ("Run checks now"): every check runs; nothing gates.
+ *
+ * ADR-0028 §2 (checks gate only where the workflow places them), for a workflow WITHOUT a block
+ * before the lead's merge (a graph saved after ADR-0028; every older graph and every version 1
+ * run has one and keeps the rules above exactly):
+ * - before the lead's merge: nothing runs and nothing gates (`NO_CHECKS`);
+ * - the ticket branch: with a branch block, its selection runs and gates the owner's merge; without
+ *   one, nothing runs and nothing gates, so the owner merges without "Merge anyway".
  */
 export interface CheckSpec {
   place: CheckRunPlace;
@@ -55,8 +62,22 @@ export function checksToGate(
   return union(manifest, spec.gate);
 }
 
-/** The block before the lead's merge (and its early run on a sealed change). */
+/** No check runs and none gates (ADR-0028 §2: no Checks block at this place). */
+function noChecks(place: CheckRunPlace): CheckSpec {
+  return { place, blockNodeId: null, run: [], gate: [] };
+}
+
+/** True when the spec runs no check at all, so there is nothing to start (or set up) for it. */
+export function runsNothing(spec: CheckSpec): boolean {
+  return spec.run !== 'all' && spec.run.length === 0;
+}
+
+/**
+ * The block before the lead's merge (and its early run on a sealed change). `program` null: a
+ * stored graph the validator refuses, which keeps the old defaults (every required check).
+ */
 export function mergeSpec(program: WorkflowProgram | null): CheckSpec {
+  if (program !== null && program.checkBlocks.merge === null) return noChecks('merge');
   const block = program?.checkBlocks.merge;
   const select = block?.select ?? REQUIRED;
   return {
@@ -70,6 +91,12 @@ export function mergeSpec(program: WorkflowProgram | null): CheckSpec {
 /** The ticket branch tip before the owner's merge (and the branch block's own run). */
 export function branchSpec(program: WorkflowProgram | null): CheckSpec {
   const block = program?.checkBlocks.branch ?? null;
+  if (program !== null && program.checkBlocks.merge === null) {
+    // ADR-0028 §2: gated only by a block placed on the ticket branch, by its own selection.
+    return block === null
+      ? noChecks('branch')
+      : { place: 'branch', blockNodeId: block.nodeId, run: [block.select], gate: [block.select] };
+  }
   if (block === null) return { place: 'branch', blockNodeId: null, run: 'all', gate: [REQUIRED] };
   return {
     place: 'branch',

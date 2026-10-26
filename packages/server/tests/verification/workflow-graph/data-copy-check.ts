@@ -18,10 +18,10 @@ import { makeTempDir } from '../control/harness.js';
 import { sweepRepositories, tableDigests, v010Readability } from './v010-readers.js';
 
 /*
- * WG-V data-copy check (docs/workflow-graph/RESUME.md Step 4b item 4; the owner consented in chat
- * on 2026-10-20 to checking the new build on a COPY of their data). The coordinator runs it; it is
- * never run from `pnpm test` against real data (its test uses a synthetic copy). From
- * packages/server:
+ * WG-V data-copy check (docs/workflow-graph/RESUME.md at tag v0.3.0, Step 4b item 4; the owner
+ * consented in chat on 2026-10-20 to checking the new build on a COPY of their data). The
+ * coordinator runs it; it is never run from `pnpm test` against real data (its test uses a
+ * synthetic copy). From packages/server:
  *
  *   node --conditions=development --import tsx \
  *     tests/verification/workflow-graph/data-copy-check.ts --data-dir <copy> --port <n>

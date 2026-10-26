@@ -8,7 +8,7 @@
 
 Phase 3 M1 runs agents from a single control-panel chat. The owner wants work organised like a
 Jira board: many projects, tickets per project, and each ticket worked by agents with the owner's
-approval of a plan first (docs/phase-4/README.md).
+approval of a plan first (docs/history/phase-4/README.md).
 
 ## Decision
 

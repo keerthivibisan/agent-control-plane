@@ -1,9 +1,14 @@
 {
   "name": "@acp/web",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
-  "description": "React dashboard: Command Center, Session Explorer, usage views. Owned by P1-E.",
+  "description": "The Agent Control Plane web UI (React): board, tickets, workflow editor, sessions and tokens.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keerthivibisan/agent-control-plane.git",
+    "directory": "packages/web"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

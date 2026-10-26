@@ -47,7 +47,7 @@ function costDto(snapshot: { reportedCostUsd: number | null } | null): ReportedC
 }
 
 /**
- * The project Tokens page (docs/redesign/README.md §4.5): the db query does the accounting
+ * The project Tokens page (docs/history/redesign/README.md §4.5): the db query does the accounting
  * (direct usage only, usage-accounting §6); this maps it to `ProjectTokensDto`, adding provenance.
  */
 export function createTokensService(deps: { db: AcpDatabase; now?: () => Date }): TokensService {

@@ -12,7 +12,7 @@ import {
  * Golden version 1 traces (README "Graph correctness", layer 5). The snapshots were recorded on
  * the engine BEFORE WG-B changed it (feature/workflow-graph 7ffd373). They must never be updated
  * to make a test pass: a difference is a behaviour change, to be explained in
- * docs/workflow-graph/wp/WG-B.md. Synthetic data only.
+ * docs/workflow-graph/wp/WG-B.md at tag v0.3.0. Synthetic data only.
  */
 describe('golden v1 traces', () => {
   it('has unique case names', () => {

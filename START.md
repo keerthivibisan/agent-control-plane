@@ -90,17 +90,17 @@ ACP_MODE=demo ACP_DATA_DIR="$(mktemp -d)" ACP_PORT=7451 pnpm --filter @acp/serve
 Set these as environment variables when you start the server. Invalid values stop the server at
 start with a message naming the variable.
 
-| Variable               | Default                                | Meaning                                                                              |
-| ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------ |
-| `ACP_PORT`             | `7420`                                 | the server's port; it always binds `127.0.0.1`                                       |
-| `ACP_DATA_DIR`         | `~/.agent-control-plane`               | where the app keeps its database, hook token and agent workspaces                    |
-| `ACP_CLAUDE_DIR`       | `$CLAUDE_CONFIG_DIR`, else `~/.claude` | the Claude Code data folder to read (read-only)                                      |
-| `ACP_MODE`             | `live`                                 | `live`, or `demo` for sample data                                                    |
-| `ACP_MANAGED`          | on in live mode, off in demo mode      | `off` turns managed agent runs off; the app then only observes sessions              |
-| `ACP_POLL_INTERVAL_MS` | `5000`                                 | how often session files are checked for new records                                  |
-| `ACP_ACTIVE_WINDOW_MS` | `120000` (2 minutes)                   | a session with activity this recent counts as running                                |
-| `ACP_STALE_AFTER_MS`   | `1800000` (30 minutes)                 | a session idle this long counts as inactive; must be at least `ACP_ACTIVE_WINDOW_MS` |
-| `ACP_RUN_TIMEOUT_MS`   | `7200000` (2 hours)                    | a managed run still working after this long is stopped                               |
+| Variable               | Default                                | Meaning                                                                                                                      |
+| ---------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ACP_PORT`             | `7420`                                 | the server's port; it always binds `127.0.0.1`                                                                               |
+| `ACP_DATA_DIR`         | `~/.agent-control-plane`               | where the app keeps its database, hook token and agent workspaces                                                            |
+| `ACP_CLAUDE_DIR`       | `$CLAUDE_CONFIG_DIR`, else `~/.claude` | the Claude Code data folder to read (read-only)                                                                              |
+| `ACP_MODE`             | `live`                                 | `live`, or `demo` for sample data                                                                                            |
+| `ACP_MANAGED`          | on in live mode, off in demo mode      | `off` turns managed agent runs off; the app then only observes sessions                                                      |
+| `ACP_POLL_INTERVAL_MS` | `5000`                                 | how often session files are checked for new records                                                                          |
+| `ACP_ACTIVE_WINDOW_MS` | `120000` (2 minutes)                   | a session with activity this recent counts as running                                                                        |
+| `ACP_STALE_AFTER_MS`   | `1800000` (30 minutes)                 | a session idle this long counts as inactive; must be at least `ACP_ACTIVE_WINDOW_MS`                                         |
+| `ACP_RUN_TIMEOUT_MS`   | `7200000` (2 hours)                    | a managed run still working after this long is stopped; time spent waiting only for your decision on a change is not counted |
 
 ## Where your data lives
 
@@ -130,8 +130,9 @@ and reads the rest only for folders you added as projects. It never reads Claude
 
 **What it writes in your projects.** Only on your actions: a new repository when you create one,
 skill and agent files under `.claude/skills/` and `.claude/agents/` from the Skills & Agents page,
-the ticket branch (`acp/<KEY>`) when you approve a plan, and the final merge into main when you
-merge a ticket. Agents never write in your own working folder; each helper works in its own git
+the ticket branch (named by the project's branching strategy, `acp/<KEY>` without one) when you
+approve a plan, and the final merge into the ticket's target branch when you merge a ticket (or a
+push to `origin` when you open a pull request). Agents never write in your own working folder; each helper works in its own git
 worktree under `ACP_DATA_DIR`.
 
 The app makes no network calls of its own: no telemetry and no update checks. Managed runs start
@@ -163,9 +164,9 @@ The same steps, with copy buttons, are on the **Data health → Connection** pag
    already on your computer, or let the app create a new, empty one. The setup then asks how agents
    work (ticket prefix, helpers at once, budget per agent, model), which actions are pre-approved,
    which context files agents read, and the harness checks.
-2. **Set the workflow.** On **Workflow**, pick the approval mode (Manual, Auto edits, Auto or Full
-   auto) and choose each stage's model, skill and agent file. Turn on the final code review and the
-   unit-test writer if you want them.
+2. **Set the workflow.** On **Workflow**, start from a template or draw your own graph: a planner,
+   the lead, helpers, reviewers, a tester and Checks blocks. Each agent block has its own model,
+   effort, skills, agent file and approval mode (Manual, Auto edits, Auto or Full auto).
 3. **Create a ticket.** On **Board**, choose **New ticket** and describe the work.
 4. **Start a run.** Use the card's **Move** menu (**Start**), or **Start** on the ticket page.
    **Start with options…** changes the approval mode, reviewer or rework rounds for this run only.

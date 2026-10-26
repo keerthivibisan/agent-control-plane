@@ -8,6 +8,7 @@ import {
   HARD_MAX_DEPTH,
   isPathInside,
   LeadToolInputs,
+  type AgentEffort,
   type AgentRoleKind,
   type Attachment,
   type FullAutoSpec,
@@ -75,7 +76,7 @@ import {
   isActiveAgentStatus,
   isApprovalOverdue,
   isLiveAgentStatus,
-  isRunPastDeadline,
+  isRunOverdue,
   leadHasEnded,
   leadToolCall,
   ownerChat,
@@ -188,9 +189,15 @@ const NON_TERMINAL: readonly RunStatus[] = [
 ];
 /**
  * Run states the run timeout applies to; a run under review, or a plan waiting for the owner
- * (PLAN_REVIEW), waits for the owner.
+ * (PLAN_REVIEW), waits for the owner. So does a loop run whose only pending work is a change at
+ * the owner's decision: that time is not counted (`isRunOverdue`, P-D).
  */
 const WORKING: readonly RunStatus[] = ['QUEUED', 'PLANNING', 'RUNNING', 'BLOCKED'];
+
+/** P-D: the ticket's line when a rework turn could not continue the helper's saved session. */
+export function reworkNewSessionLine(role: string): string {
+  return `${role} could not continue its earlier conversation, so it reworks its change in a new session, in the same folder with its earlier work.`;
+}
 
 export const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SWEEP_INTERVAL_MS = 15_000;
@@ -508,6 +515,8 @@ interface LaunchInput {
   setup: AgentSetup;
   /** The stage's model (`start-agent.model`); else the agent file's, else the project's. */
   model?: string | undefined;
+  /** ADR-0028 §1: the node's reasoning effort (`start-agent.effort`); absent: the model's default. */
+  effort?: AgentEffort | undefined;
   plugin?: { path: string; skills: readonly string[] } | undefined;
   /** The stage's agent file (ADR-0019 §6), when it could be read; its `model` is the fallback. */
   agentFile?: { profile: AgentProfile; model: string | null } | undefined;
@@ -944,6 +953,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             agentRunId: effect.agentRunId,
             code: effect.code,
           });
+          // P-D: the owner reads it on the ticket in plain words (app data only: the role).
+          if (effect.code === 'rework-session-replaced') {
+            const role = live.state.agents.find((a) => a.id === effect.agentRunId)?.role;
+            appComment(live, reworkNewSessionLine(role ?? 'A helper'));
+          }
           break;
       }
     }
@@ -1094,6 +1108,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       kind,
       prompt: kind === 'lead' ? withTicketSummary(live, effect.prompt) : effect.prompt,
       model: effect.model,
+      effort: effect.effort,
     };
     if (kind === 'lead' || kind === 'planner') {
       if (
@@ -1456,6 +1471,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           kind: effect.kind,
           prompt,
           model: effect.model,
+          effort: effect.effort,
           cwd: ws.cwd,
           setup,
           plugin,
@@ -1634,6 +1650,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           followUp: { resumeSessionId: effect.resumeSessionId },
         };
         if (setup.context.trim() !== '') spec.context = setup.context;
+        // ADR-0028 §1: the lead node's effort, as for its own turns.
+        if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
         let handle: ManagedAgentHandle;
         try {
@@ -1873,6 +1891,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
+    // ADR-0028 §1: only when the node sets one (absent: the model's default).
+    if (input.effort !== undefined) spec.effort = input.effort;
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
     const title = sessionTitle(live, agentRunId);
     if (title !== undefined) spec.title = title;
@@ -2401,7 +2421,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           if (result.ok) logger.log('info', 'approvals expired', { runId, count: result.value });
         }
         const run = live.state.run;
-        if (WORKING.includes(run.status) && isRunPastDeadline(run, now, runTimeoutMs)) {
+        // P-D: the time a run waits only for the owner's decision does not count.
+        if (WORKING.includes(run.status) && isRunOverdue(live.state, now, runTimeoutMs)) {
           logger.log('warn', 'run timed out', { runId });
           apply(live, timeOutRun);
         }

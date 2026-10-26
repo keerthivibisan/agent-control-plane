@@ -7,7 +7,7 @@
 - **Amends:** ADR-0017 (the harness manifest, the commands the app may run), ADR-0021 §3 (when
   checks run and who decides after a failure), ADR-0023 (the Checks gate becomes a configurable
   block)
-- **Plan:** [docs/v0.3.0/README.md](../v0.3.0/README.md), part 5 (H series)
+- **Plan:** [docs/history/v0.3.0/README.md](../history/v0.3.0/README.md), part 5 (H series)
 
 ## Context
 

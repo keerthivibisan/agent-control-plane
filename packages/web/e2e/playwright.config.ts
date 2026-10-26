@@ -100,6 +100,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
     },
     {
+      // v0.3.1 P-B (ADR-0028): effort, optional Checks blocks, the Finish block (editor, live).
+      name: 'effort-finish',
+      testMatch: 'effort-finish.spec.ts',
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PORT}` },
+    },
+    {
       // Redesign R-F: the project Tokens page (and its screenshots) on the demo server.
       name: 'tokens',
       testMatch: 'tokens.spec.ts',

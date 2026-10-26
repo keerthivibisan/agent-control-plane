@@ -32,9 +32,9 @@ import {
 } from './harness.js';
 
 /*
- * R-V: the lead's chat after the lead ends (ADR-0020, docs/redesign/README.md §6b) end to end
- * over HTTP. A ticket run completes in lead mode, with an orchestrate-stage agent file that lists
- * `Read, Bash`; then the owner's chat message resumes the lead for one answers-only turn.
+ * R-V: the lead's chat after the lead ends (ADR-0020, docs/history/redesign/README.md §6b) end to
+ * end over HTTP. A ticket run completes in lead mode, with an orchestrate-stage agent file that
+ * lists `Read, Bash`; then the owner's chat message resumes the lead for one answers-only turn.
  *
  * Checked: the resume id is the lead's own linked session; the real adapter's SDK options for the
  * turn (`resume`, no fork, `Read` only, subagents and edits disallowed, no MCP server, no skills);

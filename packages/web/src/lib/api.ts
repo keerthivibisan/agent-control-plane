@@ -555,8 +555,8 @@ export async function reviewAction(client: ApiClient, runId: string, input: Revi
 
 // --- Board (Phase 4, wp/p4-e-board) -------------------------------------------------------------
 //
-// Routes from docs/phase-4/README.md §6.3, served by P4-D. Every response is parsed with its
-// @acp/core/api DTO; every mutation sends the CSRF header (ADR-0013) through `controlPost`.
+// Routes from docs/history/phase-4/README.md §6.3, served by P4-D. Every response is parsed with
+// its @acp/core/api DTO; every mutation sends the CSRF header (ADR-0013) through `controlPost`.
 
 export type CreateTicketRequest = ReturnType<typeof CreateTicketRequestSchema.parse>;
 export type MoveTicketRequest = ReturnType<typeof MoveTicketRequestSchema.parse>;
@@ -618,8 +618,8 @@ export function startTicket(client: ApiClient, ticketId: string, input?: StartTi
 
 // --- Project setup: wizard and settings (Phase 4, wp/p4-f-project-setup) ------------------------
 //
-// Served by P4-D (docs/phase-4/README.md §6.3). Every mutation sends the CSRF header like the
-// control panel; the harness POSTs send an empty JSON body.
+// Served by P4-D (docs/history/phase-4/README.md §6.3). Every mutation sends the CSRF header like
+// the control panel; the harness POSTs send an empty JSON body.
 
 export type CreateRepoProjectRequest = ReturnType<typeof CreateRepoProjectRequestSchema.parse>;
 export type UpdateProjectSetupRequest = ReturnType<typeof UpdateProjectSetupRequestSchema.parse>;
@@ -732,11 +732,12 @@ export function getContextCandidates(client: ApiClient, projectId: string, signa
 
 // --- Ticket page (Phase 4, wp/p4-g-ticket) ------------------------------------------------------
 //
-// Routes from docs/phase-4/README.md §6.3, served by P4-D. Assumed response bodies (proposed to
-// P4-D): PATCH /tickets/:id, POST /tickets/:id/start and POST /tickets/:id/plans/:planId/decision →
-// TicketDetailDto; POST /tickets/:id/comments → TicketCommentDto; GET /runs/:id/checks and
-// POST /runs/:id/agents/:agentId/checks → CheckRunDto[]. The Phase 3 route
-// POST /runs/:id/agents/:agentId/message → AgentRunDto. Every mutation sends the CSRF header.
+// Routes from docs/history/phase-4/README.md §6.3, served by P4-D. Assumed response bodies
+// (proposed to P4-D): PATCH /tickets/:id, POST /tickets/:id/start and POST
+// /tickets/:id/plans/:planId/decision → TicketDetailDto; POST /tickets/:id/comments →
+// TicketCommentDto; GET /runs/:id/checks and POST /runs/:id/agents/:agentId/checks → CheckRunDto[].
+// The Phase 3 route POST /runs/:id/agents/:agentId/message → AgentRunDto. Every mutation sends the
+// CSRF header.
 
 export type UpdateTicketRequest = ReturnType<typeof UpdateTicketRequestSchema.parse>;
 export type TicketCommentRequest = ReturnType<typeof TicketCommentRequestSchema.parse>;
@@ -875,11 +876,11 @@ export const tokensSchemas = {
 
 // --- Workflow page (redesign R-B, wp/r-b-workflow) ----------------------------------------------
 //
-// Served by R-G (docs/redesign/wp/R-G.md): GET /api/projects/:id/workflow → ProjectWorkflowDto,
-// read only by the ticket page's version 1 view, for a server from before graphs. It answers 409
-// `workflow_is_graph` once a project stores a graph, so everything else (the Workflow page, the run
-// options, Skills & Agents) reads the graph below since WG-D and WG-F. The agent files list,
-// GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's.
+// Served by R-G (docs/redesign/wp/R-G.md at tag v0.3.0): GET /api/projects/:id/workflow →
+// ProjectWorkflowDto, read only by the ticket page's version 1 view, for a server from before
+// graphs. It answers 409 `workflow_is_graph` once a project stores a graph, so everything else (the
+// Workflow page, the run options, Skills & Agents) reads the graph below since WG-D and WG-F. The
+// agent files list, GET /api/projects/:id/agents → AgentDefinitionSummaryDto[], is R-D's.
 
 export const workflowPaths = {
   workflow: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/workflow`,
@@ -893,7 +894,7 @@ export const workflowSchemas = {
 
 // --- Workflow graph (WG-D, wp/wg-d-editor; ADR-0023) ---------------------------------------------
 //
-// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9): GET/PUT
+// Served by WG-C (docs/history/workflow-graph/README.md, WG-0 refinement 9): GET/PUT
 // /api/projects/:id/workflow-graph → WorkflowGraphDto, POST …/workflow-graph/validate →
 // ValidateWorkflowGraphResultDto. A PUT of a graph with an error answers 422 `workflow_invalid`.
 // The project's limits and approvals still save through PUT …/setup.
@@ -1099,10 +1100,11 @@ export function commitAgent(client: ApiClient, projectId: string, name: string) 
 
 // --- Ticket page workflow and harness history (redesign R-H, wp/r-h-polish) ----------------------
 //
-// Served by R-G (docs/redesign/wp/R-G.md): GET /api/runs/:id/workflow → RunWorkflowDto (404 for an
-// unknown run, and while managed agents are off); POST /api/runs/:id/continue (CSRF, no body) →
-// RunDetailDto; GET /api/projects/:id/harness/checks → CheckRunDto[], the last 50 main-branch
-// results, newest first (the same path as "Run checks now", which POSTs).
+// Served by R-G (docs/redesign/wp/R-G.md at tag v0.3.0): GET /api/runs/:id/workflow →
+// RunWorkflowDto (404 for an unknown run, and while managed agents are off); POST
+// /api/runs/:id/continue (CSRF, no body) → RunDetailDto; GET /api/projects/:id/harness/checks →
+// CheckRunDto[], the last 50 main-branch results, newest first (the same path as "Run checks now",
+// which POSTs).
 
 export const runWorkflowPaths = {
   workflow: (runId: string) => `${API_BASE}/runs/${enc(runId)}/workflow`,
@@ -1118,12 +1120,12 @@ export const runWorkflowSchemas = {
 
 // --- Live run graph and the blocks' modes (WG-E, wp/wg-e-live; ADR-0023) ------------------------
 //
-// Served by WG-C (docs/workflow-graph/README.md, WG-0 refinement 9). GET /api/runs/:id/workflow-graph
-// (`runWorkflowPaths.graph` above) answers the run's snapshot graph; a server from before it
-// answers 404 (or 409), and the ticket page then keeps the version 1 view. The run options, the
-// Start dialog, the board badge and "Used by" read the project's graph with the editor's path and
-// schema (`workflowGraphPaths`), so they share one cache entry: the project's defaults, the
-// blocks' own approval modes and the blocks that use a file (WG-F).
+// Served by WG-C (docs/history/workflow-graph/README.md, WG-0 refinement 9). GET
+// /api/runs/:id/workflow-graph (`runWorkflowPaths.graph` above) answers the run's snapshot graph; a
+// server from before it answers 404 (or 409), and the ticket page then keeps the version 1 view.
+// The run options, the Start dialog, the board badge and "Used by" read the project's graph with
+// the editor's path and schema (`workflowGraphPaths`), so they share one cache entry: the project's
+// defaults, the blocks' own approval modes and the blocks that use a file (WG-F).
 
 /** 404 or 409: the server has no graph for this run or project (a server from before ADR-0023). */
 export function isGraphUnavailable(error: ApiError | null): boolean {

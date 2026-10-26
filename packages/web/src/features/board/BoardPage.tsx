@@ -31,8 +31,8 @@ import { NewTicketDialog } from './NewTicketDialog';
 const C = BOARD_COPY;
 
 /**
- * "2 running · 1 needs you": the board's one live line (docs/redesign/README.md §4.1). The token
- * tiles and the harness state have their own pages now, linked from the header.
+ * "2 running · 1 needs you": the board's one live line (docs/history/redesign/README.md §4.1). The
+ * token tiles and the harness state have their own pages now, linked from the header.
  */
 export function LiveLine({ stats }: { stats: BoardDto['stats'] }) {
   return (
@@ -324,8 +324,8 @@ function Board({ projectId }: { projectId: string }) {
 }
 
 /**
- * `#/p/:projectId/board` (docs/redesign/README.md §4.1): one project's tickets in columns by stage.
- * The project comes from the address; the top bar's switcher is the only project picker.
+ * `#/p/:projectId/board` (docs/history/redesign/README.md §4.1): one project's tickets in columns
+ * by stage. The project comes from the address; the top bar's switcher is the only project picker.
  */
 export function BoardPage({ projectId }: { projectId: string }) {
   return <Board key={projectId} projectId={projectId} />;

@@ -8,7 +8,7 @@
   - ADR-0009 (one more kind of owner-facing text stored as a ticket comment);
   - ADR-0016 and ADR-0021 (what is kept as ticket comments);
   - ADR-0012 (the managed agent spec gains a title).
-- **Plan:** [docs/v0.3.0/README.md](../v0.3.0/README.md)
+- **Plan:** [docs/history/v0.3.0/README.md](../history/v0.3.0/README.md)
 
 ## Context
 

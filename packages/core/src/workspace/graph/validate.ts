@@ -168,21 +168,14 @@ function checksNodes(nodes: readonly WorkflowNode[]): WorkflowNodeOf<'checks'>[]
 }
 
 /**
- * ADR-0027 §5: exactly one block before the lead's merge (the mandatory block, so no graph merges
- * a change without checks), at most one on the ticket branch. Change blocks are bounded by the
- * editing nodes (each flows into at most one, `many-check-blocks`) and the graph's node limit.
+ * ADR-0027 §5 as amended by ADR-0028 §2: every Checks block is optional; at most one before the
+ * lead's merge and at most one on the ticket branch. Change blocks are bounded by the editing nodes
+ * (each flows into at most one, `many-check-blocks`) and the graph's node limit. A workflow with no
+ * block at all gets the `no-checks` warning (`checkNoChecks`).
  */
 function checkBlockCounts(graph: WorkflowGraph, issues: Issues): void {
   const blocks = checksNodes(graph.nodes);
   const merge = blocks.filter((n) => isCheckBlockAt(n, 'merge'));
-  if (merge.length === 0) {
-    issues.error(
-      'missing-node',
-      blocks.length === 0
-        ? 'The workflow needs a Checks block.'
-        : 'The workflow needs a Checks block before the Lead’s merge, so no change is merged without checks.',
-    );
-  }
   const extraMerge = merge[1];
   if (extraMerge !== undefined) {
     issues.error(
@@ -386,11 +379,30 @@ function checkAssigned({ index, valid, issues }: Scope): void {
   }
 }
 
+/**
+ * The lead's merge: through the block before the merge, which flows to the ticket merge; without
+ * one (ADR-0028 §2), straight into the ticket merge. With more than one block before the merge
+ * (`too-many-nodes`) the path is not checked.
+ */
 function checkMergePath({ graph, valid, issues }: Scope): void {
   const lead = singleOfType(graph, 'lead');
   const mergeBlocks = graph.nodes.filter((n) => isCheckBlockAt(n, 'merge'));
-  const checks = mergeBlocks.length === 1 ? mergeBlocks[0] : undefined;
   const ticketMerge = singleOfType(graph, 'ticket-merge');
+  if (mergeBlocks.length === 0) {
+    if (
+      lead !== undefined &&
+      ticketMerge !== undefined &&
+      !has(valid, 'merge', lead.id, ticketMerge.id)
+    ) {
+      issues.error(
+        'merge-path',
+        `${q(lead)} needs a merge link to ${q(ticketMerge)}: only the Lead merges changes into the ticket branch, after their review.`,
+        { nodeId: lead.id },
+      );
+    }
+    return;
+  }
+  const checks = mergeBlocks.length === 1 ? mergeBlocks[0] : undefined;
   if (lead !== undefined && checks !== undefined && !has(valid, 'merge', lead.id, checks.id)) {
     issues.error(
       'merge-path',
@@ -699,6 +711,13 @@ function checkModes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Iss
   }
 }
 
+/** ADR-0028 §2: the editor warns (never refuses) when a workflow has no Checks block at all. */
+export const NO_CHECKS_MESSAGE = 'No checks: changes merge after review only.';
+
+function checkNoChecks(graph: WorkflowGraph, issues: Issues): void {
+  if (!graph.nodes.some((n) => n.type === 'checks')) issues.warning('no-checks', NO_CHECKS_MESSAGE);
+}
+
 function checkInstances(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues): void {
   const limit = ctx.maxConcurrentHelpers;
   if (limit === undefined) return;
@@ -717,7 +736,8 @@ function checkInstances(graph: WorkflowGraph, ctx: ValidateGraphContext, issues:
  * Any `error` means the graph cannot be saved or started; warnings never block. The order is
  * fixed: ids, edges (in graph order), counts and labels, plan path, review routes, change
  * reviewers, rework, assignment, merge path, final chain, Checks blocks, cycles, reachability,
- * then the warnings (the Checks blocks' selection last, when `ctx.harness` is given). Within a rule, issues follow graph order.
+ * then the warnings (files, modes, instances, `no-checks`, and the Checks blocks' selection last,
+ * when `ctx.harness` is given). Within a rule, issues follow graph order.
  *
  * The graph must already have `WorkflowGraphSchema`'s shape; this checks what the shape cannot.
  * Every path rule reads only the edges that pass `canConnect`, so a refused edge is reported once,
@@ -746,6 +766,7 @@ export function validateWorkflowGraph(
   checkFiles(graph, ctx, issues);
   checkModes(graph, ctx, issues);
   checkInstances(graph, ctx, issues);
+  checkNoChecks(graph, issues);
   if (ctx.harness !== undefined) issues.list.push(...checkSelectionIssues(graph, ctx.harness));
   return issues.list;
 }

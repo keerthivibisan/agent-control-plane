@@ -26,7 +26,9 @@ export interface ProjectPageDef {
 
 const L = SHELL_COPY.nav.pages;
 
-/** The project sidebar, in order (docs/redesign/README.md §3). One list for nav and palette. */
+/**
+ * The project sidebar, in order (docs/history/redesign/README.md §3). One list for nav and palette.
+ */
 export const PROJECT_PAGES: readonly ProjectPageDef[] = [
   { id: 'board', label: L.board, icon: BoardNavIcon, available: true },
   // R-B.

@@ -11,9 +11,10 @@ import type { SkillProject, SkillsService } from '../skills/index.js';
 import { out, param } from './respond.js';
 
 /**
- * Project skills routes (ADR-0018, docs/redesign/README.md §6). Thin: find the project, call the
- * skills service, send the response parsed by its `@acp/core/api` DTO. Every mutation needs the
- * `X-ACP-CSRF` token (ADR-0013 §6), so only an owner action in the Skills page can write a skill.
+ * Project skills routes (ADR-0018, docs/history/redesign/README.md §6). Thin: find the project,
+ * call the skills service, send the response parsed by its `@acp/core/api` DTO. Every mutation
+ * needs the `X-ACP-CSRF` token (ADR-0013 §6), so only an owner action in the Skills page can write
+ * a skill.
  */
 
 export interface SkillsRouterDeps {
