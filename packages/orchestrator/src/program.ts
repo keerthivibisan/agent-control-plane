@@ -126,6 +126,15 @@ export function programOf(view: ProgramView): WorkflowProgram {
   return compiled(view).program;
 }
 
+/**
+ * ADR-0028 §2: whether the run's workflow has a Checks block before the lead's merge. Without
+ * one the lead merges a change after its review: no checks run on it, and none gate its merge.
+ * Every version 1 run and every graph from before ADR-0028 has one.
+ */
+export function hasMergeChecks(view: ProgramView): boolean {
+  return programOf(view).checkBlocks.merge !== null;
+}
+
 /** The graph the run follows: its snapshot, or its version 1 workflow migrated. */
 export function runGraphOf(view: ProgramView): WorkflowGraph {
   return compiled(view).graph;

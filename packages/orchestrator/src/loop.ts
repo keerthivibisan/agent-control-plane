@@ -13,7 +13,7 @@ import { cleanSummary } from './summary.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
-import { editingNodeOf, programOf, reviewRouteOf } from './program.js';
+import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
 import {
   changeReviewerBrief,
@@ -441,7 +441,8 @@ function decisionRunStatus(d: ChangeView, by: ChangeDecider): Refusal | null {
  *   the owner also a `ready` or `needs-owner` one (never while a review agent reviews it);
  * - nothing while a merge of the change is under way;
  * - merge: refused while the required checks run, and for the lead after one failed (the owner's
- *   `merge-anyway` passes a failed check, never a running one); `merge-anyway` is the owner's;
+ *   `merge-anyway` passes a failed check, never a running one); `merge-anyway` is the owner's.
+ *   Without a Checks block before the merge (ADR-0028 §2) no check holds a merge back;
  * - rework: the helper must be waiting (AWAITING_REVIEW), within the round limit (the lead only;
  *   the owner may grant a round past it), within budget (the lead only; the owner's rework raises
  *   the cap), and a helper slot must be free; `ask-owner` is the lead's.
@@ -514,6 +515,9 @@ export function checkChange(
       if (action === 'merge-anyway' && by !== 'owner') {
         return refusal('not-lead', 'Only the owner can merge past a failed check.');
       }
+      // ADR-0028 §2: without a Checks block before the merge, the change merges after its
+      // review; no check runs on it or holds it back.
+      if (!hasMergeChecks(d)) return null;
       if (change.checks === 'pending') {
         return refusal(
           'checks-pending',
@@ -832,8 +836,9 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
         : `Review agent's verdict: ${change.verdict} (its findings were sent to you).`,
     );
   }
-  const checks =
-    change.checks === null
+  const checks = !hasMergeChecks(view)
+    ? 'none (this workflow has no Checks block before the merge; merge_change merges after the review)'
+    : change.checks === null
       ? 'not run yet on this change (merge_change runs them)'
       : change.checks === 'pending'
         ? 'running'

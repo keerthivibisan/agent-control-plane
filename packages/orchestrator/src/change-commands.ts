@@ -3,6 +3,7 @@ import type { ChangeDecider } from '@acp/core';
 import type { TicketBranchActionRequest } from '@acp/core/api';
 import { startChangeChecks } from './check-blocks.js';
 import { applyCommand } from './commands.js';
+import { hasMergeChecks } from './program.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
 import type { Refusal } from './errors.js';
@@ -290,9 +291,12 @@ export function recordChangeDecision(
   });
 }
 
-/** Where the block before the lead's merge sends a failed change (ADR-0027 §5; old graphs: lead). */
+/**
+ * Where the block before the lead's merge sends a failed change (ADR-0027 §5; old graphs: lead).
+ * Without that block (ADR-0028 §2) no check gates the merge, so nothing fails there: `lead`.
+ */
 function mergeFailureRoute(d: Draft): 'lead' | 'owner' | 'helper' {
-  return d.program().checkBlocks.merge.onFailure;
+  return d.program().checkBlocks.merge?.onFailure ?? 'lead';
 }
 
 /** The change goes to the owner after a failed merge block; returns the lead's reply. */
@@ -442,6 +446,9 @@ export function checksFinished(
     if (change === undefined) return refusal('change-not-found', 'No change.');
     // A late result for a change already decided changes nothing.
     if (isFinalChangeState(change.state)) return done;
+    // ADR-0028 §2: without a Checks block before the merge no check gates it, so a result (which
+    // the server never asks for then) is not recorded and never holds the merge back.
+    if (!hasMergeChecks(d)) return done;
     change.checks = result.requiredPassed ? 'passed' : 'failed';
     const atLead =
       change.state === 'decision' || (change.state === 'reviewing' && change.reviewer === 'lead');

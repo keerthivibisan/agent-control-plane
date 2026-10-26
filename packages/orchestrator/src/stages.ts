@@ -1,5 +1,6 @@
 import { reviewStageOf } from '@acp/core';
 import type {
+  AgentEffort,
   AgentRoleKind,
   OrchestrationRun,
   ProjectWorkflow,
@@ -10,7 +11,7 @@ import type {
 } from '@acp/core';
 import { AGENT_NOTE_LINE, BRANCH_RULE_LINE } from './agent-note.js';
 import { approvedPlan } from './plan-read.js';
-import { programNode, programOf } from './program.js';
+import { hasMergeChecks, programNode, programOf } from './program.js';
 import type { ProgramView } from './program.js';
 import type { EngineAgent, RunIntegration } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
@@ -32,7 +33,7 @@ interface AgentsView {
 interface WorkflowView extends ProgramView {
   readonly workflow?: ProjectWorkflow | undefined;
 }
-interface BriefView extends AgentsView {
+interface BriefView extends AgentsView, ProgramView {
   readonly run: Pick<OrchestrationRun, 'title'> & { readonly ticketId?: string | null };
   readonly plans?: readonly TicketPlan[] | undefined;
   readonly integration?: RunIntegration | undefined;
@@ -317,15 +318,16 @@ export function launchFields(
 
 /**
  * The launch fields of a `start-agent` effect for an agent of `nodeId` (ADR-0023 §3): the prompt
- * with one line per node skill, plus `model`, `skills` and `agent` only when the node sets them.
- * The model's precedence is unchanged: the node's model, else its agent file's (the server reads
- * the file, `resolveAgentModel`), else the project's.
+ * with one line per node skill, plus `model`, `skills`, `agent` and `effort` (ADR-0028 §1) only
+ * when the node sets them. The model's precedence is unchanged: the node's model, else its agent
+ * file's (the server reads the file, `resolveAgentModel`), else the project's. Every start of the
+ * node's agents goes through here (first turn, rework, check rework), so they all keep its effort.
  */
 export function launchFieldsFor(
   program: WorkflowProgram,
   nodeId: WorkflowNodeId,
   prompt: string,
-): { prompt: string; model?: string; skills?: string[]; agent?: string } {
+): { prompt: string; model?: string; skills?: string[]; agent?: string; effort?: AgentEffort } {
   const node = programNode(program, nodeId);
   if (node === undefined) return { prompt };
   const skills = [...node.skills];
@@ -334,6 +336,7 @@ export function launchFieldsFor(
     ...(node.model !== null ? { model: node.model } : {}),
     ...(skills.length > 0 ? { skills } : {}),
     ...(node.agent !== null ? { agent: node.agent } : {}),
+    ...(node.effort !== undefined ? { effort: node.effort } : {}),
   };
 }
 
@@ -405,7 +408,10 @@ export function testerBrief(state: BriefView): string {
     'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.',
     (state.integration?.ticketBranch ?? null) === null
       ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
-      : 'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes, after the project’s checks.',
+      : hasMergeChecks(state)
+        ? 'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes, after the project’s checks.'
+        : // ADR-0028 §2: no Checks block before the merge, so no checks run on the change.
+          'Your copy starts from the ticket branch. Your change is reviewed and decided like the helpers’ changes.',
     // F-1: the app owns branches and commits.
     BRANCH_RULE_LINE,
     // ADR-0026 §3: ticket runs only (the note is a ticket comment).

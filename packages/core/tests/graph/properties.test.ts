@@ -26,6 +26,8 @@ import {
 const SEEDS = 2000;
 /** Seeds generated with the Checks block moves too (`checkBlocks: true`). */
 const CHECK_SEEDS = 600;
+/** Seeds that may also remove the block before the merge (`optionalChecks: true`, ADR-0028 §2). */
+const OPTIONAL_SEEDS = 600;
 const ctx: CompileContext = {
   projectMode: 'auto-edits',
   approvalCeilings: [],
@@ -42,6 +44,7 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
   'unknown-check-label',
   'no-checks-selected',
   'merge-skips-required',
+  'no-checks',
 ];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
 const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};
@@ -54,6 +57,30 @@ const EDGE_CODES: readonly GraphIssueCode[] = [
   'edge-not-allowed',
   'duplicate-edge',
 ];
+
+/** FNV-1a (32 bits) of `text`, continuing from `h`: a fingerprint, not a security hash. */
+function fnv1a(text: string, h: number): number {
+  let out = h;
+  for (let i = 0; i < text.length; i++) {
+    out ^= text.charCodeAt(i);
+    out = Math.imul(out, 0x01000193) >>> 0;
+  }
+  return out;
+}
+
+/** Two FNV-1a runs (different starts) and the total length over the graphs' JSON. */
+function fingerprint(graphs: readonly WorkflowGraph[]): string {
+  let a = 0x811c9dc5;
+  let b = 0x01234567;
+  let length = 0;
+  for (const graph of graphs) {
+    const json = JSON.stringify(graph);
+    a = fnv1a(json, a);
+    b = fnv1a(json, b);
+    length += json.length;
+  }
+  return `${a.toString(16)}-${b.toString(16)}-${length}`;
+}
 
 function compiles(graph: WorkflowGraph): boolean {
   try {
@@ -120,6 +147,10 @@ describe('layer 3: generated valid graphs and their mutants', () => {
       seed: 100_001 + i,
       graph: generateValidGraph(100_001 + i, { checkBlocks: true }),
     })),
+    ...Array.from({ length: OPTIONAL_SEEDS }, (_, i) => ({
+      seed: 200_001 + i,
+      graph: generateValidGraph(200_001 + i, { optionalChecks: true }),
+    })),
   ];
   const seenCodes = new Set<GraphIssueCode>();
 
@@ -140,6 +171,12 @@ describe('layer 3: generated valid graphs and their mutants', () => {
     expect(generateValidGraph(42)).not.toEqual(generateValidGraph(43));
     const withChecks = generateValidGraph(42, { checkBlocks: true, moves: 30 });
     expect(withChecks).toEqual(generateValidGraph(42, { checkBlocks: true, moves: 30 }));
+  });
+
+  it('keeps every seed’s graph from before the optional-checks moves (ADR-0028 §2)', () => {
+    // The seeds' graphs as v0.3.0 generated them (computed with its generator).
+    const before = graphs.slice(0, SEEDS + CHECK_SEEDS).map((g) => g.graph);
+    expect(fingerprint(before)).toBe('7077d439-1d33da6b-4764302');
   });
 
   it('keeps every seed’s graph without the Checks block moves (no Checks block fields)', () => {
@@ -183,8 +220,11 @@ describe('layer 3: generated valid graphs and their mutants', () => {
         seen.add(route.by === 'lead' ? 'route a' : route.then === 'lead' ? 'route b' : 'route c');
       }
       const { merge, branch, change } = program.checkBlocks;
-      if (merge.onFailure === 'owner') seen.add('merge checks ask me');
-      if (merge.select.kind !== 'required') seen.add('merge checks narrowed');
+      if (merge === null) seen.add('no merge checks');
+      if (merge === null && branch === null && Object.keys(change).length === 0)
+        seen.add('no checks at all');
+      if (merge?.onFailure === 'owner') seen.add('merge checks ask me');
+      if (merge !== null && merge.select.kind !== 'required') seen.add('merge checks narrowed');
       if (branch !== null) seen.add('branch checks');
       if (branch !== null && branch.afterStages > 0) seen.add('branch checks after a final stage');
       const blocks = Object.entries(change);
@@ -210,6 +250,8 @@ describe('layer 3: generated valid graphs and their mutants', () => {
         'route a',
         'route b',
         'route c',
+        'no merge checks',
+        'no checks at all',
         'merge checks ask me',
         'merge checks narrowed',
         'branch checks',

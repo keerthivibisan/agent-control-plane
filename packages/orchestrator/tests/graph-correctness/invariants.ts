@@ -5,9 +5,11 @@ import {
   changeCheckBlockOf,
   effectiveMode,
   leadRoundsUsed,
+  programNode,
   programOf,
   reviewRouteOf,
   runGraphOf,
+  stageOf,
   undecidedChanges,
 } from '../../src/index.js';
 import type { EngineAgent, EngineEffect, RunState } from '../../src/index.js';
@@ -210,6 +212,31 @@ export function stepInvariants(step: StepRecord): string[] {
       if ((e.autoMode === true) !== (mode === 'full-auto')) out.push(`${a.role}: autoMode wrong`);
       const sandbox = mode === 'full-auto' || configured === 'full-auto';
       if ((e.sandbox === true) !== sandbox) out.push(`${a.role}: sandbox wrong`);
+    }
+  }
+  // 9. ADR-0028 §1: every start of a node's agent (first turn, rework, check rework) and the
+  //    lead's follow-up carry the node's effort, and nothing when the block sets none.
+  for (const e of effectsOf(effects, 'start-agent')) {
+    const a = agent(after, e.agentRunId);
+    if (a === undefined) continue;
+    const want = programNode(program, stageOf(a))?.effort;
+    if (e.effort !== want) {
+      out.push(
+        `${a.role} started with effort ${e.effort ?? 'none'}, its node has ${want ?? 'none'}`,
+      );
+    }
+  }
+  for (const e of effectsOf(effects, 'start-follow-up')) {
+    if (e.effort !== program.lead.effort) out.push('the follow-up lost the lead’s effort');
+  }
+
+  // 10. ADR-0028 §2: without a Checks block before the merge no check runs on a change for its
+  //     merge, and none holds a merge back.
+  if (program.checkBlocks.merge === null) {
+    for (const a of after.agents) {
+      if (a.change?.checks !== undefined && a.change.checks !== null) {
+        out.push(`${a.role}'s change has merge checks (${a.change.checks}) without a merge block`);
+      }
     }
   }
   return out;

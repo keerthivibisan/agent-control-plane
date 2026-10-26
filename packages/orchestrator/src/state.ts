@@ -1,4 +1,5 @@
 import type {
+  AgentEffort,
   AgentRoleKind,
   AgentRun,
   CheckSelection,
@@ -342,6 +343,12 @@ export type EngineEffect =
        */
       agent?: string;
       /**
+       * ADR-0028 §1: the node's reasoning effort, present only when its block sets one (absent:
+       * the model's default). Rework turns of the node carry it too. The server copies it into
+       * `ManagedAgentSpec.effort`.
+       */
+      effort?: AgentEffort;
+      /**
        * A rework turn (ADR-0021 §3): the helper works again in its own worktree on the comments in
        * `prompt`, resuming `resumeSessionId` (null: a fresh session). Never with `canStartHelpers`.
        */
@@ -474,8 +481,8 @@ export type EngineEffect =
   /**
    * A follow-up turn of the ended lead (ADR-0020): resume its saved session `resumeSessionId` in
    * the project root, answers-only (read-only tools, no control tools), for this one message.
-   * `prompt` is the app's preface plus the owner's message. `model` and `agent` are the lead's
-   * stage model and agent file, as for its `start-agent` (no skills: answers only).
+   * `prompt` is the app's preface plus the owner's message. `model`, `agent` and `effort` are the
+   * lead's stage model, agent file and effort, as for its `start-agent` (no skills: answers only).
    */
   | {
       type: 'start-follow-up';
@@ -484,6 +491,8 @@ export type EngineEffect =
       prompt: string;
       model?: string;
       agent?: string;
+      /** ADR-0028 §1: the lead node's effort, when its block sets one. */
+      effort?: AgentEffort;
     }
   /** End the follow-up turn under way (budget reached, the owner's Stop, Stop all). */
   | { type: 'abort-follow-up'; agentRunId: string }

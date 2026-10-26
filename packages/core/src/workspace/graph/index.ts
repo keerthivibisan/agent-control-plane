@@ -10,6 +10,7 @@ export {
   type CheckBlockConfig,
 } from './check-blocks.js';
 export {
+  NO_CHECKS_MESSAGE,
   RESERVED_HELPER_LABELS,
   isGraphRunnable,
   isReservedHelperLabel,
@@ -37,3 +38,4 @@ export {
 } from './testing/generate.js';
 export { GRAPH_MUTATIONS, type GraphMutation } from './testing/mutations.js';
 export { enumerateSmallGraphs, type EnumeratedGraph } from './testing/enumerate.js';
+export { withoutCheckBlocks } from './testing/graph-ops.js';

@@ -11,6 +11,7 @@ import {
 import { workflowTemplate } from '../templates.js';
 import {
   addEdge,
+  addMergeBlock,
   addNode,
   blockInputs,
   chainIds,
@@ -31,6 +32,7 @@ import {
   randomAgentConfig,
   randomMode,
   removeEdges,
+  removeMergeBlock,
   removeNode,
   reviewTargetOf,
   updateEdge,
@@ -456,8 +458,31 @@ const CHECK_BLOCK_MOVES: Readonly<Record<string, Move>> = Object.freeze({
   'remove branch checks': removeBranchChecks,
 });
 
-/** Every legal move, by name, so a failure can say which moves built the graph. */
-export const LEGAL_GRAPH_MOVES: Readonly<Record<string, Move>> = Object.freeze({
+// ---------------------------------------------------------------- optional checks (ADR-0028 §2)
+
+/** No block before the merge: the lead merges straight into the ticket merge. */
+const removeMergeChecks: Move = (graph) => removeMergeBlock(graph);
+
+/** A block before the merge again, on a graph without one. */
+const addMergeChecks: Move = (graph, rng) =>
+  addMergeBlock(graph, {
+    type: 'checks',
+    id: freshId(graph, 'merge-checks'),
+    label: 'Checks',
+    ...(rng.bool() ? { place: 'merge' as const } : {}),
+    ...blockFields(
+      pickOptional(rng, SELECTIONS),
+      pickOptional<CheckFailureRoute>(rng, ['lead', 'owner']),
+    ),
+  });
+
+/** The optional-checks moves, used only with `optionalChecks: true`. */
+const OPTIONAL_CHECK_MOVES: Readonly<Record<string, Move>> = Object.freeze({
+  'remove merge checks': removeMergeChecks,
+  'add merge checks': addMergeChecks,
+});
+
+const BASE_MOVES: Readonly<Record<string, Move>> = Object.freeze({
   'add named helper': addNamedHelper,
   'add pool': addPool,
   'remove pool': removePool,
@@ -473,10 +498,22 @@ export const LEGAL_GRAPH_MOVES: Readonly<Record<string, Move>> = Object.freeze({
   'toggle plan auto': togglePlanAuto,
   'set agent config': setAgentConfig,
   'set helper options': setHelperOptions,
-  ...CHECK_BLOCK_MOVES,
 });
-const MOVE_NAMES = Object.keys(LEGAL_GRAPH_MOVES).filter((n) => !(n in CHECK_BLOCK_MOVES));
-const MOVE_NAMES_WITH_CHECKS = Object.keys(LEGAL_GRAPH_MOVES);
+
+/** Every legal move, by name, so a failure can say which moves built the graph. */
+export const LEGAL_GRAPH_MOVES: Readonly<Record<string, Move>> = Object.freeze({
+  ...BASE_MOVES,
+  ...CHECK_BLOCK_MOVES,
+  ...OPTIONAL_CHECK_MOVES,
+});
+// Each list keeps the order it had before the later moves were added, so a seed's graph is the
+// same as before them for the options it was generated with.
+const MOVE_NAMES = Object.keys(BASE_MOVES);
+const MOVE_NAMES_WITH_CHECKS = [...MOVE_NAMES, ...Object.keys(CHECK_BLOCK_MOVES)];
+const MOVE_NAMES_WITH_OPTIONAL_CHECKS = [
+  ...MOVE_NAMES_WITH_CHECKS,
+  ...Object.keys(OPTIONAL_CHECK_MOVES),
+];
 
 export interface GenerateGraphOptions {
   /** Exactly this many moves (default: a random number from 0 to `maxMoves`). */
@@ -488,6 +525,11 @@ export interface GenerateGraphOptions {
    * block on the ticket branch. Off by default, so a seed's graph stays the one it was before them.
    */
   checkBlocks?: boolean;
+  /**
+   * Also remove and add the block before the lead's merge (ADR-0028 §2), with every Checks block
+   * move (implies `checkBlocks`). Off by default, so a seed's graph stays the one it was before.
+   */
+  optionalChecks?: boolean;
 }
 
 /**
@@ -499,7 +541,12 @@ export function generateValidGraph(seed: number, opts: GenerateGraphOptions = {}
   const rng = createGraphRng(seed);
   let graph = workflowTemplate(rng.pick(WORKFLOW_TEMPLATE_IDS), { planner: rng.bool() });
   const moves = opts.moves ?? rng.int((opts.maxMoves ?? 12) + 1);
-  const names = opts.checkBlocks === true ? MOVE_NAMES_WITH_CHECKS : MOVE_NAMES;
+  const names =
+    opts.optionalChecks === true
+      ? MOVE_NAMES_WITH_OPTIONAL_CHECKS
+      : opts.checkBlocks === true
+        ? MOVE_NAMES_WITH_CHECKS
+        : MOVE_NAMES;
   for (let i = 0; i < moves; i++) {
     const move = LEGAL_GRAPH_MOVES[rng.pick(names)];
     const next = move?.(graph, rng) ?? null;

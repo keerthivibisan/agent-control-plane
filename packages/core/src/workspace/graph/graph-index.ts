@@ -37,6 +37,11 @@ export interface NodeIndex {
   /** The nodes with distinct ids, in graph order. */
   readonly unique: readonly WorkflowNode[];
   readonly hasPlanner: boolean;
+  /**
+   * ADR-0028 §2: the graph has a Checks block before the lead's merge, so the lead merges through
+   * it; without one the lead merges straight into the ticket merge.
+   */
+  readonly hasMergeBlock: boolean;
 }
 
 export function indexNodes(nodes: readonly WorkflowNode[]): NodeIndex {
@@ -47,7 +52,13 @@ export function indexNodes(nodes: readonly WorkflowNode[]): NodeIndex {
     byId.set(node.id, node);
     unique.push(node);
   }
-  return { byId, unique, hasPlanner: nodes.some((n) => n.type === 'planner') };
+  return {
+    byId,
+    unique,
+    hasPlanner: nodes.some((n) => n.type === 'planner'),
+    // The same test as `isCheckBlockAt(n, 'merge')`, which imports this module's types.
+    hasMergeBlock: nodes.some((n) => n.type === 'checks' && (n.place ?? 'merge') === 'merge'),
+  };
 }
 
 /** The node's label in quotes, for messages. */

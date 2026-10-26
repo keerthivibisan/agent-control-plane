@@ -259,7 +259,9 @@ export const NODE_CAPABILITIES: Readonly<Record<WorkflowNodeType, NodeCapabiliti
     tester: { kind: 'tester', edits: true, minPerGraph: 0, maxPerGraph: 2 },
     ticket: { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
     'plan-approval': { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
-    checks: { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
+    // ADR-0028 §2: every Checks block is optional; at most one before the lead's merge (the
+    // validator counts the blocks by place).
+    checks: { kind: null, edits: false, minPerGraph: 0, maxPerGraph: 1 },
     'ticket-merge': { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
     'owner-merge': { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
     done: { kind: null, edits: false, minPerGraph: 1, maxPerGraph: 1 },
@@ -283,7 +285,8 @@ export function isEditorNode(node: WorkflowNode): node is EditorWorkflowNode {
  * - `rework`: this reviewer or the lead may send the change back, at most `maxRounds` times. A
  *   change reviewer with a rework edge to a helper reworks it directly and passes only approved
  *   changes (or changes out of rounds) to the lead (review route "direct");
- * - `merge`: the lead merges changes, through the checks.
+ * - `merge`: the lead merges changes, through the Checks block before the merge, or straight into
+ *   the ticket merge when the workflow has none (ADR-0028 §2).
  */
 export const WorkflowEdgeTypeSchema = z.enum([
   'flow',
@@ -405,6 +408,8 @@ export const GraphIssueCodeSchema = z.enum([
   'unknown-check-label',
   'no-checks-selected',
   'merge-skips-required',
+  // ADR-0028 §2: the workflow has no Checks block at all
+  'no-checks',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -552,7 +557,7 @@ export interface ProgramCheckBlock {
   onFailure: CheckFailureRoute;
 }
 
-/** The block before the lead's merge: one per graph; `onFailure` is `lead` or `owner`. */
+/** The block before the lead's merge: at most one per graph; `onFailure` is `lead` or `owner`. */
 export interface ProgramMergeCheckBlock extends ProgramCheckBlock {
   place: 'merge';
 }
@@ -579,8 +584,12 @@ export interface ProgramChangeCheckBlock extends ProgramCheckBlock {
 
 /** Every Checks block of a run (ADR-0027 §5). */
 export interface ProgramCheckBlocks {
-  /** Old graphs: the `checks` node with `{ kind: 'required' }` and `lead`. */
-  merge: ProgramMergeCheckBlock;
+  /**
+   * Old graphs: the `checks` node with `{ kind: 'required' }` and `lead`. Null without a block
+   * before the lead's merge (ADR-0028 §2): the lead merges a change after its review, with no
+   * checks.
+   */
+  merge: ProgramMergeCheckBlock | null;
   /** Null without a block on the ticket branch (every old graph). */
   branch: ProgramBranchCheckBlock | null;
   /** Each editing node's change block, by the editing node's id; absent for a node without one. */

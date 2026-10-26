@@ -166,8 +166,8 @@ export function followUpChat(
         aborting: false,
       },
     };
-    // The lead node's model and agent file (no skills: answers only).
-    const { model, agent } = programOf(d).lead;
+    // The lead node's model, agent file and effort (no skills: answers only).
+    const { model, agent, effort } = programOf(d).lead;
     d.effects.push({ type: 'chat-message', role: 'owner', text: message });
     d.effects.push({
       type: 'start-follow-up',
@@ -176,6 +176,7 @@ export function followUpChat(
       prompt: followUpPrompt(message),
       ...(model !== null ? { model } : {}),
       ...(agent !== null ? { agent } : {}),
+      ...(effort !== undefined ? { effort } : {}),
     });
     return done;
   });

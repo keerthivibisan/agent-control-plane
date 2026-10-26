@@ -125,6 +125,7 @@ export {
   changeCheckBlockOf,
   editingNodeOf,
   effectiveMode,
+  hasMergeChecks,
   helperNodeLines,
   helperNodeOf,
   programFullAuto,
