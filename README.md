@@ -81,7 +81,7 @@ colours, Viewed checkboxes, and comments on lines that go back to the agents as 
 </details>
 
 _The screenshots show sample data only: the built-in demo and synthetic tickets, not real projects.
-They were taken on v0.3.0._
+They were taken on v0.3.1._
 
 ### Observe your Claude Code sessions
 
