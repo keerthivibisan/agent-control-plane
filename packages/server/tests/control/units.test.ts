@@ -60,6 +60,12 @@ describe('managed agent environment (ADR-0012)', () => {
       }),
     ).toEqual({ PATH: '/usr/bin', HOME: '/home/tester', ANTHROPIC_API_KEY: 'k' });
   });
+
+  it("drops Claude Code's idle-exit timer, so a waiting lead never exits (P-D)", () => {
+    expect(
+      managedAgentEnv({ PATH: '/usr/bin', CLAUDE_CODE_EXIT_AFTER_STOP_DELAY: '300000' }),
+    ).toEqual({ PATH: '/usr/bin' });
+  });
 });
 
 describe('config: ACP_MANAGED, ACP_RUN_TIMEOUT_MS', () => {
