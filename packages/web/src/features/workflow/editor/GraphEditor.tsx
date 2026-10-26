@@ -26,7 +26,8 @@ import {
 import { buttonClass } from '../../../components/Button';
 import { AlertIcon, CloseIcon } from '../../../components/icons';
 import { floatingClass } from '../../../components/Menu';
-import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { finishView } from '../finish';
 import { FitIcon, ZoomInIcon, ZoomOutIcon } from '../icons';
 import { EDITOR_COPY } from './copy';
 import { LinkSample, linkEdgeTypes } from './edges';
@@ -36,7 +37,7 @@ import { graphBounds, layoutGraph } from './layout';
 import { HowItWorks, Legend, LegendToggle, useLegendOpen } from './Legend';
 import { blockNodeTypes, type BlockNode } from './nodes';
 import { Palette } from './Palette';
-import { allowedEdgeTypes, refusalFor, type EditorAction, type Selection } from './state';
+import { refusalFor, refusalTarget, resolveLink, type EditorAction, type Selection } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
 const Z = EDITOR_COPY.zoom;
@@ -83,8 +84,11 @@ function FocusOn({ request, graph }: { request: FocusRequest | null; graph: Work
   useEffect(() => {
     if (request === null) return;
     const { selection } = request;
+    // The links as drawn: a link around the Finish block's hidden steps ends on the block.
     const edge =
-      selection.kind === 'edge' ? latest.current.edges.find((x) => x.id === selection.id) : null;
+      selection.kind === 'edge'
+        ? finishView(latest.current).graph.edges.find((x) => x.id === selection.id)
+        : null;
     const ids = selection.kind === 'node' ? [selection.id] : edge ? [edge.from, edge.to] : [];
     if (ids.length === 0) return;
     void fitView({ nodes: ids.map((id) => ({ id })), maxZoom: 1, padding: 0.4, duration: 200 });
@@ -157,8 +161,12 @@ function ZoomControls() {
 }
 
 interface Choice {
+  /** The stored ends (`resolveLink`). */
   from: WorkflowNodeId;
   to: WorkflowNodeId;
+  /** The blocks as drawn, for the words and for focus afterwards. */
+  shownFrom: WorkflowNodeId;
+  shownTo: WorkflowNodeId;
   types: WorkflowEdgeType[];
   /** Where the link was dropped, in the canvas frame's pixels. */
   at: { x: number; y: number };
@@ -282,7 +290,10 @@ function Canvas({
     [graph, issues, selection, positions, connectFrom],
   );
   const label = useCallback(
-    (id: string) => graph.nodes.find((n) => n.id === id)?.label ?? id,
+    (id: string) => {
+      const node = graph.nodes.find((n) => n.id === id);
+      return node?.type === 'owner-merge' ? FINISH_COPY.title : (node?.label ?? id);
+    },
     [graph],
   );
 
@@ -329,7 +340,7 @@ function Canvas({
   );
   const isValidConnection = useCallback(
     (c: { source: string; target: string }) =>
-      c.source !== c.target && allowedEdgeTypes(graph, c.source, c.target).length > 0,
+      c.source !== c.target && resolveLink(graph, c.source, c.target) !== null,
     [graph],
   );
   const onConnectStart = useCallback((_: MouseEvent | TouchEvent, params: OnConnectStartParams) => {
@@ -354,18 +365,18 @@ function Canvas({
         to = hit?.dataset['id'] ?? null;
       }
       if (to === null || to === from) return;
-      const types = allowedEdgeTypes(graph, from, to);
-      if (types.length === 0) {
-        dispatch({ type: 'refuse', message: refusalFor(graph, from, to) });
-      } else if (types.length === 1 && types[0] !== undefined) {
-        dispatch({ type: 'connect', from, to, edgeType: types[0] });
+      const option = resolveLink(graph, from, to);
+      if (option === null) {
+        dispatch({ type: 'refuse', message: refusalFor(graph, from, refusalTarget(graph, to)) });
+      } else if (option.types.length === 1 && option.types[0] !== undefined) {
+        dispatch({ type: 'connect', from: option.from, to: option.to, edgeType: option.types[0] });
       } else {
         const box = frame.current?.getBoundingClientRect();
         const at =
           box === undefined || point === null
             ? { x: 24, y: 24 }
             : { x: point.clientX - box.left, y: point.clientY - box.top };
-        setChoice({ from, to, types, at });
+        setChoice({ ...option, shownFrom: from, shownTo: to, at });
       }
     },
     [graph, dispatch],
@@ -382,11 +393,12 @@ function Canvas({
 
   const shape = graph.nodes.map((n) => n.id).join(',');
   // The canvas takes the automatic layout's shape (moving a block doesn't resize it, so the view
-  // never jumps mid-drag): it fills the width without empty bands, within the viewport.
-  const bounds = useMemo(
-    () => graphBounds({ ...graph, nodes: graph.nodes.map(withoutPosition) }),
-    [graph],
-  );
+  // never jumps mid-drag): it fills the width without empty bands, within the viewport. Measured
+  // on the blocks as drawn (the Finish block, not the steps it stands for).
+  const bounds = useMemo(() => {
+    const unmoved = { ...graph, nodes: graph.nodes.map(withoutPosition) };
+    return graphBounds(finishView(unmoved).graph, layoutGraph(unmoved));
+  }, [graph]);
   return (
     <div className="relative" ref={frame}>
       <div
@@ -467,12 +479,12 @@ function Canvas({
       {choice !== null ? (
         <EdgeChoice
           choice={choice}
-          from={label(choice.from)}
-          to={label(choice.to)}
+          from={label(choice.shownFrom)}
+          to={label(choice.shownTo)}
           onClose={() => setChoice(null)}
           restoreFocus={() =>
             frame.current
-              ?.querySelector<HTMLElement>(`.react-flow__node[data-id="${choice.to}"]`)
+              ?.querySelector<HTMLElement>(`.react-flow__node[data-id="${choice.shownTo}"]`)
               ?.focus({ preventScroll: true })
           }
           onChoose={(t) => {

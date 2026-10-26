@@ -35,12 +35,14 @@ const ITEM_ICON: Readonly<Record<PaletteItemKey, (typeof ROLE_ICON)['lead']>> = 
 const ITEM_CLASS =
   'group flex cursor-default items-start gap-2.5 rounded-control px-2 py-1.5 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent focus-visible:outline-solid data-[disabled]:cursor-not-allowed data-[highlighted]:bg-hover';
 
-const CHECK_ITEMS: readonly CheckBlockItem[] = ['change', 'branch'];
+/** In the order a change meets them. */
+const CHECK_ITEMS: readonly CheckBlockItem[] = ['change', 'merge', 'branch'];
 
 /**
- * A Checks block the menu can add (ADR-0027 §5): on a change, linked from the selected helper or
- * tester when it has none yet (else the first without one), or on the branch, just before your
- * merge. The block before the lead's merge is in every workflow, so it is not offered.
+ * A Checks block the menu can add (ADR-0027 §5, ADR-0028 §2): on a change, linked from the
+ * selected helper or tester when it has none yet (else the first without one); before the lead's
+ * merge, between the lead and the ticket branch; or on the branch, just before the Finish block.
+ * Each is optional, so each place is offered while the workflow has room for it.
  */
 function AddChecksItem({
   place,

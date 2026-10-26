@@ -1,3 +1,4 @@
+import type { AgentEffort } from '@acp/core';
 import type {
   AgentRunDto,
   ChatMessageDto,
@@ -14,10 +15,11 @@ import { enter, fade } from '../../components/motion';
 import { RelativeTime } from '../../components/RelativeTime';
 import { Skeleton } from '../../components/Skeleton';
 import { Tab, TabList, TabPanel, Tabs } from '../../components/Tabs';
-import { paths, schemas } from '../../lib/api';
+import { paths, runWorkflowPaths, runWorkflowSchemas, schemas } from '../../lib/api';
 import {
   CONTROL_COPY,
   describeEvent,
+  EFFORT_COPY,
   FOLLOW_UP_COPY,
   NOT_REPORTED,
   REVIEW_LOOP_COPY,
@@ -230,6 +232,20 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/**
+ * The effort the agent's workflow block sets (ADR-0028 §1), from the run's own graph (the same
+ * query as the live graph, so no extra request). Undefined while the graph or the agent's block is
+ * not known, so the row is left out rather than guessed.
+ */
+function useAgentEffort(agent: AgentRunDto): AgentEffort | null | undefined {
+  const graph = useApiQuery(runWorkflowPaths.graph(agent.runId), runWorkflowSchemas.graph).data;
+  if (graph === undefined) return undefined;
+  const nodeId = graph.nodes.find((n) => n.agentRunIds.includes(agent.id))?.nodeId;
+  const node = graph.graph.nodes.find((n) => n.id === nodeId);
+  if (node === undefined || !('skills' in node)) return undefined;
+  return node.effort ?? null;
+}
+
 /** Ids, branch, model and session link (README §5.3 "Details"). Model and cost come from the session. */
 function DetailsTab({
   agent,
@@ -243,6 +259,7 @@ function DetailsTab({
     schemas.session,
   );
   const branch = agentBranch(agent, review);
+  const effort = useAgentEffort(agent);
   const models = session.data?.models ?? [];
   const cost = session.data?.latestSnapshot?.reportedCostUsd ?? {
     provenance: 'unavailable' as const,
@@ -284,6 +301,13 @@ function DetailsTab({
           <span className="text-unavailable">{NOT_REPORTED}</span>
         )}
       </Row>
+      {effort !== undefined ? (
+        <Row label={EFFORT_COPY.detail}>
+          <span data-testid="details-effort" data-effort={effort ?? 'default'}>
+            {effort === null ? EFFORT_COPY.detailDefault : EFFORT_COPY.word[effort]}
+          </span>
+        </Row>
+      ) : null}
       <Row label={D.cost}>
         <EstimatedCost cost={cost} />
       </Row>

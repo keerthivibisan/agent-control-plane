@@ -104,7 +104,8 @@ function PlaceField({
           <CheckIcon size={14} className="shrink-0 text-success" />
           {H.places.merge}
         </p>
-        <Note testId="check-place-mandatory">{P.mandatory}</Note>
+        <p className="text-caption text-dim">{H.placeHints.merge}</p>
+        <Note testId="check-place-merge">{P.mergePlace}</Note>
       </div>
     );
   }
@@ -456,6 +457,10 @@ export function CheckBlockFields({
       <Part>
         <FailureField node={node} graph={graph} dispatch={dispatch} />
       </Part>
+      {/* ADR-0028 §2: no Checks block is required; say what removing this one means. */}
+      <p className="text-caption text-dim" data-testid="check-optional">
+        {H.optional[checkPlaceOf(node)]}
+      </p>
     </div>
   );
 }

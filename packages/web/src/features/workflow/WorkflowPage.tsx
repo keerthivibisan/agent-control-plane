@@ -22,6 +22,7 @@ import { WORKFLOW_COPY, WORKFLOW_GRAPH_COPY } from '../../lib/copy';
 import { useApiQuery, useQueryStore } from '../../lib/query';
 import { harnessForValidation } from './check-blocks';
 import { refusalMessage } from './draft';
+import { finishIssues, finishView, isHiddenByFinish } from './finish';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
 import type { BlockContext } from './editor/flow';
@@ -135,6 +136,9 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       }),
     [graph, dto.skills, dto.agents, helperLimit, projectMode, harnessFile],
   );
+  // As drawn: the Finish block stands for the end steps, and owns their problems (ADR-0028 §3).
+  const view = useMemo(() => finishView(graph), [graph]);
+  const shownIssues = useMemo(() => finishIssues(issues, graph, view), [issues, graph, view]);
   const blocked = hasErrors(issues);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warningCount = issues.length - errorCount;
@@ -156,6 +160,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       projectMode,
       helperLimit,
       harness,
+      target: dto.setup.branching?.defaultTargetBranch ?? null,
     }),
     [
       projectId,
@@ -166,6 +171,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       projectMode,
       helperLimit,
       harness,
+      dto.setup.branching?.defaultTargetBranch,
     ],
   );
 
@@ -194,10 +200,18 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   };
 
   const selection = state.selection;
-  const node =
-    selection?.kind === 'node' ? graph.nodes.find((n) => n.id === selection.id) : undefined;
+  // A hidden end step's settings are the Finish block's; a link is shown as drawn.
+  const nodeId =
+    selection?.kind === 'node' &&
+    view.finish !== null &&
+    isHiddenByFinish(view.finish, selection.id)
+      ? view.finish.ownerMerge
+      : selection?.kind === 'node'
+        ? selection.id
+        : undefined;
+  const node = nodeId === undefined ? undefined : graph.nodes.find((n) => n.id === nodeId);
   const edge =
-    selection?.kind === 'edge' ? graph.edges.find((e) => e.id === selection.id) : undefined;
+    selection?.kind === 'edge' ? view.graph.edges.find((e) => e.id === selection.id) : undefined;
   const close = () => dispatch({ type: 'select', selection: null });
   // A refusal is about the graph that was sent; any change after it may have fixed it.
   const serverIssues = refused !== null && refused.graph === graph ? refused.issues : null;
@@ -319,7 +333,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
         <GraphEditor
           graph={graph}
           selection={selection}
-          issues={issues}
+          issues={shownIssues}
           context={context}
           refusal={state.refusal}
           dispatch={dispatch}
@@ -338,7 +352,9 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
                     node={node}
                     graph={graph}
                     ctx={context}
-                    issues={issues.filter((i) => i.nodeId === node.id && i.edgeId === undefined)}
+                    issues={shownIssues.filter(
+                      (i) => i.nodeId === node.id && i.edgeId === undefined,
+                    )}
                     dispatch={dispatch}
                     onClose={close}
                   />
@@ -348,7 +364,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
                   <EdgePanel
                     edge={edge}
                     graph={graph}
-                    issues={issues.filter((i) => i.edgeId === edge.id)}
+                    issues={shownIssues.filter((i) => i.edgeId === edge.id)}
                     dispatch={dispatch}
                     onClose={close}
                   />
@@ -356,7 +372,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
               ) : null}
             </aside>
           ) : (
-            <IssuesList issues={issues} serverIssues={serverIssues} onFocus={focusOn} />
+            <IssuesList
+              issues={shownIssues}
+              serverIssues={serverIssues === null ? null : finishIssues(serverIssues, graph, view)}
+              onFocus={focusOn}
+            />
           )}
         </div>
       </div>

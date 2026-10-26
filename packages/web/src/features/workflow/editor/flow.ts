@@ -7,11 +7,12 @@ import type {
   WorkflowNodeId,
 } from '@acp/core';
 import { MarkerType, type Edge } from '@xyflow/react';
-import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { finishIssues, finishView } from '../finish';
 import { linkStroke } from './edges';
 import { isGateType, layoutGraph, sizeOf } from './layout';
 import { planLinks, type Route } from './routing';
-import { allowedEdgeTypes, isRemovable, type Selection } from './state';
+import { isRemovable, resolveLink, type Selection } from './state';
 import type { EditorIssue } from './IssuesList';
 import { kindWord, type BlockNode, type LinkTarget } from './nodes';
 
@@ -22,6 +23,9 @@ const G = WORKFLOW_GRAPH_COPY;
  * different by kind through their dashes and weight, never by the accent (DESIGN.md, "Agent
  * views"): the accent marks only the selection. A link the rules refuse is drawn in the danger tone,
  * because it is a real problem the owner has to fix. Where each link runs is `routing.ts`.
+ *
+ * The end of the flow is drawn as one Finish block (ADR-0028 §3, `finish.ts`): the functions take
+ * the stored graph and draw its Finish view, and a problem with a hidden step shows on the block.
  */
 
 export interface LinkData {
@@ -45,6 +49,8 @@ export interface BlockContext {
   projectModel: string | null;
   projectMode: ApprovalMode | null;
   helperLimit: number;
+  /** The project's default target branch for the Finish block's words; null: not known. */
+  target?: string | null;
 }
 
 /** The model a block's agent gets: its own, else its agent file's, else the project's. */
@@ -73,13 +79,9 @@ export function linkTargets(
 ): ReadonlyMap<WorkflowNodeId, LinkTarget> | null {
   if (from === null || !graph.nodes.some((n) => n.id === from)) return null;
   return new Map(
-    graph.nodes.map((n): [WorkflowNodeId, LinkTarget] => [
+    finishView(graph).graph.nodes.map((n): [WorkflowNodeId, LinkTarget] => [
       n.id,
-      n.id === from
-        ? 'source'
-        : allowedEdgeTypes(graph, from, n.id).length > 0
-          ? 'valid'
-          : 'invalid',
+      n.id === from ? 'source' : resolveLink(graph, from, n.id) !== null ? 'valid' : 'invalid',
     ]),
   );
 }
@@ -93,20 +95,24 @@ export function toFlowNodes(
   connectFrom: WorkflowNodeId | null = null,
 ): BlockNode[] {
   const targets = linkTargets(graph, connectFrom);
-  return graph.nodes.map((node) => {
-    const mine = issues.filter((i) => i.nodeId === node.id);
+  const view = finishView(graph);
+  const shown = finishIssues(issues, graph, view);
+  const target = ctx.target ?? null;
+  return view.graph.nodes.map((node) => {
+    const mine = shown.filter((i) => i.nodeId === node.id);
     const { width, height } = sizeOf(node);
     const agent = 'skills' in node;
     const linkTarget = targets?.get(node.id) ?? null;
+    const finish = view.finish !== null && node.id === view.finish.ownerMerge;
     return {
       id: node.id,
-      type: isGateType(node.type) ? 'gate' : 'agent',
+      type: finish ? 'finish' : isGateType(node.type) ? 'gate' : 'agent',
       position: positions.get(node.id) ?? { x: 0, y: 0 },
       width,
       height,
       selected: selection?.kind === 'node' && selection.id === node.id,
       deletable: isRemovable(node),
-      ariaLabel: `${kindWord(node)}: ${node.label}`,
+      ariaLabel: finish ? FINISH_COPY.label(target) : `${kindWord(node)}: ${node.label}`,
       ...(linkTarget === 'valid' ? { className: 'link-target-valid' } : {}),
       data: {
         node,
@@ -130,6 +136,7 @@ export function toFlowNodes(
         projectMode: ctx.projectMode,
         helperLimit: ctx.helperLimit,
         linkTarget,
+        target,
       },
     };
   });
@@ -150,12 +157,20 @@ export function toFlowEdges(
   positions: ReadonlyMap<string, NodePosition> = layoutGraph(graph),
   connecting = false,
 ): LinkEdge[] {
-  const labels = new Map(graph.nodes.map((n) => [n.id, n.label]));
-  const refusedIds = new Set(
-    issues.filter((i) => i.edgeId !== undefined && REFUSED_CODES.has(i.code)).map((i) => i.edgeId),
+  const view = finishView(graph);
+  const labels = new Map(
+    view.graph.nodes.map((n) => [
+      n.id,
+      view.finish !== null && n.id === view.finish.ownerMerge ? FINISH_COPY.title : n.label,
+    ]),
   );
-  const plan = planLinks(graph, positions);
-  return graph.edges.map((e) => {
+  const refusedIds = new Set(
+    finishIssues(issues, graph, view)
+      .filter((i) => i.edgeId !== undefined && REFUSED_CODES.has(i.code))
+      .map((i) => i.edgeId),
+  );
+  const plan = planLinks(view.graph, positions);
+  return view.graph.edges.map((e) => {
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);
     const link = plan.get(e.id);

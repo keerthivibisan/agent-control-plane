@@ -1,10 +1,12 @@
 import {
+  AGENT_EFFORTS,
   APPROVAL_MODES,
   HARD_MAX_HELPERS,
   MAX_NODE_DESCRIPTION,
   MAX_NODE_LABEL,
   MAX_NODE_SKILLS,
   isEditorNode,
+  type AgentEffort,
   type ApprovalMode,
   type WorkflowEdgeType,
   type WorkflowGraph,
@@ -16,7 +18,7 @@ import { useId, useState, type Dispatch, type ReactNode } from 'react';
 import { Button } from '../../../components/Button';
 import { AlertIcon } from '../../../components/icons';
 import { Select, hintClass, labelClass } from '../../../components/Input';
-import { REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { FINISH_COPY, REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { href } from '../../../lib/router';
 import {
   CheckboxField,
@@ -27,13 +29,14 @@ import {
 } from '../../project-setup/fields';
 import { FullAutoWarning } from '../../review-loop/ApprovalsEditor';
 import { isChecksNode } from '../check-blocks';
+import { finishParts, finishView } from '../finish';
 import { RemoveIcon } from '../icons';
 import { CheckBlockFields } from './CheckBlockFields';
 import { LinkSample } from './edges';
 import { EDITOR_COPY } from './copy';
 import { IssueRow, type EditorIssue } from './IssuesList';
 import { RoleIcon, kindText, kindWord } from './nodes';
-import { allowedEdgeTypes, isRemovable, type EditorAction, type NodePatch } from './state';
+import { isRemovable, resolveLink, type EditorAction, type NodePatch } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
 const P = WORKFLOW_GRAPH_COPY.panel;
@@ -59,6 +62,49 @@ export interface NodePanelContext {
   helperLimit: number;
   /** The project's harness, for the Checks blocks' picks; undefined while unknown. */
   harness?: HarnessStatusDto | undefined;
+  /** The project's default target branch, for the Finish block; null: not known. */
+  target?: string | null;
+}
+
+/** "Default" in the effort choice; the graph leaves the field out. */
+const EFFORT_DEFAULT = 'default';
+
+/** How much the agent thinks before acting (ADR-0028 §1): Default, Low, Medium or High. */
+function EffortField({
+  value,
+  onChange,
+}: {
+  value: AgentEffort | undefined;
+  onChange: (next: AgentEffort | null) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" data-testid="effort-field">
+      <label htmlFor={id} className={labelClass}>
+        {P.effort}
+      </label>
+      <Select
+        id={id}
+        value={value ?? EFFORT_DEFAULT}
+        onChange={(e) => {
+          const next = AGENT_EFFORTS.find((x) => x === e.target.value);
+          onChange(next ?? null);
+        }}
+        aria-describedby={`${id}-hint`}
+        data-testid="effort-select"
+      >
+        <option value={EFFORT_DEFAULT}>{P.efforts.default}</option>
+        {AGENT_EFFORTS.map((x) => (
+          <option key={x} value={x}>
+            {P.efforts[x]}
+          </option>
+        ))}
+      </Select>
+      <span id={`${id}-hint`} className={hintClass}>
+        {P.effortHint}
+      </span>
+    </div>
+  );
 }
 
 /** A warning under a field: what is wrong and what happens because of it. */
@@ -256,14 +302,19 @@ function LinksSection({
   dispatch: Dispatch<EditorAction>;
 }) {
   const id = useId();
-  const label = (nid: string) => graph.nodes.find((n) => n.id === nid)?.label ?? nid;
-  const outgoing = graph.edges.filter((e) => e.from === node.id);
-  const targets = graph.nodes.filter(
-    (n) => n.id !== node.id && allowedEdgeTypes(graph, node.id, n.id).length > 0,
+  // The blocks and links as drawn: the Finish block stands for the end steps (ADR-0028 §3).
+  const view = finishView(graph);
+  const finishId = view.finish?.ownerMerge;
+  const label = (nid: string) =>
+    nid === finishId ? FINISH_COPY.title : (graph.nodes.find((n) => n.id === nid)?.label ?? nid);
+  const outgoing = view.graph.edges.filter((e) => e.from === node.id);
+  const targets = view.graph.nodes.filter(
+    (n) => n.id !== node.id && resolveLink(graph, node.id, n.id) !== null,
   );
   const [to, setTo] = useState<WorkflowNodeId>('');
   const target = targets.some((t) => t.id === to) ? to : (targets[0]?.id ?? '');
-  const types = target === '' ? [] : allowedEdgeTypes(graph, node.id, target);
+  const option = target === '' ? null : resolveLink(graph, node.id, target);
+  const types = option?.types ?? [];
   const [type, setType] = useState<WorkflowEdgeType | ''>('');
   const kind = types.includes(type as WorkflowEdgeType) ? (type as WorkflowEdgeType) : types[0];
   return (
@@ -309,7 +360,7 @@ function LinksSection({
               <Select id={`${id}-to`} value={target} onChange={(e) => setTo(e.target.value)}>
                 {targets.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.label}
+                    {label(t.id)}
                   </option>
                 ))}
               </Select>
@@ -335,7 +386,10 @@ function LinksSection({
           <Button
             size="sm"
             className="w-fit"
-            onClick={() => dispatch({ type: 'connect', from: node.id, to: target, edgeType: kind })}
+            onClick={() =>
+              option !== null &&
+              dispatch({ type: 'connect', from: option.from, to: option.to, edgeType: kind })
+            }
           >
             {P.linkAdd}
           </Button>
@@ -404,6 +458,7 @@ function AgentFields({
         placeholder={placeholder}
         mono
       />
+      <EffortField value={node.effort} onChange={(effort) => change({ effort })} />
       <SkillsField
         value={node.skills}
         skills={ctx.skills}
@@ -483,6 +538,11 @@ export function NodePanel({
   onClose: () => void;
 }) {
   const change = (patch: NodePatch) => dispatch({ type: 'update-node', id: node.id, patch });
+  if (node.type === 'owner-merge' && finishParts(graph) !== null) {
+    return (
+      <FinishPanel node={node} target={ctx.target ?? null} issues={issues} onClose={onClose} />
+    );
+  }
   return (
     <div
       className="flex flex-col"
@@ -536,6 +596,50 @@ export function NodePanel({
               {P.fixed}
             </p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Finish block's panel (ADR-0028 §3): what happens at the end of every ticket, with the
+ * project's target. Nothing to set: the owner's final step is a click on the ticket page.
+ */
+function FinishPanel({
+  node,
+  target,
+  issues,
+  onClose,
+}: {
+  node: WorkflowNode;
+  target: string | null;
+  issues: readonly EditorIssue[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex flex-col" data-testid="node-panel" data-node={node.id} data-kind="finish">
+      <PanelHeading
+        icon={<RoleIcon node={node} />}
+        eyebrow={FINISH_COPY.kind}
+        title={FINISH_COPY.title}
+        text={FINISH_COPY.panelText(target)}
+        onClose={onClose}
+      />
+      <PanelIssues issues={issues} title={E.blockTitle} />
+      <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
+        <section className="flex flex-col gap-2" data-testid="finish-steps">
+          <h4 className="font-semibold">{FINISH_COPY.stepsTitle}</h4>
+          <ol className="flex list-decimal flex-col gap-1 pl-5 text-caption text-dim">
+            {FINISH_COPY.steps(target).map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </section>
+        <div className="-mx-4 border-t border-line px-4 pt-4">
+          <p className="text-caption text-dim" data-testid="block-fixed">
+            {FINISH_COPY.fixed}
+          </p>
         </div>
       </div>
     </div>
