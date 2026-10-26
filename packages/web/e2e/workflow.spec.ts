@@ -195,9 +195,11 @@ test('opens the migrated workflow: every block on the canvas, no problems', asyn
   await expect(
     page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workflow' }),
   ).toHaveAttribute('aria-current', 'page');
-  for (const id of ['ticket', 'orchestrate', 'plan-approval', 'helpers', 'review', 'done']) {
+  // The end of the flow is one Finish block (ADR-0028 §3): your merge; Done is part of it.
+  for (const id of ['ticket', 'orchestrate', 'plan-approval', 'helpers', 'review', 'owner-merge']) {
     await expect(block(page, id)).toBeVisible();
   }
+  await expect(block(page, 'done')).toHaveCount(0);
   await expect(block(page, 'orchestrate')).toHaveAttribute('data-kind', 'lead');
   // Nothing selected: the problems list sits beside the canvas, with its count on the header.
   await expect(issues(page).getByTestId('issues-none')).toBeVisible();
@@ -205,7 +207,7 @@ test('opens the migrated workflow: every block on the canvas, no problems', asyn
   await expect(page.getByTestId('save-workflow')).toBeDisabled();
   // Every block is inside the canvas (fit to the view, nothing cut off).
   const canvas = await page.getByTestId('graph-editor').boundingBox();
-  for (const id of ['ticket', 'owner-merge', 'done', 'helpers']) {
+  for (const id of ['ticket', 'owner-merge', 'helpers']) {
     const box = await block(page, id).boundingBox();
     expect(box).not.toBeNull();
     if (canvas && box) {
@@ -395,7 +397,9 @@ test('dragging a link lights the blocks it can end on; a drop on a block body li
   await expect(block(page, 'helper-1')).toHaveAttribute('data-link-target', 'valid');
   await expect(block(page, 'checks')).toHaveAttribute('data-link-target', 'invalid');
   await expect(block(page, 'ticket')).toHaveAttribute('data-link-target', 'invalid');
-  await expect(block(page, 'done')).toHaveAttribute('data-link-target', 'invalid');
+  // The Finish block (your merge, with the ticket merge and Done in it): the lead merges through
+  // its Checks block, so not here.
+  await expect(block(page, 'owner-merge')).toHaveAttribute('data-link-target', 'invalid');
   // The valid block's in handle grows into a target; an invalid block fades.
   const opacity = await block(page, 'ticket').evaluate((el) => getComputedStyle(el).opacity);
   expect(Number(opacity)).toBeLessThan(0.6);

@@ -44,6 +44,7 @@ export const GATE_H = 72;
 /** Ticket and Done are pills: they are not agents. */
 export const END_W = 120;
 export const END_H = 44;
+export const CHECKS_W = 204;
 /** The Finish block: "Finish", "Merge into <target> or open a pull request", then Done. */
 export const FINISH_W = 300;
 export const FINISH_H = 76;
@@ -66,6 +67,8 @@ export function isGateNode(node: WorkflowNode): boolean {
 export function blockSize(node: WorkflowNode): { width: number; height: number } {
   if (node.type === 'ticket' || node.type === 'done') return { width: END_W, height: END_H };
   if (node.type === 'owner-merge') return { width: FINISH_W, height: FINISH_H };
+  // A Checks block names its place ("Checks before merge"), so it is wider than the other steps.
+  if (node.type === 'checks') return { width: CHECKS_W, height: GATE_H };
   if (isGateNode(node)) return { width: GATE_W, height: GATE_H };
   return { width: AGENT_W, height: AGENT_H };
 }
