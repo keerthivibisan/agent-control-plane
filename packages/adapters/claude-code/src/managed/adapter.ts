@@ -54,6 +54,15 @@ export interface ManagedClaudeCodeOptions {
   env?: Readonly<Record<string, string>>;
 }
 
+/**
+ * P-D: the first words of a rework turn that could not continue the helper's saved session and
+ * started a new one in the same worktree. App text only; the rework prompt follows it.
+ */
+export const REWORK_NEW_SESSION_NOTE =
+  'Your earlier conversation for this task could not be continued, so this is a new session. ' +
+  'Your earlier work is in this folder, saved on its branch: read the files you changed before ' +
+  'you change anything.';
+
 /** Thrown by `send` on a follow-up turn, which takes exactly one message (ADR-0020). */
 export class ManagedFollowUpSendError extends Error {
   readonly code = 'managed_follow_up_one_message';
@@ -257,14 +266,14 @@ function startAgent(
   env: Readonly<Record<string, string>> | undefined,
 ): ManagedAgentHandle {
   const abortController = new AbortController();
-  const input = new AsyncQueue<SDKUserMessage>();
+  let input = new AsyncQueue<SDKUserMessage>();
   const events = new AsyncQueue<ManagedAgentEvent>();
   const state: MapperState = { started: false };
   let lastResult: TurnResult | null = null;
 
   input.push(userMessage(spec.prompt));
   const protection = launchProtectionOf(spec);
-  const q = run({
+  let q = run({
     prompt: input,
     options: buildOptions(spec, callbacks, abortController, env, protection),
   });
@@ -274,6 +283,10 @@ function startAgent(
   const fullAuto = protection?.autoMode === true;
   // Why the agent could not run protected, once known.
   let failure: ManagedFailureCode | null = null;
+  // P-D: a rework turn that resumes the helper's saved session, until it falls back to a new one.
+  let resuming = spec.followUp === undefined && (spec.rework?.resumeSessionId ?? null) !== null;
+  // The session answered (a model message or a tool call): its resume worked.
+  let answered = false;
 
   const finish = (outcome: 'success' | 'error' | 'cancelled'): void => {
     if (events.isClosed) return;
@@ -296,25 +309,29 @@ function startAgent(
     q.close?.();
   };
 
-  const pump = async (): Promise<void> => {
+  /** Reads one query to its end: `ended` (the stream ended), `threw`, or `stopped` (we ended it). */
+  const drain = async (query: ManagedQuery): Promise<'ended' | 'threw' | 'stopped'> => {
     try {
-      for await (const message of q) {
-        if (events.isClosed) break;
+      for await (const message of query) {
+        if (events.isClosed) return 'stopped';
         const mapped = mapSdkMessage(message, spec, state);
         // The session must really be in auto mode; a CLI or model without it may start in
         // another mode, which Full auto never accepts (the agent ends before any tool runs).
         if (fullAuto && mapped.init !== undefined && mapped.init.permissionMode !== 'auto') {
           failClosed('auto-mode-unavailable');
-          break;
+          return 'stopped';
         }
-        for (const event of mapped.events) events.push(event);
+        for (const event of mapped.events) {
+          if (event.type === 'usage' || event.type === 'activity') answered = true;
+          events.push(event);
+        }
         if (mapped.result !== null) {
           lastResult = mapped.result;
           if (sandboxed && mapped.result.unavailable !== null) failure = mapped.result.unavailable;
           if (!specKeepsInputOpen(spec) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
         }
       }
-      finish(abortController.signal.aborted ? 'cancelled' : (lastResult?.outcome ?? 'error'));
+      return 'ended';
     } catch (error) {
       // The SDK throws AbortError after abort(); any other failure ends the agent as an error.
       // No message text is kept: it may quote model or tool output. For Full auto it is only
@@ -322,8 +339,54 @@ function startAgent(
       if (sandboxed && failure === null && error instanceof Error) {
         failure = classifyStartupError([error.message]);
       }
-      finish(abortController.signal.aborted ? 'cancelled' : 'error');
+      return 'threw';
     }
+  };
+
+  /**
+   * P-D: the resumed session ended in an error before it answered at all, so it could not be
+   * continued (Claude Code's "No conversation found with session ID": a transcript cleaned up,
+   * moved or never written). Never after the session answered, never once stopped, and never
+   * for a Full auto failure (the sandbox or auto mode was unavailable: a new session would fail
+   * the same way).
+   */
+  const resumeFailed = (how: 'ended' | 'threw'): boolean =>
+    resuming &&
+    !answered &&
+    failure === null &&
+    !abortController.signal.aborted &&
+    !events.isClosed &&
+    (how === 'threw' || lastResult?.outcome !== 'success');
+
+  /**
+   * Starts the rework turn again in a new session, in the same worktree, with a note that the
+   * earlier conversation is gone (the work itself is in the folder). The new session reports its
+   * own id (`started`), which the engine keeps for the next rework. Only once per turn.
+   */
+  const startFresh = (): void => {
+    resuming = false;
+    input.close();
+    q.close?.();
+    input = new AsyncQueue<SDKUserMessage>();
+    input.push(userMessage(`${REWORK_NEW_SESSION_NOTE}\n\n${spec.prompt}`));
+    state.started = false;
+    lastResult = null;
+    const fresh: ManagedAgentSpec = { ...spec, rework: { resumeSessionId: null } };
+    q = run({
+      prompt: input,
+      options: buildOptions(fresh, callbacks, abortController, env, protection),
+    });
+  };
+
+  const pump = async (): Promise<void> => {
+    let how = await drain(q);
+    if (how !== 'stopped' && resumeFailed(how)) {
+      startFresh();
+      how = await drain(q);
+    }
+    if (how === 'stopped') return;
+    const aborted = abortController.signal.aborted;
+    finish(aborted ? 'cancelled' : how === 'ended' ? (lastResult?.outcome ?? 'error') : 'error');
   };
   void pump();
 

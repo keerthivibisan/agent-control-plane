@@ -2,6 +2,7 @@ export {
   createManagedClaudeCode,
   ManagedAgentEndedError,
   ManagedFollowUpSendError,
+  REWORK_NEW_SESSION_NOTE,
 } from './adapter.js';
 export type { ManagedClaudeCodeOptions, ManagedQuery, ManagedQueryFn } from './adapter.js';
 export {
