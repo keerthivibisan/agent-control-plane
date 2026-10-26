@@ -362,3 +362,21 @@
   --xy-controls-button-border-color: var(--color-line);
   --xy-minimap-background-color: var(--color-panel);
 }
+
+/*
+ * v0.3.1 P-C: either end of a link can be dragged to another block. The grips show on the selected
+ * link (drawn above the blocks) and under the pointer; elsewhere they stay invisible but grabbable.
+ */
+.react-flow__edgeupdater {
+  cursor: grab;
+}
+.react-flow__edge.selected .react-flow__edgeupdater {
+  fill: var(--color-panel);
+  stroke: var(--color-accent);
+  stroke-width: 2px;
+}
+.react-flow__edgeupdater:hover {
+  fill: var(--color-accent);
+  stroke: var(--color-panel);
+  stroke-width: 2px;
+}

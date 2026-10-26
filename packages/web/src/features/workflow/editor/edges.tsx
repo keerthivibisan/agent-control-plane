@@ -1,6 +1,8 @@
 import type { WorkflowEdgeType } from '@acp/core';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
+import { memo } from 'react';
 import type { LinkEdge } from './flow';
+import { useLinkState } from './link-store';
 import { labelPoint, pathOf, routePoints } from './routing';
 
 /**
@@ -54,7 +56,7 @@ export function LinkSample({ type, width = 28 }: { type: WorkflowEdgeType; width
  * over a soft halo; while a block is selected or a link is being dragged, the links that don't
  * touch it fade back. Rework links carry a small "Rework ×n" label on their lower run.
  */
-export function LinkEdgeView({
+export const LinkEdgeView = memo(function LinkEdgeView({
   id,
   sourceX,
   sourceY,
@@ -65,7 +67,10 @@ export function LinkEdgeView({
   markerEnd,
   label,
 }: EdgeProps<LinkEdge>) {
+  // While a link is being made the others fade back (the link store, so no remapping).
+  const linking = useLinkState((s) => s.mode !== null);
   if (data === undefined) return null;
+  const dim = data.dim || linking;
   const points = routePoints({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, data.route);
   const d = pathOf(points);
   const look = EDGE_LOOK[data.type];
@@ -73,7 +78,7 @@ export function LinkEdgeView({
   const stroke = linkStroke(data.type, isSelected, data.refused);
   const at = labelPoint(points);
   return (
-    <g opacity={data.dim ? 0.3 : 1} data-link={data.type} className="transition-opacity">
+    <g opacity={dim ? 0.3 : 1} data-link={data.type} className="transition-opacity">
       {isSelected ? (
         <path
           d={d}
@@ -105,7 +110,7 @@ export function LinkEdgeView({
             }`}
             style={{
               transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)`,
-              opacity: data.dim ? 0.3 : 1,
+              opacity: dim ? 0.3 : 1,
             }}
             data-testid="link-label"
           >
@@ -115,6 +120,6 @@ export function LinkEdgeView({
       ) : null}
     </g>
   );
-}
+});
 
 export const linkEdgeTypes = { link: LinkEdgeView };

@@ -12,12 +12,16 @@ import {
   GitCommitHorizontal,
   GitMerge,
   List,
+  Link2,
   Lock,
   Maximize,
   MousePointerClick,
+  Redo2,
   ScanSearch,
   Trash,
+  Undo2,
   UserCheck,
+  WandSparkles,
   Users,
   X,
   ZoomIn,
@@ -68,6 +72,11 @@ export const LegendIcon = icon(List, 'LegendIcon');
 export const FitIcon = icon(Maximize, 'FitIcon');
 export const ZoomInIcon = icon(ZoomIn, 'ZoomInIcon');
 export const ZoomOutIcon = icon(ZoomOut, 'ZoomOutIcon');
+/** The editor's history and layout tools (v0.3.1 P-C). */
+export const UndoIcon = icon(Undo2, 'UndoIcon');
+export const RedoIcon = icon(Redo2, 'RedoIcon');
+export const TidyIcon = icon(WandSparkles, 'TidyIcon');
+export const LinkIcon = icon(Link2, 'LinkIcon');
 
 /** One icon per agent role, so a node reads at a glance (the role's word is always next to it). */
 export const ROLE_ICON: Record<WorkflowRole, ReturnType<typeof icon>> = {

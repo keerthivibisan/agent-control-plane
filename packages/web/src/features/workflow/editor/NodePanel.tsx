@@ -8,15 +8,14 @@ import {
   isEditorNode,
   type AgentEffort,
   type ApprovalMode,
-  type WorkflowEdgeType,
   type WorkflowGraph,
   type WorkflowNode,
-  type WorkflowNodeId,
 } from '@acp/core';
 import type { HarnessStatusDto } from '@acp/core/api';
-import { useId, useState, type Dispatch, type ReactNode } from 'react';
+import { useId, type Dispatch, type ReactNode } from 'react';
 import { Button } from '../../../components/Button';
 import { AlertIcon } from '../../../components/icons';
+import { Menu, MenuLabel } from '../../../components/Menu';
 import { Select, hintClass, labelClass } from '../../../components/Input';
 import { FINISH_COPY, REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { href } from '../../../lib/router';
@@ -30,13 +29,15 @@ import {
 import { FullAutoWarning } from '../../review-loop/ApprovalsEditor';
 import { isChecksNode } from '../check-blocks';
 import { finishParts, finishView } from '../finish';
-import { RemoveIcon } from '../icons';
+import { LinkIcon, RemoveIcon } from '../icons';
 import { CheckBlockFields } from './CheckBlockFields';
 import { LinkSample } from './edges';
 import { EDITOR_COPY } from './copy';
 import { IssueRow, type EditorIssue } from './IssuesList';
+import { LinkChoiceItems } from './LinkMenu';
+import { drawnLabel, linkChoices } from './linking';
 import { RoleIcon, kindText, kindWord } from './nodes';
-import { isRemovable, resolveLink, type EditorAction, type NodePatch } from './state';
+import { isRemovable, type EditorAction, type NodePatch } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
 const P = WORKFLOW_GRAPH_COPY.panel;
@@ -301,22 +302,12 @@ function LinksSection({
   graph: WorkflowGraph;
   dispatch: Dispatch<EditorAction>;
 }) {
-  const id = useId();
   // The blocks and links as drawn: the Finish block stands for the end steps (ADR-0028 §3).
   const view = finishView(graph);
-  const finishId = view.finish?.ownerMerge;
-  const label = (nid: string) =>
-    nid === finishId ? FINISH_COPY.title : (graph.nodes.find((n) => n.id === nid)?.label ?? nid);
+  const label = (nid: string) => drawnLabel(graph, nid);
   const outgoing = view.graph.edges.filter((e) => e.from === node.id);
-  const targets = view.graph.nodes.filter(
-    (n) => n.id !== node.id && resolveLink(graph, node.id, n.id) !== null,
-  );
-  const [to, setTo] = useState<WorkflowNodeId>('');
-  const target = targets.some((t) => t.id === to) ? to : (targets[0]?.id ?? '');
-  const option = target === '' ? null : resolveLink(graph, node.id, target);
-  const types = option?.types ?? [];
-  const [type, setType] = useState<WorkflowEdgeType | ''>('');
-  const kind = types.includes(type as WorkflowEdgeType) ? (type as WorkflowEdgeType) : types[0];
+  // Only the links core allows, one entry per kind that fits (v0.3.1 P-C).
+  const choices = linkChoices(graph, node.id);
   return (
     <Section title={P.links}>
       {outgoing.length === 0 ? (
@@ -345,55 +336,31 @@ function LinksSection({
           })}
         </ul>
       )}
-      {targets.length === 0 || kind === undefined ? (
+      {choices.length === 0 ? (
         node.type === 'done' ? null : (
           <p className="text-caption text-dim">{P.linkToNone}</p>
         )
       ) : (
-        <div className="flex flex-col gap-2" data-testid="add-link">
-          <span className={labelClass}>{P.addLink}</span>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={`${id}-to`} className={hintClass}>
-                {P.linkTo}
-              </label>
-              <Select id={`${id}-to`} value={target} onChange={(e) => setTo(e.target.value)}>
-                {targets.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {label(t.id)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <label htmlFor={`${id}-type`} className={hintClass}>
-                {P.linkType}
-              </label>
-              <Select
-                id={`${id}-type`}
-                value={kind}
-                onChange={(e) => setType(e.target.value as WorkflowEdgeType)}
-              >
-                {types.map((t) => (
-                  <option key={t} value={t}>
-                    {G.edges[t]}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
-          <p className="text-caption text-dim">{G.edgeText[kind]}</p>
-          <Button
-            size="sm"
-            className="w-fit"
-            onClick={() =>
-              option !== null &&
-              dispatch({ type: 'connect', from: option.from, to: option.to, edgeType: kind })
+        <Menu
+          label={EDITOR_COPY.linkTo.title(label(node.id))}
+          testId="link-to-menu"
+          loop
+          className="max-h-[min(24rem,70vh)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto"
+          trigger={
+            <Button size="sm" className="w-fit" data-testid="link-to">
+              <LinkIcon size={14} />
+              {EDITOR_COPY.linkTo.button}
+            </Button>
+          }
+        >
+          <MenuLabel>{EDITOR_COPY.linkTo.title(label(node.id))}</MenuLabel>
+          <LinkChoiceItems
+            choices={choices}
+            onPick={(c) =>
+              dispatch({ type: 'connect', from: c.link.from, to: c.link.to, edgeType: c.type })
             }
-          >
-            {P.linkAdd}
-          </Button>
-        </div>
+          />
+        </Menu>
       )}
     </Section>
   );

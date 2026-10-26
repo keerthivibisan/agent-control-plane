@@ -31,7 +31,8 @@ import { editorIssues, hasErrors } from './editor/issues';
 import { IssueCounter, IssuesList, type EditorIssue } from './editor/IssuesList';
 import { NodePanel, type NodePanelContext } from './editor/NodePanel';
 import { saveWorkflowGraph } from './editor/save';
-import { editorReducer, initialEditorState, sameGraph, type Selection } from './editor/state';
+import { historyReducer, initialHistoryState } from './editor/history';
+import { sameGraph, type Selection } from './editor/state';
 import { TemplatePicker } from './editor/TemplatePicker';
 import { useUnsavedGuard } from './editor/useUnsavedGuard';
 import { ProjectDefaults } from './ProjectDefaults';
@@ -107,7 +108,7 @@ function EditorHeader({ actions, status }: { actions: ReactNode; status: ReactNo
  */
 function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGraphDto }) {
   const store = useQueryStore();
-  const [state, dispatch] = useReducer(editorReducer, dto.graph, initialEditorState);
+  const [state, dispatch] = useReducer(historyReducer, dto.graph, initialHistoryState);
   const [templates, setTemplates] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const [pending, setPending] = useState(false);
@@ -123,6 +124,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   const harnessFile = useMemo(() => harnessForValidation(harness), [harness]);
 
   const graph = state.graph;
+  // Undo and redo (v0.3.1 P-C): the toolbar's buttons follow the stacks.
+  const history = useMemo(
+    () => ({ canUndo: state.past.length > 0, canRedo: state.future.length > 0 }),
+    [state.past.length, state.future.length],
+  );
   const projectMode = approvalsOf(dto.setup).mode;
   const helperLimit = dto.setup.maxConcurrentHelpers;
   const issues = useMemo(
@@ -338,6 +344,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           refusal={state.refusal}
           dispatch={dispatch}
           focus={focus}
+          history={history}
         />
         <div className="flex min-w-0 flex-col gap-4">
           {node !== undefined || edge !== undefined ? (

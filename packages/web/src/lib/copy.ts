@@ -3953,7 +3953,7 @@ export const WORKFLOW_GRAPH_COPY = {
   canvasTitle: 'How a ticket flows',
   canvasLabel: 'Workflow editor',
   canvasHint:
-    'Drag a block to move it. Drag from the dot on a block’s right edge to another block’s left edge to link them. Select a block or link and press Delete to remove it.',
+    'Drag a block to move it. Drag from a dot or the edge of a block onto another block to link them, or press Enter on a block’s dot and then on the other block; Shift+F10 lists the links a block can make. Drag the end of a selected link to move it. Select a block or link and press Delete to remove it. Command or Control+Z undoes, with Shift redoes.',
   loading: 'Loading the workflow…',
   kinds: {
     planner: 'Planner',
@@ -4151,11 +4151,7 @@ export const WORKFLOW_GRAPH_COPY = {
     } satisfies Record<AgentEffort | 'default', string>,
     links: 'Links from this block',
     noLinks: 'No links from this block yet.',
-    addLink: 'Add a link',
-    linkTo: 'To',
-    linkType: 'Kind of link',
     linkToNone: 'No block can be linked from here.',
-    linkAdd: 'Add link',
     removeLink: (name: string) => `Remove link ${name}`,
   },
   edgePanel: {
