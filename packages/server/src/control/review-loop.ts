@@ -72,8 +72,9 @@ import {
 import type { RunStore } from './store.js';
 
 /**
- * The server half of the review loop (ADR-0021 §3–§4, docs/review-loop/README.md §6). The engine
- * decides; this module carries out its git effects with the workspace manager and reports back:
+ * The server half of the review loop (ADR-0021 §3–§4, docs/history/review-loop/README.md §6). The
+ * engine decides; this module carries out its git effects with the workspace manager and
+ * reports back:
  *
  * - `seal-change`: commit the helper's worktree, then `changeSealed`; the sealed commit's checks
  *   start at once;

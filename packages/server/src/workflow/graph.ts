@@ -16,9 +16,9 @@ import type { NodeUseDto } from '@acp/core/api';
 import type { StoredProjectWorkflow } from '@acp/db';
 
 /**
- * A project's effective workflow graph (ADR-0023 §9, docs/workflow-graph/README.md §4): the stored
- * version 2 graph, or the version 1 workflow (stored, or the default) migrated with the project's
- * approval mode. One answer for the Workflow page, the run start and the "used by" chips.
+ * A project's effective workflow graph (ADR-0023 §9, docs/history/workflow-graph/README.md §4): the
+ * stored version 2 graph, or the version 1 workflow (stored, or the default) migrated with the
+ * project's approval mode. One answer for the Workflow page, the run start and the "used by" chips.
  */
 export interface EffectiveWorkflow {
   stored: 'v2' | 'v1' | 'default';

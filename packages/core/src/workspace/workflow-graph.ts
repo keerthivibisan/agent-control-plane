@@ -11,9 +11,9 @@ import {
 } from './workflow.js';
 
 /**
- * Editable workflow graphs (ADR-0023, docs/workflow-graph/README.md). A project's workflow is a
- * graph of building blocks: agent nodes whose capabilities are fixed by their type, gate nodes,
- * and typed edges. The owner chooses and wires blocks; `validateWorkflowGraph` decides which
+ * Editable workflow graphs (ADR-0023, docs/history/workflow-graph/README.md). A project's workflow
+ * is a graph of building blocks: agent nodes whose capabilities are fixed by their type, gate
+ * nodes, and typed edges. The owner chooses and wires blocks; `validateWorkflowGraph` decides which
  * graphs may run and `compileWorkflow` turns a valid one into the engine's program. No graph can
  * switch off a safety rule: the engine, server and adapter still enforce every one of them.
  *

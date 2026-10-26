@@ -22,7 +22,8 @@ import { createLogger } from '../../../../src/logger.js';
 import { dumpDatabase, git } from '../../control/harness.js';
 
 /*
- * RL-V REAL run driver for the review loop (docs/review-loop/wp/RL-V.md, "Real run plan").
+ * RL-V REAL run driver for the review loop (docs/review-loop/wp/RL-V.md at tag v0.3.0, "Real run
+ * plan").
  *
  * THIS STARTS REAL `claude` PROCESSES THROUGH THE AGENT SDK AND SPENDS TOKENS. It runs only when
  * the owner has consented in chat AND sets ACP_REAL_RUN=1; never in CI; never from `pnpm test`

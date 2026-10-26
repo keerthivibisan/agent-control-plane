@@ -55,7 +55,7 @@ import {
 } from './loop-helpers.js';
 import { workflow } from './workflow-helpers.js';
 
-/** The review loop (ADR-0021 §3, docs/review-loop/README.md §5). Synthetic data only. */
+/** The review loop (ADR-0021 §3, docs/history/review-loop/README.md §5). Synthetic data only. */
 
 const B = 'wb-1';
 

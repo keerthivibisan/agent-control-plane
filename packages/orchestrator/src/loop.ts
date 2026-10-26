@@ -26,11 +26,11 @@ import type { EngineAgent, EngineChange, RunIntegration, RunLimits } from './sta
 import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 
 /**
- * The review loop (ADR-0021 §3, docs/review-loop/README.md §5), as operations on a command's
- * draft. A helper (or the tester) that ends its turn goes to AWAITING_REVIEW and its worktree is
- * sealed; a reviewer (a read-only review agent, or the lead) reviews the change; the lead decides:
- * merge into the ticket branch, rework, discard, or ask the owner. The engine never runs git: it
- * asks the server with effects and records what the server reports.
+ * The review loop (ADR-0021 §3, docs/history/review-loop/README.md §5), as operations on a
+ * command's draft. A helper (or the tester) that ends its turn goes to AWAITING_REVIEW and its
+ * worktree is sealed; a reviewer (a read-only review agent, or the lead) reviews the change; the
+ * lead decides: merge into the ticket branch, rework, discard, or ask the owner. The engine never
+ * runs git: it asks the server with effects and records what the server reports.
  *
  * Every function here is only called for runs with `integration`; runs without it keep the legacy
  * flow untouched.

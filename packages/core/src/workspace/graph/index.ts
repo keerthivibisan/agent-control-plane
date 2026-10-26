@@ -1,4 +1,4 @@
-// Workflow graph logic (ADR-0023, docs/workflow-graph/README.md): pure functions over the
+// Workflow graph logic (ADR-0023, docs/history/workflow-graph/README.md): pure functions over the
 // contract in `../workflow-graph.ts`, shared by the editor, the server and the engine.
 export { canConnect, type ConnectIssueCode, type ConnectResult } from './connect.js';
 export {

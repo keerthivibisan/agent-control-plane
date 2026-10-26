@@ -25,9 +25,9 @@ import { runLimits } from './limits.js';
 import type { EngineAgent, RunIntegration, RunLimits } from './state.js';
 
 /**
- * The run's compiled workflow program (ADR-0023 §4, docs/workflow-graph/README.md §3). Every
- * stage decision of the engine reads it: who plans, which helper nodes exist with their launch
- * fields, modes and review routes, and the final stages in order.
+ * The run's compiled workflow program (ADR-0023 §4, docs/history/workflow-graph/README.md §3).
+ * Every stage decision of the engine reads it: who plans, which helper nodes exist with their
+ * launch fields, modes and review routes, and the final stages in order.
  *
  * A run with a graph snapshot (`RunState.graph`) compiles it with its `graphContext`. A version 1
  * run (no graph) migrates its workflow snapshot with `migrateWorkflowV1`, with the run's own

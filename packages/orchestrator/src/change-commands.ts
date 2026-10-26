@@ -23,8 +23,8 @@ import type { EngineAgent, EngineContext, EngineResult, RunState } from './state
 import { isActiveAgentStatus, isLiveAgentStatus, isTerminalRunStatus } from './transitions.js';
 
 /**
- * The review loop's commands for the server (ADR-0021 §3–4, docs/review-loop/README.md §5–6).
- * The engine never runs git: the server carries out `seal-change`, `create-ticket-branch`,
+ * The review loop's commands for the server (ADR-0021 §3–4, docs/history/review-loop/README.md
+ * §5–6). The engine never runs git: the server carries out `seal-change`, `create-ticket-branch`,
  * `merge-change` and `discard-change`, and reports back here. Every command refuses runs without
  * the review loop, which keep the legacy per-change owner review.
  */

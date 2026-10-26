@@ -33,9 +33,9 @@ const C = HARNESS_PAGE_COPY;
 const HB = HARNESS_BLOCKS_COPY.harness;
 
 /**
- * `#/p/:projectId/harness` (docs/redesign/README.md §4.4): does the project have a harness, and
- * does it pass? The status from `GET /projects/:id/harness` (read fresh from the project folder),
- * the checks it lists, "Run checks now" on the main branch with every stored run, the
+ * `#/p/:projectId/harness` (docs/history/redesign/README.md §4.4): does the project have a harness,
+ * and does it pass? The status from `GET /projects/:id/harness` (read fresh from the project
+ * folder), the checks it lists, "Run checks now" on the main branch with every stored run, the
  * "Build the harness" ticket, and where the checks are used. Since ADR-0027 (H-D): the setup
  * steps with the switch "Setup may use the network" and the latest setup runs on main, each
  * check's labels and the workflow's Checks blocks that run it, and "Run setup and checks now"

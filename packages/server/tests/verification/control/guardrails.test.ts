@@ -12,9 +12,10 @@ import { boot, makeRepo, makeTempDir, registerProject, waitFor, waitForRun } fro
 /*
  * P3-F: the ADR-0013 guardrail refusals P3-D's tests did not already cover. The full map (each
  * guardrail → its passing refusal test) is the "Phase 3 M1 acceptance" checklist in
- * docs/implementation-plan.md. Covered elsewhere, not repeated here: missing/invalid CSRF, a run
- * for an unregistered project, a 4th worker, the worker budget soft cap, a pending non-read-only
- * tool use, a merge into a dirty base (tests/control/guardrails.test.ts).
+ * docs/history/phase-1-3/implementation-plan.md. Covered elsewhere, not repeated here:
+ * missing/invalid CSRF, a run for an unregistered project, a 4th worker, the worker budget soft
+ * cap, a pending non-read-only tool use, a merge into a dirty base
+ * (tests/control/guardrails.test.ts).
  */
 
 describe('P3-F lead tool refusals on a persisted run (engine via the run service)', () => {

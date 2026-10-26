@@ -1181,7 +1181,7 @@ export interface StageCopy {
   empty: string;
 }
 
-/** Board columns (docs/phase-4/README.md §5.2), in board order. */
+/** Board columns (docs/history/phase-4/README.md §5.2), in board order. */
 export const STAGE_COPY: Readonly<Record<TicketStage, StageCopy>> = {
   BACKLOG: {
     word: 'Backlog',
@@ -1367,7 +1367,9 @@ export const BOARD_COPY = {
 // --- New project wizard and project settings (Phase 4, wp/p4-f-project-setup) ------------------
 import type { CheckRunStatus } from '@acp/core';
 
-/** Harness states (docs/phase-4/README.md §3) as a word, a one-line explanation and a tone. */
+/**
+ * Harness states (docs/history/phase-4/README.md §3) as a word, a one-line explanation and a tone.
+ */
 export const SETUP_HARNESS_STATE_COPY: Readonly<Record<HarnessState, ControlStatusCopy>> = {
   ready: {
     word: 'Ready',
@@ -2823,8 +2825,8 @@ export const STAGE_AGENT_COPY = {
 // --- The lead's chat after the lead ends (redesign R-J, wp/r-j-web) -----------------------------
 //
 // Add-only. Once a run's lead has ended, an owner message brings it back for one answers-only turn
-// (docs/redesign/README.md §6b, ADR-0020): the line above the box, the wait for the answer, why a
-// chat can't be continued, and the follow-up bubbles.
+// (docs/history/redesign/README.md §6b, ADR-0020): the line above the box, the wait for the answer,
+// why a chat can't be continued, and the follow-up bubbles.
 
 import type { FollowUpUnavailableReason } from '@acp/core/api';
 
@@ -2878,8 +2880,9 @@ export const SHELL_FRAME_COPY = {
 
 // --- Review loop: approval modes, Start dialog, change cards, ticket branch (RL-D, wp/rl-d-web) --
 //
-// Add-only (ADR-0021, docs/review-loop/README.md §7). Words for the approval modes, the review
-// stage, the Start dialog, the change cards, the ticket branch and the live graph's additions.
+// Add-only (ADR-0021, docs/history/review-loop/README.md §7). Words for the approval modes, the
+// review stage, the Start dialog, the change cards, the ticket branch and the live graph's
+// additions.
 
 const MODE_WORDS: Readonly<Record<ApprovalMode, string>> = {
   manual: 'Manual',

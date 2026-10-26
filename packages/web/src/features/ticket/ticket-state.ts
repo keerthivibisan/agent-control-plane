@@ -22,9 +22,9 @@ import type {
 import { isAgentLive as isLiveAgentStatus, type AgentNode } from '../control/run-state';
 
 /**
- * Pure rules the ticket page reads from a `TicketDetailDto` (docs/phase-4/README.md §5.3). The
- * server decides what is allowed; these only decide what to show and which buttons to offer, so a
- * refused action still shows the server's reason.
+ * Pure rules the ticket page reads from a `TicketDetailDto` (docs/history/phase-4/README.md §5.3).
+ * The server decides what is allowed; these only decide what to show and which buttons to offer, so
+ * a refused action still shows the server's reason.
  */
 
 /**

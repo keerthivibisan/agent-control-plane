@@ -37,8 +37,8 @@ import { isAgentLive } from '../control/run-state';
 import { isFailing } from '../ticket/ticket-state';
 
 /**
- * Pure rules for the review loop's screens (ADR-0021, docs/review-loop/README.md §7). The server
- * and the engine decide what is allowed; these only decide what to show and which buttons to
+ * Pure rules for the review loop's screens (ADR-0021, docs/history/review-loop/README.md §7). The
+ * server and the engine decide what is allowed; these only decide what to show and which buttons to
  * offer, so a refused action still shows the server's reason.
  */
 

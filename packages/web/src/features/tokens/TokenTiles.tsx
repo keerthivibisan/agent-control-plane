@@ -51,10 +51,10 @@ export function CountsOnly({ data }: { data: ProjectTokensDto }) {
 }
 
 /**
- * The page's five headline tiles (docs/redesign/README.md §4.5): sessions, agent runs, new work,
- * total processed and the cache reuse share. Figures come from `tokenHeadline()` on the server;
- * none is computed here. There is no cost tile: provider-reported cost is per session and never
- * summed, so it lives in the session table.
+ * The page's five headline tiles (docs/history/redesign/README.md §4.5): sessions, agent runs, new
+ * work, total processed and the cache reuse share. Figures come from `tokenHeadline()` on the
+ * server; none is computed here. There is no cost tile: provider-reported cost is per session and
+ * never summed, so it lives in the session table.
  */
 export function TokenTiles({ data }: { data: ProjectTokensDto }) {
   const t = TOKENS_COPY.tiles;

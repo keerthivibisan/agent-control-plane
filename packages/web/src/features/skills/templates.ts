@@ -1,6 +1,6 @@
 /**
- * Starting points for a new skill (docs/redesign/README.md §4.3). Short on purpose: a skill is read
- * by an agent on every use, so each line should change what the agent does.
+ * Starting points for a new skill (docs/history/redesign/README.md §4.3). Short on purpose: a skill
+ * is read by an agent on every use, so each line should change what the agent does.
  */
 export interface SkillTemplate {
   id: 'code-review' | 'unit-tests' | 'plan' | 'docs';

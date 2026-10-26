@@ -3,8 +3,9 @@ import { HARNESS_PAGE_COPY, PALETTE_COPY, SHELL_COPY } from '../../lib/copy';
 import { href } from '../../lib/router';
 
 /**
- * The ⌘K palette's entries (docs/redesign/README.md §5): jump to a project, a page of the current
- * project or a ticket by key, and two actions. Pure, so filtering and ordering are unit-tested.
+ * The ⌘K palette's entries (docs/history/redesign/README.md §5): jump to a project, a page of the
+ * current project or a ticket by key, and two actions. Pure, so filtering and ordering are
+ * unit-tested.
  */
 export type CommandGroup = 'actions' | 'pages' | 'projects' | 'tickets';
 

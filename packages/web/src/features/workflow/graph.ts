@@ -9,10 +9,11 @@ import type { RunWorkflowDto } from '@acp/core/api';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
 /**
- * The Workflow page's process graph (docs/redesign/README.md §4.2, ADR-0019), built only from data:
- * the project's workflow (stages on or off, planner mode, models, skills, agent files) and its agent setup
- * (helpers, depth, budget, allowlist). Nothing here is hardcoded per project, so the ticket page's
- * live graph and a later editable workflow (README §7a) can reuse the same nodes and edges.
+ * The Workflow page's process graph (docs/history/redesign/README.md §4.2, ADR-0019), built only
+ * from data: the project's workflow (stages on or off, planner mode, models, skills, agent files)
+ * and its agent setup (helpers, depth, budget, allowlist). Nothing here is hardcoded per project,
+ * so the ticket page's live graph and a later editable workflow (README §7a) can reuse the same
+ * nodes and edges.
  *
  * Layout: three rows that read left to right, like lines of text, so the graph stays readable at
  * 1024px without zooming far out:

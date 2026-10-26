@@ -4,8 +4,8 @@ import type { TokensService } from '../tokens/service.js';
 import { out, param } from './respond.js';
 
 /**
- * The project Tokens page (docs/redesign/README.md §4.5). Read-only, so no CSRF token. Thin: parse,
- * call the tokens service, send the response parsed by its `@acp/core/api` DTO.
+ * The project Tokens page (docs/history/redesign/README.md §4.5). Read-only, so no CSRF token.
+ * Thin: parse, call the tokens service, send the response parsed by its `@acp/core/api` DTO.
  */
 export function createTokensRouter(tokens: TokensService): Router {
   const router = Router();

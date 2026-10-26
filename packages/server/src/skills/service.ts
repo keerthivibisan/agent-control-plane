@@ -21,7 +21,7 @@ import { listSkillFolders, skillTarget } from './paths.js';
 import { createFileStore, type ProjectRef } from './store.js';
 
 /**
- * Project skills (ADR-0018, docs/redesign/README.md §4.3): list, read, write and commit
+ * Project skills (ADR-0018, docs/history/redesign/README.md §4.3): list, read, write and commit
  * `<project>/.claude/skills/<slug>/SKILL.md`. The path rules, writes and git live in `store.ts`,
  * shared with agent definitions; this file is the skill format and the "used by" guard.
  */

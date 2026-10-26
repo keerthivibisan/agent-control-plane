@@ -15,8 +15,9 @@ import { ProjectCard } from './ProjectCard';
 const C = ALL_PROJECTS_COPY;
 
 /**
- * `#/projects`, the cross-project home (docs/redesign/README.md §3): one card per project, New
- * project, and below them what Claude Code sessions do across all projects (the former Overview).
+ * `#/projects`, the cross-project home (docs/history/redesign/README.md §3): one card per project,
+ * New project, and below them what Claude Code sessions do across all projects (the former
+ * Overview).
  */
 export function AllProjectsPage() {
   const projects = useApiQuery(paths.projects(), schemas.projects);

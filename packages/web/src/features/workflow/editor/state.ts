@@ -35,10 +35,10 @@ import {
 import { finishParts } from '../finish';
 
 /**
- * The graph editor's state (ADR-0023, docs/workflow-graph/README.md §5): the graph being edited,
- * what is selected, and the last refused link. A pure reducer, so every editing rule is tested
- * without React Flow. Whether a link may exist is always core's `canConnect`, the same check the
- * validator and the server run, so the editor can never draw a link the server would refuse.
+ * The graph editor's state (ADR-0023, docs/history/workflow-graph/README.md §5): the graph being
+ * edited, what is selected, and the last refused link. A pure reducer, so every editing rule is
+ * tested without React Flow. Whether a link may exist is always core's `canConnect`, the same check
+ * the validator and the server run, so the editor can never draw a link the server would refuse.
  *
  * Two conveniences keep the forced wiring out of the owner's way, because there is only one valid
  * way to do it:

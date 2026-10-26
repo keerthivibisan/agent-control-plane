@@ -21,8 +21,8 @@ import { ReportedCostUsdDtoSchema, SessionSummaryDtoSchema, UsageTotalsDtoSchema
 import { ProjectAgentSetupDtoSchema } from './workspace.js';
 
 /**
- * HTTP contracts for the project-first redesign (docs/redesign/README.md §4, §6). Mutations need
- * the `X-ACP-CSRF` header (ADR-0013).
+ * HTTP contracts for the project-first redesign (docs/history/redesign/README.md §4, §6). Mutations
+ * need the `X-ACP-CSRF` header (ADR-0013).
  */
 
 const count = z.number().int().nonnegative();

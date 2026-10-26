@@ -371,7 +371,7 @@ const TABS: readonly { id: SkillsTabId; label: string; icon: typeof SparkIcon }[
 ];
 
 /**
- * The Skills & Agents page (docs/redesign/README.md §4.3): the project's own skills
+ * The Skills & Agents page (docs/history/redesign/README.md §4.3): the project's own skills
  * (`.claude/skills/<name>/SKILL.md`) and agent definitions (`.claude/agents/<name>.md`), each with
  * a list, New/Edit with templates and a preview, Save, Commit and Delete (ADR-0018 and its
  * amendment). The shell mounts it at `#/p/:projectId/skills`, `…/skills/:name` (`item`) and

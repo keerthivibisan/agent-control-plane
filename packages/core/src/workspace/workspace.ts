@@ -11,7 +11,7 @@ import {
 } from './workflow.js';
 
 /**
- * Phase 4 Agent Workspace domain (docs/phase-4/README.md §6, ADR-0016, ADR-0017).
+ * Phase 4 Agent Workspace domain (docs/history/phase-4/README.md §6, ADR-0016, ADR-0017).
  * Tickets live on an internal per-project board; each run of a ticket is a Phase 3 orchestration
  * run, plan-first. The harness is declared in the repo itself (`.acp/harness.json`).
  */

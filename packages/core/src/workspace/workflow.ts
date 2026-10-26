@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 
 /**
- * Project workflow and skills (docs/redesign/README.md §4.2–4.3, ADR-0018, ADR-0019).
+ * Project workflow and skills (docs/history/redesign/README.md §4.2–4.3, ADR-0018, ADR-0019).
  *
  * A workflow is a fixed sequence of stages; a project turns optional stages on or off and gives each
  * agent stage a model and a skill. Agent limits (helpers, depth, budget) and the approval settings

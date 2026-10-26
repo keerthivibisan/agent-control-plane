@@ -125,8 +125,8 @@ function Body({ data, params }: { data: ProjectTokensDto; params: TokensParams }
 
 /**
  * `#/p/:projectId/tokens`: how many sessions and tokens the project used, and new work vs cache
- * reuse (docs/redesign/README.md §4.5). One request (`ProjectTokensDto`) feeds the whole page, so
- * the tiles, charts and tables always describe the same range.
+ * reuse (docs/history/redesign/README.md §4.5). One request (`ProjectTokensDto`) feeds the whole
+ * page, so the tiles, charts and tables always describe the same range.
  */
 export function TokensPage({
   projectId,
