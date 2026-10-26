@@ -102,6 +102,19 @@ export type EditorAction =
   | { type: 'update-node'; id: WorkflowNodeId; patch: NodePatch }
   | { type: 'move-node'; id: WorkflowNodeId; position: NodePosition }
   | { type: 'connect'; from: WorkflowNodeId; to: WorkflowNodeId; edgeType: WorkflowEdgeType }
+  /**
+   * Moves an end of a link (v0.3.1 P-C): the link `id` becomes `from → to` of `edgeType`, checked
+   * with `canConnect` on the graph without it; refused, the link stays where it was.
+   */
+  | {
+      type: 'reconnect';
+      id: string;
+      from: WorkflowNodeId;
+      to: WorkflowNodeId;
+      edgeType: WorkflowEdgeType;
+    }
+  /** Tidy layout (P-C): every block back in the automatic layout (the saved positions go). */
+  | { type: 'tidy' }
   | { type: 'refuse'; message: string }
   | { type: 'dismiss-refusal' }
   | { type: 'remove-edge'; id: string }
@@ -740,7 +753,7 @@ function patchFields(node: WorkflowNode, patch: NodePatch): WorkflowNode {
 // ---------------------------------------------------------------- the reducer
 
 /** The selection, while what it names is still in the graph. */
-function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
+export function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
   if (selection === null) return null;
   const exists =
     selection.kind === 'node'
@@ -752,6 +765,39 @@ function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
 /** A change by hand makes the graph `custom` (`WorkflowGraph.template`); moving a block doesn't. */
 function custom(graph: WorkflowGraph): WorkflowGraph {
   return graph.template === 'custom' ? graph : { ...graph, template: 'custom' };
+}
+
+/** The graph with every block in the automatic layout: the same blocks and links, no positions. */
+export function tidyGraph(graph: WorkflowGraph): WorkflowGraph {
+  if (!graph.nodes.some((n) => n.position !== undefined)) return graph;
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => {
+      if (n.position === undefined) return n;
+      const copy = { ...n };
+      delete copy.position;
+      return copy;
+    }),
+  };
+}
+
+/** Moves a link's ends: the same place in the list, a fresh id for its new ends, its rounds kept. */
+function reconnect(
+  graph: WorkflowGraph,
+  id: string,
+  from: WorkflowNodeId,
+  to: WorkflowNodeId,
+  edgeType: WorkflowEdgeType,
+): { graph: WorkflowGraph; edge: WorkflowEdge } | { refusal: string } | null {
+  const old = graph.edges.find((e) => e.id === id);
+  if (old === undefined) return null;
+  const without = unlink(graph, (e) => e.id !== id);
+  const result = canConnect(without, from, to, edgeType);
+  if (!result.ok) return { refusal: result.message };
+  const made = makeEdge(without, edgeType, from, to);
+  const edge =
+    made.type === 'rework' && old.type === 'rework' ? { ...made, maxRounds: old.maxRounds } : made;
+  return { graph: { ...graph, edges: graph.edges.map((e) => (e.id === id ? edge : e)) }, edge };
 }
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -801,6 +847,20 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         selection: { kind: 'edge', id: edge.id },
         refusal: null,
       };
+    }
+    case 'reconnect': {
+      const r = reconnect(g, action.id, action.from, action.to, action.edgeType);
+      if (r === null) return state;
+      if ('refusal' in r) return { ...state, refusal: r.refusal };
+      return {
+        graph: custom(r.graph),
+        selection: { kind: 'edge', id: r.edge.id },
+        refusal: null,
+      };
+    }
+    case 'tidy': {
+      const next = tidyGraph(g);
+      return next === g ? state : { ...state, graph: next };
     }
     case 'refuse':
       return { ...state, refusal: action.message };
