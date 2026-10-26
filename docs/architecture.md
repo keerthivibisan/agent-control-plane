@@ -209,8 +209,19 @@ sequenceDiagram
   requests.
 - **Budgets and stops.** A soft budget per agent counts output plus new input tokens (ADR-0014);
   reaching it blocks the agent until the owner raises it. Stop, Stop all and a run timeout
-  (`ACP_RUN_TIMEOUT_MS`) cancel children first. After a restart nothing relaunches by itself:
-  interrupted work becomes `NEEDS_REVIEW`.
+  (`ACP_RUN_TIMEOUT_MS`, 2 hours) cancel children first. After a restart nothing relaunches by
+  itself: interrupted work becomes `NEEDS_REVIEW`.
+- **The run timeout counts working time** (v0.3.1). Time a loop run spends waiting only for the
+  owner (a change at `needs-owner` and no agent but the lead still working) is not counted
+  (`isRunOverdue` in `@acp/orchestrator`; the waits are kept in memory only). A run whose other
+  helpers keep working while one change waits keeps its clock running. When the timeout does stop a
+  run, a helper whose change waits for review ends `CANCELLED`, as with Stop all, and the other live
+  agents end `TIMED_OUT`.
+- **Rework in a new session** (v0.3.1). A rework turn resumes the helper's saved session. If that
+  resume fails before the session answered (no usage, no tool call), the adapter starts the turn
+  once more in a new session, in the same worktree with the helper's earlier work, and the prompt
+  says so. The engine keeps the new session id for later reworks and tells the lead, and the
+  ticket gets a line for the owner.
 
 The run and agent state machines are in [orchestration-lifecycle.md](orchestration-lifecycle.md).
 
@@ -236,6 +247,12 @@ flowchart LR
 - A version 1 workflow is migrated on read; a run snapshots its graph and compile context, so a
   restart compiles the same program.
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
+- **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
+  onto the nearest block that accepts it, or is made by clicking a connector and then a block, or
+  with "Link to…" in the block's panel or menu. Every one of these, and moving a link's end, asks
+  core's `canConnect`, so the editor adds no rule of its own; when only one kind of link fits it is
+  made at once. Undo and redo (50 steps) and Tidy layout are editor state only
+  (`packages/web/src/features/workflow/editor/`).
 
 ## 10. The review loop and the ticket branch (ADR-0021) [implemented]
 
@@ -349,4 +366,4 @@ None of these exist yet; do not build them outside their phase ([roadmap.md](roa
 - [provider-adapters.md](provider-adapters.md): the Claude Code adapter and its file allowlist.
 - [orchestration-lifecycle.md](orchestration-lifecycle.md): run and agent states.
 - [security.md](security.md): the threat model and rules.
-- [decisions/](decisions/README.md): ADR-0001 to ADR-0028.
+- [decisions/](decisions/README.md): ADR-0001 to ADR-0028 (accepted) and ADR-0029 (proposed).

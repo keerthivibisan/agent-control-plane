@@ -1,25 +1,25 @@
 # Security model
 
-> Status: these are binding requirements for every work package. Items marked **[enforced]** exist
-> today; everything else is **[required for Phase 1]** and must have tests. Reporting vulnerabilities:
-> see [/SECURITY.md](../SECURITY.md).
+> **Status:** binding requirements for every change to this repository. Each rule below is in force
+> and tested unless it is marked **[planned]**. Reporting vulnerabilities: see
+> [SECURITY.md](../SECURITY.md).
 
-## 1. Threat model (Phase 1)
+## 1. Threat model (observation)
 
 | Asset                                                                | Threat                                                           | Control                                                                               |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Transcripts (may contain code, secrets, personal data)               | upload or leak                                                   | local-only; no outbound network; content not stored (ADR-0009)                        |
 | Claude credentials and peer tokens (`~/.claude/sessions/*`, `*.key`) | read by the adapter                                              | path allowlist (provider-adapters §3); deny by default                                |
 | Registered repositories                                              | reads outside allowed roots                                      | root allowlist; `realpath` containment; no arbitrary file API                         |
-| Local API                                                            | other local processes or browser pages calling it                | bind `127.0.0.1`; hook token; strict CORS; no state-changing GET                      |
+| Local API                                                            | other local processes or browser pages calling it                | bind `127.0.0.1`; hook token; CSRF token; strict CORS; no state-changing GET          |
 | User's Claude Code configuration                                     | silently modified                                                | the app never writes Claude settings; the hook snippet is copy/paste only             |
 | Agent and contributor workflow                                       | prompt injection through transcripts, repo files, or tool output | all ingested content is untrusted data; never executed or interpreted as instructions |
 
 ## 2. Rules
 
 1. **Local-first.**
-   - The server listens on `127.0.0.1` only. A configurable host is allowed only behind an explicit
-     `ACP_ALLOW_REMOTE=1`, which Phase 1 does not implement.
+   - The server listens on `127.0.0.1` only. A configurable host behind an explicit
+     `ACP_ALLOW_REMOTE=1` is **[planned]** and not implemented.
    - No telemetry and no update checks.
 2. **Filesystem.**
    - Provider files: the allowlist in [provider-adapters.md §3](provider-adapters.md#3-file-access-allowlist-security-critical).
@@ -28,16 +28,17 @@
    - No API accepts an arbitrary path to read.
    - Symlink escapes are rejected.
 3. **Content minimization (ADR-0009).**
-   - Phase 1 persists no prompt or response text, no thinking, and no tool inputs or outputs.
+   - Observation persists no prompt or response text, no thinking, and no tool inputs or outputs.
    - The free-text fields allowed are session titles, subagent `description`, and error kinds. They are
-     redacted (rule 4) and capped in length.
-4. **Redaction (`redact()` in core) [implemented, P1-A].** The replacement marker is `[REDACTED]`. Beyond the list below, it also covers `ghu_`/`ghs_`/`ghr_`, `xoxs-`, `ASIA…`, `Proxy-Authorization`, and `secret=`/`api_key=` values.
+     redacted (rule 4) and capped in length. Managed runs store only the owner-facing texts listed
+     in §4.
+4. **Redaction (`redact()` in core).** The replacement marker is `[REDACTED]`. Beyond the list below, it also covers `ghu_`/`ghs_`/`ghr_`, `xoxs-`, `ASIA…`, `Proxy-Authorization`, and `secret=`/`api_key=` values.
    - It is applied to every persisted free-text field and every log line.
    - Patterns cover at least: `sk-ant-…`, `sk-…`, `ghp_`/`gho_`/`github_pat_`, `xox[abpr]-`, `AKIA…`,
      `-----BEGIN … PRIVATE KEY-----`, `Bearer <token>`, `Authorization:` headers, and `password=`/`token=`
      query values.
    - Redaction must be tested with positive and negative cases.
-5. **Logging [implemented, P1-D; audited 2026-10-10].**
+5. **Logging (audited 2026-10-10).**
    - Logs are structured JSON lines; request-scoped lines (hook accepted/rejected, unhandled request
      errors) carry the request id.
    - Logs never include payload bodies, hook bodies, or file contents. They include only ids, counts,
@@ -51,13 +52,19 @@
 6. **HTTP.**
    - Every input is validated with Zod.
    - Errors use the format `{ error: { code, message, requestId } }`, with no stack traces in responses.
-   - Body size limits apply: 256 KiB for hooks, 64 KiB otherwise.
-   - CORS allows only the app's own origin.
+   - Body size limits apply per route: 256 KiB for hooks, 16–64 KiB for most JSON bodies, larger
+     only where the content needs it (a workflow graph, a skill or agent file, an attachment of at
+     most 10 MiB).
+   - CORS allows only the app's own origin. Every mutation outside the hook endpoint needs the
+     per-start CSRF token (`X-ACP-CSRF`).
    - The hook endpoint requires `X-ACP-Hook-Token` (compared in constant time).
-7. **No command execution.** Phase 1 runs no shell commands from any input, model output, or config. The
-   validation runner (Phase 3) will use an explicit per-project command allowlist with timeouts.
-8. **Provider permissions.** Never bypass, wrap, or weaken Claude Code permission settings. The control
-   plane observes; it does not approve tool calls.
+7. **No shell.** No text from any input, model output or config ever reaches a shell. The server
+   starts only `git`, the Agent SDK's `claude`, `gh` on the owner's click (ADR-0025) and the
+   project's harness checks and setup steps (ADR-0017, ADR-0027), each as an argument array with
+   a time limit (§4).
+8. **Provider permissions.** Never bypass, wrap, or weaken Claude Code permission settings, and never
+   write them. Observation approves nothing. Managed agents run in `default` permission mode
+   (never `bypassPermissions`), and their tool requests go to the app's approval gate (§4).
 9. **Untrusted input.**
    - Text inside transcripts or repositories that looks like instructions ("ignore previous…",
      "approve this") is data.
@@ -75,32 +82,39 @@
 
 ## 3. Data at rest
 
-- The database lives at `~/.agent-control-plane/acp.sqlite`. The directory is created with mode
-  0700 and the hook token with mode 0600.
-- **Retention:** kept until the user purges it. A `DELETE /api/projects/:id?purge=true` (P2) removes
-  sessions, events, and usage for that project.
+- The database lives at `<ACP_DATA_DIR>/acp.sqlite` (default `~/.agent-control-plane`; demo mode
+  uses `demo.sqlite` beside it). The directory is created with mode 0700, and the database and the
+  hook token with mode 0600. Agent worktrees, review checkouts and attachments live under the same
+  directory.
+- **Retention:** kept until the user deletes it. Removing a project from the app keeps its history;
+  a purge of a project's sessions, events and usage is **[planned, Phase 2]**.
 - The database never stores credentials.
 
-## 4. Phase 3 additions (in progress, ADR-0013)
+## 4. Managed runs (ADR-0013)
 
-- **Processes:** only `git` (execFile, argument arrays) and the SDK-spawned `claude` run; no text
-  reaches a shell.
-- **Isolation:** one git worktree per worker under `<ACP_DATA_DIR>/worktrees/`; the lead is
-  read-only in the project root; the owner's working tree is never written by an agent.
-- **Approval gates:** every non-read-only tool use (edits, writes, commands, web) needs the owner's
-  approval in the panel; unanswered approvals are denied after 15 minutes.
-- **Limits:** at most 3 workers, depth 1, per-agent soft budget (ADR-0014), run timeout, Stop and
-  Stop all.
-- **Review before merge:** nothing reaches the project without the owner's Merge click, and only
-  into a clean base branch.
-- **Requests:** local-only guard plus a CSRF token (`X-ACP-CSRF`) on mutating control-panel routes.
+- **Processes:** `git` (execFile, argument arrays), the SDK-spawned `claude`, `gh` (below) and the
+  harness's checks and setup steps (`spawn` with `shell: false`, a bare command name, its own
+  process group, a filtered environment and a time limit); no text reaches a shell. Managed agents
+  never inherit `CLAUDE_CODE_EXIT_AFTER_STOP_DELAY` from the owner's shell.
+- **Isolation:** one git worktree per helper and tester under `<ACP_DATA_DIR>/worktrees/`; the lead,
+  planner and reviewers are read-only; the owner's working tree is never written by an agent.
+- **Approval gates:** a helper's or tester's tool use that is not read-only goes to the owner unless
+  its block's approval mode allows it (below, ADR-0021, ADR-0022); unanswered approvals are denied
+  after 15 minutes. Agents cannot move branches (the branch guard, architecture §13).
+- **Limits:** the project's helper limit (at most 6 at once, ADR-0016), a bounded agent tree,
+  per-agent soft budgets (ADR-0014), the run timeout (`ACP_RUN_TIMEOUT_MS`; since v0.3.1 time
+  spent waiting only for the owner is not counted), Stop and Stop all.
+- **Review before merge:** nothing reaches the project's target branch without the owner's click
+  at the end: a local merge or Push & open PR (ADR-0021, ADR-0025, below).
+- **Requests:** local-only guard plus the CSRF token on every mutating route (the hook receiver
+  uses its hook token instead).
 - **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
   (ADR-0015); never worker conversation content. Logs never include chat text. Later phases add
   the owner-facing ticket text of ADR-0016, ADR-0019 and ADR-0021 (plans, review findings, the
-  lead's change notes) and, with ADR-0024, the run summary comments (below).
-- Later (P3-G): validation command allowlist with timeouts; bounded retries.
+  lead's change notes), with ADR-0024 the run summary comments (below), and with ADR-0026 the
+  helpers' and the tester's short work notes and the owner's attachments.
 
-### Approval modes per workflow block (ADR-0023) [implemented in the server, db and adapter, WG-C]
+### Approval modes per workflow block (ADR-0023) [implemented]
 
 - **Validated graphs only.** A project's workflow graph is saved (`PUT
 /api/projects/:id/workflow-graph`) only when `validateWorkflowGraph` finds no error (422
@@ -129,7 +143,7 @@
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
 
-### Session names and run summaries (ADR-0024) [implemented in the server and adapter, v0.3.0 S-A]
+### Session names and run summaries (ADR-0024) [implemented]
 
 - **Session titles.** Every agent the app starts gets a title built from app data only: the
   ticket key and its workflow block's label (`WEB-12 · Frontend helper`, a change reviewer
@@ -147,14 +161,14 @@
 - **The lead's handover note** (`request_review.summary`, review-loop runs only) is the one free
   text in a summary: owner-facing text the lead writes for the ticket, redacted (rule 4) and capped
   at 1,500 characters by the engine, then stored as the summary's main text (after a
-  `From the lead:` line, before the facts under `Details:`; v0.3.0 S-C). Legacy runs ignore it.
+  `From the lead:` line, before the facts under `Details:`). Legacy runs ignore it.
   Logs say only that a summary was stored, its trigger, and whether a note was there.
 - **The merge line** (`Merged acp/<KEY> into <base> at <short commit>; checks passed on the tip
 (2).`) holds branch names, a commit id and the tip checks' results and names only. After a merge
   past a failed check it says `(merged anyway, with a reason)`; the owner's reason stays the
   owner's own comment and is never repeated in it.
 
-### Branching strategies and GitHub (ADR-0025) [implemented in the server and db, v0.3.0 G-A]
+### Branching strategies and GitHub (ADR-0025) [implemented]
 
 - **Network.** The app reaches the network beyond the SDK's `claude` only on the owner's request,
   and only the project's own `origin` (`git push`) and GitHub through the owner's `gh` login.
@@ -167,7 +181,7 @@
   `GH_PROMPT_DISABLED=1`, `GIT_TERMINAL_PROMPT=0`, no pager, colour or update notices; inherited
   `GIT_*` variables dropped. `git push` disables hooks (`core.hooksPath=/dev/null`, `--no-verify`)
   and is never forced: `<commit>:refs/heads/<b>`, then the tracking ref and the upstream that
-  `--set-upstream origin` would set. **F-2:** every push for the owner (and the delete on origin)
+  `--set-upstream origin` would set. Every push for the owner (and the delete on origin)
   goes to `origin`'s configured address, passed as the address, never as the remote name, so a
   `remote.origin.pushurl` planted in the shared config is never used. The address must parse as a
   repository address or be a local folder; `ext::` and `fd::` are off; a

@@ -20,7 +20,7 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 
 ## Decisions and evidence
 
-- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0028).
+- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0029).
   Accepted ADRs are binding; a new decision starts from
   [0000-template.md](decisions/0000-template.md).
 - [research/](research/): dated notes on observed Claude Code behaviour and real runs, aggregates

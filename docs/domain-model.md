@@ -1,8 +1,10 @@
 # Domain model
 
-> Status: the Phase 1 contracts below marked **[core v1]** exist in `packages/core/src`. Phase 1 tables
-> are specified for P1-B. The orchestration entities (Phase 3) are specified so that Phase 1 does not
-> block them. **They have no code or tables yet.**
+> **Status:** describes v0.3.x. The observation entities (§3, marked **[core v1]**) have Zod
+> contracts in `packages/core/src` and tables in `@acp/db` migration 0001. The managed-run entities
+> (§3.1) are implemented in migrations 0002–0011; their table keeps the original Phase 3 design for
+> background and says where the code differs. The full schema is in
+> [packages/db/README.md](../packages/db/README.md).
 
 ## 1. Core distinction: Session vs AgentRun (ADR-0008)
 
@@ -10,9 +12,11 @@
   later a Codex thread. Sessions are observed. Most sessions are started outside the control plane:
   in the terminal, the desktop app, an IDE, or the SDK.
 - An **AgentRun** is something the _control plane_ scheduled: one agent's attempt at an assigned task
-  inside an orchestration run. AgentRuns exist only in managed execution (Phase 3).
+  inside an orchestration run. AgentRuns exist only in managed execution (a ticket run or a
+  control-panel run).
 - **AgentRunSession** links them many-to-many. One run may use several sessions (a retry, or a
-  provider-internal subagent). A session may have no run at all, which is the normal case in Phase 1.
+  provider-internal subagent). A session may have no run at all, which is the normal case for
+  sessions started outside the app.
 
 Never use a session id as an agent run id or the other way round.
 
@@ -32,7 +36,7 @@ Never use a session id as an agent run id or the other way round.
 Each entry lists purpose; required (R) and optional (O) fields; identity; relationships; lifecycle;
 validation; and retention.
 
-### Project [core v1 `ProjectSchema`, table P1-B]
+### Project [core v1 `ProjectSchema`, table `projects`]
 
 - **Purpose:** a registered repository root. It is the unit of association and the filesystem allowlist.
 - **R:** `id`, `name`, `rootPath`, `createdAt`, `updatedAt`. **O (later):** `providerPreferences`.
@@ -44,7 +48,7 @@ validation; and retention.
   allowed (longest match wins).
 - **Retention:** kept until the user deletes it.
 
-### Session [core v1 `SessionKey`/`SessionStatus`, table P1-B]
+### Session [core v1 `SessionKey`/`SessionStatus`, table `sessions`]
 
 - **Purpose:** one provider conversation or subagent, observed or managed.
 - **R:** `id`, `provider`, `providerSessionId`, `providerAgentId` (`''` for top-level), `origin`
@@ -66,9 +70,9 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
   launcher.
 - **Retention:** by default kept until the user purges it. Claude Code deletes its own transcripts
   after `cleanupPeriodDays` (default 30). Our rows remain after the source disappears and are marked
-  `sourceMissing` (P2).
+  `sourceMissing` **[planned, Phase 2]**.
 
-### SessionEdge [core v1 `SessionEdgeSchema`, table P1-B]
+### SessionEdge [core v1 `SessionEdgeSchema`, table `session_edges`]
 
 - **Purpose:** a verified relationship between two sessions.
 - **R:** `kind` (`subagent` | `continuation`), `parentSessionId`, `childSessionId`, `provenance`,
@@ -83,20 +87,21 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
   silently. Conflicting evidence (two parents for one child) is stored as a diagnostic, and the edge
   is not changed.
 
-### AgentEvent [core v1 `NormalizedEventSchema`, table `events` P1-B]
+### AgentEvent [core v1 `NormalizedEventSchema`, table `events`]
 
 - **Purpose:** an immutable record of one observed or derived fact.
 - **R:** `id` (row id, monotonic; it is also the SSE id), `provider`, `eventType`, `dedupKey`,
   `observedAt`, `provenance`, `channel`, `schemaVersion`, `payload` (JSON, schema-valid for its type).
 - **O:** `sourceEventId`, `sessionId`, `projectId`, `occurredAt`, `sourcePath`, `sourceOffset`,
-  `providerVersion`, `agentRunId` (Phase 3).
+  `providerVersion`. (An `agentRunId` column was planned; managed sessions are linked through
+  AgentRunSession instead, §3.1.)
 - **Lifecycle:** append-only. Never updated. Purged only by retention or a user purge.
 - **Ordering:** displayed by `occurredAt`, falling back to `observedAt`. Out-of-order arrival is
   normal, so projections must be order-independent (see usage-accounting §5).
 - **Retention:** payloads hold no conversation content (ADR-0009). Purging events cascades to the
   projections built from them, which are then rebuilt.
 
-### UsageObservation / UsageRecord / UsageSnapshot [core v1 usage schemas, tables P1-B]
+### UsageObservation / UsageRecord / UsageSnapshot [core v1 usage schemas, tables `usage_*`]
 
 - **UsageObservation:** one per `usage.reported` event, stored as received.
   - Key: `event_id` (unique).
@@ -107,7 +112,8 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
   - the attributed `sessionId`;
   - `observationCount` and `conflict` (whether non-output categories disagree across observations);
   - `source` (`transcript`) and `provenance` (`observed`);
-  - nullable `agentRunId` and `orchestrationRunId` for Phase 3.
+  - no run columns: a managed agent's usage is found through AgentRunSession (§3.1), and run
+    budgets keep their own ledger (ADR-0014).
 
   The selection and attribution rules are in [usage-accounting.md](usage-accounting.md).
 
@@ -122,21 +128,35 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
     record stays null (unavailable). It does not become 0.
   - The UI shows direct and aggregate side by side, never one inside the other.
 
-### IngestionCheckpoint [table P1-B]
+### IngestionCheckpoint [table `ingestion_checkpoints`]
 
 - **Purpose:** restart-safe incremental reading of a source file.
 - **R:** `sourcePath` (PK), `fileIdentity` (`dev:ino`), `sizeBytes`, `mtimeMs`, `byteOffset` (the offset
   just after the last fully consumed newline), `headHash` (sha256 of the first ≤ 4 KiB), `updatedAt`.
 - **Rule:** updated in the same transaction as the events read from that chunk.
 
-### Task, OrchestrationRun, AgentRun, AgentRunSession, Artifact, ValidationRun, Approval [Phase 3 — M1 in progress]
+### 3.1 Managed runs and the workspace [implemented]
 
-> M1 (orchestration-lifecycle §0) implements OrchestrationRun, AgentRun (with `kind` lead/worker,
-> `role`, `task`, budget tokens used), AgentRunSession, Approval, Artifact (patch and manifest), plus
-> two entities not in the original table: **ManagedWorkspace** (`agentRunId`, `projectId`,
-> `worktreePath`, `branch`, `baseBranch`, `state`) and **OrchestratorMessage** (`runId`, `role`
-> owner|lead, `text`, `createdAt`; ADR-0015). Task and ValidationRun wait for P3-G. Zod shapes:
-> `packages/core/src/orchestration/orchestration.ts`.
+What exists (Zod shapes in `packages/core/src/orchestration/` and `packages/core/src/workspace/`):
+
+- **OrchestrationRun** (`orchestration_runs`), **AgentRun** (`agent_runs`: `kind` lead, worker,
+  planner, reviewer or tester; `role`, `stage`, budget tokens used), **AgentRunSession**
+  (`agent_run_sessions`, keyed by the provider session id so linking never waits for ingestion),
+  **Approval**, **Artifact** (patch and manifest), **ManagedWorkspace** (an agent's worktree, its
+  branch and, for the review loop, its change state) and **OrchestratorMessage** (the owner's and
+  the lead's chat, ADR-0015).
+- **Ticket** (`tickets`, ADR-0016) replaces the planned Task: a project's unit of work, with its
+  plan (`ticket_plans`), comments and agent notes (`ticket_comments`, ADR-0026), attachments
+  (`ticket_attachments`), run options and branch preferences. A run may belong to a ticket.
+- **CheckRun** (`check_runs`, ADR-0017, ADR-0027) and **SetupRun** (`setup_runs`) replace the
+  planned ValidationRun: one harness check or setup step, with where it ran and the redacted last
+  lines of output.
+- **TicketBranch** (`ticket_branches`) and **ChangeReview** (`change_reviews`) carry the review
+  loop and the ticket branch (ADR-0021, ADR-0025).
+- **ProjectSetup** (`project_setup`) and **ProjectWorkflow** (`project_workflow`, the workflow
+  graph, ADR-0023) hold a project's settings.
+
+The original Phase 3 design, kept as background:
 
 | Entity           | Purpose                                         | Key fields                                                                                                                                               | Lifecycle                                                                               |
 | ---------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -148,14 +168,14 @@ unknown`. Thresholds are configurable (defaults: active ≤ 2 min, idle ≤ 30 m
 | ValidationRun    | One run of the validation suite                 | `id`, `orchestrationRunId`, `status`, `checks` (JSON: command id, exit code, duration), `evidence` (artifact refs), timestamps                           | `RUNNING`, then `PASSED`, `FAILED`, `ERRORED`, or `TIMED_OUT`                           |
 | Approval         | A human decision gate                           | `id`, `orchestrationRunId`, `kind`, `requestedAt`, `decision` (`approved` \| `rejected`), `decidedAt`, `decidedBy`, `reason`                             | pending, then decided (immutable once decided)                                          |
 
-Phase 1 migrations **do not** create these tables. Creating unused tables invites schema drift. Phase
-3 adds them in new migrations. The Phase 1 columns that will reference them (`agent_run_id`,
-`orchestration_run_id`) are added with them through `ALTER TABLE … ADD COLUMN … REFERENCES`, which
-SQLite supports for nullable columns.
+Each table is added by its own migration, only when the code that uses it ships: creating unused
+tables invites schema drift.
 
-## 4. What Phase 1 deliberately does not model
+## 4. What is deliberately not modelled
 
-- Conversation content: prompt text, assistant text, thinking, tool inputs, and tool outputs (ADR-0009).
-- Monetary cost computed by the control plane. Phase 1 shows only provider-reported cost from
-  snapshots, labeled _estimated_.
-- Budgets. The budget metric is undecided; see [roadmap.md](roadmap.md) (open question Q1).
+- Conversation content: prompt text, assistant text, thinking, tool inputs, and tool outputs
+  (ADR-0009). The owner's chat, plans, review findings and comments are stored because the owner
+  reads them (ADR-0015, ADR-0026).
+- Monetary cost computed by the control plane. Only provider-reported cost from snapshots is shown,
+  labelled _estimated_; a pricing table is **[planned, Phase 2]**.
+- Run budgets count tokens, not money (ADR-0014).

@@ -1,10 +1,11 @@
 # Event and usage accounting
 
-> Status: contracts are **[core v1]**. The selection, attribution, and aggregation logic is
-> **[implemented, P1-A]** as pure functions in `@acp/core` (`selectUsage`, `attributeUsage`,
-> `buildUsageRecord`, `sumTokenCounts`, `aggregateUsage`). It is not yet wired into the pipeline
-> (P1-D). The §5.2 tie amendment is implemented (task A9). Tables are **[implemented, P1-B]** (`@acp/db` migration 0001). Dedup-key construction is **[in progress, P1-C]**. The
-> numbers quoted come from a read-only scan of local data on 2026-10-10
+> **Status:** binding (AGENTS.md §3.3). Contracts are **[core v1]**. The selection, attribution
+> and aggregation logic is **[implemented]** as pure functions in `@acp/core` (`selectUsage`,
+> `attributeUsage`, `buildUsageRecord`, `sumTokenCounts`, `aggregateUsage`), including the §5.2
+> tie amendment, and the server's ingestion pipeline uses it. The tables are **[implemented]**
+> (`@acp/db` migration 0001), and the Claude Code adapter builds the dedup keys of §3. The numbers
+> quoted come from a read-only scan of local data on 2026-10-10
 > ([research note](research/claude-code-observations-2026-10-10.md)).
 
 The goal: **no usage number is ever inflated, invented, or silently zero.**
@@ -66,7 +67,7 @@ re-delivered record yields the same key.
    - subagent edges by `(kind, child)`, where evidence accumulates;
    - tool calls by `toolUseId`.
 
-## 5. Usage selection and attribution (P1-A, pure functions in `@acp/core`)
+## 5. Usage selection and attribution (pure functions in `@acp/core`)
 
 Each `usage.reported` event becomes a **UsageObservation**. Per `(provider, messageId)`:
 
@@ -115,35 +116,35 @@ Each `usage.reported` event becomes a **UsageObservation**. Per `(provider, mess
 
 ## 7. Required failure scenarios
 
-| #   | Scenario                                                       | Handling                                                                                                                                                                                                                                                    | Test owner                                                |
-| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | Duplicate transcript lines (same `message.id`, growing output) | §5 selection: one record per message, max output                                                                                                                                                                                                            | P1-A unit, P1-C contract                                  |
-| 2   | Same record via two channels (hook and transcript)             | Separate record keys; facts converge at projections. Phase 1 hooks never produce `usage.reported`, so usage has exactly one channel. `PostToolUse` `tool_response.usage` is ignored on purpose                                                              | P1-D integration                                          |
-| 3   | Cumulative snapshots (`cost-state`)                            | `usage.snapshot` only; never added to records. The UI shows the latest snapshot as "provider-reported running total (estimated)"                                                                                                                            | P1-A, P1-E                                                |
-| 4   | Missing usage fields                                           | Category `null`; aggregate stays `null` if every value is null; the UI shows "unavailable"                                                                                                                                                                  | P1-A, P1-E                                                |
-| 5   | Out-of-order events                                            | Selection and attribution are order-independent (§5). Sessions use the min `firstSeenAt` and max `lastEventAt`                                                                                                                                              | P1-A property test (shuffled input gives the same result) |
-| 6   | Partial JSONL line                                             | Read only up to the last `\n`; the remainder is re-read next pass. Never parse a partial line                                                                                                                                                               | P1-C                                                      |
-| 7   | Truncation or replacement                                      | Checkpoint mismatch (`size < byteOffset`, changed `dev:ino`, or changed `headHash`) resets the offset to 0. Dedup keys make the re-read idempotent. Earlier events remain (append-only)                                                                     | P1-C, P1-D                                                |
-| 8   | Application restart                                            | Checkpoints commit in the same transaction as their events. A crash mid-chunk re-reads the chunk, and dedup absorbs it                                                                                                                                      | P1-D integration                                          |
-| 9   | Live vs transcript reconciliation                              | Hooks trigger an immediate transcript read. The transcript is the source of record for usage. A hook lost while the server was down is backfilled from the transcript (hook-only facts such as `SessionEnd` cannot be recovered; the session shows `stale`) | P1-D, P1-F                                                |
-| 10  | Unparseable complete line                                      | Skip it, increment `parseErrors` on the checkpoint, and advance. Never block the file                                                                                                                                                                       | P1-C                                                      |
-| 11  | Unknown record type or new runtime version                     | `record.unrecognized` with `recordType` only (no payload). Counts per `providerVersion` are shown in diagnostics                                                                                                                                            | P1-C                                                      |
+| #   | Scenario                                                       | Handling                                                                                                                                                                                                                                                    | Tested in                                        |
+| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 1   | Duplicate transcript lines (same `message.id`, growing output) | §5 selection: one record per message, max output                                                                                                                                                                                                            | `core` unit, `adapter-claude-code` contract      |
+| 2   | Same record via two channels (hook and transcript)             | Separate record keys; facts converge at projections. Hooks never produce `usage.reported`, so usage has exactly one channel. `PostToolUse` `tool_response.usage` is ignored on purpose                                                                      | `server` integration                             |
+| 3   | Cumulative snapshots (`cost-state`)                            | `usage.snapshot` only; never added to records. The UI shows the latest snapshot as "provider-reported running total (estimated)"                                                                                                                            | `core`, `web`                                    |
+| 4   | Missing usage fields                                           | Category `null`; aggregate stays `null` if every value is null; the UI shows "unavailable"                                                                                                                                                                  | `core`, `web`                                    |
+| 5   | Out-of-order events                                            | Selection and attribution are order-independent (§5). Sessions use the min `firstSeenAt` and max `lastEventAt`                                                                                                                                              | `core` order-independence test (seeded shuffles) |
+| 6   | Partial JSONL line                                             | Read only up to the last `\n`; the remainder is re-read next pass. Never parse a partial line                                                                                                                                                               | `adapter-claude-code`                            |
+| 7   | Truncation or replacement                                      | Checkpoint mismatch (`size < byteOffset`, changed `dev:ino`, or changed `headHash`) resets the offset to 0. Dedup keys make the re-read idempotent. Earlier events remain (append-only)                                                                     | `adapter-claude-code`, `server`                  |
+| 8   | Application restart                                            | Checkpoints commit in the same transaction as their events. A crash mid-chunk re-reads the chunk, and dedup absorbs it                                                                                                                                      | `server` integration                             |
+| 9   | Live vs transcript reconciliation                              | Hooks trigger an immediate transcript read. The transcript is the source of record for usage. A hook lost while the server was down is backfilled from the transcript (hook-only facts such as `SessionEnd` cannot be recovered; the session shows `stale`) | `server`, real-data check                        |
+| 10  | Unparseable complete line                                      | Skip it, increment `parseErrors` on the checkpoint, and advance. Never block the file                                                                                                                                                                       | `adapter-claude-code`                            |
+| 11  | Unknown record type or new runtime version                     | `record.unrecognized` with `recordType` only (no payload). Counts per `providerVersion` are shown in diagnostics                                                                                                                                            | `adapter-claude-code`                            |
 
-## 8. Independent cross-check (P1-F)
+## 8. Independent cross-check
 
 For sessions that have a `cost-state` snapshot (20 of 100 local sessions), compare the deduped
 per-model totals (direct plus subagent aggregate) against the snapshot's `byModel`.
 
 The snapshot's scope is **unverified**. It may include auxiliary requests that never appear in the
 transcript. A difference is therefore a finding to document, not automatically a bug. A separate
-reference script (P1-F) recomputes totals straight from the JSONL files with the §5 rules, and must
+reference script ([real-data check](research/p1-f-verification-2026-10-10.md)) recomputes totals straight from the JSONL files with the §5 rules, and must
 match the database exactly.
 
 ## 9. Cost
 
-- No cost formula exists in Phase 1. Only `reportedCostUsd` from snapshots is shown, always labeled
+- No cost formula exists yet. Only `reportedCostUsd` from snapshots is shown, always labeled
   _estimated (provider-reported)_.
-- A Phase 2 pricing table must store provider, model id, pricing version, per-category rates
+- A pricing table (**[planned, Phase 2]**) must store provider, model id, pricing version, per-category rates
   (input, output, cache write, cache read), the source URL, and the effective date. Each computed cost
   stores the pricing version and calculation time.
 - Missing pricing shows "cost unavailable", never `$0`.
