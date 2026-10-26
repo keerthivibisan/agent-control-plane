@@ -251,6 +251,12 @@ export interface RunState {
    */
   handoverPrompted?: boolean;
   /**
+   * Loop runs (P-D, v0.3.1): time the run spent waiting only for the owner's decision on a change
+   * (`waitsOnlyForOwner`). The run timeout (ADR-0013 §3) does not count it. In memory only, like
+   * the ledger: after a restart the run is NEEDS_REVIEW and never times out again.
+   */
+  ownerWait?: OwnerWait;
+  /**
    * The run's approval mode and command allowlist (ADR-0021 §1), snapshotted at creation; the
    * engine re-checks each pre-approval against it. Absent: the legacy project allowlist.
    */
@@ -268,6 +274,14 @@ export interface RunState {
    * order. Used for the lead's brief of the approved plan. In memory with the live run.
    */
   planStepHelpers?: Readonly<Record<string, readonly WorkflowNodeId[]>>;
+}
+
+/** `RunState.ownerWait`: the run's waits for the owner so far. */
+export interface OwnerWait {
+  /** When the current wait began (UTC ISO), or null while the run is not waiting. */
+  since: string | null;
+  /** The length of the waits that already ended, in milliseconds. */
+  totalMs: number;
 }
 
 /** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
@@ -525,7 +539,9 @@ export type EngineEffect =
         | 'follow-up-session-changed'
         | 'follow-up-over-budget'
         /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
-        | 'full-auto-unavailable';
+        | 'full-auto-unavailable'
+        /** P-D: a rework turn could not resume the helper's session and started a new one. */
+        | 'rework-session-replaced';
       agentRunId: string;
     };
 

@@ -257,6 +257,25 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
 }
 
 /**
+ * P-D (v0.3.1): the run waits only for the owner. A change waits for the owner's decision
+ * (`needs-owner`: the lead asked, or no lead could decide) and nothing but the lead has a process,
+ * so no work goes on until the owner answers. The run timeout (ADR-0013 §3) guards runaway work,
+ * not the owner's review time: before this, a run that was near its deadline when the lead asked
+ * was stopped as soon as the owner answered, with the helper's rework turn in it.
+ */
+export function waitsOnlyForOwner(
+  view: LoopView & { readonly run: Pick<OrchestrationRun, 'status'> },
+): boolean {
+  if (view.integration === undefined) return false;
+  if (view.run.status !== 'RUNNING' && view.run.status !== 'BLOCKED') return false;
+  const atOwner = view.agents.some(
+    (a) => hasReviewableChange(a.kind) && a.change?.state === 'needs-owner',
+  );
+  if (!atOwner) return false;
+  return !view.agents.some((a) => a.kind !== 'lead' && isActiveAgentStatus(a.status));
+}
+
+/**
  * RL-F: the lead is told once that it should hand over. A real run (2026-10-17) showed a lead that
  * ended its turn after every change was decided and waited for the run timeout without calling
  * `request_review`, since nothing would ever start a new turn. At an idle point (not handed over,
