@@ -44,3 +44,14 @@ The Agent SDK (0.3.296) also accepts a reasoning `effort` per session, which the
 - Every safety rule from F-1 and F-2 is unchanged (helpers never manage branches, only the lead
   merges changes, nothing merges without the owner's click at the end).
 - No migration.
+
+## Amendment 2026-10-26: what gates the owner's final merge (P-A)
+
+A workflow with a Checks block before
+the lead's merge (every graph saved before 0.3.1 and every version 1 run) keeps 0.3.0's rule:
+the required checks gate the owner's merge on the ticket branch tip (with "Merge anyway"), and
+a branch block's other picks run and are shown, not enforced. A workflow without a block before
+the merge is gated on the tip only by a block on the ticket branch, by that block's own
+selection; without one, nothing runs on the tip and the owner merges without "Merge anyway".
+The lead's `merge` link goes to the ticket merge when there is no block before the merge, and is
+refused there when there is one, so the lead can never merge past a block.

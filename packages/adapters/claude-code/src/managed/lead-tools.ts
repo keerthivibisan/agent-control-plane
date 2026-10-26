@@ -34,7 +34,7 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   view_change:
     "See one helper's finished change: the files it changed, the diff (cut at 32 KiB), its checks and the review so far.",
   merge_change:
-    "Merge one helper's change into the ticket branch. Its required checks must pass on it first; if they have not run yet, they start and you get a message when they finish.",
+    "Merge one helper's change into the ticket branch. When the workflow has Checks before the merge, they must pass on it first; if they have not run yet, they start and you get a message when they finish.",
   request_rework:
     'Send one helper its change back with what to fix. It works on it again in its own copy. Refused once its rework rounds are used up.',
   discard_change: "Drop one helper's change, with a short reason the owner can read.",

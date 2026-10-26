@@ -250,7 +250,10 @@ export const LeadToolInputs = {
   // change it is; the engine checks each call against the change's state.
   /** The change's files, diff (at most 32 KiB) and checks, plus the reviewer's findings. */
   view_change: z.object({ agentId: z.string().min(1) }),
-  /** Merge the change into the ticket branch; the required checks must pass on it first. */
+  /**
+   * Merge the change into the ticket branch; when the workflow has a Checks block before the merge
+   * (ADR-0028 §2), its checks must pass on it first.
+   */
   merge_change: z.object({ agentId: z.string().min(1) }),
   /** Send the change back to its helper with what to fix; refused past the round limit. */
   request_rework: z.object({
