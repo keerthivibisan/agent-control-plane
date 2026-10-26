@@ -10,7 +10,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | P-B | Web                                           | done        | `wp/p-b-web`          | `307d5a7` |
 | P-C | Smooth linking in the editor                  | done        | `wp/p-c-linking`      | `ced2192` |
 | P-D | Lost helper sessions while the owner reviews  | in progress | `wp/p-d-session-loss` |           |
-| P-O | Open-source readiness, docs and agent context | in progress | `wp/p-o-open-source`  |           |
+| P-O | Open-source readiness, docs and agent context | done        | `wp/p-o-open-source`  | `1ed05ad` |
 | P-V | Verification and release prep                 | in progress |                       |           |
 
 ## Log
@@ -40,3 +40,9 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-26 P-C merged (`ced2192`): side connectors and edge strips, magnetic drop (80 px),
   instant link when one kind fits, click-to-connect, "Link to…", moving link ends, undo/redo (50),
   Tidy layout (the existing layout; `elkjs` not needed). Full check ✓; e2e 117/117.
+- 2026-10-26 P-O merged (`1ed05ad`): internal coordination logs removed (readable at tag `v0.3.0`),
+  finished series plans moved to `docs/history/`, README, architecture, AGENTS.md, CLAUDE.md and
+  CONTRIBUTING rewritten for outside contributors, issue and PR templates, readiness audit in
+  [wp/P-O.md](wp/P-O.md). Format ✓; links 247/247 ✓. Coordinator applied its package.json
+  proposal (`610421d`). Left to the owner: CI on pull requests (reverses the 2026-10-17 decision),
+  the git-history decision, private vulnerability reporting and repo topics in GitHub.
