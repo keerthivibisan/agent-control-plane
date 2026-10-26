@@ -151,7 +151,9 @@ branches, a connected GitHub repository, skills and token figures served by the 
 
 `.github/workflows/ci.yml` runs on Ubuntu with the Node version from `.nvmrc` and pnpm from
 `packageManager`: `pnpm install --frozen-lockfile`, then format check, lint, typecheck, test and
-build (the same steps as `pnpm check`). It does not run the browser tests.
+build (the same steps as `pnpm check`). A second job, `e2e`, runs the browser tests
+(`pnpm --filter @acp/web test:e2e`, Chromium) for `main` only: pull requests into `main` and pushes
+to it. The traces of failed tests are kept as a run artifact for 7 days.
 
 It runs by itself only for `main`, `dev/*` and `release/*`: on every pull request into one of them,
 including pull requests from forks, and on pushes to them that change code (pushes that change only
