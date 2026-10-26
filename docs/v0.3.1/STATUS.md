@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | P-0 | ADR-0028, contract, plan                      | done        |                       |           |
 | P-A | Core, engine, server, adapter                 | done        | `wp/p-a-core`         | `b34062c` |
 | P-B | Web                                           | done        | `wp/p-b-web`          | `307d5a7` |
-| P-C | Smooth linking in the editor                  | in progress | `wp/p-c-linking`      |           |
+| P-C | Smooth linking in the editor                  | done        | `wp/p-c-linking`      | `ced2192` |
 | P-D | Lost helper sessions while the owner reviews  | in progress | `wp/p-d-session-loss` |           |
 | P-O | Open-source readiness, docs and agent context | in progress | `wp/p-o-open-source`  |           |
 | P-V | Verification and release prep                 | in progress |                       |           |
@@ -37,3 +37,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   context, contributing, remove unwanted files, readiness audit). P-O started. Branch scan: no
   private paths or real secrets; git history on `main` has the local user name in 12 commits'
   worktree paths (owner decision: rewrite history or not, before making the repo public).
+- 2026-10-26 P-C merged (`ced2192`): side connectors and edge strips, magnetic drop (80 px),
+  instant link when one kind fits, click-to-connect, "Link to…", moving link ends, undo/redo (50),
+  Tidy layout (the existing layout; `elkjs` not needed). Full check ✓; e2e 117/117.
