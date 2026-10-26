@@ -466,7 +466,7 @@ from before it renders as it always did (`features/review-loop/logic.ts` `isRevi
   checked with core's `CommandPatternSchema` as it is typed); Review & merge → reviewer, rework
   rounds 0–5 and the review agent's agent file, model and skill. The graph adds a "Rework" loop
   from Review back to Helpers (it leaves Review off-centre, `out-top-loop`, clear of the plan
-  approval's line) and an **owner-merge gate** ("You · Merge into main") with Done under it.
+  approval's line) and an **owner-merge gate** ("You · Finish", v0.3.1) with Done under it.
 - **Start dialog** (`StartDialog`, shared `Dialog`): from the board's "Start with options…" and
   the ticket page's "Options" button; each choice starts at the project's setting (marked
   "Project setting") and only the changes are sent. Plain Start/Re-run stay one click.
@@ -697,22 +697,25 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
 
 ## The harness in the workflow (ADR-0027, WP H-D)
 
-- **Checks blocks on the canvas** are step pills as wide as an agent card (216×40), with a small
-  outlined chip saying what they run ("Required", "2 checks", "fast · full"; read out as "Runs:
-  …"). On a change they sit in the work row next to the helpers; on the branch on the merge chain
-  before your merge. No new link kinds or styles: a change block is reached by a "Next step" link
+- **Checks blocks on the canvas** are steps as wide as an agent card (216×52, since v0.3.1): their
+  place in plain words over their name ("Checks before merge", "Checks on a change", "Checks on
+  the branch"), and a small outlined chip saying what they run ("Required", "2 checks", "fast ·
+  full"; read out as "Runs: …"). On a change they sit in the work row next to the helpers; on the
+  branch on the merge chain before the Finish block. No new link kinds or styles: a change block is reached by a "Next step" link
   and sends work back with a "Rework" link.
 - **Add block** has a third group, **Checks**: "Checks on a change" (linked from the selected
-  helper or tester when it has none, else the first without one) and "Checks on the branch" (one,
-  just before your merge). A full item stays listed with its reason, like the others.
+  helper or tester when it has none, else the first without one), "Checks before merge" (one,
+  between the lead and the ticket branch) and "Checks on the branch" (one, just before the Finish
+  block). A full item stays listed with its reason, like the others.
 - **The Checks block panel** (`editor/CheckBlockFields.tsx`): Name; **Where it runs** (the block
-  before the lead's merge is fixed: a note says every workflow has it, and it has no Remove);
+  before the lead's merge stays in its place; since ADR-0028 it can be removed like any other);
   **Which checks** as choice cards (all required / pick checks / by label) with a checklist of
   the harness's checks (name, id, Required, labels) or label chips (`aria-pressed`), a picked
   name the harness no longer has flagged in the warning tone with a remove button, and a
   "Runs: …" line; **When a check fails** offers only the place's routes in plain words, and
-  "Back to the helper" shows the rounds (0–5) of its rework link. Missing picks are warnings in
-  Problems (code `check-missing`, `check-label-missing`).
+  "Back to the helper" shows the rounds (0–5) of its rework link; a last line says the block is
+  optional and what happens without it. Missing picks are warnings in Problems (code
+  `check-missing`, `check-label-missing`).
 - **Harness page:** a **Setup** card (steps table: name with a warning-tone "Uses the network"
   badge, command, time limit, "Creates" folders) with the **"Setup may use the network"** switch
   (`role="switch"`, its On/Off word next to it, saved at once; the line under it says how many
@@ -723,6 +726,27 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   the lead's merge (rows without a place land here), On the ticket branch, Run now on the main
   branch. Setup and check outputs are native disclosures, open when the step or check did not
   pass; the chevron's turn honours reduced motion.
+
+## Effort, optional checks and the Finish block (ADR-0028, v0.3.1 P-B)
+
+- **Effort:** an agent block's panel has an **Effort** select under Model: "Default (the model
+  decides)", Low, Medium, High, with one hint line ("How much the agent thinks before acting: more
+  effort is slower and uses more tokens."). Default leaves the field out of the graph. A block
+  that sets one shows a neutral outlined chip ("High effort") next to its skills on the canvas
+  and on the live graph, and the agent's Details tab has an **Effort** row (from the run's own
+  graph; left out while it is not known).
+- **Checks blocks are optional:** every one has Remove. With none, Problems lists core's warning
+  (under "Warnings (you can still save)"); Save stays enabled.
+- **The Finish block** (`features/workflow/finish.ts`): the editor and the live run graph draw the
+  end of every flow (ticket merge → your merge → Done) as one fixed block on the `subtle` well
+  (editor 320×64, live 300×76): the accent "you" icon, **Finish**, "Merge into <target> or open
+  a pull request" (the project's default target in the editor, the run's target on the ticket
+  page, "your target branch" when unknown; never "main" unless the target is main) and a Done
+  tick on the right ("then Done" in `dim`; "Done" in `success` with the success ring once the
+  ticket is done). It is the `owner-merge` node: links end on it, none starts from it, it has no
+  Remove, and its panel explains the final step in one sentence and three numbered lines.
+  Presentation only: the stored graph keeps the three nodes and their links, a link around a
+  hidden step keeps its own id, and a problem with a hidden step shows on the Finish block.
 
 ## Glossary (single source: `src/lib/copy.ts`)
 
