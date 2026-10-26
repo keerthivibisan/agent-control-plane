@@ -155,7 +155,7 @@ build (the same steps as `pnpm check`). A second job, `e2e`, runs the browser te
 (`pnpm --filter @acp/web test:e2e`, Chromium) for `main` only: pull requests into `main` and pushes
 to it. The traces of failed tests are kept as a run artifact for 7 days.
 
-It runs by itself only for `main`, `dev/*` and `release/*`: on every pull request into one of them,
+It runs by itself only for `main`, `dev`, `dev/*` and `release/*`: on every pull request into one of them,
 including pull requests from forks, and on pushes to them that change code (pushes that change only
 `docs/**` or Markdown files are skipped). For any other branch,
 start it by hand: the Actions tab, **CI**, **Run workflow**, then pick the branch.

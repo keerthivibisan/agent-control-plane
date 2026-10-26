@@ -1,15 +1,15 @@
 name: CI
 
-# Runs by itself only for main, dev/* and release/* (owner decision 2026-10-26): on code pushes to
+# Runs by itself only for main, dev, dev/* and release/* (owner decisions 2026-10-26): on code pushes to
 # them (docs-only pushes are skipped) and on every pull request into them, including from forks, so
 # a required check always reports. Other branches: start it from the Actions tab with "Run
 # workflow". It uses no secrets and reads the repository only.
 on:
   push:
-    branches: [main, 'dev/**', 'release/**']
+    branches: [main, dev, 'dev/**', 'release/**']
     paths-ignore: ['docs/**', '**/*.md']
   pull_request:
-    branches: [main, 'dev/**', 'release/**']
+    branches: [main, dev, 'dev/**', 'release/**']
   workflow_dispatch:
 
 permissions:
