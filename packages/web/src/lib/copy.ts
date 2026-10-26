@@ -4373,7 +4373,8 @@ export const HARNESS_BLOCKS_COPY = {
     branch: 'Optional. Without it, your final merge or pull request is not gated by checks.',
   } satisfies Record<CheckBlockPlace, string>,
   chip: {
-    required: 'Required',
+    // "Required checks", not "Required": the block itself is optional (ADR-0028 §2).
+    required: 'Required checks',
     ids: (n: number) => countOf(n, 'check'),
     labels: (labels: readonly string[]) => labels.join(' · '),
     runs: 'Runs: ',

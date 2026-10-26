@@ -206,7 +206,7 @@ describe('check blocks: the editor', () => {
     expect(s.selection).toEqual({ kind: 'node', id: 'change-checks' });
     expect(rowOf(block as WorkflowNode)).toBe(1);
     expect(kindWord(block as WorkflowNode)).toBe('Checks on a change');
-    expect(selectionChip(block as ChecksNode)).toBe('Required');
+    expect(selectionChip(block as ChecksNode)).toBe('Required checks');
   });
 
   it('one change block per editing block; none without helpers or testers', () => {
