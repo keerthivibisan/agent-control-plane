@@ -46,3 +46,5 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   [wp/P-O.md](wp/P-O.md). Format ✓; links 247/247 ✓. Coordinator applied its package.json
   proposal (`610421d`). Left to the owner: CI on pull requests (reverses the 2026-10-17 decision),
   the git-history decision, private vulnerability reporting and repo topics in GitHub.
+- 2026-10-26 Owner decisions: CI runs on pull requests, including forks (`ci:` commit);
+  the git history stays as it is (the local user name in 12 old commits is accepted).
