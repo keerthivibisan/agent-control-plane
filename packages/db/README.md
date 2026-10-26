@@ -1,268 +1,120 @@
 # @acp/db
 
-**Built in:** work package P1-B (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
+SQLite persistence for Agent Control Plane, built on `better-sqlite3`. It opens the database file
+with safe settings, applies numbered SQL migrations with checksums, and provides repositories (one
+per table group) and read-side queries. Inputs and stored JSON are validated with `@acp/core`
+schemas. `@acp/server` is the only package that uses it.
 
-**Status:** **Implemented (P1-B).** Connection setup (`openDatabase`), the migration runner, the
-Phase 1 schema (`0001_observability.sql`), the repositories (`createRepositories`), the transaction
-helper (`withTransaction`), and the Phase 1 queries (`createQueries`) exist and are tested against
-temp-file databases. Nothing calls them yet: the ingestion pipeline and API are P1-D.
+## What it contains
 
-## Responsibility
+| Path (under `src/`)           | What it does                                                                       | Key exports                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `database.ts`                 | Opens the database: WAL, `foreign_keys=ON`, `busy_timeout` 5000 ms, file mode 0600 | `openDatabase`, `AcpDatabase`, `OpenDatabaseOptions`                      |
+| `migrations.ts`               | Loads, verifies and applies `migrations/NNNN_name.sql`                             | `runMigrations`, `loadMigrations`, `checksumOf`, `DEFAULT_MIGRATIONS_DIR` |
+| `transaction.ts`              | One synchronous write transaction (`BEGIN IMMEDIATE`); nested calls are savepoints | `withTransaction`                                                         |
+| `errors.ts`                   | Typed errors with a `code` (`not_found`, `conflict`, `invalid_input`, ...)         | `DbError`, `MigrationError`, `StoredValueError`                           |
+| `repositories/`               | Observation: projects, sessions, edges, events, usage, snapshots, checkpoints      | `createRepositories`                                                      |
+| `repositories/orchestration/` | Managed runs, agent runs, session links, approvals, artifacts, worktrees, chat     | `createOrchestrationRepositories`                                         |
+| `repositories/workspace/`     | Project setup, tickets, plans, comments, check runs, attachments                   | `createWorkspaceRepositories`                                             |
+| `repositories/redesign/`      | Project workflow (graph) and run audit columns                                     | `createRedesignRepositories`                                              |
+| `repositories/review-loop/`   | Ticket branches, change reviews, and review, approval and run-option columns       | `createReviewLoopRepositories`                                            |
+| `repositories/harness/`       | Harness setup runs                                                                 | `createHarnessRepositories`                                               |
+| `queries/`                    | Session list, session tree, usage sums and summaries, stats, project tokens        | `createQueries`, `createTokenQueries`, `MAX_PAGE_SIZE`                    |
 
-SQLite connection (WAL, foreign keys), versioned SQL migrations with checksums, repositories, the transaction helper, and the Phase 1 queries (session list, tree, usage sums). Spec: docs/domain-model.md, docs/implementation-plan.md (P1-B).
-
-## Allowed dependencies
-
-`@acp/core`, `better-sqlite3`. These rules are enforced by `eslint.config.js`.
-
-## Connection
-
-`openDatabase(path, options?)`:
-
-- creates a missing parent directory with mode `0700` (an existing directory is never chmod-ed);
-- creates the file with mode `0600`, or tightens an existing file to `0600`, before SQLite opens it;
-  SQLite gives the `-wal` and `-shm` files the same mode;
-- sets `journal_mode=WAL` (verified), `foreign_keys=ON` (verified), and `busy_timeout=5000`;
-- applies pending migrations unless `{ migrate: false }`.
-
-`:memory:` is accepted for quick experiments, but tests use temp-file databases.
-
-## Migrations
-
-- Plain SQL files in `src/migrations/NNNN_name.sql` (four-digit version, lowercase name).
-- Applied in version order, each in its own `BEGIN IMMEDIATE` transaction, and recorded in
-  `schema_migrations(version, name, applied_at, checksum)`. The checksum is the sha256 of the file
-  with line endings normalized to `\n`.
-- Before applying anything, the runner verifies every applied migration. An edited applied migration
-  (checksum mismatch) or an applied version this build does not know throws `MigrationError`.
-- **Never edit a migration that has shipped.** Add a new file.
-
-**How migrations reach `dist`:** the `.sql` files are the single source of truth and are **copied**
-into `dist/migrations/` by the build script (`scripts/copy-migrations.mjs`, run after `tsc`). The
-runner finds them with `new URL('./migrations/', import.meta.url)`, which points at `src/migrations/`
-when running from source (the `development` export condition: Vitest, `tsx`) and at
-`dist/migrations/` when running the build. They are not embedded as TypeScript strings, so there is
-no generated copy that can drift from the reviewed SQL.
-
-## Schema (`0001_observability.sql`)
-
-All tables are `STRICT`. Internal ids are TEXT UUIDs, except `events.id`, an
-`INTEGER PRIMARY KEY AUTOINCREMENT` that is monotonic, never reused, and doubles as the SSE id.
-Timestamps are UTC ISO-8601 text ending in `Z`. Token counts are nullable (`NULL` = unavailable).
-Enum-like columns are validated with Zod in TypeScript, not with `CHECK`, because SQLite cannot alter a
-`CHECK` without rebuilding the table. JSON columns have `json_valid` checks.
-
-| Table                   | Key / uniques                                                          | Notes                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `projects`              | `id`; `root_path` unique                                               | deleting a project sets `sessions.project_id` / `events.project_id` to NULL               |
-| `sessions`              | `id`; `(provider, provider_session_id, provider_agent_id)` unique      | `provider_agent_id = ''` for top-level sessions; evidence columns; JSON `metadata` object |
-| `session_edges`         | `id`; `(kind, child_session_id)` unique                                | JSON `evidence` array; no self-loops                                                      |
-| `edge_conflicts`        | `id`; `(kind, child_session_id, conflicting_parent_session_id)` unique | evidence naming a different parent; the edge is unchanged                                 |
-| `events`                | `id` (autoincrement); `dedup_key` unique                               | append-only; JSON `payload`; indexes `(session_id, occurred_at)`, `(observed_at)`         |
-| `usage_observations`    | `event_id`                                                             | one per `usage.reported`; index `(provider, message_id)`                                  |
-| `usage_records`         | `id`; `(provider, message_id)` unique                                  | projection; indexes `(session_id)`, `(model)`                                             |
-| `usage_snapshots`       | `event_id`                                                             | one per `usage.snapshot`; never summed                                                    |
-| `ingestion_checkpoints` | `source_path`                                                          | written in the same transaction as its events                                             |
-
-`0001` creates no Phase 3 tables (domain-model §3); they arrive in `0002`.
-
-## Orchestration schema (`0002_orchestration.sql`, Phase 3 M1, P3-C)
-
-**Status: implemented (P3-C).** Tables, repositories and temp-file DB tests exist. Nothing calls them
-yet: the run service is P3-D.
-
-Same conventions as `0001` (STRICT, UUID text ids, UTC `...Z` timestamps, enum columns validated in
-TypeScript). Same-run references use composite foreign keys `(run_id, agent_run_id) →
-agent_runs (run_id, id)`, so an approval, artifact or workspace can never point at another run's agent.
-
-| Table                   | Key / uniques                                                  | Notes                                                                                                                         |
-| ----------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `orchestration_runs`    | `id`                                                           | `project_id` → projects **ON DELETE RESTRICT** (a project with runs cannot be unregistered); budget columns (ADR-0014)        |
-| `agent_runs`            | `id`; `(run_id, id)`; one lead per run (partial unique index)  | parent in the same run; `task` ≤ 4000 (ADR-0015); `budget_tokens_used`, `budget_tokens_limit`                                 |
-| `agent_run_sessions`    | `(agent_run_id, provider, provider_session_id)`; one `primary` | stores the provider session id; the observed `sessions` row is joined at read time, so linking never waits for ingestion      |
-| `approvals`             | `id`                                                           | `summary` 1..200 characters, `redact()`ed again on write; decisions are immutable; the owner's decision message is not stored |
-| `artifacts`             | `id`; `storage_path` unique                                    | `patch` / `manifest`; path relative to the data dir (no `..`, not absolute); `sha256` lowercase hex; immutable                |
-| `managed_workspaces`    | `id`; `agent_run_id`, `worktree_path`, `branch` unique         | workers only; `state` `active`/`removed`; `review_state` (core `ReviewState`) and `changed_files`                             |
-| `orchestrator_messages` | `id`; `(run_id, seq)`                                          | owner ↔ lead chat only (ADR-0015); `seq` assigned on insert                                                                   |
-
-Every table cascades from `orchestration_runs`: deleting a run deletes its agents, session links,
-approvals, artifact rows, workspace rows and chat (ADR-0015). Files on disk are the caller's job:
-`runs.remove(id)` returns the artifact paths and the still-active worktree paths to delete.
-
-**Never stored:** worker conversation content, thinking, tool inputs or outputs, activity sentences,
-and owner decision messages. A test asserts the free-text columns are exactly `orchestration_runs.title`,
-`agent_runs.role`, `agent_runs.task`, `approvals.summary` and `orchestrator_messages.text` (+ `role`).
-
-`createOrchestrationRepositories(db, options?)` returns:
-
-- **runs**: `insert` (default `QUEUED`; optional `ticketId`, P4-B), `getById`,
-  `list({ projectId?, ticketId?, limit?, before? })` (newest
-  first, with `agentCount` and `pendingApprovals`), `listByStatus`, `setStatus(id, status, { from?,
-endedAt? })` (`from` guard → `conflict`), `setBudget`, `remove` → `{ artifactPaths,
-activeWorktreePaths }`.
-- **agentRuns**: `insert` (lead: no parent/task; worker: a parent in the same run at most
-  `HARD_MAX_DEPTH` = 2 levels below the lead (P4-B; was depth 1), and a task; limit
-  defaults to the run cap), `getById`, `listForRun`, `listByStatus`, `setStatus` (with `from`),
-  `setBudgetTokensUsed`, `setBudgetTokensLimit`. Rows carry `sessionId` (joined) and
-  `budgetTokensLimit`.
-- **agentRunSessions**: `link` (idempotent), `listForAgentRun`, `findByProviderSession`.
-- **approvals**: `insert` (pending), `getById`, `listForRun`, `listPending({ runId? })`,
-  `decide(id, 'approved' | 'denied' | 'expired', at?)`, `expirePending(cutoff, at?)`.
-- **artifacts**: `insert`, `getById`, `listForRun`, `listForAgentRun` (no update).
-- **workspaces**: `insert`, `getById`, `getByAgentRun`, `listForRun`, `listActive`, `setReview`,
-  `markRemoved`.
-- **messages**: `insert` (appends with the next `seq`), `list(runId, { limit?, beforeSeq? })`
-  (latest page, oldest first), `count`.
-
-Errors: unknown referenced rows → `DbError('not_found')`; duplicates and failed `from` guards →
-`conflict`; invalid input → `invalid_input`. The engine decides state transitions; the repositories
-only persist them.
-
-## Workspace schema (`0003_workspace.sql`, Phase 4, P4-B)
-
-**Status: implemented (P4-B).** Tables, repositories and temp-file DB tests exist, including an
-upgrade test from a 0002 database. The server wiring is P4-D. `0001` and `0002` are unchanged.
-
-| Table                | Key / uniques                                             | Notes                                                                                                                                    |
-| -------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `project_setup`      | `project_id` (1:1, cascades); `project_key` unique        | `setup` JSON validated with core's `ProjectAgentSetupSchema`; `next_ticket_seq` is the ticket counter (only incremented)                 |
-| `tickets`            | `id`; `(project_id, seq)`                                 | `key` fixed at creation; `labels` JSON array; `project_id` **RESTRICT** (tickets are never deleted, ADR-0016); `current_run_id` SET NULL |
-| `ticket_plans`       | `id`; `(run_id, version)`; one `proposed`, one `approved` | `steps` JSON (core `PlanStepSchema`); `(ticket_id, run_id)` → a run of the same ticket, cascades with the run                            |
-| `ticket_comments`    | `id`                                                      | `author` `owner`/`lead`; optional run or plan of the same ticket (composite FKs), cascades with them                                     |
-| `check_runs`         | `id`                                                      | `run_id` NULL = main branch; `(run_id, agent_run_id)` → agent of that run; `output_tail` ≤ 16384 characters                              |
-| `orchestration_runs` | + `ticket_id` (nullable, → tickets RESTRICT)              | added with `ALTER TABLE`; unique index `(ticket_id, id)` is the parent key for the same-ticket FKs                                       |
-
-Rules SQLite cannot express as foreign keys are triggers: a run's ticket belongs to the run's
-project, and a ticket's current run is a run of that ticket. They fire only when the referenced row
-exists, so a missing row still reports `not_found`. Harness status is not stored (read from the repo).
-
-**Stored text (ADR-0016/0017):** ticket titles and descriptions, owner and lead comments, plan
-summaries and steps, and the redacted output tail of a check. A test pins this list.
-
-`createWorkspaceRepositories(db, options?)` returns:
-
-- **projectSetup**: `get(projectId)`, `getByProjectKey(key)`, `upsert(setup)` (keeps the ticket
-  counter; a key used by another project → `conflict`).
-- **tickets**: `insert` (atomic per-project number from `project_setup.next_ticket_seq` in one
-  `BEGIN IMMEDIATE`; `not_found` without a setup), `getById`, `listForProject(projectId,
-{ statuses? })` (by number), `update` (owner fields), `setStatus(id, status, { from?,
-currentRunId? })`, `countForProject`.
-- **plans**: `insert` (next version per run; a still-proposed plan becomes `superseded`;
-  `plannedHelpers` = distinct non-"Lead" step roles), `getById`, `listForTicket`, `listForRun`,
-  `latestForRun`, `approvedForRun`, `decide(id, 'approved' | 'changes-requested', at?)` (only from
-  `proposed`, else `conflict`), `supersedeProposed(runId, at?)`.
-- **comments**: `insert` (the plan's run is filled in), `getById`, `listForTicket`, `listForPlan`.
-- **checkRuns**: `insert` (output `redact()`ed again and cut to its tail; run project must match),
-  `getById`, `listForRun`, `listForAgentRun`, `latestForAgentRun` (latest per check id),
-  `listForProjectMain(projectId, { limit? })`.
-
-`projects.remove` throws a foreign-key error for a project with tickets or runs; the server checks
-`tickets.countForProject` / runs first and answers 409.
-
-## Redesign schema (`0004_redesign.sql`, project workspace redesign, R-G)
-
-**Status: implemented (R-G).** The table, columns, repositories and temp-file DB tests exist,
-including an upgrade test from a 0003 database. `0001`–`0003` are unchanged.
-
-| Table / column              | Notes                                                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `project_workflow`          | `project_id` (1:1, cascades with the project); `workflow` JSON validated with core's `ProjectWorkflowSchema` |
-| `agent_runs.stage`          | a `WorkflowStageId`; NULL for Phase 3/4 agents                                                               |
-| `approvals.decided_by`      | `owner` / `allowlist` / `timeout`; NULL while pending, when closed by the engine, and for older rows         |
-| `orchestration_runs.limits` | JSON `{ maxConcurrentHelpers, maxDepth }` at start; NULL means the Phase 3 defaults                          |
-| `ticket_comments.author`    | no schema change: `reviewer` is accepted because the author is validated with core's schema (ADR-0019)       |
-
-No new stored text: a workflow holds model and skill names only.
-
-**`0005_stage_agents.sql` (R-G Part 2):** the "one lead per run" unique index is keyed by
-`kind = 'lead'` instead of "no parent", because the planner, reviewer and tester (ADR-0019) also
-have no parent. The repository still requires a lead without a parent and a worker with one.
-
-`createRedesignRepositories(db, options?)` returns:
-
-- **workflow**: `get(projectId)` (the saved workflow; without a row, `defaultProjectWorkflow()`
-  dated at the project's registration; undefined for an unknown project), `isStored(projectId)`,
-  `put(workflow)` (creates or replaces; `not_found` for an unknown project).
-- **runAudit**: the 0004 columns on the Phase 3 tables, kept out of the orchestration repositories so
-  those stay as shipped. `setApprovalDecidedBy` / `approvalDecidersForRun`, `setRunSnapshot` /
-  `getRunSnapshot` (bounded like the project setup), `setAgentStage` / `agentStagesForRun`. Each
-  setter throws `not_found` for an unknown row. The server's run store calls them inside its commit
-  transaction.
-
-## Usage
+Each `create*` factory takes an `AcpDatabase` and, for repositories, optional `now` and `newId`
+functions, so tests can inject a clock and ids. Repositories do not open their own transactions
+(except where one call must be atomic); wrap multi-step writes in `withTransaction`.
 
 ```ts
 import { createQueries, createRepositories, openDatabase, withTransaction } from '@acp/db';
 
-const db = openDatabase(`${dataDir}/acp.sqlite`); // migrates on open
-const repos = createRepositories(db); // { projects, sessions, edges, events, usage, snapshots, checkpoints }
-const queries = createQueries(db);
-
+const db = openDatabase(`${dataDir}/acp.sqlite`); // creates the file and migrates on open
+const repos = createRepositories(db);
 withTransaction(db, () => {
-  for (const event of batch.events) {
-    const { inserted, id } = repos.events.insertIfNew({ event, sessionId, projectId });
-    if (!inserted) continue; // projections only for newly inserted events
-    // ... project sessions, edges, usage observations/records, snapshots
-  }
-  repos.checkpoints.set(batch.nextCheckpoint); // same transaction as the events
+  const { inserted } = repos.events.insertIfNew({ event, sessionId, projectId });
+  // only when `inserted`: update the session, edge and usage projections
+  repos.checkpoints.set(nextCheckpoint); // same transaction as the events
 });
+const sessions = createQueries(db).listSessions({ topLevelOnly: true }, { limit: 50 });
 ```
 
-### Repositories
+## Schema conventions
 
-- **projects**: `insert`, `getById`, `getByRootPath`, `list`, `rename`, `remove`. A duplicate root
-  throws `DbError` with code `conflict`.
-- **sessions**: `upsert` by `SessionKey` returns `{ id, created }`. Merge rules:
-  - `firstSeenAt` takes the MIN; `lastObservedAt` takes the MAX;
-  - `lastEventAt`, `endedAt`, and `lastAttentionAt` take the MAX and ignore nulls;
-  - for `launchCwd`, `entrypoint`, `agentType`, `description`, and `projectId`, the first non-null
-    value wins (use `setProject` to reassign);
-  - for `title`, `gitBranch`, and `providerVersion`, the latest non-null value wins;
-  - `endReason` follows the latest `endedAt`;
-  - `metadata` is merged as a JSON merge-patch;
-  - `null` never clears a stored value.
+Tables are `STRICT`. Ids are TEXT UUIDs, except `events.id`, a monotonic `AUTOINCREMENT` integer
+that doubles as the SSE id. Timestamps are UTC ISO-8601 text ending in `Z`. Token counts are
+nullable: `NULL` means unavailable, never 0. Enum-like columns are validated with Zod in
+TypeScript, not with `CHECK`, because SQLite cannot change a `CHECK` without rebuilding the table.
+No conversation content is stored (ADR-0009); the few free-text columns are pinned by tests.
 
-  Also `getById`, `getByKey`, `getByIds`, `listByProviderSession`, `listUnassigned`, `setProject`.
+## Migrations
 
-- **edges**: `upsert` by `(kind, child)` validates against core's `SessionEdgeSchema` rules. It
-  unions evidence (`observed` beats `derived`) and returns `inserted | evidence-added | unchanged |
-conflict`. A different parent is recorded in `edge_conflicts`, and the edge is left unchanged.
-  Also `getByChild`, `listChildren`, `listForSessions`, `listConflicts`.
-- **events**: `insertIfNew` returns `{ inserted, id }` (`ON CONFLICT(dedup_key) DO NOTHING`).
-  Also `getById`, `getByDedupKey`, `listRecent` (newest first, `beforeId` cursor), `listAfter`
-  (SSE replay), `maxId`, `listToolCalls(sessionIds, toolUseIds?)` (`tool.called` evidence for
-  subagent edges; added for P1-D). Events are validated with `NormalizedEventSchema` on write and read.
-  Unknown payload keys are stripped.
-- **usage**: `insertObservation`, `listObservationsByMessage` (each row carries its session's
-  `SessionKey` for attribution), `upsertRecord` (stable id), `getRecord`, `deleteRecord`,
-  `listRecordsForSession`, `listSharedSightings(sessionIds)` (observations of messages seen in two or
-  more sessions, for continuation-edge derivation; added for P1-D).
-- **snapshots**: `insert`, `latestForSession`, `listForSession`. The cost is returned as
-  `Sourced<number>`: `estimated`, or `unavailable` when not reported.
-- **checkpoints**: implements core's `CheckpointStore` (`get`), plus `set`, `list`, `remove`.
+| File                        | Adds                                                                                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `0001_observability`        | projects, sessions, session_edges, edge_conflicts, events, usage_observations, usage_records, usage_snapshots, ingestion_checkpoints |
+| `0002_orchestration`        | orchestration_runs, agent_runs, agent_run_sessions, approvals, artifacts, managed_workspaces, orchestrator_messages                  |
+| `0003_workspace`            | project_setup, tickets, ticket_plans, ticket_comments, check_runs; orchestration_runs.ticket_id                                      |
+| `0004_redesign`             | project_workflow; agent_runs.stage, approvals.decided_by, orchestration_runs.limits                                                  |
+| `0005_stage_agents`         | "one lead per run" keyed by `kind = 'lead'` instead of "no parent"                                                                   |
+| `0006_review_loop`          | ticket_branches, change_reviews; change columns on managed_workspaces, check_runs.commit_sha, approvals.allow_rule                   |
+| `0007_ticket_run_options`   | tickets.run_options                                                                                                                  |
+| `0008_code_hosting`         | tickets.branch_prefs; ticket_branches rebuilt without the `acp/*` name check, plus pull request columns                              |
+| `0009_ticket_activity`      | ticket_comments.kind and agent_run_id; ticket_attachments                                                                            |
+| `0010_harness_setup`        | setup_runs; check_runs.place and block_node_id                                                                                       |
+| `0011_ticket_branch_source` | ticket_branches.source_branch                                                                                                        |
 
-All timestamps are normalized to UTC `...Z` (millisecond precision) on write. Inputs that fail
-validation throw `DbError('invalid_input')`. Stored values that fail validation on read throw
-`StoredValueError`.
+- Each file is applied once, in version order, in its own transaction, and recorded in
+  `schema_migrations` with a sha256 checksum (line endings normalized).
+- Before applying anything, the runner checks every applied migration. An edited applied migration
+  or an applied version this build does not know throws `MigrationError`.
+- **Never edit a migration that has shipped. Add a new file**, with an upgrade test that opens a
+  database at the previous version (see `tests/review-loop/migration-0011.test.ts`).
+- The build copies the `.sql` files into `dist/migrations/` (`scripts/copy-migrations.mjs`). The
+  runner finds them next to itself with `new URL('./migrations/', import.meta.url)`.
 
-### Queries
+## Public API and entry points
 
-- `listSessions(filter, { limit, cursor })` uses keyset pagination ordered by
-  `(COALESCE(last_event_at, '') DESC, id DESC)`. Sessions without a last event come last.
-  - Filters: `projectId` (or `null` for no project), `provider`, `model` (sessions with a usage
-    record of that model), `search` (an id substring; LIKE wildcards are literal), and
-    `topLevelOnly`.
-  - Status inputs: `lastEventAfter`, `lastEventBefore`, and `ended`.
-  - Status is derived in TypeScript from the evidence columns on each row.
-- `modelsBySession(ids)`: the distinct models in each session's records.
-- `sessionTree(rootId)`: a recursive CTE over `subagent` edges. It returns the root first, with
-  `depth` and `parentSessionId`, and is safe against cycles.
-- `directUsage(id)` and `directUsageBySession(ids)`: per-category `SUM`. A category stays `null`
-  when every value is null, or when there are no records. `recordsWithUnavailable` is
-  `COUNT(*) - COUNT(col)`.
-- `aggregateUsage(rootId)`: the direct usage of the session and its `subagent` descendants.
-  Continuation children are excluded.
-- `usageSummary(groupBy, filter)`: grouped by `project`, `session`, `model`, or UTC `day`. Every
-  group sums records directly, so children are never double-counted. The `null` key groups records
-  with no project, model, or time.
-- Recent events: `repos.events.listRecent` / `listAfter`.
+`package.json` `exports` has one entry point, `@acp/db` (`src/index.ts`): the `development`
+condition resolves it to the TypeScript source, otherwise to `dist/`. Never import a deep path.
+
+## Testing
+
+```bash
+pnpm --filter @acp/db test
+pnpm --filter @acp/db typecheck
+pnpm --filter @acp/db build
+```
+
+Tests in `tests/` use temp-file SQLite databases (never the real one) and synthetic data only.
+
+- `tests/helpers.ts`: `tempDir()` (removed after each test), `fixedClock()`, `thrown()`.
+- `tests/fixtures.ts`: `setupStore()`, a migrated temp database with repositories, a fixed clock and
+  sortable ids. `tests/orchestration/setup.ts` and `tests/workspace/setup.ts` do the same for their
+  table groups.
+- `tests/schema.test.ts` snapshots the whole schema; review its diff when you add a migration.
+- `migration-NNNN.test.ts` files upgrade a database from the previous version.
+- `vitest.config.ts` resolves `@acp/core` to its source; `tests/core-resolution.test.ts` checks it.
+
+## Dependency rules
+
+- Runtime dependencies: `@acp/core` and `better-sqlite3` only.
+- `eslint.config.js` forbids `@acp/server`, `@acp/web`, `@acp/adapter-*` and `@acp/orchestrator`.
+- The server layers its code `routes -> services -> repositories`. Repositories persist and enforce
+  data integrity (validation, uniqueness, `from` guards on status changes); deciding what should
+  happen belongs to the services and the engine.
+- Errors are thrown as `DbError` with a code; the server maps them to HTTP responses.
+
+## Specs and decisions
+
+- Specs: [architecture](../../docs/architecture.md) (sections 5 and 8),
+  [domain model](../../docs/domain-model.md), [usage accounting](../../docs/usage-accounting.md),
+  [security](../../docs/security.md),
+  [orchestration lifecycle](../../docs/orchestration-lifecycle.md).
+- ADRs: [0003 SQLite](../../docs/decisions/0003-sqlite-local-first.md),
+  [0006 dedup](../../docs/decisions/0006-usage-deduplication.md),
+  [0009 no content](../../docs/decisions/0009-content-minimization.md),
+  [0015 chat](../../docs/decisions/0015-orchestrator-chat-storage.md),
+  [0016 tickets](../../docs/decisions/0016-workspace-board-and-tickets.md),
+  [0021 review loop](../../docs/decisions/0021-approval-modes-review-loop-ticket-branch.md),
+  [0025 branching](../../docs/decisions/0025-code-hosting-and-branching.md),
+  [0026 attachments](../../docs/decisions/0026-comments-conversation-and-attachments.md),
+  [0027 setup runs](../../docs/decisions/0027-harness-setup-and-check-blocks.md).
