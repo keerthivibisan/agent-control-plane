@@ -491,3 +491,10 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 - 2026-10-26 **Video resumed** (owner: "we can resume preparing our awesome video"). Draft 7 runs on
   `wp/v-1-e` from `wp/v-1-d`. The HyperFrames app was closed at the start; the owner was asked to
   open it for the voice.
+- 2026-10-26 **Video draft 7 delivered** (`wp/v-1-e`, commits `f43d1bd`, `70966c0`; voiced and
+  rendered by the coordinator after opening the HyperFrames app: voice, compose and render all
+  passed). Outputs in that worktree's `.acp-data/demo-video/d7/`: full 16:9 97.2 s, LinkedIn 4:5
+  38.8 s, short 16:9 38.8 s, muted loop 13.7 s; audio in the voiced cuts; OCR privacy check clean.
+  Music composed in code (`music.ts`, ours); sound effects from the `hyperframes` npm package
+  (Pixabay Content License). Waiting for the owner's review (the music has not been heard by an
+  agent).
