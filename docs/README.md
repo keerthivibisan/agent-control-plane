@@ -29,6 +29,7 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 ## Releases and history
 
 - [v0.3.1/](v0.3.1/README.md): the plan of the release in progress.
+- [v0.3.2/](v0.3.2/README.md): the plan of the next patch release.
 - [history/](history/README.md): the plans of earlier series, kept for provenance: how the app was
   built with coding agents.
 - [images/](images/) and [brand/](brand/): the README screenshots (demo data only) and the logo

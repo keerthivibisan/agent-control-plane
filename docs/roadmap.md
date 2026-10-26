@@ -12,6 +12,7 @@ Where the project stands and what comes next. Nothing listed as planned is built
 | v0.2.0  | 2026-10-21 | editable workflow graphs per project (ADR-0023)                                                                                                                                    |
 | v0.3.0  | 2026-10-25 | GitHub and branching strategies, a pull-request-like ticket page, attachments and agent notes, the harness in the workflow, session names, the branch guard (ADR-0024 to ADR-0027) |
 | v0.3.1  | planned    | effort per agent, optional Checks blocks, one Finish block (ADR-0028; [plan](v0.3.1/README.md))                                                                                    |
+| v0.3.2  | planned    | the owner can send a change back for rework after a restart (ADR-0029, proposed; [plan](v0.3.2/README.md))                                                                         |
 
 Details: [CHANGELOG.md](../CHANGELOG.md). The plans of the earlier series are in
 [history/](history/README.md).
