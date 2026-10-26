@@ -2,8 +2,24 @@
   "name": "agent-control-plane",
   "version": "0.3.0",
   "private": true,
-  "description": "Local-first control plane for observing, orchestrating, and improving AI-assisted software development.",
+  "description": "Local-first control plane to observe and orchestrate Claude Code agents.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keerthivibisan/agent-control-plane.git"
+  },
+  "homepage": "https://github.com/keerthivibisan/agent-control-plane#readme",
+  "bugs": {
+    "url": "https://github.com/keerthivibisan/agent-control-plane/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "ai-agents",
+    "coding-agents",
+    "orchestration",
+    "observability",
+    "local-first"
+  ],
   "type": "module",
   "packageManager": "pnpm@10.26.1",
   "engines": {

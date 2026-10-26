@@ -4,6 +4,11 @@
   "private": true,
   "description": "Provider-agnostic domain contracts, schemas, and pure logic for Agent Control Plane.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keerthivibisan/agent-control-plane.git",
+    "directory": "packages/core"
+  },
   "type": "module",
   "exports": {
     ".": {

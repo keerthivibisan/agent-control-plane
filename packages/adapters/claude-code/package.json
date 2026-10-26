@@ -2,8 +2,13 @@
   "name": "@acp/adapter-claude-code",
   "version": "0.3.0",
   "private": true,
-  "description": "Claude Code observation adapter: transcript, subagent metadata, and hook normalization. Owned by P1-C.",
+  "description": "Claude Code adapter: session, subagent and hook observation, and managed runs over the Claude Agent SDK.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/keerthivibisan/agent-control-plane.git",
+    "directory": "packages/adapters/claude-code"
+  },
   "type": "module",
   "exports": {
     ".": {
