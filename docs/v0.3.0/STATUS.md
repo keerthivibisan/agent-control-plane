@@ -488,3 +488,6 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   `wp/v-1-d` with the draft 7 brief (story, attention rules, music composed in code with ffmpeg,
   the HyperFrames npm package for offline sound effects, four formats). Keep the HyperFrames desktop
   app open for the voice. BETA badge pushed: release/0.3.0 at `4c5da4b` on GitHub.
+- 2026-10-26 **Video resumed** (owner: "we can resume preparing our awesome video"). Draft 7 runs on
+  `wp/v-1-e` from `wp/v-1-d`. The HyperFrames app was closed at the start; the owner was asked to
+  open it for the voice.
