@@ -191,6 +191,9 @@ export function buildOptions(
   if (title !== '' && options.resume === undefined) options.title = title;
   options.systemPrompt = systemPromptFor(spec);
   if (spec.model !== null) options.model = spec.model;
+  // ADR-0028 §1: the SDK's `effort` option, only when the block sets one (absent: the model's
+  // default; models without effort support ignore it). Follow-ups and rework turns keep it too.
+  if (spec.effort !== undefined) options.effort = spec.effort;
   // A copy, so a later change to the caller's object never reaches a running agent.
   if (env !== undefined) options.env = { ...env };
   // ADR-0022, ADR-0023 §5: a helper or tester whose node runs Full auto gets auto mode inside the
