@@ -1,11 +1,13 @@
-# Orchestration lifecycle (Phase 3 — in progress, milestone M1)
+# Orchestration lifecycle
 
-> Phase 3 started on 2026-10-11 (owner decision). ADR-0012 (Agent SDK), ADR-0013 (guardrails),
-> ADR-0014 (budget) and ADR-0015 (chat storage) confirm and narrow this design. **§0 is what M1
-> builds**; §2–§5 remain the target for later milestones. Mark sections [implemented] only when they
-> work.
+> **Current:** §0 (the run and agent states, built in Phase 3 milestone M1) and §0.1 (the review
+> loop and the ticket branch, ADR-0021) describe how runs work today; workflow graphs (ADR-0023)
+> and Checks blocks (ADR-0027, ADR-0028) decide which agents and checks a run has, see
+> [architecture.md](architecture.md) §8–§11. §1 holds. §2–§5 are the original Phase 3 design,
+> kept as background: where they differ from §0 and §0.1, those win. ADR-0012 (Agent SDK),
+> ADR-0013 (guardrails), ADR-0014 (budget) and ADR-0015 (chat storage) narrow this design.
 
-## 0. Milestone M1 (what is being built)
+## 0. Milestone M1 [implemented]
 
 - **Shape.** One run per conversation in the control panel: a **lead** agent (chats with the owner,
   read-only in the project root, has the lead tools) and up to 3 **worker** agents (one task each, own

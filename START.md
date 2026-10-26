@@ -130,8 +130,9 @@ and reads the rest only for folders you added as projects. It never reads Claude
 
 **What it writes in your projects.** Only on your actions: a new repository when you create one,
 skill and agent files under `.claude/skills/` and `.claude/agents/` from the Skills & Agents page,
-the ticket branch (`acp/<KEY>`) when you approve a plan, and the final merge into main when you
-merge a ticket. Agents never write in your own working folder; each helper works in its own git
+the ticket branch (named by the project's branching strategy, `acp/<KEY>` without one) when you
+approve a plan, and the final merge into the ticket's target branch when you merge a ticket (or a
+push to `origin` when you open a pull request). Agents never write in your own working folder; each helper works in its own git
 worktree under `ACP_DATA_DIR`.
 
 The app makes no network calls of its own: no telemetry and no update checks. Managed runs start
@@ -163,9 +164,9 @@ The same steps, with copy buttons, are on the **Data health → Connection** pag
    already on your computer, or let the app create a new, empty one. The setup then asks how agents
    work (ticket prefix, helpers at once, budget per agent, model), which actions are pre-approved,
    which context files agents read, and the harness checks.
-2. **Set the workflow.** On **Workflow**, pick the approval mode (Manual, Auto edits, Auto or Full
-   auto) and choose each stage's model, skill and agent file. Turn on the final code review and the
-   unit-test writer if you want them.
+2. **Set the workflow.** On **Workflow**, start from a template or draw your own graph: a planner,
+   the lead, helpers, reviewers, a tester and Checks blocks. Each agent block has its own model,
+   effort, skills, agent file and approval mode (Manual, Auto edits, Auto or Full auto).
 3. **Create a ticket.** On **Board**, choose **New ticket** and describe the work.
 4. **Start a run.** Use the card's **Move** menu (**Start**), or **Start** on the ticket page.
    **Start with options…** changes the approval mode, reviewer or rework rounds for this run only.
