@@ -748,6 +748,39 @@ comment, reviewer → review, the app → run facts or a one-line system note, t
   Presentation only: the stored graph keeps the three nodes and their links, a link around a
   hidden step keeps its own id, and a problem with a hidden step shows on the Finish block.
 
+## Linking blocks in the Workflow editor (v0.3.1 P-C)
+
+Every way of linking makes only the links core's `canConnect` allows (`resolveLink`,
+`editor/linking.ts`); the editor never adds its own rule.
+
+- **Start anywhere:** a block a link can start from has a connector on each side: a 14px dot in a
+  28px target (at least 12px and 24px on screen at the usual zoom), hidden until the block is
+  hovered, focused or selected; the right one is always faintly there as a small square. A thin
+  strip along each edge starts a link too. The right connector is a focusable button ("Link from
+  <block>: press Enter, then choose a block"); the others are pointer shortcuts.
+- **While a link is drawn:** a smooth curve in the accent (dashed while there is nowhere to drop
+  it, solid once snapped) with a soft halo. The blocks it may end on take the accent frame and
+  soft ring, the one it would end on now a stronger ring; the others fade to 35%; the other links
+  fade back. It snaps onto the nearest valid block within 80 screen pixels and meets the side
+  facing it. Finished links stay orthogonal.
+- **Drop anywhere on a block** (8px of slop around its border): one fitting kind is made at once;
+  several open the small "What does this link do?" choice by the drop point; none is refused in
+  core's words in the danger note at the canvas's foot.
+- **Click to link:** a click (or Enter) on a connector starts a link; a status note at the top of
+  the canvas says "Linking from <block>: click a highlighted block…" with Cancel; a click (or
+  Enter on a focused block) ends it; Escape cancels.
+- **"Link to…":** the block panel's button and the block's context menu (right-click, the
+  context-menu key or Shift+F10) list only the valid ends, one item per kind that fits, the kind's
+  link sample and name on the right. A Radix menu: arrows, Home/End, typing and Escape.
+- **Move a link's end:** a selected link is drawn above the blocks with a round grip on each end
+  (panel fill, accent ring; accent on hover). Drag a grip to another block: valid blocks glow as
+  above, the link keeps its kind (and rounds) when it fits; an invalid block is refused in core's
+  words and the link stays; a drop on empty canvas snaps it back.
+- **Undo, Redo, Tidy layout:** quiet icon buttons after Add block in the toolbar (⌘Z / ⇧⌘Z, Ctrl
+  on other platforms, outside text fields and dialogs; at most 50 steps; typing in one field is
+  one step). Tidy layout puts every block back in the automatic layout, gliding for 320ms (no
+  glide with reduced motion) and refitting; it is off while the layout is already tidy.
+
 ## Glossary (single source: `src/lib/copy.ts`)
 
 | Term in UI            | Tip text                                                                                              | Was                        |
