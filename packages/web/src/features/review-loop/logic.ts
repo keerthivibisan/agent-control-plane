@@ -28,6 +28,7 @@ import type {
   RunDetailDto,
   StartTicketRequest,
   TicketBranchDto,
+  TicketBranchReviewDto,
   TicketRunOptionsPatch,
   WorkflowGraphDto,
 } from '@acp/core/api';
@@ -250,6 +251,18 @@ export function ticketBranchMode(
     return 'discard-only';
   }
   return 'waiting';
+}
+
+/**
+ * The ticket has nothing to merge: the combined change lists no files, or, before it has loaded,
+ * the branch tip is still the commit it was created at. Merge and Push & open PR have nothing to
+ * ship then (an empty merge, and `gh` refuses a pull request without commits).
+ */
+export function branchHasNoChanges(
+  branch: Pick<TicketBranchDto, 'baseCommit' | 'headCommit'>,
+  review: Pick<TicketBranchReviewDto, 'files'> | undefined,
+): boolean {
+  return review !== undefined ? review.files.length === 0 : branch.headCommit === branch.baseCommit;
 }
 
 /**

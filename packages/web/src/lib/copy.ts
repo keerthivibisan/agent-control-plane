@@ -1999,6 +1999,7 @@ export const TICKET_PAGE_COPY = {
     title: 'Final step',
     waiting: 'The agents are still working',
     ready: (target: string) => `Ready to merge into ${target}`,
+    noChanges: 'The ticket has no changes',
     blocked: 'A required check failed on the tip',
     baseMoved: (target: string) => `${target} moved since this branch started`,
     prOpen: (n: number) => `Pull request #${n} is open on GitHub`,
@@ -3184,6 +3185,8 @@ export const REVIEW_LOOP_COPY = {
       `A required check failed on the tip (${names}). Ask for changes, or merge anyway with a reason.`,
     baseMoved: (base: string) =>
       `${base} moved since this branch started, so it no longer merges as a fast-forward. Update it from ${base} first; the checks run again.`,
+    noChanges: (base: string) =>
+      `The ticket has no changes: the branch is the same as ${base}, so there is nothing to merge or to open a pull request for. Request changes to send the lead back to work, or discard the branch.`,
     merge: (base: string) => `Merge into ${base}`,
     confirmMerge: (branch: string, base: string) =>
       `Merge ${branch} into ${base}? ${base} moves forward to the ticket branch and the ticket is done. Your project folder must be on ${base} with no uncommitted changes.`,

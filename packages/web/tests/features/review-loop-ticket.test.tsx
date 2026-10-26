@@ -689,6 +689,43 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     expect(mutations(s)[0]?.body).toEqual({ action: 'update-from-base' });
   });
 
+  it('a ticket with no changes: Merge and Push & open PR stay off and it says so', async () => {
+    const s = render(loopReviewScenario({ empty: true }));
+    const card = await screen.findByTestId('ticket-branch');
+    const note = await within(card).findByTestId('branch-no-changes');
+    expect(note.textContent).toContain('The ticket has no changes');
+    expect(card.textContent).not.toContain('Ready to merge into main');
+    expect(within(card).getByRole('button', { name: 'Merge into main' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(within(card).getByRole('button', { name: 'Push & open PR' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    // The owner can still send the lead back to work, or discard the branch.
+    expect(within(card).getByRole('button', { name: 'Request changes…' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(within(card).getByRole('button', { name: 'Discard branch' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(mutations(s)).toHaveLength(0);
+  });
+
+  it('a ticket with changes still offers Merge and Push & open PR', async () => {
+    render(loopReviewScenario());
+    const card = await screen.findByTestId('ticket-branch');
+    await within(card).findByRole('button', { name: 'Merge into main' });
+    expect(within(card).queryByTestId('branch-no-changes')).toBeNull();
+    expect(within(card).getByRole('button', { name: 'Merge into main' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+  });
+
   it('a stopped run’s open branch can only be discarded', async () => {
     const sc = withRun(loopReviewScenario(), (run) => ({ ...run, status: 'CANCELLED' }));
     render(sc);
