@@ -1,14 +1,15 @@
 name: CI
 
-# Runs by itself on code pushes to main (docs-only pushes are skipped) and on every pull request,
-# including those from forks, so a required check always reports (owner decision 2026-10-26, for
-# open source). Other branches: start it from the Actions tab with "Run workflow". It uses no
-# secrets and reads the repository only.
+# Runs by itself only for main, dev/* and release/* (owner decision 2026-10-26): on code pushes to
+# them (docs-only pushes are skipped) and on every pull request into them, including from forks, so
+# a required check always reports. Other branches: start it from the Actions tab with "Run
+# workflow". It uses no secrets and reads the repository only.
 on:
   push:
-    branches: [main]
+    branches: [main, 'dev/**', 'release/**']
     paths-ignore: ['docs/**', '**/*.md']
   pull_request:
+    branches: [main, 'dev/**', 'release/**']
   workflow_dispatch:
 
 permissions:

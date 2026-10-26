@@ -74,8 +74,8 @@ pnpm --filter @acp/core test
    user would notice.
 5. **Open a pull request** to `main` with the template, including the completion report from
    AGENTS.md §9. CI must pass before a maintainer merges it. CI runs by itself on your pull request
-   (GitHub may ask a maintainer to approve the first run from a new contributor); run `pnpm check`
-   yourself first.
+   into `main` (or a `dev/*` or `release/*` branch); GitHub may ask a maintainer to approve the
+   first run from a new contributor. Run `pnpm check` yourself first.
 
 ## Working with a coding agent
 
