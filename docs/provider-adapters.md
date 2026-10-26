@@ -463,6 +463,23 @@ against the fake `query` only.
     reading content), that the stream carries only new messages, and the exact failure shape for
     a missing session.
 
+- **Rework turn whose session cannot be resumed** (`spec.rework.resumeSessionId`, v0.3.1 P-D)
+  **[implemented; fake-query tests; the real failure shape unverified]**:
+  - When the resumed query ends in an error (an error result, or a throw) **before the session
+    answered** (no assistant usage and no tool call), the adapter starts the same rework turn once
+    more without `resume`, in the same `cwd` (the helper's worktree), with the same options, and
+    the prompt prefixed by `REWORK_NEW_SESSION_NOTE` ("Your earlier conversation for this task
+    could not be continued, so this is a new session. …"). The engine still sees one turn: the new
+    session's `started`, its events, and one `finished`.
+  - Never after the session answered, never after `abort()`, never for a Full auto failure (the
+    sandbox or auto mode unavailable), never for a first turn, a fresh rework or a follow-up, and
+    at most once per turn (a second failure ends it with `finished: error`, as before).
+  - The engine keeps the new session id for the next rework (a resume keeps the id, so another
+    id means a new session), tells the lead, and the server posts an `app` line on the ticket and
+    links the new session to the same agent run as `retry`.
+  - Why: before P-D a rework turn that could not resume ended in an error every time the change
+    was sent back, so the helper's work could only be merged as it was or discarded.
+
 - **Session title** (`spec.title`, ADR-0024 §1, v0.3.0 S-A) **[implemented; fake-query tests]**:
   passed as `Options.title` when a session starts; left out when the options `resume` a session
   (a follow-up, or a rework turn resuming the helper's session) and when it is blank. The
