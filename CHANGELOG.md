@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A ticket whose helpers changed nothing no longer offers **Merge** or **Push & open PR**, which
+  failed because the branch has no commits ahead of its target. The final step says "The ticket has
+  no changes" and explains why; **Request changes** and **Discard** stay available.
+
 ## [0.3.1] - 2026-10-26
 
 A patch release for the Workflow page and long runs. Each agent block can set its effort, every
