@@ -1,13 +1,13 @@
 # ADR-0022: Full auto mode
 
-- **Status:** accepted — owner decisions in chat 2026-10-17 (docs/review-loop/STATUS.md); accepted by the coordinator on those decisions
+- **Status:** accepted — owner decisions in chat 2026-10-17 (`docs/review-loop/STATUS.md` at tag `v0.3.0`); accepted by the coordinator on those decisions
   2026-10-17)
 - **Date:** 2026-10-17
 - **Deciders:** project owner (decisions); coordinator (review); RL-G agent (draft)
 - **Amends:** ADR-0021 §1 (a fourth approval mode), ADR-0013 §4 (the gate's fallback for helpers
   in this mode), ADR-0016 (how the plan approval is recorded)
-- **Plan:** [docs/review-loop/README.md](../review-loop/README.md) §10, progress
-  `docs/review-loop/wp/RL-G.md`
+- **Plan:** [docs/history/review-loop/README.md](../history/review-loop/README.md) §10, progress
+  `docs/review-loop/wp/RL-G.md` at tag `v0.3.0`
 
 ## Context
 

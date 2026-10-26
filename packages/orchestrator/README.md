@@ -1,8 +1,8 @@
 # @acp/orchestrator
 
-**Owner:** work package P3-A (see [docs/implementation-plan.md](/docs/implementation-plan.md), Phase 3);
-Phase 4 extensions by P4-A ([docs/phase-4/README.md](/docs/phase-4/README.md)); workflow stages
-by R-C ([docs/redesign/README.md](/docs/redesign/README.md), ADR-0019).
+**Built in:** work package P3-A (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md), Phase 3);
+Phase 4 extensions by P4-A ([docs/history/phase-4/README.md](/docs/history/phase-4/README.md)); workflow stages
+by R-C ([docs/history/redesign/README.md](/docs/history/redesign/README.md), ADR-0019).
 
 **Status:** [implemented] the M1 engine (P3-A), wired into the server by P3-D. [implemented] the
 Phase 4 engine (P4-A): plan-first ticket runs, per-run limits, depth 2 and allowlist evaluation. The

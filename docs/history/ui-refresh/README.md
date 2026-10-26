@@ -1,6 +1,8 @@
 # UI refresh (v0.1.0)
 
-> Status and progress: [STATUS.md](STATUS.md). Progress files: `wp/U-*.md`, one per work package, edited only by its agent.
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/ui-refresh/STATUS.md`). See [docs/history/README.md](../README.md).
+
+> Status and progress: `STATUS.md` (at tag `v0.3.0`: `docs/ui-refresh/STATUS.md`). Progress files: `wp/U-*.md`, one per work package, edited only by its agent.
 
 ## 1. Context
 

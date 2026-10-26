@@ -1,7 +1,9 @@
 # v0.3.0: session names and run summaries (S series)
 
-Coordinator-owned plan. The status is in [STATUS.md](STATUS.md), the decision in
-[ADR-0024](../decisions/0024-session-names-and-run-summaries.md), and the progress files in
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/v0.3.0/STATUS.md`). See [docs/history/README.md](../README.md).
+
+Coordinator-owned plan. The status is in `STATUS.md` (at tag `v0.3.0`: `docs/v0.3.0/STATUS.md`), the decision in
+[ADR-0024](../../decisions/0024-session-names-and-run-summaries.md), and the progress files in
 `wp/S-*.md`, one per WP, each edited only by its agent.
 
 ## Working rules (owner decisions, binding)
@@ -377,7 +379,7 @@ back up the live database before migration 0010).
 
 ## Release (R-3)
 
-Release prep is on `wp/r-3-b` (progress in [wp/R-3.md](wp/R-3.md)): every `package.json` at
+Release prep is on `wp/r-3-b` (progress in `wp/R-3.md`): every `package.json` at
 `0.3.0` (the app's footer reads "Server 0.3.0"), the unused `@fontsource-variable` fonts removed,
 the CHANGELOG `[0.3.0] - 2026-10-25` entry, the README and its screenshots (sample data only), and
 the PR text and release notes in `.acp-data/` (git-ignored): `pr-v0.3.0.md` and

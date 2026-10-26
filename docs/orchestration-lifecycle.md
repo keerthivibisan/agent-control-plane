@@ -29,8 +29,10 @@
 
 Verified with fake agents against the real server, real git and real harness checks (server tests in
 `packages/server/tests/{board,verification/review-loop}` and the browser flow
-`packages/web/e2e/review-loop-live.spec.ts`). A consented real run is planned
-(`docs/review-loop/wp/RL-V.md`).
+`packages/web/e2e/review-loop-live.spec.ts`). A consented real run on
+2026-10-17 found two bugs ([research note](research/rl-v-real-run-2026-10-17.md)), since fixed;
+the real runs of 2026-10-21 passed with every review route
+([research note](research/wg-v-real-run-2026-10-21.md)).
 
 - **Approval modes, snapshotted per run.** The project's mode (Workflow → Helpers → Approvals) is
   the default; the Start dialog can override it, the reviewer and the rework limit for one run.

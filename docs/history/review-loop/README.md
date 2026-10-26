@@ -1,6 +1,8 @@
 # Approval modes, review loop and ticket branch (RL series, v0.1.0)
 
-> Status: [STATUS.md](STATUS.md). Progress files: `wp/RL-*.md`, one per work package, edited only by
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/review-loop/STATUS.md`). See [docs/history/README.md](../README.md).
+
+> Status: `STATUS.md` (at tag `v0.3.0`: `docs/review-loop/STATUS.md`). Progress files: `wp/RL-*.md`, one per work package, edited only by
 > its agent. The decision record is ADR-0021. Built on `feature/ui-refresh`, in the same 0.1.0
 > release as the UI refresh.
 

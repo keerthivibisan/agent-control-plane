@@ -1,6 +1,6 @@
 # @acp/db
 
-**Owner:** work package P1-B (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
+**Built in:** work package P1-B (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
 
 **Status:** **Implemented (P1-B).** Connection setup (`openDatabase`), the migration runner, the
 Phase 1 schema (`0001_observability.sql`), the repositories (`createRepositories`), the transaction

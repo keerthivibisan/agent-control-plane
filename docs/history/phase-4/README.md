@@ -1,9 +1,11 @@
 # Phase 4 — Agent Workspace: board, projects, tickets, harness
 
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/phase-4/STATUS.md`). See [docs/history/README.md](../README.md).
+
 > **Start here for any Phase 4 work.** This file is self-contained: an agent in any session can pick
 > up a work package (WP) from it. Read it fully, then `AGENTS.md` and `CLAUDE.md` (binding), then
 > the progress protocol (§9) and your WP's progress file in `docs/phase-4/wp/`. Status of every WP:
-> [`docs/phase-4/STATUS.md`](STATUS.md).
+> `STATUS.md` (at tag `v0.3.0`: `docs/phase-4/STATUS.md`).
 
 ## 0. Where we are
 
@@ -437,7 +439,7 @@ blocked`), the branch, a task checklist, an append-only **work log**, handoff no
 6. **Blocked** (you need a contract change or a decision): set `blocked`, write what you need, why,
    and the proposed diff, and stop that part.
 7. **Interrupted sessions** (usage limits, closed chats): follow "If a session was interrupted" in
-   [`STATUS.md`](STATUS.md). In short: find the branch and worktree, rescue uncommitted changes by
+   `STATUS.md` (at tag `v0.3.0`: `docs/phase-4/STATUS.md`). In short: find the branch and worktree, rescue uncommitted changes by
    continuing in the same worktree, read the work log, and never restart a WP that has commits.
 
 ## 10. Prompts

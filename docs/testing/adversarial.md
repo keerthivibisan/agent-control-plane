@@ -3,7 +3,7 @@
 The ordinary tests assume agents behave. These tests make fake agents misbehave and check that the
 app's guarantees still hold. They were added after the ACPGIT-3 incident (2026-10-24). In that
 incident, Full auto helpers switched their worktrees to the ticket branch, committed there and
-reset it, and the run looped (T-1, [docs/v0.3.0/wp/T-1.md](../v0.3.0/wp/T-1.md)).
+reset it, and the run looped (T-1, [docs/history/v0.3.0/wp/T-1.md](../history/v0.3.0/wp/T-1.md)).
 
 Everything is synthetic. Git runs in throwaway repositories with a local bare `origin` and a fake
 `gh`. The fake managed adapter plays every agent. The real `claude` and the owner's data are never
@@ -101,7 +101,7 @@ The finish then continues as before.
 ## Closed by F-2 (2026-10-24, `wp/f-2-gaps`)
 
 The last 12 known gaps flipped and are now plain tests with the same assertions
-([docs/v0.3.0/wp/F-2.md](../v0.3.0/wp/F-2.md)):
+([docs/history/v0.3.0/wp/F-2.md](../history/v0.3.0/wp/F-2.md)):
 
 - **Unbounded replacement helpers (server ×2, engine ×2).** A helper whose change was discarded
   or could not be saved is a lost attempt. A plan step (the helper node a start resolves to, and
@@ -173,7 +173,7 @@ Observed and asserted as safe, but worth knowing:
 
 ## How to run
 
-Use two workers on this 8 GB machine:
+On a machine with little memory (8 GB), use two workers:
 
 ```bash
 pnpm --filter @acp/server exec vitest run tests/adversarial --maxWorkers=2

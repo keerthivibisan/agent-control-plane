@@ -1,6 +1,6 @@
 # @acp/server
 
-**Owner:** work package P1-D (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
+**Built in:** work package P1-D (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
 
 **Status:** **Implemented (P1-D).** Demo mode verified end to end; live mode wired to the Claude Code
 adapter and tested against sanitized fixtures (not yet against real data, P1-F). The Phase 3
@@ -152,7 +152,7 @@ and a temp git repository. A server for e2e can be started with
 
 ## Workflow stages (project workspace redesign, R-G)
 
-Specs: docs/redesign/README.md §4.2, §6, ADR-0019 (as amended), ADR-0018. `src/workflow/` holds the
+Specs: docs/history/redesign/README.md §4.2, §6, ADR-0019 (as amended), ADR-0018. `src/workflow/` holds the
 project workflow service, the skill path rules and the skills plugin; the stage wiring is in
 `src/control/` (`service.ts`, `store.ts`, `review-checkouts.ts`, `roles.ts`).
 
@@ -190,7 +190,7 @@ project workflow service, the skill path rules and the skills plugin; the stage 
 ## Agent Workspace (Phase 4, P4-D)
 
 `src/board/` joins tickets to the Phase 3 run service; `src/routes/board.ts` is the thin HTTP layer.
-Specs: docs/phase-4/README.md §4, §6, ADR-0016, ADR-0017, the ADR-0012/0013 amendments.
+Specs: docs/history/phase-4/README.md §4, §6, ADR-0016, ADR-0017, the ADR-0012/0013 amendments.
 
 ### Routes
 
@@ -259,7 +259,7 @@ missing), `ticket_not_ready` (start from Backlog), `run_in_progress`, `ticket_do
   dangling links ask) before `evaluateAllowlist`; the checks it may pre-approve come from the project's checkout;
   an allowed request is recorded as an approval decided by `allowlist`. **Not active yet:** the
   managed adapter's `PermissionRequest` carries no tool input, so every request still asks the
-  owner (blocked contract change, `docs/phase-4/wp/P4-D.md`).
+  owner (blocked contract change, `docs/phase-4/wp/P4-D.md` at tag `v0.3.0`).
 - **Checks** (ADR-0017): one shared runner for the server (one check at a time). When a ticket run
   enters REVIEW, every helper with a worktree gets its checks run there; on demand too. The
   manifest is read from the project's checkout, never the agent's worktree. Results are stored as

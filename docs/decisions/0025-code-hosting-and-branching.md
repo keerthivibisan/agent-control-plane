@@ -9,7 +9,7 @@
   - AGENTS.md §3 rule 8 ("Local only": one more owner-triggered exception);
   - ADR-0013 (the commands the app may run: `gh` beside `git` and the SDK's `claude`);
   - ADR-0021 §4 (the owner's final step: merge locally or open a pull request).
-- **Plan:** [docs/v0.3.0/README.md](../v0.3.0/README.md), G series
+- **Plan:** [docs/history/v0.3.0/README.md](../history/v0.3.0/README.md), G series
 
 ## Context
 

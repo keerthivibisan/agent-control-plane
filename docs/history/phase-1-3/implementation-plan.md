@@ -1,15 +1,16 @@
 # Implementation plan — Phase 1: Session observability
 
+> **History.** The Phase 0–3 plan, kept for provenance: how the first phases were planned and built with coding agents. It is not maintained; the specs and ADRs are current. See [docs/history/README.md](../README.md).
+
 This is the **authoritative task list**. Agents pick work from here, own only the files listed for their
 work package (WP), and update the status table when they start and finish.
-Specs: [architecture](architecture.md) · [domain model](domain-model.md) ·
-[usage accounting](usage-accounting.md) · [provider adapters](provider-adapters.md) ·
-[security](security.md) · [development](development.md).
+Specs: [architecture](../../architecture.md) · [domain model](../../domain-model.md) ·
+[usage accounting](../../usage-accounting.md) · [provider adapters](../../provider-adapters.md) ·
+[security](../../security.md) · [development](../../development.md).
 
 ## Status
 
-> **Phase 4 is planned and tracked in [docs/phase-4/README.md](phase-4/README.md) and
-> [docs/phase-4/STATUS.md](phase-4/STATUS.md)**, not in this file.
+> **Phase 4 is planned and tracked in [docs/history/phase-4/README.md](../phase-4/README.md)**, not in this file.
 
 <!-- Agents: update your row when you start (in-progress + branch) and when you finish (done + PR/commit). -->
 
@@ -217,7 +218,7 @@ Components are data-driven and small, under `features/<screen>/`. Shared UI live
 
 Checked items were verified on 2026-10-10 on `wp/p1-f-verify` against synthetic fixtures, the demo
 server, and tests only. **No real Claude data has been read yet:** items that need it stay unchecked
-until F2 and F4 run with the user's consent. Details: [P1-F verification note](research/p1-f-verification-2026-10-10.md).
+until F2 and F4 run with the user's consent. Details: [P1-F verification note](../../research/p1-f-verification-2026-10-10.md).
 Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.ts`, **F3**
 `…/verification/recovery.test.ts`, **ACC** `…/verification/acceptance.test.ts`, **E2E**
 `packages/web/e2e/demo.spec.ts`.
@@ -305,7 +306,7 @@ Evidence keys: **F1** `packages/server/tests/verification/reference-usage.test.t
 
 ## Phase 3 — Managed orchestration, milestone M1 (the control panel)
 
-Decided by the owner on 2026-10-11; design in [orchestration-lifecycle.md](orchestration-lifecycle.md)
+Decided by the owner on 2026-10-11; design in [orchestration-lifecycle.md](../../orchestration-lifecycle.md)
 §0, ADR-0012 (Agent SDK), ADR-0013 (guardrails), ADR-0014 (budget), ADR-0015 (chat storage).
 Contracts are on `main`: `packages/core/src/orchestration/**`, `packages/core/src/adapters/managed.ts`,
 `packages/core/src/api/orchestration.ts`. **Contracts and shared files stay coordinator-owned**: a WP

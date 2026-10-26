@@ -1,6 +1,8 @@
 # Editable workflow graphs (WG series, v0.2.0)
 
-Coordinator-owned plan. Status: [STATUS.md](STATUS.md). Decision: [ADR-0023](../decisions/0023-editable-workflow-graphs.md).
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/workflow-graph/STATUS.md`). See [docs/history/README.md](../README.md).
+
+Coordinator-owned plan. Status: `STATUS.md` (at tag `v0.3.0`: `docs/workflow-graph/STATUS.md`). Decision: [ADR-0023](../../decisions/0023-editable-workflow-graphs.md).
 Progress files: `wp/WG-*.md`, one per WP, edited only by that WP's agent (protocol:
 `docs/phase-4/README.md` §9 with these paths). Branches `wp/wg-<id>-<slug>` come off
 `feature/workflow-graph` and merge back with `--ff-only` after review. The finished feature merges

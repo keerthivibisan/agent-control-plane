@@ -1,6 +1,6 @@
 # ADR-0019: Workflow stages and the planner, reviewer and tester roles
 
-- **Status:** accepted — owner decision 2026-10-16 (docs/redesign/README.md §2, §4.2)
+- **Status:** accepted — owner decision 2026-10-16 (docs/history/redesign/README.md §2, §4.2)
 - **Date:** 2026-10-16
 
 ## Context
@@ -100,7 +100,7 @@ unit-tests`.
 
 ## Amendment (2026-10-16): a stage uses one agent file
 
-Owner decision A (docs/redesign/README.md §6a). WP R-I builds it.
+Owner decision A (docs/history/redesign/README.md §6a). WP R-I builds it.
 
 6. **Stage agent files.**
    - Each agent stage (plan, orchestrate, helpers, code-review, unit-tests) may name one project

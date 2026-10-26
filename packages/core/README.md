@@ -1,6 +1,6 @@
 # @acp/core
 
-**Owner:** work package P0 (contracts v1), P1-A (logic), P1-D0 (`src/api/**`) (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
+**Built in:** work package P0 (contracts v1), P1-A (logic), P1-D0 (`src/api/**`) (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
 
 **Status:** **Partially implemented.**
 

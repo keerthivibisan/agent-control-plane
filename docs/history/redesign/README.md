@@ -1,7 +1,9 @@
 # Project workspace redesign — plan (draft for owner approval)
 
+> **History.** This plan is kept for provenance: it records how this part of the app was planned and built with coding agents. It is not maintained, and parts of it are superseded by the specs and ADRs. Its status log and progress files were removed in v0.3.1; read them at tag `v0.3.0` (`git show v0.3.0:docs/redesign/STATUS.md`). See [docs/history/README.md](../README.md).
+
 > Status: **approved by the owner on 2026-10-16; R-0 done, wave 2 (R-A, R-C) started.** Owner
-> decisions are in §2. Progress: [STATUS.md](STATUS.md).
+> decisions are in §2. Progress: `STATUS.md` (at tag `v0.3.0`: `docs/redesign/STATUS.md`).
 
 ## 1. Why
 

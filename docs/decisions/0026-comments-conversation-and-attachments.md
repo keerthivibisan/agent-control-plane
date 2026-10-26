@@ -12,7 +12,7 @@
   - ADR-0019 §7 (`worker` and `tester` gain one tool);
   - ADR-0024 §3 (the lead's note becomes the whole-ticket summary in Comments, and the run's facts
     move to Conversation).
-- **Plan:** [docs/v0.3.0/README.md](../v0.3.0/README.md), part 4
+- **Plan:** [docs/history/v0.3.0/README.md](../history/v0.3.0/README.md), part 4
 
 ## Decision
 

@@ -1,6 +1,6 @@
 # @acp/adapter-claude-code
 
-**Owner:** work package P1-C (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
+**Built in:** work package P1-C (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
 
 **Status:** implemented (C0-C7), tested against synthetic fixtures, checked against one real
 project in P1-F, and hook payload shapes captured from Claude Code 2.1.296 (shape only;

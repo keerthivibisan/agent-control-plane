@@ -1,6 +1,6 @@
 # @acp/adapter-demo
 
-**Owner:** work package P1-C (task C0) (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
+**Built in:** work package P1-C (task C0) (see [docs/history/phase-1-3/implementation-plan.md](/docs/history/phase-1-3/implementation-plan.md)).
 
 **Status:** **Implemented (C0).** `createDemoAdapter(options)` implements `ObservationAdapter` over the
 synthetic fixtures in [`fixtures/`](fixtures/README.md).
