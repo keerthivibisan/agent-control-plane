@@ -153,9 +153,9 @@ branches, a connected GitHub repository, skills and token figures served by the 
 `packageManager`: `pnpm install --frozen-lockfile`, then format check, lint, typecheck, test and
 build (the same steps as `pnpm check`). It does not run the browser tests.
 
-It runs by itself only on pushes to `main` that change code (changes to `docs/**` or Markdown files
-alone are skipped). For any other branch or a pull request, start it by hand: the Actions tab, **CI**,
-**Run workflow**, then pick the branch.
+It runs by itself on pushes to `main` and on pull requests, including pull requests from forks, when
+they change code (changes to `docs/**` or Markdown files alone are skipped). For any other branch,
+start it by hand: the Actions tab, **CI**, **Run workflow**, then pick the branch.
 
 ## Troubleshooting
 

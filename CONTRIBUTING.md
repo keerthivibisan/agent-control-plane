@@ -73,8 +73,9 @@ pnpm --filter @acp/core test
    really works, and add a line under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for anything a
    user would notice.
 5. **Open a pull request** to `main` with the template, including the completion report from
-   AGENTS.md §9. CI must pass before a maintainer merges it. CI runs by itself on pushes to `main`;
-   for a pull request a maintainer starts it, so run `pnpm check` yourself first.
+   AGENTS.md §9. CI must pass before a maintainer merges it. CI runs by itself on your pull request
+   (GitHub may ask a maintainer to approve the first run from a new contributor); run `pnpm check`
+   yourself first.
 
 ## Working with a coding agent
 
