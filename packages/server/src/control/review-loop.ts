@@ -42,7 +42,13 @@ import {
   type CodeHostService,
 } from '../code-host/index.js';
 import { HttpError } from '../errors.js';
-import { branchSpec, changeSpec, mergeSpec, type CheckSpec } from '../harness/index.js';
+import {
+  branchSpec,
+  changeSpec,
+  mergeSpec,
+  runsNothing,
+  type CheckSpec,
+} from '../harness/index.js';
 import { errorFields, type Logger } from '../logger.js';
 import {
   WorkspaceError,
@@ -305,8 +311,10 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     const checks = ctx.commitChecks();
     if (checks === undefined) return;
     const runId = live.state.run.id;
-    if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
     const spec = agentRunId === null ? branchChecks(live) : mergeChecks(live);
+    // ADR-0028 §2: no Checks block at this place: nothing runs, so nothing reports back either.
+    if (runsNothing(spec)) return;
+    if (agentRunId !== null) live.checkTargets.set(agentRunId, commit);
     checks.start(
       runId,
       agentRunId,

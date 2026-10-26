@@ -8,6 +8,7 @@ import {
   HARD_MAX_DEPTH,
   isPathInside,
   LeadToolInputs,
+  type AgentEffort,
   type AgentRoleKind,
   type Attachment,
   type FullAutoSpec,
@@ -508,6 +509,8 @@ interface LaunchInput {
   setup: AgentSetup;
   /** The stage's model (`start-agent.model`); else the agent file's, else the project's. */
   model?: string | undefined;
+  /** ADR-0028 §1: the node's reasoning effort (`start-agent.effort`); absent: the model's default. */
+  effort?: AgentEffort | undefined;
   plugin?: { path: string; skills: readonly string[] } | undefined;
   /** The stage's agent file (ADR-0019 §6), when it could be read; its `model` is the fallback. */
   agentFile?: { profile: AgentProfile; model: string | null } | undefined;
@@ -1094,6 +1097,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       kind,
       prompt: kind === 'lead' ? withTicketSummary(live, effect.prompt) : effect.prompt,
       model: effect.model,
+      effort: effect.effort,
     };
     if (kind === 'lead' || kind === 'planner') {
       if (
@@ -1456,6 +1460,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           kind: effect.kind,
           prompt,
           model: effect.model,
+          effort: effect.effort,
           cwd: ws.cwd,
           setup,
           plugin,
@@ -1634,6 +1639,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           followUp: { resumeSessionId: effect.resumeSessionId },
         };
         if (setup.context.trim() !== '') spec.context = setup.context;
+        // ADR-0028 §1: the lead node's effort, as for its own turns.
+        if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
         let handle: ManagedAgentHandle;
         try {
@@ -1873,6 +1880,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
+    // ADR-0028 §1: only when the node sets one (absent: the model's default).
+    if (input.effort !== undefined) spec.effort = input.effort;
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
     const title = sessionTitle(live, agentRunId);
     if (title !== undefined) spec.title = title;
