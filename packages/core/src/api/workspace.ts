@@ -36,8 +36,8 @@ import { ProjectDtoSchema, ReportedCostUsdDtoSchema } from './dto.js';
 import { RunDetailDtoSchema, RunSummaryDtoSchema } from './orchestration.js';
 
 /**
- * HTTP contracts for the Phase 4 Agent Workspace (docs/phase-4/README.md §6.3). Mutations need the
- * `X-ACP-CSRF` header (ADR-0013).
+ * HTTP contracts for the Phase 4 Agent Workspace (docs/history/phase-4/README.md §6.3). Mutations
+ * need the `X-ACP-CSRF` header (ADR-0013).
  */
 
 const count = z.number().int().nonnegative();

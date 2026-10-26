@@ -29,9 +29,9 @@ import type { FetchLike } from '../../src/lib/api';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
 /*
- * WP R-J (web): the lead's chat after the lead ends (docs/redesign/README.md §6b, ADR-0020). The
- * server reports `RunDetailDto.followUp` once the lead has ended; the owner's message goes through
- * the existing chat route, and the server starts the follow-up turn itself.
+ * WP R-J (web): the lead's chat after the lead ends (docs/history/redesign/README.md §6b,
+ * ADR-0020). The server reports `RunDetailDto.followUp` once the lead has ended; the owner's
+ * message goes through the existing chat route, and the server starts the follow-up turn itself.
  */
 
 const TICKET = `/api/tickets/${TICKET_ID}`;

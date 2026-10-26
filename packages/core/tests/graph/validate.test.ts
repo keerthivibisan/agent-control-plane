@@ -104,12 +104,12 @@ describe('shape rules', () => {
 });
 
 describe('count rules', () => {
-  it('missing-node: every required gate and the lead', () => {
+  it('missing-node: every required gate and the lead (a Checks block is optional, ADR-0028)', () => {
+    expect(errorCodes(withoutNode(routeB, 'checks'))).not.toContain('missing-node');
     for (const id of [
       'ticket',
       'plan-approval',
       'orchestrate',
-      'checks',
       'ticket-merge',
       'owner-merge',
       'done',

@@ -29,8 +29,8 @@ const USES: readonly Use[] = [
 ];
 
 /**
- * When the checks run (docs/phase-4/README.md: on entering review and on demand) and what they
- * decide (ADR-0017 §4: a failed required check blocks a plain merge; "merge anyway" needs a
+ * When the checks run (docs/history/phase-4/README.md: on entering review and on demand) and what
+ * they decide (ADR-0017 §4: a failed required check blocks a plain merge; "merge anyway" needs a
  * reason). Links to the workflow's Review & merge stage once that page exists.
  */
 export function UsageCard({

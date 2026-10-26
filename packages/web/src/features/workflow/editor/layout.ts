@@ -1,5 +1,6 @@
 import type { NodePosition, WorkflowGraph, WorkflowNode, WorkflowNodeId } from '@acp/core';
 import { checkPlaceOf, isChecksNode } from '../check-blocks';
+import { finishParts } from '../finish';
 
 /**
  * Where the editor draws each block. A block the owner moved keeps its saved `position`; the
@@ -7,12 +8,14 @@ import { checkPlaceOf, isChecksNode } from '../check-blocks';
  *
  *   Ticket → (Planner →) Approve the plan                       the plan path
  *   Lead → helpers (stacked) → change checks → change reviewers (stacked)    the work
- *   Checks → Ticket branch → final reviewers, testers, branch checks → Your merge → Done
+ *   Checks → final reviewers, testers, branch checks → Finish
  *
  * The plan path and the work share columns, so the plan reaches the lead with one straight or
  * one-bend line. The merge chain starts under the lead (the lead's merge line goes straight down)
- * and runs left to right at the steps' own width; when that row would be wider than the rows above,
- * Done hangs under your merge instead. The gaps between rows leave room for the links that go back
+ * and runs left to right at the steps' own width. The Finish block (ADR-0028 §3) stands for the
+ * ticket merge, your merge and Done (`finish.ts`): the two hidden steps take its position. A graph
+ * without exactly one of each end step (never a valid one) draws them as separate steps, with Done
+ * under your merge when the row would sprawl. The gaps between rows leave room for the links that go back
  * (over the top and underneath) and for the links between rows, each in its own lane
  * (`routing.ts`). Deterministic: the same graph is always drawn the same way, and a block added
  * from the menu lands in its kind's place without moving the blocks before it.
@@ -29,6 +32,11 @@ export const STEP_W = 172;
 export const STEP_H = 40;
 /** Ticket and Done are shorter pills. */
 export const END_W = 112;
+/** A Checks block: its kind over its name, and what it runs, as wide as an agent. */
+export const CHECKS_H = 52;
+/** The Finish block: "Finish", "Merge into <target> or open a pull request", then Done. */
+export const FINISH_W = 320;
+export const FINISH_H = 64;
 const COL_GAP = 56;
 const CHAIN_GAP = 40;
 /** Room between rows for the back links and the lanes between rows (`routing.ts`). */
@@ -55,7 +63,8 @@ export function editsFiles(type: WorkflowNode['type']): boolean {
 export function sizeOf(node: WorkflowNode): { width: number; height: number } {
   if (node.type === 'ticket' || node.type === 'done') return { width: END_W, height: STEP_H };
   // A Checks block also shows what it runs ("fast · full"), so it is as wide as an agent.
-  if (node.type === 'checks') return { width: AGENT_W, height: STEP_H };
+  if (node.type === 'checks') return { width: AGENT_W, height: CHECKS_H };
+  if (node.type === 'owner-merge') return { width: FINISH_W, height: FINISH_H };
   if (isGateType(node.type)) return { width: STEP_W, height: STEP_H };
   return { width: AGENT_W, height: editsFiles(node.type) ? EDIT_H : AGENT_H };
 }
@@ -160,13 +169,14 @@ export function layoutGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodePosit
 
   // The merge chain, left to right from under the lead, each block at its own width.
   const of = (type: WorkflowNode['type']) => graph.nodes.filter((n) => n.type === type);
+  const finish = finishParts(graph);
   const chain = [
     ...of('checks').filter((n) => isChecksNode(n) && checkPlaceOf(n) === 'merge'),
-    ...of('ticket-merge'),
+    ...(finish === null ? of('ticket-merge') : []),
     ...finalOrder(graph),
     ...of('owner-merge'),
   ];
-  const done = of('done');
+  const done = finish === null ? of('done') : [];
   const lineH = Math.max(0, ...[...chain, ...done].map((n) => sizeOf(n).height));
   const startX = (COL_W - (chain[0] ? sizeOf(chain[0]).width : COL_W)) / 2;
   const widthOf = (list: readonly WorkflowNode[]) =>
@@ -208,6 +218,14 @@ export function layoutGraph(graph: WorkflowGraph): Map<WorkflowNodeId, NodePosit
       node.position ?? auto.get(node.id) ?? { x: i * (COL_W + COL_GAP), y: top },
     );
   });
+  if (finish !== null) {
+    // The steps the Finish block stands for sit where it is (never drawn, never measured).
+    const at = positions.get(finish.ownerMerge);
+    if (at !== undefined) {
+      positions.set(finish.ticketMerge, at);
+      positions.set(finish.done, at);
+    }
+  }
   return positions;
 }
 

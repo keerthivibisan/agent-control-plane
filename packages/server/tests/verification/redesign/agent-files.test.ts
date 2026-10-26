@@ -24,8 +24,8 @@ import {
 
 /*
  * R-V: which stage agent file reaches the lead, and what happens when a file can't be used
- * (docs/redesign/README.md §6a, ADR-0019 §6), end to end over HTTP with the real adapter's SDK
- * options. A missing or unsafe file never blocks the run: the agent starts without it, and the
+ * (docs/history/redesign/README.md §6a, ADR-0019 §6), end to end over HTTP with the real adapter's
+ * SDK options. A missing or unsafe file never blocks the run: the agent starts without it, and the
  * server logs the reason code (never the file's text).
  */
 

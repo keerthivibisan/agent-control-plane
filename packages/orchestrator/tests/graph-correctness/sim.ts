@@ -22,6 +22,7 @@ import {
   decideApproval,
   decidePlan,
   evaluateAllowlist,
+  hasMergeChecks,
   isActiveAgentStatus,
   isFinalChangeState,
   isLiveAgentStatus,
@@ -703,9 +704,12 @@ export function simulate(
     const key = `${id}:${c.round}`;
     const attempt = mergeAttempts.get(key) ?? 0;
     mergeAttempts.set(key, attempt + 1);
-    const options = anyway
-      ? ['merged', 'conflict', 'no-changes']
-      : ['merged', 'checks-failed', 'conflict', 'no-changes'];
+    // ADR-0028 §2: without a Checks block before the merge the server runs no checks there, so
+    // a merge is never blocked by them.
+    const options =
+      anyway || !hasMergeChecks(state)
+        ? ['merged', 'conflict', 'no-changes']
+        : ['merged', 'checks-failed', 'conflict', 'no-changes'];
     const role = a.kind === 'tester' ? 'tester' : roleKey(a);
     const outcome = choose(ask, `merge:${role}:${c.round}:${attempt}`, options);
     const decider = by === 'owner' ? 'owner' : 'lead';

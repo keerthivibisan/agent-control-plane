@@ -24,15 +24,16 @@ import { buildV010DataDir, type V010Fixture } from './v010-fixture.js';
 import { sweepRepositories, tableDigests, v010Readability } from './v010-readers.js';
 
 /*
- * The upgrade from v0.1.0 (WG-V; docs/workflow-graph/RESUME.md Step 4b items 3 and 5). A data dir
- * in the v0.1.0 shape (`v010-fixture.ts`: 27 projects with every planner and reviewer setting,
- * the default workflow, finished and in-flight version 1 runs, tickets with their own options)
- * meets the current server, in-process with the fake managed adapter, an empty temp Claude dir and
- * an ephemeral port. Then: every project's workflow graph loads from its version 1 workflow with no
- * errors, the version 1 routes still answer, every old run's page and run graph load (the graph is
- * the version 1 workflow migrated), the board and tickets answer, the run in flight completes, a new
- * ticket starts on a version 1 project and snapshots its graph, a saved graph closes the version 1
- * routes, and finally what v0.1.0 could still read after all that (rollback). Synthetic data only.
+ * The upgrade from v0.1.0 (WG-V; docs/workflow-graph/RESUME.md at tag v0.3.0, Step 4b items 3 and
+ * 5). A data dir in the v0.1.0 shape (`v010-fixture.ts`: 27 projects with every planner and
+ * reviewer setting, the default workflow, finished and in-flight version 1 runs, tickets with their
+ * own options) meets the current server, in-process with the fake managed adapter, an empty temp
+ * Claude dir and an ephemeral port. Then: every project's workflow graph loads from its version 1
+ * workflow with no errors, the version 1 routes still answer, every old run's page and run graph
+ * load (the graph is the version 1 workflow migrated), the board and tickets answer, the run in
+ * flight completes, a new ticket starts on a version 1 project and snapshots its graph, a saved
+ * graph closes the version 1 routes, and finally what v0.1.0 could still read after all that
+ * (rollback). Synthetic data only.
  */
 
 const folders = tempFolders();

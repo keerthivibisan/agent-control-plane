@@ -20,7 +20,8 @@ import { managedAgentEnv } from '../../../../src/control/env.js';
 import { createLogger } from '../../../../src/logger.js';
 
 /*
- * R-V REAL smoke-run driver (docs/redesign/wp/R-V.md, "Real run plan for owner consent").
+ * R-V REAL smoke-run driver (docs/redesign/wp/R-V.md at tag v0.3.0, "Real run plan for owner
+ * consent").
  *
  * THIS STARTS REAL `claude` PROCESSES THROUGH THE AGENT SDK AND SPENDS TOKENS. It runs only when
  * the owner has consented in chat AND sets ACP_REAL_RUN=1; never in CI; never from `pnpm test`

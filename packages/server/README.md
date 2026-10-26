@@ -1,283 +1,120 @@
 # @acp/server
 
-**Owner:** work package P1-D (see [docs/implementation-plan.md](/docs/implementation-plan.md)).
-
-**Status:** **Implemented (P1-D).** Demo mode verified end to end; live mode wired to the Claude Code
-adapter and tested against sanitized fixtures (not yet against real data, P1-F). The Phase 3
-control-panel routes are **implemented (P3-D)** and tested with a scripted fake managed adapter and
-temp git repositories; no run against the real Agent SDK has happened yet (that is P3-F). The Phase
-4 Agent Workspace routes (board, tickets, project setup, harness, checks) are **implemented (P4-D)**
-and tested the same way; the full-flow verification is P4-H.
-
-## Responsibility
-
-Composition root: config, ingestion pipeline (validate → dedupe → persist → project → publish),
-scheduler, REST API, SSE, hook receiver, and static UI serving. Layering: `routes → services →
-repositories`.
-
-## Allowed dependencies
-
-`@acp/core`, `@acp/db`, both adapters, `express`, `zod`. Never `@acp/web`. These rules are enforced by
-`eslint.config.js`.
+The composition root of Agent Control Plane. It reads Claude Code session files through the
+adapters, ingests them into SQLite, and serves the REST API, the SSE stream, the hook receiver and
+the built web UI on `127.0.0.1`. It also runs managed runs: it drives the pure engine in
+`@acp/orchestrator`, starts agents through the Claude Code adapter, and does the git work, harness
+checks, skills, attachments and the owner's GitHub actions the engine asks for or the owner clicks.
 
 ## Running
 
+| Script (in `packages/server`) | Runs                                                          |
+| ----------------------------- | ------------------------------------------------------------- |
+| `dev`                         | `src/main.ts` with tsx and the `development` export condition |
+| `start`                       | `dist/main.js` (after `build`)                                |
+| `hooks:snippet`               | `src/hook-snippet.ts`: prints hook settings for you to paste  |
+
+The root `pnpm dev` runs this server and the web dev server together. `src/main.ts` loads the
+config, calls `startServer` (`src/bootstrap.ts`), serves `packages/web/dist` when it has been built,
+and closes cleanly on SIGINT/SIGTERM. The environment is parsed by `src/config.ts` and fails fast on
+bad values: `ACP_PORT` (7420), `ACP_DATA_DIR` (`~/.agent-control-plane`), `ACP_CLAUDE_DIR` (else
+`CLAUDE_CONFIG_DIR`, else `~/.claude`), `ACP_MODE` (`live` or `demo`), `ACP_POLL_INTERVAL_MS`,
+`ACP_ACTIVE_WINDOW_MS`, `ACP_STALE_AFTER_MS`, `ACP_MANAGED` (`on`/`off`; unset means on in live
+mode, off in demo) and `ACP_RUN_TIMEOUT_MS` (2 hours). The owner-facing table is in
+[START.md](../../START.md). Demo mode uses its own `demo.sqlite` and the demo adapter; the Agent SDK
+never runs in demo mode.
+
+## What it contains
+
+- `bootstrap.ts`, `app.ts`, `config.ts`, `main.ts`: wiring. `createApp` builds the Express app
+  without listening, so tests drive it with supertest.
+- `pipeline/ingest.ts`, `scheduler.ts`: ingestion (validate, dedupe, persist, project, checkpoint
+  in one transaction, then publish) and single-flight polling; `notifier.ts` fans notices to SSE.
+- `services/`: the observation reads (projects, sessions, usage, overview, diagnostics).
+- `hooks/`: `POST /api/hooks/claude-code`, authenticated by the `x-acp-hook-token` header against
+  `<ACP_DATA_DIR>/hook-token`; answered 204. Hooks only add lifecycle facts and trigger a poll.
+- `control/`: managed runs. `service.ts` applies engine commands, persists through `store.ts`, then
+  carries out the effects; plus the CSRF token, the allowlist's path resolution, review checkouts,
+  the review loop's git effects, Full auto's sandbox paths, session names and run summaries.
+- `workspace/`: git worktrees for helpers (`<ACP_DATA_DIR>/worktrees/<run>/<agent>`), diffs,
+  merges and the ticket branch. The server starts only `git`, the SDK's `claude`, the harness's
+  check commands and `gh`, always as argument arrays and never through a shell (ADR-0013).
+- `board/`: projects, setup, tickets, comments, attachments, activity, checks on changes, ticket
+  totals, and the owner's ticket-branch actions.
+- `code-host/`: `origin` and GitHub through the owner's `gh` login (ADR-0025). Only on the owner's
+  click, never on a timer or for an agent; no token is read or stored.
+- `harness/`: `.acp/harness.json`, the check runner, main-branch checks and check blocks.
+- `workflow/`, `skills/`, `tokens/`, `attachments/`: project workflows and graphs, the run's skills
+  plugin, project skills and agent files (ADR-0018), the Tokens page, and attachment storage.
+- `http/`: `localOnlyGuard`, request ids and the error handler.
+
+## HTTP API
+
+Every route is under `/api`. `localOnlyGuard` answers 403 to a non-loopback `Host`, a foreign
+`Origin` and CORS preflights. Every mutation of the control panel, board, workflow, skills and
+agents routes, and `POST /api/projects`, needs the `X-ACP-CSRF` header with the token from
+`GET /api/control/token` (new on each start). Errors have one shape,
+`{ error: { code, message, requestId } }`, made only in `http/middleware.ts`; engine refusals keep
+their code in snake_case. Responses are parsed by their `@acp/core/api` DTO before they are sent.
+
+- `routes/api.ts`: health, overview, capabilities, discovery, ingestion diagnostics, events,
+  projects, sessions and usage.
+- `routes/stream.ts`: `GET /api/events/stream`, SSE invalidation notices (`events-ingested`,
+  `projects-changed`, `runs-changed`, `approval-requested`, `chat-message`, `tickets-changed`).
+- `routes/control.ts`: runs, chat, stop, agents, review, ticket branch, workflow state, approvals.
+  With managed runs off these answer `404 managed_disabled`.
+- `routes/board.ts`: projects (new, delete, setup), harness, code host, branches, board, tickets,
+  comments, attachments, activity, pull requests, plan decisions, checks.
+- `routes/workflow.ts`, `routes/skills.ts`, `routes/agents.ts`, `routes/tokens.ts`: project
+  workflows and graphs, skills, agent files, and token usage.
+
+Route handlers only parse input and call a service: `routes → services → repositories`. Business
+logic lives in the services (`board/`, `control/`, `workflow/`, ...), never in a route.
+
+## Managed runs in short
+
+The engine decides and the server acts: persist the new state in one transaction, publish a
+notice, then perform the effects in order. Restarts relaunch nothing (`recoverAfterRestart`), and
+leftover worktrees and checkouts are cleaned up on start. A sweep in `control/service.ts` expires
+approvals and applies the run timeout with `isRunOverdue`, so the time a loop run waits only for the
+owner does not count (v0.3.1). When the engine reports the `rework-session-replaced` diagnostic,
+the server counts it and posts an app line on the ticket saying the helper reworks in a new session.
+
+## Testing
+
 ```bash
-ACP_MODE=demo pnpm dev   # server on 127.0.0.1:7420, UI on http://127.0.0.1:5173
-pnpm dev                 # live mode: reads <ACP_CLAUDE_DIR>/projects for registered projects only
-pnpm --filter @acp/server hooks:snippet   # prints Claude Code hook settings to paste yourself
+pnpm --filter @acp/server test
+pnpm --filter @acp/server typecheck
+pnpm --filter @acp/server build
 ```
 
-Hooks are optional. The snippet references `$ACP_HOOK_TOKEN`; set it to the contents of
-`<ACP_DATA_DIR>/hook-token`. The app never writes Claude settings. The snippet shape is unverified
-until real hook payloads are captured (P1-C6).
+Vitest collects `tests/**/*.test.ts`. Tests use temp-file databases and temp data folders, throwaway
+`git init` repositories, injected clocks, a fake `gh` (`tests/code-host/fake-gh.ts`) and no real
+agent: a scripted fake managed adapter (`tests/control/fake-adapter.ts`), or the real Claude Code
+adapter over a scripted SDK `query` function. They never read the real `~/.claude`. Folders follow
+`src/` (`board/`, `control/`, `workspace/`, ...), plus `adversarial/` and `verification/`
+(end-to-end flows over the same fakes).
 
-Configuration is in [docs/development.md §5](/docs/development.md). Demo mode rebuilds
-`<ACP_DATA_DIR>/demo.sqlite` on every start and replays fixtures starting 20 minutes in the past.
+The real-run drivers, `tests/verification/**/real-run/drive.ts`, start real `claude` processes and
+spend tokens. They are not `*.test.ts`, so `pnpm test` never collects them; they refuse to run
+without `ACP_REAL_RUN=1` or in CI, and need the owner's consent. `drive.test.ts` only checks the
+driver's `--dry-run` with the fake adapter.
 
-## Behavior notes
+## Dependencies
 
-- **Pipeline** (`src/pipeline/ingest.ts`): one transaction per batch. Invalid events are counted and
-  skipped; duplicates are detected before the session row is touched. Subagent edges come from spawn
-  evidence stored in the child's session `metadata`, so they derive in any event order. Continuation
-  edges use `usage.listSharedSightings`; ties give no edge.
-- **Hooks** carry no provider time, so the delivery time is the activity evidence for status.
-- **Scheduler**: polls are single-flight (not per file); requests during a poll coalesce into one rerun.
-- **Guard**: non-loopback `Host`, foreign `Origin`, and CORS preflights get 403 on all `/api` routes.
-- **Diagnostics** (`GET /api/diagnostics/ingestion`): checkpoints per source, unrecognized record types
-  and conflict counts from the database; each adapter's `diagnostics()` (ADR-0011: file issues from its
-  latest scan, known record types it skipped on purpose sorted by count, parse errors); and the
-  server's own counters (pipeline `eventsInvalid`/`batchesFailed`, scheduler `polls`/`pollErrors`/
-  `lastPollAt`). Adapter and server counters are in memory and reset on restart. Every path is shown
-  relative to the provider data root (`displayPath`), never as an absolute home path; the DTO rejects
-  absolute file-issue paths.
-- **Cost on the overview** (`OverviewDto.latestSnapshots`): the latest provider snapshot of each of the
-  10 most recently active top-level sessions that have one, newest first. Each entry's
-  `reportedCostUsd` is `estimated` or `unavailable` (null, never 0). Snapshots are never summed, so
-  there is no total cost field anywhere. Built from existing reads (`sessions.scan()` order, then
-  `snapshots.latestForSession` per top-level session until 10 are found).
-- **Not implemented**: `GET /api/sessions/:id/usage` (no DTO; `SessionDetailDto` already carries direct
-  and aggregate usage).
+All workspace packages except `@acp/web` (`@acp/core`, `@acp/db`, `@acp/orchestrator`, both
+adapters), plus `express` and `zod`. `eslint.config.js` forbids `@acp/web` and the demo adapter's
+fixtures here. Adapters never touch the database; the pipeline and services do.
 
-## Control panel (Phase 3 M1, P3-D)
+## Specs and decisions
 
-`src/control/` wires the pure engine (`@acp/orchestrator`), the managed adapter, the database
-(`createOrchestrationRepositories`) and the workspace manager (`src/workspace`, P3-W) together;
-`src/routes/control.ts` is the thin HTTP layer. Specs: orchestration-lifecycle §0, ADR-0012..0015.
-
-### Configuration
-
-| Variable             | Default         | Meaning                                                                                                                                              |
-| -------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACP_MANAGED`        | unset (`auto`)  | `on` / `off`. `auto`: on in live mode; off in demo mode unless a managed adapter is injected (`startServer({ managedAdapter })`, tests and e2e only) |
-| `ACP_RUN_TIMEOUT_MS` | `7200000` (2 h) | a working run (QUEUED/RUNNING/BLOCKED) is stopped after this long; its live agents end TIMED_OUT                                                     |
-
-The real Agent SDK never runs in demo mode. In live mode the `claude` process gets `process.env`
-without any `ACP_*` or `GIT_*` variable (`managedAgentEnv`, ADR-0012). With managed off every
-control route answers `404 { error: { code: 'managed_disabled' } }`; Phase 1 routes are unchanged.
-
-### Routes
-
-Every mutation needs `X-ACP-CSRF` with the token from `GET /api/control/token` (64 hex characters,
-new on every server start, constant-time compare). Missing → `403 csrf_missing`, wrong →
-`403 csrf_invalid`. Every response is parsed by its core DTO schema before it is sent.
-
-| Route                                        | Request                    | Response                 |
-| -------------------------------------------- | -------------------------- | ------------------------ |
-| `GET /api/control/token`                     |                            | `CsrfTokenDto`           |
-| `GET /api/runs`                              |                            | `RunSummaryDto[]` (100)  |
-| `POST /api/runs`                             | `StartRunRequest`          | `RunDetailDto` (201)     |
-| `GET /api/runs/:id`                          |                            | `RunDetailDto`           |
-| `POST /api/runs/:id/chat`                    | `ChatRequest`              | `ChatMessageDto` (owner) |
-| `POST /api/approvals/:id`                    | `ApprovalDecisionRequest`  | `ApprovalDto`            |
-| `POST /api/runs/:id/agents/:agentId/stop`    |                            | `AgentRunDto`            |
-| `POST /api/runs/:id/agents/:agentId/message` | `ChatRequest` (`{ text }`) | `AgentRunDto`            |
-| `POST /api/runs/:id/stop` (Stop all)         |                            | `RunSummaryDto`          |
-| `GET /api/runs/:id/review`                   |                            | `ReviewDto`              |
-| `POST /api/runs/:id/review`                  | `ReviewActionRequest`      | `ReviewDto`              |
-| `GET /api/runs/:id/workflow` (redesign)      |                            | `RunWorkflowDto`         |
-| `POST /api/runs/:id/continue` (redesign)     |                            | `RunDetailDto`           |
-
-Engine refusals become `ErrorDto`s with the engine's code in snake_case (`too_many_agents`,
-`project_not_registered`, `over_budget`, `run_cancelling`, `review_not_allowed`, ...; 409, or 404 for
-unknown agents/approvals, 400 for invalid input). Workspace refusals do the same (`base_dirty`,
-`base_moved`, `base_branch_changed`, ...). The owner's message to a worker goes through the engine's
-`message_agent` checks and is sent, never stored.
-
-### Behavior
-
-- **Persist, then act.** Every change is: engine command, then one transaction (state diff, chat
-  lines, session links), then the SSE notice, then the effects (orchestration-lifecycle §1).
-  Repositories normally make their own ids; `RunStore` hands them the engine's ids through a one-shot
-  id slot.
-- **Agents.** The first owner message starts the lead in the project root. The lead is read-only:
-  any tool use it asks permission for is denied without asking (ADR-0013 §2). A worker gets a git
-  worktree (`<ACP_DATA_DIR>/worktrees/<run>/<agent>`) and starts in it; messages for a worker whose
-  worktree is still being made are held until it runs.
-- **Approval bridge.** A worker's `requestPermission` → engine → approvals row → SSE
-  `approval-requested` → the SDK promise stays parked until `POST /api/approvals/:id` (or Stop, or
-  the expiry sweep after `APPROVAL_TIMEOUT_MS`) resolves it. An engine refusal (over budget, run
-  stopping) is an immediate deny.
-- **Lead tools** call `leadToolCall`; a refusal rejects, which the adapter returns to the model as a
-  tool error with the refusal message.
-- **Session linking.** The `started` event's session id is linked (`agent_run_sessions`, primary);
-  `AgentRunDto.sessionId` is the observed session once ingested. Active worktrees are extra
-  `RegisteredRoot`s of their run's project for the scheduler and the pipeline, and are never offered
-  as new projects by discovery. Before a worktree is removed, the server polls once so the worker's
-  transcript is read while its root still exists.
-- **Review.** `GET` diffs each ended worker's worktree (stores the changed-file count). `merge` →
-  `workspace.merge` (refusals as above) → record → release worktree and branch; `discard` →
-  `workspace.discard`. A worker that never got a worktree is recorded as `no-changes` when the run
-  enters REVIEW. The last decision completes the run and stops the lead.
-- **Stop / Stop all / timeout.** Stop all = `cancelRun` (deny approvals, abort workers, then the
-  lead); the run becomes CANCELLED once every agent stream ended, or after a 10 s grace period.
-- **Cost warning (ADR-0014).** When one agent's provider-reported estimated cost passes
-  `softCostUsdPerRun`, a warning is logged and counted; costs are never added up and nothing stops.
-  There is no DTO field for it yet (proposed).
-- **Restart.** On start, every non-terminal run goes through `recoverAfterRestart` (live work →
-  NEEDS_REVIEW, open approvals expired, nothing relaunched), then `cleanupOrphans` keeps the
-  worktrees the database references. Latest activity lines and the usage ledger are in memory only.
-- **Logs** carry run/agent/approval ids, tool names, codes and counts; never chat, task, message,
-  summary or diff text (tested in `tests/logging.test.ts`).
-- **Content (ADR-0015).** Stored: owner chat, lead replies, worker tasks, approval summaries. Never:
-  worker text, messages to workers, deny notes, activity lines (asserted by dumping every table).
-
-### Testing with a fake adapter
-
-`tests/control/fake-adapter.ts` is a scripted `ManagedExecutionAdapter` (no SDK, no process):
-`start` returns a `FakeAgent` the test drives (`started()`, `usage()`, `emit()`, `ask()`,
-`callLead()`, `finish()`). `tests/control/helpers.ts` `setupControl()` builds the app over a temp DB
-and a temp git repository. A server for e2e can be started with
-`startServer({ config, managedAdapter: createFakeManagedAdapter().adapter })` (demo mode is fine).
-
-## Workflow stages (project workspace redesign, R-G)
-
-Specs: docs/redesign/README.md §4.2, §6, ADR-0019 (as amended), ADR-0018. `src/workflow/` holds the
-project workflow service, the skill path rules and the skills plugin; the stage wiring is in
-`src/control/` (`service.ts`, `store.ts`, `review-checkouts.ts`, `roles.ts`).
-
-| Route                                           | Request                 | Response             |
-| ----------------------------------------------- | ----------------------- | -------------------- |
-| `GET /api/projects/:id/workflow` · `PUT` (CSRF) | `UpdateWorkflowRequest` | `ProjectWorkflowDto` |
-| `GET /api/runs/:id/workflow`                    |                         | `RunWorkflowDto`     |
-| `POST /api/runs/:id/continue` (CSRF)            |                         | `RunDetailDto`       |
-
-- **Run creation.** A ticket run gets the project's workflow (`project_workflow`, else the default)
-  and `ticketRunPrompts`; the engine snapshots it. The snapshot is stored with the limits in
-  `orchestration_runs.limits` (`{ maxConcurrentHelpers, maxDepth, workflow?, stagesHeld? }`).
-- **Where each role starts.** The lead and the planner read the project folder in place (their
-  permission requests are denied without asking). The reviewer reads a temporary **detached**
-  checkout of the project's HEAD (`<ACP_DATA_DIR>/review-checkouts/<run>/<agent>`, created on
-  `create-review-checkout`, removed on `remove-review-checkout`, and every leftover removed on
-  start); it is a managed path and, while it exists, an extra root of the project. Helpers and the
-  tester get a worktree from the current main branch; the tester's change goes through the same
-  review, checks and merge. Read-only roles get the control tools the engine allows them
-  (`leadTools`); the stage's model wins over the project's.
-- **Skills plugin.** When a `start-agent` names skills, they are copied from the project checkout
-  into `<ACP_DATA_DIR>/runs/<run>/skills-plugin/` (`.claude-plugin/plugin.json` named `acp-skills`,
-  `skills/<name>/SKILL.md` with the front matter reduced to `name` and `description`), under the
-  ADR-0018 path rules (no symlinks, inside the root, never `~/.claude`, 64 KiB, UTF-8). Refused
-  skills are counted (`skill-unavailable`) and the agent starts without them. The folder is removed
-  when the run ends, and every one on start.
-- **Data effects.** `review-comment` is stored as a ticket comment by `reviewer` in the commit
-  transaction; each agent's `stage` goes to `agent_runs.stage`.
-- **Notices.** A change of any stage's state (or a reviewer post) publishes `tickets-changed`.
-- **Restart.** A restart that interrupts a run with post-merge stages holds the next stage
-  (`stagesHeld`, stored); only Continue starts it, also after further restarts.
-- **Duplication.** The skill path rules (`src/workflow/skill-files.ts`) duplicate R-D's skills
-  module, which is not on main yet; replace them with it when it lands.
-
-## Agent Workspace (Phase 4, P4-D)
-
-`src/board/` joins tickets to the Phase 3 run service; `src/routes/board.ts` is the thin HTTP layer.
-Specs: docs/phase-4/README.md §4, §6, ADR-0016, ADR-0017, the ADR-0012/0013 amendments.
-
-### Routes
-
-Every mutation needs `X-ACP-CSRF` (the control panel's token). Reads work with managed agents off;
-starting a ticket or deciding a plan then answers `404 managed_disabled`, and `/api/runs/**` routes
-are off as before. Every response is parsed by its `@acp/core/api` DTO.
-
-| Route                                          | Request                                | Response                            |
-| ---------------------------------------------- | -------------------------------------- | ----------------------------------- |
-| `POST /api/projects/new`                       | `CreateRepoProjectRequest`             | `ProjectDto` (201)                  |
-| `DELETE /api/projects/:id`                     |                                        | 204; `409 project_has_history`      |
-| `GET /api/projects/:id/setup` · `PUT`          | `UpdateProjectSetupRequest` (PUT)      | `ProjectAgentSetupDto`              |
-| `GET /api/projects/:id/harness`                |                                        | `HarnessStatusDto`                  |
-| `POST /api/projects/:id/harness/checks`        | `{}`                                   | `CheckRunDto[]` (main branch)       |
-| `GET /api/projects/:id/harness/checks`         |                                        | `CheckRunDto[]` (main history, 50)  |
-| `POST /api/projects/:id/harness/ticket`        | `{}`                                   | `TicketDto` (201)                   |
-| `GET /api/projects/:id/context-candidates`     |                                        | `ContextCandidateDto[]`             |
-| `GET /api/board?projectId=`                    |                                        | `BoardDto`                          |
-| `GET /api/projects/:id/tickets` · `POST`       | `CreateTicketRequest` (POST)           | `TicketCardDto[]` / `TicketDto` 201 |
-| `GET /api/tickets/:id` · `PATCH`               | `UpdateTicketRequest` (PATCH)          | `TicketDetailDto`                   |
-| `POST /api/tickets/:id/move`                   | `MoveTicketRequest`                    | `TicketDto`                         |
-| `POST /api/tickets/:id/start`                  | `StartTicketRequest` (or `{}`)         | `TicketDetailDto`                   |
-| `POST /api/tickets/:id/comments`               | `TicketCommentRequest`                 | `TicketCommentDto` (201)            |
-| `POST /api/tickets/:id/plans/:planId/decision` | `PlanDecisionRequest`                  | `TicketDetailDto`                   |
-| `GET /api/runs/:id/checks`                     |                                        | `CheckRunDto[]`                     |
-| `POST /api/runs/:id/agents/:agentId/checks`    | `{}`                                   | `CheckRunDto[]` (this run of them)  |
-| `POST /api/runs/:id/review`                    | `ReviewActionRequest` (+ merge-anyway) | `ReviewDto`                         |
-
-Refusals: `conflict` (folder exists, key in use, ticket changed), `invalid_root` (parent folder
-missing), `ticket_not_ready` (start from Backlog), `run_in_progress`, `ticket_done`,
-`plan_not_found`, `plan_not_pending`, `checks_failed`, `checks_running`,
-`merge_anyway_unavailable`, `agent_working`, `not_a_helper`, `no_workspace`, and harness errors
-(`not_a_git_repo`, `no_commits`, `git_failed`).
-
-### Behavior
-
-- **New repository** (ADR-0017 §1): an existing absolute parent, an exclusive `mkdir` of the new
-  folder (an existing one is never touched), `init -b main`, a first commit by "Agent Control
-  Plane" (with the README, or empty), then the normal registration.
-- **Setup rows.** A project without a `project_setup` row (registered before 0003, or through "Add
-  an existing folder") gets the defaults on its first setup, board or ticket call: key from the name
-  (`web-app` → `WEBAPP`, next free variant on a clash), 3 helpers, depth 1, the default budget, the
-  provider's model, edits not pre-approved, checks pre-approved only once a harness exists, no
-  context files.
-- **Ticket ↔ run.** Start (Ready, or a re-run of Done, Cancelled or a failed run) creates a
-  plan-first run and sets the ticket `ACTIVE` with it as the current run, in one transaction. The
-  lead gets `ticketLeadPrompt` and the setup's limits and budget. The run snapshots its approval
-  mode, reviewer and rework rounds: the Start body's override, else the ticket's own run options
-  (RL-H, `tickets.run_options`, set on create or with PATCH; `null` puts one back to the project
-  default), else the project's settings. A COMPLETED run sets the ticket
-  `DONE` in the transition's own transaction. Cancelling a ticket with a live run stops the run.
-  Columns come from `ticketStage()` over the stored status and the current run; they are never
-  stored.
-- **Plans** are written with the run state (`ticket_plans`) and loaded back with it. The owner's
-  plan comment is sent to the lead by the engine and kept as a ticket comment (with the plan id).
-- **Agents' context and model.** Each run reads the project's context files plus the harness
-  manifest's `context` and `notes` once, from the project's checkout, and passes them as
-  `ManagedAgentSpec.context` (≤ 32 KiB); the setup's model is passed too. A read failure starts the
-  agents without context and is counted (`context-unavailable`).
-- **Depth 2.** A helper the engine marks `canStartHelpers` (re-checked: depth 2 allowed, helper at
-  depth 1) gets the child-management tools and a note to stay with its helpers; when one of them
-  ends, the parent is sent a content-free message. A parent whose own query already ended cannot
-  receive it; that is counted (`parent-not-notified`).
-- **Allowlist.** Edit targets are resolved with `realpath` (a new file: the real path of its
-  nearest existing folder plus the plain names still to be created; `.`, `..`, empty names and
-  dangling links ask) before `evaluateAllowlist`; the checks it may pre-approve come from the project's checkout;
-  an allowed request is recorded as an approval decided by `allowlist`. **Not active yet:** the
-  managed adapter's `PermissionRequest` carries no tool input, so every request still asks the
-  owner (blocked contract change, `docs/phase-4/wp/P4-D.md`).
-- **Checks** (ADR-0017): one shared runner for the server (one check at a time). When a ticket run
-  enters REVIEW, every helper with a worktree gets its checks run there; on demand too. The
-  manifest is read from the project's checkout, never the agent's worktree. Results are stored as
-  they finish and announced (`tickets-changed`); Stop all stops the running check. The latest
-  result per check gates merge: a required check that did not pass blocks `merge`
-  (`checks_failed`), running checks block it (`checks_running`), and `merge-anyway` needs such a
-  failure and a reason, which is kept as an owner comment on the ticket. Temporary main-branch
-  checkouts left by a crash are removed at start.
-- **Removal.** `DELETE /api/projects/:id` is refused while the project has tickets or runs (they
-  are history, ADR-0016); otherwise the project leaves the app and its folder is untouched.
-- **Notices.** `tickets-changed` (with `ticketIds`, `runIds`, `projectIds`) on ticket writes, plan
-  submissions and decisions, run status changes and new pending approvals of ticket runs, and check
-  results; `runs-changed` as before.
-- **Not stored** across a restart: run limits, `awaitingHelpers`, an approval's `decidedBy` and
-  reported costs (no columns yet). Live runs are never reloaded and nothing is relaunched after a
-  restart, so only the audit field `decidedBy` is lost (a migration is proposed).
-
-### Testing
-
-`tests/board/helpers.ts` `setupBoard()` wires the app as `startServer` does, over a temp DB, a temp
-git repo, the fake managed adapter and the real check runner (checks are tiny `node` scripts).
+- [architecture](../../docs/architecture.md), [security](../../docs/security.md),
+  [orchestration lifecycle](../../docs/orchestration-lifecycle.md),
+  [usage accounting](../../docs/usage-accounting.md), [adapters](../../docs/provider-adapters.md)
+- [docs/decisions/](../../docs/decisions/README.md), especially
+  [0005](../../docs/decisions/0005-transcript-and-hook-ingestion.md) (ingestion),
+  [0009](../../docs/decisions/0009-content-minimization.md) (no conversation content),
+  [0013](../../docs/decisions/0013-managed-execution-guardrails.md) (guardrails),
+  [0021](../../docs/decisions/0021-approval-modes-review-loop-ticket-branch.md) (review loop),
+  [0025](../../docs/decisions/0025-code-hosting-and-branching.md) (GitHub and branching) and
+  [0027](../../docs/decisions/0027-harness-setup-and-check-blocks.md) (harness)

@@ -1,9 +1,11 @@
 # Provider adapters
 
-> Status: the adapter contract is **[core v1 types]** in
-> [`packages/core/src/adapters/contract.ts`](../packages/core/src/adapters/contract.ts). The Claude Code
-> observation adapter is **[implemented, P1-C]** in `@acp/adapter-claude-code` and verified against
-> synthetic fixtures only; §10 lists everything that is still unverified against a real runtime.
+> **Status:** the adapter contracts are **[core v1 types]** in
+> [`packages/core/src/adapters/`](../packages/core/src/adapters/contract.ts). The Claude Code
+> observation adapter (§1–§10) and its managed mode (§11) are **[implemented]** in
+> `@acp/adapter-claude-code`. They are tested against synthetic fixtures and a fake SDK, and were
+> checked in consented real runs (aggregates only, [research/](research/)); §10 and §11.2 list what
+> is still unverified against a real runtime.
 > Interface facts are labeled **verified-local** (seen in local data on 2026-10-10), **documented**
 > (Claude Code docs), or **unverified**. Verify unverified items with sanitized fixtures before
 > relying on them.
@@ -23,9 +25,12 @@ The adapter contract is internal. It is not a provider API. **The source of trut
 - `ProviderCapabilities`: observation flags, `managedExecution: false`, `providerVersionsSeen`, and
   `limitations[]` (shown in the UI).
 
-`ManagedExecutionAdapter` (`startAgent`, `getRunState`, `cancelAgent`, `collectResult`) is **Phase 3**.
-Do not add it in Phase 1. The Codex adapter (Phase 5) implements the same `ObservationAdapter` against
-Codex's own interfaces. Nothing Claude-specific may leak into `@acp/core` types.
+`ManagedExecutionAdapter` (`packages/core/src/adapters/managed.ts`) is a separate contract:
+`start(spec, callbacks)` returns a handle with an event stream and `send`, `interrupt` and `abort`.
+The Claude Code adapter implements it over the Agent SDK (§11); its observation capabilities still
+report `managedExecution: false`, since observation and managed mode are separate objects. A Codex
+adapter (**[planned, Phase 6]**) would implement the same `ObservationAdapter` against Codex's own
+interfaces. Nothing Claude-specific may leak into `@acp/core` types.
 
 ## 2. Claude Code interfaces
 
@@ -122,7 +127,7 @@ The adapter never writes to the Claude data directory and never edits Claude Cod
    | `artifact-comment-monitor` (2)   | ignored          | Artifact comment subscription state; carries account ids; unrelated to sessions                                     |
    | `artifact-autoreact-ledger` (1)  | ignored          | Artifact auto-reaction ledger; carries account ids; unrelated to sessions                                           |
    | `frame-link` (401)               | **unrecognized** | Meaning unknown; a "link" may express a relationship between sessions or frames                                     |
-   | `system:compact_boundary` (7)    | **unrecognized** | Marks a compaction, a session lifecycle point that a later WP may want to show                                      |
+   | `system:compact_boundary` (7)    | **unrecognized** | Marks a compaction, a session lifecycle point that a later change may want to show                                  |
    | `relocated` (2)                  | **unrecognized** | Suggests the session or transcript moved: possible lifecycle or continuation evidence                               |
    | `agent-name` (6)                 | **unrecognized** | Possibly a session or agent name, close to titles                                                                   |
    | `mode` (5)                       | **unrecognized** | Probably a permission or plan mode switch, but not confirmed                                                        |
@@ -151,7 +156,7 @@ Verified locally:
 - 197 of 197 `toolUseId` values matched an `Agent` tool call;
 - every `spawnDepth` was 1.
 
-Depth above 1 is **unverified**. P1-C must cover it with a synthetic fixture marked as such.
+Depth above 1 is **unverified**. A synthetic fixture marked as such covers it (§10.3).
 
 Implemented rules in `@acp/core` (`deriveSubagentEdge`, `deriveContinuationEdges`):
 
@@ -178,7 +183,7 @@ Implemented rules in `@acp/core` (`deriveSubagentEdge`, `deriveContinuationEdges
   - `Stop` → `session.turn_ended`
   - `Notification` → `session.attention` (type only)
   - `CwdChanged` → `session.cwd_changed`
-- **Events to subscribe (Phase 1):** `SessionEnd`, `SubagentStart`, `SubagentStop`, `Stop`,
+- **Events to subscribe:** `SessionEnd`, `SubagentStart`, `SubagentStop`, `Stop`,
   `Notification` (the "needs attention" signal), `CwdChanged` over `type: "http"`. **verified-local
   (2.1.296, 2026-10-11)** for all but `Notification`
   ([capture note](research/p1-c6-hook-capture-2026-10-11.md)). `SessionStart` is **not delivered to
@@ -219,7 +224,7 @@ truthful answer. Stale never means completed.
   `demo.sqlite`) or in tests.
 - The UI shows a persistent **DEMO DATA** banner (ADR-0007).
 
-## 10. Claude Code adapter: implementation notes and unverified assumptions **[implemented, P1-C]**
+## 10. Claude Code adapter: implementation notes and unverified assumptions **[implemented]**
 
 `createClaudeCodeAdapter({ claudeDir, now?, maxFileBytes?, chunkBytes? })` returns an
 `ObservationAdapter` plus `diagnostics()`. `hookSettingsSnippet({ port, tokenEnvVar })` returns the
@@ -286,8 +291,8 @@ settings JSON as text. Both come from `src/index.ts`. Goldens for scenarios 1-16
   runs. `Notification` (never fires in `-p`), interactive-only values (other `source`/`reason`
   values, `permission_mode` other than `default`) and SessionStart `model` were not observed.
 - Depth above 1 is covered by a synthetic fixture only (scenario 5).
-- Transcript ingestion was verified against one real project in P1-F
-  ([F2 note](research/p1-f-real-data-2026-10-10.md)); the field-name assumptions in §10.2 that the
+- Transcript ingestion was verified against one real project on 2026-10-10
+  ([real-data note](research/p1-f-real-data-2026-10-10.md)); the field-name assumptions in §10.2 that the
   F2 totals do not exercise (titles, `cost-state` per-model keys, `api_error`) remain unverified.
 
 ### 10.4 Hook payloads observed with 2.1.296 **[verified-local, 2026-10-11]**
@@ -314,7 +319,7 @@ owner, in a throwaway directory with project-level `.claude/settings.local.json`
   `last_assistant_message`. A repeated delivery that is identical in every field (same event, same
   prompt) still collapses; none was seen. **No discriminator was added**; the §3 key is unchanged.
 
-## 11. Managed mode: Claude Agent SDK **[implemented, P3-B and P4-I; fake-query tests, real runs]**
+## 11. Managed mode: Claude Agent SDK **[implemented; fake-query tests, real runs]**
 
 `createManagedClaudeCode({ query? })` in `@acp/adapter-claude-code` (`src/managed/**`) implements
 core's `ManagedExecutionAdapter` (ADR-0012, ADR-0013). Everything below was read from the pinned
@@ -342,15 +347,18 @@ against the fake `query` only.
 - Options: `cwd`, `abortController`, `permissionMode: 'default'`, `settingSources: []` (isolation),
   `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`.
   It never sets `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
-- `mcpServers` (P4-I, ADR-0013 amendment): `{ acp: createSdkMcpServer(...) }` with every
-  `LeadToolInputs` tool (including `submit_plan`) for the lead; with only `start_agent`,
-  `list_agents`, `message_agent`, `stop_agent` and `agent_status` for a worker with
+- `mcpServers` (ADR-0013 amendment): `{ acp: createSdkMcpServer(...) }` with the role's own
+  tools: for the lead every lead tool except `post_review`, `submit_review` and `report_work`
+  (`LEAD_ROLE_TOOL_NAMES`); `submit_plan` for the planner; `post_review` for a final reviewer;
+  `submit_review` for a change reviewer; `report_work` for helpers and the tester (ADR-0026), plus
+  `start_agent`, `list_agents`, `message_agent`, `stop_agent` and `agent_status` for a helper with
   `canStartHelpers` (a depth-2 parent helper; the engine scopes each call to its own children);
-  nothing for other workers. One list (`managedToolNames`) drives both the server and `canUseTool`.
-- `systemPrompt` (P4-I, ADR-0012 amendment): always `{ type: 'preset', preset: 'claude_code' }`.
+  nothing for a follow-up turn. One list (`managedToolNames`) drives both the server and
+  `canUseTool`.
+- `systemPrompt` (ADR-0012 amendment): always `{ type: 'preset', preset: 'claude_code' }`.
   When `spec.context` is present and not blank, it is the `append`, cut to at most
   `MAX_CONTEXT_BYTES` (32 KiB) of UTF-8 on a character boundary.
-- **Stage agent file** (`spec.profile`, R-I, ADR-0019 §6) **[implemented; real run checked]**:
+- **Stage agent file** (`spec.profile`, ADR-0019 §6) **[implemented; real run checked]**:
   - The server reads `<project root>/.claude/agents/<name>.md` from the owner's checkout (never an
     agent worktree) with the ADR-0018 path rules and uses only its body, `model` and `tools`.
     The model follows stage > file > project > provider default. A missing, unsafe, oversize or
@@ -366,7 +374,7 @@ against the fake `query` only.
   - Verified in a real run (R-V, docs/research/r-v-real-run-2026-10-16.md): the reviewer's
     `system/init` tools were exactly its narrowed `tools` (`Read`) plus `mcp__acp__post_review`,
     and the file's marker word reached its review comment (the instructions were applied).
-- **Role tool base sets** (R-K, ADR-0019 §7) **[implemented; real run checked]**: every
+- **Role tool base sets** (ADR-0019 §7) **[implemented; real run checked]**: every
   managed agent gets an explicit SDK `tools` list (`agentToolNames`):
 
   | Role                      | `tools`                                                                |
@@ -432,7 +440,7 @@ against the fake `query` only.
     `finished: cancelled`. Messages that are still in flight are dropped; the transcript still has
     them for observation.
   - `reportedCostUsd` is the latest result's `total_cost_usd`.
-- **Follow-up turn of an ended lead** (`spec.followUp`, R-J, ADR-0020) **[implemented; real run
+- **Follow-up turn of an ended lead** (`spec.followUp`, ADR-0020) **[implemented; real run
   checked]**:
   - `resume: spec.followUp.resumeSessionId` with `forkSession: false`, in `spec.cwd` (the server
     passes the lead's own folder, the project root, where the session is stored). The session keeps
@@ -463,12 +471,30 @@ against the fake `query` only.
     reading content), that the stream carries only new messages, and the exact failure shape for
     a missing session.
 
-- **Session title** (`spec.title`, ADR-0024 §1, v0.3.0 S-A) **[implemented; fake-query tests]**:
+- **Rework turn whose session cannot be resumed** (`spec.rework.resumeSessionId`, v0.3.1)
+  **[implemented; fake-query tests; the real failure shape unverified]**:
+  - When the resumed query ends in an error (an error result, or a throw) **before the session
+    answered** (no assistant usage and no tool call), the adapter starts the same rework turn once
+    more without `resume`, in the same `cwd` (the helper's worktree), with the same options, and
+    the prompt prefixed by `REWORK_NEW_SESSION_NOTE` ("Your earlier conversation for this task
+    could not be continued, so this is a new session. …"). The engine still sees one turn: the new
+    session's `started`, its events, and one `finished`.
+  - Never after the session answered, never after `abort()`, never for a Full auto failure (the
+    sandbox or auto mode unavailable), never for a first turn, a fresh rework or a follow-up, and
+    at most once per turn (a second failure ends it with `finished: error`, as before).
+  - The engine keeps the new session id for the next rework (a resume keeps the id, so another
+    id means a new session), tells the lead, and the server posts an `app` line on the ticket and
+    links the new session to the same agent run as `retry`.
+  - Why: before v0.3.1 a rework turn that could not resume ended in an error every time the change
+    was sent back, so the helper's work could only be merged as it was or discarded.
+
+- **Session title** (`spec.title`, ADR-0024 §1, v0.3.0) **[implemented; fake-query tests, real run]**:
   passed as `Options.title` when a session starts; left out when the options `resume` a session
   (a follow-up, or a rework turn resuming the helper's session) and when it is blank. The
   0.3.296 declaration reads: a custom session title that "skips automatic title generation" and
-  "has no effect on the persisted title when resuming an existing session". Whether Claude Code
-  shows it in its own lists is checked by S-V with a consented real run.
+  "has no effect on the persisted title when resuming an existing session". A consented real run
+  ([S-V note](research/s-v-real-run-2026-10-21.md)) saw it recorded as the session's custom title,
+  with Claude Code's automatic title request skipped.
 
 ### 11.2 SDK facts from the 0.3.296 declarations (unverified at runtime)
 
@@ -486,16 +512,18 @@ against the fake `query` only.
 - **Permission rules can skip `canUseTool`.** The callback runs only when the permission system would
   prompt. With `settingSources: ['project']`, a project's `.claude/settings.json` `permissions.allow`
   rules (and its hooks) would apply, so an allow rule would approve a tool without asking the owner.
-  **Resolved (coordinator, ADR-0012 amendment):** managed runs use `settingSources: []`, the SDK's
+  **Resolved (ADR-0012 amendment):** managed runs use `settingSources: []`, the SDK's
   isolation mode, so no settings file is loaded. Cost: the project's CLAUDE.md is not loaded.
 - **`strictMcpConfig` ignores other MCP configuration.** It ignores project `.mcp.json`, user
   settings, plugins and agent frontmatter MCP servers, so only `mcpServers` from the options load.
-- **`env` is inherited.** When `env` is omitted, the CLI subprocess inherits `process.env`.
+- **`env` is inherited.** When `env` is omitted, the CLI subprocess inherits `process.env`. The
+  server passes the environment without `CLAUDE_CODE_EXIT_AFTER_STOP_DELAY` (v0.3.1), which the
+  CLI reads as an idle timer that would end a lead waiting for the owner.
 - **Omitting `systemPrompt` means an empty system prompt.** In `sdk.mjs` (0.3.296) an undefined
   `systemPrompt` becomes the custom prompt `""`; only `{ type: 'preset', preset: 'claude_code' }`
-  selects Claude Code's own prompt. So managed agents without context run with no system prompt
-  (as in the P3-F smoke), and agents with context get Claude Code's full prompt plus the context.
-  Whether to always use the preset is an open coordinator decision (P4-I handoff).
+  selects Claude Code's own prompt. The P3-F smoke ran without one. **Resolved (ADR-0012
+  amendment):** the adapter always passes the preset (§11.1), with the context and the stage agent
+  file appended when present.
 - **`snapshot` defaults to on.** The rendered preset plus `append` is recorded on the first request
   and reused for the session, so a context change only reaches new agents.
 - **The binary comes from an optional dependency, not a script.** The SDK ships its platform binary

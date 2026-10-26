@@ -36,6 +36,7 @@ export type * from './state.js';
 export { SUMMARY_MAX_CHARS, cleanSummary, formatTokens } from './draft.js';
 export {
   FULL_AUTO_FAILURE_ACTIVITY,
+  REWORK_NEW_SESSION_ACTIVITY,
   agentEvent,
   HANDOVER_NOTE_MAX_CHARS,
   cancelRun,
@@ -46,12 +47,14 @@ export {
   expireApprovals,
   fullAutoFailureNote,
   isApprovalOverdue,
+  isRunOverdue,
   isRunPastDeadline,
   ownerChat,
   recordReview,
   recoverAfterRestart,
   requestPermission,
   requestReview,
+  runWorkingMs,
   stopAgent,
   continueStages,
   timeOutRun,
@@ -116,6 +119,7 @@ export {
   leadRoundsUsed,
   undecidedChanges,
   viewChangeReply,
+  waitsOnlyForOwner,
 } from './loop.js';
 export type { ChangeAction, DecisionInput } from './loop.js';
 export { deriveRunWorkflow, deriveRunWorkflowGraph } from './run-workflow.js';
@@ -125,6 +129,7 @@ export {
   changeCheckBlockOf,
   editingNodeOf,
   effectiveMode,
+  hasMergeChecks,
   helperNodeLines,
   helperNodeOf,
   programFullAuto,

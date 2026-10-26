@@ -1,11 +1,14 @@
-# Orchestration lifecycle (Phase 3 — in progress, milestone M1)
+# Orchestration lifecycle
 
-> Phase 3 started on 2026-10-11 (owner decision). ADR-0012 (Agent SDK), ADR-0013 (guardrails),
-> ADR-0014 (budget) and ADR-0015 (chat storage) confirm and narrow this design. **§0 is what M1
-> builds**; §2–§5 remain the target for later milestones. Mark sections [implemented] only when they
-> work.
+> **Current:** §0 (the run and agent states, built in Phase 3 milestone M1) and §0.1 (the review
+> loop and the ticket branch, ADR-0021) describe how runs work today; workflow graphs (ADR-0023)
+> and Checks blocks (ADR-0027, ADR-0028) decide which agents and checks a run has, see
+> [architecture.md](architecture.md) §8–§11. §1 holds. §2–§5 are the original Phase 3 design,
+> kept as background: where they differ from §0 and §0.1, those win. ADR-0012 (Agent SDK),
+> ADR-0013 (guardrails), ADR-0014 (budget) and ADR-0015 (chat storage) narrow this design. ADR-0025
+> (branching) and ADR-0028 (optional Checks blocks, the Finish block) amend §0.1, as noted there.
 
-## 0. Milestone M1 (what is being built)
+## 0. Milestone M1 [implemented]
 
 - **Shape.** One run per conversation in the control panel: a **lead** agent (chats with the owner,
   read-only in the project root, has the lead tools) and up to 3 **worker** agents (one task each, own
@@ -29,33 +32,44 @@
 
 Verified with fake agents against the real server, real git and real harness checks (server tests in
 `packages/server/tests/{board,verification/review-loop}` and the browser flow
-`packages/web/e2e/review-loop-live.spec.ts`). A consented real run is planned
-(`docs/review-loop/wp/RL-V.md`).
+`packages/web/e2e/review-loop-live.spec.ts`). A consented real run on
+2026-10-17 found two bugs ([research note](research/rl-v-real-run-2026-10-17.md)), since fixed;
+the real runs of 2026-10-21 passed with every review route
+([research note](research/wg-v-real-run-2026-10-21.md)).
 
-- **Approval modes, snapshotted per run.** The project's mode (Workflow → Helpers → Approvals) is
-  the default; the Start dialog can override it, the reviewer and the rework limit for one run.
-  Only helpers and the tester are covered; the lead never approves tool requests.
+- **Approval modes, snapshotted per run.** Each editing block of the workflow has its own mode, or
+  the project's default mode (Workflow page, project defaults) when it has none; the ticket's and
+  the Start dialog's modes are ceilings that can only tighten a block (ADR-0023 §5). A ticket's run
+  options can also set the reviewer and the rework limit. Only helpers and the tester are covered;
+  the lead never approves tool requests.
   - _Manual:_ every edit and command asks the owner, harness checks too.
   - _Auto edits_ (default for new projects): an Edit/Write whose real path is inside the helper's
     own worktree (not under `.git` or `.claude`) and a Bash command that exactly matches a harness
     check run unasked.
   - _Auto:_ Auto edits plus the project's command allowlist (safe tokens only, a bare first word,
     `git` read-only). Each auto-approved request is recorded with its rule (`allowRule`).
-- **Plan approval** creates the ticket branch `acp/<KEY>` (or `acp/<KEY>-r<n>`) from the base
-  branch. The lead hears of the approval only once the branch exists. Helpers and the tester start
+- **Plan approval** creates the ticket branch from its start branch: named by the project's
+  branching strategy, or `acp/<KEY>` (`acp/<KEY>-r<n>` for a later run) without one (ADR-0025).
+  The lead hears of the approval only once the branch exists. Helpers and the tester start
   from the ticket branch tip, each in its own worktree. Plan steps name helper roles only.
 - **A helper's turn ends:** the agent goes to `AWAITING_REVIEW` (no process, no helper slot), its
-  worktree is committed (sealed) and the required checks run on that commit.
+  worktree is committed (sealed) and, when the workflow places a Checks block on the change, its
+  checks run on that commit (ADR-0027, ADR-0028).
 - **Review:** a read-only review agent (default; it gets a detached checkout of the sealed commit
   and a diff of at most 64 KiB in its brief, sent, never stored) or the lead reviews the oldest
   ready change first. The review agent's findings become a ticket comment.
 - **The lead decides** with `merge_change`, `request_rework` (comments), `discard_change`
   (reason) or `ask_owner` (question):
   - merge: integrate the tip into the helper's worktree (a conflict is refused with the file
-    names), require the required checks to have passed on that commit (or start them; the lead
-    hears back), then advance the ticket branch by compare-and-swap and release the worktree;
+    names); when a Checks block sits before the merge, require its checks to have passed on that
+    commit (or start them; the lead hears back); then advance the ticket branch by
+    compare-and-swap and release the worktree. Without that block a change merges after its
+    review only (ADR-0028);
   - rework: refused past the run's limit (2 by default), over budget or with no free slot; the
-    helper resumes its session in the same worktree and its change is reviewed again;
+    helper resumes its session in the same worktree and its change is reviewed again. If the
+    resume fails before the session answered (its saved session cannot be continued), the
+    adapter starts the turn once in a new session in the same worktree; the engine keeps the new
+    session id, tells the lead, and the ticket gets a line for the owner (v0.3.1);
   - ask the owner: the change is `needs-owner`, and only the owner decides it (merge, merge anyway
     with a reason, rework with a comment, discard), also past the rework limit.
 - **Stored text:** the review agent's findings and the lead's and owner's notes are ticket
@@ -70,15 +84,26 @@ Verified with fake agents against the real server, real git and real harness che
   missing work; with nothing merged it says so. It is sent once per such point, again only after
   new helper or reviewer work, never after the handover, and not with the owner's "Request
   changes" message. A BLOCKED lead gets it after its budget raise.
-- **The owner merges once:** at `REVIEW` the checks run on the tip (a detached temporary
-  checkout). The ticket-branch card shows the combined diff `base..tip` and those checks. Merge
-  needs a clean owner tree on the base branch, an unmoved base and passed required checks, then
-  `merge --ff-only` and the branch is deleted; the run is `COMPLETED` and the ticket Done. Merge
-  anyway (with a reason), Request changes (back to the lead, the run returns to `RUNNING`), Discard
-  and Update from the base (when the base moved) are the other actions.
+- **The owner merges once** (the Finish block): at `REVIEW` the ticket-branch card shows the
+  combined diff and, when checks gate the tip, those checks run on it (a detached temporary
+  checkout). What gates the tip: a workflow with a Checks block before the lead's merge (every
+  workflow saved before 0.3.1) needs the required checks; one without it needs only the checks of
+  a block on the ticket branch, if it has one (ADR-0028). The owner merges into the target
+  locally (a fast-forward, or a compare-and-swap of the target's ref; never forced) or pushes and
+  opens a pull request (ADR-0025, architecture §12); the run is `COMPLETED` and the ticket Done.
+  Merge anyway (with a reason, when checks gate the tip), Request changes (back to the lead, the
+  run returns to `RUNNING`), Discard and Update from the target (when it moved) are the other
+  actions.
 - **Stops and restarts:** Stop all cancels waiting helpers and keeps the ticket branch (it can only
   be discarded). After a restart nothing relaunches: waiting helpers and reviewers become
-  `NEEDS_REVIEW`, undecided changes `needs-owner`.
+  `NEEDS_REVIEW`, undecided changes `needs-owner`. The owner can merge or discard such a change but
+  not yet send it back for rework (proposed in ADR-0029, not built).
+- **Run timeout (v0.3.1):** the timeout (ADR-0013 §3, `ACP_RUN_TIMEOUT_MS`, 2 hours) counts the
+  run's working time. While the run waits only for the owner (a change at `needs-owner` and no
+  agent but the lead still working) the clock stops; it runs again after the owner's decision, and
+  keeps running while other helpers work. The waits are kept in memory only: after a restart the
+  run is `NEEDS_REVIEW` and never times out. When the timeout stops a run, a helper whose change
+  waits for review ends `CANCELLED` (as with Stop all) and the other live agents end `TIMED_OUT`.
 
 ## 1. Principles
 
@@ -150,7 +175,11 @@ The engine rejects a plan that has:
 - overlapping write scopes without isolation;
 - missing required fields.
 
-## 4. Budget (open question Q1 — must be resolved before Phase 3)
+## 4. Budget (open question Q1, resolved by ADR-0014)
+
+> Resolved: ADR-0014 counts output, uncached input and cache-write tokens (cache reads are tracked
+> and shown, never counted), as a soft limit per agent (default 500,000). The text below is the
+> original question.
 
 The draft brief proposes a 50,000-token soft budget per run. **Local data shows cache-read tokens in the
 billions for long sessions.** A single turn re-reads the full context. A budget that counts cache reads

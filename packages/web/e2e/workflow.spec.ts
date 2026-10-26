@@ -195,9 +195,11 @@ test('opens the migrated workflow: every block on the canvas, no problems', asyn
   await expect(
     page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workflow' }),
   ).toHaveAttribute('aria-current', 'page');
-  for (const id of ['ticket', 'orchestrate', 'plan-approval', 'helpers', 'review', 'done']) {
+  // The end of the flow is one Finish block (ADR-0028 §3): your merge; Done is part of it.
+  for (const id of ['ticket', 'orchestrate', 'plan-approval', 'helpers', 'review', 'owner-merge']) {
     await expect(block(page, id)).toBeVisible();
   }
+  await expect(block(page, 'done')).toHaveCount(0);
   await expect(block(page, 'orchestrate')).toHaveAttribute('data-kind', 'lead');
   // Nothing selected: the problems list sits beside the canvas, with its count on the header.
   await expect(issues(page).getByTestId('issues-none')).toBeVisible();
@@ -205,7 +207,7 @@ test('opens the migrated workflow: every block on the canvas, no problems', asyn
   await expect(page.getByTestId('save-workflow')).toBeDisabled();
   // Every block is inside the canvas (fit to the view, nothing cut off).
   const canvas = await page.getByTestId('graph-editor').boundingBox();
-  for (const id of ['ticket', 'owner-merge', 'done', 'helpers']) {
+  for (const id of ['ticket', 'owner-merge', 'helpers']) {
     const box = await block(page, id).boundingBox();
     expect(box).not.toBeNull();
     if (canvas && box) {
@@ -395,7 +397,9 @@ test('dragging a link lights the blocks it can end on; a drop on a block body li
   await expect(block(page, 'helper-1')).toHaveAttribute('data-link-target', 'valid');
   await expect(block(page, 'checks')).toHaveAttribute('data-link-target', 'invalid');
   await expect(block(page, 'ticket')).toHaveAttribute('data-link-target', 'invalid');
-  await expect(block(page, 'done')).toHaveAttribute('data-link-target', 'invalid');
+  // The Finish block (your merge, with the ticket merge and Done in it): the lead merges through
+  // its Checks block, so not here.
+  await expect(block(page, 'owner-merge')).toHaveAttribute('data-link-target', 'invalid');
   // The valid block's in handle grows into a target; an invalid block fades.
   const opacity = await block(page, 'ticket').evaluate((el) => getComputedStyle(el).opacity);
   expect(Number(opacity)).toBeLessThan(0.6);
@@ -548,4 +552,309 @@ test('project defaults: helper limits and the approval mode save through …/set
     maxConcurrentHelpers: 2,
     approvals: { mode: 'manual' },
   });
+});
+
+// ---------------------------------------------------------------- v0.3.1 P-C: smooth linking
+
+/** The middle of a block's body (its name). */
+const bodyOf = (page: Page, id: string) => centre(block(page, id).getByTestId('block-label'));
+
+/**
+ * A point `gap` pixels outside a block, over the empty canvas (no block under it): to the left,
+ * right, above or below, whichever is clear.
+ */
+async function besideBlock(page: Page, id: string, gap: number): Promise<{ x: number; y: number }> {
+  const box = await block(page, id).boundingBox();
+  if (box === null) throw new Error('block not on screen');
+  const midX = box.x + box.width / 2;
+  const midY = box.y + box.height / 2;
+  const spots = [
+    { x: box.x - gap, y: midY },
+    { x: box.x + box.width + gap, y: midY },
+    { x: midX, y: box.y - gap },
+    { x: midX, y: box.y + box.height + gap },
+  ];
+  for (const p of spots) {
+    const clear = await page.evaluate(
+      ([x, y]) => {
+        const el = document.elementFromPoint(x ?? 0, y ?? 0);
+        return (
+          el !== null &&
+          el.closest('.react-flow__pane') !== null &&
+          el.closest('.react-flow__node, .react-flow__edge') === null
+        );
+      },
+      [p.x, p.y],
+    );
+    if (clear) return p;
+  }
+  throw new Error(`no clear canvas beside ${id}`);
+}
+
+/** A block's place on the canvas, in the flow's own coordinates (its transform). */
+async function flowPosition(page: Page, id: string): Promise<{ x: number; y: number }> {
+  const t = await page
+    .locator(`.react-flow__node[data-id="${id}"]`)
+    .evaluate((el) => (el as HTMLElement).style.transform);
+  const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(t);
+  if (m === null) throw new Error(`no position for ${id}`);
+  return { x: Number(m[1]), y: Number(m[2]) };
+}
+
+/** Screenshots (1440, both themes) while a link dragged from the lead is snapped onto `to`. */
+async function shootSnapped(page: Page, from: string, to: string): Promise<void> {
+  if (SHOTS === undefined) return;
+  for (const scheme of SCHEMES) {
+    await frame(page, 1440, scheme);
+    await showCanvas(page);
+    await block(page, from).hover();
+    const start = await centre(page.getByTestId(`connector-bottom-${from}`));
+    const near = await besideBlock(page, to, 36);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(near.x, near.y, { steps: 10 });
+    await expect(page.getByTestId('link-line')).toHaveAttribute('data-snapped', 'true');
+    await page.screenshot({ path: `${SHOTS}/workflow-snapped-1440-${scheme}.png` });
+    await page.mouse.up();
+    // The drop made the link or asked which kind; put it back for the next theme.
+    if ((await page.getByTestId('edge-choice').count()) > 0) await page.keyboard.press('Escape');
+    else await page.keyboard.press('ControlOrMeta+z');
+  }
+  await reset(page);
+}
+
+test('P-C: a link from any side connector, dropped on a block body or snapped near one', async ({
+  page,
+}) => {
+  await serve(page, graphDto());
+  await open(page);
+  await addBlock(page, 'Named helper');
+  await expect(block(page, 'helper-1')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Hovering a block shows a connector on each side (12px+ dots in 24px+ targets at this zoom).
+  await showCanvas(page);
+  await block(page, 'helper-1').hover();
+  for (const side of ['left', 'top', 'bottom']) {
+    const box = await page.getByTestId(`connector-${side}-helper-1`).boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
+  }
+  // From the bottom connector, dropped anywhere on the change reviewer: the one kind, at once.
+  const start = await centre(page.getByTestId('connector-bottom-helper-1'));
+  const body = await bodyOf(page, 'review');
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(body.x, body.y, { steps: 10 });
+  await expect(page.getByTestId('link-line')).toHaveAttribute('data-snapped', 'true');
+  await expect(block(page, 'review')).toHaveAttribute('data-snapped', 'true');
+  await page.mouse.up();
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
+  await expect(page.getByTestId('edge-choice')).toHaveCount(0);
+
+  // From the lead's top connector, released on empty canvas near the helper: it snaps onto it
+  // (two kinds fit, so the choice opens).
+  await showCanvas(page);
+  await block(page, 'orchestrate').hover();
+  const lead = await centre(page.getByTestId('connector-top-orchestrate'));
+  const near = await besideBlock(page, 'helper-1', 36);
+  await page.mouse.move(lead.x, lead.y);
+  await page.mouse.down();
+  await page.mouse.move(near.x, near.y, { steps: 10 });
+  await expect(page.getByTestId('link-line')).toHaveAttribute('data-snapped', 'true');
+  await expect(block(page, 'helper-1')).toHaveAttribute('data-snapped', 'true');
+  // Invalid blocks fade while the link is dragged.
+  await expect(block(page, 'ticket')).toHaveAttribute('data-link-target', 'invalid');
+  await page.mouse.up();
+  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
+  await choice.getByRole('button', { name: /^Assigns work/ }).click();
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
+
+  // A drag from the edge strip of a block works too.
+  await showCanvas(page);
+  await page.keyboard.press('Escape');
+  const strip = await centre(page.getByTestId('strip-left-review'));
+  const helper = await bodyOf(page, 'helper-1');
+  await page.mouse.move(strip.x, strip.y);
+  await page.mouse.down();
+  await page.mouse.move(helper.x, helper.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
+  await page.keyboard.press('ControlOrMeta+z');
+  await shootSnapped(page, 'orchestrate', 'helper-1');
+});
+
+test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  await addBlock(page, 'Named helper');
+  await page.keyboard.press('Escape');
+  await showCanvas(page);
+
+  // A click on a connector starts a link; the valid blocks light up; Escape cancels.
+  await page.getByTestId('handle-out-helper-1').click();
+  await expect(page.getByTestId('click-link-hint')).toContainText('Linking from Helper 1');
+  await expect(page.getByTestId('graph-editor')).toHaveAttribute('data-link-mode', 'click');
+  await expect(block(page, 'review')).toHaveAttribute('data-link-target', 'valid');
+  await expect(block(page, 'checks')).toHaveAttribute('data-link-target', 'invalid');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('click-link-hint')).toHaveCount(0);
+  await expect(block(page, 'review')).not.toHaveAttribute('data-link-target', /.+/);
+
+  // Click the connector, then the block: linked.
+  await page.getByTestId('handle-out-helper-1').click();
+  await block(page, 'review').click();
+  await expect(page.getByTestId('click-link-hint')).toHaveCount(0);
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
+
+  // The keyboard: Enter on the lead's connector, then Enter on the helper; two kinds fit.
+  await page.getByTestId('handle-out-orchestrate').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('click-link-hint')).toBeVisible();
+  await page.locator('.react-flow__node[data-id="helper-1"]').focus();
+  await page.keyboard.press('Enter');
+  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
+  await expect(choice.getByRole('button', { name: /^Assigns work/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
+
+  // Right-click a block: "Link Lead to…" lists only what core allows, with the kind.
+  await block(page, 'orchestrate').click({ button: 'right' });
+  const menu = page.getByTestId('block-menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem')).toHaveCount(1);
+  // The block's name, then the kind in short.
+  await expect(menu.getByTestId('link-to-helper-1-rework')).toHaveText(/^Helper 1\s*Rework$/);
+  await shoot(page, 'link-menu');
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  await expect(page.locator('.react-flow__node[data-id="orchestrate"]')).toBeFocused();
+  // Shift+F10 on the focused block opens the same menu; Enter picks the focused item.
+  await page.keyboard.press('Shift+F10');
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-edge', /helper-1/);
+
+  // The block panel's "Link to…" has nothing left to offer from the lead.
+  await block(page, 'orchestrate').click();
+  await expect(panel(page).getByTestId('link-to')).toHaveCount(0);
+});
+
+test('P-C: dragging a link end moves it; an invalid drop snaps back', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  await addBlock(page, 'Named helper');
+  await page.keyboard.press('Escape');
+  await showCanvas(page);
+  const rework = page.locator('.react-flow__edge[data-id="rework-orchestrate-helpers"]');
+  // Selected (Enter on the focused link), the link is drawn above the blocks with its grips.
+  const selectLink = async () => {
+    await rework.focus();
+    await page.keyboard.press('Enter');
+  };
+  await selectLink();
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute(
+    'data-edge',
+    'rework-orchestrate-helpers',
+  );
+  const grip = async () => centre(rework.locator('.react-flow__edgeupdater-target'));
+
+  // An invalid end (a rework to the Ticket): refused in plain words, the link stays.
+  let from = await grip();
+  const ticket = await bodyOf(page, 'ticket');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(ticket.x, ticket.y, { steps: 10 });
+  await expect(block(page, 'ticket')).toHaveAttribute('data-link-target', 'invalid');
+  await expect(block(page, 'helper-1')).toHaveAttribute('data-link-target', 'valid');
+  await page.mouse.up();
+  await expect(page.getByTestId('link-refused')).toBeVisible();
+  await expect(rework).toHaveCount(1);
+  await page.getByRole('button', { name: 'Dismiss' }).click();
+
+  // Released over empty canvas: it snaps back.
+  await selectLink();
+  from = await grip();
+  const pane = await page.getByTestId('graph-editor').boundingBox();
+  if (pane === null) throw new Error('no canvas');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(pane.x + 8, pane.y + pane.height - 8, { steps: 8 });
+  await page.mouse.up();
+  await expect(rework).toHaveCount(1);
+  await expect(page.getByTestId('unsaved')).toBeVisible(); // the helper added earlier
+
+  // Onto the named helper: the rework link moves there, with its rounds.
+  await selectLink();
+  from = await grip();
+  const helper = await bodyOf(page, 'helper-1');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(helper.x, helper.y, { steps: 10 });
+  await page.mouse.up();
+  await expect(rework).toHaveCount(0);
+  const edge = panel(page).getByTestId('edge-panel');
+  await expect(edge).toHaveAttribute('data-type', 'rework');
+  await expect(edge).toHaveAttribute('data-edge', /helper-1/);
+  await expect(page.getByText('Rework ×2').first()).toBeVisible();
+  // One undo puts it back.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(rework).toHaveCount(1);
+});
+
+test('P-C: undo and redo with the keys and the toolbar; Tidy layout', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  await expect(page.getByTestId('undo')).toBeDisabled();
+  await expect(page.getByTestId('tidy-layout')).toBeDisabled();
+  await addBlock(page, 'Named helper');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('unsaved')).toBeVisible();
+
+  // A link dragged, then undone and redone with the keys.
+  await drag(page, 'helper-1', 'review');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(panel(page)).toHaveCount(0);
+  await expect(
+    page.getByRole('group', { name: /^Sends its change for review: from Helper 1/ }),
+  ).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(
+    page.getByRole('group', { name: /^Sends its change for review: from Helper 1/ }),
+  ).toHaveCount(1);
+  // The toolbar's buttons do the same; undoing back to the saved graph clears "Unsaved".
+  await page.getByTestId('undo').click();
+  await page.getByTestId('undo').click();
+  await expect(block(page, 'helper-1')).toHaveCount(0);
+  await expect(page.getByTestId('unsaved')).toHaveCount(0);
+  await expect(page.getByTestId('undo')).toBeDisabled();
+  await page.getByTestId('redo').click();
+  await expect(block(page, 'helper-1')).toBeVisible();
+
+  // Tidy layout: a block dragged away glides back to the automatic layout; one undo step.
+  await showCanvas(page);
+  const home = await flowPosition(page, 'review');
+  const at = await bodyOf(page, 'review');
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 160, at.y + 120, { steps: 8 });
+  await page.mouse.up();
+  const moved = await flowPosition(page, 'review');
+  expect(Math.abs(moved.x - home.x) + Math.abs(moved.y - home.y)).toBeGreaterThan(100);
+  await expect(page.getByTestId('tidy-layout')).toBeEnabled();
+  await shoot(page, 'untidy');
+  await page.getByTestId('tidy-layout').click();
+  await expect(page.getByTestId('tidy-layout')).toBeDisabled();
+  await expect.poll(() => flowPosition(page, 'review')).toEqual(home);
+  await shoot(page, 'tidy');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(() => flowPosition(page, 'review')).toEqual(moved);
+
+  // With reduced motion the blocks jump straight to their places (no glide).
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByTestId('tidy-layout').click();
+  expect(await flowPosition(page, 'review')).toEqual(home);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
 });

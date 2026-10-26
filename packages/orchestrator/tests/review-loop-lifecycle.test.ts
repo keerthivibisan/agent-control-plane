@@ -44,7 +44,7 @@ import { workflow } from './workflow-helpers.js';
 
 /**
  * The review loop's handover, final stages, owner's final merge, Stop all, restart, depth 2 and
- * budgets (ADR-0021 §3–5, docs/review-loop/README.md §5). Synthetic data only.
+ * budgets (ADR-0021 §3–5, docs/history/review-loop/README.md §5). Synthetic data only.
  */
 
 const B = 'wb-1';

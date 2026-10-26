@@ -1,8 +1,8 @@
 import { href, NEW_RUN, type LegacyRoute, type Route } from '../lib/router';
 
 /**
- * Where each pre-redesign address goes now (docs/redesign/README.md §3). Pure, so every rule has a
- * unit test; src/app/Redirect.tsx fetches what a rule needs and replaces the address.
+ * Where each pre-redesign address goes now (docs/history/redesign/README.md §3). Pure, so every
+ * rule has a unit test; src/app/Redirect.tsx fetches what a rule needs and replaces the address.
  */
 export type RedirectPlan =
   | { kind: 'go'; hash: string }

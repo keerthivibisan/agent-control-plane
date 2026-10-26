@@ -86,6 +86,7 @@ export function applyCommand<T>(
     const outcome = body(draft);
     if (isRefusal(outcome)) return { ok: false, refusal: outcome };
     draft.reconcile();
+    draft.trackOwnerWait();
     draft.flushCheckoutRemovals();
     return { ok: true, state: draft.finish(), effects: draft.effects, value: outcome.value };
   } catch (error) {
@@ -466,12 +467,15 @@ export function agentEvent(
           providerSessionId: event.providerSessionId,
         });
         // ADR-0021: a rework turn resumes the helper's first session; keep it (evidence only).
-        if (
-          d.integration !== undefined &&
-          hasReviewableChange(agent.kind) &&
-          agent.sessionId === null
-        ) {
-          agent.sessionId = event.providerSessionId;
+        if (d.integration !== undefined && hasReviewableChange(agent.kind)) {
+          if (agent.sessionId === null) {
+            agent.sessionId = event.providerSessionId;
+          } else if (
+            agent.sessionId !== event.providerSessionId &&
+            agent.change?.state === 'rework'
+          ) {
+            reworkInNewSession(d, agent, event.providerSessionId);
+          }
         }
         if (agent.status === 'STARTING') d.setAgentStatus(agent, 'RUNNING');
         else if (!live) d.effects.push({ type: 'diagnostic', code: 'event-after-end', agentRunId });
@@ -561,6 +565,27 @@ export function agentEvent(
       }
     }
   });
+}
+
+/** P-D: the Latest line of a helper whose rework turn could not continue its saved session. */
+export const REWORK_NEW_SESSION_ACTIVITY =
+  'Started a new session: its earlier conversation could not be continued';
+
+/**
+ * P-D: a rework turn reported another session than the one it resumed. A resume never changes the
+ * id (`forkSession: false`), so the saved session could not be continued and the adapter started a
+ * new one in the same worktree (its work is there, and the comments are in its prompt). The next
+ * rework resumes the new session. The lead hears of it in plain words; the owner sees the Latest
+ * line. The turn itself goes on as any rework turn.
+ */
+function reworkInNewSession(d: Draft, agent: EngineAgent, providerSessionId: string): void {
+  agent.sessionId = providerSessionId;
+  agent.latestActivity = REWORK_NEW_SESSION_ACTIVITY;
+  d.effects.push({ type: 'diagnostic', code: 'rework-session-replaced', agentRunId: agent.id });
+  notifyLead(
+    d,
+    `${agent.role} (agentId ${agent.id}) could not continue its earlier conversation, so it reworks its change in a new session: same folder, its earlier work and the comments. Its change comes back to review as usual.`,
+  );
 }
 
 /** The Latest line of a Full auto agent that could not run protected (ADR-0022). */
@@ -844,6 +869,27 @@ export function isRunPastDeadline(run: RunState['run'], now: Date, timeoutMs: nu
   return !isTerminalRunStatus(run.status) && now.getTime() - Date.parse(run.createdAt) >= timeoutMs;
 }
 
+/**
+ * The run's own time so far: since it was created, less the time it waited only for the owner
+ * (`RunState.ownerWait`, P-D), the current wait included.
+ */
+export function runWorkingMs(state: RunState, now: Date): number {
+  const elapsed = now.getTime() - Date.parse(state.run.createdAt);
+  const wait = state.ownerWait;
+  if (wait === undefined) return elapsed;
+  const current = wait.since === null ? 0 : Math.max(0, now.getTime() - Date.parse(wait.since));
+  return elapsed - wait.totalMs - current;
+}
+
+/**
+ * The run timeout (ADR-0013 §3) as the sweep applies it: the run's own time (`runWorkingMs`) has
+ * reached `timeoutMs`. A run that waits only for the owner never reaches it while it waits, and
+ * its clock goes on from where it stopped once the owner answers (P-D).
+ */
+export function isRunOverdue(state: RunState, now: Date, timeoutMs: number): boolean {
+  return !isTerminalRunStatus(state.run.status) && runWorkingMs(state, now) >= timeoutMs;
+}
+
 function stopEverything(
   state: RunState,
   ctx: EngineContext,
@@ -860,7 +906,12 @@ function stopEverything(
     // An ended lead's follow-up turn (ADR-0020) ends with the run's agents.
     abortFollowUpTurn(d);
     d.settlePendingApprovals(null, 'denied', Draft.messages.deniedAgentStopped);
-    for (const agent of d.liveNonLeadDeepestFirst()) d.endAgent(agent, agentStatus, true);
+    for (const agent of d.liveNonLeadDeepestFirst()) {
+      // A helper waiting for its change to be decided has no process to time out; it ends as
+      // with Stop all (ADR-0021 §5). AWAITING_REVIEW → TIMED_OUT is no transition, so before P-D
+      // the run timeout was refused while any change waited, then hit the moment none did.
+      d.endAgent(agent, agent.status === 'AWAITING_REVIEW' ? 'CANCELLED' : agentStatus, true);
+    }
     const lead = d.lead();
     if (lead !== undefined) d.endAgent(lead, agentStatus, true);
     return done;

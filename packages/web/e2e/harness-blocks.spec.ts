@@ -143,7 +143,7 @@ async function addBlock(page: Page, name: RegExp): Promise<void> {
   await page.getByRole('menuitem', { name }).click();
 }
 
-test('the Checks block panel: the fixed merge block, picks, failure routes, new blocks', async ({
+test('the Checks block panel: the merge block, picks, failure routes, new blocks', async ({
   page,
 }) => {
   await serve(page);
@@ -151,14 +151,16 @@ test('the Checks block panel: the fixed merge block, picks, failure routes, new 
   await page.goto(`/#/p/${WF_PROJECT_ID}/workflow`);
   await expect(page.getByTestId('graph-editor')).toBeVisible();
 
-  // The block before the lead's merge: shows its pick, can't move or be removed.
+  // The block before the lead's merge: shows its place and pick, stays in place, can be removed
+  // (ADR-0028 §2: every Checks block is optional).
   const merge = page.getByTestId('block-checks');
-  await expect(merge.getByTestId('checks-select')).toHaveText('Runs: Required');
+  await expect(merge.getByTestId('checks-kind')).toHaveText('Checks before merge');
+  await expect(merge.getByTestId('checks-select')).toHaveText('Runs: Required checks');
   await merge.click();
   const p = panel(page);
   await expect(p.getByTestId('check-place')).toHaveAttribute('data-place', 'merge');
-  await expect(p.getByTestId('check-place-mandatory')).toBeVisible();
-  await expect(p.getByRole('button', { name: 'Remove block' })).toHaveCount(0);
+  await expect(p.getByTestId('check-place-merge')).toBeVisible();
+  await expect(p.getByRole('button', { name: 'Remove block' })).toBeVisible();
   const failure = p.getByRole('group', { name: 'When a check fails' });
   await expect(failure.getByRole('radio')).toHaveCount(2);
   await expect(p.getByTestId('check-runs')).toHaveText('Runs: Lint, Unit tests.');

@@ -1,6 +1,6 @@
 # ADR-0020: Resume the lead's chat on an owner message
 
-- **Status:** accepted — owner decision 2026-10-16 (docs/redesign/README.md §6b)
+- **Status:** accepted — owner decision 2026-10-16 (docs/history/redesign/README.md §6b)
 - **Date:** 2026-10-16
 - **Amends:** ADR-0013 §7 (restart), for this one owner action
 

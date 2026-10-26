@@ -13,7 +13,8 @@ const TABS: readonly { id: HealthTab; label: string; to: string }[] = [
 
 /**
  * Data health with its two sections: the diagnostics (`#/health`) and the connection, which was
- * the Setup page (`#/health/connection`: project folders and hooks; docs/redesign/README.md §3).
+ * the Setup page (`#/health/connection`: project folders and hooks; docs/history/redesign/README.md
+ * §3).
  */
 export function HealthScreen({ tab }: { tab: HealthTab }) {
   // Under the page title, like every page's own controls (R-V visual problem 9). The sections are

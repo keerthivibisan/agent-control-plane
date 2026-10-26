@@ -7,6 +7,78 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-26
+
+A patch release for the Workflow page and long runs. Each agent block can set its effort, every
+Checks block is optional, the end of the flow is one Finish block, and linking blocks is much
+easier. A run no longer ends when you take your time to decide on a change. There is no database
+change: 0.3.1 opens the 0.3.0 database as it is.
+
+### Added
+
+- **Effort per agent block:** Default, Low, Medium or High, set in the block's panel and shown as
+  a chip on the block and on the live run graph. More effort means the agent thinks longer before
+  acting: slower, and more tokens. Default leaves it to the model.
+- **Easier linking on the Workflow page**
+  - Start a link from any side of a block; connectors appear on hover and keyboard focus.
+  - Drop anywhere on a block, or near one: the link snaps to the nearest block that accepts it.
+    While you drag, blocks that accept the link glow and the others fade.
+  - When only one kind of link fits, it is made at once; the chooser appears only when several do.
+  - Link without dragging: click a connector, then a block (Escape cancels), or use **Link to…** in
+    the block's panel or its menu (right-click or Shift+F10), which lists only the blocks the link
+    may end on.
+  - Drag either end of a link to another block. A move that isn't allowed is refused and the link
+    stays where it was.
+  - **Undo** and **Redo** (⌘Z and ⇧⌘Z, or Ctrl on Windows and Linux), up to 50 steps.
+  - **Tidy layout** puts every block back in the automatic layout, with a short animation (none
+    when your system reduces motion).
+
+### Changed
+
+- **Checks blocks are optional, all of them,** including the one before the lead's merge. Each
+  says in plain words what it does and what happens without it. Without a Checks block before the
+  merge, a helper's change merges after review only, and the editor says so.
+- **What gates your final merge:** a workflow without a Checks block before the merge needs only
+  the checks of its Checks block on the ticket branch, if it has one. Workflows that keep the block
+  before the merge (every workflow from 0.3.0) work exactly as before.
+- **One Finish block** ends the flow: "Merge into `<target>` or open a pull request", with the
+  ticket's target. It replaces the separate final-merge and Done blocks in the editor and on the
+  live run graph.
+
+### Fixed
+
+- A run could end while it waited for you. The 2-hour run limit counted the time a change waited
+  for your decision, so after a long run your Rework or Merge cancelled the run within seconds and
+  the ticket had to be run again. Time spent waiting only for you no longer counts, and a run that
+  does reach the limit now ends cleanly.
+- A helper sent back for rework could fail when its earlier session could not be continued. It
+  now starts a new session in the same folder, with its earlier work, and the ticket says so.
+- Agents no longer inherit `CLAUDE_CODE_EXIT_AFTER_STOP_DELAY` from your shell, which could end
+  them while they waited for you.
+
+### Known issues
+
+- After the server stops while agents are working (a restart, or quitting the app), their run
+  waits for you as "Needs review". You can merge or discard a finished change, but not send it
+  back for rework; start the ticket again instead. Planned for 0.3.2
+  ([ADR-0029](docs/decisions/0029-owner-rework-after-restart.md)).
+
+### Development
+
+- Ready to open source: a new README, architecture and contributor docs, AGENTS.md and CLAUDE.md
+  for contributors' coding agents, and issue and pull request templates. The internal coordination
+  logs were removed (still readable at tag `v0.3.0`); the plans of finished series are in
+  `docs/history/`.
+- CI runs for `main`, `dev/*` and `release/*`: on pull requests into them (forks included) and on
+  pushes to them. Pull requests into `main` and pushes to `main` also run the browser tests.
+
+### Upgrading from 0.3.0
+
+Stop the app, update (`git pull`), and start it with `./start.sh` or `pnpm install && pnpm dev`.
+There is no database change. To go back to 0.3.0: a workflow you saved in 0.3.1 without a Checks
+block before the merge is refused by 0.3.0 until you add that block again; effort settings are
+ignored.
+
 ## [0.3.0] - 2026-10-25
 
 GitHub and a ticket page that reads like a pull request. Connect a project to GitHub from
@@ -386,7 +458,8 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.0.1...v0.1.0

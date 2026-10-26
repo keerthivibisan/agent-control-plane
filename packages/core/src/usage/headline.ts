@@ -1,7 +1,7 @@
 import type { TokenCounts } from './usage.js';
 
 /**
- * New work vs cache reuse (docs/redesign/README.md §4.5), derived from one set of already
+ * New work vs cache reuse (docs/history/redesign/README.md §4.5), derived from one set of already
  * deduplicated, summed token counts. A figure is null when none of its categories was reported;
  * a missing category inside a reported figure counts as absent, not as 0 tokens of evidence, so the
  * caller should also show `recordsWithUnavailable` from the totals.

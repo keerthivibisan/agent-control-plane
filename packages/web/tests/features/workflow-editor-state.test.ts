@@ -146,7 +146,8 @@ describe('editor reducer: adding blocks', () => {
 describe('editor reducer: removing, connecting, moving', () => {
   it('never removes the lead or a step, and drops a removed block’s links', () => {
     const g = todays();
-    for (const id of ['orchestrate', 'ticket', 'plan-approval', 'checks', 'owner-merge', 'done']) {
+    // Every Checks block can be removed since ADR-0028 (tested with the Checks blocks).
+    for (const id of ['orchestrate', 'ticket', 'plan-approval', 'owner-merge', 'done']) {
       expect(run(g, { type: 'remove-node', id }).graph).toBe(g);
     }
     const s = run(g, { type: 'remove-node', id: 'review' });
@@ -281,24 +282,26 @@ describe('issues, layout and the canvas mapping', () => {
     const g = parse(customGraph());
     const moved = {
       ...g,
-      nodes: g.nodes.map((n) => (n.id === 'done' ? { ...n, position: { x: 5, y: 6 } } : n)),
+      nodes: g.nodes.map((n) => (n.id === 'plan' ? { ...n, position: { x: 5, y: 6 } } : n)),
     };
     const pos = layoutGraph(moved);
-    expect(pos.get('done')).toEqual({ x: 5, y: 6 });
+    expect(pos.get('plan')).toEqual({ x: 5, y: 6 });
     // Three rows: the plan path, then the lead and its helpers, then the merge and final steps.
     const at = (id: string) => pos.get(id) ?? { x: NaN, y: NaN };
     expect(at('ticket').y).toBeLessThan(at('orchestrate').y);
-    expect(at('plan').x).toBeLessThan(at('plan-approval').x);
     expect(at('orchestrate').x).toBeLessThan(at('helper-1').x);
     expect(at('helper-1').x).toBeLessThan(at('review').x);
     expect(at('helper-1').y).toBeLessThan(at('helpers').y);
     expect(at('helpers').y).toBeLessThan(at('checks').y);
-    expect(at('ticket-merge').x).toBeLessThan(at('unit-tests').x);
+    expect(at('checks').x).toBeLessThan(at('unit-tests').x);
     expect(at('unit-tests').x).toBeLessThan(at('owner-merge').x);
+    // The Finish block (your merge) stands for the ticket merge and Done: they share its place.
+    expect(at('ticket-merge')).toEqual(at('owner-merge'));
+    expect(at('done')).toEqual(at('owner-merge'));
     // Same layout every time.
     expect([...layoutGraph(moved)]).toEqual([...pos]);
     const boxes = moved.nodes
-      .filter((n) => n.id !== 'done')
+      .filter((n) => n.id !== 'plan' && n.id !== 'done' && n.id !== 'ticket-merge')
       .map((n) => ({ ...(pos.get(n.id) ?? { x: 0, y: 0 }), ...sizeOf(n) }));
     for (const a of boxes) {
       for (const b of boxes) {
@@ -327,7 +330,11 @@ describe('issues, layout and the canvas mapping', () => {
     const nodes = toFlowNodes(g, issues, { kind: 'node', id: 'helper-1' }, ctx);
     const byId = new Map(nodes.map((n) => [n.id, n]));
     expect(byId.get('orchestrate')).toMatchObject({ type: 'agent', deletable: false });
-    expect(byId.get('checks')).toMatchObject({ type: 'gate', deletable: false });
+    expect(byId.get('checks')).toMatchObject({ type: 'gate', deletable: true });
+    // The end steps are one Finish block (ADR-0028 §3): your merge, fixed; the others not drawn.
+    expect(byId.get('owner-merge')).toMatchObject({ type: 'finish', deletable: false });
+    expect(byId.has('ticket-merge')).toBe(false);
+    expect(byId.has('done')).toBe(false);
     expect(byId.get('helper-1')).toMatchObject({ selected: true, deletable: true });
     expect(byId.get('helper-1')?.data).toMatchObject({
       missingSkills: ['release-notes'],
@@ -386,14 +393,19 @@ describe('linking and drawing (v0.3.0 D-C)', () => {
     // A new helper can be assigned or reworked by the lead.
     expect(targets?.get('helper-1')).toBe('valid');
     // Already linked (merge, assigns and rework to the pool) or never allowed: invalid.
-    for (const id of ['checks', 'helpers', 'ticket', 'review', 'done']) {
+    for (const id of ['checks', 'helpers', 'ticket', 'review']) {
       expect(targets?.get(id)).toBe('invalid');
     }
-    // Every valid target is one allowedEdgeTypes accepts, and nothing else.
+    // The steps the Finish block stands for are not targets of their own.
+    expect(targets?.has('done')).toBe(false);
+    expect(targets?.has('ticket-merge')).toBe(false);
+    // Every valid target is one allowedEdgeTypes accepts (the Finish block: its ticket merge or
+    // your merge), and nothing else.
     for (const n of g.nodes) {
-      if (n.id === 'orchestrate') continue;
+      if (n.id === 'orchestrate' || n.id === 'done' || n.id === 'ticket-merge') continue;
+      const ends = n.id === 'owner-merge' ? ['ticket-merge', 'owner-merge'] : [n.id];
       expect(targets?.get(n.id) === 'valid').toBe(
-        allowedEdgeTypes(g, 'orchestrate', n.id).length > 0,
+        ends.some((to) => allowedEdgeTypes(g, 'orchestrate', to).length > 0),
       );
     }
     expect(linkTargets(g, null)).toBeNull();

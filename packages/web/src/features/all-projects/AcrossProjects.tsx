@@ -168,8 +168,9 @@ function Summary({
 }
 
 /**
- * The cross-project part of All projects (it replaces the Overview page, docs/redesign/README.md
- * §3): Claude Code sessions in every project, from GET /api/overview.
+ * The cross-project part of All projects (it replaces the Overview page,
+ * docs/history/redesign/README.md §3): Claude Code sessions in every project, from GET
+ * /api/overview.
  */
 export function AcrossProjects() {
   const overview = useApiQuery(paths.overview(), schemas.overview);

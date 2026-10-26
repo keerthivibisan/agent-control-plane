@@ -495,6 +495,19 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         } catch (error) {
           // A second `started` with another session id: keep the first link (it is evidence).
           if (!(error instanceof DbError && error.code === 'conflict')) throw error;
+          // P-D: a rework turn that could not resume its session runs in a new one; link it as a
+          // retry of the same agent run, so its usage and name stay with that agent.
+          try {
+            repos.agentRunSessions.link({
+              agentRunId: effect.agentRunId,
+              provider: 'claude-code',
+              providerSessionId: effect.providerSessionId,
+              relation: 'retry',
+            });
+          } catch (retryError) {
+            if (!(retryError instanceof DbError && retryError.code === 'conflict'))
+              throw retryError;
+          }
         }
       }
     }

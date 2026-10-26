@@ -1,6 +1,6 @@
 # ADR-0023: Editable workflow graphs
 
-- **Status:** accepted: owner decisions in chat 2026-10-17 (docs/workflow-graph/STATUS.md);
+- **Status:** accepted: owner decisions in chat 2026-10-17 (`docs/workflow-graph/STATUS.md` at tag `v0.3.0`);
   accepted by the coordinator on those decisions
 - **Date:** 2026-10-17
 - **Deciders:** project owner (decisions); coordinator (draft and review)
@@ -9,7 +9,7 @@
   - ADR-0021 §1 (the approval mode is set per editing node; ticket and run modes only tighten);
   - ADR-0021 §3 (three review routes);
   - ADR-0022 (Full auto per node, plan auto-approval on the plan gate).
-- **Plan:** [docs/workflow-graph/README.md](../workflow-graph/README.md)
+- **Plan:** [docs/history/workflow-graph/README.md](../history/workflow-graph/README.md)
 
 ## Context
 

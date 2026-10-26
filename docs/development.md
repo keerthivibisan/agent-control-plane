@@ -1,48 +1,20 @@
 # Development
 
-## 1. Requirements
+Conventions for working on the code. The rest lives in one place each:
 
-| Tool            | Version                                          | Notes                                                                                                                    |
-| --------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Node.js         | **22.x, at least 22.12** (`.nvmrc` pins 22.21.1) | `engines` and `engine-strict` reject other majors. Node 18 and 20 do not work                                            |
-| pnpm            | **10.26.x** (`packageManager`)                   | Run `corepack enable` under Node 22, or install pnpm 10. Some Node installs bundle an older pnpm; check `pnpm --version` |
-| C/C++ toolchain | Xcode CLT (macOS), `build-essential` (Linux)     | `better-sqlite3` builds from source when no prebuilt binary matches                                                      |
-| Claude Code     | optional                                         | Needed only for real-data runs. Tests never need it                                                                      |
+- **Toolchain, install, commands, the browser tests and CI:** [BUILD.md](../BUILD.md) (Node 22 at
+  least 22.12, pnpm 10.26.x, `pnpm check`).
+- **Running the app and its configuration** (`ACP_PORT`, `ACP_DATA_DIR`, `ACP_MODE` and the rest):
+  [START.md](../START.md#configuration).
+- **How to contribute** (branches, commits, pull requests, working with a coding agent):
+  [CONTRIBUTING.md](../CONTRIBUTING.md); the binding rules are in [AGENTS.md](../AGENTS.md).
 
-```bash
-nvm use
-```
-
-```bash
-corepack enable
-```
-
-```bash
-pnpm install
-```
-
-## 2. Commands (root)
-
-| Command                             | Does                                                                      | Current scope |
-| ----------------------------------- | ------------------------------------------------------------------------- | ------------- |
-| `pnpm test`                         | `vitest run` in every package that defines `test`                         | every package |
-| `pnpm typecheck`                    | `tsc --noEmit` per package                                                | every package |
-| `pnpm lint`                         | ESLint (type-aware, plus boundary rules) on the whole repo, zero warnings | whole repo    |
-| `pnpm format` / `pnpm format:check` | Prettier                                                                  | whole repo    |
-| `pnpm build`                        | builds each package with a `build` script                                 | every package |
-| `pnpm check`                        | runs all of the above in order (the same as CI)                           |               |
-| `pnpm dev`                          | the server (127.0.0.1:7420) and the web UI (127.0.0.1:5173) in watch mode | server, web   |
-
-Building and verifying from source, including the browser e2e suite, is in [BUILD.md](../BUILD.md);
-running the app is in [START.md](../START.md).
-
-Package scripts are added by the work package that lands the package's first source file. **A package
-without source has no `test`, `typecheck`, or `build` script**, so root commands report only what really
+Package scripts exist only where a package has source, so root commands report only what really
 runs. Do not add placeholder scripts.
 
-## 3. Standard package layout and scripts
+## 1. Standard package layout and scripts
 
-Library packages (`core`, `db`, `adapters/*`) follow the pattern of `packages/core`:
+Library packages (`core`, `db`, `orchestrator`, `adapters/*`) follow the pattern of `packages/core`:
 
 ```
 package.json   exports: { ".": { development: ./src/index.ts, types: ./dist/index.d.ts, default: ./dist/index.js } }
@@ -65,23 +37,25 @@ Scripts: `"build": "tsc -p tsconfig.build.json"`, `"typecheck": "tsc -p tsconfig
   source into the program and fails with "not under rootDir". Root `pnpm build` runs in dependency
   order. For one package, use `pnpm --filter @acp/<name>... build` (the trailing `...` builds its
   dependencies first).
-- **Node packages** (`db`, `adapters/*`, `server`) set `"types": ["node"]` in `tsconfig.json`.
-  `core` keeps `"types": []`.
+- **Node packages** (`db`, `orchestrator`, `adapters/*`, `server`) set `"types": ["node"]` in
+  `tsconfig.json`. `core` keeps `"types": []`.
 - **Server:** dev runs `node --conditions=development --import tsx src/main.ts`. Build compiles with
   `tsc` to `dist`, and production runs on the built `dist` of the workspace libraries.
 - **Web:** Vite dev server on port 5173, which proxies `/api` to the server. The production build is
   served by the server.
 
-## 4. TypeScript conventions
+## 2. TypeScript conventions
 
 - ESM everywhere (`"type": "module"`). Node packages use `module`/`moduleResolution: NodeNext`, so
   **relative imports end in `.js`**. The web package uses `Bundler` resolution.
 - `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, and `verbatimModuleSyntax` are
   on. Use `import type` for types.
 - No `any`. Parse unknown data with Zod at every boundary: files, HTTP, hooks, database JSON columns.
-- `@acp/core` has `types: []`: no Node or DOM globals, because both the server and the browser import it.
+- `@acp/core` has `types: []`: no Node or DOM globals, because both the server and the browser
+  import it.
+- Inject clocks (`now: () => Date`), id generators and file-system access so logic can be tested.
 
-### Pinned versions and why
+## 3. Pinned versions and why
 
 | Choice                                                                                                                                          | Reason                                                                                   |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -89,37 +63,27 @@ Scripts: `"build": "tsc -p tsconfig.build.json"`, `"typecheck": "tsc -p tsconfig
 | jsdom **29.1.1** (not 30)                                                                                                                       | jsdom 30 requires Node at least 22.22.2                                                  |
 | Vite 8.3.4, Vitest 5.0.3, React 19.3.0, Tailwind 4.3.3, @xyflow/react 12.12.0, Recharts 3.10.1, Express 5.3.0, better-sqlite3 13.0.3, Zod 4.6.5 | current stable versions, compatible with Node 22.12 and later; peers verified at install |
 
-Only the coordinator adds or upgrades dependencies, because it changes the shared lockfile
-(AGENTS.md §5).
+Dependency changes touch the shared lockfile, so they go in a pull request of their own and need a
+maintainer's review (AGENTS.md §5).
 
-## 5. Runtime configuration
+## 4. Testing rules
 
-| Env                                           | Default                                | Meaning                                         |
-| --------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| `ACP_PORT`                                    | `7420`                                 | server port (binds 127.0.0.1)                   |
-| `ACP_DATA_DIR`                                | `~/.agent-control-plane`               | database, hook token                            |
-| `ACP_CLAUDE_DIR`                              | `$CLAUDE_CONFIG_DIR`, else `~/.claude` | Claude data root (read-only)                    |
-| `ACP_MODE`                                    | `live`                                 | `live`, or `demo` (demo adapter, `demo.sqlite`) |
-| `ACP_POLL_INTERVAL_MS`                        | `5000`                                 | transcript scan interval                        |
-| `ACP_ACTIVE_WINDOW_MS` / `ACP_STALE_AFTER_MS` | `120000` / `1800000`                   | status thresholds                               |
-| `ACP_MANAGED`                                 | on in live mode, off in demo mode      | `off` turns managed agents (Agent SDK) off      |
-| `ACP_RUN_TIMEOUT_MS`                          | `7200000`                              | a working managed run is stopped after this     |
-
-## 6. Testing rules
-
-- Every package with source has tests. Never write empty or placeholder tests.
+- Every behaviour has a test in the same change. Never write empty or placeholder tests.
 - Tests never read the real `~/.claude`. Use `test-fixtures/` or temp directories (`fs.mkdtemp`).
+  Fixtures are synthetic or sanitized
+  ([test-fixtures/claude-code/README.md](../test-fixtures/claude-code/README.md)).
 - Database tests use a temp-file database per test (not just `:memory:`, so WAL and migrations are
   exercised).
+- No test depends on the wall clock or the network.
 - Each scenario in [usage-accounting.md §7](usage-accounting.md#7-required-failure-scenarios) has a
   named test.
-- Run e2e tests (Playwright, P1-F) against the server in demo mode. Real-data verification is a
-  documented manual procedure (P1-F).
-
-## 7. CI
-
-`.github/workflows/ci.yml` runs on Ubuntu with the Node version from `.nvmrc` and pnpm from
-`packageManager`. Steps: `pnpm install --frozen-lockfile`, then format check, lint, typecheck, test,
-and build. It runs by itself only on pushes to `main`, skipping changes that touch only `docs/**` or Markdown
-files. On other branches and pull requests it runs only when started by hand from the Actions tab
-(`workflow_dispatch`, choose the branch). Run `pnpm check` locally before every push.
+- Managed runs are tested with fake agents (`tests/managed/fake-query.ts` in the Claude Code
+  adapter, a fake managed adapter in the server tests) and real git in temp repositories, never
+  with the real `claude`.
+- Safety guarantees have adversarial tests: [testing/adversarial.md](testing/adversarial.md).
+- The browser end-to-end suite (Playwright, `packages/web/e2e`) runs against servers in demo mode
+  or with scripted fake agents and temp data folders
+  ([BUILD.md](../BUILD.md#browser-end-to-end-tests)).
+- A real run against Claude Code is never part of the test suite. When one is needed, it uses a
+  throwaway repository and data folder, runs only with a maintainer's agreement, and is written up
+  with aggregates only in [research/](research/).

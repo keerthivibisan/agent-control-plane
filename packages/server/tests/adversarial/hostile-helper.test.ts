@@ -9,12 +9,13 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ManagedAgentSpec } from '@acp/core';
+import { withoutCheckBlocks, workflowTemplate, type ManagedAgentSpec } from '@acp/core';
 import { createManagedClaudeCode, type ManagedQueryFn } from '@acp/adapter-claude-code';
 import { git, tempDir } from '../workspace/helpers.js';
 import {
   MODES,
   assertInvariants,
+  assertOwnerCanFinish,
   changeOf,
   goodChange,
   handOver,
@@ -124,6 +125,72 @@ describe.each(MODES)('the ACPGIT-3 incident (%s)', (mode) => {
       const result = await persistentLead(sc, resetTicketBranchToBaseAndCommit);
       expect(result.merged).toBe(false);
       await assertInvariants(sc);
+    },
+    T,
+  );
+});
+
+// ADR-0028 §2 (v0.3.1 P-A): a workflow with no Checks block at all. The lead merges each change
+// after its review with no checks; every invariant still holds and the owner can finish.
+describe.each(MODES)('without any Checks block (%s)', (mode) => {
+  // Full auto approves the plan itself only when the plan gate does.
+  const base = withoutCheckBlocks(workflowTemplate('lead-only'));
+  const graph = {
+    ...base,
+    template: 'custom' as const,
+    nodes: base.nodes.map((n) =>
+      n.type === 'plan-approval' ? { ...n, auto: mode === 'full-auto' } : n,
+    ),
+  };
+
+  it(
+    'a helper checks out the ticket branch and commits: nothing unreviewed ships; the owner can finish',
+    async () => {
+      const sc = await scenario({ mode, graph });
+      const worker = await helperTurn(sc, checkoutTicketBranchAndCommit);
+      if (worker === null) throw new Error('no helper');
+      expect(changeOf(await runDetail(sc.s, sc.runId), worker.id)).toMatchObject({
+        state: 'decision',
+        headCommit: null,
+      });
+      expect(await leadMerges(sc, worker.id)).not.toContain('Merged');
+      await assertInvariants(sc, { finish: true });
+    },
+    T,
+  );
+
+  it(
+    'the ticket branch moved after a merged change: the next merge goes to the owner; the owner can finish',
+    async () => {
+      const sc = await scenario({ mode, graph });
+      await goodChange(sc);
+      const reviewed = (await runDetail(sc.s, sc.runId)).ticketBranch?.headCommit;
+      const hostile = await helperTurn(sc, (t) => t.sh('branch', '--force', t.sc.branch, 'main'));
+      if (hostile === null) throw new Error('no helper');
+      expect(await leadMerges(sc, hostile.id)).not.toContain('Merged');
+      const detail = await runDetail(sc.s, sc.runId);
+      expect(changeOf(detail, hostile.id)?.state).toBe('needs-owner');
+      expect(detail.ticketBranch?.headCommit).toBe(reviewed);
+      await assertInvariants(sc, { finish: true });
+    },
+    T,
+  );
+
+  it(
+    'an honest change merges with no checks and the owner merges the ticket branch',
+    async () => {
+      const sc = await scenario({ mode, graph });
+      await goodChange(sc);
+      await handOver(sc);
+      const checks = (await sc.s.get(`/api/runs/${sc.runId}/checks`)).body as unknown[];
+      expect(checks).toEqual([]);
+      await assertInvariants(sc);
+      const r = await sc.s.post(`/api/runs/${sc.runId}/ticket-branch`, { action: 'merge' });
+      expect(r.status).toBe(200);
+      sc.ledger.resnapshot();
+      expect((await runDetail(sc.s, sc.runId)).status).toBe('COMPLETED');
+      await assertInvariants(sc);
+      await assertOwnerCanFinish(sc);
     },
     T,
   );

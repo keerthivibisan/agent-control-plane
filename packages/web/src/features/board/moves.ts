@@ -2,9 +2,9 @@ import { TICKET_STAGES, type TicketStage } from '@acp/core';
 import type { BoardDto, TicketCardDto } from '@acp/core/api';
 
 /**
- * Board rules that don't need React (docs/phase-4/README.md §5.2). The owner sets only Backlog,
- * Ready and Cancelled, and starts a ready ticket; every other column follows the ticket's run, so
- * the agents (through the server) move cards there, never a drag.
+ * Board rules that don't need React (docs/history/phase-4/README.md §5.2). The owner sets only
+ * Backlog, Ready and Cancelled, and starts a ready ticket; every other column follows the ticket's
+ * run, so the agents (through the server) move cards there, never a drag.
  */
 
 /** A column the owner may move a card to. */

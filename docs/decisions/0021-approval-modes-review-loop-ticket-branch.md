@@ -1,11 +1,11 @@
 # ADR-0021: Approval modes, the review loop and the ticket branch
 
-- **Status:** accepted — owner decisions in chat 2026-10-17 (docs/review-loop/README.md §1); accepted by the coordinator on those decisions
+- **Status:** accepted — owner decisions in chat 2026-10-17 (docs/history/review-loop/README.md §1); accepted by the coordinator on those decisions
 - **Date:** 2026-10-17
-- **Deciders:** project owner (decisions, docs/review-loop/STATUS.md); coordinator (RL-0 draft)
+- **Deciders:** project owner (decisions, `docs/review-loop/STATUS.md` at tag `v0.3.0`); coordinator (RL-0 draft)
 - **Amends:** ADR-0013 §4–§5 and its 2026-10-13 amendment, ADR-0016 (stored text), ADR-0017 §4,
   ADR-0019 §2–§3, the ADR-0020 context
-- **Plan:** [docs/review-loop/README.md](../review-loop/README.md) (RL series, v0.1.0)
+- **Plan:** [docs/history/review-loop/README.md](../history/review-loop/README.md) (RL series, v0.1.0)
 - **Amended by:** [ADR-0022](0022-full-auto-mode.md) (proposed): a fourth mode, `full-auto`, where
   helpers and the tester run in Claude Code's auto mode inside the OS sandbox and the plan is
   approved automatically (decision 1 below gains it)
@@ -21,7 +21,7 @@ Real ticket runs showed two problems (owner, 2026-10-17):
   one at a time (`reviewAction` → `WorkspaceManager.merge`, `merge --ff-only`), so review and merge
   wait on the owner, and later helpers start from a base that lacks earlier changes.
 
-Today (docs/review-loop/README.md §2): a helper that finishes gets `review = 'pending'`; the run moves
+Today (docs/history/review-loop/README.md §2): a helper that finishes gets `review = 'pending'`; the run moves
 to REVIEW once every helper has stopped (or the lead calls `request_review`); the server runs the
 harness checks in each worktree; the owner merges or discards each change; the final code review
 and unit tests (ADR-0019) run after those merges, and the engine stops the lead when they start
@@ -167,7 +167,7 @@ lead, the lead, planner and orchestrator. Control-tool names in an agent's "Late
 
 - **Contract (RL-0, coordinator):** additive `@acp/core` types and helpers (README §3); compile-only
   placeholders in the engine, adapter, server and web keep the new paths unreachable until RL-A,
-  RL-B and RL-D replace them (docs/review-loop/wp/RL-0.md).
+  RL-B and RL-D replace them (`docs/review-loop/wp/RL-0.md` at tag `v0.3.0`).
 - **Migration 0006:** `ticket_branches`, `change_reviews`, `managed_workspaces.change_state`,
   `rework_rounds`, `head_commit`, `check_runs.commit_sha`, `approvals.allow_rule`. Approvals, the
   review settings and the run snapshot stay in JSON.

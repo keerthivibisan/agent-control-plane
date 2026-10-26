@@ -41,8 +41,8 @@ const C = PROJECT_SETUP_COPY;
 const S = PROJECT_SETUP_COPY.settings;
 
 /**
- * What Settings edits (docs/redesign/README.md §4.7): the board key, the project's default model
- * and the context files. Agent limits and the allowlist moved to the Workflow page.
+ * What Settings edits (docs/history/redesign/README.md §4.7): the board key, the project's default
+ * model and the context files. Agent limits and the allowlist moved to the Workflow page.
  */
 type SettingsDraft = Pick<SetupDraft, 'projectKey' | 'model' | 'contextFiles'>;
 
@@ -319,9 +319,9 @@ function SettingsBody({ project }: { project: ProjectDto }) {
 }
 
 /**
- * `#/p/:projectId/settings` (docs/redesign/README.md §4.7): the project's name and folder, its
- * board key and default model, the context files, links to where limits and checks live now, and
- * the danger zone.
+ * `#/p/:projectId/settings` (docs/history/redesign/README.md §4.7): the project's name and folder,
+ * its board key and default model, the context files, links to where limits and checks live now,
+ * and the danger zone.
  */
 export function ProjectSettings({ id }: { id: string }) {
   const project = useApiQuery(paths.project(id), schemas.project);

@@ -176,15 +176,13 @@ describe('check blocks: selection', () => {
 });
 
 describe('check blocks: the editor', () => {
-  it('the block before the lead’s merge is fixed: not removable, its place never changes', () => {
+  it('the block before the lead’s merge stays in its place, and can be removed (ADR-0028)', () => {
     const g = workflowTemplate('todays-setup');
     const merge = blockOf(g, 'checks');
     expect(merge).toBeDefined();
-    expect(isRemovable(merge as WorkflowNode)).toBe(false);
+    expect(isRemovable(merge as WorkflowNode)).toBe(true);
     const s = run(g, { type: 'set-check-place', id: 'checks', place: 'branch' });
     expect(s.graph).toBe(g);
-    const removed = run(g, { type: 'remove-node', id: 'checks' });
-    expect(removed.graph.nodes.some((n) => n.id === 'checks')).toBe(true);
     // Only the lead or the owner may decide a failure before the lead's merge.
     const helper = run(g, { type: 'set-check-failure', id: 'checks', onFailure: 'helper' });
     expect(helper.graph).toBe(g);
@@ -208,7 +206,7 @@ describe('check blocks: the editor', () => {
     expect(s.selection).toEqual({ kind: 'node', id: 'change-checks' });
     expect(rowOf(block as WorkflowNode)).toBe(1);
     expect(kindWord(block as WorkflowNode)).toBe('Checks on a change');
-    expect(selectionChip(block as ChecksNode)).toBe('Required');
+    expect(selectionChip(block as ChecksNode)).toBe('Required checks');
   });
 
   it('one change block per editing block; none without helpers or testers', () => {

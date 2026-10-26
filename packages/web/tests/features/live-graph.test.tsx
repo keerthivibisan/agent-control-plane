@@ -104,10 +104,14 @@ describe('live graph fixtures', () => {
 describe('the live graph model', () => {
   it('draws every block and link of the run’s graph, in three rows without positions', () => {
     const g = buildLiveGraph(dto(), runOf());
+    // The Finish block (your merge) stands for the ticket merge and Done (ADR-0028 §3).
     expect(g.nodes.map((n) => n.id)).toEqual(
-      WorkflowGraphSchema.parse(directLoopGraph()).nodes.map((n) => n.id),
+      WorkflowGraphSchema.parse(directLoopGraph())
+        .nodes.map((n) => n.id)
+        .filter((id) => id !== 'ticket-merge' && id !== 'done'),
     );
-    expect(g.edges).toHaveLength((directLoopGraph().edges as unknown[]).length);
+    // Not drawn: checks → ticket merge (drawn as checks → code review) and your merge → Done.
+    expect(g.edges).toHaveLength((directLoopGraph().edges as unknown[]).length - 2);
     const y = (id: string) => g.nodes.find((n) => n.id === id)?.position.y ?? -1;
     expect(y('ticket')).toBeLessThan(y('orchestrate'));
     expect(y('orchestrate')).toBeLessThan(y('checks'));
@@ -178,10 +182,10 @@ describe('the live graph model', () => {
     expect(data('review')).toMatchObject({ direct: true, mode: null });
     expect(data('orchestrate')?.agents.map((a) => a.id)).toEqual([L_LEAD]);
     // A block the server does not list waits.
-    const partial = { ...dto(), nodes: dto().nodes.filter((n) => n.nodeId !== 'done') };
-    expect(buildLiveGraph(partial, runOf()).nodes.find((n) => n.id === 'done')?.data.state).toBe(
-      'waiting',
-    );
+    const partial = { ...dto(), nodes: dto().nodes.filter((n) => n.nodeId !== 'code-review') };
+    expect(
+      buildLiveGraph(partial, runOf()).nodes.find((n) => n.id === 'code-review')?.data.state,
+    ).toBe('waiting');
   });
 
   it('picks the working agent of a block, and maps blocks to the side panel', () => {

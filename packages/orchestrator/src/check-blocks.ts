@@ -13,7 +13,7 @@ import { cleanSummary } from './summary.js';
 import type { EngineAgent, EngineChange, EngineContext, EngineResult, RunState } from './state.js';
 
 /**
- * The harness in the workflow, engine half (ADR-0027, docs/v0.3.0/README.md part 5, H-C):
+ * The harness in the workflow, engine half (ADR-0027, docs/history/v0.3.0/README.md part 5, H-C):
  *
  * - a Checks block on a helper's or tester's change runs on its sealed commit before its review
  *   (`run-change-checks`, reported with `changeChecksFinished`); on failure the block's route

@@ -27,6 +27,7 @@ import {
   checksToGate,
   checksToRun,
   mergeSpec,
+  runsNothing,
   setupFailureNote,
   type CheckRunner,
   type CheckSpec,
@@ -340,6 +341,8 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
   ): Promise<CheckRun[]> {
     const spec = specIn ?? defaultSpec(runId, agentRunId);
     if (closed) throw new HttpError(409, 'run_not_active', 'The server is shutting down.');
+    // ADR-0028 §2: no Checks block at this place, so there is nothing to check out or set up.
+    if (runsNothing(spec)) return [];
     if (!FULL_COMMIT.test(commit)) throw new HttpError(400, 'invalid_request', 'Not a commit id');
     const state = deps.control.peek(runId);
     if (state === undefined) throw notFound(`Run ${runId} not found`);

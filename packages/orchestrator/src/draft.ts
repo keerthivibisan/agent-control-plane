@@ -27,6 +27,7 @@ import {
   sweepLoop,
   undecidedChanges,
   waitingLines,
+  waitsOnlyForOwner,
 } from './loop.js';
 import { agentDepth, childrenOf, descendantsOf } from './tree.js';
 import {
@@ -48,6 +49,7 @@ import type {
   EngineContext,
   EngineEffect,
   FollowUpState,
+  OwnerWait,
   RunIntegration,
   RunLimits,
   RunState,
@@ -84,6 +86,8 @@ export class Draft {
   integration: RunIntegration | undefined;
   /** Loop runs: the lead was told to hand over at this idle point (`RunState.handoverPrompted`). */
   handoverPrompted: boolean;
+  /** Loop runs: the run's waits for the owner so far (`RunState.ownerWait`, P-D). */
+  ownerWait: OwnerWait | undefined;
   /** The run's approval policy (`RunState.approvalPolicy`, ADR-0021). */
   readonly approvalPolicy: ProjectApprovals | undefined;
   /** The run's graph snapshot and its compile context (`RunState.graph`, ADR-0023). */
@@ -120,6 +124,7 @@ export class Draft {
         : { ...followUp, turn: followUp.turn === null ? null : { ...followUp.turn } };
     this.integration = state.integration === undefined ? undefined : { ...state.integration };
     this.handoverPrompted = state.handoverPrompted === true;
+    this.ownerWait = state.ownerWait === undefined ? undefined : { ...state.ownerWait };
     this.approvalPolicy = state.approvalPolicy;
     this.graph = state.graph;
     this.graphContext = state.graphContext;
@@ -481,6 +486,22 @@ export class Draft {
     }
   }
 
+  /**
+   * P-D: starts or ends the run's current wait for the owner (`waitsOnlyForOwner`), after the
+   * command's status changes. A wait ends at the command that ends it (the owner's decision, a
+   * helper starting), so its length is known to the millisecond of that command.
+   */
+  trackOwnerWait(): void {
+    const waiting = waitsOnlyForOwner(this);
+    const wait = this.ownerWait;
+    if (waiting && (wait === undefined || wait.since === null)) {
+      this.ownerWait = { since: this.now, totalMs: wait?.totalMs ?? 0 };
+    } else if (!waiting && wait !== undefined && wait.since !== null) {
+      const waited = Math.max(0, Date.parse(this.now) - Date.parse(wait.since));
+      this.ownerWait = { since: null, totalMs: wait.totalMs + waited };
+    }
+  }
+
   /** Loop runs: no agent but the lead has a process, and every change is decided. */
   loopSettled(): boolean {
     return (
@@ -592,6 +613,7 @@ export class Draft {
     if (this.followUp !== undefined) state.followUp = this.followUp;
     if (this.integration !== undefined) state.integration = this.integration;
     if (this.handoverPrompted) state.handoverPrompted = true;
+    if (this.ownerWait !== undefined) state.ownerWait = this.ownerWait;
     if (this.approvalPolicy !== undefined) state.approvalPolicy = this.approvalPolicy;
     if (this.graph !== undefined) state.graph = this.graph;
     if (this.graphContext !== undefined) state.graphContext = this.graphContext;
