@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
 | P-0 | ADR-0028, contract, plan      | done        |                  |           |
 | P-A | Core, engine, server, adapter | done        | `wp/p-a-core`    | `b34062c` |
 | P-B | Web                           | done        | `wp/p-b-web`     | `307d5a7` |
-| P-C | Smooth linking in the editor  | in progress | `wp/p-c-linking` |           |
+| P-C | Smooth linking in the editor  | paused      | `wp/p-c-linking` |           |
 | P-V | Verification and release prep | not started |                  |           |
 
 ## Log
@@ -22,3 +22,5 @@ Coordinator-owned. Plan: [README.md](README.md). Decision:
   copy, the Finish block. Full check ✓; e2e 113/113 after the chip spec fix.
 - 2026-10-26 P-C started (owner request: "butter smooth" linking; `elkjs` allowed if needed): side
   connectors, magnetic drop, click-to-connect, "Link to…", reconnect, undo/redo, Tidy layout.
+- 2026-10-26 P-C paused by the owner. Its work is saved as a WIP commit on `wp/p-c-linking`
+  (unchecked; the Link to… menu was half done). Resume from that branch.
