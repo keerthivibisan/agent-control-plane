@@ -74,10 +74,14 @@ jobs:
         run: pnpm --filter @acp/web exec playwright install --with-deps chromium
 
       # The tests' own repositories commit with whatever identity git has; the runner has none.
+      # Also system-wide: a test server may run git without the runner's home folder, and git on
+      # Linux cannot guess an email address as it does on macOS.
       - name: Git identity for test repositories
         run: |
           git config --global user.name "ACP CI"
           git config --global user.email "ci@example.invalid"
+          sudo git config --system user.name "ACP CI"
+          sudo git config --system user.email "ci@example.invalid"
 
       - name: End-to-end tests
         run: pnpm --filter @acp/web test:e2e
