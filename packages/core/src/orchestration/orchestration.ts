@@ -3,6 +3,10 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
+import {
+  HelperOutcomeKindSchema,
+  VerificationAssessmentInputSchema,
+} from '../workspace/conflict-resolution.js';
 
 /**
  * Managed orchestration domain (Phase 3; docs/orchestration-lifecycle.md, ADR-0012..0015).
@@ -283,7 +287,16 @@ export const LeadToolInputs = {
    * ticket comment of kind `agent-note` with its agent run; a later call replaces it. Only `worker`
    * and `tester` get this tool; the engine refuses it from anyone else.
    */
-  report_work: z.object({ note: z.string().trim().min(1).max(MAX_AGENT_NOTE_CHARS) }),
+  report_work: z.object({
+    note: z.string().trim().min(1).max(MAX_AGENT_NOTE_CHARS),
+    /**
+     * ADR-0030 §5: the helper's own outcome. The lead is told it with the note; `no-change` and
+     * `blocked` count as attempts of the step. Absent: `completed`.
+     */
+    outcome: HelperOutcomeKindSchema.optional(),
+    /** ADR-0030 §4: a resolver's assessment of the combined change (advice for the policy gate). */
+    assessment: VerificationAssessmentInputSchema.optional(),
+  }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
