@@ -85,7 +85,18 @@ export {
   helperBrief,
   withAgentNoteLine,
 } from './agent-note.js';
+export { noChangeLine } from './change-commands.js';
 export { reportWork } from './report-tool.js';
+export {
+  RESOLVER_ROLE,
+  abandonResolver,
+  resolverBrief,
+  resolverLine,
+  resolverSealed,
+  startResolver,
+  type ResolverSealOutcome,
+  type StartResolverInput,
+} from './resolution.js';
 export {
   beginChangeMerge,
   branchChangedLine,
