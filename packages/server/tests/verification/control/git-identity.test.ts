@@ -9,6 +9,20 @@ it('the verification server can commit in a new repo without global or system gi
   const options = { cwd: root };
   try {
     await run(['init', '--quiet', '-b', 'main'], options);
+    // Fail deterministically on macOS too, where git may otherwise guess an identity.
+    const withoutIdentity = createGitRunner({
+      env: {
+        GIT_CONFIG_GLOBAL: '/dev/null',
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'user.useConfigOnly',
+        GIT_CONFIG_VALUE_0: 'true',
+      },
+    });
+    await expect(
+      withoutIdentity(['commit', '--quiet', '--allow-empty', '-m', 'Must not commit'], options),
+    ).rejects.toThrow();
+    await expect(run(['rev-parse', '--verify', 'HEAD'], options)).rejects.toThrow();
     // No local identity is configured, as with repositories made by the project wizard.
     await expect(run(['config', '--local', '--get', 'user.name'], options)).rejects.toThrow();
     expect(GIT_ENV.GIT_CONFIG_GLOBAL).toBe('/dev/null');
