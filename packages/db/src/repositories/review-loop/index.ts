@@ -18,6 +18,10 @@ import {
   type TicketBranchPrefsRepository,
 } from './ticket-branch-prefs.js';
 import {
+  createConflictResolutionsRepository,
+  type ConflictResolutionsRepository,
+} from './conflict-resolutions.js';
+import {
   createTicketBranchesRepository,
   type TicketBranchesRepository,
 } from './ticket-branches.js';
@@ -40,6 +44,8 @@ export interface ReviewLoopRepositories {
   ticketRunOptions: TicketRunOptionsRepository;
   /** `tickets.branch_prefs` (migration 0008, ADR-0025). */
   ticketBranchPrefs: TicketBranchPrefsRepository;
+  /** `conflict_resolutions` (migration 0012, ADR-0030). */
+  conflictResolutions: ConflictResolutionsRepository;
 }
 
 export function createReviewLoopRepositories(
@@ -55,6 +61,7 @@ export function createReviewLoopRepositories(
     approvalRules: createApprovalRulesRepository(ctx),
     ticketRunOptions: createTicketRunOptionsRepository(ctx),
     ticketBranchPrefs: createTicketBranchPrefsRepository(ctx),
+    conflictResolutions: createConflictResolutionsRepository(ctx),
   };
 }
 
@@ -79,3 +86,4 @@ export type {
 } from './columns.js';
 export type { TicketRunOptionsRepository } from './ticket-options.js';
 export type { TicketBranchPrefsRepository } from './ticket-branch-prefs.js';
+export type { ConflictResolutionsRepository } from './conflict-resolutions.js';

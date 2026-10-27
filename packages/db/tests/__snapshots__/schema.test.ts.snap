@@ -169,6 +169,31 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
   {
     "columns": [
       "id TEXT NOT NULL PK1",
+      "run_id TEXT NOT NULL",
+      "project_id TEXT NOT NULL",
+      "state TEXT NOT NULL",
+      "ticket_commit TEXT NOT NULL",
+      "target_commit TEXT NOT NULL",
+      "candidate_commit TEXT NULL",
+      "policy_fingerprint TEXT NOT NULL",
+      "record TEXT NOT NULL",
+      "created_at TEXT NOT NULL",
+      "updated_at TEXT NOT NULL",
+    ],
+    "foreignKeys": [
+      "project_id -> orchestration_runs(project_id) ON DELETE CASCADE",
+      "run_id -> orchestration_runs(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (id)",
+      "UNIQUE conflict_resolutions_active (run_id)",
+      "conflict_resolutions_run (run_id, created_at)",
+    ],
+    "table": "conflict_resolutions",
+  },
+  {
+    "columns": [
+      "id TEXT NOT NULL PK1",
       "edge_id TEXT NOT NULL",
       "kind TEXT NOT NULL",
       "child_session_id TEXT NOT NULL",
