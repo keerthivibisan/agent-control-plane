@@ -9,6 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Attach files in the New ticket dialog**: a browse and drag-and-drop control. The files are
+  uploaded to the ticket after it is created; the allowed types and limits are unchanged
+  (ADR-0026).
 - **Update from target / Resolve conflicts** on a ticket branch whose target moved, also while a
   pull request is open. The app merges in its own copy; a resolver helper repairs conflicts; the
   result is checked and applied only if nothing moved meanwhile (ADR-0030, proposed).

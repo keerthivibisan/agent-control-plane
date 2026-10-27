@@ -7,12 +7,15 @@ import { checkFile, type FileRefusal } from './limits';
 
 const C = ATTACHMENT_COPY;
 
-/** One file the owner picked: being uploaded, uploaded, or refused (by the browser or server). */
+/**
+ * One file the owner picked: being uploaded, uploaded, or refused (by the browser or server), or
+ * `staged` (New ticket: held until the ticket exists).
+ */
 export interface Upload {
   key: string;
   name: string;
   sizeBytes: number;
-  status: 'uploading' | 'done' | 'failed';
+  status: 'staged' | 'uploading' | 'done' | 'failed';
   attachment: AttachmentDto | null;
   /** Why it was refused, in words, when it failed. */
   error: string | null;
