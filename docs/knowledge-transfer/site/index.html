@@ -1,0 +1,1667 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="ACP knowledge transfer: deterministic engine authorization, agent workflows, conflict recovery, token-efficiency risks and future provider integrations."
+    />
+    <meta name="theme-color" content="#19313a" />
+    <title>ACP — Architecture & Knowledge Transfer</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <aside class="sidebar" id="navigation">
+      <a class="brand" href="#overview" aria-label="Agent Control Plane knowledge transfer"
+        ><img
+          src="assets/acp-logo-on-dark.svg"
+          alt="Agent Control Plane"
+          width="390"
+          height="48"
+        /><small>KNOWLEDGE TRANSFER</small></a
+      >
+      <p class="nav-label">SYSTEM FIELD GUIDE</p>
+      <nav aria-label="Chapters">
+        <a href="#overview"><span>00</span>Overview</a
+        ><a href="#architecture"><span>01</span>Architecture & authority</a
+        ><a href="#workflow"><span>02</span>Ticket & workflow</a
+        ><a href="#conflicts"><span>03</span>Conflict recovery</a
+        ><a href="#tokens"><span>04</span>Token efficiency</a
+        ><a href="#issues"><span>05</span>Issues & tradeoffs</a
+        ><a href="#future"><span>06</span>Future integrations</a
+        ><a href="#evidence"><span>07</span>Evidence & status</a
+        ><a href="#publishing"><span>08</span>Publishing & sharing</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="status-dot"></span> Source-grounded snapshot
+        <p>dev · df9cf44<br />Reviewed 27 Oct 2026</p>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <button
+          id="menu"
+          aria-controls="navigation"
+          aria-expanded="false"
+          aria-label="Toggle chapter navigation"
+        >
+          ☰
+        </button>
+        <p>
+          Knowledge transfer <span aria-hidden="true">/</span>
+          <strong id="current">Overview</strong>
+        </p>
+        <button id="print">Print guide <span aria-hidden="true">↗</span></button>
+      </header>
+      <main id="main" tabindex="-1">
+        <section class="page" id="overview" aria-label="Overview">
+          <header class="page-intro">
+            <p class="eyebrow">00 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Understand the control plane.<br /><em>Keep the evidence visible.</em></h1>
+            <p class="lede">
+              A practical handover of ACP: engine authorization, ticket execution, conflict
+              recovery, token economics and the path to multiple providers.
+            </p>
+          </header>
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <span class="badge implemented">CURRENT DEVELOPMENT SNAPSHOT</span>
+              <h2>The agent proposes.<br />The engine authorizes.<br />The server executes.</h2>
+              <p>
+                ACP turns tickets into scoped agent work with a pure orchestration engine, isolated
+                worktrees, role-specific tools and explicit verification and delivery rules.
+              </p>
+              <a class="button" href="#architecture"
+                >Read the architecture <span aria-hidden="true">→</span></a
+              >
+            </div>
+            <div class="hero-panel">
+              <p class="eyebrow">THE FOUR RESPONSIBILITIES</p>
+              <ol>
+                <li><strong>Intent</strong><span>Lead chooses useful work.</span></li>
+                <li><strong>Authority</strong><span>Engine validates state and policy.</span></li>
+                <li>
+                  <strong>Execution</strong><span>Server prepares workspaces and effects.</span>
+                </li>
+                <li>
+                  <strong>Evidence</strong><span>Events, checks and outcomes feed decisions.</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+          <aside class="callout">
+            <strong>Snapshot and implementation status.</strong>
+            <p>
+              This guide is pinned to <code>dev / df9cf44</code>, package version 0.3.1, including
+              the merged conflict-recovery implementation. Earlier findings about missing helper
+              outcomes and unbounded no-change replacements have been mitigated. ADR-0030 and CR
+              status metadata still say proposed/review; this guide does not rewrite those records.
+            </p>
+          </aside>
+          <div class="section-heading"><h2>Know which kind of claim you are reading.</h2></div>
+          <div class="cards four">
+            <article>
+              <span class="badge implemented">IMPLEMENTED</span>
+              <h3>Present in the code</h3>
+              <p>
+                A path exists on this baseline. This does not promise every configuration works or
+                that it is production-proven.
+              </p>
+            </article>
+            <article>
+              <span class="badge risk">OPEN RISK</span>
+              <h3>Mechanism, not a bill</h3>
+              <p>
+                The code supports the concern; its occurrence rate and actual token impact remain
+                unmeasured.
+              </p>
+            </article>
+            <article>
+              <span class="badge proposed">PROPOSED</span>
+              <h3>A future design</h3>
+              <p>
+                Context retrieval, new provider contracts and richer routing require separately
+                scoped implementation.
+              </p>
+            </article>
+            <article>
+              <span class="badge example">ILLUSTRATIVE</span>
+              <h3>Arithmetic with assumptions</h3>
+              <p>
+                Numerical scenarios explain scaling. They are not token-savings benchmarks or
+                provider bills.
+              </p>
+            </article>
+          </div>
+          <h2>Suggested reading path</h2>
+          <p>
+            Architecture → Ticket flow → Conflict recovery → Token efficiency → Issues → Future
+            providers. The publication chapter covers Pages preparation and a reviewed LinkedIn
+            draft. All content is static; this site cannot launch agents or access live ACP data.
+          </p>
+        </section>
+        <section class="page" id="architecture" aria-label="Architecture &amp; authority">
+          <header class="page-intro">
+            <p class="eyebrow">01 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Who is allowed<br /><em>to do what?</em></h1>
+            <p class="lede">
+              Authorization is a sequence of deterministic decisions and execution safeguards. A
+              successful model response does not grant a permission.
+            </p>
+          </header>
+          <figure class="diagram">
+            <a href="assets/architecture.svg" target="_blank" rel="noopener"
+              ><img
+                src="assets/architecture.svg"
+                alt="ACP authorization architecture: owner and agent requests enter server validation, the engine authorizes, state is persisted, server effects execute, and lifecycle evidence returns to the engine."
+                width="1320"
+                height="1110"
+            /></a>
+            <figcaption>
+              Conceptual architecture. Open the vector diagram to zoom. Individual effects do not
+              all execute in this visual order; the helper sequence below gives the launch ordering.
+            </figcaption>
+          </figure>
+          <div class="section-heading">
+            <h2>Inspect an authorization decision.</h2>
+            <span>EXPLANATORY / NO LIVE ACTIONS</span>
+          </div>
+          <div class="tabs" role="group" aria-label="Authorization scenarios">
+            <button data-scenario="helper" aria-pressed="true">Start a helper</button
+            ><button data-scenario="edit" aria-pressed="false">Edit a file</button
+            ><button data-scenario="integrate" aria-pressed="false">Integrate work</button
+            ><button data-scenario="publish" aria-pressed="false">Publish a result</button>
+          </div>
+          <article id="authorization-detail" class="detail-panel" aria-live="polite">
+            <h3>Start a helper</h3>
+            <p>
+              The engine checks caller, phase, node, capacity, depth, budget and attempts. The
+              server persists before preparing the worktree, setup and SDK launch. An accepted
+              request is not completed work.
+            </p>
+          </article>
+          <p>
+            <a href="assets/architecture.mmd" download>Architecture Mermaid source</a> ·
+            <a href="assets/helper-authorization.mmd" download>Helper sequence Mermaid source</a>
+          </p>
+          <h2>The helper sequence</h2>
+          <ol class="steps">
+            <li><strong>Lead requests</strong> <code>start_agent(role, task, helper?)</code>.</li>
+            <li>
+              <strong>Engine checks</strong> caller, run phase, node, capacity, nesting, budget and
+              attempts. A refusal produces no launch effect.
+            </li>
+            <li>
+              <strong>Server persists</strong> accepted state before executing launch effects.
+            </li>
+            <li>
+              <strong>Server prepares</strong> the recorded-tip worktree, trusted setup and scoped
+              context.
+            </li>
+            <li>
+              <strong>Adapter launches</strong> with explicit role tools, model, effort and
+              permission bridge.
+            </li>
+            <li>
+              <strong>Events return</strong> to the engine; state is persisted and reconciliation
+              may schedule next work.
+            </li>
+          </ol>
+          <aside class="callout">
+            <strong>Accepted is not completed.</strong>
+            <p>
+              The engine can accept a launch while workspace setup or SDK startup later fails.
+              Persist-before-effect also does not make Git, SQLite, a process and GitHub one atomic
+              transaction. Explicit recovery is necessary.
+            </p>
+          </aside>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li>
+                <code
+                  >packages/orchestrator/src/commands.ts — applyCommand, createRun, agentEvent</code
+                >
+              </li>
+              <li><code>packages/orchestrator/src/policy.ts; draft.ts; lead-tools.ts</code></li>
+              <li>
+                <code
+                  >packages/server/src/control/service.ts — apply, perform, startAgent, launch</code
+                >
+              </li>
+              <li>
+                <code
+                  >packages/adapters/claude-code/src/managed/adapter.ts; permissions.ts;
+                  branch-guard.ts</code
+                >
+              </li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="workflow" aria-label="Ticket &amp; workflow">
+          <header class="page-intro">
+            <p class="eyebrow">02 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>A ticket becomes<br /><em>coordinated work.</em></h1>
+            <p class="lede">
+              A workflow configures supported roles and routes. The engine compiles and enforces the
+              program; it is not an arbitrary graph executor.
+            </p>
+          </header>
+          <div class="flow" aria-label="Ticket execution stages">
+            <div>Ready ticket</div>
+            <span>→</span>
+            <div>Plan gate</div>
+            <span>→</span>
+            <div>Helpers + changes</div>
+            <span>→</span>
+            <div>Review + checks</div>
+            <span>→</span>
+            <div>Finish / delivery</div>
+          </div>
+          <h2>What reaches the first agent?</h2>
+          <p>
+            Ticket key/title, type, priority and description enter the prompt builder. The server
+            adds selected context, stage profile, mapped skills, attachment references and a prior
+            summary of the same ticket where applicable. It does not automatically send the entire
+            repository, all comments or other tickets.
+          </p>
+          <h2>What starts the helpers?</h2>
+          <p>
+            The lead asks for implementation helpers. The engine authorizes them. The server creates
+            worktrees and setup, and the provider adapter starts sessions. Initial planning roles,
+            change reviewers and final stages can be scheduled automatically by engine rules. A
+            helper block is a template; a running helper is one authorized instance.
+          </p>
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Roles and capability boundaries"
+          >
+            <table>
+              <caption>
+                Roles and capability boundaries
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Role</th>
+                  <th scope="col">Normal work</th>
+                  <th scope="col">Boundary</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Planner</td>
+                  <td>Read and propose a plan</td>
+                  <td>No editing, shell or helpers</td>
+                </tr>
+                <tr>
+                  <td>Lead</td>
+                  <td>Coordinate, inspect, request integration</td>
+                  <td>Read-only filesystem role</td>
+                </tr>
+                <tr>
+                  <td>Helper</td>
+                  <td>Implement a scoped task</td>
+                  <td>Own worktree; no branch/history authority</td>
+                </tr>
+                <tr>
+                  <td>Reviewer</td>
+                  <td>Inspect and report findings</td>
+                  <td>Read-only; review is not an executable check</td>
+                </tr>
+                <tr>
+                  <td>Tester</td>
+                  <td>Add/extend tests for the combined behavior</td>
+                  <td>Its changes are reviewed and integrated</td>
+                </tr>
+                <tr>
+                  <td>Resolver</td>
+                  <td>Repair merge content</td>
+                  <td>Dedicated operation, no child helpers; server concludes Git merge</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2>Reviews, checks and completion</h2>
+          <p>
+            ACP seals editing work and follows configured change review/check routes. Checks blocks
+            are optional on this baseline; legacy graphs retain their existing gates. A missing
+            check gate is not a passing test result. Agent blocks can select model and effort; a
+            profile narrows role tools rather than granting new authority.
+          </p>
+          <p>
+            Final stages inspect combined work. Later edits need fresh evidence, rather than
+            assuming an earlier completed reviewer/tester covers a new candidate. Finish presents
+            local merge or PR delivery. A run ending or a discard does not by itself establish
+            accepted delivery.
+          </p>
+          <aside class="callout">
+            <strong>Worktrees isolate edits, not dependencies.</strong>
+            <p>
+              Concurrent helpers cannot automatically see one another’s unmerged changes, and target
+              branches can move while a ticket works. Scope independent work and keep commit
+              identity visible.
+            </p>
+          </aside>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li><code>packages/server/src/board/service.ts — startTicket, runBase</code></li>
+              <li><code>packages/orchestrator/src/plan.ts; loop.ts; stages.ts</code></li>
+              <li><code>packages/core/src/workspace/graph/validate.ts; compile.ts</code></li>
+              <li><code>ADR-0023; ADR-0026; ADR-0027; ADR-0028</code></li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="conflicts" aria-label="Conflict recovery">
+          <header class="page-intro">
+            <p class="eyebrow">03 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Repair content.<br /><em>Keep Git authority in ACP.</em></h1>
+            <p class="lede">
+              Conflict recovery is implemented on this development baseline. Resolution,
+              verification, review and delivery have separate statuses and policy decisions.
+            </p>
+          </header>
+          <div class="flow">
+            <div>Pin tips + policy</div>
+            <span>→</span>
+            <div>Clean merge or resolver</div>
+            <span>→</span>
+            <div>Assess combined change</div>
+            <span>→</span>
+            <div>Policy + evidence</div>
+            <span>→</span>
+            <div>Promote + allowed delivery</div>
+          </div>
+          <p>
+            A clean merge needs no resolver model call. For a conflict, ACP prepares a worktree with
+            the merge in progress. The resolver edits content, reports its outcome/assessment, and
+            the server seals and validates the candidate. Attempts are bounded across replacements:
+            1–3, default 2.
+          </p>
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Independent verification and delivery routes"
+          >
+            <table>
+              <caption>
+                Independent verification and delivery routes
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Condition</th>
+                  <th scope="col">Current behavior</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Adaptive prose in approved scopes</td>
+                  <td>May skip normal checks; always-run checks still apply</td>
+                </tr>
+                <tr>
+                  <td>Runtime, configuration, MDX or uncertainty</td>
+                  <td>Agent confidence or a small diff cannot create a prose skip</td>
+                </tr>
+                <tr>
+                  <td>Missing checks</td>
+                  <td>
+                    Unavailable, or explicit unverified policy; configured escalation/draft route
+                  </td>
+                </tr>
+                <tr>
+                  <td>Candidate / target / policy changed</td>
+                  <td>Evidence stale; promotion rechecks freshness</td>
+                </tr>
+                <tr>
+                  <td>Delivery not delegated / target not allowed</td>
+                  <td>Retain owner delivery</td>
+                </tr>
+                <tr>
+                  <td>Delegated push/PR</td>
+                  <td>Push and open/update PR; draft when the route requires it</td>
+                </tr>
+                <tr>
+                  <td>Delegated merge</td>
+                  <td>Local fast-forward where applicable; existing PR follows the PR path</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2>What is still limited?</h2>
+          <ul>
+            <li>Targets are local refs; ACP does not fetch origin before resolution.</li>
+            <li>
+              Automatic triggers are supported view/refetch/local-merge paths, not a background
+              timer.
+            </li>
+            <li>
+              Adaptive routing is project policy; no conditional verification node exists in the
+              graph.
+            </li>
+            <li>No automatic missing-test preparation route or independent assessor agent.</li>
+            <li>
+              Delegated conflict delivery opens/updates PRs; it does not automatically merge them on
+              GitHub.
+            </li>
+          </ul>
+          <aside class="callout">
+            <strong>Policy classification is not universal proof of safety.</strong>
+            <p>
+              Executable documentation pipelines may still need checks. Configure conservative skip
+              scopes and always-run checks. “Skipped,” “unavailable,” “unverified by policy” and
+              “passed” must remain distinct.
+            </p>
+          </aside>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li><code>packages/server/src/control/conflict-resolution.ts</code></li>
+              <li>
+                <code>packages/core/src/workspace/conflict-resolution.ts — decideVerification</code>
+              </li>
+              <li>
+                <code
+                  >packages/orchestrator/src/resolution.ts; report-tool.ts; step-attempts.ts</code
+                >
+              </li>
+              <li>
+                <code
+                  >docs/conflict-resolution/STATUS.md; ADR-0030 (file still marked proposed)</code
+                >
+              </li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="tokens" aria-label="Token efficiency">
+          <header class="page-intro">
+            <p class="eyebrow">04 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Optimize accepted work.<br /><em>Not just the first prompt.</em></h1>
+            <p class="lede">
+              Fresh sessions can repeat discovery, but agents do not automatically read the whole
+              repository. We need evidence before claiming how much is wasted.
+            </p>
+          </header>
+          <aside class="callout">
+            <strong>Four different reuse mechanisms.</strong>
+            <p>
+              Task context selects useful input. Repository knowledge reuses current source facts. A
+              provider cache reuses matching prefix processing. Session continuation preserves one
+              task’s history. These are different guarantees; none implies cross-provider memory.
+            </p>
+          </aside>
+          <div id="numbers">
+            <h2>Speak with numbers, keep assumptions visible.</h2>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Historical supplied screenshot arithmetic — anonymized, not a current benchmark"
+            >
+              <table>
+                <caption>
+                  Historical supplied screenshot arithmetic — anonymized, not a current benchmark
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Historical helper card</th>
+                    <th scope="col">Displayed budget tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>First Git-sync helper</td>
+                    <td>5,836</td>
+                  </tr>
+                  <tr>
+                    <td>Second Git-sync helper</td>
+                    <td>6,847</td>
+                  </tr>
+                  <tr>
+                    <td>Third Git-sync helper</td>
+                    <td>8,297</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Total displayed</strong></td>
+                    <td><strong>20,980</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              The earlier conflict remained unresolved. Some investigation was useful, so the entire
+              subtotal is not proven waste. Current recovery, outcome and retry-bound code mitigates
+              the historical loop. Do not combine counters from screenshots taken at different
+              moments.
+            </p>
+            <h3>Illustration: four sessions repeat discovery</h3>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Hypothetical budget tokens — lead, two helpers and a reviewer"
+            >
+              <table>
+                <caption>
+                  Hypothetical budget tokens — lead, two helpers and a reviewer
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Work</th>
+                    <th scope="col">Repeated discovery</th>
+                    <th scope="col">Focused context</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Discovery per session</td>
+                    <td>15,000</td>
+                    <td>5,000</td>
+                  </tr>
+                  <tr>
+                    <td>Discovery across four sessions</td>
+                    <td>60,000</td>
+                    <td>20,000</td>
+                  </tr>
+                  <tr>
+                    <td>Other work, assumed equal</td>
+                    <td>30,000</td>
+                    <td>30,000</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    <td><strong>90,000</strong></td>
+                    <td><strong>50,000</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Assumed difference: <strong>40,000 tokens, about 44%</strong>. This arithmetic is not
+              measured ACP savings. It assumes focused context reduces discovery while acceptance
+              quality and other work stay equal.
+            </p>
+            <h3>Illustration: preparation and amortization</h3>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Hypothetical scaling — later maintenance omitted"
+            >
+              <table>
+                <caption>
+                  Hypothetical scaling — later maintenance omitted
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Twenty comparable tickets</th>
+                    <th scope="col">Hypothetical budget tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>20 × 90,000 baseline</td>
+                    <td>1,800,000</td>
+                  </tr>
+                  <tr>
+                    <td>20 × 50,000 focused execution</td>
+                    <td>1,000,000</td>
+                  </tr>
+                  <tr>
+                    <td>One-time project map</td>
+                    <td>8,000</td>
+                  </tr>
+                  <tr>
+                    <td><strong>Focused total with preparation</strong></td>
+                    <td><strong>1,008,000</strong></td>
+                  </tr>
+                  <tr>
+                    <td><strong>Illustrative difference</strong></td>
+                    <td><strong>792,000</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Real evaluation must include refreshes, retrieval, failures and repairs. A map
+              regenerated for every helper, or stale guidance that causes wrong edits, can erase the
+              benefit.
+            </p>
+            <h3>Illustration: parallel overhead</h3>
+            <div
+              class="table-wrap"
+              tabindex="0"
+              role="region"
+              aria-label="Hypothetical equal useful implementation work; capacity still applies"
+            >
+              <table>
+                <caption>
+                  Hypothetical equal useful implementation work; capacity still applies
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Approach</th>
+                    <th scope="col">Implementation</th>
+                    <th scope="col">Coordination</th>
+                    <th scope="col">Rework</th>
+                    <th scope="col">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Two scoped helpers</td>
+                    <td>30,000</td>
+                    <td>10,000</td>
+                    <td>0</td>
+                    <td>40,000</td>
+                  </tr>
+                  <tr>
+                    <td>Six overlapping helpers</td>
+                    <td>30,000</td>
+                    <td>30,000</td>
+                    <td>20,000</td>
+                    <td>80,000</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Six instances need not run simultaneously. Parallel work can finish sooner while
+              consuming more total tokens.
+            </p>
+          </div>
+          <h2>Actual budget semantics</h2>
+          <p>
+            Budget tokens = uncached input + cache creation + output. Cache reads are tracked
+            separately and excluded from the cap. Default: <strong>500,000 per agent</strong>,
+            configurable and soft. Three agents reaching that allowance account for
+            <strong>1,500,000</strong> before possible overshoot—not an observed bill. Follow-up
+            allowance resets per question.
+          </p>
+          <p>
+            Initial shared context allows <strong>10 files / 32 KiB</strong>. That does not cap
+            later tool reads or history, and reading context once per run does not prove a provider
+            cache hit.
+          </p>
+          <h2>24 risks to understand before adding infrastructure</h2>
+          <p>
+            Historical fixes are labeled. Other mechanisms identify potential waste, not measured
+            frequency or savings.
+          </p>
+          <details class="risk-item" data-risk="T01">
+            <summary>T01 Repeated repository discovery</summary>
+            <p>
+              <strong>Trigger:</strong> Each ticket rediscovers layout, entry points and
+              conventions. Cost grows with tickets and agents, not only repository size.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed fresh-session mechanism; actual repeated
+              reads unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Small versioned project map; task-relevant
+              retrieval.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T02">
+            <summary>T02 Planner/lead/helper duplication</summary>
+            <p>
+              <strong>Trigger:</strong> Several roles independently investigate the same question
+              because handoff contains little evidence.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed separate roles and helper briefs; overlap
+              unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Structured handoff with findings, source
+              references, assumptions and acceptance criteria. Preserve independent review where
+              required.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T03">
+            <summary>T03 Context copied to every role</summary>
+            <p>
+              <strong>Trigger:</strong> Large generic context, profiles or skills are supplied even
+              when irrelevant.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed shared run context/profile assembly;
+              actual bloat unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Shared essentials plus role/task-specific
+              references; hard size caps and explicit truncation.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T04">
+            <summary>T04 Broad search and oversized tool results</summary>
+            <p>
+              <strong>Trigger:</strong> Dumps of whole files, generated assets, lockfiles or long
+              search output fill subsequent rounds.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; current byte cap does not bound tool
+              exploration.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Search filenames/symbols first, bounded excerpts,
+              exclusions and expandable results.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T05">
+            <summary>T05 Growing conversation history</summary>
+            <p>
+              <strong>Trigger:</strong> More messages and tool results increase input on later
+              rounds; a long-lived agent becomes expensive to continue.
+            </p>
+            <p><strong>Evidence / status:</strong> General session risk; not profiled locally.</p>
+            <p>
+              <strong>Candidate control:</strong> Bounded milestones, concise handoffs,
+              provider-supported compaction when validated.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T06">
+            <summary>T06 Prompt cache misses</summary>
+            <p>
+              <strong>Trigger:</strong> Changing earlier instructions, tool ordering, models or
+              reference text prevents reusable prefixes. A run-local text cache is mistaken for
+              provider caching.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Provider documentation; actual SDK cache hits
+              require reported usage.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Stable useful prefixes; measure actual cache
+              categories; do not add padding just to reach thresholds.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T07">
+            <summary>T07 Over-delegation</summary>
+            <p>
+              <strong>Trigger:</strong> Many tiny helpers each pay startup, discovery, reporting and
+              review overhead.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed launch model; optimal task size
+              unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Compare coordination overhead with independent
+              work; combine related edits under one capable helper.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T08">
+            <summary>T08 Overlapping parallel work</summary>
+            <p>
+              <strong>Trigger:</strong> Helpers/tickets touch shared modules or depend on unmerged
+              changes, causing conflicts and repeated fixes.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed isolated branch semantics; historical
+              supplied screenshot case.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Dependency-aware scheduling, declared likely file
+              scopes, shared-file hotspots, bounded conflict recovery. Scope estimates are advisory.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T09">
+            <summary>T09 Blocked or impossible tasks retried</summary>
+            <p>
+              <strong>Trigger:</strong> A helper is asked to perform an unsupported operation;
+              replacement starts can repeat it.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Historical screenshot case. Current conflict
+              operations, structured outcomes and no-change attempt bounds mitigate this loop.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Use the supported server operation; retain
+              capability-aware briefs and progress measurements.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T10">
+            <summary>T10 Rework without new information</summary>
+            <p>
+              <strong>Trigger:</strong> The next attempt repeats the same strategy without new
+              evidence.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Current step/operation bounds cover no-change and
+              failed outcomes; bounds do not prove each remaining attempt is useful.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Use stable step identity and structured reasons;
+              change strategy or stop within configured policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T11">
+            <summary>T11 Findings not consumed by the next actor</summary>
+            <p>
+              <strong>Trigger:</strong> Useful findings can still be omitted from a task or ignored
+              by the recipient.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> The earlier no-change reporting gap is fixed by
+              reportedOutcome and noChangeLine. Cross-ticket knowledge reuse is still proposed.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Keep structured handoffs, source pointers and
+              outcome coverage; do not label the old gap open.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T12">
+            <summary>T12 Invalid tools and excessive polling</summary>
+            <p>
+              <strong>Trigger:</strong> Repeated malformed calls, unknown targets or status checks
+              consume model rounds without progress.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; status tools exist, frequency
+              unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Clear schemas/capabilities, actionable refusals,
+              event-driven completion where possible.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T13">
+            <summary>T13 Duplicate review</summary>
+            <p>
+              <strong>Trigger:</strong> Change reviewers, final reviewers and testers repeat
+              identical analysis without a distinct acceptance goal.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Configurable review/stage mechanism; duplication
+              unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Assign review purpose and scope; retain
+              independent checks required by policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T14">
+            <summary>T14 Repeated checks and log analysis</summary>
+            <p>
+              <strong>Trigger:</strong> Same commit/check is rerun, or huge logs are repeatedly read
+              by LLMs. Test execution itself is compute, not necessarily model-token usage.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Commit-specific gating exists; waste frequency
+              unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Trusted evidence reuse only when commit, check
+              definition, environment and policy match; bounded failure summaries.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T15">
+            <summary>T15 Verification feedback too weak</summary>
+            <p>
+              <strong>Trigger:</strong> Missing environment, unclear failure or flaky tests trigger
+              speculative edits and repeated runs.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; setup failure already blocks SDK
+              startup.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Distinguish setup/product/flaky/unknown failures;
+              provide reproducible command IDs and bounded diagnostics.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T16">
+            <summary>T16 Stale knowledge and stale evidence</summary>
+            <p>
+              <strong>Trigger:</strong> Cached architecture notes survive renames, branch changes or
+              dependency updates, causing wrong edits and repair.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk for shared knowledge; context
+              currently comes from owner checkout.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Commit/content-hash provenance, dependency
+              invalidation, freshness checks against the agent&#x27;s checkout.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T17">
+            <summary>T17 Bad retrieval or over-compression</summary>
+            <p>
+              <strong>Trigger:</strong> Relevant callers, invariants or tests are omitted; short
+              prompts save input but cause more incorrect work.
+            </p>
+            <p><strong>Evidence / status:</strong> Future risk.</p>
+            <p>
+              <strong>Candidate control:</strong> Retrieval coverage checks, source pointers,
+              uncertainty and on-demand expansion.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T18">
+            <summary>T18 Wrong model or effort</summary>
+            <p>
+              <strong>Trigger:</strong> A costly model handles mechanical work, or a weaker
+              configuration needs many failed attempts on hard work.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Role/profile/project model selection exists; no
+              measured routing policy.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Evaluate outcome-adjusted work by task class;
+              change configuration only under explicit policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T19">
+            <summary>T19 Verbose generated output</summary>
+            <p>
+              <strong>Trigger:</strong> Long plans, repeated summaries and commentary add output and
+              later input without helping execution.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Short work-note instruction already exists; other
+              verbosity unmeasured.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Bounded structured plans/outcomes; retain required
+              reasoning evidence without storing chain of thought.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T20">
+            <summary>T20 Unbounded project-wide activity</summary>
+            <p>
+              <strong>Trigger:</strong> Per-agent limits still allow many concurrent tickets,
+              replacements and repeated runs to spend heavily in aggregate.
+            </p>
+            <p><strong>Evidence / status:</strong> Current ADR-0014 budget is per agent.</p>
+            <p>
+              <strong>Candidate control:</strong> Proposed project/run aggregate admission and
+              reservation policy with explicit unknown usage and overshoot. No silent change to
+              existing accounting.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T21">
+            <summary>T21 Restart, reconnect and transport retries</summary>
+            <p>
+              <strong>Trigger:</strong> Launching another agent after an uncertain result duplicates
+              work or abandons useful session state.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Restart recovery exists; provider/transport
+              ambiguity remains a design concern.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Idempotent operations, reconciliation before retry
+              and explicit resumability capability.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T22">
+            <summary>T22 Cross-provider accounting mismatch</summary>
+            <p>
+              <strong>Trigger:</strong> Inclusive cached input, reasoning already included in
+              output, or cumulative totals are summed again. A cheaper-looking provider may simply
+              report less.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future Codex integration risk; existing ACP has
+              strict accounting rules.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Versioned provider mappings, fixtures and
+              provenance; no invented zeros or double counting.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T23">
+            <summary>T23 Knowledge maintenance costs more than it saves</summary>
+            <p>
+              <strong>Trigger:</strong> A scout rescans the whole monorepo or regenerates summaries
+              for every small change.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk of the proposed optimization itself.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Deterministic metadata first, incremental
+              invalidation, capped refreshes and measured net benefit.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T24">
+            <summary>T24 Cross-project leakage or untrusted cached instructions</summary>
+            <p>
+              <strong>Trigger:</strong> Reused material includes another project&#x27;s data or
+              repository text is promoted to policy.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; existing local-only and
+              prompt-injection boundaries apply.
+            </p>
+            <p>
+              <strong>Candidate control:</strong> Project isolation, allowlisted paths,
+              origin/provenance, treat retrieved text as data and keep permissions outside model
+              control.
+            </p>
+          </details>
+          <h2>Our opinion: reuse verified knowledge across isolated sessions.</h2>
+          <div class="cards four">
+            <article>
+              <p class="eyebrow">01 / ESSENTIALS</p>
+              <h3>Small project map</h3>
+              <p>Owner-approved boundaries, invariants and trusted check IDs. Keep it concise.</p>
+            </article>
+            <article>
+              <p class="eyebrow">02 / REFERENCES</p>
+              <h3>Incremental module catalog</h3>
+              <p>
+                Local paths, symbols and dependencies. Validate content hashes and source snapshot.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">03 / TASK</p>
+              <h3>Focused role context</h3>
+              <p>
+                Goal, acceptance criteria, likely sources, tests and uncertainty. Allow expansion.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">04 / EVIDENCE</p>
+              <h3>Current candidate facts</h3>
+              <p>Diff, checks and review bound to the relevant commits and policy.</p>
+            </article>
+          </div>
+          <p>
+            Start with maintained docs and local file/symbol search. Do not add a mandatory research
+            agent or external vector service before measuring net benefit. One permanent project
+            conversation can accumulate irrelevant history, stale assumptions and mixed permissions.
+          </p>
+          <p>
+            Keep source facts separate from authority; invalidate affected knowledge and dependents
+            after changes. Do not persist conversations, tool I/O or hidden reasoning as project
+            memory.
+          </p>
+          <h2>Measure quality and the entire attempt</h2>
+          <p>
+            Track acceptance evidence, regressions/reopenings, owner interruptions, latency,
+            reported usage coverage and retries. Include map maintenance, retrieval, reviews and
+            repairs. Test compute time is separate from LLM tokens. Exact discovery-token
+            attribution is not established; do not invent it from timestamps.
+          </p>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li><code>docs/decisions/0014-orchestration-budget-metric.md</code></li>
+              <li><code>packages/core/src/orchestration/limits.ts — budgetTokens</code></li>
+              <li>
+                <code
+                  >packages/server/src/harness/context.ts; control/service.ts — setupFor,
+                  withTicketSummary</code
+                >
+              </li>
+              <li><code>packages/orchestrator/src/budget.ts; follow-up.ts</code></li>
+              <li>
+                <code
+                  >Provider primary references are listed in Evidence. Cache behavior is
+                  model/transport dependent.</code
+                >
+              </li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="issues" aria-label="Issues &amp; tradeoffs">
+          <header class="page-intro">
+            <p class="eyebrow">05 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Make the remaining<br /><em>risks actionable.</em></h1>
+            <p class="lede">
+              This is a bounded code review, not production incident statistics. Each issue names
+              its mechanism, possible impact, proposed control and source.
+            </p>
+          </header>
+          <h2>Historical gaps that are now mitigated</h2>
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Current baseline differs from the earlier screenshots"
+          >
+            <table>
+              <caption>
+                Current baseline differs from the earlier screenshots
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Earlier gap</th>
+                  <th scope="col">Current mitigation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>No repair route through helper Git restrictions</td>
+                  <td>Server-owned isolated conflict operation and content-only resolver</td>
+                </tr>
+                <tr>
+                  <td>Lead cannot see no-change reason</td>
+                  <td>Structured reportedOutcome and noChangeLine</td>
+                </tr>
+                <tr>
+                  <td>No-change replacements escape attempt bounds</td>
+                  <td>
+                    Step accounting includes no-changes; resolver operation has its own bounds
+                  </td>
+                </tr>
+                <tr>
+                  <td>Owner-only waits consume working deadline</td>
+                  <td>Current isRunOverdue subtracts tracked owner wait</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2>Seven concrete mechanisms still worth reviewing</h2>
+          <details class="risk-item code-finding">
+            <summary>C01. A temporary context failure lasts for the run</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>The first rejected setup read is caught and
+              replaced with NO_SETUP; its promise remains cached in live.setup. Later agents in that
+              live run reuse the empty setup instead of retrying the read.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>If context loading fails before a lead and four
+              helpers start, all five can lack the intended guidance. Actual extra discovery tokens
+              are unknown.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Show degraded context explicitly; consider a bounded
+              retry before later launches while preserving a coherent context version.
+            </p>
+            <p><strong>Source:</strong>packages/server/src/control/service.ts — setupFor.</p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C02. Context can describe a different source snapshot</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>Context is read from the owner checkout and
+              reused per run; editing agents work in ticket-based worktrees. That launch path does
+              not bind context file hashes to each helper base commit.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>A ticket still using the old directory layout
+              may receive guidance from an owner checkout with a newer layout. The mismatch can
+              cause wrong searches or rework.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Keep trusted owner policy separate from source
+              facts. Attach source hashes/commit provenance and validate source references against
+              the agent checkout.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/server/src/board/harness.ts — agentSetup;
+              control/service.ts — startAgent, setupFor.
+            </p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C03. Input and event queues have no size bound</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>The adapter queue explicitly describes itself as
+              unbounded. Messages sent while a worker starts also accumulate in an array. Existing
+              message validation does not impose a total queue bound here.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>A burst can create a backlog of stale or
+              repetitive requests. Queued input may cause extra turns if consumed; queued events
+              create memory/backpressure risk rather than directly generating tokens.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Bound queue count/bytes; expose backpressure and
+              per-message state. Coalesce only explicitly replaceable updates, never silently drop
+              task instructions.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/adapters/claude-code/src/managed/queue.ts —
+              AsyncQueue; server/src/control/service.ts — pendingSends, sendTo.
+            </p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C04. “Message sent” is not a delivery acknowledgment</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>The engine returns success after emitting
+              send-to-agent. Missing handles and rejected sends are logged later; that reply does
+              not acknowledge consumption or reading.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>The coordinator may wait, poll or repeat an
+              instruction that never arrived. Race frequency and extra tokens have not been
+              measured.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Track accepted, queued, delivered-to-handle and
+              failed states. Do not claim read acknowledgment without provider evidence.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/orchestrator/src/lead-tools.ts — message_agent;
+              server/src/control/service.ts — sendTo.
+            </p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C05. Follow-up spending resets for each question</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>Each ended-lead follow-up starts with
+              EMPTY_LEDGER and zero turn usage, using the run per-agent limit. The budget is
+              enforced per follow-up turn, not as a cumulative conversation allowance.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>Illustrative ceiling: ten follow-ups at the
+              default 500,000-token allowance permit 5,000,000 budget tokens before considering
+              soft-cap overshoot. This is permission to spend, not actual consumption.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Keep per-turn protection; propose a separate
+              cumulative follow-up/project allowance and show remaining scope. Preserve accounting
+              and explicit owner policy.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/orchestrator/src/follow-up.ts — followUpChat,
+              followUpBudgetTokens, followUpEvent.
+            </p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C06. Large change inspection returns a bounded prefix</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>The full lead view_change reply is capped at 32
+              KiB. The tool takes an agent ID, with no file/range cursor. Repeating it without a
+              source change cannot page through the rest.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>A large refactor can require repeated file
+              discovery because later portions do not fit. The cap is intentional protection, not
+              evidence that increasing it is the right fix.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Offer a file manifest and bounded per-file/range
+              inspection with explicit coverage/truncation. Keep a total inspection budget.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/orchestrator/src/loop.ts — viewChangeReply;
+              server/src/control/service.ts — leadTool(view_change).
+            </p>
+          </details>
+          <details class="risk-item code-finding">
+            <summary>C07. Global check serialization can extend feedback loops</summary>
+            <p>
+              <strong>Confirmed mechanism:</strong>Checks share a server-wide serial runner. The
+              working-state timeout defaults to two hours. The current isRunOverdue path subtracts
+              owner-only wait time; no dedicated harness-queue subtraction is apparent in this path.
+              Review/plan-owner-wait states have their own handling.
+            </p>
+            <p>
+              <strong>Possible consequence:</strong>Hypothetically, six ten-minute check jobs ahead
+              create about one hour of waiting. Whether it times out a run depends on its state and
+              remaining deadline. Waiting alone generates no model tokens; duplicate retries can.
+            </p>
+            <p>
+              <strong>Proposed control:</strong>Expose queued versus active work, avoid duplicate
+              in-flight checks, and design resource/deadline policy deliberately. Preserve required
+              checks and isolation.
+            </p>
+            <p>
+              <strong>Source:</strong>packages/server/src/harness/runner.ts — queue;
+              packages/server/src/control/service.ts — sweep; packages/orchestrator/src/commands.ts
+              — isRunOverdue.
+            </p>
+          </details>
+          <h2>Recommended priorities</h2>
+          <ol>
+            <li>
+              Make degraded context visible and validate source facts against the actual checkout.
+            </li>
+            <li>
+              Bound message backlogs and expose delivery status without inventing read receipts.
+            </li>
+            <li>
+              Scope aggregate run/project/follow-up admission limits separately from current
+              accounting.
+            </li>
+            <li>
+              Measure progress after the retry fixes; improve change-inspection coverage and
+              evidence freshness.
+            </li>
+            <li>
+              Reconcile ADR/status wording with the merged implementation in a separate governance
+              change.
+            </li>
+          </ol>
+          <aside class="callout">
+            <strong>Keep current limitations in the operating model.</strong>
+            <p>
+              Targets may lag origin. Auto repair is event/read-triggered. Final stage completion is
+              not timeless evidence for later changes. Optional checks and policy-approved skips
+              must remain visible as such, never a fabricated pass.
+            </p>
+          </aside>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li><code>packages/server/src/control/service.ts — setupFor, sendTo, sweep</code></li>
+              <li><code>packages/adapters/claude-code/src/managed/queue.ts — AsyncQueue</code></li>
+              <li>
+                <code
+                  >packages/orchestrator/src/follow-up.ts; loop.ts — viewChangeReply; stages.ts —
+                  nextStage</code
+                >
+              </li>
+              <li><code>packages/server/src/harness/runner.ts — shared setup/check queue</code></li>
+              <li>
+                <code
+                  >docs/decisions/0030-conflict-resolution-and-delegated-delivery.md;
+                  docs/conflict-resolution/STATUS.md</code
+                >
+              </li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="future" aria-label="Future integrations">
+          <header class="page-intro">
+            <p class="eyebrow">06 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>More providers.<br /><em>The same control-plane promises.</em></h1>
+            <p class="lede">
+              A model selection and a coding-agent integration are different things. Each provider
+              needs explicit lifecycle, tools, permissions and usage semantics.
+            </p>
+          </header>
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Provider status — no implied release commitments"
+          >
+            <table>
+              <caption>
+                Provider status — no implied release commitments
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Integration</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Next requirement</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Claude Code</td>
+                  <td>Implemented managed provider</td>
+                  <td>Preserve role isolation and conformance</td>
+                </tr>
+                <tr>
+                  <td>Codex</td>
+                  <td>Phase 6 planned</td>
+                  <td>Validate supported app-server transport/version and contracts</td>
+                </tr>
+                <tr>
+                  <td>Other models</td>
+                  <td>Within a supported, validated provider configuration</td>
+                  <td>Check availability, effort support and acceptance quality</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2>ACP owns intent and authority. Adapters own transport.</h2>
+          <p>
+            Keep logical task identity, workflow policy, context selection, retry limits and
+            evidence in ACP. Translate them to each provider’s supported API or process. Do not pass
+            a Claude session identifier to Codex or imply conversation/cache reuse across providers.
+          </p>
+          <div class="cards two">
+            <article>
+              <h3>Lifecycle and permissions</h3>
+              <p>
+                Start, stream, interrupt, cancel, recover and resume with tested semantics. Enforce
+                role tools, own-worktree writes, server-owned Git and unsupported-capability
+                refusals.
+              </p>
+            </article>
+            <article>
+              <h3>Usage and context</h3>
+              <p>
+                Establish stable dedup identity, per-call vs cumulative reports, cached-input
+                inclusion and reasoning inclusion. Missing fields stay unavailable; no invented
+                zeros or double counting.
+              </p>
+            </article>
+          </div>
+          <h2>Sequence the work</h2>
+          <ol>
+            <li>Stabilize the current provider and establish quality-aware baselines.</li>
+            <li>
+              Evaluate focused context and incremental local references with freshness checks.
+            </li>
+            <li>
+              At Phase 6, test adapter capabilities and conformance before enabling real runs.
+            </li>
+            <li>
+              Evaluate model/effort routing and richer retrieval only when evidence justifies them.
+            </li>
+          </ol>
+          <p>
+            Current model precedence is node → profile → project → provider default. Effort is a
+            separate workflow setting; support depends on the chosen provider/model. No new adapter,
+            model recommendation service or future-phase feature is implemented in this
+            documentation package.
+          </p>
+          <details class="evidence">
+            <summary>Code evidence and scope</summary>
+            <ul>
+              <li>
+                <code
+                  >docs/roadmap.md — Phase 6 Codex adapter, Phase 5 Harness Lab, Phase 7
+                  research</code
+                >
+              </li>
+              <li><code>packages/core/src/adapters/managed.ts</code></li>
+              <li>
+                <code>packages/server/src/control/service.ts — resolveAgentModel, launch</code>
+              </li>
+              <li>
+                <code>packages/adapters/claude-code/src/managed/adapter.ts — buildOptions</code>
+              </li>
+              <li><code>ADR-0013; ADR-0014; ADR-0028</code></li>
+            </ul>
+            <p>
+              Source snapshot: dev · df9cf44 · 27 Oct 2026. Code presence is not a production
+              reliability benchmark.
+            </p>
+          </details>
+        </section>
+        <section class="page" id="evidence" aria-label="Evidence &amp; status">
+          <header class="page-intro">
+            <p class="eyebrow">07 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>A guide you can<br /><em>check against the code.</em></h1>
+            <p class="lede">
+              Use the pinned baseline and explicit claim labels. A design document is not proof of
+              implementation, and code presence is not a measured reliability result.
+            </p>
+          </header>
+          <h2>Baseline and governance</h2>
+          <p>
+            <code>dev / df9cf44f713e11c62add3786e6026aaee8022495</code>, reviewed 27 Oct 2026.
+            Package version 0.3.1. The snapshot includes conflict-recovery code, while ADR-0030
+            remains marked proposed and CR rows remain review. Maintainers should reconcile that
+            wording separately.
+          </p>
+          <h2>Where to inspect</h2>
+          <div
+            class="table-wrap"
+            tabindex="0"
+            role="region"
+            aria-label="Source map — package paths abbreviated"
+          >
+            <table>
+              <caption>
+                Source map — package paths abbreviated
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Question</th>
+                  <th scope="col">Repository source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Ticket handoff</td>
+                  <td>server/src/board/service.ts; orchestrator/src/plan.ts</td>
+                </tr>
+                <tr>
+                  <td>Authorization and scheduling</td>
+                  <td>orchestrator/src/commands.ts, policy.ts, draft.ts, loop.ts</td>
+                </tr>
+                <tr>
+                  <td>Provider execution</td>
+                  <td>
+                    server/src/control/service.ts; adapters/claude-code/src/managed/adapter.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>Safety</td>
+                  <td>managed/permissions.ts, branch-guard.ts; server/src/workspace/manager.ts</td>
+                </tr>
+                <tr>
+                  <td>Conflict policy</td>
+                  <td>
+                    core/src/workspace/conflict-resolution.ts;
+                    server/src/control/conflict-resolution.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>Usage</td>
+                  <td>docs/usage-accounting.md; ADR-0014; orchestrator/src/budget.ts</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h2>Primary external references</h2>
+          <ul>
+            <li>
+              <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
+                >Anthropic prompt caching</a
+              >
+              — matching prefixes and usage evidence.
+            </li>
+            <li>
+              <a href="https://developers.openai.com/api/docs/guides/prompt-caching"
+                >Official OpenAI prompt caching</a
+              >
+              — API behavior; not proof of a future Codex transport control.
+            </li>
+            <li>
+              <a
+                href="https://www.anthropic.com/research/effective-context-engineering-for-ai-agents"
+                >Context engineering</a
+              >
+              — focused retrieval; ACP’s proposed layers are our design.
+            </li>
+            <li>
+              <a
+                href="https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages"
+                >GitHub Pages workflows</a
+              >
+              and
+              <a
+                href="https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site"
+                >site visibility</a
+              >.
+            </li>
+          </ul>
+          <h2>Limits of this review</h2>
+          <p>
+            No private provider transcript scan, production token study or comprehensive security
+            audit was performed. Historical figures were transcribed from supplied screenshots;
+            examples are hypothetical. Exact prices, model capacity and provider availability are
+            deliberately not pinned.
+          </p>
+          <p>
+            The site makes no ACP API calls, uses no analytics, remote assets or browser storage,
+            and contains no live inventory or credentials. Citations load only when clicked.
+            Repository code links may require access to the private source; this guide does not
+            require it.
+          </p>
+        </section>
+        <section class="page" id="publishing" aria-label="Publishing &amp; sharing">
+          <header class="page-intro">
+            <p class="eyebrow">08 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>Ready to share.<br /><em>Publish only the guide.</em></h1>
+            <p class="lede">
+              The package includes readable Markdown, editable Mermaid source and an offline static
+              site. Hosting and social publication remain separate owner actions.
+            </p>
+          </header>
+          <h2>GitHub Pages artifact</h2>
+          <p>
+            Upload only <code>docs/knowledge-transfer/site/</code>. Its artifact root contains
+            <code>index.html</code> and <code>.nojekyll</code>; relative assets and hash navigation
+            support project-site paths. No build or ACP server is needed.
+          </p>
+          <p>
+            The example workflow is documentation outside <code>.github/</code>, not an active
+            deployment. Review it in a separate workflow change, enable Pages, choose the intended
+            ref and restrict the <code>github-pages</code> environment. The repository is currently
+            private; plan/visibility settings determine hosting availability and site audience.
+          </p>
+          <p>
+            <strong>No live deployment URL is claimed.</strong> Verify the actual URL before adding
+            it to LinkedIn. Do not upload the repository root or live ACP files.
+          </p>
+          <h2>A public-facing draft</h2>
+          <blockquote>
+            <p>
+              We are building Agent Control Plane, a local-first workspace for coordinating AI
+              coding agents around projects and tickets.
+            </p>
+            <p>
+              Agents propose work; a deterministic engine authorizes actions; the server prepares
+              isolated workspaces and performs Git operations; provider adapters enforce role tools.
+            </p>
+            <p>
+              Our architecture guide explains that boundary, conflict recovery and token-efficiency
+              tradeoffs. Its numerical examples are hypothetical, not measured savings. Claude Code
+              is supported today; Codex is a future roadmap item.
+            </p>
+            <p>
+              The useful question: how much work does it take to deliver a correctly accepted
+              ticket, including retries and verification?
+            </p>
+          </blockquote>
+          <p>
+            Deployment instructions and editable sharing materials remain in the documentation
+            package. Nothing has been posted to LinkedIn.
+          </p>
+        </section>
+      </main>
+      <footer>
+        ACP / ARCHITECTURE & KNOWLEDGE TRANSFER <span>Implementation · Evidence · Proposals</span>
+      </footer>
+    </div>
+  </body>
+</html>

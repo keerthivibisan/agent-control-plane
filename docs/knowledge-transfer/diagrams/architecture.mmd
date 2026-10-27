@@ -1,0 +1,21 @@
+flowchart TB
+    Owner["Owner: tickets, workflow and project policy"] --> API["REST boundary: Zod, CSRF and request validation"]
+    Agent["Lead / agent control-tool request"] --> Bridge["Server tool bridge"]
+    API --> Engine
+    Bridge --> Engine
+    subgraph ACP["ACP: deterministic control plane"]
+      Engine["Pure engine: state + command + policy"] --> Decision{"Authorized in current state?"}
+      Decision -->|No| Refusal["Typed refusal; no launch"]
+      Decision -->|Yes| Persist["Commit state and records to SQLite"]
+      Persist --> Effects["Server executes declared effects"]
+      Effects --> Workspace["Own worktree + setup + pinned Git state"]
+      Workspace --> Adapter["Provider adapter: role tools and permission gates"]
+      Effects --> Checks["Trusted harness runner and commit evidence"]
+      Effects --> Git["Server-owned Git / delegated GitHub delivery"]
+    end
+    Adapter --> Claude["Claude Agent SDK: sessions and model calls"]
+    Claude --> Events["Usage / lifecycle / structured outcomes"]
+    Events --> Engine
+    Persist --> SSE["SSE: persisted run state for the UI"]
+    Checks --> Engine
+    Adapter -.-> Future["Future: Codex adapter (Phase 6)"]
