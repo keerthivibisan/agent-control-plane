@@ -1,10 +1,11 @@
 # Policy-driven conflict resolution and autonomous delivery
 
-**Status: proposed; not implemented.** Revised on 2026-10-27 following the owner's clarification:
-ACP should let agents complete work with minimal human interruption, select proportionate
-verification, and expose what was verified or deliberately skipped in the UI. This replaces the
-earlier proposal's blanket requirement to block every repair without configured checks and to
-always require owner delivery. No existing runtime permissions or contracts have been changed.
+**Status: implemented on `feature/conflict-resolution` (2026-10-27) as
+[ADR-0030](../decisions/0030-conflict-resolution-and-delegated-delivery.md), proposed.** What was
+built, and what was left out, is in [README.md](README.md) and [STATUS.md](STATUS.md); this file is
+the design that led to it. The original revision note follows: revised on 2026-10-27 following the
+owner's clarification: ACP should let agents complete work with minimal human interruption, select
+proportionate verification, and expose what was verified or deliberately skipped in the UI.
 
 ## Design position
 
