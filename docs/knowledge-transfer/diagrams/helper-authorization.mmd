@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant L as Lead
+    participant S as Server tool bridge
+    participant E as Pure engine
+    participant D as SQLite
+    participant W as Workspace and setup
+    participant A as Provider adapter
+    L->>S: start_agent(role, task, helper?)
+    S->>E: Validated command + current run state
+    E->>E: Check caller, phase, capacity, depth, budget and attempts
+    alt Refused
+      E-->>S: Typed refusal, no effects
+      S-->>L: Actionable explanation
+    else Authorized
+      E-->>S: New state + start-agent effect
+      S->>D: Commit new state before launch
+      S->>W: Prepare worktree and trusted setup
+      alt Setup fails
+        W-->>S: Failure metadata
+        S->>E: agentSetupFailed
+      else Ready
+        S->>A: Role-scoped spec, context, model and effort
+        A-->>S: Lifecycle / usage / outcome events
+        S->>E: Apply event, persist, reconcile
+      end
+      S-->>L: Accepted launch request, not completed work
+    end

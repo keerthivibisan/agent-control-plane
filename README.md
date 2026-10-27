@@ -265,6 +265,32 @@ flowchart LR
   S -->|"git / gh, on your click"| GH["origin on GitHub"]
 ```
 
+### Managed-run authorization
+
+Agents propose work; the pure engine authorizes transitions; the server persists and executes the
+permitted effects. Role tools, workspace setup, Git guards and evidence gates remain separate
+checks after a control request is accepted.
+
+```mermaid
+flowchart TB
+  Intent["Owner action or agent control request"] --> Boundary["Server: validate input"]
+  Boundary --> Engine["Pure engine: current state and policy"]
+  Engine --> Decision{"Caller, phase, capacity, depth, budget and attempts allowed?"}
+  Decision -->|No| Refusal["Typed refusal, no launch"]
+  Decision -->|Yes| Store["Commit state before effects"]
+  Store --> Execute["Server: worktree, trusted setup and scoped adapter launch"]
+  Execute --> Agent["Provider process with role tools and permission gates"]
+  Agent --> Evidence["Lifecycle, usage and structured outcomes"]
+  Evidence --> Engine
+```
+
+The [knowledge-transfer guide](docs/knowledge-transfer/README.md) includes the full architecture,
+helper sequence, current development conflict-recovery behavior and limits, token-efficiency
+analysis with labeled numerical examples, and the planned Codex integration. Its
+[offline visual site](docs/knowledge-transfer/site/index.html) is prepared for GitHub Pages;
+[publishing instructions](docs/knowledge-transfer/PUBLISHING.md) do not enable deployment.
+The guide pins its development baseline and distinguishes implemented code from proposals.
+
 The code is a TypeScript monorepo with enforced dependency directions:
 
 | Package                    | What it does                                                       |

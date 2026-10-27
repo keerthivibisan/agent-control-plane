@@ -24,6 +24,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   starting. Without it, the script stops with a message naming the port and PID. `-h` and `--help`
   print the usage.
 
+### Fixed
+
+- A ticket whose helpers changed nothing no longer offers **Merge** or **Push & open PR**, which
+  failed because the branch has no commits ahead of its target. The final step says "The ticket has
+  no changes" and explains why; **Request changes** and **Discard** stay available.
+
 ### Database
 
 - Migration 0012 adds `conflict_resolutions`. Back up the database before upgrading.
