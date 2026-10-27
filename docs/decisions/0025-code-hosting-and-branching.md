@@ -189,3 +189,10 @@ for fetches. After a push, the app sets the remote-tracking ref and the branch's
   publishes.
 - **Pull requests only, for GitHub projects:** rejected by the owner; the local merge stays as a
   choice.
+
+## Amendment 2026-10-27: conflict resolution and delegated delivery (ADR-0030, proposed)
+
+§2: besides the owner's click, the server may push the ticket branch and open or update its pull
+request, or merge locally, when the project's delivery policy explicitly delegates it to an allowed
+target and the verification route permits it. Same commands, origin and login as §1; the delivery
+state is recorded before the network call and an unknown outcome is never retried.
