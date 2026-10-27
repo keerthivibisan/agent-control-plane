@@ -11,7 +11,10 @@ export function isSafeId(id: unknown): id is string {
   return typeof id === 'string' && SAFE_ID.test(id);
 }
 
-export function assertSafeId(id: unknown, what: 'runId' | 'agentId'): asserts id is string {
+export function assertSafeId(
+  id: unknown,
+  what: 'runId' | 'agentId' | 'operationId',
+): asserts id is string {
   if (!isSafeId(id)) {
     throw new WorkspaceError(
       'invalid-id',

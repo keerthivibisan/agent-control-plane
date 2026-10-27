@@ -17,6 +17,9 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   approval modes up to Full auto; the review loop and the ticket branch; the harness and Checks
   blocks; GitHub and branching strategies; the branch guard. The release in progress is planned in
   [docs/v0.3.1/](docs/v0.3.1/README.md).
+- **Conflict resolution and delegated delivery (CR series, ADR-0030 proposed):** on
+  `feature/conflict-resolution`, for `dev`. Plan and status:
+  [docs/conflict-resolution/](docs/conflict-resolution/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):
@@ -84,6 +87,9 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
      - **ADR-0025:** on the owner's click only, the server pushes a ticket branch to the project's
        own `origin` and opens, reads or merges its pull request with the owner's GitHub CLI login
        (`gh`). It never reads or stores a token, and nothing runs on a timer or for an agent.
+     - **ADR-0030 (proposed):** the same push and pull request (or a local merge) without a click,
+       only when the project's delivery policy explicitly delegates it to an allowed target and
+       the verification route permits it. Off by default; never for an agent's own request.
    - The server binds `127.0.0.1`.
    - No shell execution from any input. Managed runs follow ADR-0013: only `git`, the SDK-spawned
      `claude`, `gh` (ADR-0025) and the project's own harness setup steps and checks (ADR-0017,

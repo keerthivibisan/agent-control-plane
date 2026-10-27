@@ -70,3 +70,9 @@ never pre-approved for an agent, in any mode. The harness status lists a warning
 or setup step that is branch-managing git. The app's own runner never starts one, anywhere it
 runs (agent worktrees, tip checkouts, the main branch). A check is recorded `error`, and a setup
 step `refused`, which stops the rest of the setup.
+
+## Amendment 2026-10-27: conflict resolution and delegated delivery (ADR-0030, proposed)
+
+§6 "nothing merges automatically": still true for changes into the ticket branch. A conflict
+resolution may promote its candidate to the ticket branch, and delegated delivery may merge into an
+allowed target, only under the project's explicit policy.

@@ -1,4 +1,7 @@
 import {
+  ConflictResolutionDtoSchema,
+  ConflictResolutionViewDtoSchema,
+  PromoteResolutionRequestSchema,
   BoardDtoSchema,
   CreateTicketRequestSchema,
   MoveTicketRequestSchema,
@@ -1192,6 +1195,42 @@ export async function resetTicketBranch(client: ApiClient, runId: string, from: 
     checked(ResetTicketBranchRequestSchema, { from }, path),
     TicketBranchReviewDtoSchema,
   );
+}
+
+// --- Conflict resolution (ADR-0030) --------------------------------------------------------------
+//
+// GET /api/runs/:id/conflict-resolution → ConflictResolutionViewDto (the latest operation, the
+// project's policy, whether the target moved). POST the same path (CSRF) starts "Update target /
+// Resolve conflicts"; POST …/cancel and …/promote (`{ reason? }`) act on the operation. Each answers
+// the operation (ConflictResolutionDto).
+
+export const conflictResolutionPaths = {
+  view: (runId: string) => `${API_BASE}/runs/${enc(runId)}/conflict-resolution`,
+} as const;
+
+export const conflictResolutionSchemas = { view: ConflictResolutionViewDtoSchema } as const;
+
+/** The owner's "Update target / Resolve conflicts". */
+export async function startConflictResolution(client: ApiClient, runId: string) {
+  const path = conflictResolutionPaths.view(runId);
+  return controlPost(client, path, {}, ConflictResolutionDtoSchema);
+}
+
+/** Stops the operation under way (its resolver too); the ticket branch stays as it was. */
+export async function cancelConflictResolution(client: ApiClient, runId: string) {
+  const path = `${conflictResolutionPaths.view(runId)}/cancel`;
+  return controlPost(client, path, {}, ConflictResolutionDtoSchema);
+}
+
+/** Applies a candidate the policy gate held; `reason` when it was not verified. */
+export async function promoteConflictResolution(client: ApiClient, runId: string, reason?: string) {
+  const path = `${conflictResolutionPaths.view(runId)}/promote`;
+  const body = checked(
+    PromoteResolutionRequestSchema,
+    reason === undefined ? {} : { reason },
+    path,
+  );
+  return controlPost(client, path, body, ConflictResolutionDtoSchema);
 }
 
 // --- Code hosting: GitHub status, Push & open PR (G-B, ADR-0025) ---------------------------------

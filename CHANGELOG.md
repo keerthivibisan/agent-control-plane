@@ -7,11 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Update from target / Resolve conflicts** on a ticket branch whose target moved, also while a
+  pull request is open. The app merges in its own copy; a resolver helper repairs conflicts; the
+  result is checked and applied only if nothing moved meanwhile (ADR-0030, proposed).
+- **Conflicts, verification and delivery policy** in project Settings: automatic resolution,
+  adaptive verification with approved documentation scopes, explicit unverified delivery, and
+  delegated push/PR or merge to allowed targets. Everything stays manual until you change it.
+- The ticket shows resolution, verification, review and delivery separately, with the reason for
+  any skipped, unavailable, failed or stale verification.
+- Helpers report an outcome (completed, no change, blocked) that reaches the lead; repeated
+  no-change attempts are bounded.
+
 ### Fixed
 
 - A ticket whose helpers changed nothing no longer offers **Merge** or **Push & open PR**, which
   failed because the branch has no commits ahead of its target. The final step says "The ticket has
   no changes" and explains why; **Request changes** and **Discard** stay available.
+
+### Database
+
+- Migration 0012 adds `conflict_resolutions`. Back up the database before upgrading.
 
 ## [0.3.1] - 2026-10-26
 

@@ -22,7 +22,7 @@ function columns(db: AcpDatabase, table: string): string[] {
 
 describe('migration 0011 (G-H)', () => {
   it('ships as 0011_ticket_branch_source', () => {
-    expect(loadMigrations(DEFAULT_MIGRATIONS_DIR).at(-1)).toMatchObject({
+    expect(loadMigrations(DEFAULT_MIGRATIONS_DIR).find((m) => m.version === 11)).toMatchObject({
       version: 11,
       name: 'ticket_branch_source',
     });

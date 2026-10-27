@@ -218,6 +218,16 @@ export class Draft {
         if (this.integration === undefined) {
           // Helpers and the tester leave a worktree the owner merges or discards (ADR-0019).
           if (agent.review === null) agent.review = 'pending';
+        } else if (agent.resolution !== undefined) {
+          // ADR-0030: a resolver's half-done merge is never an ordinary change; the server ends
+          // its operation's attempt (sealed ones report through `resolverSealed`).
+          if (from !== 'AWAITING_REVIEW') {
+            this.effects.push({
+              type: 'resolver-ended',
+              agentRunId: agent.id,
+              operationId: agent.resolution.operationId,
+            });
+          }
         } else if (from !== 'AWAITING_REVIEW' && !this.isStopping()) {
           // ADR-0021: stopped mid-turn while the run goes on; its work waits for a decision.
           stoppedWithoutReview(agent);

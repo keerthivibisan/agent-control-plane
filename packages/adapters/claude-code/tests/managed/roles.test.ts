@@ -95,6 +95,12 @@ async function collect(events: AsyncIterable<ManagedAgentEvent>): Promise<Manage
 /** One turn with some text, then a result; reports whether the input was still open after it. */
 async function oneTurn(kind: AgentRoleKind) {
   let stillOpen: boolean | null = null;
+  // Abort only once the fake session has looked at its input: a fixed delay raced the session's
+  // start on slow machines (GitHub's Linux runners), which then saw the input closed by the abort.
+  let looked: () => void = () => undefined;
+  const lookedAtInput = new Promise<void>((resolve) => {
+    looked = resolve;
+  });
   const { query } = fakeQuery(async function* (ctx) {
     await ctx.nextInput();
     yield init();
@@ -106,13 +112,14 @@ async function oneTurn(kind: AgentRoleKind) {
       new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), 20)),
     ]);
     stillOpen = next !== null;
+    looked();
   });
   const handle = createManagedClaudeCode({ query }).start(spec(kind), callbacks());
   const events: ManagedAgentEvent[] = [];
   const reading = (async () => {
     for await (const e of handle.events) events.push(e);
   })();
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  await lookedAtInput;
   handle.abort();
   await reading;
   return { events, stillOpen };

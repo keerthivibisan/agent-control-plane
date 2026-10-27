@@ -3,6 +3,8 @@ import type {
   AgentRoleKind,
   AgentRun,
   CheckSelection,
+  HelperOutcomeKind,
+  VerificationAssessmentInput,
   AllowRule,
   ApprovalKindSchema,
   ApprovalStatus,
@@ -71,6 +73,18 @@ export interface EngineAgent extends AgentRun {
    * change it reviews. Absent for the final code reviewer (stage `code-review`).
    */
   reviewsAgentRunId?: string;
+  /**
+   * ADR-0030: this worker is the resolver of a conflict-resolution operation. It edits content in
+   * a worktree the server prepared with the target merged in (conflicts left in place); its turn
+   * never enters the review loop: the server seals the merge and the operation goes on. In memory
+   * with the live run; after a restart the server marks it from the operation's record.
+   */
+  resolution?: { operationId: string };
+  /**
+   * ADR-0030 §5: the outcome the helper reported with `report_work` this turn, and its note. The
+   * lead is told it when the change is sealed. In memory with the live run.
+   */
+  reportedOutcome?: { kind: HelperOutcomeKind; note: string };
 }
 
 /**
@@ -375,6 +389,11 @@ export type EngineEffect =
        */
       fromBranch?: string;
       /**
+       * ADR-0030: a resolver. The server starts it in the operation's prepared worktree (the
+       * ticket tip with the target merged in, conflicts left) instead of creating one.
+       */
+      resolution?: { operationId: string };
+      /**
        * ADR-0023 §5, runs with a graph only (version 1 runs keep the run-level Full auto, which
        * `agentLaunchMode` also answers): true when this helper or tester runs in Claude Code's
        * auto mode, because its node's mode for this run is Full auto.
@@ -523,6 +542,23 @@ export type EngineEffect =
    * kind `agent-note` (a later note replaces it).
    */
   | { type: 'agent-note'; agentRunId: string; body: string }
+  /**
+   * ADR-0030 §5: the helper's reported outcome (and a resolver's assessment). The server records it
+   * on the agent's conflict-resolution operation when it has one; nothing else is stored.
+   */
+  | {
+      type: 'helper-outcome';
+      agentRunId: string;
+      outcome: HelperOutcomeKind;
+      assessment?: VerificationAssessmentInput;
+    }
+  /**
+   * ADR-0030: a resolver's turn ended; commit the merge in its worktree (the server's own commit,
+   * never the agent's), check it, then report with `resolverSealed`.
+   */
+  | { type: 'seal-resolution'; agentRunId: string; operationId: string }
+  /** ADR-0030: a resolver ended without a sealed result (stopped, failed or cancelled). */
+  | { type: 'resolver-ended'; agentRunId: string; operationId: string }
   /** A new plan version waits for the owner (run → PLAN_REVIEW). The plan is in `state.plans`. */
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */

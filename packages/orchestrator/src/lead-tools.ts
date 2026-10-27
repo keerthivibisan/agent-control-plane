@@ -97,7 +97,11 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
       return isChangeReviewer(agent) ? ['submit_review'] : ['post_review'];
     case 'worker': {
       const children =
-        agent.change === undefined && mayStartHelpers(state, agent) ? CHILD_MANAGEMENT_TOOLS : [];
+        agent.change === undefined &&
+        agent.resolution === undefined &&
+        mayStartHelpers(state, agent)
+          ? CHILD_MANAGEMENT_TOOLS
+          : [];
       return state.run.ticketId === null ? children : [...children, 'report_work'];
     }
     case 'tester':
@@ -147,7 +151,7 @@ export function leadToolCall(
     }
     const parsed = LeadToolInputs.report_work.safeParse(call.input);
     if (!parsed.success) return invalid(parsed.error);
-    return reportWork(state, caller.id, parsed.data.note, ctx);
+    return reportWork(state, caller.id, parsed.data, ctx);
   }
   if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
