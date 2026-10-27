@@ -1,6 +1,8 @@
 import express, { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import {
+  ConflictResolutionDtoSchema,
+  ConflictResolutionViewDtoSchema,
   AgentRunDtoSchema,
   ApprovalDtoSchema,
   ChatMessageDtoSchema,
@@ -100,6 +102,24 @@ export function createControlRouter(control: ControlService): Router {
   router.post('/runs/:id/ticket-branch/reset', csrf, json, async (req, res) => {
     const dto = await control.resetTicketBranch(param(req.params['id']), req.body);
     res.json(out(TicketBranchReviewDtoSchema, dto));
+  });
+
+  // ADR-0030: "Update target / Resolve conflicts"; every change is the owner's click (CSRF).
+  router.get('/runs/:id/conflict-resolution', async (req, res) => {
+    const dto = await control.conflictResolution(param(req.params['id']));
+    res.json(out(ConflictResolutionViewDtoSchema, dto));
+  });
+  router.post('/runs/:id/conflict-resolution', csrf, json, async (req, res) => {
+    const dto = await control.startConflictResolution(param(req.params['id']));
+    res.json(out(ConflictResolutionDtoSchema, dto));
+  });
+  router.post('/runs/:id/conflict-resolution/cancel', csrf, json, async (req, res) => {
+    const dto = await control.cancelConflictResolution(param(req.params['id']));
+    res.json(out(ConflictResolutionDtoSchema, dto));
+  });
+  router.post('/runs/:id/conflict-resolution/promote', csrf, json, async (req, res) => {
+    const dto = await control.promoteConflictResolution(param(req.params['id']), req.body);
+    res.json(out(ConflictResolutionDtoSchema, dto));
   });
 
   router.post('/approvals/:id', csrf, json, (req, res) => {

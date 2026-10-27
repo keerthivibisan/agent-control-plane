@@ -377,3 +377,70 @@ describe('Project settings (#/p/:id/settings, docs/redesign/README.md §4.7)', (
     ).toBeTruthy();
   });
 });
+
+describe('Conflicts, verification and delivery policy (ADR-0030)', () => {
+  it('starts on the safe defaults and saves an explicit policy with PUT', async () => {
+    const s = server();
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await screen.findByTestId('settings-automation');
+    expect(within(card).getByTestId<HTMLSelectElement>('automation-conflict-mode').value).toBe(
+      'manual',
+    );
+    expect(within(card).getByTestId<HTMLSelectElement>('automation-delivery-mode').value).toBe(
+      'manual',
+    );
+    expect(within(card).getByTestId<HTMLInputElement>('automation-allow-unverified').checked).toBe(
+      false,
+    );
+    fireEvent.change(within(card).getByTestId('automation-conflict-mode'), {
+      target: { value: 'auto' },
+    });
+    fireEvent.change(within(card).getByTestId('automation-verification-mode'), {
+      target: { value: 'agent-adaptive' },
+    });
+    fireEvent.change(within(card).getByTestId('automation-skip-scopes'), {
+      target: { value: 'docs/**\n*.md' },
+    });
+    fireEvent.change(within(card).getByTestId('automation-delivery-mode'), {
+      target: { value: 'push-pr' },
+    });
+    // Delegated delivery with no target is allowed but warned about.
+    expect(within(card).getByTestId('automation-warnings').textContent).toContain(
+      'no target branch is allowed',
+    );
+    fireEvent.change(within(card).getByTestId('automation-targets'), {
+      target: { value: 'dev' },
+    });
+    fireEvent.click(within(card).getByTestId('automation-save'));
+    await waitFor(() => expect(s.calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(s.calls.find((c) => c.method === 'PUT')?.body).toMatchObject({
+      automation: {
+        conflictResolution: { mode: 'auto', maxAttempts: 2, helper: null },
+        verification: {
+          mode: 'agent-adaptive',
+          skipScopes: ['docs/**', '*.md'],
+          alwaysRunChecks: [],
+          allowUnverifiedDelivery: false,
+          onMissingChecks: 'escalate',
+        },
+        delivery: { mode: 'push-pr', allowedTargets: ['dev'] },
+      },
+    });
+    expect(s.csrf).toContain(CSRF);
+  });
+
+  it('refuses an unsafe pattern before saving', async () => {
+    const s = server();
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const card = await screen.findByTestId('settings-automation');
+    fireEvent.change(within(card).getByTestId('automation-verification-mode'), {
+      target: { value: 'agent-adaptive' },
+    });
+    fireEvent.change(within(card).getByTestId('automation-skip-scopes'), {
+      target: { value: '../secrets/**' },
+    });
+    expect(within(card).getByTestId('automation-invalid')).toBeTruthy();
+    expect(within(card).getByTestId('automation-save')).toHaveProperty('disabled', true);
+    expect(s.calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+});

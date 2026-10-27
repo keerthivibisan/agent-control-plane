@@ -10,9 +10,9 @@ import type { EngineAgent, RunState } from './state.js';
  * started a new helper after every failed seal, and each did the same: a loop only the lead's
  * budget would have ended. Rework rounds were bounded; replacements were not.
  *
- * A **lost attempt** is a helper whose change was discarded (by the lead or the owner) or could
- * not be saved (`sealFailure`, also while it waits to be discarded). Work that merged, or that had
- * no changes, never counts, so a well-behaved run is never limited by this.
+ * A **lost attempt** is a helper whose change was discarded (by the lead or the owner), could not
+ * be saved (`sealFailure`, also while it waits to be discarded), or had no changes (ADR-0030 §5:
+ * repeated no-change attempts were otherwise unbounded). Work that merged never counts.
  *
  * - **Per plan step:** a step is the helper node a start resolves to plus its role (as the lead
  *   names a step's helper; case and spacing aside). It may lose `stepAttemptLimit` attempts:
@@ -30,13 +30,21 @@ export function stepAttemptLimit(state: Pick<RunState, 'integration'>): number {
   return Math.max(2, 1 + (state.integration?.maxReworkRounds ?? 0));
 }
 
-/** A helper whose work was lost: its change was discarded or could not be saved. */
+/**
+ * A helper whose work was lost: its change was discarded or could not be saved, or (ADR-0030 §5)
+ * it ended with no change. A no-change helper made no progress on its step whether it said it was
+ * blocked or not, so a replacement for it counts too; the lead hears each one's reported reason.
+ * Resolvers (ADR-0030) belong to their operation's own attempt budget, not to a plan step.
+ */
 function isLostAttempt(agent: EngineAgent): boolean {
   const change = agent.change;
   return (
     agent.kind === 'worker' &&
+    agent.resolution === undefined &&
     change !== undefined &&
-    (change.state === 'discarded' || change.sealFailure !== undefined)
+    (change.state === 'discarded' ||
+      change.state === 'no-changes' ||
+      change.sealFailure !== undefined)
   );
 }
 
@@ -112,6 +120,17 @@ export function checkStepAttempts(
   if (what === null) return null;
   return refusal(
     'attempts-exhausted',
-    `${what} had their work discarded or could not save it, which is as many as this run allows. Do not start another one: decide the changes still waiting, hand over with request_review, and say in your summary what is still missing. The owner decides what happens next.`,
+    `${what} had their work discarded, could not save it, or ended with no changes, which is as many as this run allows.${lastReports(state, node, role)} Do not start another one: decide the changes still waiting, hand over with request_review, and say in your summary what is still missing. The owner decides what happens next.`,
   );
+}
+
+/** The last reported outcomes of the step's lost attempts, so the refusal says why they failed. */
+function lastReports(state: RunState, node: ProgramHelperNode, role: string): string {
+  const key = norm(role);
+  const reports = state.agents
+    .filter((a) => isLostAttempt(a) && stageOf(a) === node.id && norm(a.role) === key)
+    .flatMap((a) => (a.reportedOutcome === undefined ? [] : [a.reportedOutcome]))
+    .slice(-2)
+    .map((r) => `${r.kind}: ${r.note}`);
+  return reports.length === 0 ? '' : ` Their last reports: ${reports.join(' | ')}.`;
 }

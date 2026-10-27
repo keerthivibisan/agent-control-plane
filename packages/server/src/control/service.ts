@@ -19,6 +19,7 @@ import {
   type PermissionDecision,
   type PermissionRequest,
   type CompileContext,
+  type HarnessManifest,
   type ProjectApprovals,
   type ProjectWorkflow,
   type RegisteredRoot,
@@ -35,6 +36,8 @@ import {
   type AgentRunDto,
   type ApprovalDto,
   type ChatMessageDto,
+  type ConflictResolutionDto,
+  type ConflictResolutionViewDto,
   type ReviewDto,
   type RunDetailDto,
   type RunSummaryDto,
@@ -126,6 +129,7 @@ import {
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
 import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
+import { createConflictResolution } from './conflict-resolution.js';
 import { refusalError, workspaceError } from './errors.js';
 import {
   summaryOf,
@@ -267,6 +271,11 @@ export interface ControlWorkspaceHooks {
    * starts. Not called for rework turns (the worktree is set up), nor for reading roles.
    */
   setupWorktree?: (input: WorktreeSetupInput) => Promise<WorktreeSetup>;
+  /**
+   * ADR-0030: the harness file of the project's own checkout (never a candidate's), for the
+   * conflict-resolution policy gate; null without a valid one.
+   */
+  readManifest?: (projectId: string) => Promise<HarnessManifest | null>;
   reviewGate?: (runId: string, agentRunId: string) => ReviewGate;
   /** The owner merged although a required check failed; `reason` is their own text. */
   mergedAnyway?: (input: {
@@ -408,6 +417,14 @@ export interface ControlService {
   ): Promise<TicketBranchDto>;
   /** ADR-0025: reads the pull request's state now; merged on GitHub completes the run. */
   refreshPullRequest(runId: string): Promise<TicketBranchDto>;
+  /** ADR-0030: the run's latest conflict-resolution operation and the project's policy. */
+  conflictResolution(runId: string): Promise<ConflictResolutionViewDto>;
+  /** ADR-0030: the owner's "Update target / Resolve conflicts" (CSRF). */
+  startConflictResolution(runId: string): Promise<ConflictResolutionDto>;
+  /** ADR-0030: the owner cancels the operation under way. */
+  cancelConflictResolution(runId: string): Promise<ConflictResolutionDto>;
+  /** ADR-0030: the owner applies a candidate the policy gate held (`PromoteResolutionRequest`). */
+  promoteConflictResolution(runId: string, body: unknown): Promise<ConflictResolutionDto>;
   /** A plan-first run for a board ticket (ADR-0016): PLANNING, its lead starts on the brief. */
   createTicketRun(input: TicketRunInput): RunDetailDto;
   /**
@@ -622,7 +639,71 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     notify: (live) => notify('runs-changed', live as LiveRun),
     track,
     countDiagnostic: (code) => countDiagnostic(code),
+    tipGate: (runId, tip) => resolution.tipGateOverride(runId, tip),
   });
+
+  /** ADR-0030: "Update target / Resolve conflicts" operations (server-owned git, policy gate). */
+  const resolution = createConflictResolution({
+    store,
+    workspaces: deps.workspaces,
+    logger,
+    now: () => deps.now(),
+    projectRoot: (projectId) => deps.repos.projects.getById(projectId)?.rootPath,
+    refOf: (live, row) => loop.refOf(live as LiveRun, row),
+    readManifest: async (projectId) => (await hooks.readManifest?.(projectId)) ?? null,
+    commitChecks: () => hooks.commitChecks,
+    apply: (live, command) => apply(live as LiveRun, command),
+    release: (live, agentRunId) => loop.release(live as LiveRun, agentRunId),
+    appComment: (live, text) => appComment(live as LiveRun, text),
+    ownerComment: (live, text) => ownerComment(live as LiveRun, text),
+    notify: (live) => notify('runs-changed', live as LiveRun),
+    track,
+    delivery: {
+      openPullRequest: async (live, draft) => {
+        const l = live as LiveRun;
+        const ticket = ticketOf(l);
+        if (ticket === null) throw new HttpError(409, 'no_ticket', 'The run has no ticket');
+        await loop.openPullRequest(l, { draft }, ticket);
+      },
+      mergeLocally: async (live) => {
+        const l = live as LiveRun;
+        await loop.ticketBranchAction(
+          l,
+          { action: 'merge' },
+          {
+            ownerComment: (text) => ownerComment(l, text),
+            appComment: (text) => appComment(l, text),
+          },
+        );
+      },
+    },
+  });
+
+  function ticketOf(live: LiveRun): { key: string; title: string } | null {
+    const ticketId = live.state.run.ticketId;
+    const ticket = ticketId === null ? undefined : store.workspaceRepos.tickets.getById(ticketId);
+    return ticket === undefined ? null : { key: ticket.key, title: ticket.title };
+  }
+
+  /** The owner's own words (ADR-0016, ADR-0021 §6), kept on the run's ticket. */
+  function ownerComment(live: LiveRun, text: string): void {
+    const ticketId = live.state.run.ticketId;
+    if (ticketId === null) return;
+    try {
+      store.workspaceRepos.comments.insert({
+        ticketId,
+        runId: live.state.run.id,
+        author: 'owner',
+        body: text.slice(0, 8000),
+        kind: 'comment',
+      });
+    } catch (error) {
+      logger.log('error', 'owner comment not stored', {
+        runId: live.state.run.id,
+        ...errorFields(error),
+      });
+    }
+  }
 
   /**
    * ADR-0024 §3: one comment by author `app` on the run's ticket (app data only: branch names,
@@ -887,6 +968,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'agent-note':
           // ADR-0026 §3: stored in the same transaction (RunStore.commit); no text is logged.
           logger.log('info', 'agent note stored', { runId, agentRunId: effect.agentRunId });
+          break;
+        // ADR-0030: the resolver's report, seal and end go to its conflict-resolution operation.
+        case 'helper-outcome':
+          resolution.onHelperOutcome(effect.agentRunId, effect.outcome, effect.assessment);
+          break;
+        case 'seal-resolution':
+          resolution.sealResolution(live, effect.agentRunId, effect.operationId);
+          break;
+        case 'resolver-ended':
+          resolution.resolverEnded(live, effect.agentRunId, effect.operationId);
           break;
         case 'start-follow-up':
           startFollowUp(live, effect);
@@ -1214,12 +1305,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       (async () => {
         let ws: Workspace;
         try {
-          ws = await deps.workspaces.create(
-            project.rootPath,
-            runId,
-            agentRunId,
-            fromTicketBranch(live, effect.fromBranch),
-          );
+          let options = fromTicketBranch(live, effect.fromBranch);
+          if (effect.resolution !== undefined) {
+            // ADR-0030: the operation's pinned tip with its target merged in, conflicts left.
+            const prepared = resolution.workspaceOptions(effect.resolution.operationId);
+            if (prepared === undefined) {
+              throw new WorkspaceError('invalid-workspace', 'The conflict resolution is over');
+            }
+            options = prepared;
+          }
+          ws = await deps.workspaces.create(project.rootPath, runId, agentRunId, options);
         } catch (error) {
           live.starting.delete(agentRunId);
           live.pendingSends.delete(agentRunId);
@@ -2492,6 +2587,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         logger.log('warn', 'temporary agent folder cleanup failed', errorFields(error));
       }
       if (!deps.enabled) return;
+      // ADR-0030: interrupted conflict resolutions end (never relaunched or republished), and
+      // their resolvers' half-done worktrees are discarded before the orphan cleanup.
+      await resolution.recover((runId) => runs.get(runId));
       // Worktrees the database still references stay, NEEDS_REVIEW ones included.
       const keep = store.repos.workspaces
         .listActive()
@@ -2812,7 +2910,26 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     ticketBranch(runId) {
-      return loop.ticketBranchReview(get(runId));
+      const live = get(runId);
+      // ADR-0030: a project that delegated conflict resolution updates a moved target by itself.
+      resolution.maybeAutoStart(live);
+      return loop.ticketBranchReview(live);
+    },
+
+    conflictResolution(runId) {
+      return resolution.view(get(runId));
+    },
+
+    startConflictResolution(runId) {
+      return resolution.startByOwner(get(runId));
+    },
+
+    cancelConflictResolution(runId) {
+      return resolution.cancel(get(runId));
+    },
+
+    promoteConflictResolution(runId, body) {
+      return resolution.promote(get(runId), body);
     },
 
     async ticketBranchAction(runId, body) {
@@ -2837,6 +2954,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // ADR-0024 §3: the merge line, app data only (branch names and a commit id).
         appComment: (text) => appComment(live, text),
       });
+      // ADR-0030: a merge moved a target; other tickets of the project waiting on it may update
+      // themselves when their project delegated it.
+      if (live.state.run.status === 'COMPLETED') {
+        for (const other of runs.values()) {
+          if (other === live || other.state.run.projectId !== live.state.run.projectId) continue;
+          if (other.state.run.status === 'REVIEW') resolution.maybeAutoStart(other);
+        }
+      }
       return loop.ticketBranchReview(live);
     },
 

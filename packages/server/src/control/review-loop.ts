@@ -164,6 +164,12 @@ export interface ReviewLoopContext {
   flushIngestion?: () => Promise<void>;
   track(promise: Promise<unknown>): void;
   countDiagnostic(code: string): void;
+  /**
+   * ADR-0030: the gate for the owner's merge of exactly this tip when a current conflict
+   * resolution skipped its checks by the project's policy (only its always-run checks); null
+   * keeps the workflow's own gate.
+   */
+  tipGate?: (runId: string, tip: string) => CheckSpec | null;
 }
 
 /** The change reviewer's brief holds at most this much diff (ADR-0021 §3; sent, never stored). */
@@ -960,7 +966,12 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         case 'merge-anyway': {
           const gate = (await ctx
             .commitChecks()
-            ?.gate(runId, null, row.headCommit, branchChecks(live))) ?? {
+            ?.gate(
+              runId,
+              null,
+              row.headCommit,
+              ctx.tipGate?.(runId, row.headCommit) ?? branchChecks(live),
+            )) ?? {
             passed: true,
             failedRequired: [],
             missing: [],
@@ -1211,6 +1222,8 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
   }
 
   return {
+    refOf,
+    release,
     openPullRequest,
     refreshPullRequest,
     sealChange,

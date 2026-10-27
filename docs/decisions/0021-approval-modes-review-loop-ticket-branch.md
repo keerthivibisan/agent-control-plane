@@ -238,3 +238,11 @@ From the adversarial suite (T-1); owner request to tighten the tests and close t
    It also reads a shell's input: here-strings and here-documents fed to a shell are read as
    scripts. A shell reading a pipe or substituted input is denied when the command mentions git.
    `xargs git` with no subcommand is denied.
+
+## Amendment 2026-10-27: conflict resolution and delegated delivery (ADR-0030, proposed)
+
+§4: besides the owner's "Update from main", a server-owned conflict-resolution operation may update
+the ticket branch from its target (owner's click, or automatically when the project's policy says
+so). It promotes by compare-and-swap after its own policy gate. A current `skipped-by-policy`
+decision for exactly the tip gates the owner's merge by its always-run checks only; every other
+route keeps this ADR's gate. §3 (F-2): helpers that end with no change count as lost attempts.
