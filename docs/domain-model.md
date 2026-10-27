@@ -148,6 +148,10 @@ What exists (Zod shapes in `packages/core/src/orchestration/` and `packages/core
 - **Ticket** (`tickets`, ADR-0016) replaces the planned Task: a project's unit of work, with its
   plan (`ticket_plans`), comments and agent notes (`ticket_comments`, ADR-0026), attachments
   (`ticket_attachments`), run options and branch preferences. A run may belong to a ticket.
+  Attachments accept only the ADR-0026 allowlist (images, text, Markdown, CSV, JSON, PDF, zip,
+  gzip; never HTML or SVG; 10 MB each, 50 per ticket), not arbitrary types. The New ticket dialog
+  has a browse and drag-and-drop **Attach files** control **[implemented]**: the files are
+  uploaded to the ticket after it is created, under the same rules.
 - **CheckRun** (`check_runs`, ADR-0017, ADR-0027) and **SetupRun** (`setup_runs`) replace the
   planned ValidationRun: one harness check or setup step, with where it ran and the redacted last
   lines of output.
