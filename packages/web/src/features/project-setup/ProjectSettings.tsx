@@ -3,6 +3,7 @@ import type { ContextCandidateDto, ProjectAgentSetupDto, ProjectDto } from '@acp
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { AutomationCard } from './AutomationCard';
 import { AlertIcon, CheckIcon, HarnessIcon, WorkflowIcon } from '../../components/icons';
 import { ApprovalsIcon } from '../review-loop/icons';
 import { BranchesCard } from '../branching/Branches';
@@ -271,6 +272,7 @@ function SettingsBody({ project }: { project: ProjectDto }) {
         <QueryView query={setup}>
           {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
         </QueryView>
+        {setup.data !== undefined ? <AutomationCard projectId={id} setup={setup.data} /> : null}
         <CodeHostCard projectId={id} />
         <BranchesCard projectId={id} />
         <Card title={S.elsewhere.title} testId="settings-elsewhere">

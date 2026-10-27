@@ -55,3 +55,8 @@ the merge is gated on the tip only by a block on the ticket branch, by that bloc
 selection; without one, nothing runs on the tip and the owner merges without "Merge anyway".
 The lead's `merge` link goes to the ticket merge when there is no block before the merge, and is
 refused there when there is one, so the lead can never merge past a block.
+
+## Amendment 2026-10-27: conflict resolution and delegated delivery (ADR-0030, proposed)
+
+§2: the owner's merge on a tip promoted by a conflict resolution whose checks were skipped by
+policy is gated by that decision's always-run checks only (see ADR-0030 §7).

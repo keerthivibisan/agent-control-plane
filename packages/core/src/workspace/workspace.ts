@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectAutomationSchema } from './conflict-resolution.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from './node-id.js';
 import { BranchStrategySchema, TicketBranchPrefsSchema } from './branching.js';
@@ -506,6 +507,11 @@ export const ProjectAgentSetupSchema = z.object({
    * ADR-0027 §2: setup steps that declare `network: true` may run. Owner-only; absent means off.
    */
   setupNetwork: z.boolean().optional(),
+  /**
+   * ADR-0030: conflict resolution, verification and delivery policy. Absent: `DEFAULT_AUTOMATION`
+   * (manual resolution, required checks, escalate, owner delivery); never widened implicitly.
+   */
+  automation: ProjectAutomationSchema.optional(),
   updatedAt: IsoTimestampSchema,
 });
 export type ProjectAgentSetup = z.infer<typeof ProjectAgentSetupSchema>;

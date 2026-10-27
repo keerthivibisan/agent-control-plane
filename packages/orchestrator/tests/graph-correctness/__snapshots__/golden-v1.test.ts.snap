@@ -3713,7 +3713,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut no-changes 1`] = 
   > link-session agentRunId=CR1 providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #14 server "seal unchanged" -> ok
-  > send-to-agent agentRunId=L text="UI finished with no changes; there is no…"#37c7ca4c/55
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished with no changes…"#0ad01295/172
   ~ W2 SUCCEEDED review=no-changes change=no-changes/r0
 #15 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -6076,7 +6076,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut no-changes 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #14 server "seal unchanged" -> ok
-  > send-to-agent agentRunId=L text="UI finished with no changes; there is no…"#37c7ca4c/55
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished with no changes…"#0ad01295/172
   ~ W2 SUCCEEDED review=no-changes change=no-changes/r0
 #15 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
@@ -9384,7 +9384,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut no-changes 1`] = `
   > link-session agentRunId=CR1 providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #15 server "seal unchanged" -> ok
-  > send-to-agent agentRunId=L text="UI finished with no changes; there is no…"#37c7ca4c/55
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished with no changes…"#0ad01295/172
   ~ W2 SUCCEEDED review=no-changes change=no-changes/r0
 #16 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -11715,7 +11715,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut no-changes 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #15 server "seal unchanged" -> ok
-  > send-to-agent agentRunId=L text="UI finished with no changes; there is no…"#37c7ca4c/55
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished with no changes…"#0ad01295/172
   ~ W2 SUCCEEDED review=no-changes change=no-changes/r0
 #16 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."

@@ -41,9 +41,13 @@ describe('report_work (ADR-0026 §3)', () => {
     );
     expect(r.effects).toEqual([
       { type: 'agent-note', agentRunId: A, body: 'Added the endpoint and two tests.' },
+      // ADR-0030 §5: the outcome (default `completed`) for the lead and the operation.
+      { type: 'helper-outcome', agentRunId: A, outcome: 'completed' },
     ]);
     expect(r.value).toContain('Noted on the ticket');
-    expect(r.state.agents).toEqual(s.agents);
+    // Only the in-memory report changes; the run and every status stay as they were.
+    expect(r.state.run.status).toBe(s.run.status);
+    expect(r.state.agents.map(({ reportedOutcome: _, ...a }) => a)).toEqual(s.agents);
     // A second call is allowed: the server replaces the earlier note.
     const again = ok(leadTool(r.state, 'report_work', { note: 'Fixed it.' }, 'n2', A));
     expect(effectsOf(again.effects, 'agent-note')[0]?.body).toBe('Fixed it.');

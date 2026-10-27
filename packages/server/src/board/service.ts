@@ -744,6 +744,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         deps.checks.startOnCommit(runId, agentRunId, commit, onFinished, spec, options),
     },
     setupWorktree: (input) => deps.checks.setupWorktree(input),
+    // ADR-0030: the trusted harness file (the project's own checkout) for the policy gate.
+    readManifest: async (projectId) => {
+      const p = deps.repos.projects.getById(projectId);
+      return p === undefined ? null : ((await deps.harness.read(p))?.manifest ?? null);
+    },
 
     mergedAnyway({ runId, role, reason, failedChecks }) {
       // The owner's reason is their own text (ADR-0016): kept on the ticket, for the record.
@@ -821,11 +826,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           ? legacyAllowlistOf(input.approvals)
           : (stored?.allowlist ?? { editInOwnWorktree: false, runHarnessChecks: false }));
       // ADR-0025: an absent strategy keeps the stored one; `null` removes it.
-      const { branching: branchingInput, setupNetwork: networkInput, ...rest } = input;
+      const {
+        branching: branchingInput,
+        setupNetwork: networkInput,
+        automation: automationInput,
+        ...rest
+      } = input;
       const branching =
         branchingInput === undefined ? stored?.branching : (branchingInput ?? undefined);
       // ADR-0027 §2: an absent switch keeps the stored one (off when never set).
       const setupNetwork = networkInput ?? stored?.setupNetwork;
+      // ADR-0030: an absent policy keeps the stored one; `null` resets it to the defaults.
+      const automation =
+        automationInput === undefined ? stored?.automation : (automationInput ?? undefined);
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
@@ -835,6 +848,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           ...(approvals !== undefined && { approvals }),
           ...(branching !== undefined && { branching }),
           ...(setupNetwork !== undefined && { setupNetwork }),
+          ...(automation !== undefined && { automation }),
         });
         notice('projects-changed', { projectId });
         return saved;

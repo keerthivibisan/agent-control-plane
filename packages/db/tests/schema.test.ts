@@ -53,6 +53,9 @@ const ACTIVITY_TABLES = ['ticket_attachments'];
 /** Added by 0010 (H-B, ADR-0027: setup runs). */
 const HARNESS_TABLES = ['setup_runs'];
 
+/** Added by 0012 (CR-B, ADR-0030: conflict resolution). */
+const RESOLUTION_TABLES = ['conflict_resolutions'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -140,6 +143,7 @@ describe('0001_observability schema (B3)', () => {
         ...REVIEW_LOOP_TABLES,
         ...ACTIVITY_TABLES,
         ...HARNESS_TABLES,
+        ...RESOLUTION_TABLES,
       ].sort(),
     );
   });

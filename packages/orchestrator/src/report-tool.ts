@@ -1,3 +1,4 @@
+import type { HelperOutcomeKind, VerificationAssessmentInput } from '@acp/core';
 import { cleanAgentNote } from './agent-note.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
@@ -13,12 +14,17 @@ import { isLiveAgentStatus } from './transitions.js';
 
 /**
  * A helper's or tester's `report_work`: allowed while the agent is live in a ticket run that is
- * not being stopped. Emits `agent-note`; the server stores it with the transition.
+ * not being stopped. Emits `agent-note` (the server stores it with the transition) and
+ * `helper-outcome` (ADR-0030 §5).
  */
 export function reportWork(
   state: RunState,
   callerAgentRunId: string,
-  note: string,
+  input: {
+    note: string;
+    outcome?: HelperOutcomeKind | undefined;
+    assessment?: VerificationAssessmentInput | undefined;
+  },
   ctx: EngineContext,
 ): EngineResult<string> {
   return applyCommand(state, ctx, (d) => {
@@ -36,9 +42,21 @@ export function reportWork(
     if (!isLiveAgentStatus(agent.status) || agent.status === 'AWAITING_REVIEW') {
       return refusal('agent-not-live', 'Your turn is over.');
     }
-    const body = cleanAgentNote(note);
+    const body = cleanAgentNote(input.note);
     if (body === '') return refusal('invalid-input', 'The note is empty.');
     d.effects.push({ type: 'agent-note', agentRunId: agent.id, body });
+    // ADR-0030 §5: the outcome reaches the lead with the seal; a resolver's assessment goes to its
+    // operation (advice for the policy gate, never a decision).
+    const outcome = input.outcome ?? 'completed';
+    agent.reportedOutcome = { kind: outcome, note: body };
+    d.effects.push({
+      type: 'helper-outcome',
+      agentRunId: agent.id,
+      outcome,
+      ...(agent.resolution !== undefined && input.assessment !== undefined
+        ? { assessment: { ...input.assessment, reason: cleanAgentNote(input.assessment.reason) } }
+        : {}),
+    });
     return { value: 'Noted on the ticket. A later report replaces this one.' };
   });
 }
