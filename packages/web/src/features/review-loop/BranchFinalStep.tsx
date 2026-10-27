@@ -13,7 +13,7 @@ import { DeleteTicketBranch, MergePullRequest } from '../branching/MergeAndDelet
 import { PullRequestInfo, PushAndOpenPr, PushNewCommits } from '../branching/PullRequest';
 import { ActionError, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
-import { checksSummary, type TicketBranchMode } from './logic';
+import { branchHasNoChanges, checksSummary, type TicketBranchMode } from './logic';
 import { MovedOutsideBanner } from './MovedOutsideBanner';
 import { ReasonForm } from './ReasonForm';
 import { ResolutionPanel } from './ResolutionPanel';
@@ -44,6 +44,7 @@ function PushAction({
 }: {
   ticket: FinalStepTicket;
   branch: TicketBranchDto;
+  /** Another action is running, or the branch has nothing to push. */
   disabled: boolean;
 }) {
   const host = useCodeHost(ticket.projectId);
@@ -83,6 +84,8 @@ function Actions({
   const pr = branch.pullRequest ?? null;
   const prOpen = pr?.state === 'open';
   const newCommits = hasNewCommits(branch);
+  // Nothing to ship: Merge and Push & open PR stay off, with the reason in words.
+  const noChanges = !prOpen && branchHasNoChanges(branch, review);
   return (
     <div className="flex flex-col gap-2.5" data-testid="branch-actions">
       {prOpen && pr !== null && isCurrentRun(ticket, run.id) ? (
@@ -95,7 +98,16 @@ function Actions({
           disabled={act.pending}
         />
       ) : null}
-      {prOpen ? null : checks.kind === 'failed' ? (
+      {noChanges ? (
+        <p
+          role="note"
+          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2"
+          data-testid="branch-no-changes"
+        >
+          {B.noChanges(base)}
+        </p>
+      ) : null}
+      {prOpen || noChanges ? null : checks.kind === 'failed' ? (
         <p
           role="alert"
           className="rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger"
@@ -120,7 +132,7 @@ function Actions({
               disabled={act.pending}
             />
           ) : null
-        ) : checks.kind === 'failed' ? (
+        ) : checks.kind === 'failed' && !noChanges ? (
           <ReasonForm
             openLabel={B.mergeAnyway}
             title={B.mergeAnywayTitle}
@@ -145,14 +157,14 @@ function Actions({
             cancelLabel={B.cancel}
             pendingLabel={B.working}
             pending={act.pending}
-            disabled={review?.baseMoved === true}
+            disabled={noChanges || review?.baseMoved === true}
             danger={false}
             primary
             onConfirm={() => act.run(run.id, { action: 'merge' })}
           />
         )}
         {!prOpen && ticket !== null ? (
-          <PushAction ticket={ticket} branch={branch} disabled={act.pending} />
+          <PushAction ticket={ticket} branch={branch} disabled={act.pending || noChanges} />
         ) : null}
         <ReasonForm
           openLabel={B.requestChanges}

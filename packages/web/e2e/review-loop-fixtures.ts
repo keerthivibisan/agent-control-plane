@@ -583,6 +583,8 @@ export interface BranchReviewOptions {
    * v0.1.0 stored it (`error` with the shutdown note).
    */
   stopped?: 'interrupted' | 'legacy';
+  /** The ticket branch has no changes against its target: no changed files. */
+  empty?: boolean;
 }
 
 function tipUnitTests(o: BranchReviewOptions): Json {
@@ -613,8 +615,8 @@ export function ticketBranchReview(o: BranchReviewOptions = {}): Json {
   return {
     runId: LOOP_RUN_ID,
     ticketBranch: ticketBranch('open'),
-    files: API_FILES,
-    diff: LOOP_DIFF,
+    files: o.empty === true ? [] : API_FILES,
+    diff: o.empty === true ? '' : LOOP_DIFF,
     diffTruncated: false,
     checks: [tipUnitTests(o), check(null, 'build', 'Build', 'passed', TIP_1, { startedAt: T(40) })],
     baseMoved: o.baseMoved === true,
