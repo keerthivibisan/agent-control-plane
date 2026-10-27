@@ -45,8 +45,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Every package's tests run even when one fails, so one run shows every failure.
       - name: Test
-        run: pnpm test
+        run: pnpm -r --if-present --no-bail run test
 
       - name: Build
         run: pnpm build
