@@ -496,10 +496,534 @@
             <p class="eyebrow">04 / ACP KNOWLEDGE TRANSFER</p>
             <h1>Optimize accepted work.<br /><em>Not just the first prompt.</em></h1>
             <p class="lede">
-              Fresh sessions can repeat discovery, but agents do not automatically read the whole
-              repository. We need evidence before claiming how much is wasted.
+              Understand the issue first: separate ticket agents can search and read the same code
+              again. Then see the proposed fixes, current safeguards and illustrative numbers.
             </p>
           </header>
+          <h2>The issue: each new ticket can pay to learn the same code again</h2>
+          <p>
+            Imagine a large application with authentication, billing, notifications and shared
+            libraries. Ticket A asks an agent to fix a login error. Before editing, it must locate
+            the login route, follow the authentication service, understand shared validation and
+            find the tests. Those reads are useful work: the agent needs evidence to make a correct
+            change.
+          </p>
+          <p>
+            Ticket B later asks for another login change. It starts a separate run. ACP does not
+            currently provide an automatic, project-wide memory of everything Ticket A discovered.
+            The new lead and helpers may repeat searches and read the same route, service and tests.
+            A reviewer may also inspect them independently. More tickets and more roles create more
+            opportunities to repeat the same discovery.
+          </p>
+          <p>
+            This does not mean ACP automatically sends the entire repository to every agent. The
+            model sees the context supplied to it and the results of tools it uses. An agent with an
+            unclear brief may explore many folders or read large files; a focused agent may need
+            only a few relevant modules. The risk is repeated broad exploration, not a guaranteed
+            full-repository scan.
+          </p>
+          <div class="cards two" aria-label="Illustrative repeated discovery across tickets">
+            <article>
+              <p class="eyebrow">TICKET A / FIRST LOGIN CHANGE</p>
+              <h3>Discover, read, change</h3>
+              <p>
+                Locate the login route → read authentication and validation → find tests →
+                implement.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">TICKET B / ANOTHER LOGIN CHANGE</p>
+              <h3>Discover and read again</h3>
+              <p>
+                A separate run may repeat the same searches and file reads before its own
+                implementation.
+              </p>
+            </article>
+          </div>
+          <h2>How repeated reads become model input</h2>
+          <p>
+            A file exists on disk without consuming model tokens. When an agent reads it through a
+            tool, the returned text becomes input for a later model request. Search results,
+            instructions, the task, relevant conversation history and the requested answer also
+            contribute. Long tool results can remain in context for subsequent requests, subject to
+            the provider and transport’s context management.
+          </p>
+          <p>
+            If another session reads that file again, its returned text can enter another model
+            request. That is a new opportunity for input consumption even though the source file did
+            not change. A matching provider prompt cache may reduce repeated processing or price,
+            but an unchanged file alone does not guarantee a cache hit. Fresh sessions do not imply
+            either zero reuse or fully shared memory.
+          </p>
+          <p>
+            Consider four sessions: the lead, two helpers and a reviewer. In the illustrative
+            comparison below, discovery uses 15,000 tokens per session, or 60,000 across four. If
+            focused context reduces discovery to 5,000 per session, that becomes 20,000. With 30,000
+            other tokens unchanged, the example moves from 90,000 to 50,000. These are assumptions
+            to explain the mechanism, not measured ACP savings or a dollar bill.
+          </p>
+          <h2>Why a small ticket can still be expensive</h2>
+          <p>
+            Changing three lines may require understanding callers, permissions, data contracts and
+            tests across several packages. Codebase size increases the search space; change size
+            does not reliably predict discovery cost. Adding helpers can shorten elapsed time while
+            increasing total reading, handoff, review and rework. Worktrees isolate edits; they do
+            not automatically share what each agent learned.
+          </p>
+          <p>
+            The waste to reduce is avoidable rediscovery or irrelevant input. Re-reading current
+            source to validate an assumption, checking a changed dependency and independently
+            reviewing a security-sensitive edit can be necessary. Optimizing by forbidding those
+            reads could save input while increasing incorrect changes and later repairs.
+          </p>
+          <h2>Proposed fix: give each role a focused starting point, then verify it</h2>
+          <p>
+            These are proposed improvements, not an implemented project-memory service. Start with a
+            small, source-backed project map: module responsibilities, entry points, important
+            dependencies, invariants and where trusted tests are defined. Reuse that map across
+            tickets only while its references remain valid. Do not generate a full repository
+            summary separately for every helper.
+          </p>
+          <p>
+            For the login example, a ticket brief should name the relevant route, authentication
+            service, shared validator and tests, explain the requested behavior, and identify what
+            is still uncertain. The lead hands a helper the findings and source references it
+            already has. The helper verifies those references in its own checkout and expands its
+            search whenever the task requires it.
+          </p>
+          <p>
+            Keep shared essentials small and tailor additional context to the role. A documentation
+            helper does not automatically need the billing implementation. A reviewer still receives
+            the current diff, acceptance criteria and relevant checks, and retains enough
+            independence to find mistakes rather than merely accepting the implementer’s account.
+          </p>
+          <p>
+            Key reusable source facts to the project and source snapshot; use file content hashes
+            and invalidate affected entries after changes. Concurrent tickets can be based on
+            different commits, so a correct map for Ticket A may already be stale for Ticket B.
+            Source facts remain data, never permission grants. New persistent knowledge needs an
+            explicit trust and retention design; do not store conversations or tool output as
+            memory.
+          </p>
+          <p>
+            Measure net benefit per correctly accepted ticket: model input/output and cache
+            categories, discovery overhead where reliably attributable, preparation and refresh
+            work, retries, reviews, latency and regressions. Do not claim a saving if maintaining
+            the map or fixing missed context costs more than the reading it avoided.
+          </p>
+          <h2>What ACP already does, and what remains proposed</h2>
+          <p>
+            Implemented: bounded initial context of up to 10 files / 32 KiB, assembled once per run
+            and passed to its agents; same-ticket summaries; helper-session continuation for rework
+            when available; structured outcomes and attempt limits; role/node model and effort
+            settings. These mechanisms help within the current design, but do not establish a
+            cross-ticket memory or a provider cache hit.
+          </p>
+          <p>
+            Proposed: a reusable project map with freshness checks, task-specific retrieval and
+            structured source handoffs, plus evaluation of their net benefit. The existing 32 KiB
+            bound is a byte limit on initial context, not a total token cap or a limit on later file
+            reads. The issue cards below pair each additional risk with its proposed control.
+          </p>
+          <h2>24 risks to understand before adding infrastructure</h2>
+          <p>
+            Historical fixes are labeled. Other mechanisms identify potential waste, not measured
+            frequency or savings.
+          </p>
+          <details class="risk-item" data-risk="T01" open>
+            <summary>T01 Repeated repository discovery</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Each ticket rediscovers layout, entry points and
+              conventions. Cost grows with tickets and agents, not only repository size.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed fresh-session mechanism; actual repeated
+              reads unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Small versioned project map; task-relevant
+              retrieval.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T02">
+            <summary>T02 Planner/lead/helper duplication</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Several roles independently investigate the same
+              question because handoff contains little evidence.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed separate roles and helper briefs; overlap
+              unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Structured handoff with findings, source
+              references, assumptions and acceptance criteria. Preserve independent review where
+              required.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T03">
+            <summary>T03 Context copied to every role</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Large generic context, profiles or skills are
+              supplied even when irrelevant.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed shared run context/profile assembly;
+              actual bloat unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Shared essentials plus role/task-specific
+              references; hard size caps and explicit truncation.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T04">
+            <summary>T04 Broad search and oversized tool results</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Dumps of whole files, generated assets,
+              lockfiles or long search output fill subsequent rounds.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; current byte cap does not bound tool
+              exploration.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Search filenames/symbols first, bounded
+              excerpts, exclusions and expandable results.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T05">
+            <summary>T05 Growing conversation history</summary>
+            <p>
+              <strong>Issue / consequence:</strong> More messages and tool results increase input on
+              later rounds; a long-lived agent becomes expensive to continue.
+            </p>
+            <p><strong>Evidence / status:</strong> General session risk; not profiled locally.</p>
+            <p>
+              <strong>Proposed fix / control:</strong> Bounded milestones, concise handoffs,
+              provider-supported compaction when validated.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T06">
+            <summary>T06 Prompt cache misses</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Changing earlier instructions, tool ordering,
+              models or reference text prevents reusable prefixes. A run-local text cache is
+              mistaken for provider caching.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Provider documentation; actual SDK cache hits
+              require reported usage.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Stable useful prefixes; measure actual cache
+              categories; do not add padding just to reach thresholds.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T07">
+            <summary>T07 Over-delegation</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Many tiny helpers each pay startup, discovery,
+              reporting and review overhead.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed launch model; optimal task size
+              unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Compare coordination overhead with
+              independent work; combine related edits under one capable helper.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T08">
+            <summary>T08 Overlapping parallel work</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Helpers/tickets touch shared modules or depend
+              on unmerged changes, causing conflicts and repeated fixes.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Observed isolated branch semantics; historical
+              supplied screenshot case.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Dependency-aware scheduling, declared likely
+              file scopes, shared-file hotspots, bounded conflict recovery. Scope estimates are
+              advisory.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T09">
+            <summary>T09 Blocked or impossible tasks retried</summary>
+            <p>
+              <strong>Issue / consequence:</strong> A helper is asked to perform an unsupported
+              operation; replacement starts can repeat it.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Historical screenshot case. Current conflict
+              operations, structured outcomes and no-change attempt bounds mitigate this loop.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Use the supported server operation; retain
+              capability-aware briefs and progress measurements.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T10">
+            <summary>T10 Rework without new information</summary>
+            <p>
+              <strong>Issue / consequence:</strong> The next attempt repeats the same strategy
+              without new evidence.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Current step/operation bounds cover no-change and
+              failed outcomes; bounds do not prove each remaining attempt is useful.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Use stable step identity and structured
+              reasons; change strategy or stop within configured policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T11">
+            <summary>T11 Findings not consumed by the next actor</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Useful findings can still be omitted from a task
+              or ignored by the recipient.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> The earlier no-change reporting gap is fixed by
+              reportedOutcome and noChangeLine. Cross-ticket knowledge reuse is still proposed.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Keep structured handoffs, source pointers and
+              outcome coverage; do not label the old gap open.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T12">
+            <summary>T12 Invalid tools and excessive polling</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Repeated malformed calls, unknown targets or
+              status checks consume model rounds without progress.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; status tools exist, frequency
+              unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Clear schemas/capabilities, actionable
+              refusals, event-driven completion where possible.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T13">
+            <summary>T13 Duplicate review</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Change reviewers, final reviewers and testers
+              repeat identical analysis without a distinct acceptance goal.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Configurable review/stage mechanism; duplication
+              unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Assign review purpose and scope; retain
+              independent checks required by policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T14">
+            <summary>T14 Repeated checks and log analysis</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Same commit/check is rerun, or huge logs are
+              repeatedly read by LLMs. Test execution itself is compute, not necessarily model-token
+              usage.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Commit-specific gating exists; waste frequency
+              unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Trusted evidence reuse only when commit,
+              check definition, environment and policy match; bounded failure summaries.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T15">
+            <summary>T15 Verification feedback too weak</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Missing environment, unclear failure or flaky
+              tests trigger speculative edits and repeated runs.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; setup failure already blocks SDK
+              startup.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Distinguish setup/product/flaky/unknown
+              failures; provide reproducible command IDs and bounded diagnostics.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T16">
+            <summary>T16 Stale knowledge and stale evidence</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Cached architecture notes survive renames,
+              branch changes or dependency updates, causing wrong edits and repair.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk for shared knowledge; context
+              currently comes from owner checkout.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Commit/content-hash provenance, dependency
+              invalidation, freshness checks against the agent&#x27;s checkout.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T17">
+            <summary>T17 Bad retrieval or over-compression</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Relevant callers, invariants or tests are
+              omitted; short prompts save input but cause more incorrect work.
+            </p>
+            <p><strong>Evidence / status:</strong> Future risk.</p>
+            <p>
+              <strong>Proposed fix / control:</strong> Retrieval coverage checks, source pointers,
+              uncertainty and on-demand expansion.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T18">
+            <summary>T18 Wrong model or effort</summary>
+            <p>
+              <strong>Issue / consequence:</strong> A costly model handles mechanical work, or a
+              weaker configuration needs many failed attempts on hard work.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Role/profile/project model selection exists; no
+              measured routing policy.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Evaluate outcome-adjusted work by task class;
+              change configuration only under explicit policy.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T19">
+            <summary>T19 Verbose generated output</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Long plans, repeated summaries and commentary
+              add output and later input without helping execution.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Short work-note instruction already exists; other
+              verbosity unmeasured.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Bounded structured plans/outcomes; retain
+              required reasoning evidence without storing chain of thought.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T20">
+            <summary>T20 Unbounded project-wide activity</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Per-agent limits still allow many concurrent
+              tickets, replacements and repeated runs to spend heavily in aggregate.
+            </p>
+            <p><strong>Evidence / status:</strong> Current ADR-0014 budget is per agent.</p>
+            <p>
+              <strong>Proposed fix / control:</strong> Proposed project/run aggregate admission and
+              reservation policy with explicit unknown usage and overshoot. No silent change to
+              existing accounting.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T21">
+            <summary>T21 Restart, reconnect and transport retries</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Launching another agent after an uncertain
+              result duplicates work or abandons useful session state.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Restart recovery exists; provider/transport
+              ambiguity remains a design concern.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Idempotent operations, reconciliation before
+              retry and explicit resumability capability.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T22">
+            <summary>T22 Cross-provider accounting mismatch</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Inclusive cached input, reasoning already
+              included in output, or cumulative totals are summed again. A cheaper-looking provider
+              may simply report less.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future Codex integration risk; existing ACP has
+              strict accounting rules.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Versioned provider mappings, fixtures and
+              provenance; no invented zeros or double counting.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T23">
+            <summary>T23 Knowledge maintenance costs more than it saves</summary>
+            <p>
+              <strong>Issue / consequence:</strong> A scout rescans the whole monorepo or
+              regenerates summaries for every small change.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk of the proposed optimization itself.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Deterministic metadata first, incremental
+              invalidation, capped refreshes and measured net benefit.
+            </p>
+          </details>
+          <details class="risk-item" data-risk="T24">
+            <summary>T24 Cross-project leakage or untrusted cached instructions</summary>
+            <p>
+              <strong>Issue / consequence:</strong> Reused material includes another project&#x27;s
+              data or repository text is promoted to policy.
+            </p>
+            <p>
+              <strong>Evidence / status:</strong> Future risk; existing local-only and
+              prompt-injection boundaries apply.
+            </p>
+            <p>
+              <strong>Proposed fix / control:</strong> Project isolation, allowlisted paths,
+              origin/provenance, treat retrieved text as data and keep permissions outside model
+              control.
+            </p>
+          </details>
+          <h2>Our opinion: reuse verified knowledge across isolated sessions.</h2>
+          <div class="cards four">
+            <article>
+              <p class="eyebrow">01 / ESSENTIALS</p>
+              <h3>Small project map</h3>
+              <p>Owner-approved boundaries, invariants and trusted check IDs. Keep it concise.</p>
+            </article>
+            <article>
+              <p class="eyebrow">02 / REFERENCES</p>
+              <h3>Incremental module catalog</h3>
+              <p>
+                Local paths, symbols and dependencies. Validate content hashes and source snapshot.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">03 / TASK</p>
+              <h3>Focused role context</h3>
+              <p>
+                Goal, acceptance criteria, likely sources, tests and uncertainty. Allow expansion.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">04 / EVIDENCE</p>
+              <h3>Current candidate facts</h3>
+              <p>Diff, checks and review bound to the relevant commits and policy.</p>
+            </article>
+          </div>
+          <p>
+            Start with maintained docs and local file/symbol search. Do not add a mandatory research
+            agent or external vector service before measuring net benefit. One permanent project
+            conversation can accumulate irrelevant history, stale assumptions and mixed permissions.
+          </p>
+          <p>
+            Keep source facts separate from authority; invalidate affected knowledge and dependents
+            after changes. Do not persist conversations, tool I/O or hidden reasoning as project
+            memory.
+          </p>
           <aside class="callout">
             <strong>Four different reuse mechanisms.</strong>
             <p>
@@ -700,403 +1224,6 @@
             Initial shared context allows <strong>10 files / 32 KiB</strong>. That does not cap
             later tool reads or history, and reading context once per run does not prove a provider
             cache hit.
-          </p>
-          <h2>24 risks to understand before adding infrastructure</h2>
-          <p>
-            Historical fixes are labeled. Other mechanisms identify potential waste, not measured
-            frequency or savings.
-          </p>
-          <details class="risk-item" data-risk="T01">
-            <summary>T01 Repeated repository discovery</summary>
-            <p>
-              <strong>Trigger:</strong> Each ticket rediscovers layout, entry points and
-              conventions. Cost grows with tickets and agents, not only repository size.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Observed fresh-session mechanism; actual repeated
-              reads unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Small versioned project map; task-relevant
-              retrieval.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T02">
-            <summary>T02 Planner/lead/helper duplication</summary>
-            <p>
-              <strong>Trigger:</strong> Several roles independently investigate the same question
-              because handoff contains little evidence.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Observed separate roles and helper briefs; overlap
-              unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Structured handoff with findings, source
-              references, assumptions and acceptance criteria. Preserve independent review where
-              required.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T03">
-            <summary>T03 Context copied to every role</summary>
-            <p>
-              <strong>Trigger:</strong> Large generic context, profiles or skills are supplied even
-              when irrelevant.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Observed shared run context/profile assembly;
-              actual bloat unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Shared essentials plus role/task-specific
-              references; hard size caps and explicit truncation.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T04">
-            <summary>T04 Broad search and oversized tool results</summary>
-            <p>
-              <strong>Trigger:</strong> Dumps of whole files, generated assets, lockfiles or long
-              search output fill subsequent rounds.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk; current byte cap does not bound tool
-              exploration.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Search filenames/symbols first, bounded excerpts,
-              exclusions and expandable results.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T05">
-            <summary>T05 Growing conversation history</summary>
-            <p>
-              <strong>Trigger:</strong> More messages and tool results increase input on later
-              rounds; a long-lived agent becomes expensive to continue.
-            </p>
-            <p><strong>Evidence / status:</strong> General session risk; not profiled locally.</p>
-            <p>
-              <strong>Candidate control:</strong> Bounded milestones, concise handoffs,
-              provider-supported compaction when validated.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T06">
-            <summary>T06 Prompt cache misses</summary>
-            <p>
-              <strong>Trigger:</strong> Changing earlier instructions, tool ordering, models or
-              reference text prevents reusable prefixes. A run-local text cache is mistaken for
-              provider caching.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Provider documentation; actual SDK cache hits
-              require reported usage.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Stable useful prefixes; measure actual cache
-              categories; do not add padding just to reach thresholds.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T07">
-            <summary>T07 Over-delegation</summary>
-            <p>
-              <strong>Trigger:</strong> Many tiny helpers each pay startup, discovery, reporting and
-              review overhead.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Observed launch model; optimal task size
-              unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Compare coordination overhead with independent
-              work; combine related edits under one capable helper.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T08">
-            <summary>T08 Overlapping parallel work</summary>
-            <p>
-              <strong>Trigger:</strong> Helpers/tickets touch shared modules or depend on unmerged
-              changes, causing conflicts and repeated fixes.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Observed isolated branch semantics; historical
-              supplied screenshot case.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Dependency-aware scheduling, declared likely file
-              scopes, shared-file hotspots, bounded conflict recovery. Scope estimates are advisory.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T09">
-            <summary>T09 Blocked or impossible tasks retried</summary>
-            <p>
-              <strong>Trigger:</strong> A helper is asked to perform an unsupported operation;
-              replacement starts can repeat it.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Historical screenshot case. Current conflict
-              operations, structured outcomes and no-change attempt bounds mitigate this loop.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Use the supported server operation; retain
-              capability-aware briefs and progress measurements.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T10">
-            <summary>T10 Rework without new information</summary>
-            <p>
-              <strong>Trigger:</strong> The next attempt repeats the same strategy without new
-              evidence.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Current step/operation bounds cover no-change and
-              failed outcomes; bounds do not prove each remaining attempt is useful.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Use stable step identity and structured reasons;
-              change strategy or stop within configured policy.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T11">
-            <summary>T11 Findings not consumed by the next actor</summary>
-            <p>
-              <strong>Trigger:</strong> Useful findings can still be omitted from a task or ignored
-              by the recipient.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> The earlier no-change reporting gap is fixed by
-              reportedOutcome and noChangeLine. Cross-ticket knowledge reuse is still proposed.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Keep structured handoffs, source pointers and
-              outcome coverage; do not label the old gap open.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T12">
-            <summary>T12 Invalid tools and excessive polling</summary>
-            <p>
-              <strong>Trigger:</strong> Repeated malformed calls, unknown targets or status checks
-              consume model rounds without progress.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk; status tools exist, frequency
-              unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Clear schemas/capabilities, actionable refusals,
-              event-driven completion where possible.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T13">
-            <summary>T13 Duplicate review</summary>
-            <p>
-              <strong>Trigger:</strong> Change reviewers, final reviewers and testers repeat
-              identical analysis without a distinct acceptance goal.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Configurable review/stage mechanism; duplication
-              unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Assign review purpose and scope; retain
-              independent checks required by policy.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T14">
-            <summary>T14 Repeated checks and log analysis</summary>
-            <p>
-              <strong>Trigger:</strong> Same commit/check is rerun, or huge logs are repeatedly read
-              by LLMs. Test execution itself is compute, not necessarily model-token usage.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Commit-specific gating exists; waste frequency
-              unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Trusted evidence reuse only when commit, check
-              definition, environment and policy match; bounded failure summaries.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T15">
-            <summary>T15 Verification feedback too weak</summary>
-            <p>
-              <strong>Trigger:</strong> Missing environment, unclear failure or flaky tests trigger
-              speculative edits and repeated runs.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk; setup failure already blocks SDK
-              startup.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Distinguish setup/product/flaky/unknown failures;
-              provide reproducible command IDs and bounded diagnostics.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T16">
-            <summary>T16 Stale knowledge and stale evidence</summary>
-            <p>
-              <strong>Trigger:</strong> Cached architecture notes survive renames, branch changes or
-              dependency updates, causing wrong edits and repair.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk for shared knowledge; context
-              currently comes from owner checkout.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Commit/content-hash provenance, dependency
-              invalidation, freshness checks against the agent&#x27;s checkout.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T17">
-            <summary>T17 Bad retrieval or over-compression</summary>
-            <p>
-              <strong>Trigger:</strong> Relevant callers, invariants or tests are omitted; short
-              prompts save input but cause more incorrect work.
-            </p>
-            <p><strong>Evidence / status:</strong> Future risk.</p>
-            <p>
-              <strong>Candidate control:</strong> Retrieval coverage checks, source pointers,
-              uncertainty and on-demand expansion.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T18">
-            <summary>T18 Wrong model or effort</summary>
-            <p>
-              <strong>Trigger:</strong> A costly model handles mechanical work, or a weaker
-              configuration needs many failed attempts on hard work.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Role/profile/project model selection exists; no
-              measured routing policy.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Evaluate outcome-adjusted work by task class;
-              change configuration only under explicit policy.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T19">
-            <summary>T19 Verbose generated output</summary>
-            <p>
-              <strong>Trigger:</strong> Long plans, repeated summaries and commentary add output and
-              later input without helping execution.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Short work-note instruction already exists; other
-              verbosity unmeasured.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Bounded structured plans/outcomes; retain required
-              reasoning evidence without storing chain of thought.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T20">
-            <summary>T20 Unbounded project-wide activity</summary>
-            <p>
-              <strong>Trigger:</strong> Per-agent limits still allow many concurrent tickets,
-              replacements and repeated runs to spend heavily in aggregate.
-            </p>
-            <p><strong>Evidence / status:</strong> Current ADR-0014 budget is per agent.</p>
-            <p>
-              <strong>Candidate control:</strong> Proposed project/run aggregate admission and
-              reservation policy with explicit unknown usage and overshoot. No silent change to
-              existing accounting.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T21">
-            <summary>T21 Restart, reconnect and transport retries</summary>
-            <p>
-              <strong>Trigger:</strong> Launching another agent after an uncertain result duplicates
-              work or abandons useful session state.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Restart recovery exists; provider/transport
-              ambiguity remains a design concern.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Idempotent operations, reconciliation before retry
-              and explicit resumability capability.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T22">
-            <summary>T22 Cross-provider accounting mismatch</summary>
-            <p>
-              <strong>Trigger:</strong> Inclusive cached input, reasoning already included in
-              output, or cumulative totals are summed again. A cheaper-looking provider may simply
-              report less.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future Codex integration risk; existing ACP has
-              strict accounting rules.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Versioned provider mappings, fixtures and
-              provenance; no invented zeros or double counting.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T23">
-            <summary>T23 Knowledge maintenance costs more than it saves</summary>
-            <p>
-              <strong>Trigger:</strong> A scout rescans the whole monorepo or regenerates summaries
-              for every small change.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk of the proposed optimization itself.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Deterministic metadata first, incremental
-              invalidation, capped refreshes and measured net benefit.
-            </p>
-          </details>
-          <details class="risk-item" data-risk="T24">
-            <summary>T24 Cross-project leakage or untrusted cached instructions</summary>
-            <p>
-              <strong>Trigger:</strong> Reused material includes another project&#x27;s data or
-              repository text is promoted to policy.
-            </p>
-            <p>
-              <strong>Evidence / status:</strong> Future risk; existing local-only and
-              prompt-injection boundaries apply.
-            </p>
-            <p>
-              <strong>Candidate control:</strong> Project isolation, allowlisted paths,
-              origin/provenance, treat retrieved text as data and keep permissions outside model
-              control.
-            </p>
-          </details>
-          <h2>Our opinion: reuse verified knowledge across isolated sessions.</h2>
-          <div class="cards four">
-            <article>
-              <p class="eyebrow">01 / ESSENTIALS</p>
-              <h3>Small project map</h3>
-              <p>Owner-approved boundaries, invariants and trusted check IDs. Keep it concise.</p>
-            </article>
-            <article>
-              <p class="eyebrow">02 / REFERENCES</p>
-              <h3>Incremental module catalog</h3>
-              <p>
-                Local paths, symbols and dependencies. Validate content hashes and source snapshot.
-              </p>
-            </article>
-            <article>
-              <p class="eyebrow">03 / TASK</p>
-              <h3>Focused role context</h3>
-              <p>
-                Goal, acceptance criteria, likely sources, tests and uncertainty. Allow expansion.
-              </p>
-            </article>
-            <article>
-              <p class="eyebrow">04 / EVIDENCE</p>
-              <h3>Current candidate facts</h3>
-              <p>Diff, checks and review bound to the relevant commits and policy.</p>
-            </article>
-          </div>
-          <p>
-            Start with maintained docs and local file/symbol search. Do not add a mandatory research
-            agent or external vector service before measuring net benefit. One permanent project
-            conversation can accumulate irrelevant history, stale assumptions and mixed permissions.
-          </p>
-          <p>
-            Keep source facts separate from authority; invalidate affected knowledge and dependents
-            after changes. Do not persist conversations, tool I/O or hidden reasoning as project
-            memory.
           </p>
           <h2>Measure quality and the entire attempt</h2>
           <p>
