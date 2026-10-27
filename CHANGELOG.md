@@ -19,6 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any skipped, unavailable, failed or stale verification.
 - Helpers report an outcome (completed, no change, blocked) that reaches the lead; repeated
   no-change attempts are bounded.
+- **`./start.sh --restart`** stops a copy of this app already running on ports 7420 and 5173
+  (SIGTERM, waits up to about 10 seconds; only processes that belong to this repository) before
+  starting. Without it, the script stops with a message naming the port and PID. `-h` and `--help`
+  print the usage.
 
 ### Database
 
