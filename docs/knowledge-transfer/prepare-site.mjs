@@ -34,3 +34,13 @@ for (const file of files) {
 for (const file of ['architecture.mmd', 'helper-authorization.mmd']) {
   await copyFile(join(root, 'diagrams', file), join(root, 'site', 'assets', file));
 }
+
+// Reuse the repository brand assets byte-for-byte in the standalone artifact.
+await copyFile(
+  join(root, '..', 'brand', 'control-plane-logo-on-dark.svg'),
+  join(root, 'site', 'assets', 'acp-logo-on-dark.svg'),
+);
+await copyFile(
+  join(root, '..', 'brand', 'favicon.svg'),
+  join(root, 'site', 'assets', 'favicon.svg'),
+);

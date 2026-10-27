@@ -57,3 +57,21 @@
    then activate the reviewed Pages configuration separately and verify the public URL before
    using the LinkedIn draft. Prioritize context freshness/degradation, message backpressure and
    delivery status, aggregate admission policy and current evidence coverage for implementation.
+
+## Follow-up — public UI cleanup and official branding
+
+1. Summary: removed chapter download/footer labels and the three publication-resource buttons;
+   replaced the temporary header mark and favicon with the official ACP repository assets.
+2. Files: modified site HTML/CSS, favicon, artifact preparation and this report; added the official
+   dark-background wordmark copy. Underlying Markdown/sharing documents remain in the package.
+3. Verification: 262 browser assertions passed across nine chapters at 1440/768/390/320 widths,
+   including removal of the requested labels, preserved navigation, exact official asset bytes,
+   logo loading, responsive layout and mobile menu behavior. Zero runtime errors or external
+   requests. Scoped JS lint passed; SVG/logo rendering was inspected. Formatting and diff checks
+   passed. Application unit tests were not rerun for this HTML/CSS/asset follow-up; the preceding
+   6,034-test package verification remains the prior baseline.
+4. Acceptance: requested UI controls removed; official logo reused without redrawing; PR #8 updated.
+5. Assumption: the request concerns visible UI links/labels, not deleting the source KT documents.
+6. Shared changes: none; original files in docs/brand are reused unchanged.
+7. Gaps: GitHub Pages activation/deployment remains a separate action; no live URL is claimed.
+8. Next task: review the updated PR and activate the documented Pages publication when ready.
