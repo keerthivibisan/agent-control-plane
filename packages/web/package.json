@@ -1,6 +1,6 @@
 {
   "name": "@acp/web",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "The Agent Control Plane web UI (React): board, tickets, workflow editor, sessions and tokens.",
   "license": "MIT",
