@@ -16,6 +16,10 @@ import type { StepRecord } from './sim.js';
  * workflow. Synthetic data only.
  */
 
+// Exploring every behaviour takes seconds on a laptop and far longer on a shared CI runner, as in
+// the other graph-correctness suites; the default 5 s timed out on GitHub's runners.
+const EXPLORE_TIMEOUT_MS = 120_000;
+
 describe('layer 1: invariants on every step of every golden script', () => {
   for (const c of GOLDEN_CASES) {
     it(c.name, () => {
@@ -33,7 +37,7 @@ describe('layer 1: invariants on every step of every golden script', () => {
   }
 });
 
-describe('layer 2: every behaviour of each template', () => {
+describe('layer 2: every behaviour of each template', { timeout: EXPLORE_TIMEOUT_MS }, () => {
   const setups: GraphRunSetup[] = [
     { projectMode: 'manual' },
     { projectMode: 'full-auto' },
@@ -67,30 +71,34 @@ describe('layer 2: every behaviour of each template', () => {
   });
 });
 
-describe('layer 2: every behaviour of each migrated v1 workflow', () => {
-  for (const plannerMode of ['lead', 'separate'] as const) {
-    for (const reviewer of ['agent', 'lead'] as const) {
-      for (const rounds of [0, 2]) {
-        for (const codeReview of [false, true]) {
-          for (const unitTests of [false, true]) {
-            const o = { plannerMode, reviewer, rounds, codeReview, unitTests };
-            it(JSON.stringify(o), () => {
-              const wf = v1Workflow(o);
-              const config = {
-                workflow: wf,
-                loop: { reviewer, rounds },
-                approvals: { mode: 'auto-edits' as const, commands: [] },
-              };
-              const result = exploreGraph(config, 5000, true);
-              expect(result.violation).toBeNull();
-              expect(result.exhaustive).toBe(true);
-            });
+describe(
+  'layer 2: every behaviour of each migrated v1 workflow',
+  { timeout: EXPLORE_TIMEOUT_MS },
+  () => {
+    for (const plannerMode of ['lead', 'separate'] as const) {
+      for (const reviewer of ['agent', 'lead'] as const) {
+        for (const rounds of [0, 2]) {
+          for (const codeReview of [false, true]) {
+            for (const unitTests of [false, true]) {
+              const o = { plannerMode, reviewer, rounds, codeReview, unitTests };
+              it(JSON.stringify(o), () => {
+                const wf = v1Workflow(o);
+                const config = {
+                  workflow: wf,
+                  loop: { reviewer, rounds },
+                  approvals: { mode: 'auto-edits' as const, commands: [] },
+                };
+                const result = exploreGraph(config, 5000, true);
+                expect(result.violation).toBeNull();
+                expect(result.exhaustive).toBe(true);
+              });
+            }
           }
         }
       }
     }
-  }
-});
+  },
+);
 
 describe('the invariants are not vacuous', () => {
   /** A real step of a golden run, to break by hand. */

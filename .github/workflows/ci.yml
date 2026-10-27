@@ -1,15 +1,15 @@
 name: CI
 
-# Runs by itself only for main, dev/* and release/* (owner decision 2026-10-26): on code pushes to
+# Runs by itself only for main, dev, dev/* and release/* (owner decisions 2026-10-26): on code pushes to
 # them (docs-only pushes are skipped) and on every pull request into them, including from forks, so
 # a required check always reports. Other branches: start it from the Actions tab with "Run
 # workflow". It uses no secrets and reads the repository only.
 on:
   push:
-    branches: [main, 'dev/**', 'release/**']
+    branches: [main, dev, 'dev/**', 'release/**']
     paths-ignore: ['docs/**', '**/*.md']
   pull_request:
-    branches: [main, 'dev/**', 'release/**']
+    branches: [main, dev, 'dev/**', 'release/**']
   workflow_dispatch:
 
 permissions:
@@ -45,8 +45,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Every package's tests run even when one fails, so one run shows every failure.
       - name: Test
-        run: pnpm test
+        run: pnpm -r --if-present --no-bail run test
 
       - name: Build
         run: pnpm build
@@ -74,10 +75,14 @@ jobs:
         run: pnpm --filter @acp/web exec playwright install --with-deps chromium
 
       # The tests' own repositories commit with whatever identity git has; the runner has none.
+      # Also system-wide: a test server may run git without the runner's home folder, and git on
+      # Linux cannot guess an email address as it does on macOS.
       - name: Git identity for test repositories
         run: |
           git config --global user.name "ACP CI"
           git config --global user.email "ci@example.invalid"
+          sudo git config --system user.name "ACP CI"
+          sudo git config --system user.email "ci@example.invalid"
 
       - name: End-to-end tests
         run: pnpm --filter @acp/web test:e2e
