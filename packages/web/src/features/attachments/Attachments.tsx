@@ -217,7 +217,13 @@ export function UploadList({
           <span className="min-w-0 truncate font-medium text-ink">{u.name}</span>
           <span className="text-dim tabular-nums">{formatBytes(u.sizeBytes)}</span>
           <span className={u.status === 'failed' ? 'text-danger' : 'text-dim'}>
-            {u.status === 'uploading' ? C.uploading : u.status === 'done' ? C.uploaded : u.error}
+            {u.status === 'uploading'
+              ? C.uploading
+              : u.status === 'done'
+                ? C.uploaded
+                : u.status === 'staged'
+                  ? C.staged
+                  : u.error}
           </span>
           <Button
             variant="quiet"

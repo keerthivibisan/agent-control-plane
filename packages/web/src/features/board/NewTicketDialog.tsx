@@ -10,8 +10,12 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { hintClass, inputClass, labelClass } from '../../components/Input';
-import { createTicket } from '../../lib/api';
+import { createTicket, uploadAttachment } from '../../lib/api';
+import { useQueryStore } from '../../lib/query';
 import { BOARD_COPY, TICKET_PRIORITY_COPY, TICKET_TYPE_COPY } from '../../lib/copy';
+import { AttachButton, DropZone, UploadList } from '../attachments/Attachments';
+import { useStagedFiles } from '../attachments/use-staged-files';
+import type { Upload } from '../attachments/use-uploads';
 import { ActionError } from '../control/bits';
 import { RunOptionsFields, useProjectRunDefaults } from '../review-loop/RunOptions';
 import {
@@ -102,6 +106,11 @@ export function NewTicketDialog({
   onCreated: (ticket: TicketDto) => void;
 }) {
   const create = useBoardAction(createTicket);
+  const store = useQueryStore();
+  const staged = useStagedFiles();
+  const [uploading, setUploading] = useState<string | null>(null);
+  // Set when the ticket exists but some files didn't attach: the owner continues from here.
+  const [partial, setPartial] = useState<{ ticket: TicketDto; names: string[] } | null>(null);
   const [title, setTitle] = useState('');
   const [type, setType] = useState<TicketType>('feature');
   const [priority, setPriority] = useState<TicketPriority>('medium');
@@ -118,7 +127,9 @@ export function NewTicketDialog({
     priority: useId(),
     labels: useId(),
     description: useId(),
+    attachments: useId(),
   };
+  const busy = create.pending || uploading !== null;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -137,12 +148,49 @@ export function NewTicketDialog({
       ...(Object.keys(runOptions).length > 0 && { runOptions }),
       ...(branchPrefs !== undefined && { branch: branchPrefs }),
     });
-    if (ticket !== null) onCreated(ticket);
+    if (ticket === null) return;
+    // The ticket exists now, so a failed file is reported, never a reason to create it again.
+    const failed: string[] = [];
+    for (const s of staged.valid) {
+      setUploading(s.key);
+      try {
+        await uploadAttachment(store.client, ticket.id, {
+          data: s.file,
+          name: s.file.name,
+          mimeType: s.mimeType,
+        });
+      } catch {
+        failed.push(s.file.name);
+      }
+    }
+    setUploading(null);
+    if (failed.length === 0) onCreated(ticket);
+    else setPartial({ ticket, names: failed });
   };
 
   const close = () => {
-    if (!create.pending) onClose();
+    if (!busy) onClose();
   };
+
+  const rows: Upload[] = [
+    ...staged.valid.map((s) => ({
+      key: s.key,
+      name: s.file.name,
+      sizeBytes: s.file.size,
+      status: s.key === uploading ? ('uploading' as const) : ('staged' as const),
+      attachment: null,
+      error: null,
+    })),
+    ...staged.failures.map((f) => ({
+      key: f.key,
+      name: f.name,
+      sizeBytes: f.sizeBytes,
+      status: 'failed' as const,
+      attachment: null,
+      error: f.error,
+    })),
+  ];
+  const locked = busy || partial !== null;
 
   return (
     <Dialog title={C.title} description={C.description} onClose={close} testId="new-ticket" wide>
@@ -211,6 +259,18 @@ export function NewTicketDialog({
             className={inputClass('resize-y')}
           />
         </Field>
+        <Field id={ids.attachments} label={C.attachmentsField} hint={C.attachmentsHint}>
+          <DropZone onFiles={locked ? () => undefined : staged.add} testId="new-ticket-drop">
+            <div
+              id={ids.attachments}
+              className="flex flex-col items-start gap-2"
+              aria-describedby={`${ids.attachments}-hint`}
+            >
+              <AttachButton onFiles={staged.add} disabled={locked} />
+              <UploadList uploads={rows} onRemove={staged.remove} />
+            </div>
+          </DropZone>
+        </Field>
         <RunOptionsFields
           value={runOptions}
           onChange={setRunOptions}
@@ -238,13 +298,25 @@ export function NewTicketDialog({
           }
         />
         <ActionError error={create.error} message={C.failed} />
+        {partial !== null ? (
+          <div role="alert" data-testid="attachments-partial" className="text-caption text-danger">
+            <p>{C.attachmentsPartial(partial.names.length)}</p>
+            <p>{C.attachmentsNotAttached(partial.names.join(', '))}</p>
+          </div>
+        ) : null}
         <div className="-mx-5 -mb-5 flex justify-end gap-2 rounded-b-card border-t border-line bg-sunken/60 px-5 py-3">
-          <Button onClick={close} disabled={create.pending}>
+          <Button onClick={close} disabled={busy}>
             {C.cancel}
           </Button>
-          <Button type="submit" variant="primary" disabled={create.pending}>
-            {create.pending ? C.creating : C.create}
-          </Button>
+          {partial !== null ? (
+            <Button variant="primary" onClick={() => onCreated(partial.ticket)}>
+              {C.openTicket}
+            </Button>
+          ) : (
+            <Button type="submit" variant="primary" disabled={busy}>
+              {create.pending ? C.creating : uploading !== null ? C.attachmentsUploading : C.create}
+            </Button>
+          )}
         </div>
       </form>
     </Dialog>

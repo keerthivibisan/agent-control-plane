@@ -1345,6 +1345,16 @@ export const BOARD_COPY = {
     descriptionField: 'Description',
     descriptionHint:
       'Optional. What should change and why. The lead agent reads this when it plans the ticket.',
+    attachmentsField: 'Attachments',
+    attachmentsHint:
+      'Optional. Uploaded once the ticket is created; agents can read them, they never commit them.',
+    attachmentsUploading: 'Attaching files…',
+    attachmentsPartial: (n: number) =>
+      `Ticket created, but ${n === 1 ? '1 file' : `${n} files`} could not be attached. Add ${
+        n === 1 ? 'it' : 'them'
+      } on the ticket page.`,
+    attachmentsNotAttached: (names: string) => `Not attached: ${names}.`,
+    openTicket: 'Open the ticket',
     create: 'Create ticket',
     creating: 'Creating…',
     cancel: 'Cancel',

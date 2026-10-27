@@ -60,6 +60,7 @@ export const ATTACHMENT_COPY = {
   confirm: 'Delete',
   cancel: 'Cancel',
   deleteFailed: 'The attachment wasn’t deleted.',
+  staged: 'Ready to attach',
   uploadFailed: 'The upload failed.',
   refused: {
     tooBig: (name: string) => `${name} is larger than 10 MB.`,
