@@ -26,15 +26,15 @@
       >
       <p class="nav-label">SYSTEM FIELD GUIDE</p>
       <nav aria-label="Chapters">
-        <a href="#overview"><span>00</span>Overview</a
-        ><a href="#architecture"><span>01</span>Architecture & authority</a
-        ><a href="#workflow"><span>02</span>Ticket & workflow</a
-        ><a href="#conflicts"><span>03</span>Conflict recovery</a
-        ><a href="#tokens"><span>04</span>Token efficiency</a
-        ><a href="#issues"><span>05</span>Issues & tradeoffs</a
-        ><a href="#future"><span>06</span>Future integrations</a
-        ><a href="#evidence"><span>07</span>Evidence & status</a
-        ><a href="#publishing"><span>08</span>Publishing & sharing</a>
+        <a href="#overview"><span>00</span>Overview</a>
+        <a href="#architecture"><span>01</span>Architecture &amp; authority</a>
+        <a href="#engine"><span>02</span>Engine in detail</a>
+        <a href="#workflow"><span>03</span>Ticket &amp; workflow</a>
+        <a href="#conflicts"><span>04</span>Conflict recovery</a>
+        <a href="#tokens"><span>05</span>Token efficiency</a>
+        <a href="#issues"><span>06</span>Issues &amp; tradeoffs</a>
+        <a href="#future"><span>07</span>Future integrations</a>
+        <a href="#evidence"><span>08</span>Evidence &amp; status</a>
       </nav>
       <div class="sidebar-foot">
         <span class="status-dot"></span> Source-grounded snapshot
@@ -71,7 +71,7 @@
             <strong>Start with the question you want answered.</strong>
             <p>
               New to ACP? Read <a href="#workflow">Ticket &amp; workflow</a> first. To understand
-              permissions and agent coordination, go to
+              permissions and agent coordination, go to <a href="#engine">Engine in detail</a> and
               <a href="#architecture">Architecture &amp; authority</a>. For the cost discussion,
               start with <a href="#tokens">Token efficiency</a>. The guide labels implemented
               behavior, open risks and proposed ideas separately.
@@ -1745,54 +1745,111 @@
             require it.
           </p>
         </section>
-        <section class="page" id="publishing" aria-label="Publishing &amp; sharing">
+        <section class="page" id="engine" aria-label="Engine in detail">
           <header class="page-intro">
-            <p class="eyebrow">08 / ACP KNOWLEDGE TRANSFER</p>
-            <h1>Ready to share.<br /><em>Publish only the guide.</em></h1>
+            <p class="eyebrow">02 / ACP KNOWLEDGE TRANSFER</p>
+            <h1>How the engine works.<br /><em>From ticket to coordinated agents.</em></h1>
             <p class="lede">
-              The package includes readable Markdown, editable Mermaid source and an offline static
-              site. Hosting and social publication remain separate owner actions.
+              The engine decides which transitions and effects are allowed. The server performs the
+              work and returns events to the engine.
             </p>
           </header>
-          <h2>GitHub Pages artifact</h2>
+          <h2>Who does what?</h2>
+          <div class="cards two">
+            <article>
+              <h3>Engine: decisions</h3>
+              <p>
+                Maintains run state, checks the workflow and policies, enforces capacity and
+                budgets, and declares permitted effects. It is pure logic: it does not launch
+                processes or perform Git operations.
+              </p>
+            </article>
+            <article>
+              <h3>Server: execution</h3>
+              <p>
+                Persists accepted transitions, prepares worktrees, runs configured setup and checks,
+                starts agents through the provider adapter, and feeds their events back to the
+                engine.
+              </p>
+            </article>
+          </div>
+          <h2>How ticket details reach an agent</h2>
+          <ol class="steps">
+            <li>
+              The owner creates a ticket and starts a run. The server supplies the ticket brief and
+              configured project context to the run.
+            </li>
+            <li>
+              The workflow determines the available roles and routes. A planning role proposes work
+              where configured, and the required approval must be satisfied before implementation
+              proceeds.
+            </li>
+            <li>
+              The lead receives its role instructions and ticket context. It can request a helper
+              with a role and task through <code>start_agent</code>.
+            </li>
+            <li>
+              The engine checks the caller, run phase, workflow node, capacity, nesting, budget and
+              attempt limits. An invalid request is refused.
+            </li>
+            <li>
+              For an accepted request, the server records the transition, prepares a worktree from
+              the recorded ticket tip, runs trusted setup, assembles the helper brief and context,
+              and invokes the provider adapter.
+            </li>
+            <li>
+              The adapter starts the SDK query. Agent lifecycle and usage events return to the
+              server and engine; a completed helper reports its outcome for the lead and configured
+              review flow.
+            </li>
+          </ol>
+          <aside class="callout">
+            <strong>Who spins up the helper?</strong>
+            <p>
+              The lead requests a helper. The engine authorizes the request. The server prepares the
+              workspace and calls the adapter, which starts the agent. The lead does not directly
+              spawn the operating-system process.
+            </p>
+          </aside>
+          <h2>The engine can also schedule agents</h2>
           <p>
-            Upload only <code>docs/knowledge-transfer/site/</code>. Its artifact root contains
-            <code>index.html</code> and <code>.nojekyll</code>; relative assets and hash navigation
-            support project-site paths. No build or ACP server is needed.
+            Depending on the configured workflow, the engine can schedule planning, change reviewers
+            and final stages as their conditions become ready. Conflict resolution uses a separate
+            server-managed operation and resolver helper.
           </p>
+          <h2>One command, four stages</h2>
+          <div class="flow" aria-label="Engine command lifecycle">
+            <div><strong>1. Command</strong><br />A user or agent requests an action.</div>
+            <span aria-hidden="true">→</span>
+            <div><strong>2. State</strong><br />The engine validates and updates the run.</div>
+            <span aria-hidden="true">→</span>
+            <div><strong>3. Effect</strong><br />The server carries out accepted work.</div>
+            <span aria-hidden="true">→</span>
+            <div><strong>4. Event</strong><br />The result returns to the engine.</div>
+          </div>
           <p>
-            The example workflow is documentation outside <code>.github/</code>, not an active
-            deployment. Review it in a separate workflow change, enable Pages, choose the intended
-            ref and restrict the <code>github-pages</code> environment. The repository is currently
-            private; plan/visibility settings determine hosting availability and site audience.
+            Persisting state before an effect prevents an unrecorded launch when that database
+            commit fails. It does not make SQLite, Git, the agent process and GitHub one atomic
+            transaction; failures and restarts require reconciliation.
           </p>
+          <h2>What the safeguards check</h2>
+          <ul>
+            <li>
+              A helper cannot start before the required planning or branch conditions are met.
+            </li>
+            <li>
+              Configured capacity, nesting, budget and attempt limits apply to agent requests.
+            </li>
+            <li>Reviewers are read-only; helper branch-management commands are denied.</li>
+            <li>
+              Conflict candidate promotion checks the pinned candidate, target and policy. Delivery
+              requires its own owner action or explicit project delegation.
+            </li>
+          </ul>
           <p>
-            <strong>No live deployment URL is claimed.</strong> Verify the actual URL before adding
-            it to LinkedIn. Do not upload the repository root or live ACP files.
-          </p>
-          <h2>A public-facing draft</h2>
-          <blockquote>
-            <p>
-              We are building Agent Control Plane, a local-first workspace for coordinating AI
-              coding agents around projects and tickets.
-            </p>
-            <p>
-              Agents propose work; a deterministic engine authorizes actions; the server prepares
-              isolated workspaces and performs Git operations; provider adapters enforce role tools.
-            </p>
-            <p>
-              Our architecture guide explains that boundary, conflict recovery and token-efficiency
-              tradeoffs. Its numerical examples are hypothetical, not measured savings. Claude Code
-              is supported today; Codex is a future roadmap item.
-            </p>
-            <p>
-              The useful question: how much work does it take to deliver a correctly accepted
-              ticket, including retries and verification?
-            </p>
-          </blockquote>
-          <p>
-            Deployment instructions and editable sharing materials remain in the documentation
-            package. Nothing has been posted to LinkedIn.
+            These descriptions are based on the guide’s pinned development snapshot. See
+            <a href="#architecture">Architecture &amp; authority</a> for the diagram and
+            <a href="#workflow">Ticket &amp; workflow</a> for configurable routes.
           </p>
         </section>
       </main>
