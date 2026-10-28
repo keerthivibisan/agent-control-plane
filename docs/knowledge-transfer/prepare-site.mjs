@@ -44,3 +44,12 @@ await copyFile(
   join(root, '..', 'brand', 'favicon.svg'),
   join(root, 'site', 'assets', 'favicon.svg'),
 );
+
+// Match the app's dark-theme accent while preserving the repository's original brand assets.
+for (const [source, destination] of [
+  ['control-plane-logo-on-dark.svg', 'acp-logo-blue.svg'],
+  ['favicon.svg', 'favicon-blue.svg'],
+]) {
+  const svg = await readFile(join(root, '..', 'brand', source), 'utf8');
+  await writeFile(join(root, 'site', 'assets', destination), svg.replaceAll('#D8FF64', '#1F6FEB'));
+}

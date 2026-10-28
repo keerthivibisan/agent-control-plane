@@ -27,6 +27,12 @@ import { createGitRunner } from '../../../src/workspace/index.js';
 export const GIT_ENV: Readonly<Record<string, string>> = {
   GIT_CONFIG_GLOBAL: '/dev/null',
   GIT_CONFIG_NOSYSTEM: '1',
+  // The server runner needs an identity too: global and system CI config are disabled here.
+  GIT_CONFIG_COUNT: '2',
+  GIT_CONFIG_KEY_0: 'user.name',
+  GIT_CONFIG_VALUE_0: 'Test Owner',
+  GIT_CONFIG_KEY_1: 'user.email',
+  GIT_CONFIG_VALUE_1: 'owner@example.invalid',
 };
 
 export function makeTempDir(prefix: string): string {

@@ -12,13 +12,14 @@ Agent Control Plane (ACP) is a local-first control plane for observing and orche
 agent sessions. The first provider is Claude Code. Overview: [README.md](README.md); design:
 [docs/architecture.md](docs/architecture.md); all docs: [docs/README.md](docs/README.md).
 
-- **Current release line: v0.3.x (beta).** Implemented: session observability; projects, the board
+- **Current release line: v0.4.x (experimental POC).** Implemented: session observability; projects, the board
   and plan-first ticket runs (a lead, helpers, reviewers, a tester); editable workflow graphs;
   approval modes up to Full auto; the review loop and the ticket branch; the harness and Checks
-  blocks; GitHub and branching strategies; the branch guard. The release in progress is planned in
-  [docs/v0.3.1/](docs/v0.3.1/README.md).
-- **Conflict resolution and delegated delivery (CR series, ADR-0030 proposed):** on
-  `feature/conflict-resolution`, for `dev`. Plan and status:
+  blocks; GitHub and branching strategies; the branch guard. Release scope and limitations are recorded in
+  [docs/releases/0.4.0.md](docs/releases/0.4.0.md); see [CHANGELOG.md](CHANGELOG.md).
+- **Conflict resolution and delegated delivery (CR series, ADR-0030 proposed):** implemented in
+  the merged v0.4.0 release. The ADR and CR review labels still need maintainer reconciliation
+  with the safety wording below. Plan and status:
   [docs/conflict-resolution/](docs/conflict-resolution/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
@@ -230,8 +231,12 @@ Put it in the pull request description, or hand it back to the human you work fo
 
 ## 10. Git workflow
 
-- Fork the repository (maintainers may branch in it), and branch from `main`: `feat/<slug>`,
-  `fix/<slug>` or `docs/<slug>`.
+- Fork the repository (maintainers may branch in it), and branch from `dev`:
+  `feature/<area>/<description>`, `change/<area>/<description>` or `fix/<area>/<description>`.
+  Use lowercase kebab-case. See [BRANCHING.md](BRANCHING.md) for commands and examples.
+- Normal PRs target `dev`. Maintainer `release/<version>` branches start from a selected, recorded
+  commit reachable from `dev` and target `main`. Bring every merged release back into `dev`
+  through a synchronization PR, preserving ancestry and release fixes.
 - Never push to `main` and never force-push a shared branch. Changes reach `main` only through a
   reviewed pull request.
 - Commit at every checkpoint: a coherent slice with `pnpm check` passing. Use Conventional Commits
@@ -243,5 +248,6 @@ Put it in the pull request description, or hand it back to the human you work fo
   - a `Checks:` line with the real results, for example
     `Checks: format ✓ lint ✓ typecheck ✓ test 41/41 ✓ build ✓`.
 - Split unrelated changes into separate commits. Never commit failing checks.
-- Open a pull request to `main` with the template. CI (format, lint, typecheck, test, build) must
+- Open a pull request to `dev` with the template, except the release PRs described above.
+  CI (format, lint, typecheck, test, build) must
   pass before a maintainer merges it.

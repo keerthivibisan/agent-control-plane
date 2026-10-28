@@ -428,12 +428,25 @@ describe('project allowlist (ADR-0013 amendment)', () => {
     ).resolves.toEqual({ allow: true });
 
     // Outside it (the owner's checkout): the owner is asked.
-    const outside = worker.ask('Edit', 'Edit README.md', {
-      file_path: join(s.repo, 'README.md'),
-      old_string: SECRET,
-      new_string: 'y',
-    });
-    await s.settle();
+    let outsideSettled = false;
+    const outside = worker
+      .ask('Edit', 'Edit README.md', {
+        file_path: join(s.repo, 'README.md'),
+        old_string: SECRET,
+        new_string: 'y',
+      })
+      .then((decision) => {
+        outsideSettled = true;
+        return decision;
+      });
+    // Path resolution precedes recording the approval and is not drained by settle().
+    await expect
+      .poll(
+        async () =>
+          RunDetailDtoSchema.parse((await s.get(`/api/runs/${runId}`)).body).approvals.length,
+        { timeout: 2_000 },
+      )
+      .toBe(2);
     const raw = (await s.get(`/api/runs/${runId}`)).body as unknown;
     const run = RunDetailDtoSchema.parse(raw);
     // The first was approved with no owner decision. Who decided ("allowlist") is not persisted until
@@ -442,6 +455,7 @@ describe('project allowlist (ADR-0013 amendment)', () => {
       ['Edit src/app.ts', 'approved'],
       ['Edit README.md', 'pending'],
     ]);
+    expect(outsideSettled).toBe(false);
     // The raw input is used for matching only: it is not in the API response.
     expect(JSON.stringify(raw)).not.toContain(SECRET);
 
@@ -464,11 +478,19 @@ describe('project allowlist (ADR-0013 amendment)', () => {
     if (worker === undefined) throw new Error('no worker');
     worker.started();
     const runId = (await s.detail(ticket.id)).currentRun?.id ?? '';
-    void worker.ask('Edit', 'Edit src/app.ts', {
+    const asked = worker.ask('Edit', 'Edit src/app.ts', {
       file_path: join(s.worktree(runId, worker.id), 'src', 'app.ts'),
     });
-    await s.settle();
+    await expect
+      .poll(
+        async () =>
+          RunDetailDtoSchema.parse((await s.get(`/api/runs/${runId}`)).body).approvals.length,
+        { timeout: 2_000 },
+      )
+      .toBe(1);
     const run = RunDetailDtoSchema.parse((await s.get(`/api/runs/${runId}`)).body);
     expect(run.approvals.map((a) => a.status)).toEqual(['pending']);
+    await s.post(`/api/approvals/${run.approvals[0]?.id ?? ''}`, { decision: 'deny' });
+    await expect(asked).resolves.toMatchObject({ allow: false });
   });
 });

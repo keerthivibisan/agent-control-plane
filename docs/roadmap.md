@@ -12,7 +12,11 @@ Where the project stands and what comes next. Nothing listed as planned is built
 | v0.2.0  | 2026-10-21 | editable workflow graphs per project (ADR-0023)                                                                                                                                    |
 | v0.3.0  | 2026-10-25 | GitHub and branching strategies, a pull-request-like ticket page, attachments and agent notes, the harness in the workflow, session names, the branch guard (ADR-0024 to ADR-0027) |
 | v0.3.1  | 2026-10-26 | effort per agent, optional Checks blocks, one Finish block, easier linking in the Workflow editor, runs no longer end while waiting for you (ADR-0028; [plan](v0.3.1/README.md))   |
-| v0.3.2  | planned    | the owner can send a change back for rework after a restart (ADR-0029, proposed; [plan](v0.3.2/README.md))                                                                         |
+| v0.4.0  | merged     | conflict recovery and delivery policies, no-change ticket actions, knowledge-transfer guide and manual Pages workflow ([release scope](releases/0.4.0.md))                         |
+
+Rework after a server restart (ADR-0029; [Q-series plan](v0.3.2/README.md)) remains planned and
+is not included in the merged 0.4.0 release. The earlier version assignment in that plan is
+historical; no Q-series implementation is claimed.
 
 Details: [CHANGELOG.md](../CHANGELOG.md). The plans of the earlier series are in
 [history/](history/README.md).

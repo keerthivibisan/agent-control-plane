@@ -1,5 +1,11 @@
 # Architecture
 
+> **Release review note:** This document includes owner-only delivery wording written before
+> conflict recovery was merged in v0.4.0. ADR-0030 remains marked proposed and its relationship
+> to existing safety authority needs maintainer review. For implemented behavior and known limits,
+> see [conflict-recovery status](conflict-resolution/STATUS.md) and the
+> [release scope](releases/0.4.0.md#previously-planned-scope-and-release-review).
+
 > **Status:** describes the code at v0.3.x (beta). Each section says whether it is
 > **[implemented]** or **[planned]**; planned items are not built, even partially. Decisions are
 > recorded as ADRs in [decisions/](decisions/README.md), and an ADR wins where this overview is

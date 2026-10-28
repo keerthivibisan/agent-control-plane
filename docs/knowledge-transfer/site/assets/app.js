@@ -5,13 +5,13 @@
 const pageLabels = {
   overview: 'Overview',
   architecture: 'Architecture & authority',
+  engine: 'Engine in detail',
   workflow: 'Ticket & workflow',
   conflicts: 'Conflict recovery',
   tokens: 'Token efficiency',
   issues: 'Issues & tradeoffs',
   future: 'Future integrations',
   evidence: 'Evidence & status',
-  publishing: 'Publishing & sharing',
 };
 
 const scenarios = {
