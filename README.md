@@ -11,23 +11,35 @@
 </p>
 
 <p align="center">
-  <img alt="Version 0.3.1" src="https://img.shields.io/badge/version-0.3.1-171717">
-  <img alt="Status: beta" src="https://img.shields.io/badge/status-beta-171717">
+  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-171717">
+  <img alt="Status: experimental" src="https://img.shields.io/badge/status-experimental-171717">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-171717">
   <img alt="Node 22" src="https://img.shields.io/badge/node-22-171717">
 </p>
 
 # Agent Control Plane
 
-Agent Control Plane (ACP) is a local-first control plane to **observe and orchestrate Claude Code
-agents**. It reads your Claude Code sessions and shows which ones are running, which agent started
-which helper, and how many tokens each used. It also runs agents for you: give a ticket to a lead
-agent, approve its plan, and follow its helpers, their reviews and your project's checks until you
-merge the result once, locally or as a pull request on GitHub.
+Agent Control Plane (ACP) is an **experimental, local-first workflow orchestrator**, currently
+built around the Claude Agent SDK. Configure how a team of coding agents takes a ticket through
+planning, implementation, review and testing, with policy controls for permissions, approvals,
+branching and delivery. It also shows Claude Code sessions, their relationships and token usage.
 
-Why: once you run more than one coding agent, it gets hard to see what each is doing, what it costs
-and what it changed, and easy to let one touch the wrong branch. ACP puts that on one board, on
-your own computer: nothing leaves it, and nothing lands without your merge.
+> **Experimental POC · v0.4.0.** The core ticket workflow works, but bugs, incomplete recovery
+> paths and architectural questions remain. Use a disposable project or a backed-up repository
+> when evaluating it. Workflows are configured by you; ACP does not learn from past runs or
+> automatically improve them. Codex integration and a reusable codebase map remain planned.
+
+ACP's server and database run on your computer. Agent execution contacts Anthropic through Claude
+Code; optional GitHub delivery uses your own `git` and `gh` login. Local-first does not mean offline
+agent execution. Start with the demo to explore without launching agents.
+
+| I want to…                                             | Start here                                                      |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| Explore the UI with sample data                        | [Quick start](#quick-start), then `./start.sh --demo`           |
+| Run my first ticket                                    | [First-ticket guide](START.md) and a configured project harness |
+| Understand the engine, permissions and token tradeoffs | [Knowledge-transfer guide](docs/knowledge-transfer/README.md)   |
+| Fix a bug or contribute an idea                        | [Contributing](CONTRIBUTING.md)                                 |
+| Choose a branch or prepare a release                   | [Branching and releases](BRANCHING.md)                          |
 
 - [Feature tour](#feature-tour)
 - [Quick start](#quick-start)
@@ -120,8 +132,8 @@ allowed them.
 - Each agent block has its own model, effort (Low, Medium, High), skills, agent file and approval
   mode. A ticket's or run's mode can only make a block more careful, never less.
 - Links that make no sense are refused, and no workflow can switch off a safety rule: only helpers
-  and testers edit, only the lead merges into the ticket branch, and only you merge the ticket
-  branch.
+  and testers edit, and the server controls Git operations. Final delivery requires an owner
+  action or explicit project delegation under the configured verification policy.
 - The ticket page draws the run's workflow live, with each block's state and agents.
 
 ### A workspace per project
@@ -137,7 +149,8 @@ allowed them.
   failure.
 - **GitHub, through your own `gh` login:** create or connect the repository, branching strategies
   (GitHub flow, Git flow or custom) with a preview, local branches, and Push & open PR, Merge pull
-  request and Delete branch, each only on your click. The app never reads or stores a token.
+  request and Delete branch. Conflict recovery can delegate push/PR delivery under explicit project
+  policy; defaults remain manual. The app never reads or stores a token.
 - Attachments on tickets (up to 10 MB each); agents get read-only copies, never committed.
 - Light, Dark or System theme.
 
@@ -157,6 +170,16 @@ allowed them.
 macOS and Linux are tested. Windows is untested.
 
 ### Run it
+
+Clone the repository and enter it first:
+
+```bash
+git clone https://github.com/keerthivibisan/agent-control-plane.git
+cd agent-control-plane
+```
+
+The default branch is the reviewed release snapshot. Contributors should branch from `dev`
+using [BRANCHING.md](BRANCHING.md).
 
 One command on macOS or Linux. It checks Node and pnpm (installing them through nvm when needed),
 installs the dependencies and starts the app:
@@ -189,7 +212,8 @@ ticket. [BUILD.md](BUILD.md) covers building and testing from source.
 
 - **Local only.** The server listens on `127.0.0.1`. No telemetry, no update checks, no uploads.
   Agent runs start Claude Code, which talks to Anthropic as it always does. The GitHub features use
-  your own `git` and `gh` against the project's `origin`, and only when you click.
+  your own `git` and `gh` against the project's `origin`, through owner actions or explicit
+  conflict-delivery delegation. Project harness setup can also use the network when enabled.
 - **Read-only access to Claude Code data.** Only the session files under `~/.claude/projects`, and
   only fully for the projects you add. Credentials (`~/.claude/sessions/`), settings files and
   history are never read, and Claude Code settings are never changed.
@@ -205,8 +229,9 @@ ticket. [BUILD.md](BUILD.md) covers building and testing from source.
   folder. Their work is committed by the app. The app itself acts only on the ticket branch it
   recorded, and refuses `main`, `master`, the ticket's target, your strategy's long-lived branches,
   `origin`'s default branch and your checked-out branch.
-- **You decide what lands.** Nothing reaches the ticket's target without your merge or your pull
-  request. Budgets per agent, bounded retries, Stop and Stop all, a run timeout and safe restarts
+- **Delivery follows policy.** Manual delivery is the default. Explicit project policy can delegate
+  local merge or push/PR delivery after conflict recovery; it does not automatically merge a GitHub
+  PR. Budgets per agent, bounded retries, Stop and Stop all, a run timeout and safe restarts
   (interrupted work waits for you, never relaunches by itself) apply throughout.
 
 Details: [docs/security.md](docs/security.md). Report a vulnerability privately as described in
@@ -214,7 +239,7 @@ Details: [docs/security.md](docs/security.md). Report a vulnerability privately 
 
 ## Status
 
-**Beta.** Features and data formats may still change before 1.0.0 (database migrations run
+**Experimental POC.** Features and data formats may still change before 1.0.0 (database migrations run
 automatically on start; back up your data folder before an upgrade). What works today:
 
 - observing Claude Code sessions, their helper agents and token usage, live;
@@ -224,6 +249,7 @@ automatically on start; back up your data folder before an upgrade). What works 
 - the pull-request-like ticket page, attachments, agent notes and run summaries;
 - GitHub (create or connect a repository, push, open and merge pull requests) and branching
   strategies;
+- owner-triggered conflict recovery, optional automatic recovery and explicit verification/delivery policies;
 - the demo mode.
 
 It is tested by thousands of unit and integration tests, a browser end-to-end suite and an
@@ -232,6 +258,12 @@ runs against Claude Code are written up in [docs/research/](docs/research/).
 
 Known limits:
 
+- **Repeated discovery.** Separate agents can read overlapping context. A project-wide codebase map
+  and task-specific retrieval are proposed, with no measured token savings yet.
+- **Conflict recovery has limits.** It uses local target refs without fetching origin; a dedicated
+  helper repairs content and policy determines verification. See the [current limits](docs/conflict-resolution/STATUS.md).
+- **Restart rework remains planned.** Interrupted work needs owner review; resuming a finished
+  change for rework after restart is not implemented (ADR-0029).
 - **Claude Code only.** Codex and other agents are not supported yet.
 - **Costs are estimates.** Token counts are exact where Claude Code reports them; there is no
   pricing table yet, and Claude Code's own cost figures are shown as estimated.
@@ -317,6 +349,10 @@ every change follows.
 This app was itself built mostly by coding agents, coordinated in parallel git worktrees with a
 human deciding and merging. [docs/history/](docs/history/README.md) keeps the plans, for the
 curious.
+
+**Normal contributions target `dev`.** Use `feature/<area>/<description>`,
+`change/<area>/<description>` or `fix/<area>/<description>`. Release branches start at a reviewed
+commit from `dev` and target `main`; see [BRANCHING.md](BRANCHING.md).
 
 Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 

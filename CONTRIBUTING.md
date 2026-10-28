@@ -1,8 +1,22 @@
 # Contributing
 
-Thanks for helping. Bug reports, docs fixes, tests and code are all welcome. This project was built
+Thanks for helping. ACP is an experimental POC; bug reports, docs fixes, tests and code are all welcome. This project was built
 mostly by AI coding agents working under written rules, and you are welcome to contribute with one
 too: the same rules apply to people and agents.
+
+## Find a starting point
+
+| Contribution                              | Useful starting point                                                                     |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Understand what works and what is planned | [README status](README.md#status), [roadmap](docs/roadmap.md)                             |
+| Reproduce a UI issue without agents       | `./start.sh --demo`; [START.md](START.md)                                                 |
+| Follow engine and authorization behavior  | [KT guide](docs/knowledge-transfer/README.md), [architecture](docs/architecture.md)       |
+| Report a bug or discuss an experiment     | [Issues](https://github.com/keerthivibisan/agent-control-plane/issues); use the templates |
+| Choose a branch and PR target             | [Branching and releases](BRANCHING.md)                                                    |
+
+You do not need Claude Code or an Anthropic account to run unit tests or the demo. Managed test
+runs use fake agents. Ordinary contributors do not need internal work-package assignments; the
+issue and PR describe the scope. Discuss new capabilities before implementing them.
 
 ## Before you start
 
@@ -59,8 +73,9 @@ pnpm --filter @acp/core test
 
 ## Branches, commits and pull requests
 
-1. **Fork** the repository and **branch** from `main`: `feat/<slug>`, `fix/<slug>` or
-   `docs/<slug>`.
+1. **Fork** the repository and **branch from `dev`**. Use `feature/<area>/<description>`,
+   `change/<area>/<description>` or `fix/<area>/<description>`. Follow the fork/maintainer
+   commands and release exceptions in [BRANCHING.md](BRANCHING.md).
 2. **Stay in scope.** One pull request, one purpose. Shared files (root configs, the lockfile,
    dependency lists, the v1 contracts, `@acp/core/api`, migrations, ADRs) change only in a pull
    request of their own, explained (AGENTS.md §5).
@@ -72,7 +87,7 @@ pnpm --filter @acp/core test
 4. **Update the docs** in the same change. Flip **[planned]** to **[implemented]** only for what
    really works, and add a line under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for anything a
    user would notice.
-5. **Open a pull request** to `main` with the template, including the completion report from
+5. **Open a pull request** to `dev` with the template, including the completion report from
    AGENTS.md §9. CI must pass before a maintainer merges it. CI runs by itself on your pull request
    into `main`, `dev`, a `dev/*` or a `release/*` branch; GitHub may ask a maintainer to approve
    the first run from a new contributor. Run `pnpm check` yourself first.

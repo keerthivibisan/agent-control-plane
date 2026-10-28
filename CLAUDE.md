@@ -9,7 +9,9 @@ file adds Claude Code-specific working notes.
 ## Start of every session
 
 1. Run `git status` and `git log --oneline -5`. Know your branch and what changed. If you are on
-   `main`, create a branch first (`feat/<slug>`, `fix/<slug>` or `docs/<slug>`).
+   `main` or `dev`, create a work branch from the current `dev` first:
+   `feature/<area>/<description>`, `change/<area>/<description>` or `fix/<area>/<description>`.
+   Normal PRs target `dev`; maintainer releases follow [BRANCHING.md](BRANCHING.md).
 2. Know the task: the issue, or what the human asked for in chat. If neither names a clear scope,
    ask before writing code. Out-of-scope phases (AGENTS.md §1) are never "just a small start".
 3. Read the docs the task touches (AGENTS.md §2) before writing code. For anything bigger than a
@@ -68,6 +70,7 @@ completion report from AGENTS.md §9, including the actual command output summar
 
 ## Kickoff prompt (for a human starting an agent)
 
-> Work on <issue or task> in a new git worktree on a branch from `main`. Follow `CLAUDE.md` and
+> Work on <issue or task> in a new git worktree on a `feature/<area>/<description>`,
+> `change/<area>/<description>` or `fix/<area>/<description>` branch from `dev`. Follow `CLAUDE.md` and
 > `AGENTS.md`. Start in plan mode and show me the plan before writing code. Stay in the task's
 > scope. Finish with `pnpm check` and the completion report.

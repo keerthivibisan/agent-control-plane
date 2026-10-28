@@ -4,7 +4,16 @@ Start with the [architecture](architecture.md). Running the app is in [START.md]
 building and testing it in [BUILD.md](../BUILD.md), and contributing in
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-## Specs (current)
+See the [KT guide](knowledge-transfer/README.md) for a guided architecture tour and
+[branching and releases](../BRANCHING.md) for contribution targets and release preparation.
+
+> **Review note:** Some safety and lifecycle statements predate conflict-recovery delivery policy.
+> ADR-0030 remains marked proposed while its implementation has been merged; owner-only wording
+> in existing authority records still needs maintainer reconciliation. See the
+> [conflict-recovery status](conflict-resolution/STATUS.md) and
+> [release review note](releases/0.4.0.md#previously-planned-scope-and-release-review).
+
+## Specs and review notes
 
 | Document                                                 | What it covers                                                                   |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -20,7 +29,7 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 
 ## Decisions and evidence
 
-- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0029).
+- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0030).
   Accepted ADRs are binding; a new decision starts from
   [0000-template.md](decisions/0000-template.md).
 - [research/](research/): dated notes on observed Claude Code behaviour and real runs, aggregates
@@ -28,8 +37,11 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 
 ## Releases and history
 
-- [v0.3.1/](v0.3.1/README.md): the plan of the release in progress.
-- [v0.3.2/](v0.3.2/README.md): the plan of the next patch release.
+- [releases/0.4.0.md](releases/0.4.0.md): the reviewed 0.4.0 candidate scope and upgrade notes;
+  [CHANGELOG.md](../CHANGELOG.md) records version history.
+- [v0.3.1/](v0.3.1/README.md): the historical 0.3.1 implementation plan.
+- [v0.3.2/](v0.3.2/README.md): the unimplemented restart-rework proposal, originally assigned
+  that version; it is not part of 0.4.0.
 - [history/](history/README.md): the plans of earlier series, kept for provenance: how the app was
   built with coding agents.
 - [images/](images/) and [brand/](brand/): the README screenshots (demo data only) and the logo

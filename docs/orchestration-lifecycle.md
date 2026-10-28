@@ -1,5 +1,11 @@
 # Orchestration lifecycle
 
+> **Release review note:** This document includes owner-only delivery wording written before
+> conflict recovery was merged in v0.4.0. ADR-0030 remains marked proposed and its relationship
+> to existing safety authority needs maintainer review. For implemented behavior and known limits,
+> see [conflict-recovery status](conflict-resolution/STATUS.md) and the
+> [release scope](releases/0.4.0.md#previously-planned-scope-and-release-review).
+
 > **Current:** §0 (the run and agent states, built in Phase 3 milestone M1) and §0.1 (the review
 > loop and the ticket branch, ADR-0021) describe how runs work today; workflow graphs (ADR-0023)
 > and Checks blocks (ADR-0027, ADR-0028) decide which agents and checks a run has, see

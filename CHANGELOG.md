@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documentation
+
+- Clarify experimental POC status, current provider and known limits; add contributor entry
+  points and a dev-first branching/release guide, including synchronization after a release.
+
 ## [0.4.0] - 2026-10-28
 
 Conflict recovery for parallel tickets, explicit verification and delivery policies, and a

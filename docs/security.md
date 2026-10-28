@@ -1,5 +1,11 @@
 # Security model
 
+> **Release review note:** This document includes owner-only delivery wording written before
+> conflict recovery was merged in v0.4.0. ADR-0030 remains marked proposed and its relationship
+> to existing safety authority needs maintainer review. For implemented behavior and known limits,
+> see [conflict-recovery status](conflict-resolution/STATUS.md) and the
+> [release scope](releases/0.4.0.md#previously-planned-scope-and-release-review).
+
 > **Status:** binding requirements for every change to this repository. Each rule below is in force
 > and tested unless it is marked **[planned]**. Reporting vulnerabilities: see
 > [SECURITY.md](../SECURITY.md).
