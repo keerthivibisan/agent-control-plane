@@ -1,10 +1,10 @@
 :root {
-  --ink: #19313a;
-  --muted: #52676b;
-  --paper: #f7f7f2;
-  --line: #d6ddd4;
-  --accent: #bd532e;
-  --soft: #faede4;
+  --ink: #e6edf3;
+  --muted: #8b949e;
+  --paper: #0d1117;
+  --line: #30363d;
+  --accent: #58a6ff;
+  --soft: #161b22;
   --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 * {
@@ -22,11 +22,11 @@ body {
     sans-serif;
 }
 a {
-  color: #994425;
+  color: #58a6ff;
   text-underline-offset: 4px;
 }
 a:hover {
-  color: #542614;
+  color: #a5d6ff;
 }
 button,
 a {
@@ -37,7 +37,7 @@ button {
   cursor: pointer;
 }
 :focus-visible {
-  outline: 3px solid #ac541e;
+  outline: 3px solid #58a6ff;
   outline-offset: 4px;
 }
 [hidden] {
@@ -49,7 +49,7 @@ button {
   left: 12px;
   z-index: 20;
   padding: 10px 16px;
-  background: white;
+  background: #161b22;
   transform: translateY(-160%);
 }
 .skip:focus {
@@ -59,8 +59,8 @@ button {
   width: 254px;
   position: fixed;
   inset: 0 auto 0 0;
-  background: var(--ink);
-  color: #d6e0dc;
+  background: #010409;
+  color: #c9d1d9;
   padding: 32px 22px;
   display: flex;
   flex-direction: column;
@@ -89,12 +89,12 @@ button {
   display: block;
   font: 9px/1.6 var(--mono);
   letter-spacing: 1.9px;
-  color: #b0c5bf;
+  color: #8b949e;
 }
 .nav-label {
   font: 9px var(--mono);
   letter-spacing: 2px;
-  color: #a2bbb5;
+  color: #8b949e;
   margin: 50px 0 16px;
 }
 nav a {
@@ -105,26 +105,26 @@ nav a {
   margin: 2px 0;
   border-radius: 6px;
   font-size: 12px;
-  color: #c5d7d2;
+  color: #c9d1d9;
   text-decoration: none;
 }
 nav a span {
   font: 9px var(--mono);
-  color: #9db9b1;
+  color: #8b949e;
 }
 nav a:hover,
 nav a[aria-current='page'] {
   color: white;
-  background: #29434c;
+  background: #21262d;
 }
 nav a[aria-current='page'] {
-  box-shadow: inset 3px 0 #e6a774;
+  box-shadow: inset 3px 0 #58a6ff;
 }
 .sidebar-foot {
   font-size: 10px;
   margin-top: auto;
   padding-top: 24px;
-  color: #b0c6c0;
+  color: #8b949e;
 }
 .sidebar-foot p {
   font: 11px/1.8 var(--mono);
@@ -134,7 +134,7 @@ nav a[aria-current='page'] {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #93bca6;
+  background: #3fb950;
   margin-right: 6px;
 }
 .workspace {
@@ -157,7 +157,7 @@ nav a[aria-current='page'] {
 }
 .topbar p span {
   margin: 0 10px;
-  color: #8ca09b;
+  color: #8b949e;
 }
 .topbar strong {
   color: var(--ink);
@@ -235,7 +235,7 @@ p {
   color: var(--muted);
 }
 .hero-panel {
-  background: #e7ece3;
+  background: #21262d;
   padding: 28px;
   border-radius: 12px;
 }
@@ -249,7 +249,7 @@ p {
   display: grid;
   grid-template-columns: 1fr;
   padding: 14px 0;
-  border-top: 1px solid #cbd6cc;
+  border-top: 1px solid #30363d;
 }
 .hero-panel li span {
   font-size: 13px;
@@ -258,7 +258,7 @@ p {
 .button {
   display: inline-flex;
   gap: 25px;
-  background: var(--ink);
+  background: #010409;
   color: white;
   padding: 12px 18px;
   border-radius: 6px;
@@ -267,7 +267,7 @@ p {
 }
 .button:hover {
   color: white;
-  background: #325159;
+  background: #30363d;
 }
 .badge {
   display: inline-block;
@@ -277,20 +277,20 @@ p {
   letter-spacing: 0.5px;
 }
 .implemented {
-  color: #254d3b;
-  background: #e3eee3;
+  color: #7ee787;
+  background: #12311f;
 }
 .risk {
-  color: #8c3b23;
-  background: #f6e5d9;
+  color: #ffa198;
+  background: #391b20;
 }
 .proposed {
-  color: #354e7a;
-  background: #e5eaf3;
+  color: #a5d6ff;
+  background: #152a43;
 }
 .example {
-  color: #6b4b22;
-  background: #f5ead1;
+  color: #e3b341;
+  background: #382b13;
 }
 .callout {
   margin: 28px 0;
@@ -301,7 +301,7 @@ p {
   font-size: 14px;
 }
 .callout strong {
-  color: #8d3c23;
+  color: #a5d6ff;
 }
 .callout p:last-child {
   margin-bottom: 0;
@@ -336,7 +336,7 @@ p {
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: white;
+  background: #161b22;
   min-width: 0;
 }
 .cards h3 {
@@ -352,7 +352,7 @@ p {
   width: 100%;
   overflow-x: auto;
   margin: 22px 0;
-  background: white;
+  background: #161b22;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -367,14 +367,14 @@ caption {
   padding: 13px 18px;
   color: var(--muted);
   font-size: 12px;
-  background: #f0f3ec;
+  background: #21262d;
   border-bottom: 1px solid var(--line);
 }
 th {
   text-align: left;
   font: 10px/1.6 var(--mono);
   letter-spacing: 0.6px;
-  background: #e8ede4;
+  background: #21262d;
   padding: 14px 18px;
 }
 td {
@@ -384,7 +384,7 @@ td {
 }
 code {
   font: 12px/1.65 var(--mono);
-  background: #e9eee5;
+  background: #21262d;
   padding: 2px 5px;
   border-radius: 3px;
   overflow-wrap: anywhere;
@@ -395,7 +395,7 @@ code {
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow-x: auto;
-  background: #f7f7f2;
+  background: #0d1117;
 }
 .diagram img {
   display: block;
@@ -415,8 +415,8 @@ figcaption {
   margin: 20px 0;
 }
 .tabs button {
-  border: 1px solid #b6c8c1;
-  background: white;
+  border: 1px solid #8b949e;
+  background: #161b22;
   padding: 10px 15px;
   border-radius: 5px;
   font-size: 13px;
@@ -424,14 +424,14 @@ figcaption {
 }
 .tabs button[aria-pressed='true'] {
   color: white;
-  background: var(--ink);
-  border-color: var(--ink);
+  background: #010409;
+  border-color: #30363d;
 }
 .detail-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 22px 28px;
-  background: white;
+  background: #161b22;
 }
 .detail-panel h3 {
   margin-top: 0;
@@ -455,8 +455,8 @@ figcaption {
 .flow div {
   flex: 1 0 150px;
   padding: 15px;
-  background: #e8eee3;
-  border: 1px solid #d3dfd3;
+  background: #21262d;
+  border: 1px solid #30363d;
   border-radius: 6px;
   font-size: 13px;
   text-align: center;
@@ -470,7 +470,7 @@ figcaption {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 14px 20px;
-  background: #edf0e8;
+  background: #161b22;
   font-size: 14px;
 }
 .risk-item summary,
@@ -484,18 +484,18 @@ figcaption {
   margin: 14px 0 5px;
 }
 .risk-item code {
-  background: #e2e8dd;
+  background: #30363d;
 }
 .evidence {
   margin-top: 30px;
   font-size: 12px;
-  background: white;
+  background: #161b22;
 }
 blockquote {
   margin: 20px 0;
   padding: 8px 24px;
   border-left: 3px solid var(--accent);
-  background: #ecefe8;
+  background: #21262d;
 }
 footer {
   padding: 24px 46px;
