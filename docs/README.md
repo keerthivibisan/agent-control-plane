@@ -4,6 +4,9 @@ Start with the [architecture](architecture.md). Running the app is in [START.md]
 building and testing it in [BUILD.md](../BUILD.md), and contributing in
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+See the [KT guide](knowledge-transfer/README.md) for a guided architecture tour and
+[branching and releases](../BRANCHING.md) for contribution targets and release preparation.
+
 ## Specs (current)
 
 | Document                                                 | What it covers                                                                   |
@@ -28,8 +31,11 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 
 ## Releases and history
 
-- [v0.3.1/](v0.3.1/README.md): the plan of the release in progress.
-- [v0.3.2/](v0.3.2/README.md): the plan of the next patch release.
+- [releases/0.4.0.md](releases/0.4.0.md): the reviewed 0.4.0 candidate scope and upgrade notes;
+  [CHANGELOG.md](../CHANGELOG.md) records version history.
+- [v0.3.1/](v0.3.1/README.md): the historical 0.3.1 implementation plan.
+- [v0.3.2/](v0.3.2/README.md): the unimplemented restart-rework proposal, originally assigned
+  that version; it is not part of 0.4.0.
 - [history/](history/README.md): the plans of earlier series, kept for provenance: how the app was
   built with coding agents.
 - [images/](images/) and [brand/](brand/): the README screenshots (demo data only) and the logo
