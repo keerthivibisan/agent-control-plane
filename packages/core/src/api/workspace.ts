@@ -5,6 +5,7 @@ import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
 import { AttachmentDtoSchema } from './activity.js';
+import { ProjectAutomationSchema } from '../workspace/conflict-resolution.js';
 import {
   BranchStrategySchema,
   TicketBranchPrefsPatchSchema,
@@ -144,6 +145,8 @@ export const UpdateProjectSetupRequestSchema = z.object({
   branching: BranchStrategySchema.nullable().optional(),
   /** ADR-0027 §2. Absent: the stored switch is kept (off when never set). */
   setupNetwork: z.boolean().optional(),
+  /** ADR-0030. Absent: the stored policy is kept; `null` resets it to `DEFAULT_AUTOMATION`. */
+  automation: ProjectAutomationSchema.nullable().optional(),
 });
 /**
  * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own

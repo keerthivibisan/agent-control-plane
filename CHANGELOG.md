@@ -7,6 +7,67 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+Conflict recovery for parallel tickets, explicit verification and delivery policies, and a
+shareable architecture and knowledge-transfer guide. Existing projects keep manual resolution
+and delivery. This release includes a database migration; back up before upgrading.
+
+### Added
+
+- **Update from target / Resolve conflicts** on a ticket branch whose target moved, also while a
+  pull request is open. The app merges in its own copy; a resolver helper repairs conflicts; the
+  result is checked and applied only if nothing moved meanwhile (ADR-0030, proposed).
+- **Conflicts, verification and delivery policy** in project Settings: automatic resolution,
+  adaptive verification with approved documentation scopes, explicit unverified delivery, and
+  delegated push/PR or merge to allowed targets. Everything stays manual until you change it.
+- The ticket shows resolution, verification, review and delivery separately, with the reason for
+  any skipped, unavailable, failed or stale verification.
+- Helpers report an outcome (completed, no change, blocked) that reaches the lead; repeated
+  no-change attempts are bounded.
+
+### Fixed
+
+- A ticket whose helpers changed nothing no longer offers **Merge** or **Push & open PR**, which
+  failed because the branch has no commits ahead of its target. The final step says "The ticket has
+  no changes" and explains why; **Request changes** and **Discard** stay available.
+
+### Documentation
+
+- A standalone [knowledge-transfer guide](docs/knowledge-transfer/README.md) and responsive static
+  site covering the engine, authorization, workflow configuration, conflict recovery, token
+  accounting and optimization examples, code findings, and future Codex integration. Implemented
+  behavior, proposed improvements and illustrative token numbers are labelled separately.
+- Architecture and helper-authorization diagrams, official ACP branding, and GitHub Pages
+  publication instructions. The manual **Publish ACP knowledge transfer** workflow uploads only
+  `docs/knowledge-transfer/site/`; merging this release does not deploy the site automatically.
+
+### Development
+
+- CI now runs on pull requests into and code pushes to `dev`, alongside `main`, `dev/*` and
+  `release/*`. Package tests continue after another package fails so all failures are visible.
+- Linux browser-test repositories have a git identity even when the test server omits the runner's
+  home environment.
+
+### Known limitations
+
+- Target updates use local refs; the app does not fetch `origin` before resolving conflicts.
+- Automatic recovery starts on supported ticket reads or local ticket merges, without a background
+  timer. Delegated GitHub delivery opens or updates a pull request; it does not merge that PR.
+- Adaptive verification is project policy, not conditional workflow nodes. There is no separate
+  assessor agent or missing-check test-preparation route; missing checks route to escalation or a
+  draft PR according to policy.
+- Rework after a server restart (ADR-0029), previously planned for 0.3.2, is **not included**. The
+  existing [Q-series plan](docs/v0.3.2/README.md) remains future work; see the
+  [release scope](docs/releases/0.4.0.md).
+- ADR-0030 and its CR status records still carry proposed/review labels from before the feature PR
+  was merged. Release review must reconcile these records with the owner-only safety wording in
+  AGENTS.md; this release preparation does not change architectural authority.
+
+### Database
+
+- Migration 0012 adds `conflict_resolutions`. Back up the database before upgrading.
+
 ## [0.3.1] - 2026-10-26
 
 A patch release for the Workflow page and long runs. Each agent block can set its effort, every
@@ -60,7 +121,7 @@ change: 0.3.1 opens the 0.3.0 database as it is.
 
 - After the server stops while agents are working (a restart, or quitting the app), their run
   waits for you as "Needs review". You can merge or discard a finished change, but not send it
-  back for rework; start the ticket again instead. Planned for 0.3.2
+  back for rework; start the ticket again instead. Still planned, not included in 0.4.0
   ([ADR-0029](docs/decisions/0029-owner-rework-after-restart.md)).
 
 ### Development
@@ -458,7 +519,8 @@ an early version: features and data formats may change in any release before 1.0
   - Logs are redacted.
   - The app never reads Claude Code's session credential files, settings files or prompt history.
 
-[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/keerthivibisan/agent-control-plane/compare/v0.1.0...v0.2.0

@@ -8,6 +8,7 @@ import {
 } from '@acp/core/api';
 import { fireEvent, render as renderUi, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_AUTOMATION } from '@acp/core';
 import {
   CSRF,
   L_API,
@@ -95,6 +96,71 @@ function server(sc: LoopScenario, routes: RouteTable = {}) {
 }
 type Server = ReturnType<typeof server>;
 const mutations = (s: Server) => s.calls.filter((c) => c.method !== 'GET');
+
+const RESOLUTION_PATH = `${LOOP_RUN_PATH}/conflict-resolution`;
+
+/** ADR-0030: a synthetic conflict-resolution operation; `over` replaces parts of each dimension. */
+function resolutionOp(over: Record<string, unknown>) {
+  const base = {
+    id: 'op-1',
+    runId: LOOP_RUN_ID,
+    projectId: 'proj-1',
+    trigger: 'owner',
+    state: 'verifying',
+    ticketBranch: 'acp/WEB-21',
+    targetBranch: 'main',
+    ticketCommit: 'a'.repeat(40),
+    targetCommit: 'b'.repeat(40),
+    mergeBase: 'd'.repeat(40),
+    candidateCommit: null,
+    conflictFiles: [],
+    policy: DEFAULT_AUTOMATION,
+    policyFingerprint: 'fp',
+    maxAttempts: 2,
+    attempts: [],
+    resolverAgentRunId: null,
+    resolution: { status: 'clean', reason: null },
+    verification: {
+      status: 'pending',
+      route: null,
+      classification: null,
+      assessedPaths: 0,
+      outsideScope: [],
+      checkIds: [],
+      mandatoryCheckIds: [],
+      omitted: [],
+      failedChecks: [],
+      checkedCommit: null,
+      matchedRule: null,
+      reason: null,
+      assessment: null,
+      deliverAs: null,
+    },
+    review: { status: 'pending-owner', reason: null },
+    delivery: { status: 'not-delegated', reason: null, commit: null, draft: false },
+    createdAt: '2026-10-27T09:00:00.000Z',
+    updatedAt: '2026-10-27T09:00:00.000Z',
+    finishedAt: null,
+    stale: null,
+  };
+  const merged: Record<string, unknown> = { ...base, ...over };
+  for (const key of ['resolution', 'verification', 'review', 'delivery'] as const) {
+    if (over[key] !== undefined) {
+      merged[key] = { ...base[key], ...(over[key] as object) };
+    }
+  }
+  return merged;
+}
+
+function resolutionView(o: { baseMoved: boolean; operation: unknown }) {
+  return {
+    runId: LOOP_RUN_ID,
+    policy: DEFAULT_AUTOMATION,
+    baseMoved: o.baseMoved,
+    operation: o.operation,
+    startBlocked: null,
+  };
+}
 
 /** The ticket page on a tab (v0.3.0 D-B: the address's `?tab=`, Comments without one, C-B). */
 function render(
@@ -676,17 +742,173 @@ describe('ticket page: the owner’s merge of the ticket branch', () => {
     });
   });
 
-  it('when main moved: Merge waits and Update from main is offered', async () => {
-    const s = render(loopReviewScenario({ baseMoved: true }));
+  it('when main moved: Merge waits and Update / Resolve conflicts is offered (ADR-0030)', async () => {
+    const s = render(loopReviewScenario({ baseMoved: true }), {
+      [RESOLUTION_PATH]: ok(resolutionView({ baseMoved: true, operation: null })),
+      [`POST ${RESOLUTION_PATH}`]: ok(resolutionOp({})),
+    });
     const card = await screen.findByTestId('ticket-branch');
     const moved = await within(card).findByTestId('branch-base-moved');
     expect(within(card).getByRole('button', { name: 'Merge into main' })).toHaveProperty(
       'disabled',
       true,
     );
-    fireEvent.click(within(moved).getByRole('button', { name: 'Update from main' }));
+    fireEvent.click(
+      within(moved).getByRole('button', { name: 'Update from main / Resolve conflicts' }),
+    );
     await waitFor(() => expect(mutations(s)).toHaveLength(1));
-    expect(mutations(s)[0]?.body).toEqual({ action: 'update-from-base' });
+    expect(mutations(s)[0]).toMatchObject({ method: 'POST', path: RESOLUTION_PATH, body: {} });
+    expect(s.csrf).toEqual([CSRF]);
+  });
+
+  it('the update is offered while a pull request is open too', async () => {
+    const pr = {
+      provider: 'github',
+      number: 7,
+      url: 'https://github.com/example/app/pull/7',
+      state: 'open',
+      baseBranch: 'main',
+      headBranch: 'acp/WEB-21',
+      checkedAt: '2026-10-27T09:00:00.000Z',
+    };
+    const sc = withRun(loopReviewScenario({ baseMoved: true }), (run) => ({
+      ...run,
+      ticketBranch: { ...(run['ticketBranch'] as object), pullRequest: pr },
+    }));
+    render(sc, {
+      [RESOLUTION_PATH]: ok(resolutionView({ baseMoved: true, operation: null })),
+    });
+    const card = await screen.findByTestId('ticket-branch');
+    const moved = await within(card).findByTestId('branch-base-moved');
+    expect(
+      within(moved).getByRole('button', { name: 'Update from main / Resolve conflicts' }),
+    ).toHaveProperty('disabled', false);
+  });
+
+  it('shows resolution, verification, review and delivery apart; a skip is never a pass', async () => {
+    render(loopReviewScenario(), {
+      [RESOLUTION_PATH]: ok(
+        resolutionView({
+          baseMoved: false,
+          operation: resolutionOp({
+            state: 'completed',
+            resolution: { status: 'resolved', reason: 'Resolved on attempt 1 of 2.' },
+            verification: {
+              status: 'skipped-by-policy',
+              reason: 'Prose-only changes inside the approved documentation scope.',
+              matchedRule: 'skip-scope:docs/**',
+              omitted: [
+                { id: 'test', reason: 'documentation-only change inside an approved scope' },
+              ],
+            },
+            review: { status: 'not-required-by-policy', reason: 'Delivery is delegated.' },
+            delivery: { status: 'pr-updated', reason: 'Pushed to the open pull request.' },
+          }),
+        }),
+      ),
+    });
+    const op = await screen.findByTestId('resolution-operation');
+    expect(within(op).getByTestId('resolution-resolution-status').textContent).toBe('Resolved');
+    const verification = within(op).getByTestId('resolution-verification-status').textContent;
+    expect(verification).toBe('Checks skipped by policy');
+    expect(verification).not.toMatch(/passed/i);
+    expect(within(op).getByTestId('resolution-verification-reason').textContent).toContain(
+      'documentation scope',
+    );
+    expect(within(op).getByTestId('resolution-omitted').textContent).toContain('test');
+    expect(within(op).getByTestId('resolution-review-status').textContent).toBe(
+      'Not required by policy',
+    );
+    expect(within(op).getByTestId('resolution-delivery-status').textContent).toBe(
+      'Pull request updated',
+    );
+  });
+
+  it('a held update shows why and needs a reason to apply; stale evidence offers no apply', async () => {
+    const held = resolutionOp({
+      state: 'awaiting-owner',
+      candidateCommit: 'c'.repeat(40),
+      verification: {
+        status: 'unavailable',
+        reason: 'The project has no harness file. Verification unavailable: waiting for the owner.',
+      },
+    });
+    const s = render(loopReviewScenario(), {
+      [RESOLUTION_PATH]: ok(resolutionView({ baseMoved: false, operation: held })),
+      [`POST ${RESOLUTION_PATH}/promote`]: ok({ ...held, state: 'completed' }),
+    });
+    const op = await screen.findByTestId('resolution-operation');
+    expect(within(op).getByTestId('resolution-verification-status').textContent).toBe(
+      'Verification unavailable',
+    );
+    fireEvent.click(within(op).getByRole('button', { name: 'Apply anyway' }));
+    const form = await within(op).findByTestId('resolution-apply');
+    fireEvent.change(within(form).getByRole('textbox'), {
+      target: { value: 'Reviewed the merge by hand.' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Apply anyway' }));
+    await waitFor(() => expect(mutations(s)).toHaveLength(1));
+    expect(mutations(s)[0]).toMatchObject({
+      path: `${RESOLUTION_PATH}/promote`,
+      body: { reason: 'Reviewed the merge by hand.' },
+    });
+  });
+
+  it('stale evidence is shown as stale, with the reason, and cannot be applied', async () => {
+    render(loopReviewScenario(), {
+      [RESOLUTION_PATH]: ok(
+        resolutionView({
+          baseMoved: true,
+          operation: resolutionOp({
+            state: 'awaiting-owner',
+            stale: 'The target branch moved since this was assessed; earlier evidence is stale.',
+            verification: { status: 'stale', reason: null },
+          }),
+        }),
+      ),
+    });
+    const op = await screen.findByTestId('resolution-operation');
+    expect(within(op).getByTestId('resolution-stale').textContent).toContain('target branch moved');
+    expect(within(op).getByTestId('resolution-verification-status').textContent).toBe('Stale');
+    expect(within(op).queryByRole('button', { name: 'Apply anyway' })).toBeNull();
+    expect(within(op).getByRole('button', { name: 'Cancel update' })).toBeTruthy();
+  });
+
+  it('a ticket with no changes: Merge and Push & open PR stay off and it says so', async () => {
+    const s = render(loopReviewScenario({ empty: true }));
+    const card = await screen.findByTestId('ticket-branch');
+    const note = await within(card).findByTestId('branch-no-changes');
+    expect(note.textContent).toContain('The ticket has no changes');
+    expect(card.textContent).not.toContain('Ready to merge into main');
+    expect(within(card).getByRole('button', { name: 'Merge into main' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(within(card).getByRole('button', { name: 'Push & open PR' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    // The owner can still send the lead back to work, or discard the branch.
+    expect(within(card).getByRole('button', { name: 'Request changes…' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(within(card).getByRole('button', { name: 'Discard branch' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(mutations(s)).toHaveLength(0);
+  });
+
+  it('a ticket with changes still offers Merge and Push & open PR', async () => {
+    render(loopReviewScenario());
+    const card = await screen.findByTestId('ticket-branch');
+    await within(card).findByRole('button', { name: 'Merge into main' });
+    expect(within(card).queryByTestId('branch-no-changes')).toBeNull();
+    expect(within(card).getByRole('button', { name: 'Merge into main' })).toHaveProperty(
+      'disabled',
+      false,
+    );
   });
 
   it('a stopped run’s open branch can only be discarded', async () => {

@@ -544,10 +544,31 @@ export function agentEvent(
           agent.awaitingHelpers = true;
           return done;
         }
+        // ADR-0030: a resolver's successful turn is sealed by the server, never reviewed as a
+        // change; a failed one ends (`resolver-ended`) and its operation counts the attempt.
+        if (
+          agent.resolution !== undefined &&
+          event.outcome === 'success' &&
+          agent.status !== 'WAITING_APPROVAL'
+        ) {
+          d.settlePendingApprovals(
+            agent.id,
+            'denied',
+            'The agent finished its turn; the action was denied.',
+          );
+          d.setAgentStatus(agent, 'AWAITING_REVIEW');
+          d.effects.push({
+            type: 'seal-resolution',
+            agentRunId: agent.id,
+            operationId: agent.resolution.operationId,
+          });
+          return done;
+        }
         // ADR-0021 §3: a helper's or tester's turn that ends (well or with an error) goes to the
         // review loop. One parked in an approval cannot finish its turn, so it ends as before.
         if (
           d.integration !== undefined &&
+          agent.resolution === undefined &&
           hasReviewableChange(agent.kind) &&
           event.outcome !== 'cancelled' &&
           agent.status !== 'WAITING_APPROVAL'

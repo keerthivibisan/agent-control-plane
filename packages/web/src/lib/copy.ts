@@ -2001,6 +2001,7 @@ export const TICKET_PAGE_COPY = {
     title: 'Final step',
     waiting: 'The agents are still working',
     ready: (target: string) => `Ready to merge into ${target}`,
+    noChanges: 'The ticket has no changes',
     blocked: 'A required check failed on the tip',
     baseMoved: (target: string) => `${target} moved since this branch started`,
     prOpen: (n: number) => `Pull request #${n} is open on GitHub`,
@@ -3187,6 +3188,8 @@ export const REVIEW_LOOP_COPY = {
       `A required check failed on the tip (${names}). Ask for changes, or merge anyway with a reason.`,
     baseMoved: (base: string) =>
       `${base} moved since this branch started, so it no longer merges as a fast-forward. Update it from ${base} first; the checks run again.`,
+    noChanges: (base: string) =>
+      `The ticket has no changes: the branch is the same as ${base}, so there is nothing to merge or to open a pull request for. Request changes to send the lead back to work, or discard the branch.`,
     merge: (base: string) => `Merge into ${base}`,
     confirmMerge: (branch: string, base: string) =>
       `Merge ${branch} into ${base}? ${base} moves forward to the ticket branch and the ticket is done. Your project folder must be on ${base} with no uncommitted changes.`,
@@ -4573,4 +4576,128 @@ export const FINISH_COPY = {
     'The ticket is done.',
   ],
   fixed: 'Every workflow ends with this block, so it can’t be removed.',
+} as const;
+
+/**
+ * ADR-0030: "Update target / Resolve conflicts" on the ticket branch. Resolution, verification,
+ * review and delivery are shown apart, each with its reason; skipped, unavailable and unverified
+ * verification are never worded as passed.
+ */
+export const RESOLUTION_COPY = {
+  title: 'Update from target',
+  moved: (target: string) =>
+    `${target} has new commits this branch lacks. Update it here: the app merges them in its own copy; a helper resolves any conflicts.`,
+  start: (target: string) => `Update from ${target} / Resolve conflicts`,
+  starting: 'Starting…',
+  blocked: 'Not available now',
+  cancel: 'Cancel update',
+  cancelConfirm: 'Stop the update? The ticket branch stays as it is.',
+  apply: 'Apply anyway',
+  applyReason: 'Why apply it although it was not verified?',
+  applyPlaceholder: 'For example: reviewed the merge by hand',
+  applyPlain: 'Apply update',
+  applyHint:
+    'It was not verified by checks. Your reason is kept on the ticket; the result still goes to the ticket branch only if nothing moved meanwhile.',
+  tooLong: (max: number) => `Keep it under ${max} characters.`,
+  back: 'Back',
+  working: 'Working…',
+  failed: 'The update could not be changed.',
+  stale: 'Out of date',
+  conflicts: (n: number) => `${n} conflicting file${n === 1 ? '' : 's'}`,
+  attempts: 'Attempts',
+  candidate: (c: string) => `Candidate ${c.slice(0, 12)}`,
+  checked: (c: string) => `on candidate ${c.slice(0, 12)}`,
+  selected: 'Selected checks',
+  omitted: 'Not run',
+  rule: 'Matched rule',
+  assessment: 'Assessment',
+  dimensions: {
+    resolution: 'Resolution',
+    verification: 'Verification',
+    review: 'Review',
+    delivery: 'Delivery',
+  },
+  resolution: {
+    preparing: 'Preparing',
+    'up-to-date': 'Already up to date',
+    clean: 'Merged without conflicts',
+    resolving: 'Resolving',
+    resolved: 'Resolved',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+  },
+  verification: {
+    pending: 'Assessing',
+    running: 'Running selected checks',
+    passed: 'Checks passed',
+    failed: 'Checks failed',
+    'skipped-by-policy': 'Checks skipped by policy',
+    'unverified-by-policy': 'Not verified: no automated checks (allowed by policy)',
+    unavailable: 'Verification unavailable',
+    stale: 'Stale',
+  },
+  review: {
+    'pending-owner': 'Waiting for your review',
+    'owner-approved': 'Applied by you',
+    'not-required-by-policy': 'Not required by policy',
+    stale: 'Stale',
+  },
+  delivery: {
+    'not-delegated': 'You deliver it',
+    waiting: 'Waiting',
+    pushing: 'Pushing',
+    'pr-opened': 'Pull request opened',
+    'pr-updated': 'Pull request updated',
+    merging: 'Merging',
+    merged: 'Merged',
+    blocked: 'Blocked',
+    unknown: 'Outcome unknown',
+  },
+  state: {
+    preparing: 'Preparing',
+    resolving: 'Resolving conflicts',
+    verifying: 'Verifying',
+    'awaiting-owner': 'Waiting for you',
+    delivering: 'Delivering',
+    completed: 'Done',
+    failed: 'Failed',
+    cancelled: 'Cancelled',
+    interrupted: 'Interrupted by a restart',
+  },
+} as const;
+
+/** ADR-0030: the project's automation policy (Settings). Conservative unless the owner widens it. */
+export const AUTOMATION_COPY = {
+  title: 'Conflicts, verification and delivery',
+  description:
+    'What the app may do by itself when a ticket’s target moves. Each part is separate: automatic resolution never publishes or merges by itself.',
+  conflict: {
+    label: 'Conflict resolution',
+    manual: 'Only when I click Update',
+    auto: 'Automatically when the target moves',
+    attempts: 'Resolver attempts per update',
+  },
+  verification: {
+    label: 'Verification',
+    required: 'Always run the required checks',
+    adaptive: 'Adaptive: agents may select checks; approved documentation may skip them',
+    skipScopes: 'Documentation scopes that may skip checks (one per line, e.g. docs/** or *.md)',
+    alwaysRun: 'Checks that always run (ids, comma separated)',
+    unverified: 'Allow delivery when no automated check exists (shown as not verified)',
+    missing: 'When checks are needed but none exists',
+    escalate: 'Wait for me',
+    draft: 'Allow only a draft pull request',
+  },
+  delivery: {
+    label: 'Delivery',
+    manual: 'I merge or open the pull request',
+    pushPr: 'Push and open or update the pull request',
+    merge: 'Merge (locally, or update an open pull request)',
+    targets: 'Targets delivery may go to (comma separated)',
+  },
+  save: 'Save policy',
+  saving: 'Saving…',
+  saved: 'Saved',
+  reset: 'Reset to the safe defaults',
+  invalid: 'Check the values: patterns must be repository-relative and targets valid branch names.',
 } as const;

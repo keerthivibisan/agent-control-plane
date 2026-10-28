@@ -161,7 +161,7 @@ export function changeSealed(
       change.state = 'no-changes';
       agent.review = 'no-changes';
       d.setAgentStatus(agent, change.turnFailed ? 'FAILED' : 'SUCCEEDED');
-      notifyLead(d, `${agent.role} finished with no changes; there is nothing to merge.`);
+      notifyLead(d, noChangeLine(agent));
       return done;
     }
     change.changedFiles = files;
@@ -599,4 +599,21 @@ export function requestTicketChanges(
     );
     return done;
   });
+}
+
+/**
+ * ADR-0030 §5: the lead's line about a helper that ended with no changes. It carries the helper's
+ * own reported outcome and note, so the lead can tell a read-only step that is done from a blocked
+ * one, instead of starting the same helper again with nothing new.
+ */
+export function noChangeLine(agent: EngineAgent): string {
+  const reported = agent.reportedOutcome;
+  const base = `${agent.role} (agentId ${agent.id}) finished with no changes; there is nothing to merge.`;
+  if (reported === undefined) {
+    return `${base} It sent no report, so why is unknown; give a replacement a different, more specific task, or hand over.`;
+  }
+  if (reported.kind === 'blocked') {
+    return `${base} It reported it was blocked: ${reported.note} A replacement with the same task would be blocked too; change the task or hand over (it counts as an attempt of the step).`;
+  }
+  return `${base} It reported ${reported.kind}: ${reported.note}`;
 }

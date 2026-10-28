@@ -4,8 +4,6 @@ import type {
   TicketBranchReviewDto,
   TicketDto,
 } from '@acp/core/api';
-import { Button } from '../../components/Button';
-import { AlertIcon } from '../../components/icons';
 import { reviewLoopPaths, reviewLoopSchemas, ticketBranchAction } from '../../lib/api';
 import { MERGE_PR_COPY, REVIEW_LOOP_COPY } from '../../lib/copy';
 import { useApiQuery } from '../../lib/query';
@@ -15,9 +13,10 @@ import { DeleteTicketBranch, MergePullRequest } from '../branching/MergeAndDelet
 import { PullRequestInfo, PushAndOpenPr, PushNewCommits } from '../branching/PullRequest';
 import { ActionError, ConfirmAction } from '../control/bits';
 import { useTicketAction } from '../ticket/actions';
-import { checksSummary, type TicketBranchMode } from './logic';
+import { branchHasNoChanges, checksSummary, type TicketBranchMode } from './logic';
 import { MovedOutsideBanner } from './MovedOutsideBanner';
 import { ReasonForm } from './ReasonForm';
+import { ResolutionPanel } from './ResolutionPanel';
 
 const B = REVIEW_LOOP_COPY.branch;
 const MAX_REASON = 500;
@@ -45,6 +44,7 @@ function PushAction({
 }: {
   ticket: FinalStepTicket;
   branch: TicketBranchDto;
+  /** Another action is running, or the branch has nothing to push. */
   disabled: boolean;
 }) {
   const host = useCodeHost(ticket.projectId);
@@ -62,8 +62,8 @@ function PushAction({
 /**
  * The owner's final step (ADR-0021 §4, ADR-0025 §4): Merge into the target (or merge anyway past
  * a failed required check, with a reason), or Push & open PR for a ticket; Request changes (a
- * comment for the lead; the run goes on); Discard; and Update from the target when it moved. Each
- * asks first; the server checks again. While a pull request is open on GitHub, the merge happens
+ * comment for the lead; the run goes on); Discard; and "Update target / Resolve conflicts" when it
+ * moved (ADR-0030, also with a pull request open). Each asks first; the server checks again. While a pull request is open on GitHub, the merge happens
  * there: Merge pull request (G-G; off until new commits are pushed), Request changes and Discard,
  * with Push new commits when the branch moved on since the last push (G-D).
  */
@@ -84,6 +84,8 @@ function Actions({
   const pr = branch.pullRequest ?? null;
   const prOpen = pr?.state === 'open';
   const newCommits = hasNewCommits(branch);
+  // Nothing to ship: Merge and Push & open PR stay off, with the reason in words.
+  const noChanges = !prOpen && branchHasNoChanges(branch, review);
   return (
     <div className="flex flex-col gap-2.5" data-testid="branch-actions">
       {prOpen && pr !== null && isCurrentRun(ticket, run.id) ? (
@@ -96,7 +98,16 @@ function Actions({
           disabled={act.pending}
         />
       ) : null}
-      {prOpen ? null : checks.kind === 'failed' ? (
+      {noChanges ? (
+        <p
+          role="note"
+          className="rounded-control border border-warning/30 bg-warning-soft px-3 py-2"
+          data-testid="branch-no-changes"
+        >
+          {B.noChanges(base)}
+        </p>
+      ) : null}
+      {prOpen || noChanges ? null : checks.kind === 'failed' ? (
         <p
           role="alert"
           className="rounded-control border border-danger/25 bg-danger-soft px-3 py-2 text-danger"
@@ -109,23 +120,8 @@ function Actions({
           {B.checksStopped}
         </p>
       ) : null}
-      {!prOpen && review?.baseMoved === true ? (
-        <div
-          role="note"
-          className="flex flex-wrap items-center gap-3 rounded-control border border-warning/30 bg-warning-soft px-3 py-2"
-          data-testid="branch-base-moved"
-        >
-          <AlertIcon size={15} className="shrink-0 text-warning" />
-          <span className="min-w-0 flex-1 text-caption">{B.baseMoved(base)}</span>
-          <Button
-            size="sm"
-            disabled={act.pending}
-            onClick={() => void act.run(run.id, { action: 'update-from-base' })}
-          >
-            {act.pending ? B.working : B.update(base)}
-          </Button>
-        </div>
-      ) : null}
+      {/* ADR-0030: offered whenever the target moved, also while a pull request is open. */}
+      <ResolutionPanel runId={run.id} branch={branch} baseMoved={review?.baseMoved === true} />
       <div className="flex flex-wrap items-start gap-2">
         {prOpen ? (
           ticket !== null && branch.pullRequest && newCommits ? (
@@ -136,7 +132,7 @@ function Actions({
               disabled={act.pending}
             />
           ) : null
-        ) : checks.kind === 'failed' ? (
+        ) : checks.kind === 'failed' && !noChanges ? (
           <ReasonForm
             openLabel={B.mergeAnyway}
             title={B.mergeAnywayTitle}
@@ -161,14 +157,14 @@ function Actions({
             cancelLabel={B.cancel}
             pendingLabel={B.working}
             pending={act.pending}
-            disabled={review?.baseMoved === true}
+            disabled={noChanges || review?.baseMoved === true}
             danger={false}
             primary
             onConfirm={() => act.run(run.id, { action: 'merge' })}
           />
         )}
         {!prOpen && ticket !== null ? (
-          <PushAction ticket={ticket} branch={branch} disabled={act.pending} />
+          <PushAction ticket={ticket} branch={branch} disabled={act.pending || noChanges} />
         ) : null}
         <ReasonForm
           openLabel={B.requestChanges}

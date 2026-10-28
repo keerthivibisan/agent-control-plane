@@ -9,7 +9,12 @@ import { PULL_REQUEST_COPY, REVIEW_LOOP_COPY, TICKET_PAGE_COPY } from '../../lib
 import { PullRequestIcon } from '../branching/icons';
 import { BranchFinalStep, type FinalStepTicket } from '../review-loop/BranchFinalStep';
 import { BranchIcon } from '../review-loop/icons';
-import { checksSummary, shortCommit, type ChecksSummary } from '../review-loop/logic';
+import {
+  branchHasNoChanges,
+  checksSummary,
+  shortCommit,
+  type ChecksSummary,
+} from '../review-loop/logic';
 import type { TicketBranchReview } from './run-data';
 import { useTicketNav } from './ticket-nav';
 import { FINAL_STEP_ID } from './ticket-state';
@@ -40,6 +45,7 @@ function headline(
   branch: TicketBranchDto,
   checks: ChecksSummary,
   baseMoved: boolean,
+  noChanges: boolean,
 ): { text: string; tone: Tone; Icon: ComponentType<IconProps> } {
   const target = branch.baseBranch;
   const pr = branch.pullRequest ?? null;
@@ -51,6 +57,7 @@ function headline(
   }
   if (pr?.state === 'open')
     return { text: F.prOpen(pr.number), tone: 'accent', Icon: PullRequestIcon };
+  if (noChanges) return { text: F.noChanges, tone: 'warning', Icon: AlertIcon };
   if (checks.kind === 'failed') return { text: F.blocked, tone: 'danger', Icon: AlertIcon };
   if (baseMoved) return { text: F.baseMoved(target), tone: 'warning', Icon: AlertIcon };
   return { text: F.ready(target), tone: 'success', Icon: CheckIcon };
@@ -103,7 +110,13 @@ export function FinalStepBox({
   if (branch === null || mode === null) return null;
   const review = query.data;
   const checks = checksSummary(review?.checks ?? []);
-  const head = headline(mode, branch, checks, review?.baseMoved === true);
+  const head = headline(
+    mode,
+    branch,
+    checks,
+    review?.baseMoved === true,
+    branchHasNoChanges(branch, review),
+  );
   return (
     <section
       id={FINAL_STEP_ID}

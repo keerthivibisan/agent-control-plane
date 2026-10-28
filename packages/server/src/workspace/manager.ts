@@ -102,6 +102,29 @@ export interface MergeOptions {
 export interface CreateOptions {
   /** The ticket branch and its tip commit: the worktree starts there and reviews diff against it. */
   from?: { branch: string; commit: string };
+  /**
+   * ADR-0030, a resolver's worktree: after creating it at `from`, merge this commit in without
+   * committing (`merge --no-commit --no-ff`), leaving any conflicts in the files for the agent to
+   * edit. The server's `seal` then concludes the merge (a two-parent commit).
+   */
+  mergeTarget?: { commit: string };
+}
+
+/** ADR-0030: the private candidate an operation builds before any agent is involved. */
+export type CandidateResult =
+  /** The target is already in the ticket branch: nothing to update. */
+  | { kind: 'up-to-date'; mergeBase: string }
+  /** Git merged it cleanly; `candidate` is pinned under `refs/acp/resolutions/<operation>`. */
+  | { kind: 'clean'; candidate: string; mergeBase: string }
+  /** Git left conflicts in these files (the temporary merge was aborted). */
+  | { kind: 'conflict'; files: string[]; mergeBase: string };
+
+/** ADR-0030: what the server's check of a resolver's sealed merge found. */
+export interface ResolutionCheck {
+  /** The commit contains the pinned target commit (it is a real merge of it). */
+  containsTarget: boolean;
+  /** Files of the given list that still hold conflict markers at the commit. */
+  markerFiles: string[];
 }
 
 /**
@@ -317,6 +340,37 @@ export interface WorkspaceManager {
   removeCheckout(checkout: CommitCheckout): Promise<void>;
   /** On start: removes every temporary commit checkout (none survives a restart). */
   cleanupCheckouts(): Promise<number>;
+
+  // ------------------------------------------------------------- ADR-0030 conflict resolution
+
+  /** A local branch's tip, or null when it does not exist (read only). */
+  branchTip(projectRoot: string, branch: string): Promise<string | null>;
+  /**
+   * Merges `targetTip` into `ticketTip` in a temporary detached checkout (never the owner's tree,
+   * never the ticket branch itself). A clean result is pinned by `refs/acp/resolutions/<op>` so it
+   * survives the checkout's removal; a conflict is aborted and reported with its file names.
+   */
+  prepareCandidate(
+    ref: TicketBranchRef & { runId: string },
+    input: { operationId: string; ticketTip: string; targetTip: string },
+  ): Promise<CandidateResult>;
+  /** Pins a resolver's sealed merge as the operation's candidate. */
+  pinCandidate(projectRoot: string, operationId: string, commit: string): Promise<void>;
+  /** Removes an operation's candidate ref (idempotent). */
+  dropCandidate(projectRoot: string, operationId: string): Promise<void>;
+  /**
+   * Every path the combined change touches (ADR-0030 §4): `target..candidate` (what the ticket
+   * adds to the new target) and `mergeBase..target` (what the target update brings).
+   */
+  combinedPaths(
+    projectRoot: string,
+    input: { mergeBase: string; targetCommit: string; candidateCommit: string },
+  ): Promise<string[]>;
+  /** Checks a resolver's sealed merge: it contains the target, and no conflict markers remain. */
+  checkResolution(
+    projectRoot: string,
+    input: { commit: string; targetCommit: string; files: readonly string[] },
+  ): Promise<ResolutionCheck>;
   /**
    * ADR-0024 §3, the run summary: the files and lines one sealed change brought, read from the
    * project's repository (no worktree needed). When `headCommit` is the merge the review loop made
@@ -883,9 +937,33 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       assertSafeId(runId, 'runId');
       assertSafeId(agentId, 'agentId');
       const { repoRoot, subdir } = await repoOf(projectRoot);
-      return serial(repoKey(repoRoot), () =>
+      const ws = await serial(repoKey(repoRoot), () =>
         createIn(repoRoot, subdir, runId, agentId, options.from),
       );
+      if (options.mergeTarget === undefined) return ws;
+      assertCommit(options.mergeTarget.commit, 'The target commit');
+      const target = options.mergeTarget.commit;
+      return serial(worktreeKey(ws.path), async () => {
+        try {
+          await run(
+            [...COMMIT_CONFIG, 'merge', '--quiet', '--no-commit', '--no-ff', target],
+            ws.path,
+          );
+        } catch (error) {
+          // Exit 1 with conflicts is the expected case: they stay for the resolver. Anything
+          // else (no merge in progress afterwards) is a failure, and the worktree goes.
+          const merging = await probe(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], ws.path);
+          if (merging === null || merging === '') {
+            await removeWorktree(repoRoot, ws.path).catch(() => undefined);
+            await deleteBranch(repoRoot, ws.branch).catch(() => undefined);
+            throw new WorkspaceError(
+              'git-failed',
+              `Could not prepare the merge for the resolver (${errorName(error)})`,
+            );
+          }
+        }
+        return ws;
+      });
     },
 
     async changes(ws, options = {}) {
@@ -1033,7 +1111,11 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       return serial(worktreeKey(w.path), async () => {
         await requireWorktree(w);
         await stageAll(w);
-        if (!(await test(['diff', '--cached', '--quiet', 'HEAD', '--'], w.path))) {
+        // ADR-0030: a resolver's worktree holds a merge in progress; it is concluded even when the
+        // result's tree equals HEAD's (a merge commit still records the target as merged).
+        const merging = await probe(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], w.path);
+        const inMerge = merging !== null && merging !== '';
+        if (inMerge || !(await test(['diff', '--cached', '--quiet', 'HEAD', '--'], w.path))) {
           await run(
             [
               ...COMMIT_CONFIG,
@@ -1440,7 +1522,146 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       }
       return removed;
     },
+
+    async branchTip(projectRoot, branch) {
+      // Any branch, the long-lived target included: this only reads its tip.
+      if (!GitBranchNameSchema.safeParse(branch).success) {
+        throw new WorkspaceError('invalid-ticket-branch', 'Not a branch name');
+      }
+      const { repoRoot } = await repoOf(projectRoot);
+      return refTip(repoRoot, branch);
+    },
+
+    async prepareCandidate(ref, input) {
+      assertBranchName(ref.branch, reservedOf(ref));
+      assertCommit(input.ticketTip, 'The ticket branch tip');
+      assertCommit(input.targetTip, 'The target tip');
+      assertSafeId(input.operationId, 'operationId');
+      const { repoRoot, subdir } = await repoOf(ref.projectRoot);
+      return serial(repoKey(repoRoot), async () => {
+        await guardTicketBranch(repoRoot, ref, { checkedOut: true });
+        await requireTip(repoRoot, ref.branch, input.ticketTip);
+        const mergeBase = (
+          await out(['merge-base', input.ticketTip, input.targetTip], repoRoot)
+        ).trim();
+        if (
+          await test(['merge-base', '--is-ancestor', input.targetTip, input.ticketTip], repoRoot)
+        ) {
+          return { kind: 'up-to-date', mergeBase };
+        }
+        const checkout = await addCheckout(repoRoot, subdir, ref.runId, input.ticketTip);
+        try {
+          try {
+            await run(
+              [
+                ...COMMIT_CONFIG,
+                'merge',
+                '--quiet',
+                '--no-edit',
+                '--no-ff',
+                '-m',
+                `Merge ${ref.baseBranch} into ${ref.branch}`,
+                input.targetTip,
+              ],
+              checkout.path,
+            );
+          } catch {
+            const files = await conflictNames(checkout.path);
+            await probe(['merge', '--abort'], checkout.path);
+            if (files.length === 0) {
+              throw new WorkspaceError('git-failed', 'Git could not merge the target');
+            }
+            return { kind: 'conflict', files, mergeBase };
+          }
+          const candidate = (
+            await out(['rev-parse', '--verify', 'HEAD^{commit}'], checkout.path)
+          ).trim();
+          await pinIn(repoRoot, input.operationId, candidate);
+          return { kind: 'clean', candidate, mergeBase };
+        } finally {
+          await dropCheckout(checkout).catch((error: unknown) => {
+            logger.log('warn', 'workspace.checkout_remove_failed', errorFields(error));
+          });
+        }
+      });
+    },
+
+    async pinCandidate(projectRoot, operationId, commit) {
+      assertSafeId(operationId, 'operationId');
+      assertCommit(commit, 'The candidate');
+      const { repoRoot } = await repoOf(projectRoot);
+      await serial(repoKey(repoRoot), () => pinIn(repoRoot, operationId, commit));
+    },
+
+    async dropCandidate(projectRoot, operationId) {
+      assertSafeId(operationId, 'operationId');
+      const { repoRoot } = await repoOf(projectRoot);
+      await serial(repoKey(repoRoot), async () => {
+        await probe(['update-ref', '-d', candidateRef(operationId)], repoRoot);
+      });
+    },
+
+    async combinedPaths(projectRoot, input) {
+      assertCommit(input.mergeBase, 'The merge base');
+      assertCommit(input.targetCommit, 'The target commit');
+      assertCommit(input.candidateCommit, 'The candidate');
+      const { repoRoot } = await repoOf(projectRoot);
+      const names = async (from: string, to: string) =>
+        (await out([...DIFF_BASE, '-z', '--name-only', from, to, '--'], repoRoot))
+          .split('\0')
+          .filter((n) => n !== '');
+      const ticket = await names(input.targetCommit, input.candidateCommit);
+      const target = await names(input.mergeBase, input.targetCommit);
+      return [...new Set([...ticket, ...target])];
+    },
+
+    async checkResolution(projectRoot, input) {
+      assertCommit(input.commit, 'The resolved commit');
+      assertCommit(input.targetCommit, 'The target commit');
+      const { repoRoot } = await repoOf(projectRoot);
+      const containsTarget = await test(
+        ['merge-base', '--is-ancestor', input.targetCommit, input.commit],
+        repoRoot,
+      );
+      const files = input.files.filter((f) => f !== '' && !f.startsWith('-'));
+      if (files.length === 0) return { containsTarget, markerFiles: [] };
+      // `git grep` exits 1 when nothing matches. Lines that are exactly a marker, as git writes
+      // them (`<<<<<<< ours`, `=======`, `>>>>>>> theirs`); never the file content itself.
+      const found = await probe(
+        [
+          'grep',
+          '-l',
+          '-E',
+          '-e',
+          '^(<<<<<<<|>>>>>>>)( .*)?$',
+          '-e',
+          '^=======$',
+          input.commit,
+          '--',
+          ...files,
+        ],
+        repoRoot,
+      );
+      const markerFiles = (found ?? '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '')
+        .map((l) => (l.startsWith(`${input.commit}:`) ? l.slice(input.commit.length + 1) : l));
+      return { containsTarget, markerFiles };
+    },
   };
+
+  function candidateRef(operationId: string): string {
+    return `refs/acp/resolutions/${operationId}`;
+  }
+
+  /** Pins a candidate so it survives its temporary checkout; the caller holds the repo's lock. */
+  async function pinIn(repoRoot: string, operationId: string, commit: string): Promise<void> {
+    await run(
+      ['update-ref', '-m', 'acp: resolution candidate', candidateRef(operationId), commit],
+      repoRoot,
+    );
+  }
 
   /** The compare-and-swap move of a ticket branch; the caller holds the repository's lock. */
   async function advanceIn(
