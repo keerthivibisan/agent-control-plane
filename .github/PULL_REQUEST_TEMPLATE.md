@@ -1,3 +1,9 @@
+## Target and scope
+
+<!-- Normal contributions target dev. Use feature/<area>/<description>, change/<area>/<description>
+or fix/<area>/<description>. Maintainer release/<version> PRs target main; synchronization PRs
+return releases to dev. See BRANCHING.md. For a release, record the selected full dev commit SHA. -->
+
 ## What and why
 
 <!-- What this changes, and why. Link the issue: "Closes #123". -->
@@ -15,11 +21,13 @@
 5. Assumptions (and where documented):
 6. Contract or shared-file changes proposed:
 7. Known gaps / follow-ups:
+8. Next recommended task:
 
 ## Checklist
 
-- [ ] One purpose; shared files (AGENTS.md §5) changed only if this pull request is about them
-- [ ] `pnpm check` passes locally
+- [ ] Correct PR base (`dev` for normal work; `main` for a maintainer release)
+- [ ] One purpose; shared files (AGENTS.md §5) isolated and explained
+- [ ] Validation results recorded honestly; explain any local checks deferred to CI
 - [ ] Tests added for every new behaviour; fixtures synthetic or sanitized; no real `claude` in tests
 - [ ] Docs updated; nothing planned is described as implemented; `CHANGELOG.md` updated if users
       would notice
