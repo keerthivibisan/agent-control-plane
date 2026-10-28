@@ -7,7 +7,13 @@ building and testing it in [BUILD.md](../BUILD.md), and contributing in
 See the [KT guide](knowledge-transfer/README.md) for a guided architecture tour and
 [branching and releases](../BRANCHING.md) for contribution targets and release preparation.
 
-## Specs (current)
+> **Review note:** Some safety and lifecycle statements predate conflict-recovery delivery policy.
+> ADR-0030 remains marked proposed while its implementation has been merged; owner-only wording
+> in existing authority records still needs maintainer reconciliation. See the
+> [conflict-recovery status](conflict-resolution/STATUS.md) and
+> [release review note](releases/0.4.0.md#previously-planned-scope-and-release-review).
+
+## Specs and review notes
 
 | Document                                                 | What it covers                                                                   |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -23,7 +29,7 @@ See the [KT guide](knowledge-transfer/README.md) for a guided architecture tour 
 
 ## Decisions and evidence
 
-- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0029).
+- [decisions/](decisions/README.md): the architecture decision records (ADR-0001 to ADR-0030).
   Accepted ADRs are binding; a new decision starts from
   [0000-template.md](decisions/0000-template.md).
 - [research/](research/): dated notes on observed Claude Code behaviour and real runs, aggregates
