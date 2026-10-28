@@ -17,8 +17,9 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   approval modes up to Full auto; the review loop and the ticket branch; the harness and Checks
   blocks; GitHub and branching strategies; the branch guard. Release scope and limitations are recorded in
   [docs/releases/0.4.0.md](docs/releases/0.4.0.md); see [CHANGELOG.md](CHANGELOG.md).
-- **Conflict resolution and delegated delivery (CR series, ADR-0030 proposed):** on
-  `feature/conflict-resolution`, for `dev`. Plan and status:
+- **Conflict resolution and delegated delivery (CR series, ADR-0030 proposed):** implemented in
+  the merged v0.4.0 release. The ADR and CR review labels still need maintainer reconciliation
+  with the safety wording below. Plan and status:
   [docs/conflict-resolution/](docs/conflict-resolution/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
