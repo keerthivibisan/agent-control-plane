@@ -165,6 +165,8 @@ export const REVIEW_PAGE_COPY = {
     discarded: 'This change was discarded.',
     noChanges: 'This helper finished without changing any file.',
     sealing: 'This change is still being saved.',
+    restartUnavailable:
+      'This change cannot be restarted safely. You can merge or discard it instead.',
     leadDecides:
       'The lead decides this change now. You can send it back once the lead asks you, or after the lead ends.',
     noBranch: 'This run has no ticket branch yet.',

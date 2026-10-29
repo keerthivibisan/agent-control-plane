@@ -24,7 +24,7 @@ const EXPECTED_RUN: Record<RunStatus, RunStatus[]> = {
   BLOCKED: ['RUNNING', 'REVIEW', 'FAILED', 'CANCELLING', 'NEEDS_REVIEW'],
   // ADR-0021: REVIEW → RUNNING for the owner's "request changes" on the ticket branch.
   REVIEW: ['COMPLETED', 'RUNNING', 'CANCELLING'],
-  NEEDS_REVIEW: ['REVIEW', 'CANCELLING'],
+  NEEDS_REVIEW: ['REVIEW', 'RUNNING', 'CANCELLING'],
   CANCELLING: ['CANCELLED'],
   COMPLETED: [],
   FAILED: [],
@@ -69,7 +69,7 @@ const EXPECTED_AGENT: Record<AgentRunStatus, AgentRunStatus[]> = {
   FAILED: [],
   CANCELLED: [],
   TIMED_OUT: [],
-  NEEDS_REVIEW: [],
+  NEEDS_REVIEW: ['STARTING'],
 };
 
 const RUN_STATUSES = RunStatusSchema.options;

@@ -3136,6 +3136,8 @@ export const REVIEW_LOOP_COPY = {
       rework: 'Send back for rework…',
       reworkTitle: 'What should the helper change?',
       reworkHint: 'Required. Your note goes to the helper and is kept as a ticket comment.',
+      restartReworkHint:
+        'Your note restarts the helper in its existing folder and resumes the lead if its conversation is available.',
       reworkPlaceholder: 'For example: keep the old API working and add a test for the new option.',
       reworkTooLong: (max: number) => `Keep it under ${formatCount(max)} characters.`,
       reworkExtra: (used: number, max: number) =>

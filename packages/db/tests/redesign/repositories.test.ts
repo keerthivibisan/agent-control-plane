@@ -1,7 +1,12 @@
 // Synthetic data only: ids, paths and texts are fake (R-G).
 import { defaultProjectWorkflow } from '@acp/core';
 import { describe, expect, it } from 'vitest';
-import { createRedesignRepositories, DbError, StoredValueError } from '../../src/index.js';
+import {
+  createRedesignRepositories,
+  createRunRecoveryRepository,
+  DbError,
+  StoredValueError,
+} from '../../src/index.js';
 import { fixedClock, thrown } from '../helpers.js';
 import { setupWorkspace, ticketWithRun } from '../workspace/setup.js';
 
@@ -79,6 +84,36 @@ describe('project workflow repository (R-G)', () => {
 });
 
 describe('run audit repository (R-G)', () => {
+  it('round-trips restart eligibility and the budget ledger and rejects inconsistent observations', () => {
+    const store = setup();
+    const { run } = ticketWithRun(store);
+    const audit = createRunRecoveryRepository(store.db);
+    const snapshot = {
+      restartReworkAgents: ['worker-1'],
+      sealedReviewAgents: ['worker-1'],
+      ownerWait: { since: '2026-10-16T09:00:00.000Z', totalMs: 300 },
+      budgetLedger: {
+        entries: [
+          {
+            messageId: 'm1',
+            agentRunIds: ['worker-1'],
+            tokens: { input: 5, output: 3, cacheCreation: null, cacheRead: null },
+          },
+        ],
+      },
+    };
+    audit.set(run.id, snapshot);
+    expect(audit.get(run.id)).toEqual(snapshot);
+    const bad = {
+      ...snapshot,
+      budgetLedger: {
+        entries: [...snapshot.budgetLedger.entries, ...snapshot.budgetLedger.entries],
+      },
+    };
+    expect(thrown(() => audit.set(run.id, bad))).toMatchObject({
+      code: 'invalid_input',
+    });
+  });
   it('stores who decided an approval', () => {
     const store = setup();
     const { run, lead } = ticketWithRun(store);

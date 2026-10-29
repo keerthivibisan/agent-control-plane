@@ -73,6 +73,7 @@ export class Draft {
   readonly agents: EngineAgent[];
   readonly approvals: EngineApproval[];
   ledger: UsageLedger;
+  readonly durableBudgetLedger: boolean;
   readonly plans: TicketPlan[];
   readonly limits: RunLimits | undefined;
   readonly workflow: ProjectWorkflow | undefined;
@@ -111,6 +112,7 @@ export class Draft {
     this.agents = state.agents.map((a) => ({ ...a }));
     this.approvals = state.approvals.map((a) => ({ ...a }));
     this.ledger = state.ledger;
+    this.durableBudgetLedger = state.durableBudgetLedger === true;
     this.plans = (state.plans ?? []).map((p) => ({ ...p }));
     this.hadPlans = state.plans !== undefined;
     this.limits = state.limits === undefined ? undefined : { ...state.limits };
@@ -212,6 +214,7 @@ export class Draft {
     assertAgentTransition(agent.status, to);
     const from = agent.status;
     agent.status = to;
+    if (from === 'NEEDS_REVIEW' && to === 'STARTING') agent.endedAt = null;
     if (!isLiveAgentStatus(to)) {
       agent.endedAt = this.now;
       if (hasReviewableChange(agent.kind)) {
@@ -616,6 +619,7 @@ export class Draft {
       ledger: this.ledger,
     };
     if (this.limits !== undefined) state.limits = this.limits;
+    if (this.durableBudgetLedger) state.durableBudgetLedger = true;
     if (this.hadPlans || this.plans.length > 0) state.plans = this.plans;
     if (this.workflow !== undefined) state.workflow = this.workflow;
     if (this.leadBrief !== undefined) state.leadBrief = this.leadBrief;

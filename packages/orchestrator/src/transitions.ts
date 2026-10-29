@@ -21,7 +21,7 @@ export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> 
   // "request changes" on the ticket branch while the lead is live (ADR-0021 §4).
   REVIEW: ['COMPLETED', 'RUNNING', 'CANCELLING'],
   // After a restart the owner reviews what the interrupted workers left, or cancels.
-  NEEDS_REVIEW: ['REVIEW', 'CANCELLING'],
+  NEEDS_REVIEW: ['REVIEW', 'RUNNING', 'CANCELLING'],
   CANCELLING: ['CANCELLED'],
   COMPLETED: [],
   FAILED: [],
@@ -71,17 +71,21 @@ export const AGENT_TRANSITIONS: Readonly<Record<AgentRunStatus, readonly AgentRu
     FAILED: [],
     CANCELLED: [],
     TIMED_OUT: [],
-    NEEDS_REVIEW: [],
+    NEEDS_REVIEW: ['STARTING'],
   });
 
 export const TERMINAL_RUN_STATUSES: readonly RunStatus[] = Object.freeze(
   (Object.keys(RUN_TRANSITIONS) as RunStatus[]).filter((s) => RUN_TRANSITIONS[s].length === 0),
 );
-export const TERMINAL_AGENT_STATUSES: readonly AgentRunStatus[] = Object.freeze(
-  (Object.keys(AGENT_TRANSITIONS) as AgentRunStatus[]).filter(
-    (s) => AGENT_TRANSITIONS[s].length === 0,
-  ),
-);
+// A recovered agent has no process, even if an owner action can later restart it. Keep process
+// liveness independent of the legal transition table so reopening a state cannot make it live.
+export const TERMINAL_AGENT_STATUSES: readonly AgentRunStatus[] = Object.freeze([
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+  'TIMED_OUT',
+  'NEEDS_REVIEW',
+]);
 
 export function canTransitionRun(from: RunStatus, to: RunStatus): boolean {
   return RUN_TRANSITIONS[from].includes(to);
@@ -107,7 +111,7 @@ export function isTerminalRunStatus(status: RunStatus): boolean {
 
 /** Live = not ended: the agent may still run, spend budget, or ask for approval. */
 export function isLiveAgentStatus(status: AgentRunStatus): boolean {
-  return AGENT_TRANSITIONS[status].length > 0;
+  return !TERMINAL_AGENT_STATUSES.includes(status);
 }
 
 /**

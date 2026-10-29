@@ -17,6 +17,7 @@ import {
   recordChangeDecision,
   recordTicketBranchDecision,
   recoverAfterRestart,
+  runWorkingMs,
   requestPermission,
   requestTicketChanges,
 } from '../src/index.js';
@@ -327,6 +328,69 @@ describe('Stop all and restart', () => {
     return s;
   }
 
+  it('keeps evidence only for sealed waiting changes, including across another restart', () => {
+    const original = busy();
+    const recovered = ok(recoverAfterRestart(original, makeCtx(20_000))).state;
+    expect(changeOf(recovered, A).reworkAfterRestart).toBe(true);
+    expect(agentOf(recovered, B).change?.reworkAfterRestart).toBeUndefined();
+    const twice = ok(recoverAfterRestart(recovered, makeCtx(21_000))).state;
+    expect(changeOf(twice, A).reworkAfterRestart).toBe(true);
+    expect(
+      checkChangeAction({ ...twice, durableBudgetLedger: false }, A, 'rework', 'owner'),
+    ).toMatchObject({ code: 'change-not-decidable' });
+    const withoutLedger = { ...original, durableBudgetLedger: false };
+    expect(
+      changeOf(ok(recoverAfterRestart(withoutLedger, makeCtx(20_000))).state, A).reworkAfterRestart,
+    ).toBeUndefined();
+  });
+
+  it('resumes the saved lead only on the owner rework action', () => {
+    const original = busy();
+    const withSession = {
+      ...original,
+      agents: original.agents.map((a) => (a.id === LEAD ? { ...a, sessionId: 'lead-session' } : a)),
+    };
+    const recovered = ok(recoverAfterRestart(withSession, makeCtx(20_000)));
+    expect(effectsOf(recovered.effects, 'start-agent')).toHaveLength(0);
+    const action = ok(
+      recordChangeDecision(
+        recovered.state,
+        A,
+        { decision: 'rework', by: 'owner', comments: 'Add coverage' },
+        makeCtx(21_000),
+      ),
+    );
+    expect(statusOf(action.state, LEAD)).toBe('STARTING');
+    expect(effectsOf(action.effects, 'start-agent')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ agentRunId: LEAD, resumeLeadSessionId: 'lead-session' }),
+        expect.objectContaining({ agentRunId: A }),
+      ]),
+    );
+    expect(
+      effectsOf(action.effects, 'start-agent').find((e) => e.agentRunId === A)?.rework,
+    ).toBeDefined();
+    expect(agentOf(action.state, B).status).toBe('NEEDS_REVIEW');
+  });
+
+  it('does not charge the owner review wait after restart to the run timeout', () => {
+    const recovered = ok(recoverAfterRestart(busy(), makeCtx(20_000))).state;
+    const before = runWorkingMs(recovered, makeCtx(20_000).now);
+    const resumed = ok(
+      recordChangeDecision(
+        recovered,
+        A,
+        {
+          decision: 'rework',
+          by: 'owner',
+          comments: 'Please revise',
+        },
+        makeCtx(3_620_000),
+      ),
+    ).state;
+    expect(runWorkingMs(resumed, makeCtx(3_620_000).now)).toBe(before);
+  });
+
   it('Stop all: waiting helpers are cancelled without an abort; the ticket branch stays open', () => {
     const s = busy();
     const r = ok(cancelRun(s, makeCtx(9000)));
@@ -377,19 +441,20 @@ describe('Stop all and restart', () => {
     expect(changeOf(r.state, A)).toMatchObject({ state: 'needs-owner', merging: false });
     expect(changeOf(r.state, B).state).toBe('needs-owner');
     expect(types(r.effects)).toEqual(['remove-review-checkout']);
-    // The owner decides; the first decision moves the run to REVIEW. No rework after a restart.
-    expect(
-      refusalOf(
-        recordChangeDecision(
-          r.state,
-          A,
-          { decision: 'rework', by: 'owner', comments: 'x' },
-          makeCtx(),
-        ),
+    // The owner may explicitly restart a sealed helper, but recovery itself starts nothing.
+    const rework = ok(
+      recordChangeDecision(
+        r.state,
+        A,
+        { decision: 'rework', by: 'owner', comments: 'x' },
+        makeCtx(),
       ),
-    ).toMatchObject({
-      code: 'change-not-decidable',
-    });
+    );
+    expect(statusOf(rework.state, A)).toBe('STARTING');
+    expect(rework.state.run.status).toBe('RUNNING');
+    expect(
+      effectsOf(rework.effects, 'start-agent').find((e) => e.agentRunId === A)?.rework,
+    ).toBeDefined();
     const d = ok(
       recordChangeDecision(
         r.state,

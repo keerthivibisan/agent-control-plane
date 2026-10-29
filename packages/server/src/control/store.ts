@@ -4,6 +4,7 @@ import {
   MAX_ORCHESTRATOR_MESSAGE_LENGTH,
   createOrchestrationRepositories,
   createRedesignRepositories,
+  createRunRecoveryRepository,
   createReviewLoopRepositories,
   createWorkspaceRepositories,
   withTransaction,
@@ -26,7 +27,13 @@ import {
   type EngineEffect,
   type RunState,
 } from '@acp/orchestrator';
-import type { OrchestrationRun, PlanStep, TicketPlan, WorkflowNodeId } from '@acp/core';
+import type {
+  OrchestrationRun,
+  PlanStep,
+  RunRecovery,
+  TicketPlan,
+  WorkflowNodeId,
+} from '@acp/core';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -109,6 +116,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
   const repos = createOrchestrationRepositories(deps.db, repoOptions);
   const workspaceRepos = createWorkspaceRepositories(deps.db, repoOptions);
   const redesignRepos = createRedesignRepositories(deps.db, repoOptions);
+  const recoveryRepos = createRunRecoveryRepository(deps.db, repoOptions);
   const loopRepos = createReviewLoopRepositories(deps.db, repoOptions);
 
   /** Runs one insert with the engine's id; the slot is always empty again afterwards. */
@@ -167,6 +175,25 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     const before = prev === null ? null : snapshotOf(prev);
     if (JSON.stringify(after) === JSON.stringify(before)) return;
     redesignRepos.runAudit.setRunSnapshot(next.run.id, after);
+  }
+
+  function recoveryOf(state: RunState): RunRecovery | undefined {
+    if (state.durableBudgetLedger !== true) return undefined;
+    return {
+      budgetLedger: {
+        entries: Object.values(state.ledger.entries).map((entry) => ({
+          ...entry,
+          agentRunIds: [...entry.agentRunIds],
+        })),
+      },
+      ...(state.ownerWait !== undefined && { ownerWait: { ...state.ownerWait } }),
+      restartReworkAgents: state.agents
+        .filter((a) => a.change?.reworkAfterRestart === true)
+        .map((a) => a.id),
+      sealedReviewAgents: state.agents
+        .filter((a) => a.change?.sealedForRecovery === true)
+        .map((a) => a.id),
+    };
   }
 
   /** The agent's primary Claude Code session id (provider id), or `fallback` without one. */
@@ -523,6 +550,13 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       withTransaction(deps.db, () => {
         syncRun(prev?.run ?? null, next.run);
         syncSnapshot(prev, next);
+        const recovery = recoveryOf(next);
+        if (
+          recovery !== undefined &&
+          (prev === null || JSON.stringify(recoveryOf(prev)) !== JSON.stringify(recovery))
+        ) {
+          recoveryRepos.set(next.run.id, recovery);
+        }
         const prevAgents = new Map(prev?.agents.map((a) => [a.id, a]));
         for (const agent of next.agents) syncAgent(prevAgents.get(agent.id), agent);
         const prevApprovals = new Map(prev?.approvals.map((a) => [a.id, a]));
@@ -541,6 +575,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       );
       const stages = redesignRepos.runAudit.agentStagesForRun(runId);
       const snapshot = redesignRepos.runAudit.getRunSnapshot(runId);
+      const recovery = recoveryRepos.get(runId);
       const loop = snapshot?.integration !== undefined;
       const changes = new Map(
         loop ? loopRepos.workspaceChanges.listForRun(runId).map((c) => [c.agentRunId, c]) : [],
@@ -556,7 +591,9 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         // ADR-0021 (RL-A notes): a loop helper's rework resumes its provider session, which the
         // engine keeps in `sessionId` while live; after a reload it comes from the session link.
         sessionId:
-          loop && hasReviewableChange(a.kind) ? providerSession(a.id, a.sessionId) : a.sessionId,
+          loop && (hasReviewableChange(a.kind) || a.kind === 'lead')
+            ? providerSession(a.id, a.sessionId)
+            : a.sessionId,
         budgetTokensUsed: a.budgetTokensUsed,
         createdAt: a.createdAt,
         endedAt: a.endedAt,
@@ -571,6 +608,14 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         ...withStage(stages.get(a.id) ?? null),
         ...changeOf(changes.get(a.id), workspaces.get(a.id)),
       }));
+      for (const agent of agents) {
+        if (agent.change !== undefined && recovery?.sealedReviewAgents.includes(agent.id)) {
+          agent.change.sealedForRecovery = true;
+        }
+        if (agent.change !== undefined && recovery?.restartReworkAgents.includes(agent.id)) {
+          agent.change.reworkAfterRestart = true;
+        }
+      }
       const deciders = redesignRepos.runAudit.approvalDecidersForRun(runId);
       const rules = loopRepos.approvalRules.forRun(runId);
       const approvals: EngineApproval[] = repos.approvals.listForRun(runId).map((a) => {
@@ -583,8 +628,21 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           ...(rule !== null && { allowRule: rule }),
         };
       });
-      // Usage is only accounted while agents are live; after a restart they never are again.
-      const state: RunState = { run, agents, approvals, ledger: EMPTY_LEDGER };
+      const state: RunState = {
+        run,
+        agents,
+        approvals,
+        ledger:
+          recovery === undefined
+            ? EMPTY_LEDGER
+            : {
+                entries: Object.fromEntries(
+                  recovery.budgetLedger.entries.map((entry) => [entry.messageId, entry]),
+                ),
+              },
+        ...(recovery !== undefined && { durableBudgetLedger: true }),
+      };
+      if (recovery?.ownerWait !== undefined) state.ownerWait = recovery.ownerWait;
       if (snapshot !== null) {
         state.limits = {
           maxConcurrentHelpers: snapshot.maxConcurrentHelpers,

@@ -71,6 +71,15 @@ const resumeFailsThenWorks = (fail: 'result' | 'throw'): Script =>
   };
 
 describe('a rework turn whose session cannot be resumed (P-D)', () => {
+  it('does not create a fresh lead session when its saved session is gone', async () => {
+    const { events, calls } = await eventsOf(
+      worker({ kind: 'lead', resumeLeadSessionId: SESSION_ID }, null),
+      resumeFailsThenWorks('result'),
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.options).toMatchObject({ resume: SESSION_ID, forkSession: false });
+    expect(events.at(-1)).toMatchObject({ type: 'finished', outcome: 'error' });
+  });
   for (const fail of ['result', 'throw'] as const) {
     it(`starts once more in a new session in the same worktree (resume ${fail})`, async () => {
       const { events, calls } = await eventsOf(worker(), resumeFailsThenWorks(fail));

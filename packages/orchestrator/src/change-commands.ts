@@ -186,6 +186,7 @@ export function changeSealed(
       return done;
     }
     change.headCommit = result.headCommit;
+    change.sealedForRecovery = true;
     // A rework the owner granted after a failed seal saved it this time (F-2).
     delete change.sealFailure;
     change.state = 'ready';

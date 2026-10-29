@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Allow the owner to send an eligible sealed change back for rework after a restart, resuming the
+  helper and its lead when their saved sessions are available (ADR-0029). This adds a database
+  migration for recovery evidence.
+
 ### Documentation
 
 - Clarify experimental POC status, current provider and known limits; add contributor entry

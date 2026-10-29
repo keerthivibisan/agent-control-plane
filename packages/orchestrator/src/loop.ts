@@ -267,7 +267,13 @@ export function waitsOnlyForOwner(
   view: LoopView & { readonly run: Pick<OrchestrationRun, 'status'> },
 ): boolean {
   if (view.integration === undefined) return false;
-  if (view.run.status !== 'RUNNING' && view.run.status !== 'BLOCKED') return false;
+  if (
+    view.run.status !== 'RUNNING' &&
+    view.run.status !== 'BLOCKED' &&
+    view.run.status !== 'NEEDS_REVIEW' &&
+    view.run.status !== 'REVIEW'
+  )
+    return false;
   const atOwner = view.agents.some(
     (a) => hasReviewableChange(a.kind) && a.change?.state === 'needs-owner',
   );
@@ -432,6 +438,7 @@ const STATE_WORDS: Readonly<Record<ChangeState, string>> = Object.freeze({
 interface ChangeView extends LoopView {
   readonly run: Pick<OrchestrationRun, 'status'>;
   readonly limits?: RunLimits | undefined;
+  readonly durableBudgetLedger?: boolean | undefined;
 }
 
 /** Run states in which the lead (or the owner) may decide a change. */
@@ -553,7 +560,15 @@ export function checkChange(
       }
       return null;
     case 'rework': {
-      if (agent.status !== 'AWAITING_REVIEW') {
+      if (
+        agent.status !== 'AWAITING_REVIEW' &&
+        !(
+          by === 'owner' &&
+          agent.status === 'NEEDS_REVIEW' &&
+          change.reworkAfterRestart === true &&
+          d.durableBudgetLedger === true
+        )
+      ) {
         return refusal(
           'change-not-decidable',
           `${agent.role} has stopped, so it cannot rework; merge or discard its work.`,
@@ -638,6 +653,14 @@ function reworkPrompt(
 export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput): string {
   const change = agent.change;
   if (change === undefined) return 'No change.';
+  const recoveredRework =
+    input.decision === 'rework' &&
+    agent.status === 'NEEDS_REVIEW' &&
+    change.reworkAfterRestart === true;
+  if (input.decision !== 'ask-owner') {
+    delete change.reworkAfterRestart;
+    delete change.sealedForRecovery;
+  }
   const branch = branchLabel(d);
   const role = agent.role;
   const byOwner = input.by === 'owner';
@@ -705,6 +728,32 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       return `The owner will decide on ${role}'s change. You will get a message when they do.`;
     }
     case 'rework': {
+      if (recoveredRework) {
+        d.stagesHeld = false;
+        if (d.run.status === 'NEEDS_REVIEW' || d.run.status === 'REVIEW') d.setRunStatus('RUNNING');
+        const lead = d.lead();
+        if (lead?.status === 'NEEDS_REVIEW' && lead.sessionId !== null) {
+          if (isOverBudget(lead.budgetTokensUsed, lead.budgetLimit)) {
+            lead.budgetLimit = lead.budgetTokensUsed + d.run.budget.maxTokensPerAgent;
+          }
+          d.setAgentStatus(lead, 'STARTING');
+          lead.recoveredLead = true;
+          d.effects.push({
+            type: 'start-agent',
+            agentRunId: lead.id,
+            kind: 'lead',
+            role: lead.role,
+            ...launchFieldsFor(
+              d.program(),
+              stageOf(lead),
+              `The server restarted. The owner sent ${agent.role}'s sealed change back for rework. Continue the plan, review its new change and decide it when ready.`,
+            ),
+            resumeLeadSessionId: lead.sessionId,
+          });
+        } else if (lead !== undefined && !isLiveAgentStatus(lead.status)) {
+          lead.latestActivity = 'The lead could not continue. The owner can review the change.';
+        }
+      }
       const comments = note(input.comments);
       emitRound(d, agent, { decision: 'rework', by: input.by });
       // A change reviewer's rework comments are its findings, already stored as its
@@ -750,6 +799,8 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
         role: agent.role,
         ...launchFieldsFor(d.program(), stageOf(agent), prompt),
         rework: { resumeSessionId: agent.sessionId },
+        ...(recoveredRework &&
+          change.headCommit !== null && { expectedRecoveredHead: change.headCommit }),
         ...d.launchModeFields(agent),
       });
       const done = `Asked ${role} to rework its change (round ${change.round}).`;

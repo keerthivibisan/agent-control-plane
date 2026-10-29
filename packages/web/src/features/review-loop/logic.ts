@@ -175,6 +175,17 @@ export function ownerMayDecide(
   return !leadIsLive(run);
 }
 
+/** Recovered helpers may be resumed only when the server proves they are eligible. */
+export function ownerMayRework(
+  change: Pick<ChangeReviewDto, 'state'> &
+    Partial<Pick<ChangeReviewDto, 'agentRunId' | 'canReworkAfterRestart'>>,
+  run: Pick<RunDetailDto, 'agents'>,
+): boolean {
+  if (!ownerMayDecide(change, run)) return false;
+  const agent = run.agents.find((a) => a.id === change.agentRunId);
+  return agent?.status === 'NEEDS_REVIEW' ? change.canReworkAfterRestart === true : true;
+}
+
 /** The chip's tone: warning only when it waits for you, success once merged (DESIGN.md). */
 export function changeTone(state: ChangeState): PillTone {
   switch (state) {

@@ -372,4 +372,4 @@ None of these exist yet; do not build them outside their phase ([roadmap.md](roa
 - [provider-adapters.md](provider-adapters.md): the Claude Code adapter and its file allowlist.
 - [orchestration-lifecycle.md](orchestration-lifecycle.md): run and agent states.
 - [security.md](security.md): the threat model and rules.
-- [decisions/](decisions/README.md): ADR-0001 to ADR-0028 (accepted) and ADR-0029 (proposed).
+- [decisions/](decisions/README.md): accepted architecture decisions and proposals.

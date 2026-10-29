@@ -59,6 +59,7 @@ export interface ChangeDtoInput {
   maxReworkRounds: number;
   /** ADR-0023: one change's own limit (its node's review route); `maxReworkRounds` otherwise. */
   maxRoundsOf?: (agentRunId: string) => number;
+  canReworkAfterRestart?: (agentRunId: string) => boolean;
 }
 
 /** The latest result per check id, in check-id order. */
@@ -83,6 +84,9 @@ export function toChangeReviewDtos(input: ChangeDtoInput): ChangeReviewDto[] {
       maxReworkRounds: input.maxRoundsOf?.(agent.id) ?? input.maxReworkRounds,
       headCommit: head,
       changedFiles: change.changedFiles,
+      ...(input.canReworkAfterRestart !== undefined && {
+        canReworkAfterRestart: input.canReworkAfterRestart(agent.id),
+      }),
       conflictFiles: change.conflictFiles.slice(0, 100),
       // Only results on the change's own commit (ADR-0021: checks gate the commit they ran on).
       checks:

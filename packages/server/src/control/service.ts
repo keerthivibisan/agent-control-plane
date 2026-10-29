@@ -62,6 +62,7 @@ import {
   agentLaunchMode,
   allowlistTarget,
   cancelRun,
+  checkChangeAction,
   checkReviewAction,
   completeCancellation,
   continueStages,
@@ -540,6 +541,7 @@ interface LaunchInput {
   canStartHelpers?: boolean;
   /** ADR-0021: a rework turn resumes this session (null: fresh). */
   rework?: { resumeSessionId: string | null } | undefined;
+  resumeLeadSessionId?: string | undefined;
   /** ADR-0021: what a reviewer reviews. */
   reviewScope?: 'change' | 'final' | undefined;
   /** ADR-0026 §4: the lead's or planner's attachment copies, readable without asking. */
@@ -1200,6 +1202,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       prompt: kind === 'lead' ? withTicketSummary(live, effect.prompt) : effect.prompt,
       model: effect.model,
       effort: effect.effort,
+      resumeLeadSessionId: effect.resumeLeadSessionId,
     };
     if (kind === 'lead' || kind === 'planner') {
       if (
@@ -1541,6 +1544,23 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-worktree' });
           endWithError(live, agentRunId);
           return;
+        }
+        if (effect.expectedRecoveredHead !== undefined) {
+          try {
+            if ((await deps.workspaces.sealedHead(ws)) !== effect.expectedRecoveredHead) {
+              throw new Error('The recovered workspace changed');
+            }
+          } catch (error) {
+            live.starting.delete(agentRunId);
+            live.pendingSends.delete(agentRunId);
+            logger.log('warn', 'recovered workspace could not be verified', {
+              runId,
+              agentRunId,
+              ...errorFields(error),
+            });
+            endWithError(live, agentRunId);
+            return;
+          }
         }
         const setup = await setupFor(live);
         const plugin = await pluginFor(live, projectRoot, effect);
@@ -2005,6 +2025,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       spec.canStartHelpers = true;
     }
     if (input.rework !== undefined) spec.rework = { ...input.rework };
+    if (input.resumeLeadSessionId !== undefined)
+      spec.resumeLeadSessionId = input.resumeLeadSessionId;
     if (input.reviewScope !== undefined) spec.reviewScope = input.reviewScope;
     if (input.readOnlyDirs !== undefined) spec.readOnlyDirs = input.readOnlyDirs;
     if (input.plugin !== undefined) spec.skillPlugin = input.plugin;
@@ -2339,6 +2361,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         reviews: store.loopRepos.changeReviews.listForRun(runId),
         checks: store.loopRepos.checkCommits.listForRun(runId),
         maxReworkRounds: integration.maxReworkRounds,
+        canReworkAfterRestart: (agentRunId) => {
+          const agent = live.state.agents.find((a) => a.id === agentRunId);
+          return (
+            agent?.status === 'NEEDS_REVIEW' &&
+            agent.change?.reworkAfterRestart === true &&
+            checkChangeAction(live.state, agentRunId, 'rework', 'owner') === null
+          );
+        },
         // ADR-0023: each change's rounds come from its node's review route (the lead's, plus the
         // reviewer's on route c); a version 1 run's route carries its single limit.
         maxRoundsOf: (agentRunId) => {

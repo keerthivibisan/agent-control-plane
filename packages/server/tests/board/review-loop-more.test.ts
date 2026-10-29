@@ -254,6 +254,107 @@ describe("the owner's ticket-branch actions (ADR-0021 §4)", () => {
 });
 
 describe('restart and failures (ADR-0021 §5)', () => {
+  it('refuses recovered rework when the worktree no longer has its reviewed branch', async () => {
+    const first = await setupBoard({ files: FILES });
+    const { runId, lead } = await approved(first, LEAD_REVIEWS);
+    const worker = await helperDone(first, lead, runId, {
+      'a.txt': 'first\n',
+      'fixed.txt': 'ok\n',
+    });
+    const second = await setupBoard({
+      reopen: { dbPath: first.dbPath, dataDir: first.dataDir, repo: first.repo },
+    });
+    git(second.worktree(runId, worker.id), 'checkout', '--quiet', '--detach');
+    const response = await second.post(`/api/runs/${runId}/review`, {
+      agentRunId: worker.id,
+      action: 'rework',
+      comment: 'Add a line.',
+    });
+    expect(response.status).toBe(409);
+    expect(second.fake.agents).toEqual([]);
+    expect((await run(second, runId)).status).toBe('NEEDS_REVIEW');
+  }, 60_000);
+  it('leaves the revised change with the owner when the lead session is gone', async () => {
+    const first = await setupBoard({ files: FILES });
+    const { runId, lead } = await approved(first, LEAD_REVIEWS);
+    const worker = await helperDone(first, lead, runId, {
+      'a.txt': 'first\n',
+      'fixed.txt': 'ok\n',
+    });
+    const second = await setupBoard({
+      reopen: { dbPath: first.dbPath, dataDir: first.dataDir, repo: first.repo },
+    });
+    expect(
+      (
+        await second.post(`/api/runs/${runId}/review`, {
+          agentRunId: worker.id,
+          action: 'rework',
+          comment: 'Add a line.',
+        })
+      ).status,
+    ).toBe(200);
+    await second.settle();
+    const resumedLead = second.fake.agents.find((a) => a.id === lead.id);
+    const resumedWorker = second.fake.agents.find((a) => a.id === worker.id);
+    if (resumedLead === undefined || resumedWorker === undefined)
+      throw new Error('agents not resumed');
+    resumedLead.finish('error');
+    resumedWorker.started();
+    await second.settle();
+    writeFileSync(join(second.worktree(runId, worker.id), 'a.txt'), 'first\nsecond\n');
+    resumedWorker.finish('success');
+    await second.settle();
+    expect((await run(second, runId)).changes?.[0]?.state).toBe('needs-owner');
+    expect(
+      (await second.post(`/api/runs/${runId}/review`, { agentRunId: worker.id, action: 'merge' }))
+        .status,
+    ).toBe(200);
+  }, 60_000);
+  it('restarts a sealed helper and its lead only after owner rework, then merges the new change', async () => {
+    const first = await setupBoard({ files: FILES });
+    const { runId, lead } = await approved(first, LEAD_REVIEWS);
+    lead.usage('before-restart', { input: 50, output: 10, cacheCreation: 0, cacheRead: 0 });
+    const worker = await helperDone(first, lead, runId, {
+      'a.txt': 'first\n',
+      'fixed.txt': 'ok\n',
+    });
+    const reopen = { dbPath: first.dbPath, dataDir: first.dataDir, repo: first.repo };
+    const second = await setupBoard({ reopen });
+    expect(second.fake.agents).toEqual([]);
+    expect((await run(second, runId)).changes?.[0]?.canReworkAfterRestart).toBe(true);
+    const third = await setupBoard({ reopen });
+    expect(third.fake.agents).toEqual([]);
+    expect((await run(third, runId)).changes?.[0]?.canReworkAfterRestart).toBe(true);
+    const response = await third.post(`/api/runs/${runId}/review`, {
+      agentRunId: worker.id,
+      action: 'rework',
+      comment: 'Add another line.',
+    });
+    expect(response.status).toBe(200);
+    await third.settle();
+    const resumedLead = third.fake.agents.find((a) => a.id === lead.id);
+    const resumedWorker = third.fake.agents.find((a) => a.id === worker.id);
+    expect(resumedLead?.spec.resumeLeadSessionId).toBe(`sess-${lead.id}`);
+    expect(resumedWorker?.spec.rework).toEqual({ resumeSessionId: `sess-${worker.id}` });
+    if (resumedLead === undefined || resumedWorker === undefined)
+      throw new Error('agents not resumed');
+    resumedLead.started();
+    resumedLead.usage('before-restart', { input: 50, output: 10, cacheCreation: 0, cacheRead: 0 });
+    resumedWorker.started();
+    await third.settle();
+    expect((await run(third, runId)).agents.find((a) => a.id === lead.id)?.budget.used).toBe(60);
+    writeFileSync(join(third.worktree(runId, worker.id), 'a.txt'), 'first\nsecond\n');
+    resumedWorker.finish('success');
+    await third.settle();
+    expect(await resumedLead.callLead('merge_change', { agentId: worker.id })).toContain('Merged');
+    expect(git(third.repo, 'show', 'acp/WEBAPP-1:a.txt')).toBe('first\nsecond\n');
+    await resumedLead.callLead('request_review', {});
+    expect((await run(third, runId)).status).toBe('REVIEW');
+    expect((await third.post(`/api/runs/${runId}/ticket-branch`, { action: 'merge' })).status).toBe(
+      200,
+    );
+    expect((await run(third, runId)).status).toBe('COMPLETED');
+  }, 60_000);
   it('a restart puts an undecided change with the owner; the owner merges it', async () => {
     const first = await setupBoard({ files: FILES });
     const { runId, lead } = await approved(first, LEAD_REVIEWS);

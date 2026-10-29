@@ -741,6 +741,25 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     const id = input.agentRunId;
     const refusal = checkChangeAction(live.state, id, input.action, 'owner');
     if (refusal !== null) throw refusalError(refusal);
+    const agent = live.state.agents.find((a) => a.id === id);
+    if (input.action === 'rework' && agent?.status === 'NEEDS_REVIEW') {
+      const ws = await activeWorkspace(live, id);
+      if (ws === null)
+        throw new HttpError(409, 'workspace_unavailable', 'The helper folder is unavailable.');
+      try {
+        const head = await ctx.workspaces.sealedHead(ws);
+        if (head === null || head !== agent.change?.headCommit) {
+          throw new HttpError(
+            409,
+            'workspace_changed',
+            'The helper folder changed since its review; it cannot be restarted safely.',
+          );
+        }
+      } catch (error) {
+        if (error instanceof WorkspaceError) throw workspaceError(error);
+        throw error;
+      }
+    }
     if (input.action === 'discard' || input.action === 'rework') {
       const comments = input.action === 'rework' ? input.comment : input.reason;
       const r = ctx.apply(live, (s, c) =>

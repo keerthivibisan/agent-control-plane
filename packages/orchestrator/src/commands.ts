@@ -339,6 +339,7 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     ledger: EMPTY_LEDGER,
     limits,
   };
+  if (loopInputs.integration !== undefined) state.durableBudgetLedger = true;
   if (loopInputs.approvals !== undefined) state.approvalPolicy = loopInputs.approvals;
   if (ticket === undefined) return { ok: true, state, effects: [], value: state };
 
@@ -511,6 +512,10 @@ export function agentEvent(
         return done;
 
       case 'finished': {
+        if (agent.kind === 'lead' && agent.recoveredLead === true && event.outcome === 'error') {
+          agent.latestActivity = 'The lead could not continue. The owner can review the change.';
+          d.effects.push({ type: 'diagnostic', code: 'restart-lead-unavailable', agentRunId });
+        }
         const cost = event.reportedCostUsd;
         if (cost !== null && Number.isFinite(cost) && cost >= 0) agent.reportedCostUsd = cost;
         if (!live) return done;
@@ -1058,6 +1063,17 @@ export function recoverAfterRestart(state: RunState, ctx: EngineContext): Engine
     // An interrupted follow-up turn just ends (ADR-0020 §3); nothing resumes it.
     if (d.followUp !== undefined) d.followUp = { ...d.followUp, turn: null };
     for (const agent of d.agents) {
+      if (
+        !cancelling &&
+        agent.status === 'AWAITING_REVIEW' &&
+        agent.change !== undefined &&
+        agent.change.sealedForRecovery === true &&
+        agent.change.headCommit !== null &&
+        agent.change.sealFailure === undefined &&
+        d.durableBudgetLedger
+      ) {
+        agent.change.reworkAfterRestart = true;
+      }
       if (isLiveAgentStatus(agent.status)) {
         d.setAgentStatus(agent, cancelling ? 'CANCELLED' : 'NEEDS_REVIEW');
       }

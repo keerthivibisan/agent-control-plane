@@ -1,5 +1,5 @@
 import type { ChangeReviewDto, RunDetailDto, TicketBranchDto } from '@acp/core/api';
-import { ownerMayDecide, ticketBranchMode } from '../review-loop/logic';
+import { ownerMayRework, ticketBranchMode } from '../review-loop/logic';
 import { REVIEW_PAGE_COPY } from './copy';
 
 /**
@@ -41,7 +41,10 @@ export type ReviewTarget =
       kind: 'change';
       run: Pick<RunDetailDto, 'agents'>;
       /** Null for a run without the review loop (a helper reviewed the Phase 4 way). */
-      change: Pick<ChangeReviewDto, 'state'> | null;
+      change:
+        | (Pick<ChangeReviewDto, 'state'> &
+            Partial<Pick<ChangeReviewDto, 'agentRunId' | 'canReworkAfterRestart'>>)
+        | null;
     }
   | {
       kind: 'branch';
@@ -52,7 +55,12 @@ export type ReviewTarget =
 function reworkReason(target: Extract<ReviewTarget, { kind: 'change' }>): string | null {
   const { change, run } = target;
   if (change === null) return R.noLoop;
-  if (ownerMayDecide(change, run)) return null;
+  if (ownerMayRework(change, run)) return null;
+  if (
+    run.agents.some((agent) => agent.id === change.agentRunId && agent.status === 'NEEDS_REVIEW')
+  ) {
+    return R.restartUnavailable;
+  }
   switch (change.state) {
     case 'merged':
       return R.merged;

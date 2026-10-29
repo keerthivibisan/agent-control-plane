@@ -188,7 +188,10 @@ export function buildOptions(
   // A rework turn (ADR-0021 §3) resumes the helper's own session in its own worktree, never
   // forked, with the same role tools; its input closes after the turn like any helper's. Without a
   // session to resume it starts fresh, with the comments in the prompt.
-  const resume = spec.followUp === undefined ? (spec.rework?.resumeSessionId ?? null) : null;
+  const resume =
+    spec.followUp === undefined
+      ? (spec.resumeLeadSessionId ?? spec.rework?.resumeSessionId ?? null)
+      : null;
   if (resume !== null) {
     options.resume = resume;
     options.forkSession = false;
@@ -328,7 +331,11 @@ function startAgent(
         if (mapped.result !== null) {
           lastResult = mapped.result;
           if (sandboxed && mapped.result.unavailable !== null) failure = mapped.result.unavailable;
-          if (!specKeepsInputOpen(spec) && (mapped.result.queuedTurns ?? 0) === 0) input.close();
+          if (
+            (mapped.result.outcome === 'error' || !specKeepsInputOpen(spec)) &&
+            (mapped.result.queuedTurns ?? 0) === 0
+          )
+            input.close();
         }
       }
       return 'ended';

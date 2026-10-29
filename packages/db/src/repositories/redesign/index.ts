@@ -21,6 +21,8 @@ export function createRedesignRepositories(
 }
 
 export { WorkflowStoredAsGraphError } from './workflow.js';
+export { createRunRecoveryRepository } from './run-recovery.js';
+export type { RunRecoveryRepository } from './run-recovery.js';
 export type {
   ProjectWorkflowInput,
   ProjectWorkflowRepository,

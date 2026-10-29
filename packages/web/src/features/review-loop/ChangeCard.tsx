@@ -30,6 +30,7 @@ import {
   checksSummary,
   leadIsLive,
   ownerMayDecide,
+  ownerMayRework,
   reworkRoundsBy,
   shortCommit,
 } from './logic';
@@ -264,6 +265,10 @@ function OwnerDecision({
       <p className="text-caption text-dim">
         {change.state === 'needs-owner' && leadIsLive(run) ? O.asked : O.leadEnded}
       </p>
+      {run.agents.some((a) => a.id === id && a.status === 'NEEDS_REVIEW') &&
+      !ownerMayRework(change, run) ? (
+        <p className="text-caption text-dim">{REVIEW_PAGE_COPY.reasons.restartUnavailable}</p>
+      ) : null}
       <div className="flex flex-wrap items-start gap-2">
         {checks.kind === 'failed' ? (
           <ReasonForm
@@ -297,26 +302,28 @@ function OwnerDecision({
             onConfirm={() => act.run(run.id, { agentRunId: id, action: 'merge' })}
           />
         )}
-        <ReasonForm
-          openLabel={O.rework}
-          title={O.reworkTitle}
-          label={O.reworkTitle}
-          hint={O.reworkHint}
-          placeholder={O.reworkPlaceholder}
-          max={MAX_COMMENT}
-          tooLong={O.reworkTooLong(MAX_COMMENT)}
-          submitLabel={O.sendRework}
-          cancelLabel={O.cancel}
-          pendingLabel={O.working}
-          pending={act.pending}
-          testId="change-rework"
-          extra={
-            change.reworkRounds >= change.maxReworkRounds
-              ? O.reworkExtra(change.reworkRounds, change.maxReworkRounds)
-              : undefined
-          }
-          onConfirm={(comment) => act.run(run.id, { agentRunId: id, action: 'rework', comment })}
-        />
+        {ownerMayRework(change, run) && (
+          <ReasonForm
+            openLabel={O.rework}
+            title={O.reworkTitle}
+            label={O.reworkTitle}
+            hint={change.canReworkAfterRestart ? O.restartReworkHint : O.reworkHint}
+            placeholder={O.reworkPlaceholder}
+            max={MAX_COMMENT}
+            tooLong={O.reworkTooLong(MAX_COMMENT)}
+            submitLabel={O.sendRework}
+            cancelLabel={O.cancel}
+            pendingLabel={O.working}
+            pending={act.pending}
+            testId="change-rework"
+            extra={
+              change.reworkRounds >= change.maxReworkRounds
+                ? O.reworkExtra(change.reworkRounds, change.maxReworkRounds)
+                : undefined
+            }
+            onConfirm={(comment) => act.run(run.id, { agentRunId: id, action: 'rework', comment })}
+          />
+        )}
         <ConfirmAction
           label={O.discard}
           question={O.confirmDiscard(change.role)}

@@ -102,13 +102,17 @@ the real runs of 2026-10-21 passed with every review route
   actions.
 - **Stops and restarts:** Stop all cancels waiting helpers and keeps the ticket branch (it can only
   be discarded). After a restart nothing relaunches: waiting helpers and reviewers become
-  `NEEDS_REVIEW`, undecided changes `needs-owner`. The owner can merge or discard such a change but
-  not yet send it back for rework (proposed in ADR-0029, not built).
+  `NEEDS_REVIEW`, undecided changes `needs-owner`. The owner can merge or discard such a change. A
+  change whose successful seal and complete usage ledger were recorded can also be sent back for
+  rework: that owner action resumes its helper and, when available, its lead (ADR-0029). Older
+  runs without the necessary evidence remain merge-or-discard only.
 - **Run timeout (v0.3.1):** the timeout (ADR-0013 §3, `ACP_RUN_TIMEOUT_MS`, 2 hours) counts the
   run's working time. While the run waits only for the owner (a change at `needs-owner` and no
   agent but the lead still working) the clock stops; it runs again after the owner's decision, and
-  keeps running while other helpers work. The waits are kept in memory only: after a restart the
-  run is `NEEDS_REVIEW` and never times out. When the timeout stops a run, a helper whose change
+  keeps running while other helpers work. Review-loop runs persist these waits; after recovery,
+  time spent waiting for the owner's decision is excluded when work resumes. The interval between
+  the last recorded activity and recovery is conservatively counted as elapsed unless the run was
+  already waiting for the owner. When the timeout stops a run, a helper whose change
   waits for review ends `CANCELLED` (as with Stop all) and the other live agents end `TIMED_OUT`.
 
 ## 1. Principles

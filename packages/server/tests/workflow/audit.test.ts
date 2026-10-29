@@ -39,6 +39,7 @@ async function withHelper(s: Board) {
   await s.post(`/api/tickets/${ticket.id}/plans/${plan?.id ?? ''}/decision`, {
     decision: 'approve',
   });
+  await s.settle();
   await s.fake.lead().callLead('start_agent', { role: 'Builder', task: 'Build the toggle' });
   await s.settle();
   const worker = s.fake.workers()[0];
@@ -57,6 +58,22 @@ async function run(s: Board, runId: string): Promise<RunDetailDto> {
 }
 
 describe('approval decidedBy and run limits persistence (R-G)', () => {
+  it('restores managed usage observations so replayed messages remain deduplicated', async () => {
+    const s = await setupBoard();
+    const { runId, worker } = await withHelper(s);
+    worker.usage('message-1', { input: 50, output: 10, cacheCreation: 0, cacheRead: 0 });
+    worker.usage('__proto__', { input: 2, output: 3, cacheCreation: 0, cacheRead: 0 });
+    await s.settle();
+    const loaded = createRunStore({ db: s.db, now: () => BOARD_NOW }).load(runId);
+    expect(loaded?.durableBudgetLedger).toBe(true);
+    expect(loaded?.ledger.entries['message-1']).toMatchObject({
+      messageId: 'message-1',
+      agentRunIds: [worker.id],
+      tokens: { input: 50, output: 10 },
+    });
+    expect(Object.hasOwn(loaded?.ledger.entries ?? {}, '__proto__')).toBe(true);
+    expect(loaded?.ledger.entries['__proto__']?.tokens.output).toBe(3);
+  });
   it('stores the owner as decider and the limits snapshot, and reloads both', async () => {
     const s = await setupBoard({ legacyRuns: true });
     await setLimits(s, 2, false);

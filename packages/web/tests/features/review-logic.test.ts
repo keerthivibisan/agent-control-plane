@@ -278,6 +278,16 @@ describe('the choices by state', () => {
     expect(rework?.enabled).toBe(true);
   });
 
+  it('offers recovered rework only when the server verifies eligibility', () => {
+    const run = { agents: [{ id: 'worker', kind: 'worker', status: 'NEEDS_REVIEW' }] } as never;
+    const change = { agentRunId: 'worker', state: 'needs-owner' as const };
+    expect(reviewChoices({ kind: 'change', run, change })[0]?.enabled).toBe(false);
+    expect(
+      reviewChoices({ kind: 'change', run, change: { ...change, canReworkAfterRestart: true } })[0]
+        ?.enabled,
+    ).toBe(true);
+  });
+
   it('disables rework with the reason in every other state', () => {
     const reason = (state: string, run = liveLead) =>
       reviewChoices({ kind: 'change', run, change: { state } as never })[0]?.reason;

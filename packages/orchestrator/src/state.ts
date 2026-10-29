@@ -18,6 +18,7 @@ import type {
   PermissionDecision,
   ProjectApprovals,
   ProjectWorkflow,
+  RecoveryOwnerWait,
   ReviewScope,
   ReviewState,
   CompileContext,
@@ -51,6 +52,8 @@ export interface EngineAgent extends AgentRun {
    * Its process has ended, so nothing can be sent to it. Absent/false for everyone else.
    */
   awaitingHelpers?: boolean;
+  /** This lead is attempting to resume after an owner-requested restart rework. */
+  recoveredLead?: boolean;
   /**
    * The workflow node this agent works for (ADR-0019, ADR-0023: a node id of the run's graph), set
    * for every agent of a ticket run. A version 1 run's graph keeps the old stage ids: `plan`
@@ -95,6 +98,10 @@ export interface EngineAgent extends AgentRun {
  */
 export interface EngineChange {
   state: ChangeState;
+  /** Proven sealed and awaiting review at recovery; persisted until a decision is made. */
+  reworkAfterRestart?: true;
+  /** The current turn's seal succeeded, recorded independently of any older commit. */
+  sealedForRecovery?: true;
   /** Rework rounds used so far; also the current review round (0 = the first review). */
   round: number;
   /** This round's review-agent verdict: advice for the lead, never a gate. */
@@ -212,14 +219,15 @@ export interface RunLimits {
  * Everything the engine decides over for one run. Plain data: the server persists it (or the parts
  * P3-C stores) before carrying out any effect (orchestration-lifecycle §1).
  *
- * The usage ledger is only needed while agents are live; after a restart live agents become
- * NEEDS_REVIEW, so the server may keep it in memory and start from `EMPTY_LEDGER`.
+ * A durable ledger permits resumed agents to account for replayed usage without double counting.
  */
 export interface RunState {
   run: OrchestrationRun;
   agents: readonly EngineAgent[];
   approvals: readonly EngineApproval[];
   ledger: UsageLedger;
+  /** True only when every observation since the run started is durably recorded. */
+  durableBudgetLedger?: boolean;
   /**
    * Limits for this run. Absent means the Phase 3 defaults (`MAX_CONCURRENT_CHILD_AGENTS` helpers,
    * depth `MAX_DELEGATION_DEPTH`), so runs loaded without them keep the M1 behaviour.
@@ -291,12 +299,7 @@ export interface RunState {
 }
 
 /** `RunState.ownerWait`: the run's waits for the owner so far. */
-export interface OwnerWait {
-  /** When the current wait began (UTC ISO), or null while the run is not waiting. */
-  since: string | null;
-  /** The length of the waits that already ended, in milliseconds. */
-  totalMs: number;
-}
+export type OwnerWait = RecoveryOwnerWait;
 
 /** Follow-up turns of an ended lead (ADR-0020). One turn at a time per run. */
 export interface FollowUpState {
@@ -381,6 +384,10 @@ export type EngineEffect =
        * `prompt`, resuming `resumeSessionId` (null: a fresh session). Never with `canStartHelpers`.
        */
       rework?: { resumeSessionId: string | null };
+      /** The reviewed tip to verify again before launching recovered work. */
+      expectedRecoveredHead?: string;
+      /** Resume a recovered lead with its normal orchestration tools. */
+      resumeLeadSessionId?: string;
       /** A reviewer: `change` (one helper's change, `submit_review`) or `final` (`post_review`). */
       reviewScope?: ReviewScope;
       /**
@@ -577,7 +584,8 @@ export type EngineEffect =
         /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
         | 'full-auto-unavailable'
         /** P-D: a rework turn could not resume the helper's session and started a new one. */
-        | 'rework-session-replaced';
+        | 'rework-session-replaced'
+        | 'restart-lead-unavailable';
       agentRunId: string;
     };
 
