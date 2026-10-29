@@ -28,6 +28,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A ticket whose helpers changed nothing no longer offers **Merge** or **Push & open PR**, which
   failed because the branch has no commits ahead of its target. The final step says "The ticket has
   no changes" and explains why; **Request changes** and **Discard** stay available.
+- **The "Save folder" button in project Settings** now lines up with the folder input box, also
+  when a hint or an error shows below it.
 
 ### Database
 

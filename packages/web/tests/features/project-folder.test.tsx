@@ -65,6 +65,27 @@ describe('Settings: change the project folder', () => {
     expect((await folderBox()).value).toBe('/work/moved');
   });
 
+  it('keeps Save folder in the input row, level with the box, with or without an error', async () => {
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, server());
+    const box = await folderBox();
+    const save = screen.getByRole('button', { name: 'Save folder' });
+    // jsdom has no layout, so check the structure that keeps them level: the button shares a
+    // centred row with the input only, and the hint and error text sit outside that row.
+    const row = box.parentElement as HTMLElement;
+    expect(save.parentElement).toBe(row);
+    expect(row.className).toContain('items-center');
+    expect(row.className).not.toContain('items-end');
+    const hint = document.getElementById(box.getAttribute('aria-describedby')?.split(' ')[0] ?? '');
+    expect(hint).toBeTruthy();
+    expect(row.contains(hint)).toBe(false);
+
+    fireEvent.change(box, { target: { value: 'relative/dir' } });
+    fireEvent.click(save);
+    const error = await screen.findByText(/starting with \/ \(for example/);
+    expect(row.contains(error)).toBe(false);
+    expect(save.parentElement).toBe(box.parentElement);
+  });
+
   it('refuses an empty or relative path without calling the server', async () => {
     const s = server();
     renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
