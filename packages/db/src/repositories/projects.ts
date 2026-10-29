@@ -15,6 +15,11 @@ export interface ProjectsRepository {
   /** All projects, ordered by name then id. */
   list(): Project[];
   rename(id: string, name: string): Project | undefined;
+  /**
+   * Re-points a project at another folder. `rootPath` must already be realpath-normalized.
+   * Throws `DbError('conflict')` when another project has that root.
+   */
+  setRootPath(id: string, rootPath: string): Project | undefined;
   /** Unregisters a project. Its sessions and events are detached (`project_id = NULL`), not deleted. */
   remove(id: string): boolean;
 }
@@ -55,6 +60,9 @@ export function createProjectsRepository(ctx: RepositoryContext): ProjectsReposi
   const rename = c.prepare(
     `UPDATE projects SET name = ?, updated_at = ? WHERE id = ? RETURNING ${COLUMNS}`,
   );
+  const setRoot = c.prepare(
+    `UPDATE projects SET root_path = ?, updated_at = ? WHERE id = ? RETURNING ${COLUMNS}`,
+  );
   const remove = c.prepare('DELETE FROM projects WHERE id = ?');
 
   return {
@@ -87,6 +95,20 @@ export function createProjectsRepository(ctx: RepositoryContext): ProjectsReposi
       const valid = parseInput(RegisterProjectInputSchema.shape.name, name, 'project name');
       const row = rename.get(valid, ctx.now().toISOString(), id) as ProjectRow | undefined;
       return row && toProject(row);
+    },
+    setRootPath(id, rootPath) {
+      const valid = parseInput(RegisterProjectInputSchema.shape.rootPath, rootPath, 'project root');
+      try {
+        const row = setRoot.get(valid, ctx.now().toISOString(), id) as ProjectRow | undefined;
+        return row && toProject(row);
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new DbError('conflict', 'a project with this root path is already registered', {
+            cause: error,
+          });
+        }
+        throw error;
+      }
     },
     remove(id) {
       return remove.run(id).changes > 0;

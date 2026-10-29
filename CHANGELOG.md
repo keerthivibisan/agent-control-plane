@@ -20,6 +20,9 @@ and delivery. This release includes a database migration; back up before upgradi
 
 ### Added
 
+- **Rename a project or change its folder** in project Settings (`PATCH /api/projects/:id`). Only
+  the database changes; nothing moves on disk. A folder that no longer exists shows a notice, and
+  the folder stays editable.
 - **Update from target / Resolve conflicts** on a ticket branch whose target moved, also while a
   pull request is open. The app merges in its own copy; a resolver helper repairs conflicts; the
   result is checked and applied only if nothing moved meanwhile (ADR-0030, proposed).

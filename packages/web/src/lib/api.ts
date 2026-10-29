@@ -35,6 +35,7 @@ import {
   pageSchema,
 } from '@acp/core/api';
 import type { RegisterProjectInput } from '@acp/core';
+import type { UpdateProjectInput } from '@acp/core/api';
 import { API_BASE, PROXY_ERROR_HEADER } from './constants';
 // Project setup (Phase 4, P4-F).
 import {
@@ -681,6 +682,20 @@ export async function createRepoProject(client: ApiClient, input: CreateRepoProj
     checked(CreateRepoProjectRequestSchema, input, path),
     ProjectDtoSchema,
   );
+}
+
+/** True for the cached project, list and overview views, which show the folder path. */
+export function isProjectQueryPath(key: string): boolean {
+  return key.startsWith(`${API_BASE}/projects`) || key.startsWith(`${API_BASE}/overview`);
+}
+
+/** PATCH /api/projects/:id: the owner renames the project or points it at a new folder. */
+export async function updateProject(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateProjectInput,
+) {
+  return controlPatch(client, paths.project(projectId), input, ProjectDtoSchema);
 }
 
 export function getProjectSetup(client: ApiClient, projectId: string, signal?: AbortSignal) {

@@ -38,6 +38,22 @@ describe('projects repository (B4)', () => {
     expect(() => repos.projects.insert({ name: 'c', rootPath: 'relative/path' })).toThrow(DbError);
   });
 
+  it('re-points a project root, rejecting duplicates, relative paths and unknown ids', () => {
+    const { repos } = setupStore();
+    const a = repos.projects.insert({ name: 'a', rootPath: '/repo' });
+    repos.projects.insert({ name: 'b', rootPath: '/other' });
+    const moved = repos.projects.setRootPath(a.id, '/moved');
+    expect(moved).toMatchObject({ rootPath: '/moved', name: 'a', createdAt: a.createdAt });
+    expect((moved?.updatedAt ?? '') > a.updatedAt).toBe(true);
+    expect(repos.projects.getByRootPath('/repo')).toBeUndefined();
+    expect(repos.projects.setRootPath('missing', '/x')).toBeUndefined();
+    expect(thrown(() => repos.projects.setRootPath(a.id, '/other'))).toMatchObject({
+      code: 'conflict',
+    });
+    expect(() => repos.projects.setRootPath(a.id, 'relative')).toThrow(DbError);
+    expect(repos.projects.getById(a.id)?.rootPath).toBe('/moved');
+  });
+
   it('detaches sessions when a project is removed', () => {
     const { repos } = setupStore();
     const p = repos.projects.insert({ name: 'a', rootPath: '/repo' });

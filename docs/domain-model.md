@@ -42,7 +42,8 @@ validation; and retention.
 - **R:** `id`, `name`, `rootPath`, `createdAt`, `updatedAt`. **O (later):** `providerPreferences`.
 - **Identity:** `id`; `rootPath` unique after `realpath` normalization.
 - **Relations:** has many Sessions (by association) and, later, Tasks.
-- **Lifecycle:** registered, then optionally renamed, then unregistered. Unregistering detaches
+- **Lifecycle:** registered, then optionally renamed or re-pointed at another folder (database only,
+  `PATCH /api/projects/:id`; architecture §6a), then unregistered. Unregistering detaches
   sessions (`project_id = NULL`). It does not delete history unless the user explicitly purges it.
 - **Validation:** absolute path; it must exist and be a directory when registered; nested roots are
   allowed (longest match wins).

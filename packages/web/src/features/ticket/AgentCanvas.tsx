@@ -9,6 +9,7 @@ import { AGENT_FINISHED_COPY, AGENT_STATUS_COPY, CONTROL_COPY, TICKET_COPY } fro
 import { formatCount } from '../../lib/format';
 import { BudgetBar } from '../control/AgentTree';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
+import { MissingFolderNotice } from '../project-setup/MissingFolderNotice';
 import { buildAgentTree, isAgentLive, type AgentNode } from '../control/run-state';
 import { activityText } from '../../lib/activity';
 import { useTicketAction } from './actions';
@@ -118,6 +119,7 @@ function PromptBox({ agent, runId }: { agent: AgentRunDto; runId: string }) {
       </div>
       {tooLong ? <span className="text-caption text-danger">{C.tooLong}</span> : null}
       <ActionError error={action.error} message={C.sendFailed} />
+      <MissingFolderNotice error={action.error} />
     </form>
   );
 }

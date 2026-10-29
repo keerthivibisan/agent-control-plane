@@ -307,7 +307,7 @@ describe('Project settings (#/p/:id/settings, docs/redesign/README.md §4.7)', (
     expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy();
     const card = await screen.findByTestId('settings-project');
     expect(within(card).getByText('web-app')).toBeTruthy();
-    expect(within(card).getByText('/work/web-app')).toBeTruthy();
+    expect(within(card).getByLabelText<HTMLInputElement>('Folder').value).toBe('/work/web-app');
     expect(within(card).getByLabelText<HTMLInputElement>('Board key').value).toBe('WEB');
     expect(within(card).getByLabelText<HTMLInputElement>('Default model').value).toBe('some-model');
     const context = screen.getByTestId('settings-context');
