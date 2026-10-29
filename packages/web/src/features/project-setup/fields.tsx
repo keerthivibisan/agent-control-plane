@@ -35,6 +35,7 @@ export function TextField({
   className = '',
   inputClassName = '',
   readOnly = false,
+  action,
 }: {
   label: string;
   hint: ReactNode;
@@ -47,6 +48,8 @@ export function TextField({
   tip?: string;
   className?: string;
   inputClassName?: string;
+  /** A control level with the input box, e.g. a Save button; the hint and error stay below. */
+  action?: ReactNode;
   /** Shown but fixed (a preset's value); still read and focusable. */
   readOnly?: boolean;
 }) {
@@ -59,21 +62,26 @@ export function TextField({
         </label>
         {tip ? <InfoTip tip={tip} label={label} /> : null}
       </span>
-      <input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        readOnly={readOnly}
-        inputMode={numeric ? 'numeric' : undefined}
-        spellCheck={mono ? false : undefined}
-        autoComplete="off"
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(`${id}-hint`, `${id}-error`, error)}
-        className={inputClass(
-          `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${readOnly ? 'read-only:bg-sunken read-only:text-dim' : ''} ${inputClassName}`,
-        )}
-      />
+      {/* The action sits beside the input box only, so it stays level with it however much hint
+          or error text follows. */}
+      <div className="flex items-center gap-2">
+        <input
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          readOnly={readOnly}
+          inputMode={numeric ? 'numeric' : undefined}
+          spellCheck={mono ? false : undefined}
+          autoComplete="off"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(`${id}-hint`, `${id}-error`, error)}
+          className={inputClass(
+            `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${readOnly ? 'read-only:bg-sunken read-only:text-dim' : ''} ${inputClassName}`,
+          )}
+        />
+        {action}
+      </div>
       <span id={`${id}-hint`} className={hintClass}>
         {hint}
       </span>

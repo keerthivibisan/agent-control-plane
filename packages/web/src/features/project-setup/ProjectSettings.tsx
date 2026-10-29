@@ -101,24 +101,28 @@ function FolderEditor({ project }: { project: ProjectDto }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid="settings-folder">
-      <div className="flex flex-wrap items-end gap-2">
-        <TextField
-          label={S.project.folder}
-          hint={S.project.folderHint}
-          error={message}
-          value={value}
-          onChange={(v) => {
-            setJustSaved(false);
-            setValue(v);
-          }}
-          placeholder={S.project.folderPlaceholder}
-          mono
-          className="min-w-64 flex-1"
-        />
-        <Button type="button" disabled={!changed || save.pending} onClick={() => void submit()}>
-          {save.pending ? S.project.folderSaving : S.project.folderSave}
-        </Button>
-      </div>
+      <TextField
+        label={S.project.folder}
+        hint={S.project.folderHint}
+        error={message}
+        value={value}
+        onChange={(v) => {
+          setJustSaved(false);
+          setValue(v);
+        }}
+        placeholder={S.project.folderPlaceholder}
+        mono
+        action={
+          <Button
+            type="button"
+            className="shrink-0"
+            disabled={!changed || save.pending}
+            onClick={() => void submit()}
+          >
+            {save.pending ? S.project.folderSaving : S.project.folderSave}
+          </Button>
+        }
+      />
       {message === undefined ? (
         <ActionError error={save.error} message={S.project.folderFailed} />
       ) : null}
