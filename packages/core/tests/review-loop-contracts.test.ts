@@ -704,6 +704,13 @@ describe('review-loop DTOs', () => {
       false,
     );
     expect(ChangeReviewDtoSchema.parse(change).reviews).toHaveLength(2);
+    expect(ChangeReviewDtoSchema.parse({ ...change, canReworkAfterRestart: true })).toHaveProperty(
+      'canReworkAfterRestart',
+      true,
+    );
+    expect(
+      ChangeReviewDtoSchema.safeParse({ ...change, canReworkAfterRestart: 'yes' }).success,
+    ).toBe(false);
     expect(ChangeReviewDtoSchema.safeParse({ ...change, state: 'approved' }).success).toBe(false);
     expect(
       ChangeReviewDtoSchema.safeParse({ ...change, conflictFiles: ['../outside'] }).success,

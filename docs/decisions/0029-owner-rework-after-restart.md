@@ -1,7 +1,6 @@
 # ADR-0029: The owner may send a change back for rework after a restart
 
-- **Status:** proposed (owner, 2026-10-26: "yes plan it for 0.3.2"; the design below is the
-  coordinator's draft, to be accepted before work starts)
+- **Status:** accepted (owner approved the proposed behavior in chat)
 - **Date:** 2026-10-26
 - **Deciders:** project owner (decision); coordinator (draft)
 - **Amends:** ADR-0021 §5 (a restart ends live agents as `NEEDS_REVIEW`), ADR-0020 (owner actions
@@ -18,7 +17,7 @@ for rework" is refused, because `NEEDS_REVIEW` has no transition back to work an
 lead to carry the plan on. The owner then cancels the ticket and runs it again, which repeats work
 that is already done (P-D finding, [docs/v0.3.1/wp/P-D.md](../v0.3.1/wp/P-D.md)).
 
-## Decision (draft)
+## Decision
 
 1. **Rework after a restart, on the owner's click only.** For a helper that was `AWAITING_REVIEW`
    (its change sealed) when the server stopped, the owner may choose **Rework** with comments. The
@@ -27,18 +26,22 @@ that is already done (P-D finding, [docs/v0.3.1/wp/P-D.md](../v0.3.1/wp/P-D.md))
    itself after a restart.
 2. **Engine:** `NEEDS_REVIEW → STARTING` becomes a transition for such a helper only, and
    `checkChange` accepts the owner's rework on it. Every other agent stays `NEEDS_REVIEW`.
-3. **The run goes on with its lead resumed.** The owner's rework resumes the lead's saved session as
-   a follow-up turn (ADR-0020), told what happened, so the change comes back to review and the plan
+3. **The run goes on with its lead resumed.** The owner's rework resumes the lead's saved session in
+   a managed turn, told what happened, so the change comes back to review and the plan
    continues as before. If the lead's session cannot be continued, the run stays waiting for the
-   owner with a plain message, and merge and discard still work.
+   owner with a plain message, and merge and discard still work. This turn needs the lead's normal
+   orchestration tools; ADR-0020's answers-only follow-up remains read-only.
 4. **Invariants kept:** the branch guard and every safety rule apply to the resumed agents as at
    start; limits and budgets count the earlier work; the ticket branch moves only by the lead's
    merge or the owner's.
 
 ## Consequences
 
-- No migration: states and transitions live in the orchestrator; the API gains the rework action on
-  such a change (an `@acp/core/api` contract change, reviewed by the coordinator).
+- Recovery must preserve evidence that the helper was awaiting review with a sealed change, and
+  retain the usage observations needed to count resumed work without double-counting replays.
+  Legacy runs without sufficient evidence must not be treated as eligible by assumption. The API
+  exposes eligibility to the client; any necessary persistence and contract changes are reviewed
+  with the implementation.
 - A restart no longer costs the owner a whole ticket when changes were already done.
 
 ## Alternatives considered

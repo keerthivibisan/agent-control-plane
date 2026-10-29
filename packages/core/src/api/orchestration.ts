@@ -161,6 +161,8 @@ export const ChangeReviewDtoSchema = z.object({
   /** The sealed (or integrated) commit; null before the change is sealed. */
   headCommit: GitCommitSchema.nullable(),
   changedFiles: count.nullable(),
+  /** The server verified that the owner can resume this change after a restart. */
+  canReworkAfterRestart: z.boolean().optional(),
   /** Names of the files that conflicted with the ticket branch on the last merge attempt. */
   conflictFiles: z.array(RepoRelativePathSchema).max(100),
   /** Check runs on `headCommit` only (ADR-0021: checks are stored with their commit). */

@@ -395,6 +395,19 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
   },
   {
     "columns": [
+      "run_id TEXT NOT NULL PK1",
+      "record TEXT NOT NULL",
+    ],
+    "foreignKeys": [
+      "run_id -> orchestration_runs(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (run_id)",
+    ],
+    "table": "run_recovery",
+  },
+  {
+    "columns": [
       "version INTEGER NULL PK1",
       "name TEXT NOT NULL",
       "applied_at TEXT NOT NULL",

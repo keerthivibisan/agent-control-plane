@@ -144,6 +144,7 @@ describe('0001_observability schema (B3)', () => {
         ...ACTIVITY_TABLES,
         ...HARNESS_TABLES,
         ...RESOLUTION_TABLES,
+        'run_recovery',
       ].sort(),
     );
   });

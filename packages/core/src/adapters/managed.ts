@@ -75,6 +75,8 @@ export interface ManagedAgentSpec {
    * the read-only toolset and no control-plane tools, and closes the input after one turn.
    */
   followUp?: { resumeSessionId: string };
+  /** Resume a recovered lead with normal orchestration tools; never start a fresh session on failure. */
+  resumeLeadSessionId?: string;
   /**
    * A rework turn of a helper or tester (ADR-0021 §3): the agent works again in its own worktree on
    * the lead's or owner's comments. `resumeSessionId` resumes its earlier session (SDK `resume`,

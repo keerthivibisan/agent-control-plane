@@ -1,7 +1,7 @@
 # v0.3.2 (Q series): plan
 
 Coordinator-owned. Status: [STATUS.md](STATUS.md). Decision:
-[ADR-0029](../decisions/0029-owner-rework-after-restart.md) (proposed).
+[ADR-0029](../decisions/0029-owner-rework-after-restart.md) (accepted; implementation planned).
 
 ## Goal
 

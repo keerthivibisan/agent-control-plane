@@ -19,6 +19,7 @@ export * from './paths/containment.js';
 export * from './redaction/redact.js';
 export * from './orchestration/orchestration.js';
 export * from './orchestration/limits.js';
+export * from './orchestration/budget-ledger.js';
 export * from './workspace/workspace.js';
 export * from './workspace/workflow.js';
 export * from './workspace/workflow-graph.js';

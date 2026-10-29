@@ -34,5 +34,5 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0026](0026-comments-conversation-and-attachments.md)      | Comments, Conversation and attachments                         | accepted |
 | [0027](0027-harness-setup-and-check-blocks.md)             | Harness setup steps and check blocks in the workflow graph     | accepted |
 | [0028](0028-agent-effort-optional-checks-finish-block.md)  | Effort per agent, optional Checks blocks, one Finish block     | accepted |
-| [0029](0029-owner-rework-after-restart.md)                 | The owner may send a change back for rework after a restart    | proposed |
+| [0029](0029-owner-rework-after-restart.md)                 | The owner may send a change back for rework after a restart    | accepted |
 | [0030](0030-conflict-resolution-and-delegated-delivery.md) | Conflict resolution, adaptive verification, delegated delivery | proposed |

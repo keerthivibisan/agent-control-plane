@@ -59,7 +59,7 @@ function record(runId: string, projectId: string, id: string): ConflictResolutio
 
 describe('migration 0012 (CR-B)', () => {
   it('ships as 0012_conflict_resolution', () => {
-    expect(loadMigrations(DEFAULT_MIGRATIONS_DIR).at(-1)).toMatchObject({
+    expect(loadMigrations(DEFAULT_MIGRATIONS_DIR).find((m) => m.version === 12)).toMatchObject({
       version: 12,
       name: 'conflict_resolution',
     });
