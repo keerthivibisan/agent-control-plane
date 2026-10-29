@@ -56,6 +56,9 @@ export function createApiRouter(services: Services, options: ApiRouterOptions = 
   router.post('/projects', csrf, express.json({ limit: '16kb' }), async (req, res) => {
     res.status(201).json(await services.projects.register(req.body));
   });
+  router.patch('/projects/:id', csrf, express.json({ limit: '16kb' }), async (req, res) => {
+    res.json(await services.projects.update(param(req.params['id']), req.body));
+  });
   router.get('/projects/:id', (req, res) => {
     res.json(services.projects.get(param(req.params['id'])));
   });
