@@ -139,6 +139,20 @@ SQLite through `better-sqlite3` (synchronous, in-process; ADR-0003):
 through REST, so the UI never shows data that is not persisted. `Last-Event-ID` resumes from the
 event row id, and a heartbeat comment is sent every 15 s.
 
+## 6a. Renaming and re-pointing a project (`PATCH /api/projects/:id`) [implemented]
+
+`PATCH /api/projects/:id` takes `{ name?, rootPath? }` (at least one; `UpdateProjectInput` in
+`@acp/core/api`) and returns the `ProjectDto`. It renames the project and/or re-points its root
+path. Only the database changes: nothing is moved, created or deleted on disk. A new root is
+normalized like on registration; a root already used by another project answers 409, an unknown
+project 404, an invalid body 400. After a re-point, sessions that were unassigned are matched
+against the new root, and a `projects-changed` notice is published.
+
+In project **Settings**, the Folder fact is an editor (a new absolute path and Save). When the
+registered folder no longer exists on disk, the setup, harness and context views show a
+missing-folder notice instead of failing, and the folder editor stays available so the path can
+be fixed.
+
 ## 7. Network posture [implemented]
 
 - The server binds `127.0.0.1` only.

@@ -35,6 +35,7 @@ import {
   pageSchema,
 } from '@acp/core/api';
 import type { RegisterProjectInput } from '@acp/core';
+import type { UpdateProjectInput } from '@acp/core/api';
 import { API_BASE, PROXY_ERROR_HEADER } from './constants';
 // Project setup (Phase 4, P4-F).
 import {
@@ -681,15 +682,6 @@ export async function createRepoProject(client: ApiClient, input: CreateRepoProj
     checked(CreateRepoProjectRequestSchema, input, path),
     ProjectDtoSchema,
   );
-}
-
-/**
- * The body of `PATCH /api/projects/:id`: at least one of the two. Defined here until
- * `UpdateProjectInput` is exported from `@acp/core/api`; the shape is the same.
- */
-export interface UpdateProjectInput {
-  name?: string;
-  rootPath?: string;
 }
 
 /** True for the cached project, list and overview views, which show the folder path. */
