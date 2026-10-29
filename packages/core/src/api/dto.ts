@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
-import { ProjectSchema } from '../domain/project.js';
+import { ProjectSchema, RegisterProjectInputSchema } from '../domain/project.js';
 import { ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { IngestionChannelSchema } from '../events/source.js';
@@ -73,6 +73,17 @@ export const ProjectDtoSchema = ProjectSchema.extend({
   lastEventAt: IsoTimestampSchema.nullable(),
 });
 export type ProjectDto = z.infer<typeof ProjectDtoSchema>;
+
+/** `PATCH /api/projects/:id` body. The root is only re-pointed in the database; nothing moves on disk. */
+export const UpdateProjectInputSchema = z
+  .object({
+    name: RegisterProjectInputSchema.shape.name.optional(),
+    rootPath: z.string().min(1).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.rootPath !== undefined, {
+    message: 'at least one of name or rootPath is required',
+  });
+export type UpdateProjectInput = z.infer<typeof UpdateProjectInputSchema>;
 
 export const SessionSummaryDtoSchema = z.object({
   id: z.string().min(1),

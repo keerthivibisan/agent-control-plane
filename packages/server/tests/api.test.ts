@@ -468,6 +468,74 @@ describe('API: project registration', () => {
   });
 });
 
+describe('API: PATCH /api/projects/:id', () => {
+  async function setup() {
+    const s = await setupApp({
+      ingestDemo: false,
+      normalizeRoot: async (p) => {
+        if (p.includes('missing')) {
+          const { HttpError } = await import('../src/errors.js');
+          throw new HttpError(400, 'invalid_root', 'Root path does not exist');
+        }
+        return p;
+      },
+    });
+    const create = async (name: string, rootPath: string) =>
+      ProjectDtoSchema.parse(
+        (await request(s.app).post('/api/projects').send({ name, rootPath })).body,
+      );
+    const patch = (id: string, body: unknown) =>
+      request(s.app)
+        .patch(`/api/projects/${id}`)
+        .send(body as object);
+    return { s, create, patch };
+  }
+
+  it('changes the root, publishes projects-changed and requests a poll', async () => {
+    const { s, create, patch } = await setup();
+    const p = await create('app', '/work/app');
+    s.notices.length = 0;
+    const before = s.polls.length;
+    const res = await patch(p.id, { rootPath: '/work/moved' });
+    expect(res.status).toBe(200);
+    expect(ProjectDtoSchema.parse(res.body)).toMatchObject({
+      id: p.id,
+      name: 'app',
+      rootPath: '/work/moved',
+    });
+    expect(s.notices).toMatchObject([{ kind: 'projects-changed', projectIds: [p.id] }]);
+    expect(s.polls.length).toBe(before + 1);
+  });
+
+  it('updates only the name', async () => {
+    const { create, patch } = await setup();
+    const p = await create('app', '/work/app');
+    const res = await patch(p.id, { name: 'renamed' });
+    expect(res.status).toBe(200);
+    expect(ProjectDtoSchema.parse(res.body)).toMatchObject({
+      name: 'renamed',
+      rootPath: '/work/app',
+    });
+  });
+
+  it('rejects a missing path (400), a duplicate root (409), unknown ids (404) and bad bodies', async () => {
+    const { create, patch } = await setup();
+    const p = await create('app', '/work/app');
+    await create('other', '/work/other');
+    const missing = await patch(p.id, { rootPath: '/missing/dir' });
+    expect(missing.status).toBe(400);
+    expect(ErrorDtoSchema.parse(missing.body).error.code).toBe('invalid_root');
+    const dup = await patch(p.id, { rootPath: '/work/other' });
+    expect(dup.status).toBe(409);
+    expect(ErrorDtoSchema.parse(dup.body).error.code).toBe('conflict');
+    expect((await patch('nope', { name: 'x' })).status).toBe(404);
+    const empty = await patch(p.id, {});
+    expect(empty.status).toBe(400);
+    expect(ErrorDtoSchema.parse(empty.body).error.code).toBe('invalid_request');
+    expect((await patch(p.id, { name: '' })).status).toBe(400);
+  });
+});
+
 describe('API: local-only guard', () => {
   it('rejects foreign hosts, foreign origins and CORS preflights; allows the dev UI origin', async () => {
     const { app } = await setupApp({ ingestDemo: false });
