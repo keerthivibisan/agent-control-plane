@@ -11,7 +11,14 @@ On macOS or Linux, one script does it all:
 ./start.sh
 ```
 
-`./start.sh --demo` starts the same app with sample data.
+Usage: `./start.sh [--demo] [--restart] [-h|--help]`
+
+- `--demo` starts the same app with sample data.
+- `--restart` stops a copy of this app that is already running, then starts a new one. It only
+  stops processes on ports 7420 and 5173 whose command line or working folder belongs to this
+  repository: it sends SIGTERM and waits up to about 10 seconds. Without it, the script stops with a
+  message naming the port and the process id (PID).
+- `-h` or `--help` prints the usage and exits.
 
 The script:
 
@@ -20,7 +27,9 @@ The script:
 2. installs pnpm 10.26.1 for that Node if an older pnpm is found;
 3. warns when the build tools for the SQLite driver or Claude Code are missing;
 4. installs the locked dependencies;
-5. stops if port 7420 or 5173 is already in use;
+5. checks ports 7420 and 5173: if one is in use, it stops with a message naming the port and PID,
+   or, with `--restart`, first stops this repository's own copy of the app (anything else on those
+   ports is left alone and the script still stops);
 6. runs `pnpm dev`.
 
 By hand, the same is:
