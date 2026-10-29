@@ -25,7 +25,9 @@ import {
   paths,
   projectSetupPaths,
   projectSetupSchemas,
+  isProjectQueryPath,
   schemas,
+  updateProject,
   updateProjectSetup,
 } from '../../lib/api';
 import { BRANCHING_COPY, PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SHELL_COPY } from '../../lib/copy';
@@ -35,6 +37,7 @@ import { href } from '../../lib/router';
 import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { TextField } from './fields';
+import { isMissingFolder, MissingFolderNotice } from './MissingFolderNotice';
 import { ContextPicker } from './SetupSections';
 import { draftFromSetup, draftToRequest, type SetupDraft, type SetupErrors } from './setup-form';
 
@@ -66,6 +69,65 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
     <div className="flex min-w-0 flex-col gap-1">
       <dt className={labelClass}>{label}</dt>
       <dd className="min-w-0 break-words text-dim">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * The Folder fact, editable: a new absolute path and Save (PATCH /api/projects/:id). It is not a
+ * form of its own because it sits inside the settings form, so its Save is a plain button.
+ */
+function FolderEditor({ project }: { project: ProjectDto }) {
+  const [value, setValue] = useState(project.rootPath);
+  const [problem, setProblem] = useState<string | undefined>();
+  const [justSaved, setJustSaved] = useState(false);
+  const save = useSetupAction(updateProject, isProjectQueryPath);
+  const trimmed = value.trim();
+  const changed = trimmed !== project.rootPath;
+
+  const submit = async () => {
+    if (trimmed === '') return setProblem(S.project.folderPathMissing);
+    if (!trimmed.startsWith('/')) return setProblem(S.project.folderNotAbsolute);
+    setProblem(undefined);
+    if ((await save.run(project.id, { rootPath: trimmed })) !== null) setJustSaved(true);
+  };
+
+  const refusal = save.error;
+  const message =
+    problem ??
+    (refusal !== null && refusal.kind === 'http' && refusal.code !== null
+      ? S.project.folderErrors[refusal.code]
+      : undefined);
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2" data-testid="settings-folder">
+      <div className="flex flex-wrap items-end gap-2">
+        <TextField
+          label={S.project.folder}
+          hint={S.project.folderHint}
+          error={message}
+          value={value}
+          onChange={(v) => {
+            setJustSaved(false);
+            setValue(v);
+          }}
+          placeholder={S.project.folderPlaceholder}
+          mono
+          className="min-w-64 flex-1"
+        />
+        <Button type="button" disabled={!changed || save.pending} onClick={() => void submit()}>
+          {save.pending ? S.project.folderSaving : S.project.folderSave}
+        </Button>
+      </div>
+      {message === undefined ? (
+        <ActionError error={save.error} message={S.project.folderFailed} />
+      ) : null}
+      {justSaved && !changed ? (
+        <span role="status" className="inline-flex items-center gap-1.5 text-success">
+          <CheckIcon size={16} />
+          {S.project.folderSaved}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -127,12 +189,10 @@ function SettingsForm({
     >
       <Card title={S.project.title} description={S.project.description} testId="settings-project">
         <div className="flex flex-col gap-6">
-          <dl className="grid gap-6 sm:grid-cols-2">
+          <dl className="grid gap-6">
             <Fact label={S.project.name}>{project.name}</Fact>
-            <Fact label={S.project.folder}>
-              <span className="font-mono text-caption">{project.rootPath}</span>
-            </Fact>
           </dl>
+          <FolderEditor key={project.rootPath} project={project} />
           <div className="grid gap-6 sm:grid-cols-2">
             <TextField
               label={S.project.boardKey}
@@ -265,13 +325,33 @@ function SettingsBody({ project }: { project: ProjectDto }) {
     projectSetupPaths.contextCandidates(id),
     projectSetupSchemas.contextCandidates,
   );
+  const missing = isMissingFolder(setup.error);
   return (
     <div className="max-w-4xl">
       <PageHeader title={S.title} tip={S.tip} description={S.description} />
       <div className="flex flex-col gap-6">
-        <QueryView query={setup}>
-          {(s) => <SettingsForm project={project} setup={s} candidates={candidates} />}
-        </QueryView>
+        {missing ? (
+          // Without a folder the setup can't be read; keep the folder editable so it can be fixed.
+          <>
+            <MissingFolderNotice error={setup.error ?? candidates.error} />
+            <Card
+              title={S.project.title}
+              description={S.project.description}
+              testId="settings-project"
+            >
+              <FolderEditor key={project.rootPath} project={project} />
+            </Card>
+          </>
+        ) : (
+          <QueryView query={setup}>
+            {(s) => (
+              <>
+                <MissingFolderNotice error={candidates.error} />
+                <SettingsForm project={project} setup={s} candidates={candidates} />
+              </>
+            )}
+          </QueryView>
+        )}
         {setup.data !== undefined ? <AutomationCard projectId={id} setup={setup.data} /> : null}
         <CodeHostCard projectId={id} />
         <BranchesCard projectId={id} />

@@ -23,6 +23,7 @@ import { projectBranchName, projectTarget, startSource } from '../branching/tick
 import { MissingTargetFix } from '../branching/Branches';
 import { useBranchDefaults } from '../branching/TicketBranchFields';
 import { ActionError, ConfirmAction, StatusWord } from '../control/bits';
+import { MissingFolderNotice } from '../project-setup/MissingFolderNotice';
 import { BranchIcon, OptionsIcon } from '../review-loop/icons';
 import { checksSummary } from '../review-loop/logic';
 import { StartDialog } from '../review-loop/StartDialog';
@@ -109,6 +110,7 @@ function StartButton({
         </Button>
       </div>
       <ActionError error={start.error} message={C.actions.startFailed} />
+      <MissingFolderNotice error={start.error} projectId={ticket.projectId} />
       <MissingTargetFix
         projectId={ticket.projectId}
         ticketBranch={ticket.branch}

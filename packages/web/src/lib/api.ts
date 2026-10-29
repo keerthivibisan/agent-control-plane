@@ -683,6 +683,29 @@ export async function createRepoProject(client: ApiClient, input: CreateRepoProj
   );
 }
 
+/**
+ * The body of `PATCH /api/projects/:id`: at least one of the two. Defined here until
+ * `UpdateProjectInput` is exported from `@acp/core/api`; the shape is the same.
+ */
+export interface UpdateProjectInput {
+  name?: string;
+  rootPath?: string;
+}
+
+/** True for the cached project, list and overview views, which show the folder path. */
+export function isProjectQueryPath(key: string): boolean {
+  return key.startsWith(`${API_BASE}/projects`) || key.startsWith(`${API_BASE}/overview`);
+}
+
+/** PATCH /api/projects/:id: the owner renames the project or points it at a new folder. */
+export async function updateProject(
+  client: ApiClient,
+  projectId: string,
+  input: UpdateProjectInput,
+) {
+  return controlPatch(client, paths.project(projectId), input, ProjectDtoSchema);
+}
+
 export function getProjectSetup(client: ApiClient, projectId: string, signal?: AbortSignal) {
   return client.get(projectSetupPaths.setup(projectId), projectSetupSchemas.setup, signal);
 }

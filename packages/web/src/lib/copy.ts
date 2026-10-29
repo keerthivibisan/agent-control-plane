@@ -1587,6 +1587,21 @@ export const PROJECT_SETUP_COPY = {
       description: 'Where the project lives, and how its tickets are numbered.',
       name: 'Name',
       folder: 'Folder',
+      folderHint:
+        'The full path of the project’s folder, starting with /. Change it if you moved the folder.',
+      folderPlaceholder: '/Users/me/code/my-app',
+      folderPathMissing: 'Enter the folder path.',
+      folderNotAbsolute:
+        'Use the full folder path, starting with / (for example /Users/me/code/my-app).',
+      folderSave: 'Save folder',
+      folderSaving: 'Saving…',
+      folderSaved: 'Folder updated.',
+      folderFailed: "The folder couldn't be changed.",
+      folderErrors: {
+        invalid_root: 'Folder not found. Point the project at its new location.',
+        conflict: 'Another project already uses this folder.',
+        not_found: 'This project was not found. It may have been removed.',
+      } as Readonly<Record<string, string>>,
       boardKey: 'Board key',
       boardKeyHint: 'Starts every ticket number on this project’s board, for example WEB-12.',
       model: 'Default model',
@@ -1607,6 +1622,11 @@ export const PROJECT_SETUP_COPY = {
     unsaved: 'You have unsaved changes.',
     reset: 'Undo changes',
     saveFailed: "Your changes couldn't be saved.",
+    missingFolder: {
+      title: 'The project folder was not found',
+      text: 'Folder not found. Point the project at its new location.',
+      link: 'Update the folder',
+    },
     danger: 'Danger zone',
     dangerText:
       'Removing a project from this app isn’t available yet. When it is, it will never delete the folder or its git history, and it won’t be possible while the project has tickets or runs.',
