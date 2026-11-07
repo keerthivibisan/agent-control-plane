@@ -2409,6 +2409,22 @@ export const TOKENS_COPY = {
     ticketNote:
       "A ticket's tokens are its agents' sessions. A ticket whose agents haven't reported usage yet reads \"Not reported\".",
     roleNote: 'Sessions you started yourself in Claude Code count as "Outside the app".',
+    /** CX-6b (ADR-0032 §6): each provider's own tokens. Dollars are never added across them. */
+    providers: {
+      label: 'Tokens by provider',
+      newWork: 'new work',
+      total: 'total processed',
+      cost: 'Estimated cost',
+      perSession: 'Per session',
+      perSessionTip:
+        'This provider reports a running cost for each session, shown in the session table. Costs are never added up, across sessions or across providers.',
+      notReportedTip: 'This provider reported no cost, so none is shown. It is not $0.',
+      unknown: 'Unknown',
+      unknownTip:
+        'This usage came from an older version of the app, which did not record the provider.',
+      demo: 'Demo',
+      demoTip: 'Demo data, from the built-in sample provider.',
+    },
   },
   roles: {
     planner: { word: 'Planner', tip: 'Writes the plan for a ticket.' },

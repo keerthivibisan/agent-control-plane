@@ -375,3 +375,74 @@ describe('ticketTokens (v0.3.0 T-A, the ticket badge)', () => {
     expect(fx.q.ticketTokens('no-such-project', fx.tickets.web1)).toBeUndefined();
   });
 });
+
+describe('projectTokens by provider (CX-6b, ADR-0032 §6)', () => {
+  function mixed() {
+    const store = setupWorkspace();
+    const { repos, projectId } = store;
+    const session = (provider: 'claude-code' | 'codex', providerSessionId: string) =>
+      repos.sessions.upsert(
+        sessionInput({ provider, providerSessionId, providerAgentId: null }, { projectId }),
+      ).id;
+    const claude = session('claude-code', 'sess-c');
+    const codex = session('codex', 'thread-x');
+    const rec = (
+      provider: 'claude-code' | 'codex',
+      messageId: string,
+      sessionId: string,
+      t: TokenCounts,
+      model: string | null,
+    ) =>
+      repos.usage.upsertRecord({
+        provider,
+        messageId,
+        sessionId,
+        selectedEventId: null,
+        occurredAt: DAY1,
+        requestId: null,
+        model,
+        tokens: t,
+        observationCount: 1,
+        conflict: false,
+        attributionAmbiguous: false,
+        source: 'transcript',
+      });
+    // The same message id and model name from two providers: two records, two model rows.
+    rec('claude-code', 'm1', claude, tokens(10, 100, 5, 1000), 'shared');
+    rec('codex', 'm1', codex, tokens(3, 30, 0, 300), 'shared');
+    rec('codex', 'm2', codex, tokens(1, 10, null, null), null);
+    const t = createTokenQueries(store.db).projectTokens(projectId);
+    if (t === undefined) throw new Error('project missing');
+    return { t, claude, codex };
+  }
+
+  it('groups models by (provider, model), so one name from two providers stays two rows', () => {
+    const { t } = mixed();
+    expect(t.byModel.map((r) => [r.provider, r.model])).toEqual([
+      ['claude-code', 'shared'],
+      ['codex', 'shared'],
+      ['codex', null],
+    ]);
+    expect(tokensOf(t.byModel)).toEqual([
+      tokens(10, 100, 5, 1000),
+      tokens(3, 30, 0, 300),
+      tokens(1, 10, null, null),
+    ]);
+  });
+
+  it('carries the session’s provider, and the provider rows partition the totals', () => {
+    const { t, claude, codex } = mixed();
+    expect(t.bySession.find((r) => r.sessionId === claude)?.provider).toBe('claude-code');
+    const x = t.bySession.find((r) => r.sessionId === codex);
+    expect(x?.provider).toBe('codex');
+    // A category one record lacks stays from the other record, flagged partial (never 0-filled).
+    expect(x?.totals.tokens).toEqual(tokens(4, 40, 0, 300));
+    expect(x?.totals.recordsWithUnavailable.cacheRead).toBe(1);
+    // Neither session has a snapshot: no cost, never 0.
+    expect(x?.latestSnapshot).toBeNull();
+    const records = (p: string) =>
+      t.byModel.filter((r) => r.provider === p).reduce((n, r) => n + r.totals.recordCount, 0);
+    expect([records('claude-code'), records('codex')]).toEqual([1, 2]);
+    expect(t.totals.recordCount).toBe(3);
+  });
+});

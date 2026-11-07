@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
 import {
@@ -248,6 +249,13 @@ export type TokenHeadlineDto = z.infer<typeof TokenHeadlineDtoSchema>;
 
 const UsageRowBase = { usage: UsageTotalsDtoSchema, headline: TokenHeadlineDtoSchema };
 
+/**
+ * CX-6b (ADR-0032 §6): which provider a by-session or by-model row's usage came from. Additive:
+ * absent means a row from a server before the CX series, which the UI shows as an unknown
+ * provider (never guessed as Claude Code).
+ */
+const TokenRowProvider = { provider: ProviderIdSchema.optional() };
+
 /** GET `/api/projects/:id/tokens?from&to`. All groups sum DIRECT usage (no double counting). */
 export const ProjectTokensDtoSchema = z.object({
   projectId: z.string().min(1),
@@ -273,6 +281,8 @@ export const ProjectTokensDtoSchema = z.object({
       firstSeenAt: IsoTimestampSchema.optional(),
       gitBranch: SessionSummaryDtoSchema.shape.gitBranch.optional(),
       agentType: SessionSummaryDtoSchema.shape.agentType.optional(),
+      /** The session's own provider. */
+      ...TokenRowProvider,
       ...UsageRowBase,
     }),
   ),
@@ -288,7 +298,11 @@ export const ProjectTokensDtoSchema = z.object({
   byRole: z.array(
     z.object({ role: z.union([AgentRoleKindSchema, z.literal('external')]), ...UsageRowBase }),
   ),
-  byModel: z.array(z.object({ model: z.string().min(1), ...UsageRowBase })),
+  /**
+   * One row per (provider, model): the same model name from two providers is two rows, so usage
+   * from different providers is never merged.
+   */
+  byModel: z.array(z.object({ model: z.string().min(1), ...TokenRowProvider, ...UsageRowBase })),
 });
 export type ProjectTokensDto = z.infer<typeof ProjectTokensDtoSchema>;
 
