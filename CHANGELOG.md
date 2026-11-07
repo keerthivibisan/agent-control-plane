@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Codex as a second managed provider** (ADR-0031). Each workflow block, the lead included, can
+  run on Claude Code or Codex, and one ticket can mix both. Codex runs through `codex app-server`
+  with the owner's own Codex (ChatGPT) login, the same approval modes, lead tools, follow-ups and
+  rework, and per-agent permission profiles that keep `.git` read-only and block private files.
+  A provider picker per block and a project default, provider labels, Codex availability on Data
+  health, and Codex usage on the Tokens page (by provider; no combined dollar total; ADR-0032).
+  Known gaps: no project skills on Codex, agent-file tool limits are refused, reads outside the
+  project are not prompted. This release includes a database migration (0013); back up first.
+- **Lead and agent messaging** (ADR-0033): honest delivery states for `message_agent`, held
+  messages for a blocked lead, `ask_lead` for helpers, reviewers and testers, finish notices,
+  `get_review_findings`, a bounded merge wait, and a metadata-only message list on the ticket.
+
 ### Documentation
 
 - Clarify experimental POC status, current provider and known limits; add contributor entry
