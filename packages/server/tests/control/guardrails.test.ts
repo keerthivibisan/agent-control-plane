@@ -203,6 +203,13 @@ describe('ordering: persisted before effects (orchestration-lifecycle §1)', () 
     const db: { probe?: (id: string) => unknown; countApprovals?: () => number } = {};
     const adapter: ManagedExecutionAdapter = {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         seen.push({ agent: spec.kind, storedStatus: db.probe?.(spec.agentRunId) });
         return inner.adapter.start(spec, callbacks);

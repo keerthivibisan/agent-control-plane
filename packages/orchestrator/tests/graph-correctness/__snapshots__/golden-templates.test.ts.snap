@@ -5,7 +5,7 @@ exports[`template traces > lead-only approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -24,7 +24,7 @@ exports[`template traces > lead-only approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -61,7 +61,7 @@ exports[`template traces > lead-only failed-check 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -80,7 +80,7 @@ exports[`template traces > lead-only failed-check 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -102,7 +102,7 @@ exports[`template traces > lead-only failed-check 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #13 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #14 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -139,7 +139,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -158,7 +158,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -174,7 +174,7 @@ exports[`template traces > lead-only rework-then-approve 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #11 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #12 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -212,7 +212,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -230,14 +230,14 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -276,7 +276,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -294,14 +294,14 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -323,7 +323,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #14 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #15 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -362,7 +362,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -380,14 +380,14 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -403,7 +403,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #12 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #13 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -441,7 +441,7 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -460,7 +460,7 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -472,7 +472,7 @@ exports[`template traces > reviewer-helper-loop approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -512,7 +512,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -531,7 +531,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -543,7 +543,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -588,7 +588,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -607,7 +607,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -619,7 +619,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"rework\\",\\"findi…"#98f572e5/70 -> ok
   = "Submitted. Your findings went back to th…"#12ce35d3/144
@@ -633,7 +633,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   > remove-review-checkout agentRunId=CR1
   ~ CR1 SUCCEEDED
 #13 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #14 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -645,7 +645,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #16 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #17 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -687,7 +687,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -705,14 +705,14 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -724,7 +724,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -766,7 +766,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -784,14 +784,14 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -803,7 +803,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -850,7 +850,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -868,14 +868,14 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -887,7 +887,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"rework\\",\\"findi…"#98f572e5/70 -> ok
   = "Submitted. Your findings went back to th…"#12ce35d3/144
@@ -901,7 +901,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > remove-review-checkout agentRunId=CR1
   ~ CR1 SUCCEEDED
 #14 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #15 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -913,7 +913,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #17 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #18 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -955,7 +955,7 @@ exports[`template traces > todays-setup approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -974,7 +974,7 @@ exports[`template traces > todays-setup approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -986,7 +986,7 @@ exports[`template traces > todays-setup approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1026,7 +1026,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -1045,7 +1045,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1057,7 +1057,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1081,7 +1081,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #16 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #17 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1093,7 +1093,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #19 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #20 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1134,7 +1134,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #3 lead "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -1153,7 +1153,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #7 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #8 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1165,7 +1165,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #10 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #11 Review_Store "submit_review {\\"verdict\\":\\"rework\\",\\"findi…"#98f572e5/70 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1183,7 +1183,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #14 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #15 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1195,7 +1195,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #17 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #18 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1237,7 +1237,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -1255,14 +1255,14 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1274,7 +1274,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1316,7 +1316,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -1334,14 +1334,14 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1353,7 +1353,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1377,7 +1377,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #17 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #18 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1389,7 +1389,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #20 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #21 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1432,7 +1432,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   ~ +L lead role="Lead" stage=orchestrate QUEUED
   ~ +P1 planner role="Planner" stage=plan STARTING
 #2 Planner "started" -> ok
-  > link-session agentRunId=P1 providerSessionId="sess:P1"
+  > link-session agentRunId=P1 provider="claude-code" providerSessionId="sess:P1"
   ~ P1 RUNNING
 #3 planner "submit_plan {\\"summary\\":\\"Add a theme stor…"#a34738c3/149 -> ok
   = "Plan v1 submitted. Wait for the owner: y…"#a5080703/102
@@ -1450,14 +1450,14 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   ~ plan1 approved
 #5 server "ticket branch created" -> ok
 #6 Lead "started" -> ok
-  > link-session agentRunId=L providerSessionId="sess:L"
+  > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
   ~ L RUNNING
 #7 lead "start_agent {\\"role\\":\\"Store\\",\\"task\\":\\"Buil…"#e2311af6/73 -> ok
   = "Started agent W1 (Store)."
   > start-agent agentRunId=W1 fromBranch="acp/WEB-12" kind="worker" prompt="Build the Store. The app owns branches a…"#f6b4ba48/366 role="Store"
   ~ +W1 worker role="Store" stage=helpers STARTING
 #8 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING
 #9 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1469,7 +1469,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   ~ W1 AWAITING_REVIEW change=reviewing/r0
   ~ +CR1 reviewer role="Review: Store" stage=review STARTING
 #11 Review_Store "started" -> ok
-  > link-session agentRunId=CR1 providerSessionId="sess:CR1"
+  > link-session agentRunId=CR1 provider="claude-code" providerSessionId="sess:CR1"
   ~ CR1 RUNNING
 #12 Review_Store "submit_review {\\"verdict\\":\\"rework\\",\\"findi…"#98f572e5/70 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50
@@ -1487,7 +1487,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   > start-agent agentRunId=W1 kind="worker" prompt="The lead reviewed your change and asks f…"#241a4656/371 rework={"resumeSessionId":"sess:W1"} role="Store"
   ~ W1 STARTING change=rework/r1
 #15 Store "started" -> ok
-  > link-session agentRunId=W1 providerSessionId="sess:W1"
+  > link-session agentRunId=W1 provider="claude-code" providerSessionId="sess:W1"
   ~ W1 RUNNING change=rework/r1
 #16 Store "finish changed" -> ok
   > seal-change agentRunId=W1
@@ -1499,7 +1499,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   ~ W1 AWAITING_REVIEW change=reviewing/r1
   ~ +CR2 reviewer role="Review: Store" stage=review STARTING
 #18 Review_Store "started" -> ok
-  > link-session agentRunId=CR2 providerSessionId="sess:CR2"
+  > link-session agentRunId=CR2 provider="claude-code" providerSessionId="sess:CR2"
   ~ CR2 RUNNING
 #19 Review_Store "submit_review {\\"verdict\\":\\"approve\\",\\"find…"#3fd7efca/61 -> ok
   = "Submitted. Your review is done: end your…"#5e04921c/50

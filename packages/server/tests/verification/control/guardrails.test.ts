@@ -151,6 +151,13 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
       logger: silentLogger,
       adapter: {
         provider: 'claude-code',
+        capabilities: {
+          skills: true,
+          profileTools: true,
+          fullAuto: true,
+          leadTools: true,
+          followUp: true,
+        },
         start(spec, callbacks) {
           if (spec.kind === 'lead') leadTools = spec.leadTools;
           return real.start(spec, callbacks);

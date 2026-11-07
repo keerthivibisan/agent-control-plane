@@ -1,7 +1,8 @@
-import { reviewStageOf } from '@acp/core';
+import { DEFAULT_MANAGED_PROVIDER, modelMatchesProvider, reviewStageOf } from '@acp/core';
 import type {
   AgentEffort,
   AgentRoleKind,
+  ManagedProviderId,
   OrchestrationRun,
   ProjectWorkflow,
   TicketPlan,
@@ -279,18 +280,52 @@ export function stageAgentFor(
 }
 
 /**
+ * The provider an agent runs on (ADR-0031 §1): its node's provider, else the project's default
+ * provider, else Claude Code.
+ */
+export function resolveAgentProvider(input: {
+  stage: ManagedProviderId | null | undefined;
+  project: ManagedProviderId | null | undefined;
+}): ManagedProviderId {
+  return input.stage ?? input.project ?? DEFAULT_MANAGED_PROVIDER;
+}
+
+/**
+ * The provider of an agent of `nodeId` under the run's program: the node's, which the compiler
+ * already resolved against the project's default (`CompileContext.projectProvider`), else Claude
+ * Code. An agent keeps it for its whole life (`EngineAgent.provider`), rework and follow-ups too.
+ */
+export function nodeProvider(program: WorkflowProgram, nodeId: WorkflowNodeId): ManagedProviderId {
+  return resolveAgentProvider({ stage: programNode(program, nodeId)?.provider, project: null });
+}
+
+/**
  * The model an agent runs with (ADR-0019 §6): an explicit stage model, else the stage's agent
  * file's `model`, else the project's default model, else null (the provider default). The engine
  * never reads files, so it puts only the stage model on the effect (`model`) and the file's name
  * (`agent`); the server reads the file and resolves the model with this function.
+ *
+ * ADR-0031: with a `provider`, the agent file's and the project's models are inherited only when
+ * they may belong to it (`modelMatchesProvider` is not false), so a Codex node never inherits
+ * `sonnet`. The stage model is the node's own choice and always used (the graph warns about a
+ * mismatch). Without a provider, as before.
  */
 export function resolveAgentModel(input: {
   stage: string | null | undefined;
   agentFile: string | null | undefined;
   project: string | null | undefined;
+  provider?: ManagedProviderId;
 }): string | null {
-  for (const candidate of [input.stage, input.agentFile, input.project]) {
-    if (candidate !== null && candidate !== undefined && candidate.trim() !== '') return candidate;
+  const usable = (candidate: string | null | undefined, inherited: boolean): boolean =>
+    candidate !== null &&
+    candidate !== undefined &&
+    candidate.trim() !== '' &&
+    (!inherited ||
+      input.provider === undefined ||
+      modelMatchesProvider(candidate, input.provider) !== false);
+  if (usable(input.stage, false)) return input.stage ?? null;
+  for (const candidate of [input.agentFile, input.project]) {
+    if (usable(candidate, true)) return candidate ?? null;
   }
   return null;
 }
@@ -322,12 +357,21 @@ export function launchFields(
  * when the node sets them. The model's precedence is unchanged: the node's model, else its agent
  * file's (the server reads the file, `resolveAgentModel`), else the project's. Every start of the
  * node's agents goes through here (first turn, rework, check rework), so they all keep its effort.
+ * `provider` (ADR-0031) is present only when the node or the project sets one, so a run from
+ * before it gets exactly the effect it got then.
  */
 export function launchFieldsFor(
   program: WorkflowProgram,
   nodeId: WorkflowNodeId,
   prompt: string,
-): { prompt: string; model?: string; skills?: string[]; agent?: string; effort?: AgentEffort } {
+): {
+  prompt: string;
+  model?: string;
+  skills?: string[];
+  agent?: string;
+  effort?: AgentEffort;
+  provider?: ManagedProviderId;
+} {
   const node = programNode(program, nodeId);
   if (node === undefined) return { prompt };
   const skills = [...node.skills];
@@ -337,6 +381,7 @@ export function launchFieldsFor(
     ...(skills.length > 0 ? { skills } : {}),
     ...(node.agent !== null ? { agent: node.agent } : {}),
     ...(node.effort !== undefined ? { effort: node.effort } : {}),
+    ...(node.provider !== undefined ? { provider: node.provider } : {}),
   };
 }
 

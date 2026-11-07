@@ -830,6 +830,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         branching: branchingInput,
         setupNetwork: networkInput,
         automation: automationInput,
+        provider: providerInput,
         ...rest
       } = input;
       const branching =
@@ -839,6 +840,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       // ADR-0030: an absent policy keeps the stored one; `null` resets it to the defaults.
       const automation =
         automationInput === undefined ? stored?.automation : (automationInput ?? undefined);
+      // ADR-0031: an absent default provider keeps the stored one; `null` removes it (Claude Code).
+      const provider =
+        providerInput === undefined ? stored?.provider : (providerInput ?? undefined);
       try {
         const saved = ws.projectSetup.upsert({
           projectId,
@@ -849,6 +853,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           ...(branching !== undefined && { branching }),
           ...(setupNetwork !== undefined && { setupNetwork }),
           ...(automation !== undefined && { automation }),
+          ...(provider !== undefined && { provider }),
         });
         notice('projects-changed', { projectId });
         return saved;
@@ -1060,6 +1065,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           projectMode: projectApprovals.mode,
           approvalCeilings,
           maxConcurrentHelpers: limits.maxConcurrentHelpers,
+          // ADR-0031: agent nodes without a provider take the project's default.
+          ...(setup.provider !== undefined && { projectProvider: setup.provider }),
           ...(effective.source.reviewer !== 'project' && { reviewer: effective.options.reviewer }),
           ...(effective.source.maxReworkRounds !== 'project' && {
             maxReworkRounds: effective.options.maxReworkRounds,

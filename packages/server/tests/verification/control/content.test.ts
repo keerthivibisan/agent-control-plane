@@ -170,6 +170,13 @@ describe('P3-F content minimization through the real managed adapter', () => {
     let leadTools: ManagedAgentSpec['leadTools'];
     const adapter: ManagedExecutionAdapter = {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         if (spec.kind === 'lead') leadTools = spec.leadTools;
         return real.start(spec, callbacks);

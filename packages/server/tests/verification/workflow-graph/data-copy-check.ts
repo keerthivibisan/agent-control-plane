@@ -110,6 +110,13 @@ function refusingAdapter(): { adapter: ManagedExecutionAdapter; starts: () => nu
     starts: () => starts,
     adapter: {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        leadTools: true,
+        followUp: true,
+      },
       start() {
         starts++;
         const events: AsyncIterable<ManagedAgentEvent> = {

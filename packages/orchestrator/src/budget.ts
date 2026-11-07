@@ -1,12 +1,13 @@
 import { budgetTokens } from '@acp/core';
-import type { TokenCounts } from '@acp/core';
+import type { ManagedProviderId, TokenCounts } from '@acp/core';
 
 /**
  * Budget accounting for managed agents (ADR-0014, usage-accounting §4–§5).
  *
  * The SDK reports usage per assistant message and may repeat a message with growing output counts,
- * so the ledger keeps one entry per messageId (dedup is global within the run, not per agent) and
- * selects the observation with the most output. It never sums repeated reports.
+ * so the ledger keeps one entry per `(provider, messageId)` (ADR-0032 §1; dedup is global within
+ * the run, not per agent) and selects the observation with the most output. It never sums repeated
+ * reports. Ids of two providers never collide: the same id from Claude and Codex is two entries.
  *
  * Attribution: usage-accounting attributes to the earliest occurrence, but `ManagedAgentEvent` has
  * no provider timestamp, and arrival order is not evidence. Each agent is its own SDK query, so a
@@ -14,6 +15,7 @@ import type { TokenCounts } from '@acp/core';
  * smallest agentRunId so that replaying the same reports in any order gives the same budgets.
  */
 export interface LedgerEntry {
+  provider: ManagedProviderId;
   messageId: string;
   /** Every agent that reported this message, sorted; the first one is charged. */
   agentRunIds: readonly string[];
@@ -22,7 +24,25 @@ export interface LedgerEntry {
 }
 
 export interface UsageLedger {
+  /** Keyed by `ledgerKey(provider, messageId)`. */
   readonly entries: Readonly<Record<string, LedgerEntry>>;
+}
+
+/**
+ * The entry key of one message. A provider id holds no `:` and comes first, so two different
+ * pairs never share a key.
+ */
+export function ledgerKey(provider: ManagedProviderId, messageId: string): string {
+  return `${provider}:${messageId}`;
+}
+
+/** Whether the ledger already holds this provider's message. */
+export function hasLedgerEntry(
+  ledger: UsageLedger,
+  provider: ManagedProviderId,
+  messageId: string,
+): boolean {
+  return Object.hasOwn(ledger.entries, ledgerKey(provider, messageId));
 }
 
 export const EMPTY_LEDGER: UsageLedger = Object.freeze({ entries: Object.freeze({}) });
@@ -55,14 +75,17 @@ export function compareUsage(a: TokenCounts, b: TokenCounts): number {
 export function recordUsage(
   ledger: UsageLedger,
   agentRunId: string,
+  provider: ManagedProviderId,
   messageId: string,
   tokens: TokenCounts,
 ): UsageLedger {
-  const existing = Object.hasOwn(ledger.entries, messageId) ? ledger.entries[messageId] : undefined;
+  const key = ledgerKey(provider, messageId);
+  const existing = Object.hasOwn(ledger.entries, key) ? ledger.entries[key] : undefined;
   const entry: LedgerEntry =
     existing === undefined
-      ? { messageId, agentRunIds: [agentRunId], tokens: { ...tokens } }
+      ? { provider, messageId, agentRunIds: [agentRunId], tokens: { ...tokens } }
       : {
+          provider,
           messageId,
           agentRunIds: existing.agentRunIds.includes(agentRunId)
             ? existing.agentRunIds
@@ -70,7 +93,7 @@ export function recordUsage(
           tokens: compareUsage(tokens, existing.tokens) > 0 ? { ...tokens } : existing.tokens,
         };
   // A computed key defines an own property even for "__proto__", so any messageId is safe.
-  return { entries: { ...ledger.entries, [messageId]: entry } };
+  return { entries: { ...ledger.entries, [key]: entry } };
 }
 
 export interface AgentBudgetUsage {

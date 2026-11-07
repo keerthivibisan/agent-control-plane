@@ -36,6 +36,7 @@ import {
   isSeparatePlanner,
   isStageAgent,
   launchFieldsFor,
+  nodeProvider,
   nextStage,
   reviewerBrief,
   testerBrief,
@@ -555,6 +556,7 @@ export class Draft {
       review: null,
       reportedCostUsd: null,
       stage: node.id,
+      provider: nodeProvider(this.program(), node.id),
     };
     if (kind === 'reviewer') agent.reviewPosts = 0;
     this.agents.push(agent);

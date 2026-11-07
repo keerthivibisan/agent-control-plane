@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AbsolutePathSchema } from '../domain/project.js';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { ManagedProviderIdSchema } from '../domain/provider.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
@@ -147,6 +148,8 @@ export const UpdateProjectSetupRequestSchema = z.object({
   setupNetwork: z.boolean().optional(),
   /** ADR-0030. Absent: the stored policy is kept; `null` resets it to `DEFAULT_AUTOMATION`. */
   automation: ProjectAutomationSchema.nullable().optional(),
+  /** ADR-0031. Absent: the stored default provider is kept; `null` removes it (Claude Code). */
+  provider: ManagedProviderIdSchema.nullable().optional(),
 });
 /**
  * POST `/api/tickets/:id/start` body (ADR-0021 §1, §3). Each field overrides the ticket's own

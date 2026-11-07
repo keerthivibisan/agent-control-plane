@@ -25,6 +25,7 @@ import {
   isChangeReviewer,
   isSeparatePlanner,
   launchFieldsFor,
+  nodeProvider,
 } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
@@ -260,6 +261,7 @@ export function leadToolCall(
           latestActivity: null,
           review: null,
           reportedCostUsd: null,
+          provider: nodeProvider(program, node.id),
           // Ticket runs record each agent's node (ADR-0019, ADR-0023).
           ...(d.run.ticketId !== null ? { stage: node.id } : {}),
         };

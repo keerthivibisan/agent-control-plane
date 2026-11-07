@@ -155,6 +155,11 @@ describe('run snapshot: graph and graphContext (ADR-0023)', () => {
       'maxConcurrentHelpers',
       'projectMode',
     ]);
+
+    // ADR-0031: the project's default provider round-trips when set.
+    const codex: CompileContext = { ...plain, projectProvider: 'codex' };
+    audit.setRunSnapshot(run.id, { ...older, graph: LOOP, graphContext: codex });
+    expect(audit.getRunSnapshot(run.id)?.graphContext).toEqual(codex);
   });
 
   it('refuses a graph without its context, a bad context, or a helper limit not the run’s', () => {
@@ -176,6 +181,7 @@ describe('run snapshot: graph and graphContext (ADR-0023)', () => {
       { ...base, graph: LOOP, graphContext: { ...CONTEXT, reviewer: 'robot' } },
       { ...base, graph: LOOP, graphContext: { ...CONTEXT, maxReworkRounds: 9 } },
       { ...base, graph: LOOP, graphContext: { ...CONTEXT, extra: true } },
+      { ...base, graph: LOOP, graphContext: { ...CONTEXT, projectProvider: 'demo' } },
       { ...base, graph: LOOP, graphContext: { ...CONTEXT, maxConcurrentHelpers: 2 } },
       { ...base, graph: LOOP, graphContext: [] },
     ];

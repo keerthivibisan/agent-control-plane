@@ -36,6 +36,7 @@ function agent(id: string, kind: EngineAgent['kind'], extra: Partial<EngineAgent
     latestActivity: null,
     review: null,
     reportedCostUsd: null,
+    provider: 'claude-code',
     ...extra,
   };
   return a;

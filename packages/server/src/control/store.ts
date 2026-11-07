@@ -26,7 +26,13 @@ import {
   type EngineEffect,
   type RunState,
 } from '@acp/orchestrator';
-import type { OrchestrationRun, PlanStep, TicketPlan, WorkflowNodeId } from '@acp/core';
+import type {
+  ManagedProviderId,
+  OrchestrationRun,
+  PlanStep,
+  TicketPlan,
+  WorkflowNodeId,
+} from '@acp/core';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -169,11 +175,15 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     redesignRepos.runAudit.setRunSnapshot(next.run.id, after);
   }
 
-  /** The agent's primary Claude Code session id (provider id), or `fallback` without one. */
-  function providerSession(agentRunId: string, fallback: string | null): string | null {
+  /** The agent's primary session id with its provider (ADR-0031), or `fallback` without one. */
+  function providerSession(
+    agentRunId: string,
+    provider: ManagedProviderId,
+    fallback: string | null,
+  ): string | null {
     const link = repos.agentRunSessions
       .listForAgentRun(agentRunId)
-      .find((l) => l.provider === 'claude-code' && l.relation === 'primary');
+      .find((l) => l.provider === provider && l.relation === 'primary');
     return link?.providerSessionId ?? fallback;
   }
 
@@ -213,6 +223,8 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           task: next.task,
           budgetTokensLimit: next.budgetLimit,
           status: next.status,
+          // ADR-0031: resolved by the engine from the node and the run's project default.
+          provider: next.provider,
         }),
       );
       if (next.endedAt !== null) {
@@ -488,7 +500,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         try {
           repos.agentRunSessions.link({
             agentRunId: effect.agentRunId,
-            provider: 'claude-code',
+            provider: effect.provider,
             providerSessionId: effect.providerSessionId,
             relation: 'primary',
           });
@@ -500,7 +512,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           try {
             repos.agentRunSessions.link({
               agentRunId: effect.agentRunId,
-              provider: 'claude-code',
+              provider: effect.provider,
               providerSessionId: effect.providerSessionId,
               relation: 'retry',
             });
@@ -556,11 +568,14 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         // ADR-0021 (RL-A notes): a loop helper's rework resumes its provider session, which the
         // engine keeps in `sessionId` while live; after a reload it comes from the session link.
         sessionId:
-          loop && hasReviewableChange(a.kind) ? providerSession(a.id, a.sessionId) : a.sessionId,
+          loop && hasReviewableChange(a.kind)
+            ? providerSession(a.id, a.provider, a.sessionId)
+            : a.sessionId,
         budgetTokensUsed: a.budgetTokensUsed,
         createdAt: a.createdAt,
         endedAt: a.endedAt,
         budgetLimit: a.budgetTokensLimit,
+        provider: a.provider,
         // Kept in memory only (content-free, but not part of the audit trail).
         latestActivity: null,
         review:

@@ -17,6 +17,7 @@ describe('agent runs repository (P3-C)', () => {
       sessionId: null,
       budgetTokensUsed: 0,
       budgetTokensLimit: BUDGET.maxTokensPerAgent,
+      provider: 'claude-code',
       createdAt: lead.createdAt,
       endedAt: null,
     });

@@ -68,6 +68,7 @@ export function toAgentDto(
         ? { state: agent.review, changedFiles: workspace?.changedFiles ?? null }
         : null,
     branch: workspace?.branch ?? null,
+    provider: agent.provider,
     createdAt: agent.createdAt,
     endedAt: agent.endedAt,
   };

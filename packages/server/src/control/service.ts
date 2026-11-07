@@ -16,6 +16,7 @@ import {
   type ManagedAgentSpec,
   type ManagedAgentHandle,
   type ManagedExecutionAdapter,
+  type ManagedFailureCode,
   type PermissionDecision,
   type PermissionRequest,
   type CompileContext,
@@ -1154,11 +1155,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
   }
 
-  function endWithError(live: LiveRun, agentRunId: string): void {
+  function endWithError(live: LiveRun, agentRunId: string, failure?: ManagedFailureCode): void {
     const finished: ManagedAgentEvent = {
       type: 'finished',
       outcome: 'error',
       reportedCostUsd: null,
+      ...(failure !== undefined && { failure }),
     };
     defer(() => {
       apply(live, (s, c) => agentEvent(s, agentRunId, finished, c));
@@ -1679,7 +1681,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         ? undefined
         : store.repos.agentRunSessions
             .listForAgentRun(lead.id)
-            .find((l) => l.provider === 'claude-code' && l.relation === 'primary');
+            // ADR-0031 §7: only a session of the lead's own provider can be resumed.
+            .find((l) => l.provider === lead.provider && l.relation === 'primary');
     return {
       managed: deps.enabled && deps.adapter !== undefined,
       leadSessionId: link?.providerSessionId ?? null,
@@ -1971,6 +1974,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const adapter = deps.adapter;
     if (adapter === undefined) {
       endWithError(live, agentRunId);
+      return;
+    }
+    // ADR-0031 §2: an agent runs only on its own provider's adapter. Never fall back to another
+    // provider: the run would record one provider while a different one did the work.
+    const provider = live.state.agents.find((a) => a.id === agentRunId)?.provider;
+    if (provider !== undefined && provider !== adapter.provider) {
+      logger.log('warn', 'agent provider has no adapter', { runId, agentRunId, provider });
+      endWithError(live, agentRunId, 'provider-unavailable');
       return;
     }
     const spec: ManagedAgentSpec = {

@@ -54,7 +54,7 @@ describe('run start and owner chat', () => {
     );
     expect(started.state.run.status).toBe('RUNNING');
     expect(started.effects).toEqual([
-      { type: 'link-session', agentRunId: LEAD, providerSessionId: 's1' },
+      { type: 'link-session', agentRunId: LEAD, provider: 'claude-code', providerSessionId: 's1' },
     ]);
   });
 

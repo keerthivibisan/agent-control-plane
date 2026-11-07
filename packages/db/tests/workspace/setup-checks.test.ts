@@ -24,6 +24,18 @@ describe('project setup repository (P4-B)', () => {
     expect(count(store.db, 'project_setup')).toBe(1);
   });
 
+  it('keeps the default provider (ADR-0031) when set, and none when not', () => {
+    const store = setupWorkspace({ withSetup: false });
+    const plain = store.ws.projectSetup.upsert(setupInput(store.projectId));
+    expect(plain).not.toHaveProperty('provider');
+    const codex = store.ws.projectSetup.upsert({
+      ...setupInput(store.projectId),
+      provider: 'codex',
+    });
+    expect(codex.provider).toBe('codex');
+    expect(store.ws.projectSetup.get(store.projectId)).toEqual(codex);
+  });
+
   it('rejects values over the ceilings, bad paths, unknown projects and a taken key', () => {
     const store = setupWorkspace();
     const base = setupInput(store.projectId);

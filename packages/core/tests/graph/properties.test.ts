@@ -45,6 +45,7 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
   'no-checks-selected',
   'merge-skips-required',
   'no-checks',
+  'model-provider-mismatch',
 ];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
 const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};

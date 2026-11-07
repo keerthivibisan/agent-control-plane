@@ -414,6 +414,7 @@ function observingAdapter(inner: ManagedQueryFn, starts: StartRecord[]): Managed
   const real = createManagedClaudeCode({ query, env: managedAgentEnv(process.env) });
   return {
     provider: 'claude-code',
+    capabilities: real.capabilities,
     start(spec, callbacks) {
       current = spec;
       try {
@@ -452,6 +453,7 @@ export async function driveScenario(options: DriveOptions): Promise<DriveResult>
     adapter: options.dryRun
       ? (fake) => ({
           provider: 'claude-code',
+          capabilities: observing.capabilities,
           start(spec, callbacks) {
             // The adapter's own options for this spec, then the fake plays the agent.
             observing.start(spec, callbacks).abort();

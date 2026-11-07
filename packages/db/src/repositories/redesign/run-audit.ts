@@ -1,6 +1,7 @@
 import {
   ApprovalModeSchema,
   ChangeReviewerModeSchema,
+  ManagedProviderIdSchema,
   ProjectAgentSetupSchema,
   ProjectApprovalsSchema,
   ProjectWorkflowSchema,
@@ -130,6 +131,7 @@ function parseGraphContext(value: unknown): CompileContext | null {
     reviewer,
     maxReworkRounds,
     maxConcurrentHelpers,
+    projectProvider,
     ...extra
   } = value as Record<string, unknown>;
   if (Object.keys(extra).length > 0) return null;
@@ -159,6 +161,12 @@ function parseGraphContext(value: unknown): CompileContext | null {
     const parsed = ReworkRoundsSchema.safeParse(maxReworkRounds);
     if (!parsed.success) return null;
     context.maxReworkRounds = parsed.data;
+  }
+  // ADR-0031: absent on every snapshot before it (Claude Code).
+  if (projectProvider !== undefined) {
+    const parsed = ManagedProviderIdSchema.safeParse(projectProvider);
+    if (!parsed.success) return null;
+    context.projectProvider = parsed.data;
   }
   return context;
 }

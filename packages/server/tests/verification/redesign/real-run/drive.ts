@@ -193,6 +193,7 @@ const observingQuery: ManagedQueryFn = (params) => {
 const real = createManagedClaudeCode({ query: observingQuery, env: managedAgentEnv(process.env) });
 const adapter: ManagedExecutionAdapter = {
   provider: 'claude-code',
+  capabilities: real.capabilities,
   start(spec, callbacks) {
     current = spec;
     try {

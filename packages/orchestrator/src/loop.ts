@@ -20,6 +20,7 @@ import {
   countsAsHelper,
   hasReviewableChange,
   launchFieldsFor,
+  nodeProvider,
   stageOf,
 } from './stages.js';
 import type { EngineAgent, EngineChange, RunIntegration, RunLimits } from './state.js';
@@ -382,6 +383,7 @@ function startChangeReviewer(
     review: null,
     reportedCostUsd: null,
     stage: reviewerNode,
+    provider: nodeProvider(d.program(), reviewerNode),
     reviewsAgentRunId: helper.id,
     reviewPosts: 0,
   };

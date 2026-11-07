@@ -177,6 +177,16 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     expect(adapter.provider).toBe('claude-code');
     expect(() => adapter.start(spec('worker'), callbacks())).toThrow('real Agent SDK');
   });
+
+  it('honours every managed capability (ADR-0031)', () => {
+    expect(createManagedClaudeCode().capabilities).toEqual({
+      skills: true,
+      profileTools: true,
+      fullAuto: true,
+      leadTools: true,
+      followUp: true,
+    });
+  });
 });
 
 describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () => {

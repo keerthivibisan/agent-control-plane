@@ -162,6 +162,13 @@ export function createFakeManagedAdapter(): FakeManagedAdapter {
     workers: () => agents.filter((a) => a.spec.kind === 'worker'),
     adapter: {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         const agent = new FakeAgent(spec, callbacks);
         agents.push(agent);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PullRequestDtoSchema } from './code-host.js';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { ManagedProviderIdSchema } from '../domain/provider.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import {
   AgentRoleKindSchema,
@@ -54,6 +55,8 @@ export const AgentRunDtoSchema = z.object({
   review: z.object({ state: ReviewStateSchema, changedFiles: count.nullable() }).nullable(),
   /** The worker's worktree branch once its workspace exists; null for the lead or before setup. */
   branch: z.string().min(1).nullable(),
+  /** ADR-0031: the provider that runs the agent. Absent from servers before it (Claude Code). */
+  provider: ManagedProviderIdSchema.optional(),
   createdAt: IsoTimestampSchema,
   endedAt: IsoTimestampSchema.nullable(),
 });

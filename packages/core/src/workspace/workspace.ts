@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ProjectAutomationSchema } from './conflict-resolution.js';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { ManagedProviderIdSchema } from '../domain/provider.js';
 import { WorkflowNodeIdSchema } from './node-id.js';
 import { BranchStrategySchema, TicketBranchPrefsSchema } from './branching.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
@@ -512,6 +513,11 @@ export const ProjectAgentSetupSchema = z.object({
    * (manual resolution, required checks, escalate, owner delivery); never widened implicitly.
    */
   automation: ProjectAutomationSchema.optional(),
+  /**
+   * ADR-0031: the provider for agent nodes that choose none. Absent (every setup saved before it):
+   * Claude Code (`DEFAULT_MANAGED_PROVIDER`).
+   */
+  provider: ManagedProviderIdSchema.optional(),
   updatedAt: IsoTimestampSchema,
 });
 export type ProjectAgentSetup = z.infer<typeof ProjectAgentSetupSchema>;

@@ -4,6 +4,7 @@ import type {
   AgentRun,
   CheckSelection,
   HelperOutcomeKind,
+  ManagedProviderId,
   VerificationAssessmentInput,
   AllowRule,
   ApprovalKindSchema,
@@ -37,6 +38,12 @@ export type ApprovalKind = z.infer<typeof ApprovalKindSchema>;
  * (ADR-0009/0015): `task` is the owner-facing task text, `latestActivity` is content-free.
  */
 export interface EngineAgent extends AgentRun {
+  /**
+   * ADR-0031: the provider running this agent, fixed when it is created (`nodeProvider`): its
+   * node's, else the project's default, else Claude Code (every agent before ADR-0031). Its
+   * sessions, follow-ups and usage belong to this provider.
+   */
+  provider: ManagedProviderId;
   /** Soft cap in budget tokens (ADR-0014); starts at the run's `maxTokensPerAgent`, owner may raise. */
   budgetLimit: number;
   /** Latest content-free activity line from the adapter, redacted and capped at 200 characters. */
@@ -377,6 +384,12 @@ export type EngineEffect =
        */
       effort?: AgentEffort;
       /**
+       * ADR-0031: the node's provider (already resolved against the project's default), present
+       * only when the node or the project sets one. Absent: Claude Code. Equal to the agent's
+       * `EngineAgent.provider`; the server starts the agent with that provider's adapter.
+       */
+      provider?: ManagedProviderId;
+      /**
        * A rework turn (ADR-0021 §3): the helper works again in its own worktree on the comments in
        * `prompt`, resuming `resumeSessionId` (null: a fresh session). Never with `canStartHelpers`.
        */
@@ -510,7 +523,13 @@ export type EngineEffect =
   | { type: 'resolve-permission'; approvalId: string; decision: PermissionDecision }
   /** Store and publish a chat line (ADR-0015). Only owner text and the lead's replies. */
   | { type: 'chat-message'; role: 'owner' | 'lead'; text: string }
-  | { type: 'link-session'; agentRunId: string; providerSessionId: string }
+  /** The agent's session started: link it, under the agent's provider (ADR-0031). */
+  | {
+      type: 'link-session';
+      agentRunId: string;
+      provider: ManagedProviderId;
+      providerSessionId: string;
+    }
   /**
    * A follow-up turn of the ended lead (ADR-0020): resume its saved session `resumeSessionId` in
    * the project root, answers-only (read-only tools, no control tools), for this one message.
@@ -520,6 +539,8 @@ export type EngineEffect =
   | {
       type: 'start-follow-up';
       agentRunId: string;
+      /** The lead's provider: a session is resumed only by its own provider (ADR-0031 §7). */
+      provider: ManagedProviderId;
       resumeSessionId: string;
       prompt: string;
       model?: string;
