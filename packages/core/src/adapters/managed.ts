@@ -1,6 +1,7 @@
 import type { TokenCounts } from '../usage/usage.js';
 import type { AgentRoleKind, LeadToolName } from '../orchestration/orchestration.js';
 import type { ManagedProviderId } from '../domain/provider.js';
+import type { ApprovalMode } from '../workspace/workspace.js';
 
 /**
  * Managed execution contract (ADR-0004, ADR-0012). Separate from `ObservationAdapter`: observation
@@ -111,6 +112,13 @@ export interface ManagedAgentSpec {
    * Ignored for the lead, planner and reviewers, and for follow-ups.
    */
   sandbox?: FullAutoSpec;
+  /**
+   * CX-3, for a `worker` or `tester`: the node's effective approval mode, already tightened by the
+   * ticket or run (ADR-0023 §5). The server sets it. An adapter whose provider enforces approvals
+   * itself (Codex maps it to a sandbox and approval policy) reads it, and absent means `manual`
+   * there. The Claude Code adapter ignores it: its gate is the server's `requestPermission`.
+   */
+  approvalMode?: ApprovalMode;
 }
 
 /** The sandbox paths of a Full auto agent (`ManagedAgentSpec.fullAuto`, ADR-0022). */

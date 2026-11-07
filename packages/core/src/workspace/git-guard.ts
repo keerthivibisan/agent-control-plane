@@ -713,3 +713,11 @@ function shellWord(arg: string): string {
 export function checkGitArgv(argv: readonly string[]): GitGuardDenial | null {
   return argv.length === 0 ? null : checkGitCommand(argv.map(shellWord).join(' '));
 }
+
+/**
+ * What an agent is told when the guard refuses its command, in plain words. Shared by every
+ * managed adapter (the Claude Code hook and gate, the Codex approval answer) so the wording is one.
+ */
+export function gitGuardMessage(denial: GitGuardDenial): string {
+  return `The app owns branches and commits, so this command is not run (${denial.command}). Never run git commands that switch, create, commit, reset, merge, rebase, stash, fetch or push. Keep working by editing files in this folder; your work is saved when you finish.`;
+}

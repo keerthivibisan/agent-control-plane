@@ -24,14 +24,19 @@ sandbox, ACP's instructions and the lead tools (as dynamic tools); `turn/start` 
 deliver messages; approval requests become ACP permission requests. User-level Codex configuration
 is overridden so a managed run sees only what ACP gives it.
 
-| ACP approval mode | Codex sandbox     | Codex approval policy |
-| ----------------- | ----------------- | --------------------- |
-| `manual`          | `read-only`       | `on-request`          |
-| `auto-edits`      | `workspace-write` | `on-request`          |
-| `auto`            | `workspace-write` | `untrusted`           |
-| `full-auto`       | `workspace-write` | `never`               |
+| Agent                                  | Codex sandbox     | Codex approval policy |
+| -------------------------------------- | ----------------- | --------------------- |
+| lead, planner, reviewer, any follow-up | `read-only`       | `never`               |
+| worker or tester, `manual` (or absent) | `read-only`       | `on-request`          |
+| worker or tester, `auto-edits`         | `workspace-write` | `untrusted`           |
+| worker or tester, `auto`               | `workspace-write` | `on-request`          |
+| worker or tester, `full-auto`          | `workspace-write` | `never`               |
 
-The mapping is confirmed by the CX-1 spike before CX-3 relies on it.
+Confirmed by the CX-1 spike and implemented in CX-3 (`packages/adapters/codex/src/modes.ts`).
+Every `workspace-write` turn passes an explicit `sandboxPolicy`: writable roots are the worktree
+and the run's temp folder only, no network, `/tmp` and `$TMPDIR` excluded (CX-1 result 8). A
+writing agent whose repository's git directories lie in a writable temp folder is refused
+(`unsafe-git-location`).
 
 ## Work packages
 

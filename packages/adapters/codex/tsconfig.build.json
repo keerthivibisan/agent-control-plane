@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    // Resolve @acp/core to its built dist, not its .ts source, so the program stays under rootDir.
+    "customConditions": []
+  },
+  "include": ["src"]
+}

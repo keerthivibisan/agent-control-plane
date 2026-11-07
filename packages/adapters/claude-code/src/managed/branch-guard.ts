@@ -1,5 +1,5 @@
 import type { HookCallbackMatcher, HookJSONOutput } from '@anthropic-ai/claude-agent-sdk';
-import { checkGitCommand } from '@acp/core';
+import { checkGitCommand, gitGuardMessage } from '@acp/core';
 import type { GitGuardDenial } from '@acp/core';
 
 /**
@@ -26,16 +26,12 @@ import type { GitGuardDenial } from '@acp/core';
  *
  * F-2: the reader itself (`checkGitCommand`) moved to `@acp/core` (`workspace/git-guard.ts`), so
  * the server gate's allowlist and the harness status read commands exactly as this guard does. It
- * now also reads a shell's here-strings, here-documents and piped input. It is re-exported here.
+ * now also reads a shell's here-strings, here-documents and piped input. It is re-exported here,
+ * with the denial message (`gitGuardMessage`), which core holds so the Codex adapter says the same.
  */
 
-export { checkGitCommand };
+export { checkGitCommand, gitGuardMessage };
 export type { GitGuardDenial };
-
-/** What the agent is told, in plain words. */
-export function gitGuardMessage(denial: GitGuardDenial): string {
-  return `The app owns branches and commits, so this command is not run (${denial.command}). Never run git commands that switch, create, commit, reset, merge, rebase, stash, fetch or push. Keep working by editing files in this folder; your work is saved when you finish.`;
-}
 
 /**
  * The second layer (SDK `disallowedTools`): permission deny rules for the plain forms of the
