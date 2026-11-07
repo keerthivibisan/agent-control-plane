@@ -143,6 +143,59 @@ describe('model-provider-mismatch warning', () => {
   });
 });
 
+describe('Codex block checks (CX-4, ADR-0031 §5)', () => {
+  const graph = workflowTemplate('lead-only');
+  const pool = (change: Partial<WorkflowNode>): WorkflowGraph => ({
+    ...graph,
+    nodes: graph.nodes.map((n) =>
+      n.type === 'helper-pool' ? ({ ...n, ...change } as WorkflowNode) : n,
+    ),
+  });
+  const poolId = graph.nodes.find((n) => n.type === 'helper-pool')?.id;
+  const codes = (g: WorkflowGraph, ctx: Parameters<typeof validateWorkflowGraph>[1] = {}) =>
+    validateWorkflowGraph(g, ctx)
+      .filter((i) => i.code.startsWith('codex-'))
+      .map((i) => [i.code, i.severity, i.nodeId]);
+
+  it('refuses Full auto on a Codex editing block, by its own mode or the project mode', () => {
+    expect(codes(pool({ provider: 'codex', approvalMode: 'full-auto' }))).toEqual([
+      ['codex-full-auto', 'error', poolId],
+    ]);
+    expect(
+      codes(pool({ provider: 'codex', approvalMode: null }), { projectMode: 'full-auto' }),
+    ).toEqual([['codex-full-auto', 'error', poolId]]);
+    expect(codes(pool({ approvalMode: 'full-auto' }), { projectProvider: 'codex' })).toEqual([
+      ['codex-full-auto', 'error', poolId],
+    ]);
+    // Claude keeps Full auto; Codex in another mode is fine.
+    expect(codes(pool({ approvalMode: 'full-auto' }))).toEqual([]);
+    expect(codes(pool({ provider: 'codex', approvalMode: 'auto' }))).toEqual([]);
+    const message = validateWorkflowGraph(
+      pool({ provider: 'codex', approvalMode: 'full-auto' }),
+    ).find((i) => i.code === 'codex-full-auto')?.message;
+    expect(message).toContain('its sandbox cannot block reads of private files');
+  });
+
+  it('refuses a Codex block whose agent file narrows tools, only when the validator knows it', () => {
+    const narrowing = pool({ provider: 'codex', agent: 'narrow' });
+    expect(codes(narrowing)).toEqual([]);
+    expect(codes(narrowing, { toolNarrowingAgents: ['narrow'] })).toEqual([
+      ['codex-agent-tools', 'error', poolId],
+    ]);
+    expect(codes(pool({ agent: 'narrow' }), { toolNarrowingAgents: ['narrow'] })).toEqual([]);
+    expect(codes(narrowing, { toolNarrowingAgents: ['other'] })).toEqual([]);
+  });
+
+  it('warns that a Codex block leaves its skills out', () => {
+    expect(codes(pool({ provider: 'codex', skills: ['lint'] }))).toEqual([
+      ['codex-skills-ignored', 'warning', poolId],
+    ]);
+    expect(codes(pool({ skills: ['lint'] }))).toEqual([]);
+    const issues = validateWorkflowGraph(pool({ provider: 'codex', skills: ['lint'] }));
+    expect(issues.every((i) => i.severity === 'warning')).toBe(true);
+  });
+});
+
 describe('project default provider', () => {
   const setup = {
     projectId: 'p1',

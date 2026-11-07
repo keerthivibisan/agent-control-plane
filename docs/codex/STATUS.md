@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | CX-1 | Spike against a real app-server | done        | `feat/codex-integration` |        |
 | CX-2 | Contracts and DB                | done        | `feat/codex-integration` |        |
 | CX-3 | `@acp/adapter-codex`            | done        | `feat/codex-integration` |        |
-| CX-4 | Server                          | not started |                          |        |
+| CX-4 | Server                          | done        | `feat/codex-integration` |        |
 | CX-5 | Messaging (ADR-0033)            | not started |                          |        |
 | CX-6 | Web                             | not started |                          |        |
 | CX-7 | Safety and docs                 | not started |                          |        |
@@ -29,3 +29,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   approvals through the server gate with the git guard first, dynamic lead tools, per-request usage),
   tested against a fake app-server. Known gaps: no project skills or agent-file tool narrowing; the
   sandbox cannot deny reads, so Full auto denyRead is not enforceable (CX-4 refuses Full auto on Codex).
+- 2026-11-07 CX-4 done: provider-keyed adapter registry, routing without fallback, cached
+  availability checks, approvalMode on specs, capability refusals (Full auto on Codex refused until
+  CX-3b; agent-file tool narrowing refused; skills dropped with a note), graph checks, Codex usage
+  persisted through the pipeline (managed channel), `.codex` in the Claude Full auto deny list,
+  `managedProviders` in diagnostics. CX-3b added: permission profiles with deny-read (CX-1b).

@@ -4,7 +4,9 @@ import type {
   ManagedAgentHandle,
   ManagedAgentSpec,
   ManagedCallbacks,
+  ManagedCapabilities,
   ManagedExecutionAdapter,
+  ManagedProviderId,
   PermissionDecision,
   TokenCounts,
 } from '@acp/core';
@@ -99,8 +101,8 @@ export class FakeAgent {
     return this;
   }
 
-  started(providerSessionId = `sess-${this.id}`): this {
-    return this.emit({ type: 'started', providerSessionId, model: 'claude-test' });
+  started(providerSessionId = `sess-${this.id}`, model: string | null = 'claude-test'): this {
+    return this.emit({ type: 'started', providerSessionId, model });
   }
 
   usage(messageId: string, tokens: TokenCounts): this {
@@ -144,7 +146,25 @@ export interface FakeManagedAdapter {
   workers(): FakeAgent[];
 }
 
-export function createFakeManagedAdapter(): FakeManagedAdapter {
+/** What Codex's adapter honours (`CODEX_CAPABILITIES` of `@acp/adapter-codex`, CX-3). */
+export const FAKE_CODEX_CAPABILITIES: ManagedCapabilities = Object.freeze({
+  skills: false,
+  profileTools: false,
+  fullAuto: true,
+  leadTools: true,
+  followUp: true,
+});
+
+export interface FakeAdapterOptions {
+  /** Default `claude-code`; `codex` also defaults the capabilities to Codex's. */
+  provider?: ManagedProviderId;
+  capabilities?: ManagedCapabilities;
+  /** Gives the adapter a `checkAvailable` (CX-4); absent, it has none (always available). */
+  checkAvailable?: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+}
+
+export function createFakeManagedAdapter(options: FakeAdapterOptions = {}): FakeManagedAdapter {
+  const provider = options.provider ?? 'claude-code';
   const agents: FakeAgent[] = [];
   const byId = (id: string): FakeAgent => {
     const agent = agents.findLast((a) => a.id === id);
@@ -161,19 +181,24 @@ export function createFakeManagedAdapter(): FakeManagedAdapter {
     },
     workers: () => agents.filter((a) => a.spec.kind === 'worker'),
     adapter: {
-      provider: 'claude-code',
-      capabilities: {
-        skills: true,
-        profileTools: true,
-        fullAuto: true,
-        leadTools: true,
-        followUp: true,
-      },
+      provider,
+      capabilities:
+        options.capabilities ??
+        (provider === 'codex'
+          ? FAKE_CODEX_CAPABILITIES
+          : {
+              skills: true,
+              profileTools: true,
+              fullAuto: true,
+              leadTools: true,
+              followUp: true,
+            }),
       start(spec, callbacks) {
         const agent = new FakeAgent(spec, callbacks);
         agents.push(agent);
         return agent.handle;
       },
+      ...(options.checkAvailable !== undefined && { checkAvailable: options.checkAvailable }),
     },
   };
 }

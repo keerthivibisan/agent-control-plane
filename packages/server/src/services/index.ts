@@ -1,5 +1,5 @@
 import type { ObservationAdapter, SessionStatusThresholds } from '@acp/core';
-import type { StreamNoticeDto } from '@acp/core/api';
+import type { ManagedProviderAvailabilityDto, StreamNoticeDto } from '@acp/core/api';
 import type { AcpDatabase, Queries, Repositories } from '@acp/db';
 import { createManagedSessionNames } from './managed-sessions.js';
 import { createProjectsService, type ProjectsService } from './projects.js';
@@ -37,6 +37,8 @@ export interface ServicesDeps {
   requestPoll: () => void;
   /** Managed worktree paths (Phase 3); hidden from project discovery. */
   isManagedPath?: (cwd: string) => boolean;
+  /** ADR-0031: each managed provider's availability, for diagnostics. */
+  managedProviders?: () => ManagedProviderAvailabilityDto[];
 }
 
 export function createServices(deps: ServicesDeps): Services {
@@ -72,6 +74,7 @@ export function createServices(deps: ServicesDeps): Services {
       claudeDir: deps.claudeDir,
       ingestionStats: deps.ingestionStats,
       ...(deps.isManagedPath !== undefined && { isManagedPath: deps.isManagedPath }),
+      ...(deps.managedProviders !== undefined && { managedProviders: deps.managedProviders }),
     }),
   };
 }

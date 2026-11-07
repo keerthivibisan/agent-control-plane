@@ -20,6 +20,8 @@ export const HOME_SECRET_DIRS: readonly string[] = [
   '.docker',
   '.kube',
   '.claude',
+  // CX-4: Codex's login (ADR-0031 owner decision 4), so a Claude agent can't read it.
+  '.codex',
 ];
 
 /** `<dataDir>/sandbox-tmp/<runId>`: one folder per run, removed when the run ends. */
@@ -30,6 +32,8 @@ export interface FullAutoPathsDeps {
   dataDir: string;
   /** Claude Code's config folder when it is not `~/.claude` (`CLAUDE_CONFIG_DIR`). */
   claudeDir?: string;
+  /** Codex's home when it is not `~/.codex` (`CODEX_HOME`), which holds its login (CX-4). */
+  codexHome?: string;
 }
 
 export interface FullAutoPaths {
@@ -45,7 +49,8 @@ export interface FullAutoPaths {
 }
 
 /**
- * The deny-read list: the home secret folders, the app's data folder and Claude's config folder,
+ * The deny-read list: the home secret folders, the app's data folder, Claude's config folder and
+ * Codex's home,
  * each as given and, when it exists and differs, as resolved through symlinks (macOS `/var` is
  * `/private/var`), so the sandbox matches either spelling.
  */
@@ -54,6 +59,7 @@ export async function fullAutoDenyRead(deps: FullAutoPathsDeps): Promise<string[
     ...HOME_SECRET_DIRS.map((d) => resolve(deps.homeDir, d)),
     resolve(deps.dataDir),
     ...(deps.claudeDir !== undefined ? [resolve(deps.claudeDir)] : []),
+    ...(deps.codexHome !== undefined ? [resolve(deps.codexHome)] : []),
   ];
   const out: string[] = [];
   for (const path of given) {

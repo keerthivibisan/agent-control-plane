@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
 import { ProjectSchema } from '../domain/project.js';
-import { ProviderIdSchema } from '../domain/provider.js';
+import { ManagedProviderIdSchema, ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { IngestionChannelSchema } from '../events/source.js';
 import { EVENT_TYPES, type EventType } from '../events/normalized-event.js';
@@ -298,6 +298,22 @@ export const AdapterDiagnosticsDtoSchema = z.object({
 });
 export type AdapterDiagnosticsDto = z.infer<typeof AdapterDiagnosticsDtoSchema>;
 
+/**
+ * ADR-0031 (CX-4): whether one managed provider could start agents when the server last checked
+ * (`ManagedExecutionAdapter.checkAvailable`). Checked before the first agent of the provider
+ * starts, kept for the server's lifetime, and checked again (at most once a minute) only after a
+ * failure. Never carries account details.
+ */
+export const ManagedProviderAvailabilityDtoSchema = z.object({
+  provider: ManagedProviderIdSchema,
+  /** Null until the first check (no agent of this provider has started since the server did). */
+  available: z.boolean().nullable(),
+  /** The adapter's short, fixed owner-facing sentence when not available; else null. */
+  reason: z.string().min(1).max(300).nullable(),
+  checkedAt: IsoTimestampSchema.nullable(),
+});
+export type ManagedProviderAvailabilityDto = z.infer<typeof ManagedProviderAvailabilityDtoSchema>;
+
 export const DiagnosticsDtoSchema = z.object({
   sources: z.array(
     z.object({
@@ -316,6 +332,11 @@ export const DiagnosticsDtoSchema = z.object({
   usageConflictCount: count,
   /** What each adapter reports about its own reading (ADR-0011). In memory; resets on restart. */
   adapters: z.array(AdapterDiagnosticsDtoSchema),
+  /**
+   * ADR-0031: each registered managed provider's availability. Absent from servers before CX-4
+   * and when managed execution is off.
+   */
+  managedProviders: z.array(ManagedProviderAvailabilityDtoSchema).optional(),
   /** The server's own ingestion counters since it started. */
   ingestion: z.object({
     pipeline: z.object({

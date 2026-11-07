@@ -122,6 +122,9 @@ importers:
       '@acp/adapter-claude-code':
         specifier: workspace:*
         version: link:../adapters/claude-code
+      '@acp/adapter-codex':
+        specifier: workspace:*
+        version: link:../adapters/codex
       '@acp/adapter-demo':
         specifier: workspace:*
         version: link:../adapters/demo

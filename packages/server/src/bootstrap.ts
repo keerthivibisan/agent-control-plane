@@ -2,8 +2,9 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import { createClaudeCodeAdapter, createManagedClaudeCode } from '@acp/adapter-claude-code';
+import { createManagedCodex } from '@acp/adapter-codex';
 import { createDemoAdapter } from '@acp/adapter-demo';
-import type { ManagedExecutionAdapter, ObservationAdapter } from '@acp/core';
+import type { ManagedExecutionAdapter, ManagedProviderId, ObservationAdapter } from '@acp/core';
 import {
   createQueries,
   createRepositories,
@@ -62,6 +63,11 @@ export interface StartOptions {
    * fake). With one injected, managed execution defaults to on in demo mode too.
    */
   managedAdapter?: ManagedExecutionAdapter;
+  /**
+   * Several injected managed adapters (tests of mixed-provider runs, ADR-0031): each is registered
+   * under its own `provider`, after `managedAdapter`. Either one injected replaces the real ones.
+   */
+  managedAdapters?: readonly ManagedExecutionAdapter[];
   /** Tests: git for the workspace manager (isolated from the user's git config). */
   git?: GitRunner;
   /** Tests and the e2e: the harness check runner (default: the real one, ADR-0017). */
@@ -108,19 +114,33 @@ async function normalizeLiveRoot(rootPath: string): Promise<string> {
   }
 }
 
+/** The managed adapters by provider (ADR-0031 §2): one per provider, never a fallback. */
+export type ManagedAdapterRegistry = ReadonlyMap<ManagedProviderId, ManagedExecutionAdapter>;
+
 /**
- * Managed execution (Phase 3): an injected adapter (tests, e2e) is used whenever managed is not
- * `off`. Otherwise the Agent SDK adapter runs only in live mode, never in demo mode, with the
- * filtered environment (no ACP_* or GIT_* variables; ADR-0012).
+ * Managed execution (Phase 3, ADR-0031): injected adapters (tests, e2e) are used whenever managed
+ * is not `off`, each under its own provider. Otherwise the real adapters run only in live mode,
+ * never in demo mode: the Agent SDK with the filtered environment (no ACP_* or GIT_* variables;
+ * ADR-0012), and Codex's app-server, whose adapter filters the environment the same way.
  */
-function resolveManagedAdapter(
+export function resolveManagedAdapters(
   config: ServerConfig,
-  injected: ManagedExecutionAdapter | undefined,
-): ManagedExecutionAdapter | undefined {
-  if (config.managed === 'off') return undefined;
-  if (injected !== undefined) return injected;
-  if (config.mode === 'demo') return undefined;
-  return createManagedClaudeCode({ env: managedAgentEnv(process.env) });
+  injected: { single?: ManagedExecutionAdapter; many?: readonly ManagedExecutionAdapter[] },
+): ManagedAdapterRegistry {
+  const registry = new Map<ManagedProviderId, ManagedExecutionAdapter>();
+  if (config.managed === 'off') return registry;
+  const given = [
+    ...(injected.single !== undefined ? [injected.single] : []),
+    ...(injected.many ?? []),
+  ];
+  if (given.length > 0) {
+    for (const adapter of given) registry.set(adapter.provider, adapter);
+    return registry;
+  }
+  if (config.mode === 'demo') return registry;
+  registry.set('claude-code', createManagedClaudeCode({ env: managedAgentEnv(process.env) }));
+  registry.set('codex', createManagedCodex({ env: process.env, bin: config.codexBin }));
+  return registry;
 }
 
 export async function startServer(options: StartOptions): Promise<RunningServer> {
@@ -172,7 +192,10 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     extraRoots,
   });
 
-  const managedAdapter = resolveManagedAdapter(config, options.managedAdapter);
+  const managedAdapters = resolveManagedAdapters(config, {
+    ...(options.managedAdapter !== undefined && { single: options.managedAdapter }),
+    ...(options.managedAdapters !== undefined && { many: options.managedAdapters }),
+  });
   const git = options.git ?? createGitRunner();
   // Filled in by the board service below; the control service reads it at call time.
   const workspaceHooks: ControlWorkspaceHooks = {};
@@ -187,18 +210,23 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const controlService = createControlService({
     db,
     repos,
-    adapter: managedAdapter,
+    adapters: managedAdapters,
     workspaces: workspaceManager,
     git,
     dataDir: config.dataDir,
     homeDir: config.homeDir,
     claudeDir: config.claudeDir,
-    enabled: managedAdapter !== undefined,
+    codexHome: config.codexHome,
+    enabled: managedAdapters.size > 0,
     logger,
     now,
     publish: (n) => notifier.publish(n),
     runTimeoutMs: config.runTimeoutMs,
     flushIngestion: () => scheduler.pollNow(),
+    // ADR-0032 §5: managed usage of a provider ACP does not observe (Codex) is ingested here.
+    ingestManaged: (events) => {
+      pipeline.ingestEvents(events);
+    },
     workspace: workspaceHooks,
     codeHost,
     ...options.control,
@@ -230,6 +258,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     publish: (n) => notifier.publish(n),
     requestPoll,
     isManagedPath: (cwd) => controlService.isManagedPath(cwd),
+    managedProviders: () => controlService.providerAvailability(),
   });
   // Phase 4 board: one shared check runner for the whole server (ADR-0017: one check at a time).
   const workspaceRepos = createWorkspaceRepositories(db, { now });

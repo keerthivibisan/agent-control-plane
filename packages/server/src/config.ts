@@ -15,12 +15,27 @@ const EnvSchema = z.object({
   ACP_DATA_DIR: z.string().min(1).optional(),
   ACP_CLAUDE_DIR: z.string().min(1).optional(),
   CLAUDE_CONFIG_DIR: z.string().min(1).optional(),
+  CODEX_HOME: z.string().min(1).optional(),
   ACP_MODE: z.enum(['live', 'demo']).default('live'),
   ACP_POLL_INTERVAL_MS: positiveInt('ACP_POLL_INTERVAL_MS').default(5_000),
   ACP_ACTIVE_WINDOW_MS: positiveInt('ACP_ACTIVE_WINDOW_MS').default(120_000),
   ACP_STALE_AFTER_MS: positiveInt('ACP_STALE_AFTER_MS').default(1_800_000),
   ACP_MANAGED: z.enum(['on', 'off']).optional(),
   ACP_RUN_TIMEOUT_MS: positiveInt('ACP_RUN_TIMEOUT_MS').default(7_200_000),
+  // A program name on the PATH or a path to it; passed as the first element of an argument array,
+  // never through a shell (ADR-0031 §3). No control characters, and never an option (`-x`).
+  ACP_CODEX_BIN: z
+    .string()
+    .min(1, 'ACP_CODEX_BIN must not be empty')
+    .max(1024, 'ACP_CODEX_BIN is too long')
+    .refine(
+      (v) =>
+        !v.startsWith('-') &&
+        v.trim() === v &&
+        [...v].every((c) => c.charCodeAt(0) >= 0x20 && c !== '\u007f'),
+      'ACP_CODEX_BIN must be one program name or path',
+    )
+    .default('codex'),
 });
 
 export interface ServerConfig {
@@ -31,6 +46,11 @@ export interface ServerConfig {
   /** The user's home folder (Full auto's deny-read list, ADR-0022). */
   readonly homeDir: string;
   readonly claudeDir: string;
+  /**
+   * Codex's home (`CODEX_HOME`, else `~/.codex`): never read by the app (ADR-0031 owner decision
+   * 4); only denied to Full auto's sandboxed commands (CX-4).
+   */
+  readonly codexHome: string;
   readonly mode: 'live' | 'demo';
   /** Demo data lives in its own file and is never mixed with live data (ADR-0007). */
   readonly databasePath: string;
@@ -44,6 +64,8 @@ export interface ServerConfig {
   readonly managed: 'on' | 'off' | 'auto';
   /** A working run is stopped (agents TIMED_OUT) after this long (ADR-0013 §3). */
   readonly runTimeoutMs: number;
+  /** The Codex program for managed Codex agents (ADR-0031): `codex` on the PATH by default. */
+  readonly codexBin: string;
 }
 
 export class ConfigError extends Error {
@@ -78,6 +100,7 @@ export function loadConfig(
     dataDir,
     homeDir: home,
     claudeDir: resolve(e.ACP_CLAUDE_DIR ?? e.CLAUDE_CONFIG_DIR ?? join(home, '.claude')),
+    codexHome: resolve(e.CODEX_HOME ?? join(home, '.codex')),
     mode: e.ACP_MODE,
     databasePath: join(dataDir, e.ACP_MODE === 'demo' ? 'demo.sqlite' : 'acp.sqlite'),
     hookTokenPath: join(dataDir, 'hook-token'),
@@ -88,5 +111,6 @@ export function loadConfig(
     },
     managed: e.ACP_MANAGED ?? 'auto',
     runTimeoutMs: e.ACP_RUN_TIMEOUT_MS,
+    codexBin: e.ACP_CODEX_BIN,
   };
 }

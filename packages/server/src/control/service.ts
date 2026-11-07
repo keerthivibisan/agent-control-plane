@@ -17,6 +17,8 @@ import {
   type ManagedAgentHandle,
   type ManagedExecutionAdapter,
   type ManagedFailureCode,
+  type ManagedProviderId,
+  type NormalizedEvent,
   type PermissionDecision,
   type PermissionRequest,
   type CompileContext,
@@ -39,6 +41,7 @@ import {
   type ChatMessageDto,
   type ConflictResolutionDto,
   type ConflictResolutionViewDto,
+  type ManagedProviderAvailabilityDto,
   type ReviewDto,
   type RunDetailDto,
   type RunSummaryDto,
@@ -128,6 +131,14 @@ import {
   type AgentProfiles,
 } from '../workflow/agent-profile.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
+import {
+  MANAGED_PROVIDER_NAMES,
+  capabilityRefusal,
+  dropsSkills,
+  skillsIgnoredLine,
+  type CapabilityRefusal,
+} from './capabilities.js';
+import { SELF_RECORDED_USAGE, managedSessionEvents, managedUsageEvent } from './managed-usage.js';
 import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
 import { createConflictResolution } from './conflict-resolution.js';
@@ -208,6 +219,12 @@ export const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SWEEP_INTERVAL_MS = 15_000;
 /** Stop all: abort, then give the processes this long before the run is marked cancelled anyway. */
 const DEFAULT_CANCEL_GRACE_MS = 10_000;
+/** CX-4: a provider found unavailable is asked again at most this often (the injected clock). */
+export const AVAILABILITY_RECHECK_MS = 60_000;
+/** CX-4: the reason given when `checkAvailable` itself failed (it should never throw). */
+export const AVAILABILITY_CHECK_FAILED = 'The provider could not be checked.';
+
+type Availability = { ok: true } | { ok: false; reason: string };
 
 export const LEAD_READ_ONLY_MESSAGE =
   'The lead agent works read-only in the project. Start a worker agent to change files or run commands.';
@@ -317,8 +334,11 @@ export interface TicketRunInput {
 export interface ControlServiceDeps {
   db: AcpDatabase;
   repos: Repositories;
-  /** The managed adapter; undefined when managed execution is off. */
-  adapter: ManagedExecutionAdapter | undefined;
+  /**
+   * The managed adapters by provider (ADR-0031 §2); empty when managed execution is off. An agent
+   * runs only on its own provider's adapter, never on another.
+   */
+  adapters: ReadonlyMap<ManagedProviderId, ManagedExecutionAdapter>;
   workspaces: WorkspaceManager;
   /** Used only to re-derive a stored workspace's repository root after a restart. */
   git: GitRunner;
@@ -335,6 +355,12 @@ export interface ControlServiceDeps {
   sweepIntervalMs?: number | null;
   /** Ingests what is on disk now; awaited before a worker's worktree is removed. */
   flushIngestion?: () => Promise<void>;
+  /**
+   * ADR-0032 §5: ingests the session and usage events of a managed provider ACP does not observe
+   * from files (Codex) through the ingestion pipeline. Omitted: that usage reaches only the run's
+   * budget, as before CX-4.
+   */
+  ingestManaged?: (events: readonly NormalizedEvent[]) => void;
   newId?: () => string;
   csrfToken?: string;
   /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
@@ -354,6 +380,8 @@ export interface ControlServiceDeps {
   homeDir?: string;
   /** Claude Code's config folder, also denied to Full auto's sandboxed commands. */
   claudeDir?: string;
+  /** Codex's home (`CODEX_HOME`, else `~/.codex`), also denied to them (CX-4). */
+  codexHome?: string;
   /** Full auto's per-run temp folders and deny-read list; defaults to `<dataDir>/sandbox-tmp`. */
   fullAutoPaths?: FullAutoPaths;
   /** ADR-0026 §4: the attachments' bytes; defaults to `<dataDir>/attachments`. */
@@ -455,6 +483,8 @@ export interface ControlService {
   /** Tests: resolves when no worker start, send or pump step is in flight. */
   idle(): Promise<void>;
   counters(): ControlCounters;
+  /** ADR-0031 (CX-4): each registered managed provider's last availability check. */
+  providerAvailability(): ManagedProviderAvailabilityDto[];
 }
 
 interface LiveRun {
@@ -552,6 +582,14 @@ interface LaunchInput {
   protection?: AgentProtection | undefined;
 }
 
+/** What a pump needs to record a self-recorded provider's usage (`usageRecorder`). */
+interface UsageSource {
+  provider: ManagedProviderId;
+  cwd: string;
+  /** The model the server asked for; the `started` event's reported model replaces it. */
+  model: string | null;
+}
+
 /** How a helper or tester is protected at launch (`ManagedAgentSpec.fullAuto` or `.sandbox`). */
 interface AgentProtection {
   autoMode: boolean;
@@ -585,6 +623,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       homeDir: deps.homeDir ?? homedir(),
       dataDir: deps.dataDir,
       ...(deps.claudeDir !== undefined && { claudeDir: deps.claudeDir }),
+      ...(deps.codexHome !== undefined && { codexHome: deps.codexHome }),
     });
   /** Reviewer checkouts in use, for the observation pipeline's roots (by agent run id). */
   const activeCheckouts = new Map<string, { projectId: string; checkout: ReviewCheckout }>();
@@ -606,6 +645,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   const counters: ControlCounters = { diagnostics: {}, leadToolUsesDenied: 0, costWarnings: 0 };
   let closed = false;
   let sweepTimer: ReturnType<typeof setInterval> | undefined;
+  /** CX-4: each provider's last `checkAvailable` result, kept for the server's lifetime. */
+  const availability = new Map<ManagedProviderId, { result: Availability; checkedAt: Date }>();
+  /** CX-4: the check under way per provider, so concurrent starts share one. */
+  const availabilityChecks = new Map<ManagedProviderId, Promise<Availability>>();
 
   /** Agent folders under the data dir: helpers' worktrees and reviewers' checkouts. */
   const worktreesDirs = (() => {
@@ -1190,9 +1233,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const runId = live.state.run.id;
     const agentRunId = effect.agentRunId;
     const project = deps.repos.projects.getById(live.state.run.projectId);
-    if (project === undefined || deps.adapter === undefined) {
+    if (project === undefined) {
       logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'unavailable' });
       endWithError(live, agentRunId);
+      return;
+    }
+    // ADR-0031 §2: before any folder is made, an agent whose provider has no adapter ends.
+    if (adapterOf(live, agentRunId) === undefined) {
+      refuseNoAdapter(live, agentRunId);
       return;
     }
     const kind = effect.kind;
@@ -1684,7 +1732,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             // ADR-0031 §7: only a session of the lead's own provider can be resumed.
             .find((l) => l.provider === lead.provider && l.relation === 'primary');
     return {
-      managed: deps.enabled && deps.adapter !== undefined,
+      // ADR-0031 §7: a follow-up runs only on the lead's own provider.
+      managed: deps.enabled && lead !== undefined && deps.adapters.has(lead.provider),
       leadSessionId: link?.providerSessionId ?? null,
       leadProcessActive:
         lead !== undefined && (live.handles.has(lead.id) || live.starting.has(lead.id)),
@@ -1719,14 +1768,29 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   ): void {
     const runId = live.state.run.id;
     const project = deps.repos.projects.getById(live.state.run.projectId);
-    const adapter = deps.adapter;
+    // ADR-0031 §7: the lead's own provider resumes its session; never another one.
+    const adapter = deps.adapters.get(effect.provider);
     if (project === undefined || adapter === undefined) {
-      logger.log('warn', 'follow-up start failed', { runId, code: 'unavailable' });
+      logger.log('warn', 'follow-up start failed', {
+        runId,
+        code: adapter === undefined ? 'provider-unavailable' : 'unavailable',
+        provider: effect.provider,
+      });
       endFollowUp(live);
       return;
     }
     track(
       (async () => {
+        const available = await checkAvailability(adapter);
+        if (!available.ok) {
+          logger.log('warn', 'follow-up start failed', {
+            runId,
+            code: 'provider-unavailable',
+            provider: effect.provider,
+          });
+          endFollowUp(live);
+          return;
+        }
         const setup = await setupFor(live);
         const agentFile = await agentFileFor(live, project.rootPath, effect);
         const turn = live.state.followUp?.turn ?? null;
@@ -1744,6 +1808,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             stage: effect.model,
             agentFile: agentFile?.model,
             project: setup.model,
+            provider: effect.provider,
           }),
           followUp: { resumeSessionId: effect.resumeSessionId },
         };
@@ -1751,6 +1816,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // ADR-0028 §1: the lead node's effort, as for its own turns.
         if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
+        const refusal = capabilityRefusal(spec, adapter.capabilities, effect.provider);
+        if (refusal !== null) {
+          countDiagnostic(`capability-refused-${refusal.code}`);
+          logger.log('warn', 'follow-up start failed', { runId, code: refusal.code });
+          endFollowUp(live);
+          return;
+        }
         let handle: ManagedAgentHandle;
         try {
           handle = adapter.start(spec, {
@@ -1767,7 +1839,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         live.followUp = handle;
         logger.log('info', 'follow-up turn started', { runId, agentRunId: effect.agentRunId });
-        const pumping = pumpFollowUp(live, handle).catch((error: unknown) => {
+        const usage = { provider: effect.provider, cwd: spec.cwd, model: spec.model };
+        const pumping = pumpFollowUp(live, handle, usage).catch((error: unknown) => {
           logger.log('error', 'follow-up pump failed', errorFields(error));
         });
         pumps.add(pumping);
@@ -1781,11 +1854,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
    * lead's agent record stays as it ended. A stream that ends without `finished` (or throws) ended
    * in an error, which before any answer means the resume failed (the session is gone).
    */
-  async function pumpFollowUp(live: LiveRun, handle: ManagedAgentHandle): Promise<void> {
+  async function pumpFollowUp(
+    live: LiveRun,
+    handle: ManagedAgentHandle,
+    usage: UsageSource,
+  ): Promise<void> {
     const runId = live.state.run.id;
+    const record = usageRecorder(runId, usage);
     try {
       for await (const event of handle.events) {
         if (closed) break;
+        record(event);
         const result = apply(live, (s, c) => followUpEvent(s, event, c));
         if (!result.ok) {
           logger.log('warn', 'follow-up event refused', { runId, code: result.refusal.code });
@@ -1967,33 +2046,148 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
   }
 
+  /** The agent's provider (`EngineAgent.provider`, fixed when it was created). */
+  function providerOf(live: LiveRun, agentRunId: string): ManagedProviderId {
+    return live.state.agents.find((a) => a.id === agentRunId)?.provider ?? 'claude-code';
+  }
+
+  /**
+   * ADR-0031 §2: the adapter of the agent's own provider, or undefined when the server has none.
+   * Never another provider's: the run would record one provider while a different one did the work.
+   */
+  function adapterOf(live: LiveRun, agentRunId: string): ManagedExecutionAdapter | undefined {
+    return deps.adapters.get(providerOf(live, agentRunId));
+  }
+
+  function roleOf(live: LiveRun, agentRunId: string): string {
+    return live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'An agent';
+  }
+
+  /** An agent whose provider has no adapter in this server ends with `provider-unavailable`. */
+  function refuseNoAdapter(live: LiveRun, agentRunId: string): void {
+    const provider = providerOf(live, agentRunId);
+    live.pendingSends.delete(agentRunId);
+    countDiagnostic('provider-unavailable');
+    logger.log('warn', 'agent provider has no adapter', {
+      runId: live.state.run.id,
+      agentRunId,
+      provider,
+    });
+    endWithError(live, agentRunId, 'provider-unavailable');
+    appComment(
+      live,
+      `${roleOf(live, agentRunId)} did not start: ${MANAGED_PROVIDER_NAMES[provider]} is not set up on this server.`,
+    );
+  }
+
+  /**
+   * CX-4: the agent ends without running (`failure`), and the ticket says why in one line of app
+   * copy (the adapter's fixed availability sentence, or a capability refusal's line).
+   */
+  function refuseStart(
+    live: LiveRun,
+    agentRunId: string,
+    failure: ManagedFailureCode,
+    code: string,
+    line: string,
+  ): void {
+    live.pendingSends.delete(agentRunId);
+    logger.log('warn', 'agent start failed', { runId: live.state.run.id, agentRunId, code });
+    endWithError(live, agentRunId, failure);
+    appComment(live, `${roleOf(live, agentRunId)} did not start: ${line}`);
+  }
+
+  /**
+   * CX-4: the cached availability of a provider when it may be used without asking the adapter:
+   * always for an adapter without `checkAvailable`; an `ok` for the server's lifetime; a failure
+   * for `AVAILABILITY_RECHECK_MS`. Undefined: ask (`checkAvailability`).
+   */
+  function cachedAvailability(adapter: ManagedExecutionAdapter): Availability | undefined {
+    if (adapter.checkAvailable === undefined) return { ok: true };
+    const cached = availability.get(adapter.provider);
+    if (cached === undefined) return undefined;
+    if (cached.result.ok) return cached.result;
+    const age = deps.now().getTime() - cached.checkedAt.getTime();
+    return age < AVAILABILITY_RECHECK_MS ? cached.result : undefined;
+  }
+
+  /** CX-4: the provider's availability, asking the adapter when the cache cannot answer. */
+  function checkAvailability(adapter: ManagedExecutionAdapter): Promise<Availability> {
+    const cached = cachedAvailability(adapter);
+    if (cached !== undefined) return Promise.resolve(cached);
+    const provider = adapter.provider;
+    const running = availabilityChecks.get(provider);
+    if (running !== undefined) return running;
+    const check = (async (): Promise<Availability> => {
+      let result: Availability;
+      try {
+        result = (await adapter.checkAvailable?.()) ?? { ok: true };
+      } catch (error) {
+        logger.log('warn', 'managed provider check failed', { provider, ...errorFields(error) });
+        result = { ok: false, reason: AVAILABILITY_CHECK_FAILED };
+      }
+      availability.set(provider, { result, checkedAt: deps.now() });
+      // The provider id only: never the reason's text or anything about the account.
+      if (result.ok) logger.log('info', 'managed provider available', { provider });
+      else {
+        countDiagnostic('provider-unavailable');
+        logger.log('warn', 'managed provider unavailable', { provider });
+      }
+      return result;
+    })().finally(() => availabilityChecks.delete(provider));
+    availabilityChecks.set(provider, check);
+    return check;
+  }
+
+  /**
+   * Starts the agent once its provider is known to be available (CX-4): at once when the cache
+   * says so, else after the check, holding its messages meanwhile (`starting`). An unavailable
+   * provider ends the agent with `provider-unavailable` and the adapter's reason on the ticket.
+   */
   function launch(live: LiveRun, input: LaunchInput): void {
+    const { agentRunId } = input;
+    const adapter = adapterOf(live, agentRunId);
+    if (adapter === undefined) {
+      refuseNoAdapter(live, agentRunId);
+      return;
+    }
+    const refuse = (reason: string) =>
+      refuseStart(live, agentRunId, 'provider-unavailable', 'provider-unavailable', reason);
+    const cached = cachedAvailability(adapter);
+    if (cached !== undefined) {
+      if (cached.ok) launchOn(live, input, adapter);
+      else refuse(cached.reason);
+      return;
+    }
+    live.starting.add(agentRunId);
+    track(
+      (async () => {
+        const result = await checkAvailability(adapter);
+        live.starting.delete(agentRunId);
+        if (!stillStarting(live, agentRunId)) return;
+        if (result.ok) launchOn(live, input, adapter);
+        else refuse(result.reason);
+      })(),
+    );
+  }
+
+  function launchOn(live: LiveRun, input: LaunchInput, adapter: ManagedExecutionAdapter): void {
     const runId = live.state.run.id;
     const { agentRunId, kind, setup } = input;
     const canStartHelpers = input.canStartHelpers === true;
-    const adapter = deps.adapter;
-    if (adapter === undefined) {
-      endWithError(live, agentRunId);
-      return;
-    }
-    // ADR-0031 §2: an agent runs only on its own provider's adapter. Never fall back to another
-    // provider: the run would record one provider while a different one did the work.
-    const provider = live.state.agents.find((a) => a.id === agentRunId)?.provider;
-    if (provider !== undefined && provider !== adapter.provider) {
-      logger.log('warn', 'agent provider has no adapter', { runId, agentRunId, provider });
-      endWithError(live, agentRunId, 'provider-unavailable');
-      return;
-    }
+    const provider = adapter.provider;
     const spec: ManagedAgentSpec = {
       agentRunId,
       kind,
       cwd: input.cwd,
       prompt: input.prompt,
-      // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4).
+      // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4); an
+      // inherited model of another provider is skipped (ADR-0031).
       model: resolveAgentModel({
         stage: input.model,
         agentFile: input.agentFile?.model,
         project: setup.model,
+        provider,
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
@@ -2035,6 +2229,31 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (protection.autoMode) spec.fullAuto = paths;
       else spec.sandbox = paths;
     }
+    // CX-3: the approval mode the gate decides by (`agentModeOf`, already tightened), for an
+    // adapter whose provider enforces it itself (Codex).
+    if (hasReviewableChange(kind)) {
+      const mode = agentModeOf(live, agentRunId);
+      if (mode !== undefined) spec.approvalMode = mode;
+    }
+    // ADR-0031 §5: refuse what the provider cannot hold; strip only what merely helps.
+    const refusal: CapabilityRefusal | null = capabilityRefusal(
+      spec,
+      adapter.capabilities,
+      provider,
+    );
+    if (refusal !== null) {
+      countDiagnostic(`capability-refused-${refusal.code}`);
+      refuseStart(live, agentRunId, refusal.failure, refusal.code, refusal.line);
+      return;
+    }
+    if (dropsSkills(spec, adapter.capabilities)) {
+      delete spec.skillPlugin;
+      countDiagnostic('skills-not-loaded');
+      logger.log('info', 'project skills not loaded', { runId, agentRunId, provider });
+      // Once per agent run: a rework turn of the same helper says nothing new.
+      if (input.rework === undefined)
+        appComment(live, skillsIgnoredLine(roleOf(live, agentRunId), provider));
+    }
     let handle: ManagedAgentHandle;
     try {
       handle = adapter.start(spec, {
@@ -2050,18 +2269,76 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const queued = live.pendingSends.get(agentRunId);
     live.pendingSends.delete(agentRunId);
     for (const text of queued ?? []) sendTo(live, agentRunId, text);
-    const pumping = pump(live, agentRunId, handle).catch((error: unknown) => {
+    const usage = { provider, cwd: spec.cwd, model: spec.model };
+    const pumping = pump(live, agentRunId, handle, usage).catch((error: unknown) => {
       logger.log('error', 'agent pump failed', errorFields(error));
     });
     pumps.add(pumping);
     void pumping.finally(() => pumps.delete(pumping));
   }
 
-  async function pump(live: LiveRun, agentRunId: string, handle: ManagedAgentHandle) {
+  /**
+   * ADR-0032 §5: for a provider whose usage ACP does not read from files (Codex), records the
+   * agent's session (on `started`) and each `usage` event through the ingestion pipeline. Never
+   * throws: a failed write is counted and logged, and the run goes on (its budget still counts
+   * the usage).
+   */
+  function usageRecorder(runId: string, source: UsageSource): (event: ManagedAgentEvent) => void {
+    const ingest = deps.ingestManaged;
+    if (ingest === undefined || !SELF_RECORDED_USAGE.has(source.provider)) return () => undefined;
+    let sessionId: string | null = null;
+    let model = source.model;
+    return (event) => {
+      if (event.type !== 'started' && event.type !== 'usage') return;
+      const observedAt = deps.now().toISOString();
+      let events: NormalizedEvent[];
+      if (event.type === 'started') {
+        sessionId = event.providerSessionId;
+        model = event.model ?? model;
+        events = managedSessionEvents({
+          provider: source.provider,
+          providerSessionId: sessionId,
+          observedAt,
+          cwd: source.cwd,
+          model,
+        });
+      } else {
+        if (sessionId === null) {
+          countDiagnostic('managed-usage-without-session');
+          return;
+        }
+        events = [
+          managedUsageEvent({
+            provider: source.provider,
+            providerSessionId: sessionId,
+            observedAt,
+            messageId: event.messageId,
+            model,
+            tokens: event.tokens,
+          }),
+        ];
+      }
+      try {
+        ingest(events);
+      } catch (error) {
+        countDiagnostic('managed-usage-not-recorded');
+        logger.log('error', 'managed usage not recorded', { runId, ...errorFields(error) });
+      }
+    };
+  }
+
+  async function pump(
+    live: LiveRun,
+    agentRunId: string,
+    handle: ManagedAgentHandle,
+    usage: UsageSource,
+  ) {
     const runId = live.state.run.id;
+    const record = usageRecorder(runId, usage);
     try {
       for await (const event of handle.events) {
         if (closed) break;
+        record(event);
         const result = apply(live, (s, c) => agentEvent(s, agentRunId, event, c));
         if (!result.ok) {
           logger.log('warn', 'agent event refused', {
@@ -3036,5 +3313,23 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     counters: () => ({ ...counters, diagnostics: { ...counters.diagnostics } }),
+
+    providerAvailability() {
+      return [...deps.adapters.values()].map((adapter) => {
+        if (adapter.checkAvailable === undefined) {
+          return { provider: adapter.provider, available: true, reason: null, checkedAt: null };
+        }
+        const cached = availability.get(adapter.provider);
+        if (cached === undefined) {
+          return { provider: adapter.provider, available: null, reason: null, checkedAt: null };
+        }
+        return {
+          provider: adapter.provider,
+          available: cached.result.ok,
+          reason: cached.result.ok ? null : cached.result.reason.slice(0, 300),
+          checkedAt: cached.checkedAt.toISOString(),
+        };
+      });
+    },
   };
 }

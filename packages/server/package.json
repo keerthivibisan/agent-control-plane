@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@acp/adapter-claude-code": "workspace:*",
+    "@acp/adapter-codex": "workspace:*",
     "@acp/adapter-demo": "workspace:*",
     "@acp/core": "workspace:*",
     "@acp/db": "workspace:*",

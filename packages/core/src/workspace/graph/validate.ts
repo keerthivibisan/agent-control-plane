@@ -57,6 +57,12 @@ export interface ValidateGraphContext {
    * Absent: Claude Code.
    */
   projectProvider?: ManagedProviderId;
+  /**
+   * CX-4: the project's agent files whose `tools` narrow the role's tools. A Codex node using one
+   * gets `codex-agent-tools` (Codex cannot apply the narrowing, so the agent would be refused).
+   * Absent: not checked.
+   */
+  toolNarrowingAgents?: readonly string[];
 }
 
 /**
@@ -740,6 +746,42 @@ function checkModelProviders(graph: WorkflowGraph, ctx: ValidateGraphContext, is
   }
 }
 
+/**
+ * ADR-0031 §5 (CX-4): the run start refuses a Codex agent that cannot be held to its block's
+ * setup, so the editor says so first. Full auto (its sandbox cannot block reads of private files)
+ * and an agent file that narrows tools (Codex cannot apply the narrowing) are errors; project
+ * skills, which Codex leaves out, are a warning.
+ */
+function checkCodexNodes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
+  for (const node of graph.nodes) {
+    if (!isAgentNode(node)) continue;
+    const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
+    if (provider !== 'codex') continue;
+    if (isEditorNode(node) && (node.approvalMode ?? ctx.projectMode) === 'full-auto') {
+      issues.error(
+        'codex-full-auto',
+        `${q(node)} runs on Codex in Full auto, which is not available on Codex yet: its sandbox cannot block reads of private files. Choose another approval mode or run the block on Claude.`,
+        { nodeId: node.id },
+      );
+    }
+    const narrowing = ctx.toolNarrowingAgents;
+    if (narrowing !== undefined && node.agent !== null && narrowing.includes(node.agent)) {
+      issues.error(
+        'codex-agent-tools',
+        `${q(node)} runs on Codex with the agent file "${node.agent}", which limits the agent's tools. Codex cannot apply that limit yet, so the agent would not start. Remove the file's tools list, choose another file or run the block on Claude.`,
+        { nodeId: node.id },
+      );
+    }
+    if (node.skills.length > 0) {
+      issues.warning(
+        'codex-skills-ignored',
+        `${q(node)} runs on Codex, which cannot load project skills yet: its skills are left out.`,
+        { nodeId: node.id },
+      );
+    }
+  }
+}
+
 /** ADR-0028 §2: the editor warns (never refuses) when a workflow has no Checks block at all. */
 export const NO_CHECKS_MESSAGE = 'No checks: changes merge after review only.';
 
@@ -765,7 +807,7 @@ function checkInstances(graph: WorkflowGraph, ctx: ValidateGraphContext, issues:
  * Any `error` means the graph cannot be saved or started; warnings never block. The order is
  * fixed: ids, edges (in graph order), counts and labels, plan path, review routes, change
  * reviewers, rework, assignment, merge path, final chain, Checks blocks, cycles, reachability,
- * then the warnings (files, modes, instances, model providers, `no-checks`, and the Checks blocks'
+ * Codex nodes (their errors and the skills warning), then the warnings (files, modes, instances, model providers, `no-checks`, and the Checks blocks'
  * selection last, when `ctx.harness` is given). Within a rule, issues follow graph order.
  *
  * The graph must already have `WorkflowGraphSchema`'s shape; this checks what the shape cannot.
@@ -792,6 +834,7 @@ export function validateWorkflowGraph(
   checkCheckBlocks(scope);
   checkCycles(scope);
   checkReachable(scope);
+  checkCodexNodes(graph, ctx, issues);
   checkFiles(graph, ctx, issues);
   checkModes(graph, ctx, issues);
   checkInstances(graph, ctx, issues);

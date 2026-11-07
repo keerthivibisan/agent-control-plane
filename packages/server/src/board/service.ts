@@ -585,6 +585,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
     const issues = validateWorkflowGraph(graph, {
       maxConcurrentHelpers: setup.maxConcurrentHelpers,
       projectMode: context.projectMode,
+      // ADR-0031: a Codex node in Full auto is refused here too (CX-4), before the run exists.
+      ...(context.projectProvider !== undefined && { projectProvider: context.projectProvider }),
     });
     const errors = issues.filter((i) => i.severity === 'error');
     if (errors.length > 0) throw workflowCannotRun(errors.length, errors[0]?.message ?? '');

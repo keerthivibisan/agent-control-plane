@@ -218,7 +218,7 @@ describe('ordering: persisted before effects (orchestration-lifecycle §1)', () 
     const notices: StreamNoticeDto[] = [];
     const s = await setupControl({
       overrides: {
-        adapter,
+        adapters: new Map([[adapter.provider, adapter]]),
         publish: (n) => {
           notices.push(n);
           if (n.kind === 'approval-requested')
