@@ -12,7 +12,7 @@ import type {
 import { z } from 'zod';
 import { answerServerRequest } from './approvals.js';
 import type { ApprovalContext } from './approvals.js';
-import { codexEnv } from './config.js';
+import { codexArgs, codexEnv } from './config.js';
 import { mapNotification } from './events.js';
 import type { Lifecycle } from './events.js';
 import { checkGitLocation, defaultTmpRoots } from './git-location.js';
@@ -48,6 +48,7 @@ export const CODEX_CAPABILITIES: ManagedCapabilities = Object.freeze({
   skills: false,
   profileTools: false,
   fullAuto: true,
+  denyRead: true,
   leadTools: true,
   followUp: true,
 });
@@ -97,6 +98,8 @@ async function initialize(client: JsonRpcClient): Promise<void> {
 const ThreadResponseSchema = z.looseObject({
   thread: z.looseObject({ id: z.string().min(1) }),
   model: z.string().min(1).nullable().catch(null),
+  /** The profile the thread runs under (CX-1b); checked against the one ACP selected. */
+  activePermissionProfile: z.looseObject({ id: z.string() }).nullable().catch(null).optional(),
 });
 const TurnResponseSchema = z.looseObject({ turn: z.looseObject({ id: z.string().min(1) }) });
 const AccountResponseSchema = z.looseObject({
@@ -194,7 +197,7 @@ function startAgent(
   const events = new AsyncQueue<ManagedAgentEvent>();
   const keepsOpen = specKeepsInputOpen(spec);
   const writes = (spec.kind === 'worker' || spec.kind === 'tester') && spec.followUp === undefined;
-  const modes = codexModes(spec);
+  const modes = codexModes(spec, deps.tmpRoots);
   const tempDir = tempDirOf(spec);
 
   let ended = false;
@@ -271,10 +274,20 @@ function startAgent(
     }
   }
 
-  // A protected agent's temp folder is its TMPDIR, the one temp place its sandbox may write.
+  // CX-1b: the agent's permission profile goes in as config. A path that cannot be written
+  // safely ends the agent before any process starts: never a weaker profile (ADR-0022).
+  let args: string[];
+  try {
+    args = codexArgs(modes.profile);
+  } catch {
+    finish('error', 'sandbox-unavailable');
+    return handle;
+  }
+
+  // A protected agent's temp folder is its TMPDIR, the one temp place its profile lets it write.
   const env = tempDir === null ? { ...deps.env } : { ...deps.env, TMPDIR: tempDir };
   try {
-    transport = deps.spawn({ bin: deps.bin, cwd: spec.cwd, env });
+    transport = deps.spawn({ bin: deps.bin, cwd: spec.cwd, env, args });
   } catch {
     finish('error', 'provider-unavailable');
     return handle;
@@ -327,7 +340,6 @@ function startAgent(
       threadId,
       input: textInput(text),
       ...(spec.effort !== undefined ? { effort: spec.effort } : {}),
-      ...(modes.sandboxPolicy !== null ? { sandboxPolicy: modes.sandboxPolicy } : {}),
     });
     const turn = TurnResponseSchema.safeParse(response);
     if (turn.success && activeTurnId === null) {
@@ -341,7 +353,8 @@ function startAgent(
       ...(spec.model !== null ? { model: spec.model } : {}),
       cwd: spec.cwd,
       approvalPolicy: modes.approvalPolicy,
-      sandbox: modes.sandbox,
+      // CX-1b: the profile defined at spawn. No `sandbox`: a legacy sandbox overrides profiles.
+      permissions: modes.profile.id,
       approvalsReviewer: 'user',
       developerInstructions: developerInstructionsFor(spec),
     };
@@ -379,6 +392,11 @@ function startAgent(
       }
       const thread = ThreadResponseSchema.safeParse(response);
       if (!thread.success) throw new Error('thread response');
+      // ADR-0022 fail closed: a thread not running under ACP's profile never gets a turn.
+      if (thread.data.activePermissionProfile?.id !== modes.profile.id) {
+        finish('error', 'sandbox-unavailable');
+        return;
+      }
       threadId = thread.data.thread.id;
       emit({ type: 'started', providerSessionId: threadId, model: thread.data.model });
       await startTurn(prompt);

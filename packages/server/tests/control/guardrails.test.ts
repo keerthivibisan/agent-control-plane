@@ -207,6 +207,7 @@ describe('ordering: persisted before effects (orchestration-lifecycle §1)', () 
         skills: true,
         profileTools: true,
         fullAuto: true,
+        denyRead: false,
         leadTools: true,
         followUp: true,
       },

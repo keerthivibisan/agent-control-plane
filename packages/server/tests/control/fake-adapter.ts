@@ -151,6 +151,7 @@ export const FAKE_CODEX_CAPABILITIES: ManagedCapabilities = Object.freeze({
   skills: false,
   profileTools: false,
   fullAuto: true,
+  denyRead: true,
   leadTools: true,
   followUp: true,
 });
@@ -190,6 +191,7 @@ export function createFakeManagedAdapter(options: FakeAdapterOptions = {}): Fake
               skills: true,
               profileTools: true,
               fullAuto: true,
+              denyRead: false,
               leadTools: true,
               followUp: true,
             }),

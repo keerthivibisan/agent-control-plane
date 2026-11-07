@@ -155,6 +155,7 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
           skills: true,
           profileTools: true,
           fullAuto: true,
+          denyRead: false,
           leadTools: true,
           followUp: true,
         },

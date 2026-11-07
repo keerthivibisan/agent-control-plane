@@ -5,18 +5,21 @@ import { NormalizedEventSchema, type ManagedAgentSpec } from '@acp/core';
 import { DiagnosticsDtoSchema } from '@acp/core/api';
 import { resolveManagedAdapters, startServer } from '../../src/bootstrap.js';
 import { ConfigError, loadConfig } from '../../src/config.js';
-import {
-  CODEX_FULL_AUTO_LINE,
-  capabilityRefusal,
-  dropsSkills,
-} from '../../src/control/capabilities.js';
+import { capabilityRefusal, dropsSkills } from '../../src/control/capabilities.js';
 import { fullAutoDenyRead } from '../../src/control/full-auto.js';
 import { managedSessionEvents, managedUsageEvent } from '../../src/control/managed-usage.js';
 import { silentLogger } from '../../src/logger.js';
 import { tempDir } from '../helpers.js';
 import { FAKE_CODEX_CAPABILITIES, createFakeManagedAdapter } from './fake-adapter.js';
 
-const ALL = { skills: true, profileTools: true, fullAuto: true, leadTools: true, followUp: true };
+const ALL = {
+  skills: true,
+  profileTools: true,
+  fullAuto: true,
+  denyRead: false,
+  leadTools: true,
+  followUp: true,
+};
 const PATHS = { tempDir: '/t', denyRead: ['/d'] };
 
 function spec(extra: Partial<ManagedAgentSpec> = {}): ManagedAgentSpec {
@@ -29,21 +32,18 @@ describe('capabilityRefusal (ADR-0031 §5)', () => {
     expect(capabilityRefusal(spec(), ALL, 'claude-code')).toBeNull();
   });
 
-  it('refuses Full auto and its tightened sandbox on Codex, whatever the capabilities say', () => {
+  it('lets Full auto and its tightened sandbox run on Codex (CX-3b), refusing only without the capability', () => {
     for (const extra of [{ fullAuto: PATHS }, { sandbox: PATHS }]) {
-      expect(capabilityRefusal(spec(extra), ALL, 'codex')).toEqual({
-        failure: 'sandbox-unavailable',
-        line: CODEX_FULL_AUTO_LINE,
-        code: 'full-auto',
-      });
+      expect(capabilityRefusal(spec(extra), FAKE_CODEX_CAPABILITIES, 'codex')).toBeNull();
       expect(capabilityRefusal(spec(extra), ALL, 'claude-code')).toBeNull();
-      expect(
-        capabilityRefusal(spec(extra), { ...ALL, fullAuto: false }, 'claude-code')?.failure,
-      ).toBe('sandbox-unavailable');
+      for (const provider of ['codex', 'claude-code'] as const) {
+        expect(capabilityRefusal(spec(extra), { ...ALL, fullAuto: false }, provider)).toEqual({
+          failure: 'sandbox-unavailable',
+          line: `Full auto is not available on ${provider === 'codex' ? 'Codex' : 'Claude'} yet.`,
+          code: 'full-auto',
+        });
+      }
     }
-    expect(CODEX_FULL_AUTO_LINE).toBe(
-      'Full auto is not available on Codex yet: its sandbox cannot block reads of private files.',
-    );
   });
 
   it('refuses an agent file that narrows tools where they cannot be applied, and keeps one that does not', () => {

@@ -20,23 +20,38 @@ Codex login (ChatGPT) now; an API-key option comes later. The lead/agent messagi
 The adapter spawns `codex app-server` (stdio JSON-RPC, CLI 0.166.0 at the time of writing; see the
 [research note](../research/codex-app-server-2026-11-07.md)) as an argument array with a filtered
 environment. `thread/start` carries the model, the working directory, the approval policy, the
-sandbox, ACP's instructions and the lead tools (as dynamic tools); `turn/start` and `turn/steer`
+permission profile, ACP's instructions and the lead tools (as dynamic tools); `turn/start` and `turn/steer`
 deliver messages; approval requests become ACP permission requests. User-level Codex configuration
 is overridden so a managed run sees only what ACP gives it.
 
-| Agent                                  | Codex sandbox     | Codex approval policy |
-| -------------------------------------- | ----------------- | --------------------- |
-| lead, planner, reviewer, any follow-up | `read-only`       | `never`               |
-| worker or tester, `manual` (or absent) | `read-only`       | `on-request`          |
-| worker or tester, `auto-edits`         | `workspace-write` | `untrusted`           |
-| worker or tester, `auto`               | `workspace-write` | `on-request`          |
-| worker or tester, `full-auto`          | `workspace-write` | `never`               |
+| Agent                                  | Profile extends | Codex approval policy |
+| -------------------------------------- | --------------- | --------------------- |
+| lead, planner, reviewer, any follow-up | `:read-only`    | `never`               |
+| worker or tester, `manual` (or absent) | `:read-only`    | `on-request`          |
+| worker or tester, `auto-edits`         | `:workspace`    | `untrusted`           |
+| worker or tester, `auto`               | `:workspace`    | `on-request`          |
+| worker or tester, `full-auto`          | `:workspace`    | `never`               |
 
-Confirmed by the CX-1 spike and implemented in CX-3 (`packages/adapters/codex/src/modes.ts`).
-Every `workspace-write` turn passes an explicit `sandboxPolicy`: writable roots are the worktree
-and the run's temp folder only, no network, `/tmp` and `$TMPDIR` excluded (CX-1 result 8). A
-writing agent whose repository's git directories lie in a writable temp folder is refused
-(`unsafe-git-location`).
+Confirmed by the CX-1 and CX-1b spikes and implemented in CX-3b
+(`packages/adapters/codex/src/modes.ts`). Each agent's app-server is spawned with one Codex
+permission profile (`-c permissions.<id>.extends`, `-c permissions.<id>.filesystem`,
+`-c default_permissions`), and `thread/start` (or `thread/resume`) selects it with `permissions`
+and no legacy `sandbox` field, which would override it. The thread's reported
+`activePermissionProfile` must be that profile, or the agent ends with `sandbox-unavailable` before
+any turn. The filesystem entries:
+
+- `deny`: the server's deny list (`spec.denyRead`, set for every Codex agent: the home secret
+  folders, the app's data folder, `~/.claude`, `~/.codex` and `CODEX_HOME`), plus Full auto's
+  list, and `/tmp` (`:slash_tmp`). The temp folder is `:tmpdir`; when the agent has a run temp
+  folder, `TMPDIR` points there, so the host's temp folders are denied by path instead;
+- `read`: the repository's git directories (F-1), the read-only folders, and the agent's folder
+  (with its `.git`, for a `:workspace` profile, whose folder is `write`);
+- `write`: the run's temp folder.
+
+The more specific entry wins in Codex, so the worktree and temp folder (inside the app's data
+folder) stay usable. Full auto and the tightened sandbox therefore run on Codex. A writing agent
+whose repository's git directories lie in a temp folder is still refused (`unsafe-git-location`,
+defence in depth).
 
 ## Work packages
 

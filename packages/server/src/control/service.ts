@@ -132,6 +132,7 @@ import {
 } from '../workflow/agent-profile.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
 import {
+  DENY_READ_UNAVAILABLE_LINE,
   MANAGED_PROVIDER_NAMES,
   capabilityRefusal,
   dropsSkills,
@@ -1793,6 +1794,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         const setup = await setupFor(live);
         const agentFile = await agentFileFor(live, project.rootPath, effect);
+        // CX-3b: the follow-up turn is denied the same reads as the lead's own turns.
+        const denied = adapter.capabilities.denyRead ? await loadDenyReadList() : null;
         const turn = live.state.followUp?.turn ?? null;
         if (closed || turn === null) return;
         if (turn.aborting) {
@@ -1816,6 +1819,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // ADR-0028 §1: the lead node's effort, as for its own turns.
         if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
+        if (denied === undefined) {
+          logger.log('warn', 'follow-up start failed', { runId, code: 'deny-read' });
+          endFollowUp(live);
+          return;
+        }
+        if (denied !== null) spec.denyRead = [...denied];
         const refusal = capabilityRefusal(spec, adapter.capabilities, effect.provider);
         if (refusal !== null) {
           countDiagnostic(`capability-refused-${refusal.code}`);
@@ -2154,7 +2163,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const refuse = (reason: string) =>
       refuseStart(live, agentRunId, 'provider-unavailable', 'provider-unavailable', reason);
     const cached = cachedAvailability(adapter);
-    if (cached !== undefined) {
+    // CX-3b: an adapter that denies reads for every agent waits for the deny list once.
+    const waitsForDenyList = adapter.capabilities.denyRead && denyReadList === undefined;
+    if (cached !== undefined && (!cached.ok || !waitsForDenyList)) {
       if (cached.ok) launchOn(live, input, adapter);
       else refuse(cached.reason);
       return;
@@ -2162,13 +2173,31 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     live.starting.add(agentRunId);
     track(
       (async () => {
-        const result = await checkAvailability(adapter);
+        const result = cached ?? (await checkAvailability(adapter));
+        if (result.ok && adapter.capabilities.denyRead) await loadDenyReadList();
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (result.ok) launchOn(live, input, adapter);
         else refuse(result.reason);
       })(),
     );
+  }
+
+  /**
+   * CX-3b: the deny-read list every agent of a `denyRead` adapter gets (`spec.denyRead`), the same
+   * list Full auto uses (`fullAutoDenyRead`). Loaded once; a failure leaves it unset, so the agent
+   * is refused (`launchOn`) and the next start tries again.
+   */
+  let denyReadList: readonly string[] | undefined;
+  async function loadDenyReadList(): Promise<readonly string[] | undefined> {
+    if (denyReadList !== undefined) return denyReadList;
+    try {
+      denyReadList = await fullAutoPaths.denyRead();
+    } catch (error) {
+      countDiagnostic('deny-read-unavailable');
+      logger.log('warn', 'deny-read list failed', errorFields(error));
+    }
+    return denyReadList;
   }
 
   function launchOn(live: LiveRun, input: LaunchInput, adapter: ManagedExecutionAdapter): void {
@@ -2234,6 +2263,22 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (hasReviewableChange(kind)) {
       const mode = agentModeOf(live, agentRunId);
       if (mode !== undefined) spec.approvalMode = mode;
+    }
+    // CX-3b: a provider that can deny reads denies the Full auto list to every agent, whatever
+    // its role or mode. Without the list the agent does not start (ADR-0022 fail closed).
+    if (adapter.capabilities.denyRead) {
+      if (denyReadList === undefined) {
+        countDiagnostic('capability-refused-deny-read');
+        refuseStart(
+          live,
+          agentRunId,
+          'sandbox-unavailable',
+          'deny-read',
+          DENY_READ_UNAVAILABLE_LINE,
+        );
+        return;
+      }
+      spec.denyRead = [...denyReadList];
     }
     // ADR-0031 §5: refuse what the provider cannot hold; strip only what merely helps.
     const refusal: CapabilityRefusal | null = capabilityRefusal(

@@ -34,3 +34,7 @@ Coordinator-owned. Plan: [README.md](README.md).
   CX-3b; agent-file tool narrowing refused; skills dropped with a note), graph checks, Codex usage
   persisted through the pipeline (managed channel), `.codex` in the Claude Full auto deny list,
   `managedProviders` in diagnostics. CX-3b added: permission profiles with deny-read (CX-1b).
+- 2026-11-07 CX-3b done: Codex agents run under per-agent permission profiles (deny-read for the
+  Full auto deny list, tmp denied, the agent folder and run temp dir re-opened); a profile Codex does
+  not confirm fails closed. Full auto on Codex is allowed again. To verify in the real run: a more
+  specific write/read entry re-opens a folder inside a denied one; permissions on resume.

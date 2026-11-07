@@ -1,4 +1,6 @@
 // Synthetic temp git repo and scripted fake adapters only (CX-4). Never the Agent SDK or Codex.
+import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { workflowTemplate, type WorkflowGraph, type WorkflowNode } from '@acp/core';
 import {
@@ -342,26 +344,49 @@ describe('Codex capabilities (ADR-0031 §5)', () => {
     expect(s.control.counters().diagnostics['capability-refused-profile-tools']).toBe(1);
   });
 
-  it('refuses Full auto on a Codex block at save and at the run start', async () => {
+  it('runs Full auto on a Codex block (CX-3b): saved, started, launched with its sandbox paths and the deny list', async () => {
     const s = await setupBoard({ files: FILES, codex: {} });
     const graph = frontendGraph((n) =>
       onCodex({ ...n, approvalMode: 'full-auto' } as WorkflowNode),
     );
     const res = await s.send('put', `/api/projects/${s.project.id}/workflow-graph`, { graph });
-    expect(res.status).toBe(422);
-    expect(JSON.stringify(res.body)).toContain('not available on Codex yet');
-    createRedesignRepositories(s.db).workflow.putGraph(s.project.id, graph);
-    const ticket = await s.createTicket('Unsafe');
-    await s.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' });
-    const started = await s.post(`/api/tickets/${ticket.id}/start`);
-    expect(started.status).toBe(409);
-    expect(codexOf(s).agents).toEqual([]);
-    expect(s.fake.agents).toEqual([]);
+    expect(res.status, JSON.stringify(res.body).slice(0, 300)).toBe(200);
+    const x = await planned(s);
+    await x.lead.callLead('start_agent', { role: 'Page', task: 'Build it', helper: 'frontend' });
+    await s.settle();
+    const worker = codexOf(s).agents.at(-1);
+    if (worker === undefined) throw new Error('no codex worker');
+    expect(worker.spec.kind).toBe('worker');
+    expect(worker.spec.approvalMode).toBe('full-auto');
+    const fullAuto = worker.spec.fullAuto;
+    expect(fullAuto?.tempDir).toBe(realpathSync(join(s.dataDir, 'sandbox-tmp', x.runId)));
+    expect(fullAuto?.gitDirs).toContain(realpathSync(join(s.repo, '.git')));
+    // The same list as the Full auto paths, on the spec for the provider to enforce.
+    expect(worker.spec.denyRead).toEqual(fullAuto?.denyRead);
+    expect(worker.spec.denyRead).toContain(join(s.homeDir, '.codex'));
+    expect(s.control.counters().diagnostics['capability-refused-full-auto']).toBeUndefined();
+    // The Claude lead is not given the list: its adapter does not enforce it for every agent.
+    expect(x.lead.spec.denyRead).toBeUndefined();
+  });
+
+  it('gives every Codex agent the deny list, whatever its role or mode', async () => {
+    const s = await setupBoard({ files: FILES, codex: {} });
+    await setProvider(s, 'codex');
+    await start(s);
+    const lead = codexOf(s).agents.find((a) => a.spec.kind === 'lead');
+    if (lead === undefined) throw new Error('no codex lead');
+    const deny = lead.spec.denyRead ?? [];
+    for (const dir of ['.ssh', '.aws', '.claude', '.codex']) {
+      expect(deny).toContain(join(s.homeDir, dir));
+    }
+    expect(deny).toContain(s.dataDir);
+    expect(lead.spec.fullAuto).toBeUndefined();
+    expect(lead.spec.sandbox).toBeUndefined();
   });
 
   it('validates with the project default provider', async () => {
     const s = await setupBoard({ files: FILES, codex: {} });
-    const graph = frontendGraph((n) => ({ ...n, approvalMode: 'full-auto' }) as WorkflowNode);
+    const graph = frontendGraph((n) => ({ ...n, skills: ['lint'] }) as WorkflowNode);
     const valid = async () =>
       WorkflowGraphDtoSchema.shape.issues.parse(
         (
@@ -369,9 +394,9 @@ describe('Codex capabilities (ADR-0031 §5)', () => {
             .body as { issues: unknown }
         ).issues,
       );
-    expect((await valid()).map((i) => i.code)).not.toContain('codex-full-auto');
+    expect((await valid()).map((i) => i.code)).not.toContain('codex-skills-ignored');
     await setProvider(s, 'codex');
-    expect((await valid()).map((i) => i.code)).toContain('codex-full-auto');
+    expect((await valid()).map((i) => i.code)).toContain('codex-skills-ignored');
   });
 });
 

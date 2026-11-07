@@ -247,11 +247,13 @@ function applyFollowUp(options: Options, spec: ManagedAgentSpec, resumeSessionId
  * the owner's plan comments, until `abort()`. A follow-up turn of an ended lead (ADR-0020) takes
  * its one message and ends after that turn.
  */
-/** Claude Code honours every managed capability: the contract was written for it (ADR-0031). */
+/** Claude Code honours every managed capability (ADR-0031) except `denyRead`: its reads are
+ * denied by Full auto's sandbox (`fullAuto.denyRead`), not for every agent. */
 export const CLAUDE_CODE_CAPABILITIES: ManagedCapabilities = Object.freeze({
   skills: true,
   profileTools: true,
   fullAuto: true,
+  denyRead: false,
   leadTools: true,
   followUp: true,
 });

@@ -52,7 +52,7 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
  * CX-4: errors about a block's provider and its mode or agent file, not the graph's shape;
  * generated graphs run on Claude. Covered in managed-provider-contracts.test.ts.
  */
-const PROVIDER_CODES: readonly GraphIssueCode[] = ['codex-full-auto', 'codex-agent-tools'];
+const PROVIDER_CODES: readonly GraphIssueCode[] = ['codex-agent-tools'];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
 const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};
 const STRUCTURAL_CODES = GraphIssueCodeSchema.options.filter(

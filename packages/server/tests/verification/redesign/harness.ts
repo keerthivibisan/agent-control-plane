@@ -85,6 +85,7 @@ function createTeeAdapter(): {
         skills: true,
         profileTools: true,
         fullAuto: true,
+        denyRead: false,
         leadTools: true,
         followUp: true,
       },

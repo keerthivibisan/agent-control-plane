@@ -157,23 +157,15 @@ describe('Codex block checks (CX-4, ADR-0031 §5)', () => {
       .filter((i) => i.code.startsWith('codex-'))
       .map((i) => [i.code, i.severity, i.nodeId]);
 
-  it('refuses Full auto on a Codex editing block, by its own mode or the project mode', () => {
-    expect(codes(pool({ provider: 'codex', approvalMode: 'full-auto' }))).toEqual([
-      ['codex-full-auto', 'error', poolId],
-    ]);
+  it('allows Full auto on a Codex editing block (CX-3b), by its own mode or the project mode', () => {
+    const errors = (g: WorkflowGraph, ctx: Parameters<typeof validateWorkflowGraph>[1] = {}) =>
+      validateWorkflowGraph(g, ctx).filter((i) => i.severity === 'error');
+    expect(errors(pool({ provider: 'codex', approvalMode: 'full-auto' }))).toEqual([]);
     expect(
-      codes(pool({ provider: 'codex', approvalMode: null }), { projectMode: 'full-auto' }),
-    ).toEqual([['codex-full-auto', 'error', poolId]]);
-    expect(codes(pool({ approvalMode: 'full-auto' }), { projectProvider: 'codex' })).toEqual([
-      ['codex-full-auto', 'error', poolId],
-    ]);
-    // Claude keeps Full auto; Codex in another mode is fine.
-    expect(codes(pool({ approvalMode: 'full-auto' }))).toEqual([]);
-    expect(codes(pool({ provider: 'codex', approvalMode: 'auto' }))).toEqual([]);
-    const message = validateWorkflowGraph(
-      pool({ provider: 'codex', approvalMode: 'full-auto' }),
-    ).find((i) => i.code === 'codex-full-auto')?.message;
-    expect(message).toContain('its sandbox cannot block reads of private files');
+      errors(pool({ provider: 'codex', approvalMode: null }), { projectMode: 'full-auto' }),
+    ).toEqual([]);
+    expect(errors(pool({ approvalMode: 'full-auto' }), { projectProvider: 'codex' })).toEqual([]);
+    expect(codes(pool({ provider: 'codex', approvalMode: 'full-auto' }))).toEqual([]);
   });
 
   it('refuses a Codex block whose agent file narrows tools, only when the validator knows it', () => {

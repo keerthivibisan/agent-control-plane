@@ -33,6 +33,8 @@ export interface SpawnCodexOptions {
   cwd: string;
   /** The complete environment (`codexEnv`); nothing else is inherited. */
   env: Readonly<Record<string, string>>;
+  /** The argument array (`codexArgs`, with the agent's profile). Default: `codexArgs()`. */
+  args?: readonly string[];
 }
 
 export type SpawnCodex = (options: SpawnCodexOptions) => CodexTransport;
@@ -53,7 +55,7 @@ export function spawnCodexAppServer(options: SpawnCodexOptions): CodexTransport 
       resolve(exit);
     };
   });
-  const child = spawnChild(options.bin ?? 'codex', codexArgs(), {
+  const child = spawnChild(options.bin ?? 'codex', [...(options.args ?? codexArgs())], {
     cwd: options.cwd,
     env: { ...options.env },
     stdio: 'pipe',

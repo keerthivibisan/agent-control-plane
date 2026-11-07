@@ -748,22 +748,15 @@ function checkModelProviders(graph: WorkflowGraph, ctx: ValidateGraphContext, is
 
 /**
  * ADR-0031 §5 (CX-4): the run start refuses a Codex agent that cannot be held to its block's
- * setup, so the editor says so first. Full auto (its sandbox cannot block reads of private files)
- * and an agent file that narrows tools (Codex cannot apply the narrowing) are errors; project
- * skills, which Codex leaves out, are a warning.
+ * setup, so the editor says so first. An agent file that narrows tools (Codex cannot apply the
+ * narrowing) is an error; project skills, which Codex leaves out, are a warning. Full auto runs on
+ * Codex since CX-3b (its permission profiles deny reads of private files).
  */
 function checkCodexNodes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
   for (const node of graph.nodes) {
     if (!isAgentNode(node)) continue;
     const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
     if (provider !== 'codex') continue;
-    if (isEditorNode(node) && (node.approvalMode ?? ctx.projectMode) === 'full-auto') {
-      issues.error(
-        'codex-full-auto',
-        `${q(node)} runs on Codex in Full auto, which is not available on Codex yet: its sandbox cannot block reads of private files. Choose another approval mode or run the block on Claude.`,
-        { nodeId: node.id },
-      );
-    }
     const narrowing = ctx.toolNarrowingAgents;
     if (narrowing !== undefined && node.agent !== null && narrowing.includes(node.agent)) {
       issues.error(

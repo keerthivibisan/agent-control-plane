@@ -433,7 +433,6 @@ export const GraphIssueCodeSchema = z.enum([
   // ADR-0031: a node's model looks like another provider's
   'model-provider-mismatch',
   // ADR-0031 §5 (CX-4): what a Codex node cannot run with, as the run start refuses it
-  'codex-full-auto',
   'codex-agent-tools',
   'codex-skills-ignored',
 ]);

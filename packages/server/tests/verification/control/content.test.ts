@@ -174,6 +174,7 @@ describe('P3-F content minimization through the real managed adapter', () => {
         skills: true,
         profileTools: true,
         fullAuto: true,
+        denyRead: false,
         leadTools: true,
         followUp: true,
       },

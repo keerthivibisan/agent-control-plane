@@ -14,8 +14,12 @@ Observation of Codex session files is deferred by owner decision (ADR-0031, owne
   neutralised (`codexArgs()`: hooks, plugins, apps, native subagents, memories, browser and computer
   use off; no project `AGENTS.md`, MCP servers or web search) and a filtered environment
   (`codexEnv()`: no `ACP_*`, no `GIT_*`). Stderr is counted, never logged.
+- **Permission profile:** each agent's process gets one Codex permission profile from
+  `codexModes()` as `-c` overrides (`codexArgs(profile)`: `extends`, the `filesystem` table with
+  TOML-quoted paths, `default_permissions`). A path with a control character ends the agent with
+  `sandbox-unavailable` before any process starts.
 - **Thread:** `thread/start` (or `thread/resume` for a follow-up or rework) with the model, the
-  folder, the sandbox and approval policy from `codexModes()`, ACP's instructions
+  folder, the profile (`permissions`, never a legacy `sandbox`) and approval policy, ACP's instructions
   (`developerInstructions`: role, project context, agent file text, read-only folders) and the
   role's control-plane tools as dynamic tools.
 - **Messages:** `turn/start`; during a turn, `turn/steer` (falling back to `turn/start` when the
@@ -25,21 +29,27 @@ Observation of Codex session files is deferred by owner decision (ADR-0031, owne
   (F-1). Every other request kind is refused.
 - **Usage:** one `usage` event per `thread/tokenUsage/updated`, from `last`, keyed by
   `<threadId>:<turnId>:<total.totalTokens>` (ADR-0032, amended). Missing fields are `null`.
-- **Git location:** a writing agent whose repository's git directories lie in a writable temp
-  folder (or the run's temp folder) ends with `unsafe-git-location` before any process starts.
+- **Profile check:** the thread's `activePermissionProfile` must be the agent's profile; otherwise
+  the agent ends with `sandbox-unavailable` and no turn starts (ADR-0022 fail closed).
+- **Git location:** a writing agent whose repository's git directories lie in a temp folder (or
+  the run's temp folder) ends with `unsafe-git-location` before any process starts.
 
 ## Approval modes
 
-| Agent                                  | Sandbox           | Approval policy |
-| -------------------------------------- | ----------------- | --------------- |
-| lead, planner, reviewer, any follow-up | `read-only`       | `never`         |
-| worker or tester, `manual` (or absent) | `read-only`       | `on-request`    |
-| worker or tester, `auto-edits`         | `workspace-write` | `untrusted`     |
-| worker or tester, `auto`               | `workspace-write` | `on-request`    |
-| worker or tester, Full auto            | `workspace-write` | `never`         |
+| Agent                                  | Profile extends | Approval policy |
+| -------------------------------------- | --------------- | --------------- |
+| lead, planner, reviewer, any follow-up | `:read-only`    | `never`         |
+| worker or tester, `manual` (or absent) | `:read-only`    | `on-request`    |
+| worker or tester, `auto-edits`         | `:workspace`    | `untrusted`     |
+| worker or tester, `auto`               | `:workspace`    | `on-request`    |
+| worker or tester, Full auto            | `:workspace`    | `never`         |
 
-Every `workspace-write` turn passes an explicit policy: writable roots are the worktree and the
-run's temp folder only, without network, with `/tmp` and `$TMPDIR` excluded.
+Filesystem entries (`profileFilesystem()`), in order: `deny` for `spec.denyRead`,
+`fullAuto`/`sandbox.denyRead` and `/tmp` (`:slash_tmp`), plus `:tmpdir` (or, when the run temp
+folder is the agent's `TMPDIR`, the host's temp folders by path); `read` for the git directories
+(F-1), the read-only folders and the agent's folder (`write` for a `:workspace` profile, its `.git`
+kept `read`); `write` for the run's temp folder. More specific entries win, and on the same exact
+path the deny stays. Capabilities: `fullAuto: true`, `denyRead: true`.
 
 ## Known gaps
 
@@ -47,8 +57,12 @@ run's temp folder only, without network, with `/tmp` and `$TMPDIR` excluded.
   strip them for Codex (CX-4).
 - **Agent file tools** (`spec.profile.tools`) are not applied: capability `profileTools: false`.
   The file's instructions are passed.
-- **Reads are not confined.** Codex's sandbox lets every role read the whole disk. Full auto's
-  `denyRead` list and the lead's "ask before reading outside the folder" rule are not enforced.
+- **Reads are confined by a deny list only.** The server's deny list is denied to every role; other
+  folders outside the agent's own stay readable, so the lead's "ask before reading outside the
+  folder" rule is not enforced.
+- **Not verified against a real server (CX-3b):** that a more specific `read`/`write` entry beats a
+  broader `deny` (the worktree and temp folder inside the app's data folder), that an explicit
+  `write` on the worktree keeps its `.git` read-only, and `permissions` on `thread/resume`.
 - **A refused git command gets no reason.** A Codex `decline` carries no message, so the rule is
   stated in the instructions instead.
 - **Not verified against a real server:** `turn/interrupt` timing, dynamic tools after

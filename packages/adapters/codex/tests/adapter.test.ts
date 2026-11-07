@@ -12,7 +12,9 @@ import {
   NOT_SIGNED_IN,
   REWORK_NEW_SESSION_NOTE,
 } from '../src/adapter.js';
+import { codexArgs } from '../src/config.js';
 import { usageEvent } from '../src/events.js';
+import { codexModes } from '../src/modes.js';
 import { toolInputSchema } from '../src/lead-tools.js';
 import { unwrapShellCommand } from '../src/summary.js';
 import {
@@ -65,6 +67,11 @@ describe('start', () => {
       bin: 'codex',
       cwd: '/synthetic/project',
       env: { HOME: '/home/synthetic' },
+      args: codexArgs({
+        id: 'acp-read',
+        extends: ':read-only',
+        filesystem: { ':slash_tmp': 'deny', ':tmpdir': 'deny', '/synthetic/project': 'read' },
+      }),
     });
     expect(server.sent.slice(0, 2).map((m) => m.method)).toEqual(['initialize', 'initialized']);
     expect(server.sent[0]?.params).toMatchObject({ capabilities: { experimentalApi: true } });
@@ -73,10 +80,11 @@ describe('start', () => {
       model: 'model-x',
       cwd: '/synthetic/project',
       approvalPolicy: 'never',
-      sandbox: 'read-only',
+      permissions: 'acp-read',
       approvalsReviewer: 'user',
       ephemeral: false,
     });
+    expect('sandbox' in start).toBe(false);
     expect(String(start['developerInstructions'])).toContain('Project notes.');
     const tools = start['dynamicTools'] as { name: string; inputSchema: object }[];
     expect(tools.map((t) => t.name)).toContain('start_agent');
@@ -105,28 +113,78 @@ describe('start', () => {
     handle.abort();
   });
 
-  it('a writing agent passes its sandbox policy on every turn and its temp folder as TMPDIR', async () => {
+  it('a Full auto agent gets its write profile at spawn and by name, and its temp folder as TMPDIR', async () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), 'acp-run-tmp-'));
     repos.push(tempDir);
-    const fullAuto = { tempDir, denyRead: [] };
-    const spec = worker({ approvalMode: 'full-auto', fullAuto });
+    const fullAuto = { tempDir, denyRead: ['/home/synthetic/.ssh'] };
+    const spec = worker({
+      approvalMode: 'full-auto',
+      fullAuto,
+      denyRead: ['/home/synthetic/.codex'],
+    });
     const { server, handle, spawn } = setup(spec);
+    const w = watch(handle.events);
     await settle();
+    const args = codexArgs(codexModes(spec).profile);
     expect(spawn.mock.calls[0]).toEqual([
-      { bin: 'codex', cwd: spec.cwd, env: { HOME: '/home/synthetic', TMPDIR: tempDir } },
+      { bin: 'codex', cwd: spec.cwd, env: { HOME: '/home/synthetic', TMPDIR: tempDir }, args },
     ]);
-    expect(server.requests('thread/start')[0]?.params).toMatchObject({
-      sandbox: 'workspace-write',
-      approvalPolicy: 'never',
-    });
-    expect(server.requests('turn/start')[0]?.params?.['sandboxPolicy']).toEqual({
-      type: 'workspaceWrite',
-      writableRoots: [spec.cwd, tempDir],
-      networkAccess: false,
-      excludeTmpdirEnvVar: true,
-      excludeSlashTmp: true,
-    });
+    expect(args).toContain('default_permissions="acp-write"');
+    expect(args).toContain('permissions.acp-write.extends=":workspace"');
+    const filesystem = args.find((arg) => arg.startsWith('permissions.acp-write.filesystem='));
+    expect(filesystem).toContain('"/home/synthetic/.codex"="deny"');
+    expect(filesystem).toContain('"/home/synthetic/.ssh"="deny"');
+    expect(filesystem).toContain(`"${tempDir}"="write"`);
+    const start = server.requests('thread/start')[0]?.params ?? {};
+    expect(start).toMatchObject({ permissions: 'acp-write', approvalPolicy: 'never' });
+    expect('sandbox' in start).toBe(false);
+    const turn = server.requests('turn/start')[0]?.params ?? {};
+    expect('sandboxPolicy' in turn).toBe(false);
+    expect(w.seen[0]).toMatchObject({ type: 'started' });
     handle.abort();
+  });
+
+  it.each([
+    ['another profile', { id: 'acp-other', extends: ':workspace' }],
+    ['no profile', null],
+    ['a missing field', undefined],
+  ])(
+    'a thread reporting %s ends with sandbox-unavailable and never starts a turn',
+    async (_label, active) => {
+      const server = new FakeAppServer();
+      server.handlers['thread/start'] = () => ({
+        thread: { id: 'thr-synthetic' },
+        model: 'model-synthetic',
+        ...(active !== undefined ? { activePermissionProfile: active } : {}),
+      });
+      const adapter = createManagedCodex({ spawn: () => server, tmpRoots: [] });
+      const handle = adapter.start(worker({ approvalMode: 'auto' }), {
+        requestPermission: vi.fn(),
+      });
+      expect(await collect(handle.events)).toEqual([
+        {
+          type: 'finished',
+          outcome: 'error',
+          reportedCostUsd: null,
+          failure: 'sandbox-unavailable',
+        },
+      ]);
+      expect(server.requests('turn/start')).toHaveLength(0);
+      expect(server.closed).toBe(true);
+    },
+  );
+
+  it('a deny path with a control character ends with sandbox-unavailable and spawns nothing', async () => {
+    const server = new FakeAppServer();
+    const spawn = vi.fn(() => server);
+    const adapter = createManagedCodex({ spawn, tmpRoots: [] });
+    const handle = adapter.start(worker({ denyRead: ['/home/synthetic/bad\nname'] }), {
+      requestPermission: vi.fn(),
+    });
+    expect(await collect(handle.events)).toEqual([
+      { type: 'finished', outcome: 'error', reportedCostUsd: null, failure: 'sandbox-unavailable' },
+    ]);
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it('an unsafe git location ends at once with unsafe-git-location and spawns nothing', async () => {
@@ -544,15 +602,35 @@ describe('resume', () => {
     const resume = server.requests('thread/resume')[0]?.params ?? {};
     expect(resume).toMatchObject({
       threadId: 'thr-old',
-      sandbox: 'read-only',
+      permissions: 'acp-read',
       approvalPolicy: 'never',
     });
+    expect('sandbox' in resume).toBe(false);
     expect('dynamicTools' in resume).toBe(false);
     expect(w.seen[0]).toMatchObject({ type: 'started', providerSessionId: 'thr-old' });
     await expect(handle.send('x')).rejects.toBeInstanceOf(ManagedFollowUpSendError);
     server.completeTurn('turn-1');
     await w.done;
     expect(w.seen.at(-1)).toMatchObject({ type: 'finished', outcome: 'success' });
+  });
+
+  it('a resume reporting another profile ends with sandbox-unavailable and no turn', async () => {
+    const server = new FakeAppServer();
+    server.handlers['thread/resume'] = (params) => ({
+      thread: { id: params['threadId'] },
+      model: 'model-synthetic',
+      activePermissionProfile: { id: ':workspace', extends: null },
+    });
+    const adapter = createManagedCodex({ spawn: () => server, tmpRoots: [] });
+    const handle = adapter.start(worker({ rework: { resumeSessionId: 'thr-old' } }), {
+      requestPermission: vi.fn(),
+    });
+    const events = await collect(handle.events);
+    expect(server.requests('thread/resume')[0]?.params?.['permissions']).toBe('acp-read');
+    expect(events).toEqual([
+      { type: 'finished', outcome: 'error', reportedCostUsd: null, failure: 'sandbox-unavailable' },
+    ]);
+    expect(server.requests('turn/start')).toHaveLength(0);
   });
 
   it('a rework whose thread is gone starts a new thread with the note', async () => {

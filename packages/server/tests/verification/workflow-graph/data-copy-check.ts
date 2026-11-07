@@ -114,6 +114,7 @@ function refusingAdapter(): { adapter: ManagedExecutionAdapter; starts: () => nu
         skills: true,
         profileTools: true,
         fullAuto: true,
+        denyRead: false,
         leadTools: true,
         followUp: true,
       },

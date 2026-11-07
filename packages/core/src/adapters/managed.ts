@@ -119,6 +119,14 @@ export interface ManagedAgentSpec {
    * there. The Claude Code adapter ignores it: its gate is the server's `requestPermission`.
    */
   approvalMode?: ApprovalMode;
+  /**
+   * CX-3b, for any agent: absolute paths the agent may not read (the user's secret folders, the
+   * app's data folder, Claude's and Codex's config), resolved by the server. Enforced by providers
+   * that can (capability `denyRead`): Codex through a per-agent permission profile that denies
+   * each path. The server sets it only for such an adapter. The Claude Code adapter ignores it and
+   * keeps using `fullAuto.denyRead` and `sandbox.denyRead` as before.
+   */
+  denyRead?: readonly string[];
 }
 
 /** The sandbox paths of a Full auto agent (`ManagedAgentSpec.fullAuto`, ADR-0022). */
@@ -223,6 +231,8 @@ export interface ManagedCapabilities {
   profileTools: boolean;
   /** Full auto and the tightened sandbox (`ManagedAgentSpec.fullAuto`, `sandbox`). */
   fullAuto: boolean;
+  /** Read denial for every agent (`ManagedAgentSpec.denyRead`), enforced by the provider. */
+  denyRead: boolean;
   /** The lead's control tools (`ManagedAgentSpec.leadTools`). */
   leadTools: boolean;
   /** Follow-up turns resuming a saved session (`ManagedAgentSpec.followUp`). */

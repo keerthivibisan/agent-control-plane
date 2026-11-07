@@ -32,6 +32,17 @@ export class RpcFailure extends Error {
   }
 }
 
+/**
+ * The profile a real app-server reports for a thread (CX-1b): the one named in `permissions`, as
+ * when it was defined at spawn; none when no profile was asked for.
+ */
+export function activeProfile(
+  params: Record<string, unknown>,
+): { id: string; extends: string | null } | null {
+  const id = params['permissions'];
+  return typeof id === 'string' ? { id, extends: null } : null;
+}
+
 export class FakeAppServer implements CodexTransport {
   readonly incoming = new AsyncQueue<string>();
   readonly sent: RpcMessage[] = [];
@@ -44,8 +55,16 @@ export class FakeAppServer implements CodexTransport {
   readonly handlers: Record<string, Handler> = {
     initialize: () => ({ userAgent: 'fake-codex/0.0.0' }),
     'account/read': () => ({ account: { type: 'chatgpt', email: null }, requiresOpenaiAuth: true }),
-    'thread/start': () => ({ thread: { id: 'thr-synthetic' }, model: 'model-synthetic' }),
-    'thread/resume': (params) => ({ thread: { id: params['threadId'] }, model: 'model-synthetic' }),
+    'thread/start': (params) => ({
+      thread: { id: 'thr-synthetic' },
+      model: 'model-synthetic',
+      activePermissionProfile: activeProfile(params),
+    }),
+    'thread/resume': (params) => ({
+      thread: { id: params['threadId'] },
+      model: 'model-synthetic',
+      activePermissionProfile: activeProfile(params),
+    }),
     'turn/start': () => {
       this.turnCount += 1;
       return { turn: { id: `turn-${this.turnCount}`, status: 'inProgress' } };

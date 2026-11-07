@@ -178,11 +178,12 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     expect(() => adapter.start(spec('worker'), callbacks())).toThrow('real Agent SDK');
   });
 
-  it('honours every managed capability (ADR-0031)', () => {
+  it('honours every managed capability but denyRead (ADR-0031, CX-3b)', () => {
     expect(createManagedClaudeCode().capabilities).toEqual({
       skills: true,
       profileTools: true,
       fullAuto: true,
+      denyRead: false,
       leadTools: true,
       followUp: true,
     });
