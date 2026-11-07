@@ -28,10 +28,12 @@ import {
 } from './bits';
 import { FileSide, InstructionsField, TemplatePicker } from './editor-parts';
 import { RemoveIcon } from '../workflow/icons';
+import { MODEL_SUGGESTIONS as PROVIDER_MODEL_SUGGESTIONS } from '../../lib/providers';
 
 const A = AGENTS_COPY;
 const S = SKILLS_COPY;
-const MODEL_SUGGESTIONS = ['sonnet', 'opus', 'haiku', 'inherit'];
+// Agent files are Claude Code's (ADR-0018), so only Claude's names are suggested.
+const MODEL_SUGGESTIONS = PROVIDER_MODEL_SUGGESTIONS['claude-code'];
 
 function sameForm(a: AgentForm, b: AgentForm): boolean {
   return (

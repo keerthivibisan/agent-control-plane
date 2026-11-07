@@ -1,8 +1,9 @@
-import { NODE_CAPABILITIES, type WorkflowNode } from '@acp/core';
+import { NODE_CAPABILITIES, type ManagedProviderId, type WorkflowNode } from '@acp/core';
 import type { AgentRunDto } from '@acp/core/api';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
 import { CheckIcon, TicketIcon } from '../../components/icons';
+import { ProviderBadge } from '../../components/ProviderBadge';
 import { Tooltip } from '../../components/Tooltip';
 import {
   AGENT_STATUS_COPY,
@@ -143,6 +144,20 @@ function modelText(node: WorkflowNode): { text: string; own: boolean } {
   return { text: node.agent !== null ? G.fileOrProjectModel : G.projectModel, own: false };
 }
 
+/**
+ * The provider the block's agents ran on (ADR-0031): what the server reports for its agents, else
+ * the block's own choice in the run's graph. Null when neither says (a block on the project's
+ * default that has no agent yet): the snapshot doesn't carry the default, so nothing is guessed.
+ */
+export function liveProvider(
+  node: WorkflowNode,
+  agents: readonly AgentRunDto[],
+): ManagedProviderId | null {
+  const reported = agents.find((a) => a.provider !== undefined)?.provider;
+  if (reported !== undefined) return reported;
+  return 'provider' in node && node.provider !== undefined ? node.provider : null;
+}
+
 /** The status dot of one agent: the accent while it works, the warning tone while it waits for you. */
 function agentDot(agent: AgentRunDto): string {
   if (agent.status === 'WAITING_APPROVAL' || agent.status === 'BLOCKED') return 'bg-warning';
@@ -215,6 +230,7 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
   const edits = NODE_CAPABILITIES[node.type].edits;
   const lead = node.type === 'lead';
   const model = modelText(node);
+  const provider = liveProvider(node, data.agents);
   return (
     <StateFrame state={data.state} testId={`live-block-${node.id}`}>
       <div
@@ -258,6 +274,9 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
           >
             {model.text}
           </span>
+          {provider !== null ? (
+            <ProviderBadge provider={provider} testId="live-provider" className="ml-auto" />
+          ) : null}
         </p>
         <div className="flex h-5 min-w-0 items-center gap-1 overflow-hidden">
           {node.effort !== undefined ? (

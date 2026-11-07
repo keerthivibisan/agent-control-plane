@@ -35,6 +35,7 @@ export function TextField({
   className = '',
   inputClassName = '',
   readOnly = false,
+  suggestions,
 }: {
   label: string;
   hint: ReactNode;
@@ -49,6 +50,8 @@ export function TextField({
   inputClassName?: string;
   /** Shown but fixed (a preset's value); still read and focusable. */
   readOnly?: boolean;
+  /** Values the browser offers while typing (a `<datalist>`); any other value can still be typed. */
+  suggestions?: { label: string; values: readonly string[] } | undefined;
 }) {
   const id = useId();
   return (
@@ -65,6 +68,7 @@ export function TextField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         readOnly={readOnly}
+        list={suggestions !== undefined ? `${id}-list` : undefined}
         inputMode={numeric ? 'numeric' : undefined}
         spellCheck={mono ? false : undefined}
         autoComplete="off"
@@ -74,6 +78,13 @@ export function TextField({
           `${mono ? 'font-mono' : ''} ${numeric ? 'tabular-nums' : ''} ${readOnly ? 'read-only:bg-sunken read-only:text-dim' : ''} ${inputClassName}`,
         )}
       />
+      {suggestions !== undefined ? (
+        <datalist id={`${id}-list`} aria-label={suggestions.label}>
+          {suggestions.values.map((v) => (
+            <option key={v} value={v} />
+          ))}
+        </datalist>
+      ) : null}
       <span id={`${id}-hint`} className={hintClass}>
         {hint}
       </span>

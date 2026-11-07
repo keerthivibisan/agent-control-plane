@@ -1,4 +1,6 @@
 import type {
+  AgentMessageKind,
+  AgentMessageState,
   AgentRunStatus,
   RunStatus,
   SessionStatus,
@@ -11,6 +13,7 @@ import type {
   ChangeState,
   ChangeVerdict,
   TicketBranchState,
+  ManagedProviderId,
 } from '@acp/core';
 import type { EventDto } from '@acp/core/api';
 import { formatCount } from './format';
@@ -658,7 +661,13 @@ export const HEALTH_COPY = {
     title: 'What this app can see',
     description: 'What each source of sessions provides, and what it cannot tell this app.',
     providerName: (p: string) =>
-      p === 'claude-code' ? 'Claude Code' : p === 'demo' ? 'Sample data' : p,
+      p === 'claude-code'
+        ? 'Claude Code'
+        : p === 'codex'
+          ? 'Codex'
+          : p === 'demo'
+            ? 'Sample data'
+            : p,
     observation: {
       transcripts: 'Session files (messages, tools, tokens)',
       lifecycleHooks: 'Live updates through hooks',
@@ -4100,6 +4109,7 @@ export const WORKFLOW_GRAPH_COPY = {
     nameProblem: (label: string) => `A block needs a name of 1 to 40 characters (“${label}”).`,
     modelHint: 'Leave empty to use the agent file’s model, else the project default.',
     modelDefault: 'Claude Code’s default',
+    modelDefaultOf: (provider: string) => `${provider}’s default`,
     modelFromFile: (model: string) => `From agent file: ${model}`,
     modelTooLong: 'Use a shorter model name (at most 100 characters).',
     skills: 'Skills',
@@ -4700,4 +4710,81 @@ export const AUTOMATION_COPY = {
   saved: 'Saved',
   reset: 'Reset to the safe defaults',
   invalid: 'Check the values: patterns must be repository-relative and targets valid branch names.',
+} as const;
+
+/**
+ * ADR-0031 (CX-6): Codex as a second provider that runs managed agents. Its name on blocks, in the
+ * agent's details, in project settings and on Data health. The provider is only ever shown as
+ * the API reports it or as the owner chose it; nothing is guessed from a model name.
+ */
+export const PROVIDER_COPY = {
+  /** The full name: settings, details, Data health. */
+  name: {
+    'claude-code': 'Claude Code',
+    codex: 'Codex',
+  } satisfies Record<ManagedProviderId, string>,
+  /** The short word on a block's chip. */
+  chip: {
+    'claude-code': 'Claude',
+    codex: 'Codex',
+  } satisfies Record<ManagedProviderId, string>,
+  chipTip: (name: string) => `Runs on ${name}.`,
+  /** The workflow block's picker. */
+  picker: {
+    label: 'Provider',
+    projectDefault: (name: string) => `Project default (${name})`,
+    hint: 'Which program runs this block’s agents. Change the project default in Settings.',
+  },
+  /** The model field's suggestions, named for the provider. */
+  suggestions: (name: string) => `${name} models`,
+  /** Project settings: next to the default model. */
+  settings: {
+    label: 'Default provider',
+    hint: 'Runs every agent whose workflow block names no provider.',
+  },
+  /** The agent's Details row. */
+  detail: 'Provider',
+  /** Data health: can each provider start agents? */
+  health: {
+    title: 'Agent providers',
+    description: 'Whether each provider could start agents when this app last checked.',
+    available: 'Available',
+    unavailable: 'Not available',
+    notChecked: 'Not checked yet',
+    notCheckedText: 'Checked when its first agent starts.',
+    checked: 'Checked',
+    none: 'Managed agents are off, so no provider is checked.',
+  },
+} as const;
+
+/**
+ * ADR-0033 §7: the lead's and agents' messages in a run, as metadata only. The text is never kept
+ * (ADR-0009), so the list shows who, when, what kind, where it stands and how long it was.
+ */
+export const OUTBOX_COPY = {
+  title: (n: number) => `Messages (${formatCount(n)})`,
+  tip: 'Messages between the lead and the agents in this run. Only who, when and how long are kept, never the text.',
+  label: 'Messages between agents',
+  engine: 'The app',
+  unknownAgent: 'An earlier agent',
+  arrow: '→',
+  to: 'to',
+  kind: {
+    message: 'Message',
+    question: 'Question',
+    notice: 'Notice',
+  } satisfies Record<AgentMessageKind, string>,
+  state: {
+    delivered: 'Delivered',
+    queued: 'Queued',
+    held: 'Held',
+    dropped: 'Dropped',
+  } satisfies Record<AgentMessageState, string>,
+  stateTip: {
+    delivered: 'Handed to the agent.',
+    queued: 'The agent is starting; it gets the message once it runs.',
+    held: 'The agent can’t take input now; it gets the message when it can.',
+    dropped: 'The agent ended, so the message never arrived.',
+  } satisfies Record<AgentMessageState, string>,
+  length: (n: number) => countOf(n, 'character', 'characters'),
 } as const;

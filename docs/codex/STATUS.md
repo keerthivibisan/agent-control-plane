@@ -10,7 +10,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | CX-3 | `@acp/adapter-codex`            | done        | `feat/codex-integration` |        |
 | CX-4 | Server                          | done        | `feat/codex-integration` |        |
 | CX-5 | Messaging (ADR-0033)            | done        | `feat/codex-integration` |        |
-| CX-6 | Web                             | not started |                          |        |
+| CX-6 | Web                             | done        | `feat/codex-integration` |        |
 | CX-7 | Safety and docs                 | not started |                          |        |
 
 ## Log
@@ -43,3 +43,7 @@ Coordinator-owned. Plan: [README.md](README.md).
   finish notices from the engine, `get_review_findings`, a 10-minute merge timeout (owner merge: 409
   `merge_timeout`), metadata-only outbox in the run detail. Known small gaps: messages taken for a
   follow-up that then fails to start count as delivered; a dropped question still counts toward 5.
+- 2026-11-07 CX-6 done: provider picker per node and project default, per-provider model
+  suggestions, provider chips (editor, live graph, agent details), live Codex graph issues, Codex
+  availability on Data health, the metadata-only Messages list. Not done: Tokens by provider needs
+  `provider` on the tokens DTO rows (CX-6b); agent failure codes are not in the DTO (ticket lines show them).

@@ -1,5 +1,6 @@
 import type {
   ApprovalMode,
+  ManagedProviderId,
   NodePosition,
   WorkflowEdgeType,
   WorkflowGraph,
@@ -8,6 +9,7 @@ import type {
 } from '@acp/core';
 import { MarkerType, type Edge } from '@xyflow/react';
 import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { effectiveProvider } from '../../../lib/providers';
 import { finishIssues, finishView } from '../finish';
 import { linkStroke } from './edges';
 import { isGateType, layoutGraph, sizeOf } from './layout';
@@ -47,6 +49,8 @@ export interface BlockContext {
   /** Agent files' own models, when the list is known (`GET …/agents`). */
   agentModels: ReadonlyMap<string, string | null> | undefined;
   projectModel: string | null;
+  /** The project's default provider (ADR-0031); null or absent: none chosen, so Claude Code. */
+  projectProvider?: ManagedProviderId | null;
   projectMode: ApprovalMode | null;
   helperLimit: number;
   /** The project's default target branch for the Finish block's words; null: not known. */
@@ -133,6 +137,7 @@ export function toFlowNodes(
           ctx.agents !== undefined &&
           !ctx.agents.includes(node.agent),
         model: blockModel(node, ctx),
+        provider: agent ? effectiveProvider(node.provider, ctx.projectProvider) : null,
         projectMode: ctx.projectMode,
         helperLimit: ctx.helperLimit,
         linkTarget,
