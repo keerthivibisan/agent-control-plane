@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withoutCheckBlocks } from '@acp/core';
-import type { ManagedProviderId, WorkflowGraph, WorkflowNode } from '@acp/core';
+import type { ManagedAgentEvent, ManagedProviderId, WorkflowGraph, WorkflowNode } from '@acp/core';
 import {
   agentBudgetUsage,
   followUpChat,
@@ -138,6 +138,31 @@ describe('provider on agents and effects', () => {
       rework: { resumeSessionId: 'thr-w' },
       provider: 'codex',
     });
+  });
+
+  it('CX-7 C10: the usage a resumed Codex thread replays is charged once (ledger dedup)', () => {
+    let s = graphRunning(graphWith({ [POOL]: 'codex' }), {}, STORE);
+    s = ok(leadTool(s, 'start_agent', { role: 'Store', task: 'Build it' }, 'w')).state;
+    s = ok(event(s, W, { type: 'started', providerSessionId: 'thr-w', model: null })).state;
+    const last: ManagedAgentEvent = {
+      type: 'usage',
+      messageId: 'thr-w:turn-1:300',
+      tokens: tokens(9, 3, 0, 0),
+    };
+    s = ok(event(s, W, last)).state;
+    expect(agentBudgetUsage(s.ledger, W).used).toBe(12);
+    s = ok(finishTurn(s, W)).state;
+    s = ok(sealed(s, W, 'rv')).state;
+    s = ok(leadTool(s, 'request_rework', { agentId: W, comments: 'Add a test.' }, 'rw')).state;
+    // CX-1 result 2: `thread/resume` repeats the thread's last usage notification.
+    s = ok(event(s, W, { type: 'started', providerSessionId: 'thr-w', model: null })).state;
+    s = ok(event(s, W, last)).state;
+    expect(agentBudgetUsage(s.ledger, W).used).toBe(12);
+    // A new request of the rework turn is a new record.
+    s = ok(
+      event(s, W, { type: 'usage', messageId: 'thr-w:turn-2:310', tokens: tokens(10, 0, 0, 0) }),
+    ).state;
+    expect(agentBudgetUsage(s.ledger, W).used).toBe(22);
   });
 
   it('the same message id from agents of two providers is charged to each', () => {

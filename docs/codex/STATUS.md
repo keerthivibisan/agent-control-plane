@@ -11,7 +11,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | CX-4 | Server                          | done        | `feat/codex-integration` |        |
 | CX-5 | Messaging (ADR-0033)            | done        | `feat/codex-integration` |        |
 | CX-6 | Web                             | done        | `feat/codex-integration` |        |
-| CX-7 | Safety and docs                 | not started |                          |        |
+| CX-7 | Safety and docs                 | done        | `feat/codex-integration` |        |
 
 ## Log
 
@@ -47,3 +47,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   suggestions, provider chips (editor, live graph, agent details), live Codex graph issues, Codex
   availability on Data health, the metadata-only Messages list. Not done: Tokens by provider needs
   `provider` on the tokens DTO rows (CX-6b); agent failure codes are not in the DTO (ticket lines show them).
+- 2026-11-07 CX-6b done: Tokens by provider. CX-7 done: Codex adversarial cases C1-C10 (git guard
+  in every mode and wrapper, unsafe git location, TOML injection, profile mismatch, read-only roles,
+  lead-only tools, ask_lead flood, dropped message, no cross-provider resume, replay counted once);
+  security, provider-adapters, usage-accounting, architecture, roadmap docs. Open: the consented real
+  end-to-end run (profile re-open inside a denied folder, permissions on resume, mixed-provider run).

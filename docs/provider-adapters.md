@@ -3,7 +3,8 @@
 > **Status:** the adapter contracts are **[core v1 types]** in
 > [`packages/core/src/adapters/`](../packages/core/src/adapters/contract.ts). The Claude Code
 > observation adapter (§1–§10) and its managed mode (§11) are **[implemented]** in
-> `@acp/adapter-claude-code`. They are tested against synthetic fixtures and a fake SDK, and were
+> `@acp/adapter-claude-code`. The Codex managed adapter (§12) is **[implemented on
+> `feat/codex-integration`]** in `@acp/adapter-codex`, tested against a fake app-server. They are tested against synthetic fixtures and a fake SDK, and were
 > checked in consented real runs (aggregates only, [research/](research/)); §10 and §11.2 list what
 > is still unverified against a real runtime.
 > Interface facts are labeled **verified-local** (seen in local data on 2026-10-10), **documented**
@@ -28,9 +29,11 @@ The adapter contract is internal. It is not a provider API. **The source of trut
 `ManagedExecutionAdapter` (`packages/core/src/adapters/managed.ts`) is a separate contract:
 `start(spec, callbacks)` returns a handle with an event stream and `send`, `interrupt` and `abort`.
 The Claude Code adapter implements it over the Agent SDK (§11); its observation capabilities still
-report `managedExecution: false`, since observation and managed mode are separate objects. A Codex
-adapter (**[planned, Phase 6]**) would implement the same `ObservationAdapter` against Codex's own
-interfaces. Nothing Claude-specific may leak into `@acp/core` types.
+report `managedExecution: false`, since observation and managed mode are separate objects. The
+Codex adapter (`@acp/adapter-codex`) implements `ManagedExecutionAdapter` over the Codex
+app-server (§12, **[implemented on `feat/codex-integration`]**, ADR-0031). Observation of Codex
+session files (an `ObservationAdapter` for Codex) stays **[planned, Phase 6]** by owner decision.
+Nothing Claude-specific may leak into `@acp/core` types.
 
 ## 2. Claude Code interfaces
 
@@ -531,3 +534,165 @@ against the fake `query` only.
 - **The binary comes from an optional dependency, not a script.** The SDK ships its platform binary
   as an optional dependency (`@anthropic-ai/claude-agent-sdk-darwin-arm64` here). It has no install
   script, so pnpm 10's build-script block does not affect it.
+
+## 12. Managed mode: Codex app-server **[implemented on `feat/codex-integration`; fake app-server tests]**
+
+`createManagedCodex({ bin?, spawn?, env?, tmpRoots? })` in `@acp/adapter-codex` implements
+core's `ManagedExecutionAdapter` with provider `codex` (ADR-0031, plan in
+[codex/](codex/README.md)). It was written against **Codex CLI 0.166.0**: the protocol shapes come
+from the bindings that CLI generates, and the CX-1 and CX-1b spikes ran it for real with the
+owner's consent ([research note](research/codex-app-server-2026-11-07.md)). The tests use a
+scripted in-memory app-server (`packages/adapters/codex/tests/helpers/fake-app-server.ts`); the
+real `codex` never runs in tests. The protocol is marked experimental by Codex, so a new CLI version
+must be checked against the note before it is trusted.
+
+### 12.1 Transport and spawn
+
+- **One process per agent.** `codex app-server` (the server's `ACP_CODEX_BIN`, default `codex` on
+  `PATH`) is spawned with `spawn(…, { shell: false, stdio: 'pipe' })` as an argument array. It speaks
+  JSON-RPC 2.0 over stdio, one message per line. Stderr is counted, never logged. The process
+  ends with its agent.
+- **Environment** (`codexEnv`): the server's environment without any `ACP_*` or `GIT_*` variable.
+  `HOME` stays, so Codex finds the owner's own login. ACP never reads Codex's credentials. A
+  protected agent's `TMPDIR` is the run's temp folder.
+- **Flags** (`codexArgs`, each one checked in CX-1): `--disable` for `hooks`, `multi_agent`,
+  `plugins`, `apps`, `remote_plugin`, `goals`, `memories`, `image_generation`, `browser_use`,
+  `computer_use`, `guardian_approval`, `tool_suggest`, `skill_mcp_dependency_install`,
+  `daemon_auto_start` and `in_app_browser`; `-c project_doc_max_bytes=0` (no project `AGENTS.md`),
+  `-c mcp_servers={}` and `-c web_search="disabled"`. Then the agent's permission profile as three
+  `-c` overrides (§12.3).
+- **Handshake:** `initialize` with `experimentalApi: true` (dynamic tools need it), then
+  `initialized`. `thread/start` carries the model, the folder, the approval policy, `permissions`
+  (the profile id, never the legacy `sandbox` field, which would override it),
+  `approvalsReviewer: 'user'`, `developerInstructions` and the role's dynamic tools. A follow-up or
+  rework uses `thread/resume` with the same settings. Messages go as `turn/start`, or `turn/steer`
+  during a turn. `interrupt()` is `turn/interrupt`; `abort()` closes stdin and kills the process.
+- **Instructions:** Codex has no Claude Code preset, so `developerInstructions` states the role,
+  the folder, the git rule for writing roles, the role's tools, the read-only folders, the project
+  context and the stage agent file's text. With `project_doc_max_bytes=0`, no repository file is
+  loaded (CX-1 result 2).
+- **Availability** (`checkAvailable`): the app-server starts, answers `initialize`, and
+  `account/read` names an account type. Nothing else about the account is read. The server caches
+  a failure for a minute and an ok for its lifetime.
+
+### 12.2 Approval modes
+
+| Agent                                  | Profile extends | Codex approval policy |
+| -------------------------------------- | --------------- | --------------------- |
+| lead, planner, reviewer, any follow-up | `:read-only`    | `never`               |
+| worker or tester, `manual` (or absent) | `:read-only`    | `on-request`          |
+| worker or tester, `auto-edits`         | `:workspace`    | `untrusted`           |
+| worker or tester, `auto`               | `:workspace`    | `on-request`          |
+| worker or tester, Full auto            | `:workspace`    | `never`               |
+
+`codexModes` (`src/modes.ts`) builds this from the spec. A `full-auto` mode without its Full auto
+spec (`spec.fullAuto`, the run's temp folder) is read as `auto`, never as unprotected.
+
+Requests from the app-server (`src/approvals.ts`):
+
+- `item/commandExecution/requestApproval`: the command is unwrapped from a `bash -lc`/`zsh -lc`
+  wrapper. Core's git guard (`checkGitCommand`) reads both the inner and the outer form first. A git
+  write is declined without asking, with an activity line. Anything else goes to the server's
+  gate as `Bash` with `input.command`, so the approval mode and the project's command allowlist
+  apply unchanged.
+- `item/fileChange/requestApproval`: the server's gate as `Edit`, with a short reason. **The
+  request carries no path**, so the gate cannot tell an edit inside the worktree from one outside.
+  The profile keeps writes inside the worktree and the run's temp folder.
+- A reading role (lead, planner, reviewer) and a follow-up never ask the owner: every approval is
+  declined.
+- `item/permissions/requestApproval` grants nothing; `item/tool/requestUserInput` gets no answers;
+  MCP elicitation is declined; the legacy `applyPatchApproval` and `execCommandApproval` are
+  denied; anything else is "method not found".
+
+### 12.3 Permission profiles
+
+Each agent gets one profile, defined at spawn and selected by `thread/start` (CX-1b):
+
+```
+-c permissions.<id>.extends=":workspace" | ":read-only"
+-c permissions.<id>.filesystem={"<path>"="deny"|"read"|"write", …}
+-c default_permissions="<id>"
+```
+
+`<id>` is `acp-write` (`:workspace`) or `acp-read` (`:read-only`). The filesystem entries
+(`profileFilesystem`), in order:
+
+1. `deny`: the server's deny list (`spec.denyRead`, given to every Codex agent: the home secret
+   folders, the app's data folder, `~/.claude`, `~/.codex` and `CODEX_HOME`), plus the Full auto or
+   tightened sandbox's own list;
+2. `deny`: `/tmp` (`:slash_tmp`) and the temp folder (`:tmpdir`, or, when the run's temp folder is
+   the agent's `TMPDIR`, the host's temp folders by path);
+3. `read`: the repository's git directories (F-1) and the read-only folders (ADR-0026 §4);
+4. the agent's folder: `write` with its `.git` kept `read` for `:workspace`, else `read`;
+5. `write`: the run's temp folder.
+
+The more specific entry wins in Codex, so the worktree and the temp folder (inside the denied data
+folder) stay usable. On the same exact path, the first entry stays, so a deny is never loosened.
+Paths are TOML basic strings (`tomlString`): `\` and `"` are escaped. A control character, a
+newline or a lone surrogate ends the agent with `sandbox-unavailable` before any process starts.
+After `thread/start` (or `thread/resume`), the thread's `activePermissionProfile.id` must be the
+agent's profile; otherwise the agent ends `sandbox-unavailable` and no turn starts (ADR-0022
+fail closed).
+
+A writing agent whose repository's git directory or common git directory lies in a writable temp
+folder (`/tmp`, `/private/tmp`, the OS temp folder, `$TMPDIR` or the run's temp folder) ends with
+`unsafe-git-location` before spawn (`checkGitLocation`; CX-1 result 8).
+
+### 12.4 Lead tools as dynamic tools
+
+The role's control-plane tools (`managedToolNames` from core, the same set the Claude adapter
+offers through its MCP server) are given on `thread/start` as `function` dynamic tools. Their input
+schemas come from the contract's Zod schemas, with `additionalProperties: false`. Codex calls them
+through `item/tool/call`. A tool the role was not offered, a namespaced name or a bad call answers
+`success: false` without reaching the engine. A throw answers `success: false` with a redacted
+message. A follow-up turn gets no tools. CX-1 result 5 confirmed dynamic tools on a real server;
+dynamic tools after `thread/resume` (a rework turn's `report_work`) are not yet verified.
+
+### 12.5 Events and usage
+
+- `started` (thread id as the provider session id, the model the thread reports), `activity`
+  (command, file change and tool items, summarised and redacted), `lead-text` for the lead's
+  streamed text (never stored), and one `finished` with `reportedCostUsd: null`.
+- A worker, tester, reviewer or follow-up ends when its turn ends with no message on its way; the
+  lead's and the planner's input stays open until `abort()`.
+- `usage`: one event per `thread/tokenUsage/updated`, from `last`, keyed
+  `<threadId>:<turnId>:<total.totalTokens>` ([usage-accounting §10](usage-accounting.md)).
+
+### 12.6 Capabilities
+
+`CODEX_CAPABILITIES`: `skills: false`, `profileTools: false`, `fullAuto: true`, `denyRead: true`,
+`leadTools: true`, `followUp: true`. The server (`control/capabilities.ts`) refuses a spec that
+would lose a guarantee and strips one that would only lose help:
+
+- an agent file whose `tools` narrow the role: refused at save (`codex-agent-tools`) and at launch
+  (`provider-unavailable`), since dropping the narrowing would widen the agent's tools;
+- a block's project skills: dropped, with a ticket line and a graph warning
+  (`codex-skills-ignored`);
+- a deny list that could not be built: the agent does not start (ADR-0022).
+
+A follow-up or rework resumes only a thread of the agent's own provider; a Claude session id is
+never passed to Codex, nor the reverse (ADR-0031 §7). An agent's provider is fixed when it starts.
+
+### 12.7 Differences from Claude
+
+- **No project skills.** Codex cannot load ACP's skill plugin yet.
+- **No tool narrowing from agent files.** The file's instructions are passed; its `tools` are not
+  applied, so such a block is refused on Codex.
+- **Reads outside the project are not prompted.** Claude's lead asks before reading outside its
+  folder; on Codex only the deny list is blocked, and other folders stay readable.
+- **`fileChange` approvals carry no path.** The owner sees "Edit files" with Codex's short reason,
+  not the file names.
+- **Codex reports no cost.** `reportedCostUsd` is always `null`; cost is unavailable until the
+  pricing table (Phase 2).
+- **A refused git command gets no reason.** A Codex `decline` carries no message, so the rule is
+  stated in the instructions instead.
+- **Commands inside the sandbox are not screened.** In Auto edits, Auto and Full auto, Codex runs a
+  command that stays inside its sandbox without asking. The git guard sees only escalations; git
+  writes are blocked by the profile (`.git` and the repository's git directories are read-only).
+
+### 12.8 Not verified against a real server
+
+That a more specific `read` or `write` entry wins over a broader `deny` (the worktree and temp
+folder inside the data folder); that an explicit `write` on the worktree keeps its `.git`
+read-only; `permissions` on `thread/resume`; `turn/interrupt` timing; dynamic tools after
+`thread/resume`; and `fileChange` approvals in manual mode.

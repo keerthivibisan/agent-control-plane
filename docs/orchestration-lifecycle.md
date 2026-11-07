@@ -163,6 +163,14 @@ engine and the server decide; both adapters only offer the tools (the same role 
   nothing goes in the database. The run detail returns it as `outbox` while the run is held in
   memory and has entries.
 
+## 0.3 Provider per agent (ADR-0031) [implemented on `feat/codex-integration`]
+
+Each agent takes its provider (Claude or Codex) from its workflow node, else the project's
+default, else Claude, when it starts, and keeps it. Its starts, rework turns, session link, usage
+and the lead's follow-up all carry that provider; the server routes each to that provider's
+adapter only. The state machines below are the same for both providers. Details:
+[provider-adapters §12](provider-adapters.md).
+
 ## 1. Principles
 
 - The LLM plans and recommends. **The engine enforces** concurrency, budgets, permissions, workspace

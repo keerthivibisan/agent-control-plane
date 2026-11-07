@@ -51,12 +51,25 @@ folder is the agent's `TMPDIR`, the host's temp folders by path); `read` for the
 kept `read`); `write` for the run's temp folder. More specific entries win, and on the same exact
 path the deny stays. Capabilities: `fullAuto: true`, `denyRead: true`.
 
+## Tests
+
+All against the synthetic in-memory app-server (`tests/helpers/fake-app-server.ts`); the real
+`codex` never runs. `tests/adversarial.test.ts` holds the Codex cases C1 to C6 of the adversarial
+suite ([docs/testing/adversarial.md](../../../docs/testing/adversarial.md)): hostile git commands in
+every mode, the git-location refusal, TOML injection in profile paths, an unconfirmed profile,
+reading roles that never ask, and lead-only tools.
+
 ## Known gaps
 
-- **Skills** (`spec.skillPlugin`) are ignored: capability `skills: false`. The server must refuse or
-  strip them for Codex (CX-4).
+- **Skills** (`spec.skillPlugin`) are ignored: capability `skills: false`. The server strips them
+  for Codex and puts a line on the ticket (CX-4).
 - **Agent file tools** (`spec.profile.tools`) are not applied: capability `profileTools: false`.
-  The file's instructions are passed.
+  The file's instructions are passed. The server refuses a Codex block whose agent file narrows
+  tools, at save and at launch (CX-4).
+- **`fileChange` approvals carry no path**, so the owner sees "Edit files" and Codex's reason only.
+- **Codex reports no cost**: `finished.reportedCostUsd` is always `null`.
+- **Commands inside the sandbox are not screened.** Only escalations reach the git guard; a git
+  write that Codex runs without asking is stopped by the profile (`.git` read-only).
 - **Reads are confined by a deny list only.** The server's deny list is denied to every role; other
   folders outside the agent's own stay readable, so the lead's "ask before reading outside the
   folder" rule is not enforced.

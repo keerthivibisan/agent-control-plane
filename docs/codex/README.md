@@ -2,7 +2,7 @@
 
 Coordinator-owned. Status: [STATUS.md](STATUS.md). Decisions:
 [ADR-0031](../decisions/0031-codex-provider.md) (accepted),
-[ADR-0032](../decisions/0032-codex-usage-accounting.md) (proposed),
+[ADR-0032](../decisions/0032-codex-usage-accounting.md) (accepted, amended after CX-1),
 [ADR-0033](../decisions/0033-lead-agent-messaging.md) (accepted). Branch: `feat/codex-integration`
 from `dev`.
 
@@ -11,7 +11,9 @@ from `dev`.
 Each agent block of a workflow graph (lead, planner, helper, reviewer, tester) can run on Claude or
 on Codex, and one ticket run can mix both (owner, 2026-11-04 and 2026-11-07). Codex is built the
 same way as Claude: a managed adapter behind the provider-neutral `ManagedExecutionAdapter`, with
-the same approval modes, ACP tools, skills, follow-ups, usage and UI. Codex uses the owner's own
+the same approval modes, ACP tools, follow-ups, usage and UI. Project skills and agent-file tool
+narrowing have no Codex mapping yet: skills are dropped with a ticket line, and a block whose agent
+file narrows tools is refused (ADR-0031 §5). Codex uses the owner's own
 Codex login (ChatGPT) now; an API-key option comes later. The lead/agent messaging fixes from the
 2026-11-03 review ship in the same series because both providers need them.
 
@@ -66,10 +68,25 @@ defence in depth).
 | CX-6 | Web: provider picker per node, model suggestions, provider badges, Tokens by provider                                                           | `packages/web/**`                                                                                                       | CX-4  |
 | CX-7 | Safety and docs: adversarial refusal tests on the Codex path; security, provider-adapters, usage-accounting, architecture                       | `docs/**`, test files                                                                                                   | all   |
 
+## Where it is documented
+
+- The adapter, its flags, modes, profiles, tools, capabilities and the differences from Claude:
+  [provider-adapters §12](../provider-adapters.md).
+- The Codex process, git protection, deny-read, the `/tmp` finding and the fail-closed rules:
+  [security §4](../security.md).
+- Usage: [usage-accounting §10](../usage-accounting.md), with the Codex scenarios and their tests.
+- Messaging: [orchestration-lifecycle §0.2](../orchestration-lifecycle.md).
+
 ## Verification
 
-- `pnpm check` green at every checkpoint; unit tests for every mapping and messaging rule.
-- Adversarial: a Codex worker tries `git commit`, `git checkout -b`, `git push` and a write outside
-  its worktree; each is refused.
-- Real runs only with the owner's consent, on a throwaway project: a Codex reviewer with a Claude
-  helper, then a Codex lead with a Claude helper.
+- Unit tests for every mapping and messaging rule, against a fake app-server
+  (`packages/adapters/codex/tests/`) and fake adapters (server, engine).
+- Adversarial (CX-7): the Codex section of [docs/testing/adversarial.md](../testing/adversarial.md),
+  C1 to C10. A Codex worker's git writes are declined without asking the owner in every mode; a
+  repository in a temp folder, an injected profile path or an unconfirmed profile stop the agent
+  before it runs; reading roles never ask; lead-only tools, an `ask_lead` flood and messages to an
+  ended agent are refused; no resume crosses providers; a replayed usage notification counts once.
+- Still to do, only with the owner's consent, on a throwaway project: real runs with a Codex
+  reviewer and a Claude helper, then a Codex lead and a Claude helper. They should also check what
+  the fake cannot: a more specific profile entry re-opening a folder inside a denied one, and
+  `permissions` on `thread/resume`.

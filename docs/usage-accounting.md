@@ -6,7 +6,8 @@
 > tie amendment, and the server's ingestion pipeline uses it. The tables are **[implemented]**
 > (`@acp/db` migration 0001), and the Claude Code adapter builds the dedup keys of §3. The numbers
 > quoted come from a read-only scan of local data on 2026-10-10
-> ([research note](research/claude-code-observations-2026-10-10.md)).
+> ([research note](research/claude-code-observations-2026-10-10.md)). Managed Codex usage (§10,
+> ADR-0032) is **[implemented on `feat/codex-integration`]**.
 
 The goal: **no usage number is ever inflated, invented, or silently zero.**
 
@@ -144,7 +145,61 @@ match the database exactly.
 
 - No cost formula exists yet. Only `reportedCostUsd` from snapshots is shown, always labeled
   _estimated (provider-reported)_.
+- Codex reports no cost (§10): its cost is unavailable, never `$0`.
 - A pricing table (**[planned, Phase 2]**) must store provider, model id, pricing version, per-category rates
   (input, output, cache write, cache read), the source URL, and the effective date. Each computed cost
   stores the pricing version and calculation time.
 - Missing pricing shows "cost unavailable", never `$0`.
+
+## 10. Managed Codex usage (ADR-0032 and its amendment) **[implemented on `feat/codex-integration`]**
+
+Codex session files are not read (ADR-0031, owner decision 1). A managed Codex agent's usage comes
+from its app-server's `thread/tokenUsage/updated` notifications (Codex CLI 0.166.0,
+[research note](research/codex-app-server-2026-11-07.md)) and enters the database through the same
+ingestion pipeline as transcripts.
+
+- **Record unit: one model request.** Each notification carries `last` (that one request) and
+  `total` (cumulative for the thread, across turns and resumes; CX-1 result 3). The adapter turns
+  each one into one `usage` event from `last`, with provenance `observed`. `total` is never summed.
+- **Message id:** `<threadId>:<turnId>:<total.totalTokens>`. The cumulative total grows with each
+  request, so the id is unique per request.
+- **Mapping** (`usageEvent` in `@acp/adapter-codex`):
+  - `input` = `inputTokens − cachedInputTokens` (Codex's input includes the cached part);
+  - `cacheRead` = `cachedInputTokens`;
+  - `cacheCreation` = `cacheWriteInputTokens`;
+  - `output` = `outputTokens` (`reasoningOutputTokens` is part of it and is not added again).
+
+  A missing field is `null`, never 0. `input` is `null` when either of its two fields is missing.
+  A notification without `total.totalTokens` or `last` makes no record.
+
+- **Replay dedup.** Right after `thread/resume`, Codex sends the thread's last notification again,
+  identical (CX-1 result 4). It gets the same message id, so the run budget ledger (keyed by
+  `(provider, messageId)`, ADR-0032 decision 1) and the database (`(provider, message_id)`, §4)
+  both treat it as a duplicate. The managed event's `dedupKey` is
+  `managed:codex:usage:<messageId>`, built from provider identifiers only, so the replay is also a
+  record-level duplicate.
+- **Channel and time.** The server writes each Codex `usage` event as a `usage.reported` event on
+  the `managed` channel (`control/managed-usage.ts`), with a `session.observed` and
+  `session.started` pair for the thread. The notification has no timestamp of its own, so the
+  **server's receipt time is `occurredAt`** (and `observedAt`): the request has just ended when it
+  arrives. Selection (§5) then works unchanged: one observation per id in practice.
+- **Cost:** Codex reports none. `reportedCostUsd` is `null` on every Codex `finished`; cost stays
+  unavailable until the pricing table (Phase 2), and no combined dollar total across providers is
+  shown.
+- **Claude agents** are unchanged: their usage is recorded from transcripts, never from the managed
+  channel.
+
+### 10.1 Codex scenarios
+
+| #   | Scenario                                                          | Handling                                                                                  | Tested in                                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| C1  | One notification per request: map `last`, key by cumulative total | one record per request; cached input subtracted from input                                | `packages/adapters/codex/tests/adapter.test.ts` ("maps usage from last, keyed by thread, turn and cumulative total")                                                                                                                 |
+| C2  | Missing usage fields                                              | the category is `null`, never 0; no `total` means no record                               | `packages/adapters/codex/tests/adapter.test.ts` ("a missing field is null, never 0, and no total means no record"); `packages/server/tests/board/codex-provider.test.ts`                                                             |
+| C3  | Replay after `thread/resume`                                      | the same message id; a no-op in the database (`observationCount` stays 1)                 | `packages/adapters/codex/tests/adapter.test.ts` ("the usage replayed after a resume carries the same message id"); `packages/server/tests/board/codex-provider.test.ts`; `packages/server/tests/adversarial/codex-path.test.ts` (C9) |
+| C4  | Replay after a rework resume, in the run budget                   | charged once; the next request of the rework turn is charged                              | `packages/orchestrator/tests/managed-provider.test.ts` ("CX-7 C10")                                                                                                                                                                  |
+| C5  | Cross-provider id collision                                       | the same message id from a Claude and a Codex agent is charged to each                    | `packages/orchestrator/tests/managed-provider.test.ts` ("the same message id from agents of two providers is charged to each")                                                                                                       |
+| C6  | Managed events: channel, provenance, nulls, stable keys           | `managed` channel, `observed`; a replay with a later receipt time has the same `dedupKey` | `packages/server/tests/control/codex-units.test.ts` ("managed usage events (ADR-0032 §5)")                                                                                                                                           |
+| C7  | Usage on the Tokens page                                          | Codex records count under the agent's role, ticket, model and session                     | `packages/server/tests/board/codex-provider.test.ts` ("starts the Claude lead and the Codex helper …")                                                                                                                               |
+
+ADR-0032's first draft (one `derived` record per turn, `turn:<id>`) was replaced by the amendment;
+no `derived` Codex records exist.
