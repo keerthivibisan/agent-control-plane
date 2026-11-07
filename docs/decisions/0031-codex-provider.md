@@ -1,9 +1,10 @@
 # ADR-0031: Codex as a second provider, with the provider chosen per workflow stage
 
-- **Status:** proposed (implementation waits for the maintainer to accept it)
-- **Date:** 2026-11-04
+- **Status:** accepted (project owner, in chat, 2026-11-07), with the amendments in "Owner
+  decisions" below
+- **Date:** 2026-11-04 (proposed), 2026-11-07 (accepted)
 - **Deciders:** project owner (request 2026-11-04, "add codex support too, the agents can be from
-  both claude and codex"); implementing agent (draft)
+  both claude and codex"; acceptance 2026-11-07); implementing agent (draft)
 - **Amends:** ADR-0012 and ADR-0013 (the managed process is not only the SDK-spawned `claude`),
   AGENTS.md §1 (Codex is brought forward from Phase 6 by the owner's request) and §3 rule 8
   (allowed processes)
@@ -75,6 +76,32 @@ never resumed as a Codex thread.
 9. **Lead tools.** The lead's ACP tools reach Codex only if the app-server can expose them (for
    example as an MCP server). If it cannot, Codex is limited to non-lead roles until that is solved.
    The research note decides this before implementation.
+
+## Owner decisions (2026-11-03 and 2026-11-07)
+
+These settle the open points above and are binding for the CX series ([docs/codex/](../codex/README.md)).
+
+1. **Managed first.** Codex is built as a managed provider before any observation of Codex
+   sessions. This overrides the observation-first order of ADR-0004 for Codex. §8 (observation of
+   Codex data files) is deferred; managed Codex usage is recorded from the app-server's own usage
+   notifications ([ADR-0032](0032-codex-usage-accounting.md)).
+2. **Any block, lead included.** Every agent node of a workflow graph (lead, planner, helper,
+   reviewer, tester) may choose Codex or Claude. This replaces the fallback in §9: lead tools are
+   delivered to Codex as app-server dynamic tools, or as a localhost MCP server if dynamic tools
+   fail the CX-1 spike. If neither works, the lead stays Claude-only and that is reported, not
+   hidden.
+3. **Parity with the Claude setup.** Approval modes, ACP tools, skills, follow-ups, rework, usage
+   and the UI behave the same way for both providers. Where Codex cannot match a behaviour, the
+   difference is listed in `docs/provider-adapters.md` and the node is refused rather than run
+   with weaker guarantees (§5).
+4. **Login.** Codex runs with the owner's own Codex login (ChatGPT sign-in) under its default
+   home. ACP never reads, copies or stores Codex credentials or `~/.codex`. An API-key option is a
+   later change. User-level Codex configuration is neutralised for managed runs (no automatic
+   `AGENTS.md`, no user MCP servers or plugins, no native subagents, no web search), as
+   `settingSources: []` does for Claude; ACP supplies the instructions itself.
+5. **Messaging.** Workers may ask the lead questions (`ask_lead`); message metadata (id, state,
+   length, hash) may be stored, never the text; agents do not survive a server restart (ADR-0013
+   §7 stands). See [ADR-0033](0033-lead-agent-messaging.md).
 
 ## Alternatives considered
 

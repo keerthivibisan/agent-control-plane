@@ -21,13 +21,17 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   the merged v0.4.0 release. The ADR and CR review labels still need maintainer reconciliation
   with the safety wording below. Plan and status:
   [docs/conflict-resolution/](docs/conflict-resolution/README.md).
+- **Codex as a second managed provider (CX series, ADR-0031 accepted 2026-11-07):** in progress
+  on `feat/codex-integration`, brought forward from Phase 6 by the owner. Each workflow block
+  picks Claude or Codex. Plan and status: [docs/codex/](docs/codex/README.md). Observation of
+  Codex session files stays out of scope.
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):
   - Phase 2 items (pricing table, OTel, purge and retention) unless an accepted issue or ADR
     includes them;
   - Harness Lab experiments (Phase 5);
-  - a Codex adapter (Phase 6);
+  - observation of Codex session files (Phase 6; managed Codex runs are the CX series above);
   - recommendations (Phase 7).
 
   Do not build these, even partially. Propose them in an issue first.
@@ -84,7 +88,8 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
 8. **Local only.**
    - No runtime network calls, telemetry, or uploads. Two exceptions:
      - the `claude` process the Agent SDK starts for a managed run talks to Anthropic's API, as
-       Claude Code always does (ADR-0012);
+       Claude Code always does (ADR-0012), and likewise the `codex app-server` process the Codex
+       adapter starts talks to OpenAI with the owner's own Codex login (ADR-0031);
      - **ADR-0025:** on the owner's click only, the server pushes a ticket branch to the project's
        own `origin` and opens, reads or merges its pull request with the owner's GitHub CLI login
        (`gh`). It never reads or stores a token, and nothing runs on a timer or for an agent.
@@ -93,7 +98,7 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
        the verification route permits it. Off by default; never for an agent's own request.
    - The server binds `127.0.0.1`.
    - No shell execution from any input. Managed runs follow ADR-0013: only `git`, the SDK-spawned
-     `claude`, `gh` (ADR-0025) and the project's own harness setup steps and checks (ADR-0017,
+     `claude`, the adapter-spawned `codex app-server` (ADR-0031), `gh` (ADR-0025) and the project's own harness setup steps and checks (ADR-0017,
      ADR-0027), as argument arrays; no text ever reaches a shell.
 9. **Demo data stays demo.** The demo adapter runs in tests or `ACP_MODE=demo` only, against a
    separate database file. Never seed the live database.
