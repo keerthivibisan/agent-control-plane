@@ -106,7 +106,7 @@ describe('the handover (request_review)', () => {
     const start = effectsOf(h.effects, 'start-agent')[0];
     expect(start).toMatchObject({ kind: 'reviewer', reviewScope: 'final' });
     expect(start?.prompt).toContain(`ticket branch ${BRANCH}`);
-    expect(controlToolsFor(s, 'h-1')).toEqual(['post_review']);
+    expect(controlToolsFor(s, 'h-1')).toEqual(['post_review', 'ask_lead']);
     // No new helper after the handover.
     expect(refusalOf(leadTool(s, 'start_agent', { role: 'X', task: 'x' }))).toMatchObject({
       code: 'handed-over',
@@ -123,7 +123,11 @@ describe('the handover (request_review)', () => {
     const t = ok(agentEvent(s, 'h-1', finished, makeCtx(12_000, 't')));
     s = t.state;
     expect(agentOf(s, 't-1')).toMatchObject({ kind: 'tester', status: 'STARTING' });
-    expect(types(t.effects)).toEqual(['remove-review-checkout', 'start-agent']);
+    // ADR-0033 §4: one short notice that the reviewer finished (its findings came already).
+    expect(types(t.effects)).toEqual(['remove-review-checkout', 'start-agent', 'send-to-agent']);
+    expect(leadMessages(t.effects)).toEqual([
+      expect.stringContaining('finished: see its findings on the ticket.'),
+    ]);
     expect(effectsOf(t.effects, 'start-agent')[0]).toMatchObject({
       kind: 'tester',
       fromBranch: BRANCH,
@@ -430,7 +434,7 @@ describe('depth 2', () => {
     expect(effectsOf(r.effects, 'seal-change').map((e) => e.agentRunId)).toEqual(['wc-1', 'wp-1']);
     // The lead decides both changes.
     expect(ok(leadTool(r.state, 'view_change', { agentId: 'wc-1' })).value).toContain('Child');
-    expect(controlToolsFor(r.state, 'wp-1')).toEqual(['report_work']);
+    expect(controlToolsFor(r.state, 'wp-1')).toEqual(['report_work', 'ask_lead']);
   });
 
   it('a parent’s rework turn cannot start helpers; stopping a parent keeps a waiting child', () => {
@@ -443,7 +447,7 @@ describe('depth 2', () => {
     );
     s = rework.state;
     expect(effectsOf(rework.effects, 'start-agent')[0]).not.toHaveProperty('canStartHelpers');
-    expect(controlToolsFor(s, 'wp-1')).toEqual(['report_work']);
+    expect(controlToolsFor(s, 'wp-1')).toEqual(['report_work', 'ask_lead']);
     expect(refused(leadTool(s, 'start_agent', { role: 'C', task: 'x' }, 'x', 'wp-1'))).toBe(
       'depth-exceeded',
     );
@@ -486,13 +490,16 @@ describe('budgets and BLOCKED', () => {
     expect(r.state.run.status).toBe('BLOCKED');
   });
 
-  it('messages are held while the lead is BLOCKED and listed when it resumes', () => {
+  it('notices to a BLOCKED lead go out for the server to hold; the resume lists what waits', () => {
     let s = helper(loopRunning({ reviewer: 'lead', budget: 100 }), 'API builder', 'wa');
     s = ok(finishTurn(s, A)).state;
     s = ok(event(s, LEAD, { type: 'usage', messageId: 'l1', tokens: tokens(200) }, 4200)).state;
     const held = ok(sealed(s, A));
     expect(changeOf(held.state, A).state).toBe('reviewing');
-    expect(leadMessages(held.effects)).toEqual([]);
+    // ADR-0033 §2: never skipped; the server holds it until the lead can take input.
+    expect(held.effects.filter((e) => e.type === 'send-to-agent')).toEqual([
+      expect.objectContaining({ agentRunId: LEAD, message: { from: 'engine', kind: 'notice' } }),
+    ]);
     const budget = held.state.approvals.find((a) => a.kind === 'budget-raise');
     if (budget === undefined) throw new Error('no budget approval');
     const r = ok(

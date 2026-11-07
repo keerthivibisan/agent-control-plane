@@ -18,6 +18,7 @@ import {
 import { helperNodeOf, programOf, resolveHelper } from './program.js';
 import { helperBrief } from './agent-note.js';
 import { reportWork } from './report-tool.js';
+import { askLead, parentOf } from './messaging.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
 import {
@@ -27,6 +28,7 @@ import {
   launchFieldsFor,
   nodeProvider,
 } from './stages.js';
+import type { Draft } from './draft.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
@@ -73,10 +75,11 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
  * still checks every call):
  * - lead: every lead tool; in separate planner mode, without `submit_plan`; the change tools
  *   (ADR-0021) only in a run with the review loop;
- * - planner: `submit_plan`; reviewer: `post_review`; change reviewer: `submit_review`;
+ * - planner: `submit_plan`; reviewer: `post_review`; change reviewer: `submit_review`; both
+ *   reviewers also `ask_lead` (ADR-0033 §3);
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
- *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3);
- * - tester: `report_work` in a ticket run, else none.
+ *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
+ * - tester: `report_work` in a ticket run, and `ask_lead`.
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
   const agent = state.agents.find((a) => a.id === agentRunId);
@@ -89,13 +92,14 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
           n !== 'post_review' &&
           n !== 'submit_review' &&
           n !== 'report_work' &&
+          n !== 'ask_lead' &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
     case 'planner':
       return ['submit_plan'];
     case 'reviewer':
-      return isChangeReviewer(agent) ? ['submit_review'] : ['post_review'];
+      return [isChangeReviewer(agent) ? 'submit_review' : 'post_review', 'ask_lead'];
     case 'worker': {
       const children =
         agent.change === undefined &&
@@ -103,10 +107,12 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
         mayStartHelpers(state, agent)
           ? CHILD_MANAGEMENT_TOOLS
           : [];
-      return state.run.ticketId === null ? children : [...children, 'report_work'];
+      return state.run.ticketId === null
+        ? [...children, 'ask_lead']
+        : [...children, 'report_work', 'ask_lead'];
     }
     case 'tester':
-      return state.run.ticketId === null ? [] : ['report_work'];
+      return state.run.ticketId === null ? ['ask_lead'] : ['report_work', 'ask_lead'];
   }
 }
 
@@ -135,6 +141,23 @@ export function leadToolCall(
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
   const loop = state.integration !== undefined;
+  if (call.name === 'ask_lead') {
+    // ADR-0033 §3: helpers, the tester and reviewers ask their parent; the lead and planner don't.
+    if (caller.kind === 'lead' || caller.kind === 'planner') {
+      return {
+        ok: false,
+        refusal: refusal(
+          'not-lead',
+          caller.kind === 'lead'
+            ? 'The lead has nobody to ask; use ask_owner for a change, or write to the owner in chat.'
+            : NOT_YOUR_TOOL.planner,
+        ),
+      };
+    }
+    const parsed = LeadToolInputs.ask_lead.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return askLead(state, caller.id, parsed.data.question, ctx);
+  }
   if (call.name === 'report_work') {
     // ADR-0026 §3: the helper's and tester's note; nobody else has it.
     if (caller.kind !== 'worker' && caller.kind !== 'tester') {
@@ -204,6 +227,15 @@ export function leadToolCall(
     a.kind === 'worker' && (caller.kind === 'lead' || a.parentAgentRunId === caller.id);
   const findManaged = (agentId: string): EngineAgent | undefined =>
     state.agents.find((a) => a.id === agentId && manages(a));
+  /**
+   * ADR-0033 §3: `message_agent` also reaches an agent that asked the caller a question (the
+   * tester or a reviewer asking the lead), so the question can be answered.
+   */
+  const findMessageTarget = (agentId: string): EngineAgent | undefined =>
+    findManaged(agentId) ??
+    state.agents.find(
+      (a) => a.id === agentId && (a.openQuestions ?? 0) > 0 && parentOf(state, a)?.id === caller.id,
+    );
   /** ADR-0021: the lead's change tools act on a helper's or the tester's change. */
   const findChangeOwner = (agentId: string): EngineAgent | undefined =>
     state.agents.find((a) => a.id === agentId && hasReviewableChange(a.kind));
@@ -322,11 +354,26 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       const runRefusal = checkRunActive(state.run.status);
       if (runRefusal !== null) return { ok: false, refusal: runRefusal };
-      const target = findManaged(parsed.data.agentId);
+      const target = findMessageTarget(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
-      if (!isLiveAgentStatus(target.status)) {
-        return { ok: false, refusal: refusal('agent-not-live', 'That agent has stopped.') };
-      }
+      const text = parsed.data.text;
+      /** ADR-0033 §1: sent through the server, which reports the delivery state to the caller. */
+      const send = (d: Draft): { value: string } => {
+        const self = d.agent(target.id);
+        // ADR-0033 §3: the parent's message answers the agent's open questions.
+        if (self !== undefined && parentOf(d, self)?.id === caller.id) delete self.openQuestions;
+        // Sent, never stored: lead-to-worker messages are worker conversation (ADR-0015).
+        d.effects.push({
+          type: 'send-to-agent',
+          agentRunId: target.id,
+          text,
+          message: { from: caller.id, kind: 'message' },
+        });
+        if (d.integration !== undefined) humanized(`Messaged ${target.role}`)(d);
+        return { value: `Message for ${target.role}.` };
+      };
+      // ADR-0033 §1: an ended agent is no refusal: the server reports the message as dropped.
+      if (!isLiveAgentStatus(target.status)) return applyCommand(state, ctx, send);
       if (target.status === 'AWAITING_REVIEW') {
         return {
           ok: false,
@@ -354,13 +401,7 @@ export function leadToolCall(
           ),
         };
       }
-      const text = parsed.data.text;
-      return applyCommand(state, ctx, (d) => {
-        // Sent, never stored: lead-to-worker messages are worker conversation (ADR-0015).
-        d.effects.push({ type: 'send-to-agent', agentRunId: target.id, text });
-        if (d.integration !== undefined) humanized(`Messaged ${target.role}`)(d);
-        return { value: `Message sent to ${target.role}.` };
-      });
+      return applyCommand(state, ctx, send);
     }
 
     case 'stop_agent': {
@@ -368,7 +409,7 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       const target = findManaged(parsed.data.agentId);
       if (target === undefined) return unknownWorker();
-      const stopped = stopAgent(state, target.id, ctx);
+      const stopped = stopAgent(state, target.id, ctx, caller.id);
       if (stopped.ok && loop) {
         const lead = stopped.state.agents.find((a) => a.id === caller.id);
         if (lead !== undefined)
@@ -465,6 +506,21 @@ export function leadToolCall(
         { decision: 'ask-owner', by: 'lead', comments: parsed.data.question },
         ctx,
       );
+    }
+
+    case 'get_review_findings': {
+      const parsed = LeadToolInputs.get_review_findings.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const target = findChangeOwner(parsed.data.agentId);
+      if (target?.change === undefined) return unknownChange();
+      // ADR-0033 §5: the server appends the stored findings (`reviewFindingsReply`), or refuses
+      // when none are stored.
+      const value = `${target.role}'s change (agentId ${target.id}).`;
+      return applyCommand(state, ctx, (d) => {
+        humanized(`Read the review of ${target.role}'s change`)(d);
+        return { value };
+      });
     }
 
     case 'submit_review': {

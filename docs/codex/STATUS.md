@@ -9,7 +9,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | CX-2 | Contracts and DB                | done        | `feat/codex-integration` |        |
 | CX-3 | `@acp/adapter-codex`            | done        | `feat/codex-integration` |        |
 | CX-4 | Server                          | done        | `feat/codex-integration` |        |
-| CX-5 | Messaging (ADR-0033)            | not started |                          |        |
+| CX-5 | Messaging (ADR-0033)            | done        | `feat/codex-integration` |        |
 | CX-6 | Web                             | not started |                          |        |
 | CX-7 | Safety and docs                 | not started |                          |        |
 
@@ -38,3 +38,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   Full auto deny list, tmp denied, the agent folder and run temp dir re-opened); a profile Codex does
   not confirm fails closed. Full auto on Codex is allowed again. To verify in the real run: a more
   specific write/read entry re-opens a folder inside a denied one; permissions on resume.
+- 2026-11-07 CX-5 done (ADR-0033): server mailbox with delivered/queued/held/dropped states reported
+  to the caller, held messages for a blocked or ended lead (cap 50), `ask_lead` (5 open questions),
+  finish notices from the engine, `get_review_findings`, a 10-minute merge timeout (owner merge: 409
+  `merge_timeout`), metadata-only outbox in the run detail. Known small gaps: messages taken for a
+  follow-up that then fails to start count as delivered; a dropped question still counts toward 5.

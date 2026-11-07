@@ -23,12 +23,15 @@ describe('managedToolNames', () => {
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('post_review');
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('submit_review');
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('report_work');
+    expect(LEAD_ROLE_TOOL_NAMES).not.toContain('ask_lead');
+    expect(LEAD_ROLE_TOOL_NAMES).toContain('get_review_findings');
     expect(managedToolNames({ kind: 'planner' })).toEqual(['submit_plan']);
-    expect(managedToolNames({ kind: 'reviewer' })).toEqual(['post_review']);
+    expect(managedToolNames({ kind: 'reviewer' })).toEqual(['post_review', 'ask_lead']);
     expect(managedToolNames({ kind: 'reviewer', reviewScope: 'change' })).toEqual([
       'submit_review',
+      'ask_lead',
     ]);
-    expect(managedToolNames({ kind: 'worker' })).toEqual(['report_work']);
+    expect(managedToolNames({ kind: 'worker' })).toEqual(['report_work', 'ask_lead']);
     expect(managedToolNames({ kind: 'worker', canStartHelpers: true })).toEqual([
       'start_agent',
       'list_agents',
@@ -36,8 +39,20 @@ describe('managedToolNames', () => {
       'stop_agent',
       'agent_status',
       'report_work',
+      'ask_lead',
     ]);
-    expect(managedToolNames({ kind: 'tester', canStartHelpers: true })).toEqual(['report_work']);
+    expect(managedToolNames({ kind: 'tester', canStartHelpers: true })).toEqual([
+      'report_work',
+      'ask_lead',
+    ]);
+  });
+
+  it('ADR-0033: ask_lead for helpers, the tester and reviewers; get_review_findings for the lead', () => {
+    const kinds = ['lead', 'planner', 'reviewer', 'worker', 'tester'] as const;
+    const withTool = (tool: string) =>
+      kinds.filter((kind) => managedToolNames({ kind }).includes(tool as 'ask_lead'));
+    expect(withTool('ask_lead')).toEqual(['reviewer', 'worker', 'tester']);
+    expect(withTool('get_review_findings')).toEqual(['lead']);
   });
 
   it('gives a follow-up no tool at all', () => {

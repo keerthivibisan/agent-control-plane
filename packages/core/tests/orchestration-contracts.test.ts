@@ -61,8 +61,17 @@ describe('lead tools', () => {
         'submit_review',
         // ADR-0026: the helper's and tester's note
         'report_work',
+        // ADR-0033: questions to the parent, and review findings on demand
+        'ask_lead',
+        'get_review_findings',
       ].sort(),
     );
+    expect(LeadToolInputs.ask_lead.safeParse({ question: 'Which token?' }).success).toBe(true);
+    expect(LeadToolInputs.ask_lead.safeParse({ question: ' ' }).success).toBe(false);
+    expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2000) }).success).toBe(true);
+    expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2001) }).success).toBe(false);
+    expect(LeadToolInputs.get_review_findings.safeParse({ agentId: 'a' }).success).toBe(true);
+    expect(LeadToolInputs.get_review_findings.safeParse({ agentId: '' }).success).toBe(false);
     expect(LeadToolInputs.report_work.safeParse({ note: 'Added the switch.' }).success).toBe(true);
     expect(LeadToolInputs.report_work.safeParse({ note: '   ' }).success).toBe(false);
     expect(LeadToolInputs.report_work.safeParse({ note: 'x'.repeat(601) }).success).toBe(false);

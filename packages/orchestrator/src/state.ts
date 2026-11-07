@@ -1,5 +1,6 @@
 import type {
   AgentEffort,
+  AgentMessageKind,
   AgentRoleKind,
   AgentRun,
   CheckSelection,
@@ -92,6 +93,11 @@ export interface EngineAgent extends AgentRun {
    * lead is told it when the change is sealed. In memory with the live run.
    */
   reportedOutcome?: { kind: HelperOutcomeKind; note: string };
+  /**
+   * ADR-0033 §3: `ask_lead` questions this agent asked that its parent has not answered yet (a
+   * `message_agent` from the parent answers them all). Absent means none. In memory with the run.
+   */
+  openQuestions?: number;
 }
 
 /**
@@ -513,7 +519,18 @@ export type EngineEffect =
       kind: 'rework' | 'discard' | 'ask-owner';
       body: string;
     }
-  | { type: 'send-to-agent'; agentRunId: string; text: string }
+  /**
+   * Text for an agent's process. `message` marks lead/agent messaging (ADR-0033): the server
+   * records its metadata in the run's outbox (never the text), holds it while the recipient cannot
+   * take input, and reports its delivery state. Without `message`: plain input (owner chat, the
+   * resume after a raise), sent or queued as before.
+   */
+  | {
+      type: 'send-to-agent';
+      agentRunId: string;
+      text: string;
+      message?: { from: string; kind: AgentMessageKind };
+    }
   /** Stop the current turn but keep the session (budget cap reached). */
   | { type: 'interrupt-agent'; agentRunId: string }
   /** End the agent's query. Cancellation emits workers first, then the lead. */

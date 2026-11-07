@@ -87,6 +87,10 @@ export interface BoardSetupOptions {
    * options. Omitted: the server has the Claude fake only.
    */
   codex?: Omit<FakeAdapterOptions, 'provider'>;
+  /** ADR-0033 §6: the merge's wait for its checks, in milliseconds (tests: a short one). */
+  mergeTimeoutMs?: number;
+  /** Changes the board's control hooks once they are wired (a test's own merge gate, …). */
+  patchHooks?: (hooks: ControlWorkspaceHooks) => void;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -143,6 +147,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     claudeDir: join(homeDir, '.claude'),
     workspace: hooks,
     ...(options.codeHost !== undefined && { codeHost: options.codeHost }),
+    ...(options.mergeTimeoutMs !== undefined && { mergeTimeoutMs: options.mergeTimeoutMs }),
   });
   const workspace = createWorkspaceRepositories(db, { now });
   const harness = createProjectHarness({ repos, workspace, now, logger });
@@ -179,6 +184,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     ...(options.legacyRuns === true && { legacyTicketRuns: true }),
   });
   Object.assign(hooks, board.controlHooks());
+  options.patchHooks?.(hooks);
   const workflow = createWorkflowService({
     db,
     repos,

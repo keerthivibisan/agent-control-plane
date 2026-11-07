@@ -29,6 +29,12 @@ export const HELPER_PARENT_TOOL_NAMES: readonly LeadToolName[] = [
 export const AGENT_NOTE_TOOL_NAMES: readonly LeadToolName[] = ['report_work'];
 
 /**
+ * ADR-0033 §3: `ask_lead`, a question to the agent's parent (the lead, or a depth-2 parent
+ * helper). Every helper, the tester and every reviewer has it; the lead and the planner do not.
+ */
+export const ASK_LEAD_TOOL_NAMES: readonly LeadToolName[] = ['ask_lead'];
+
+/**
  * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
  * B) and `submit_review` (ADR-0021 §3), and the helpers' `report_work` (ADR-0026 §3). That
  * includes the five change tools of the review loop (`view_change`, `merge_change`,
@@ -39,18 +45,31 @@ export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.fil
   (name) =>
     name !== 'post_review' &&
     !CHANGE_REVIEWER_TOOL_NAMES.includes(name) &&
-    !AGENT_NOTE_TOOL_NAMES.includes(name),
+    !AGENT_NOTE_TOOL_NAMES.includes(name) &&
+    !ASK_LEAD_TOOL_NAMES.includes(name),
 );
+
+/** A helper's and the tester's own tools: the note and the question to the parent. */
+const WORKER_TOOL_NAMES: readonly LeadToolName[] = [
+  ...AGENT_NOTE_TOOL_NAMES,
+  ...ASK_LEAD_TOOL_NAMES,
+];
 
 /** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */
 export const PLANNER_TOOL_NAMES: readonly LeadToolName[] = ['submit_plan'];
-/** The final reviewer's one tool (ADR-0019, decision B): its findings become ticket comments. */
-export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = ['post_review'];
 /**
- * A change reviewer's one tool (ADR-0021 §3, `reviewScope: 'change'`): its verdict and findings go
- * to the lead, and the findings become a ticket comment.
+ * The final reviewer's tools (ADR-0019, decision B): its findings become ticket comments; plus
+ * `ask_lead` (ADR-0033 §3).
  */
-export const CHANGE_REVIEWER_ROLE_TOOL_NAMES: readonly LeadToolName[] = CHANGE_REVIEWER_TOOL_NAMES;
+export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = ['post_review', ...ASK_LEAD_TOOL_NAMES];
+/**
+ * A change reviewer's tools (ADR-0021 §3, `reviewScope: 'change'`): its verdict and findings go
+ * to the lead, and the findings become a ticket comment; plus `ask_lead` (ADR-0033 §3).
+ */
+export const CHANGE_REVIEWER_ROLE_TOOL_NAMES: readonly LeadToolName[] = [
+  ...CHANGE_REVIEWER_TOOL_NAMES,
+  ...ASK_LEAD_TOOL_NAMES,
+];
 
 /** True for a reviewer of one helper's change rather than of the final result (ADR-0021). */
 export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewScope'>): boolean {
@@ -61,10 +80,10 @@ export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewSc
  * The control-plane tools one agent may use (ADR-0019):
  * - lead: the lead's set (every lead tool except `post_review`);
  * - planner: `submit_plan`; reviewer: `post_review`, or `submit_review` for a change reviewer
- *   (`reviewScope: 'change'`, ADR-0021);
- * - worker: `report_work` (ADR-0026 §3), plus the child-management subset with
- *   `canStartHelpers` (depth 2);
- * - tester: `report_work` (it is a worker that never starts helpers).
+ *   (`reviewScope: 'change'`, ADR-0021), and `ask_lead`;
+ * - worker: `report_work` (ADR-0026 §3) and `ask_lead` (ADR-0033 §3), plus the child-management
+ *   subset with `canStartHelpers` (depth 2);
+ * - tester: `report_work` and `ask_lead` (it is a worker that never starts helpers).
  * An adapter builds both what the model sees and what its gate allows from this one list, so the
  * two cannot disagree. The engine checks every call again (`leadToolCall`).
  */
@@ -82,10 +101,10 @@ export function managedToolNames(
       return isChangeReviewer(spec) ? CHANGE_REVIEWER_ROLE_TOOL_NAMES : REVIEWER_TOOL_NAMES;
     case 'worker':
       return spec.canStartHelpers === true
-        ? [...HELPER_PARENT_TOOL_NAMES, ...AGENT_NOTE_TOOL_NAMES]
-        : AGENT_NOTE_TOOL_NAMES;
+        ? [...HELPER_PARENT_TOOL_NAMES, ...WORKER_TOOL_NAMES]
+        : WORKER_TOOL_NAMES;
     case 'tester':
-      return AGENT_NOTE_TOOL_NAMES;
+      return WORKER_TOOL_NAMES;
   }
 }
 

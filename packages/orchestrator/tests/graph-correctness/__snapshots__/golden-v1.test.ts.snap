@@ -23,11 +23,13 @@ exports[`golden v1 traces > control-panel approve 1`] = `
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#d8135f40/224 role="UI"
   ~ +W2 worker role="UI" stage=- STARTING
 #7 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #8 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #9 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #10 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -69,11 +71,13 @@ exports[`golden v1 traces > control-panel legacy-failing-helper 1`] = `
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#d8135f40/224 role="UI"
   ~ +W2 worker role="UI" stage=- STARTING
 #7 Store "finish error" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) failed: its change wa…"#a05d0b9f/67
   ~ W1 FAILED review=pending
 #8 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #9 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #10 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -93,7 +97,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=82592fb7bb153d01/2815
+"digest=41ec680a82c57ef4/2999
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -103,7 +107,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut legacy-discard 1`] = `
-"digest=f27a88419a9032f7/2824
+"digest=8b1fde5a6f058b70/3008
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -113,7 +117,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut legacy-failing-helper 1`] = `
-"digest=64db2be0942231fe/2813
+"digest=5eee888a29ff482c/2997
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -151,11 +155,13 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve 1`] = `
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #8 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #9 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #10 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #11 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -178,12 +184,14 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 #16 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#c4c27a6a/912 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #17 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #18 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #19 owner "review merged" -> ok
   ~ run COMPLETED
@@ -243,12 +251,14 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve interru
 #12 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#4cd23604/892 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #13 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #14 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #15 owner "review merged" -> ok
   ~ run COMPLETED
@@ -328,11 +338,13 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-discard 
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #8 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #9 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #10 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #11 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -355,12 +367,14 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-discard 
 #16 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#cfd8e2e0/886 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #17 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #18 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #19 owner "review merged" -> ok
   ~ run COMPLETED
@@ -403,11 +417,13 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-failing-
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #8 Store "finish error" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) failed: its change wa…"#a05d0b9f/67
   ~ W1 FAILED review=pending
 #9 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #10 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #11 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -430,12 +446,14 @@ exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-failing-
 #16 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#cfd8e2e0/886 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #17 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #18 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #19 owner "review merged" -> ok
   ~ run COMPLETED
@@ -450,7 +468,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=fc4d693d1b4ce703/2104
+"digest=7e1ef12ed9ec6bfc/2288
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -459,7 +477,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut legacy-discard 1`] = `
-"digest=af7ffda28cf6a3f8/2113
+"digest=d7d94cab4cf97129/2297
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -468,7 +486,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut legacy-failing-helper 1`] = `
-"digest=2f6ecfc3b08af401/2102
+"digest=50733f4d96190f7f/2286
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -477,7 +495,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=a546c61734220155/2587
+"digest=7486aff67282ecd4/2863
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -487,7 +505,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut legacy-discard 1`] = `
-"digest=1248932e483cc454/2596
+"digest=89de9cf16b6e137f/2872
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -497,7 +515,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut legacy-failing-helper 1`] = `
-"digest=fb216d37c12d0f85/2585
+"digest=198d0881ddae9773/2861
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -535,11 +553,13 @@ exports[`golden v1 traces > legacy no-workflow approve 1`] = `
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #8 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #9 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #10 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #11 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -631,11 +651,13 @@ exports[`golden v1 traces > legacy no-workflow mode-auto-edits approve 1`] = `
   > resolve-permission approvalId=A9 decision={"allow":true}
   ~ W1 RUNNING
 #24 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #25 owner "approve Bash" -> ok
   > resolve-permission approvalId=A10 decision={"allow":true}
   ~ W2 RUNNING
 #26 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #27 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -655,7 +677,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=9411b282d13cb560/3119
+"digest=be77e25707485ec5/3303
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -666,7 +688,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut legacy-discard 1`] = `
-"digest=1779471e55632f18/3128
+"digest=6ae72d0587b1340f/3312
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -677,7 +699,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut legacy-failing-helper 1`] = `
-"digest=ced383a17d3e14d3/3117
+"digest=956fbd9d3bd7053b/3301
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -723,11 +745,13 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut approve 1`] = `
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #9 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #10 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #11 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #12 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -750,12 +774,14 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut approve 1`] = `
 #17 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#c4c27a6a/912 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #18 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #19 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #20 owner "review merged" -> ok
   ~ run COMPLETED
@@ -806,11 +832,13 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-discard 1`]
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #9 Store "finish success" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) finished: its change …"#1db1b4c4/69
   ~ W1 SUCCEEDED review=pending
 #10 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #11 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #12 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -833,12 +861,14 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-discard 1`]
 #17 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#cfd8e2e0/886 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #18 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #19 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #20 owner "review merged" -> ok
   ~ run COMPLETED
@@ -889,11 +919,13 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-failing-hel
   > start-agent agentRunId=W2 kind="worker" prompt="Build the UI. The app owns branches and …"#4ec458a5/363 role="UI"
   ~ +W2 worker role="UI" stage=helpers STARTING
 #9 Store "finish error" -> ok
+  > send-to-agent agentRunId=L text="Store (agentId W1) failed: its change wa…"#a05d0b9f/67
   ~ W1 FAILED review=pending
 #10 UI "started" -> ok
   > link-session agentRunId=W2 provider="claude-code" providerSessionId="sess:W2"
   ~ W2 RUNNING
 #11 UI "finish success" -> ok
+  > send-to-agent agentRunId=L text="UI (agentId W2) finished: its change wai…"#26ae7c60/66
   ~ W2 SUCCEEDED review=pending
 #12 lead "request_review {}" -> ok
   = "The owner can now review the changes."
@@ -916,12 +948,14 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-failing-hel
 #17 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 kind="tester" prompt="Write unit tests for the merged change. …"#cfd8e2e0/886 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #18 Tester "started" -> ok
   > link-session agentRunId=T1 provider="claude-code" providerSessionId="sess:T1"
   ~ T1 RUNNING
 #19 Tester "finish success" -> ok
+  > send-to-agent agentRunId=L text="Tester (agentId T1) finished: its change…"#4cf7336f/70
   ~ T1 SUCCEEDED review=pending
 #20 owner "review merged" -> ok
   ~ run COMPLETED
@@ -937,7 +971,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=8c75b8bbebd52da5/2408
+"digest=5cb691405b3460aa/2592
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -947,7 +981,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut legacy-discard 1`] = `
-"digest=aaa07b4800077e92/2417
+"digest=c66946158c696bcf/2601
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -957,7 +991,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut legacy-failing-helper 1`] = `
-"digest=dcdf5a89713e9f8b/2406
+"digest=039b44bdf17d6463/2590
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -967,7 +1001,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=80ec5726992e3188/2891
+"digest=2a643c1720ece701/3167
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -978,7 +1012,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut legacy-discard 1`] = `
-"digest=abaedc4dcbbb2c7f/2900
+"digest=8f55dcfa4a0dd89c/3176
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -989,7 +1023,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut legacy-failing-helper 1`] = `
-"digest=e52735e2b39bad54/2889
+"digest=75575946bbc47174/3165
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1000,7 +1034,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=c7b0328d364365cb/6614
+"digest=a2f4659523416317/6706
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1012,7 +1046,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=cd65994353c959ed/7100
+"digest=c31474a7efc4465d/7192
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1024,7 +1058,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=6ca49307f9dc6cd9/6639
+"digest=e2cd933769445195/6731
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1036,7 +1070,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=14bd70e73180b1b5/6989
+"digest=66f744f75fb32a61/7081
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1048,7 +1082,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=b91e72d5b8a8258b/6637
+"digest=78b14a393495d523/6729
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1060,7 +1094,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=9d45ceb225742bc0/6618
+"digest=dafd794654c77b28/6710
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1072,7 +1106,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut approve 1`] = `
-"digest=bab2011ecc72525c/8803
+"digest=d2a97a8e7eec0588/8895
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1086,7 +1120,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=4e2afd07b565a175/9289
+"digest=c950298376fdc1ad/9381
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1100,7 +1134,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut discard 1`] = `
-"digest=52fec3c4a776d752/8828
+"digest=61e7966ca60321be/8920
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1114,7 +1148,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=7ed1dbc4680da36e/9178
+"digest=7a4461b45979a0ba/9270
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1128,7 +1162,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=80826766d9b109e0/8826
+"digest=9df137da74f68710/8918
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1142,7 +1176,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=9804ddc3cf5e8739/8807
+"digest=2d2fe73771fd4769/8899
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1414,7 +1448,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=c7b0328d364365cb/6614
+"digest=a2f4659523416317/6706
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1426,7 +1460,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=cd65994353c959ed/7100
+"digest=c31474a7efc4465d/7192
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1438,7 +1472,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=6ca49307f9dc6cd9/6639
+"digest=e2cd933769445195/6731
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1450,7 +1484,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=5d2c30a5cbd4851b/9001
+"digest=97a8218d15f4014f/9093
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1463,7 +1497,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=b91e72d5b8a8258b/6637
+"digest=78b14a393495d523/6729
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1475,7 +1509,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=c7e5c6d26f61089c/8685
+"digest=5df0d062695b7eb0/8777
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1594,6 +1628,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -1700,6 +1735,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #14 server "merged merged" -> ok
   = "Merged Store into acp/WEB-12."
   > change-round agentRunId=W1 decidedBy="owner" decision="merge" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict=null
+  > send-to-agent agentRunId=L text="The owner decided: Merged Store into acp/WEB-12."
   ~ run REVIEW
   ~ W1 NEEDS_REVIEW review=merged change=merged/r0
 #15 owner "merge" -> ok
@@ -1708,6 +1744,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #16 server "merged merged" -> ok
   = "Merged UI into acp/WEB-12."
   > change-round agentRunId=W2 decidedBy="owner" decision="merge" reviewer="owner" reviewerAgentRunId=null round=0 verdict=null
+  > send-to-agent agentRunId=L text="The owner decided: Merged UI into acp/WEB-12."
   ~ W2 NEEDS_REVIEW review=merged change=merged/r0
 #17 owner "continue" -> ok
   > create-review-checkout agentRunId=FR1 ticketBranch="acp/WEB-12"
@@ -1720,9 +1757,11 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #19 Reviewer "post_review {\\"text\\":\\"Consider a test for…"#8f82ccf7/54 -> ok
   = "Posted to the ticket. Post more findings…"#55bc3f39/68
   > review-comment agentRunId=FR1 body="Consider a test for the toggle."
+  > send-to-agent agentRunId=L text="Final code review finding: Consider a te…"#8579ded5/59
 #20 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #21 Tester "started" -> ok
@@ -1744,6 +1783,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR2 body="Looks right." changeOf=T1 round=0 verdict="approve"
   > change-round agentRunId=T1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
+  > send-to-agent agentRunId=L text="The review agent reviewed Tester's chang…"#6753cc54/231
   ~ T1 AWAITING_REVIEW change=needs-owner/r0/approve
 #26 Review_Tester "finish success" -> ok
   > remove-review-checkout agentRunId=CR2
@@ -1754,6 +1794,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt
 #28 server "merged merged" -> ok
   = "Merged Tester into acp/WEB-12."
   > change-round agentRunId=T1 decidedBy="owner" decision="merge" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
+  > send-to-agent agentRunId=L text="The owner decided: Merged Tester into ac…"#c5593bad/49
   ~ T1 SUCCEEDED review=merged change=merged/r0/approve
 #29 owner "merge ticket branch" -> ok
   ~ run COMPLETED
@@ -1973,6 +2014,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #41 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #42 Tester "started" -> ok
@@ -2174,6 +2216,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto
 #43 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #44 Tester "started" -> ok
@@ -2341,6 +2384,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-full
 #36 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #37 Tester "started" -> ok
@@ -2558,6 +2602,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-manu
 #47 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #48 Tester "started" -> ok
@@ -2721,6 +2766,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner 1`] = `
 #28 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #29 Tester "started" -> ok
@@ -2914,6 +2960,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner-rework 
 #35 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #36 Tester "started" -> ok
@@ -3107,6 +3154,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut conflict 1`] = `
 #36 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #37 Tester "started" -> ok
@@ -3264,6 +3312,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut discard 1`] = `
 #26 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #27 Tester "started" -> ok
@@ -3457,6 +3506,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failed-check 1`] 
 #36 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #37 Tester "started" -> ok
@@ -3614,6 +3664,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failing-helper 1`
 #26 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #27 Tester "started" -> ok
@@ -3749,6 +3800,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut no-changes 1`] = 
 #22 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#84a337fd/928 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #23 Tester "started" -> ok
@@ -3799,7 +3851,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=980998821675e900/10372
+"digest=baad2866cf40ce10/10464
 outcome=ended steps=50
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3813,7 +3865,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=4d434fa7bfd8c0bd/10586
+"digest=e20c844b2941deed/10678
 outcome=ended steps=52
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3827,7 +3879,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=201718712a2ceaef/9518
+"digest=142a121559a91377/9610
 outcome=ended steps=45
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3841,7 +3893,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=9bf145ff2cf5ce15/11014
+"digest=85b337d783a780d9/11106
 outcome=ended steps=56
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3971,6 +4023,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut plan-changes 1`] 
 #29 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#2b4e18ca/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #30 Tester "started" -> ok
@@ -4158,6 +4211,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut rework-then-appro
 #34 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #35 Tester "started" -> ok
@@ -4316,6 +4370,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich approve 1`] 
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -4503,6 +4558,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich rework-then-
 #34 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #35 Tester "started" -> ok
@@ -4703,7 +4759,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=9a5ea9eac6750d38/4631
+"digest=065f433ae7a6d484/4723
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4713,7 +4769,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=9e3c41c656ff0a2c/5104
+"digest=b2f653b6cde2c958/5196
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4723,7 +4779,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=08b2b7b091b1da66/4656
+"digest=17bb6a4820f24a1a/4748
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4733,7 +4789,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=594cf36ab14f3924/4999
+"digest=a45f37a67eda568c/5091
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4743,7 +4799,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=ff7386ba5a43ae2c/4654
+"digest=1debb326ee60d4bc/4746
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4753,7 +4809,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=9a5ea9eac6750d38/4631
+"digest=065f433ae7a6d484/4723
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4763,7 +4819,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut approve 1`] = `
-"digest=2067bc9fd1f64f89/5816
+"digest=ce3034f74b0993d5/5908
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4774,7 +4830,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=fd41c4d44965fe6e/6289
+"digest=cc2cde2c258325d2/6381
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4785,7 +4841,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut discard 1`] = `
-"digest=82e4a30d852e495b/5841
+"digest=68a1d5bdd4dbc017/5933
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4796,7 +4852,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=ef2cdd37d527ec75/6184
+"digest=fc550a137f01db3d/6276
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4807,7 +4863,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=4fd81abf1a07b969/5839
+"digest=9341aa631ede2a61/5931
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4818,7 +4874,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=2067bc9fd1f64f89/5816
+"digest=ce3034f74b0993d5/5908
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5117,7 +5173,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=9a5ea9eac6750d38/4631
+"digest=065f433ae7a6d484/4723
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5127,7 +5183,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=9e3c41c656ff0a2c/5104
+"digest=b2f653b6cde2c958/5196
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5137,7 +5193,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=08b2b7b091b1da66/4656
+"digest=17bb6a4820f24a1a/4748
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5147,7 +5203,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=0c6f329c3d1f35c6/6028
+"digest=c24bc9a0380555de/6120
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5157,7 +5213,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=ff7386ba5a43ae2c/4654
+"digest=1debb326ee60d4bc/4746
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5167,7 +5223,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=7fa5ae92a2cc40fc/5713
+"digest=5e248dea9f3171f8/5805
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5255,6 +5311,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut approve 1`] = `
 #21 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #22 Tester "started" -> ok
@@ -5373,6 +5430,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner 1`] = `
 #22 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #23 Tester "started" -> ok
@@ -5507,6 +5565,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner-rework 1
 #26 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #27 Tester "started" -> ok
@@ -5640,6 +5699,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut conflict 1`] = `
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -5751,6 +5811,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut discard 1`] = `
 #20 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #21 Tester "started" -> ok
@@ -5885,6 +5946,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failed-check 1`] =
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -5996,6 +6058,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failing-helper 1`]
 #20 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #21 Tester "started" -> ok
@@ -6100,6 +6163,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut no-changes 1`] = `
 #19 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#84a337fd/928 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #20 Tester "started" -> ok
@@ -6222,6 +6286,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut plan-changes 1`] =
 #23 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#2b4e18ca/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #24 Tester "started" -> ok
@@ -6350,6 +6415,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut rework-then-approv
 #25 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #26 Tester "started" -> ok
@@ -6462,6 +6528,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich approve 1`] =
 #21 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #22 Tester "started" -> ok
@@ -6590,6 +6657,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich rework-then-a
 #25 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #26 Tester "started" -> ok
@@ -6846,7 +6914,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=4893b1aa9d07abec/6919
+"digest=d1b5f07a5ffd8b68/7011
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6859,7 +6927,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=85d7fefb4b72c471/7405
+"digest=99344fb757b9f981/7497
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6872,7 +6940,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=d10c35d327c30c85/6944
+"digest=5f2872fbb3116569/7036
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6885,7 +6953,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=0300908df5588087/7294
+"digest=1fa60319ae635857/7386
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6898,7 +6966,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=bf28802d43871f0b/6942
+"digest=152cd33128bcdcf3/7034
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6911,7 +6979,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=e913169ff5e492b1/6923
+"digest=228512e3b3072b41/7015
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6924,7 +6992,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut approve 1`] = `
-"digest=1280ed8c7de58ae2/9108
+"digest=590c8fbc1f2340fe/9200
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6939,7 +7007,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=cf0570fc3c2361d2/9594
+"digest=ff2413f8a48a93ea/9686
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6954,7 +7022,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut discard 1`] = `
-"digest=195453e58c58f0a7/9133
+"digest=29758ad5f445801b/9225
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6969,7 +7037,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=7774c0b53b750b4f/9483
+"digest=5097343956bef91f/9575
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6984,7 +7052,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=28187fbf089fb8cd/9131
+"digest=a4f7f653c8390dbd/9223
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6999,7 +7067,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=ea9e808dc7729ba3/9112
+"digest=ca8cab11233adf93/9204
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7170,7 +7238,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=4893b1aa9d07abec/6919
+"digest=d1b5f07a5ffd8b68/7011
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7183,7 +7251,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=85d7fefb4b72c471/7405
+"digest=99344fb757b9f981/7497
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7196,7 +7264,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=d10c35d327c30c85/6944
+"digest=5f2872fbb3116569/7036
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7209,7 +7277,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=9828239422395b8a/9306
+"digest=c4cae9c0650dff12/9398
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7223,7 +7291,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=bf28802d43871f0b/6942
+"digest=152cd33128bcdcf3/7034
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7236,7 +7304,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=23ce107506c7aa53/8990
+"digest=918c7c4db329b977/9082
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7363,6 +7431,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve 1`] = `
 #28 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #29 Tester "started" -> ok
@@ -7564,6 +7633,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto 1`
 #42 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #43 Tester "started" -> ok
@@ -7773,6 +7843,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto-ed
 #44 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #45 Tester "started" -> ok
@@ -7948,6 +8019,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-full-au
 #37 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #38 Tester "started" -> ok
@@ -8173,6 +8245,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-manual 
 #48 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #49 Tester "started" -> ok
@@ -8344,6 +8417,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner 1`] = `
 #29 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #30 Tester "started" -> ok
@@ -8545,6 +8619,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner-rework 1`]
 #36 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #37 Tester "started" -> ok
@@ -8746,6 +8821,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut conflict 1`] = `
 #37 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #38 Tester "started" -> ok
@@ -8911,6 +8987,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut discard 1`] = `
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -9112,6 +9189,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failed-check 1`] = `
 #37 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #38 Tester "started" -> ok
@@ -9277,6 +9355,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failing-helper 1`] =
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -9420,6 +9499,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut no-changes 1`] = `
 #23 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#84a337fd/928 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #24 Tester "started" -> ok
@@ -9471,7 +9551,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=fdad185874597286/10677
+"digest=ce25cb48fce1336a/10769
 outcome=ended steps=51
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9486,7 +9566,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=08dd49d5c0034d9f/10891
+"digest=17b7f1912163bbcf/10983
 outcome=ended steps=53
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9501,7 +9581,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=ded438c722c0970d/9823
+"digest=8470dc4391a26435/9915
 outcome=ended steps=46
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9516,7 +9596,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=07ce573fb7d99761/11319
+"digest=5904dc7bd4ed8631/11411
 outcome=ended steps=57
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9654,6 +9734,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut plan-changes 1`] = `
 #30 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#2b4e18ca/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #31 Tester "started" -> ok
@@ -9849,6 +9930,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut rework-then-approve 
 #35 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #36 Tester "started" -> ok
@@ -10015,6 +10097,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich approve 1`] = `
 #28 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #29 Tester "started" -> ok
@@ -10210,6 +10293,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich rework-then-app
 #35 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #36 Tester "started" -> ok
@@ -10423,7 +10507,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=c9e73be38f732be1/4936
+"digest=4f1ddc27b6313431/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10434,7 +10518,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=9059f43efc85a774/5409
+"digest=ad66a3cea8125d20/5501
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10445,7 +10529,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=9a156c54f320f046/4961
+"digest=655c416456573c2a/5053
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10456,7 +10540,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=a55236268425c940/5304
+"digest=126da882588da4b8/5396
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10467,7 +10551,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=4725062eca548b0c/4959
+"digest=84a16672b1a06efc/5051
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10478,7 +10562,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=c9e73be38f732be1/4936
+"digest=4f1ddc27b6313431/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10489,7 +10573,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut approve 1`] = `
-"digest=71a2601387369475/6121
+"digest=b79a560751384ee5/6213
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10501,7 +10585,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=15d54d91846405b7/6594
+"digest=94d30de9eddddfdb/6686
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10513,7 +10597,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut discard 1`] = `
-"digest=8f6950549fe23412/6146
+"digest=2edd0d7c9f377f86/6238
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10525,7 +10609,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=fd7226c6505c5850/6489
+"digest=60bdd6b2a95a7c18/6581
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10537,7 +10621,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=72ac4bbaab5432ac/6144
+"digest=0ff1c46e34cf6b34/6236
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10549,7 +10633,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=71a2601387369475/6121
+"digest=b79a560751384ee5/6213
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10687,7 +10771,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=c9e73be38f732be1/4936
+"digest=4f1ddc27b6313431/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10698,7 +10782,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=9059f43efc85a774/5409
+"digest=ad66a3cea8125d20/5501
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10709,7 +10793,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=9a156c54f320f046/4961
+"digest=655c416456573c2a/5053
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10720,7 +10804,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=27ed1b3df166352b/6333
+"digest=8df61f4d03912ee7/6425
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10731,7 +10815,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=4725062eca548b0c/4959
+"digest=84a16672b1a06efc/5051
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10742,7 +10826,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=78297f9f489bbc01/6018
+"digest=73177cebadc9e291/6110
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10838,6 +10922,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut approve 1`] = `
 #22 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #23 Tester "started" -> ok
@@ -10964,6 +11049,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner 1`] = `
 #23 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #24 Tester "started" -> ok
@@ -11106,6 +11192,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner-rework 1`] 
 #27 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #28 Tester "started" -> ok
@@ -11247,6 +11334,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut conflict 1`] = `
 #28 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #29 Tester "started" -> ok
@@ -11366,6 +11454,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut discard 1`] = `
 #21 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #22 Tester "started" -> ok
@@ -11508,6 +11597,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failed-check 1`] = `
 #28 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #29 Tester "started" -> ok
@@ -11627,6 +11717,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failing-helper 1`] = 
 #21 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#4b88ced9/922 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #22 Tester "started" -> ok
@@ -11739,6 +11830,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut no-changes 1`] = `
 #20 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#84a337fd/928 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #21 Tester "started" -> ok
@@ -11869,6 +11961,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut plan-changes 1`] = `
 #24 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#2b4e18ca/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #25 Tester "started" -> ok
@@ -12005,6 +12098,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut rework-then-approve 1
 #26 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" prompt="Write unit tests for the merged change. …"#01d0c77f/948 role="Tester"
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #27 Tester "started" -> ok
@@ -12125,6 +12219,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich approve 1`] = `
 #22 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #23 Tester "started" -> ok
@@ -12261,6 +12356,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich rework-then-appr
 #26 Reviewer "finish success" -> ok
   > remove-review-checkout agentRunId=FR1
   > start-agent agent="agent-unit-tests" agentRunId=T1 fromBranch="acp/WEB-12" kind="tester" model="model-unit-tests" prompt="Write unit tests for the merged change. …"#364a663e/1002 role="Tester" skills=["skill-unit-tests"]
+  > send-to-agent agentRunId=L text="Reviewer (agentId FR1) finished: see its…"#58eb8673/64
   ~ FR1 SUCCEEDED
   ~ +T1 tester role="Tester" stage=unit-tests STARTING
 #27 Tester "started" -> ok

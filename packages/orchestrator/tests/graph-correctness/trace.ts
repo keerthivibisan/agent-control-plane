@@ -39,6 +39,9 @@ const DROPPED_KEYS = new Set([
   'requestedAt',
   'decidedAt',
   'readyAt',
+  // ADR-0033 §7: the lead/agent message marker on `send-to-agent` is delivery metadata for the
+  // server's outbox; the golden traces pin what is sent to whom, which it does not change.
+  'message',
 ]);
 
 export class IdNames {

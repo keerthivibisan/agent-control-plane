@@ -10,6 +10,7 @@ import {
 import type { RunState } from '../src/index.js';
 import {
   agentOf,
+  LEAD,
   event,
   makeCtx,
   ok,
@@ -213,18 +214,26 @@ describe('budget-raise approvals', () => {
     ).toBe(500);
   });
 
+  const stoppedNotice = (id: string) => ({
+    type: 'send-to-agent',
+    agentRunId: LEAD,
+    text: expect.stringContaining(`(agentId ${id}) was stopped`) as unknown,
+    message: { from: 'engine', kind: 'notice' },
+  });
+
   it('deny stops the agent', () => {
     const { state, id, approvalId } = blocked();
     const decided = ok(decideApproval(state, approvalId, 'deny', makeCtx(6000)));
     expect(statusOf(decided.state, id)).toBe('CANCELLED');
-    expect(decided.effects).toEqual([{ type: 'abort-agent', agentRunId: id }]);
+    // ADR-0033 §4: the lead hears that its helper was stopped.
+    expect(decided.effects).toEqual([{ type: 'abort-agent', agentRunId: id }, stoppedNotice(id)]);
   });
 
   it('no answer in time stops the agent', () => {
     const { state, id } = blocked();
     const after = ok(expireApprovals(state, makeCtx(1000 + APPROVAL_TIMEOUT_MS + 5000)));
     expect(statusOf(after.state, id)).toBe('CANCELLED');
-    expect(after.effects).toEqual([{ type: 'abort-agent', agentRunId: id }]);
+    expect(after.effects).toEqual([{ type: 'abort-agent', agentRunId: id }, stoppedNotice(id)]);
   });
 
   it('blocks an agent that crossed the cap while waiting for a tool decision once it resumes', () => {

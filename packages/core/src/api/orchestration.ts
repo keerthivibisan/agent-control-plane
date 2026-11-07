@@ -4,6 +4,8 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { ManagedProviderIdSchema } from '../domain/provider.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import {
+  AGENT_MESSAGE_KINDS,
+  AGENT_MESSAGE_STATES,
   AgentRoleKindSchema,
   AgentRunStatusSchema,
   ApprovalKindSchema,
@@ -220,6 +222,34 @@ export type TicketBranchDto = z.infer<typeof TicketBranchDtoSchema>;
 export const ResetTicketBranchRequestSchema = z.object({ from: GitCommitSchema });
 export type ResetTicketBranchRequest = z.infer<typeof ResetTicketBranchRequestSchema>;
 
+/** ADR-0033 §7: the most outbox entries a run detail carries (the latest ones). */
+export const MAX_OUTBOX_ENTRIES = 200;
+
+/**
+ * ADR-0033 §7: one lead/agent message, as metadata only. There is no text field: the length and
+ * the SHA-256 of the text are all that is kept (ADR-0009). In memory with the live run; never in
+ * the database.
+ */
+export const AgentMessageMetaDtoSchema = z
+  .object({
+    id: z.string().min(1),
+    /** The sending agent run, or `engine` for an engine notice. */
+    from: z.string().min(1),
+    /** The receiving agent run. */
+    to: z.string().min(1),
+    kind: z.enum(AGENT_MESSAGE_KINDS),
+    state: z.enum(AGENT_MESSAGE_STATES),
+    createdAt: IsoTimestampSchema,
+    /** When it was handed to the agent's process; null until then (and for a dropped one). */
+    deliveredAt: IsoTimestampSchema.nullable(),
+    /** The text's length in UTF-16 code units. */
+    length: count,
+    /** The SHA-256 of the text's UTF-8 bytes, as lowercase hex. */
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  })
+  .strict();
+export type AgentMessageMetaDto = z.infer<typeof AgentMessageMetaDtoSchema>;
+
 export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
   budget: RunBudgetSchema,
   agents: z.array(AgentRunDtoSchema),
@@ -239,6 +269,11 @@ export const RunDetailDtoSchema = RunSummaryDtoSchema.extend({
    * Absent for legacy runs.
    */
   maxReworkRounds: count.optional(),
+  /**
+   * ADR-0033 §7: the run's lead/agent messages as metadata, oldest first, at most the latest
+   * `MAX_OUTBOX_ENTRIES`. Absent when this process holds no live state for the run.
+   */
+  outbox: z.array(AgentMessageMetaDtoSchema).max(MAX_OUTBOX_ENTRIES).optional(),
 });
 export type RunDetailDto = z.infer<typeof RunDetailDtoSchema>;
 

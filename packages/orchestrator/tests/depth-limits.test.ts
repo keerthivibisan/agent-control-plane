@@ -182,7 +182,12 @@ describe('depth 2', () => {
       'unknown-agent',
     );
     expect(ok(tool(s, p1.id, 'message_agent', { agentId: c1.id, text: 'hi' })).effects).toEqual([
-      { type: 'send-to-agent', agentRunId: c1.id, text: 'hi' },
+      {
+        type: 'send-to-agent',
+        agentRunId: c1.id,
+        text: 'hi',
+        message: { from: p1.id, kind: 'message' },
+      },
     ]);
     expect(refused(tool(s, p1.id, 'submit_plan', { summary: 's', steps: [] }))).toBe('not-lead');
     expect(refused(tool(s, p1.id, 'request_review', {}))).toBe('not-lead');

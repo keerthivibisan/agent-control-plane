@@ -30,6 +30,7 @@ import { IllegalTransitionError, refusal } from './errors.js';
 import { abortFollowUpTurn } from './follow-up.js';
 import type { Refusal } from './errors.js';
 import { checkRunLimits, DEFAULT_RUN_LIMITS } from './limits.js';
+import { finishNotices } from './messaging.js';
 import {
   checkPlanApproved,
   checkProjectRegistered,
@@ -87,6 +88,7 @@ export function applyCommand<T>(
     const outcome = body(draft);
     if (isRefusal(outcome)) return { ok: false, refusal: outcome };
     draft.reconcile();
+    finishNotices(draft, draft.activeAtStart);
     draft.trackOwnerWait();
     draft.flushCheckoutRemovals();
     return { ok: true, state: draft.finish(), effects: draft.effects, value: outcome.value };
@@ -866,8 +868,15 @@ export function expireApprovals(
  * Stops one agent (owner's Stop, or `stop_agent` from the lead or a parent helper): its helpers
  * first (depth 2), then the agent; each one's open approvals are denied before it is aborted.
  */
-export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContext): EngineResult {
+export function stopAgent(
+  state: RunState,
+  agentRunId: string,
+  ctx: EngineContext,
+  /** The agent that stopped it (`stop_agent`): its tool reply says so; it gets no finish notice. */
+  byAgentRunId?: string,
+): EngineResult {
   return applyCommand(state, ctx, (d) => {
+    if (byAgentRunId !== undefined) d.noFinishNoticeTo = byAgentRunId;
     const agent = d.agent(agentRunId);
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
     if (!isLiveAgentStatus(agent.status)) {

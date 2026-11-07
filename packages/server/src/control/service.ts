@@ -79,10 +79,8 @@ import {
   followUpChat,
   followUpEvent,
   followUpView,
-  isAgentOverBudget,
   isActiveAgentStatus,
   isApprovalOverdue,
-  isLiveAgentStatus,
   isRunOverdue,
   leadHasEnded,
   leadToolCall,
@@ -102,7 +100,6 @@ import {
   viewChangeReply,
   type AllowlistTarget,
   type AllowlistVerdict,
-  type EngineAgent,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
@@ -143,6 +140,7 @@ import { SELF_RECORDED_USAGE, managedSessionEvents, managedUsageEvent } from './
 import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
 import { createConflictResolution } from './conflict-resolution.js';
+import { createMailbox, deliveryLine, emptyMail, type RunMail } from './mailbox.js';
 import { refusalError, workspaceError } from './errors.js';
 import {
   summaryOf,
@@ -352,6 +350,11 @@ export interface ControlServiceDeps {
   runTimeoutMs?: number;
   approvalTimeoutMs?: number;
   cancelGraceMs?: number;
+  /**
+   * ADR-0033 §6: how long a change's merge may wait for its required checks. Default 10 minutes;
+   * tests pass a short one.
+   */
+  mergeTimeoutMs?: number;
   /** Interval of the approval-expiry / run-timeout sweep; null disables the timer (tests). */
   sweepIntervalMs?: number | null;
   /** Ingests what is on disk now; awaited before a worker's worktree is removed. */
@@ -493,8 +496,11 @@ interface LiveRun {
   handles: Map<string, ManagedAgentHandle>;
   /** Workers whose worktree is being created. */
   starting: Set<string>;
-  /** Messages for workers that are still starting. */
-  pendingSends: Map<string, string[]>;
+  /**
+   * ADR-0033: messages queued for agents that are starting, held for agents that cannot take
+   * input now, and the run's metadata-only outbox. In memory only.
+   */
+  mail: RunMail;
   /** Workspaces created by this process. */
   workspaces: Map<string, Workspace>;
   cancellingSince: number | null;
@@ -517,6 +523,17 @@ interface LiveRun {
 
 /** The most checks an editing agent's brief lists by name and command (ADR-0027 §4). */
 const BRIEF_MAX_CHECKS = 10;
+
+/**
+ * ADR-0033 §2: messages held for the ended lead, put before the owner's message of its next
+ * follow-up turn. Sent, never stored.
+ */
+function heldBlock(texts: readonly string[]): string {
+  return [
+    'Messages that arrived for you after your own work ended, oldest first (for your information; this chat has no control tools):',
+    ...texts.map((t, i) => `${i + 1}. ${t}`),
+  ].join('\n\n');
+}
 
 /** One argument list as the agent would type it (arguments with spaces or quotes are quoted). */
 function commandLine(argv: readonly string[]): string {
@@ -669,6 +686,19 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   const ctx = (): EngineContext => ({ now: deps.now(), newId });
 
+  /** ADR-0033: lead/agent message delivery, held messages and the metadata-only outbox. */
+  const mailbox = createMailbox({
+    now: () => deps.now(),
+    newId,
+    logger,
+    countDiagnostic: (code) => countDiagnostic(code),
+    track: (promise) => track(promise),
+    followUpOpen: (live) => {
+      const view = followUpView(live.state, followUpFacts(live as LiveRun));
+      return view !== undefined && view.state !== 'unavailable';
+    },
+  });
+
   /** ADR-0021: the review loop's git effects and the owner's loop actions. */
   const loop = createReviewLoop({
     store,
@@ -685,6 +715,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     track,
     countDiagnostic: (code) => countDiagnostic(code),
     tipGate: (runId, tip) => resolution.tipGateOverride(runId, tip),
+    ...(deps.mergeTimeoutMs !== undefined && { mergeTimeoutMs: deps.mergeTimeoutMs }),
   });
 
   /** ADR-0030: "Update target / Resolve conflicts" operations (server-owned git, policy gate). */
@@ -843,7 +874,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       state,
       handles: new Map(),
       starting: new Set(),
-      pendingSends: new Map(),
+      mail: emptyMail(),
       workspaces: new Map(),
       cancellingSince: state.run.status === 'CANCELLING' ? deps.now().getTime() : null,
       reviewCheckouts: new Map(),
@@ -978,7 +1009,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           startAgent(live, effect);
           break;
         case 'send-to-agent':
-          sendTo(live, effect.agentRunId, effect.text);
+          mailbox.send(live, effect.agentRunId, effect.text, effect.message);
           break;
         case 'interrupt-agent': {
           const handle = live.handles.get(effect.agentRunId);
@@ -987,7 +1018,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           break;
         }
         case 'abort-agent': {
-          live.pendingSends.delete(effect.agentRunId);
+          mailbox.discardQueued(live, effect.agentRunId);
           live.handles.get(effect.agentRunId)?.abort();
           break;
         }
@@ -1127,58 +1158,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // reaches review). The handover's own comes from its effect.
     const ended = endTrigger(prev, live.state);
     if (ended !== null) summaries.schedule(live, ended);
-    const before = new Map(prev.agents.map((a) => [a.id, a]));
-    for (const agent of live.state.agents) {
-      const was = before.get(agent.id);
-      // ADR-0021: a helper whose turn ended (AWAITING_REVIEW) has stopped working too.
-      if (
-        was === undefined ||
-        !isActiveAgentStatus(was.status) ||
-        isActiveAgentStatus(agent.status)
-      ) {
-        continue;
-      }
-      const parent = live.state.agents.find((a) => a.id === agent.parentAgentRunId);
-      if (parent?.kind === 'worker') notifyParent(live, parent, agent);
-    }
+    // ADR-0033 §2: messages held for an agent go to it once it can take input again (the engine
+    // sends each finish notice itself, ADR-0033 §4).
+    mailbox.flush(live);
   }
 
   function countDiagnostic(code: string): void {
     counters.diagnostics[code] = (counters.diagnostics[code] ?? 0) + 1;
-  }
-
-  /**
-   * Depth 2: tells a parent helper that one of its helpers ended. Server text (role and status
-   * only), sent to the agent and never stored. A parent whose own query already ended (held as
-   * `awaitingHelpers`) has no input left to receive it; that is counted, not hidden.
-   */
-  function notifyParent(live: LiveRun, parent: EngineAgent, child: EngineAgent): void {
-    const runId = live.state.run.id;
-    const reachable =
-      isLiveAgentStatus(parent.status) &&
-      parent.awaitingHelpers !== true &&
-      !isAgentOverBudget(parent) &&
-      (live.handles.has(parent.id) || live.starting.has(parent.id));
-    if (!reachable) {
-      countDiagnostic('parent-not-notified');
-      logger.log('info', 'parent helper not notified', {
-        runId,
-        agentRunId: parent.id,
-        childAgentRunId: child.id,
-      });
-      return;
-    }
-    const outcome =
-      child.status === 'SUCCEEDED' || child.status === 'AWAITING_REVIEW'
-        ? 'finished'
-        : child.status === 'CANCELLED'
-          ? 'was stopped'
-          : 'ended without finishing';
-    sendTo(
-      live,
-      parent.id,
-      `Your helper "${child.role}" (${child.id}) ${outcome}. Use agent_status to see where it stands.`,
-    );
   }
 
   function maybeCompleteCancellation(live: LiveRun): void {
@@ -1220,7 +1206,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   function stillStarting(live: LiveRun, agentRunId: string): boolean {
     const agent = live.state.agents.find((a) => a.id === agentRunId);
     if (!closed && agent?.status === 'STARTING') return true;
-    live.pendingSends.delete(agentRunId);
+    mailbox.discardQueued(live, agentRunId);
     defer(() => maybeCompleteCancellation(live));
     return false;
   }
@@ -1300,7 +1286,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const checkout = await (live.reviewCheckouts.get(agentRunId) ?? Promise.resolve(null));
           if (checkout === null) {
             live.starting.delete(agentRunId);
-            live.pendingSends.delete(agentRunId);
+            mailbox.discardQueued(live, agentRunId);
             logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-checkout' });
             endWithError(live, agentRunId);
             return;
@@ -1368,7 +1354,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           ws = await deps.workspaces.create(project.rootPath, runId, agentRunId, options);
         } catch (error) {
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           logger.log('warn', 'agent start failed', {
             runId,
             agentRunId,
@@ -1395,7 +1381,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           });
           await deps.workspaces.discard(ws).catch(() => undefined);
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1421,7 +1407,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             });
           if (!prepared.ok) {
             live.starting.delete(agentRunId);
-            live.pendingSends.delete(agentRunId);
+            mailbox.discardQueued(live, agentRunId);
             const role = live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'A helper';
             logger.log('info', 'agent not started: setup did not pass', { runId, agentRunId });
             defer(() => {
@@ -1451,7 +1437,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1588,7 +1574,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         if (ws === undefined) {
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-worktree' });
           endWithError(live, agentRunId);
           return;
@@ -1608,7 +1594,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1802,11 +1788,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           endFollowUp(live);
           return;
         }
+        // ADR-0033 §2: what was held for the ended lead comes with this turn, oldest first.
+        const held = mailbox.takeHeld(live, effect.agentRunId);
         const spec: ManagedAgentSpec = {
           agentRunId: effect.agentRunId,
           kind: 'lead',
           cwd: project.rootPath,
-          prompt: effect.prompt,
+          prompt: held.length === 0 ? effect.prompt : `${heldBlock(held)}\n\n${effect.prompt}`,
           model: resolveAgentModel({
             stage: effect.model,
             agentFile: agentFile?.model,
@@ -2075,7 +2063,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   /** An agent whose provider has no adapter in this server ends with `provider-unavailable`. */
   function refuseNoAdapter(live: LiveRun, agentRunId: string): void {
     const provider = providerOf(live, agentRunId);
-    live.pendingSends.delete(agentRunId);
+    mailbox.discardQueued(live, agentRunId);
     countDiagnostic('provider-unavailable');
     logger.log('warn', 'agent provider has no adapter', {
       runId: live.state.run.id,
@@ -2100,7 +2088,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     code: string,
     line: string,
   ): void {
-    live.pendingSends.delete(agentRunId);
+    mailbox.discardQueued(live, agentRunId);
     logger.log('warn', 'agent start failed', { runId: live.state.run.id, agentRunId, code });
     endWithError(live, agentRunId, failure);
     appComment(live, `${roleOf(live, agentRunId)} did not start: ${line}`);
@@ -2225,15 +2213,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
     const title = sessionTitle(live, agentRunId);
     if (title !== undefined) spec.title = title;
-    // ADR-0026 §3: a ticket run's helpers and tester report their work (`report_work`).
-    const notes = (kind === 'worker' || kind === 'tester') && live.state.run.ticketId !== null;
-    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers || notes) {
-      // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
-      // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
-      // to its own children, the planner's to submit_plan, the reviewer's to post_review, a
-      // helper's or tester's to report_work.
-      spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
-    }
+    // Every role has control tools: since ADR-0033 §3 every helper, the tester and every reviewer
+    // can `ask_lead`, besides a ticket run's `report_work` (ADR-0026 §3). A refusal rejects the
+    // promise; the adapter returns it to the model as a tool error. The engine scopes each caller's
+    // calls (`leadToolCall`, `controlToolsFor`): a parent helper's to its own children, the
+    // planner's to submit_plan, the reviewer's to post_review (and ask_lead), a helper's or
+    // tester's to report_work and ask_lead (report_work only in a ticket run).
+    spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
     // A rework turn never starts helpers (ADR-0021 §3).
     if (kind === 'worker' && canStartHelpers && input.rework === undefined) {
       spec.canStartHelpers = true;
@@ -2311,9 +2297,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     live.handles.set(agentRunId, handle);
     logger.log('info', 'agent started', { runId, agentRunId, kind });
-    const queued = live.pendingSends.get(agentRunId);
-    live.pendingSends.delete(agentRunId);
-    for (const text of queued ?? []) sendTo(live, agentRunId, text);
+    mailbox.started(live, agentRunId);
     const usage = { provider, cwd: spec.cwd, model: spec.model };
     const pumping = pump(live, agentRunId, handle, usage).catch((error: unknown) => {
       logger.log('error', 'agent pump failed', errorFields(error));
@@ -2424,30 +2408,6 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       estimatedCostUsd: cost,
       warnAtUsd: limit,
     });
-  }
-
-  function sendTo(live: LiveRun, agentRunId: string, text: string): void {
-    if (live.starting.has(agentRunId)) {
-      const queue = live.pendingSends.get(agentRunId) ?? [];
-      queue.push(text);
-      live.pendingSends.set(agentRunId, queue);
-      return;
-    }
-    const handle = live.handles.get(agentRunId);
-    const runId = live.state.run.id;
-    if (handle === undefined) {
-      logger.log('warn', 'agent message not delivered', { runId, agentRunId, code: 'no-process' });
-      return;
-    }
-    track(
-      handle.send(text).catch((error: unknown) => {
-        logger.log('warn', 'agent message not delivered', {
-          runId,
-          agentRunId,
-          ...errorFields(error),
-        });
-      }),
-    );
   }
 
   /** The approval bridge (ADR-0013 §4): engine → approval row → SSE → owner decision → resolve. */
@@ -2606,6 +2566,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
    * Lead tool calls: the engine validates (ADR-0013); a refusal is returned to the model as an
    * error. ADR-0021: `view_change` gets the change's diff appended (at most 32 KiB in all, sent
    * and never stored); `merge_change` answers once the server's merge is done or blocked.
+   * ADR-0033: `message_agent` and `ask_lead` answer with the message's delivery state;
+   * `get_review_findings` gets the change's stored findings appended (refused when none are).
    */
   async function leadTool(
     live: LiveRun,
@@ -2614,11 +2576,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     input: unknown,
   ): Promise<string> {
     const runId = live.state.run.id;
-    const result = apply(live, (s, c) =>
-      leadToolCall(
-        s,
-        { callerAgentRunId: agentRunId, name, input, registeredProjectIds: projectIds() },
-        c,
+    const [result, sends] = mailbox.capture(() =>
+      apply(live, (s, c) =>
+        leadToolCall(
+          s,
+          { callerAgentRunId: agentRunId, name, input, registeredProjectIds: projectIds() },
+          c,
+        ),
       ),
     );
     if (!result.ok) {
@@ -2638,7 +2602,50 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (merging === undefined) return result.value;
       return (await merging).reply;
     }
+    if (name === 'message_agent' || name === 'ask_lead') {
+      const sent = sends.find((r) => r.entry?.from === agentRunId);
+      if (sent === undefined) return result.value;
+      return `${result.value.replace(/\.$/, '')}: ${deliveryLine(sent)}`;
+    }
+    if (name === 'get_review_findings') {
+      const target = LeadToolInputs.get_review_findings.safeParse(input);
+      const findings = target.success ? storedFindings(live, target.data.agentId) : null;
+      if (findings === null) {
+        logger.log('info', 'lead tool refused', { runId, tool: name, code: 'no-findings' });
+        throw new Error(
+          'No review findings are stored for that change yet (no review agent has reviewed it). Use view_change to see the change.',
+        );
+      }
+      return `${result.value}\n${findings}`;
+    }
     return result.value;
+  }
+
+  /**
+   * ADR-0033 §5: the latest review agent findings stored for a change (its round's row and the
+   * findings comment, ADR-0021 §6), for the lead; null when none are stored. Sent, never logged.
+   */
+  function storedFindings(live: LiveRun, agentRunId: string): string | null {
+    const rows = store.loopRepos.changeReviews
+      .listForAgentRun(agentRunId)
+      .filter(
+        (r) => r.runId === live.state.run.id && r.reviewer === 'agent' && r.commentId !== null,
+      );
+    const latest = rows
+      .map((r, i) => ({ r, i }))
+      .sort((x, y) => x.r.round - y.r.round || x.i - y.i)
+      .at(-1)?.r;
+    if (latest === undefined || latest.commentId === null) return null;
+    const comment = store.workspaceRepos.comments.getById(latest.commentId);
+    if (comment === undefined) return null;
+    const reviewer =
+      latest.reviewerAgentRunId === null
+        ? 'a review agent'
+        : `${roleOf(live, latest.reviewerAgentRunId)} (agentId ${latest.reviewerAgentRunId})`;
+    return [
+      `Review round ${latest.round}, by ${reviewer}. Verdict: ${latest.verdict ?? 'none'}.`,
+      `Findings:\n${comment.body}`,
+    ].join('\n');
   }
 
   async function workspaceFor(live: LiveRun, row: WorkspaceRow): Promise<Workspace> {
@@ -2659,6 +2666,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       messages: store.repos.messages.list(runId, { limit: MAX_PAGE_SIZE }),
       ...(followUp !== undefined && { followUp }),
     });
+    // ADR-0033 §7: metadata only, the latest entries; absent while the run has none.
+    if (live.mail.outbox.length > 0) dto.outbox = mailbox.outbox(live);
     // ADR-0021: absent for runs before it, so their detail is unchanged.
     const policy = live.state.approvalPolicy;
     if (policy !== undefined) dto.approvalMode = policy.mode;

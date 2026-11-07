@@ -55,7 +55,8 @@ Code settings, and it copies no conversation content into events (ADR-0009).
 - **Control-plane tools** (`lead-tools.ts`): one in-process MCP server (`mcp__acp__*`) carrying
   the role's tools: the lead's set, the planner's `submit_plan`, a final reviewer's `post_review`,
   a change reviewer's `submit_review`, and `report_work` for helpers and the tester (plus child
-  management for a helper allowed to start helpers). The engine checks every call again.
+  management for a helper allowed to start helpers); `ask_lead` for helpers, the tester and both
+  reviewers (ADR-0033). The engine checks every call again.
 - **Branch guard** (`branch-guard.ts`): for helpers and the tester, in every approval mode, a
   PreToolUse hook, the gate and `GIT_DENY_RULES` refuse git commands that could change a ref,
   `HEAD` or history. The app owns branches and commits (ADR-0021, ADR-0025).

@@ -88,7 +88,7 @@ describe('code review stage', () => {
 
   it('has only post_review, never edits or runs commands', () => {
     const s = ok(merged(REVIEW_ONLY)).state;
-    expect(controlToolsFor(s, REVIEWER)).toEqual(['post_review']);
+    expect(controlToolsFor(s, REVIEWER)).toEqual(['post_review', 'ask_lead']);
     expect(
       refused(
         leadToolCall(
@@ -154,7 +154,7 @@ describe('unit tests stage', () => {
     expect(start).toMatchObject({ kind: 'tester', agentRunId: TESTER });
     expect(start.prompt.startsWith(TESTER_TASK)).toBe(true);
     // ADR-0026 §3: the tester's one tool is its note.
-    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work']);
+    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work', 'ask_lead']);
     expect(start.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
   });
 
@@ -226,7 +226,12 @@ describe('both stages', () => {
     expect(agentOf(s, 'm-1').kind).toBe('reviewer');
     s = ok(postReview(s, 'm-1')).state;
     const afterReview = ok(finish(s, 'm-1'));
-    expect(types(afterReview.effects)).toEqual(['remove-review-checkout', 'start-agent']);
+    // ADR-0033 §4: the ended lead gets the reviewer's finish notice (held for a follow-up turn).
+    expect(types(afterReview.effects)).toEqual([
+      'remove-review-checkout',
+      'start-agent',
+      'send-to-agent',
+    ]);
     const testerId = startOf(afterReview.effects).agentRunId;
     expect(agentOf(afterReview.state, testerId)).toMatchObject({ kind: 'tester' });
     expect(afterReview.state.run.status).toBe('REVIEW');
@@ -239,7 +244,12 @@ describe('both stages', () => {
   it('stopping the reviewer skips its stage; the tester starts', () => {
     const r = ok(stopAgent(ok(merged(BOTH)).state, 'm-1', makeCtx(11_000, 's')));
     expect(statusOf(r.state, 'm-1')).toBe('CANCELLED');
-    expect(types(r.effects)).toEqual(['abort-agent', 'remove-review-checkout', 'start-agent']);
+    expect(types(r.effects)).toEqual([
+      'abort-agent',
+      'remove-review-checkout',
+      'start-agent',
+      'send-to-agent',
+    ]);
     expect(startOf(r.effects).kind).toBe('tester');
   });
 });

@@ -185,7 +185,16 @@ describe('cancellation (Stop all)', () => {
   it('stops a single worker without touching the others', () => {
     const { state, a, b } = twoWorkers();
     const stopped = ok(stopAgent(state, a, makeCtx(5000)));
-    expect(stopped.effects).toEqual([{ type: 'abort-agent', agentRunId: a }]);
+    // ADR-0033 §4: the owner stopped it; the lead gets one short notice (no agent text).
+    expect(stopped.effects).toEqual([
+      { type: 'abort-agent', agentRunId: a },
+      {
+        type: 'send-to-agent',
+        agentRunId: LEAD,
+        text: `Builder (agentId ${a}) was stopped: its change waits for the owner's review.`,
+        message: { from: 'engine', kind: 'notice' },
+      },
+    ]);
     expect(statusOf(stopped.state, a)).toBe('CANCELLED');
     expect(statusOf(stopped.state, b)).toBe('RUNNING');
     expect(refused(stopAgent(stopped.state, a, makeCtx()))).toBe('agent-not-live');

@@ -314,7 +314,7 @@ describe('the review agent', () => {
     expect(start?.prompt).toContain('Build the API builder');
     expect(start?.prompt).toContain('submit_review');
     expect(start?.prompt).toContain('acp-skills:code-review');
-    expect(controlToolsFor(r.state, RA)).toEqual(['submit_review']);
+    expect(controlToolsFor(r.state, RA)).toEqual(['submit_review', 'ask_lead']);
     const perm = requestPermission(
       r.state,
       { agentRunId: RA, toolName: 'Bash', toolUseId: 't', summary: 'ls' },
@@ -659,7 +659,7 @@ describe('the lead’s decisions', () => {
     expect(agentOf(r.state, LEAD).latestActivity).toBe(
       'Asked API builder to rework its change (round 1)',
     );
-    expect(controlToolsFor(r.state, A)).toEqual(['report_work']);
+    expect(controlToolsFor(r.state, A)).toEqual(['report_work', 'ask_lead']);
     // ADR-0026 §3: the rework turn asks for a new note (it replaces the earlier one).
     expect(start?.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
     // Round 1: started, finished, sealed, reviewed again.

@@ -637,7 +637,9 @@ exports[`legacy runs are unchanged by the review loop > a control-panel run from
     "step": "tools-lead",
   },
   {
-    "result": [],
+    "result": [
+      "ask_lead",
+    ],
     "step": "tools-worker",
   },
   {
@@ -943,7 +945,17 @@ Latest activity: Edit api.ts",
   },
   {
     "result": {
-      "effects": [],
+      "effects": [
+        {
+          "agentRunId": "lead-1",
+          "message": {
+            "from": "engine",
+            "kind": "notice",
+          },
+          "text": "API builder (agentId wa-1) finished: its change waits for the owner's review.",
+          "type": "send-to-agent",
+        },
+      ],
       "ok": true,
       "state": {
         "agents": [
@@ -1072,7 +1084,17 @@ Latest activity: Edit api.ts",
   },
   {
     "result": {
-      "effects": [],
+      "effects": [
+        {
+          "agentRunId": "lead-1",
+          "message": {
+            "from": "engine",
+            "kind": "notice",
+          },
+          "text": "UI builder (agentId wb-1) failed: its change waits for the owner's review.",
+          "type": "send-to-agent",
+        },
+      ],
       "ok": true,
       "state": {
         "agents": [
@@ -2108,6 +2130,15 @@ Before you finish, call report_work with 2 to 4 plain sentences on what you did 
           "role": "Tester",
           "type": "start-agent",
         },
+        {
+          "agentRunId": "lead-1",
+          "message": {
+            "from": "engine",
+            "kind": "notice",
+          },
+          "text": "Reviewer (agentId m-1) finished: see its findings on the ticket.",
+          "type": "send-to-agent",
+        },
       ],
       "ok": true,
       "state": {
@@ -2282,12 +2313,23 @@ Before you finish, call report_work with 2 to 4 plain sentences on what you did 
   {
     "result": [
       "report_work",
+      "ask_lead",
     ],
     "step": "tools-tester",
   },
   {
     "result": {
-      "effects": [],
+      "effects": [
+        {
+          "agentRunId": "lead-1",
+          "message": {
+            "from": "engine",
+            "kind": "notice",
+          },
+          "text": "Tester (agentId id-1) finished: its change waits for the owner's review.",
+          "type": "send-to-agent",
+        },
+      ],
       "ok": true,
       "state": {
         "agents": [
@@ -3192,7 +3234,17 @@ Before you finish, call report_work with 2 to 4 plain sentences on what you did 
   },
   {
     "result": {
-      "effects": [],
+      "effects": [
+        {
+          "agentRunId": "lead-1",
+          "message": {
+            "from": "engine",
+            "kind": "notice",
+          },
+          "text": "Parent (agentId wp-1) finished: its change waits for the owner's review.",
+          "type": "send-to-agent",
+        },
+      ],
       "ok": true,
       "state": {
         "agents": [

@@ -103,6 +103,10 @@ export class Draft {
   private readonly endedReviewers: string[] = [];
   /** Loop runs: helpers that stopped in this command with work waiting for a decision. */
   private readonly stoppedHelpers: string[] = [];
+  /** Agents working when the command began: those that stop get a finish notice (ADR-0033 §4). */
+  readonly activeAtStart: ReadonlySet<string>;
+  /** The agent that caused this command's ends itself (`stop_agent`): no finish notice to it. */
+  noFinishNoticeTo: string | null = null;
 
   constructor(
     state: RunState,
@@ -132,6 +136,9 @@ export class Draft {
     this.planStepHelpers =
       state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
+    this.activeAtStart = new Set(
+      state.agents.filter((a) => isActiveAgentStatus(a.status)).map((a) => a.id),
+    );
     this.nowIso = ctx.now.toISOString();
   }
 

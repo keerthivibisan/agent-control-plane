@@ -311,6 +311,8 @@ function toOwner(d: Draft, agent: EngineAgent, change: NonNullable<EngineAgent['
  * Why the server could not merge a change (README §6, `merge_change` steps 3–4). F-2: the ticket
  * branch moved outside the app (`ticket-branch-moved`: it is not at the recorded tip) or is
  * checked out in another folder (`ticket-branch-checked-out`). Neither goes away by trying again.
+ * ADR-0033 §6: `timeout`: the merge waited too long for its required checks (or for the merge
+ * before it); nothing was merged, no git operation was left half done, and it may be tried again.
  */
 export type MergeBlocked =
   | { reason: 'merge-conflict'; files: readonly string[] }
@@ -318,6 +320,7 @@ export type MergeBlocked =
   | { reason: 'checks-failed'; failed: readonly string[] }
   | { reason: 'ticket-branch-moved' }
   | { reason: 'ticket-branch-checked-out' }
+  | { reason: 'timeout'; minutes: number }
   | { reason: 'failed' };
 
 /** Longest list of file names or check names quoted back. */
@@ -406,6 +409,10 @@ export function changeMergeBlocked(
             change,
             `${branch} is checked out in another folder, so nothing can be merged into it. Only the owner can free it.`,
           ),
+        };
+      case 'timeout':
+        return {
+          value: `The merge of ${role}'s change timed out after ${blocked.minutes} minutes waiting for its checks. Nothing was merged into ${branch} and the change is unchanged. Call merge_change again later, ask for rework, discard it, or ask the owner.`,
         };
       case 'failed':
         if ((change.failedMerges ?? 0) >= MAX_FAILED_MERGES) {

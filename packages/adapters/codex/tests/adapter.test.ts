@@ -15,7 +15,7 @@ import {
 import { codexArgs } from '../src/config.js';
 import { usageEvent } from '../src/events.js';
 import { codexModes } from '../src/modes.js';
-import { toolInputSchema } from '../src/lead-tools.js';
+import { dynamicToolsFor, toolInputSchema } from '../src/lead-tools.js';
 import { unwrapShellCommand } from '../src/summary.js';
 import {
   collect,
@@ -383,6 +383,31 @@ describe('lead tools', () => {
     }
     expect(leadTools).not.toHaveBeenCalled();
     handle.abort();
+  });
+
+  it('ADR-0033: ask_lead for helpers, the tester and reviewers; get_review_findings for the lead', () => {
+    const leadTools = () => Promise.resolve('ok');
+    const names = (spec: Parameters<typeof dynamicToolsFor>[0]) =>
+      dynamicToolsFor(spec).map((t) => t.name);
+    expect(names({ kind: 'lead', leadTools })).toContain('get_review_findings');
+    expect(names({ kind: 'lead', leadTools })).not.toContain('ask_lead');
+    expect(names({ kind: 'planner', leadTools })).toEqual(['submit_plan']);
+    expect(names({ kind: 'worker', leadTools })).toEqual(['report_work', 'ask_lead']);
+    expect(names({ kind: 'worker', canStartHelpers: true, leadTools })).toContain('ask_lead');
+    expect(names({ kind: 'tester', leadTools })).toEqual(['report_work', 'ask_lead']);
+    expect(names({ kind: 'reviewer', leadTools })).toEqual(['post_review', 'ask_lead']);
+    expect(names({ kind: 'reviewer', reviewScope: 'change', leadTools })).toEqual([
+      'submit_review',
+      'ask_lead',
+    ]);
+    for (const kind of ['worker', 'tester', 'reviewer', 'planner'] as const) {
+      expect(names({ kind, leadTools })).not.toContain('get_review_findings');
+    }
+    const ask = dynamicToolsFor({ kind: 'worker', leadTools }).find((t) => t.name === 'ask_lead');
+    expect(ask?.description).toContain('keep working meanwhile');
+    expect(Object.keys(ask?.inputSchema['properties'] as Record<string, unknown>)).toEqual([
+      'question',
+    ]);
   });
 
   it('tool schemas refuse unknown properties and carry no $schema key', () => {

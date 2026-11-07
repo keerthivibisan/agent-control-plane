@@ -348,12 +348,14 @@ against the fake `query` only.
   `canUseTool`, `strictMcpConfig: true`, `model` only when the spec names one, and `mcpServers`.
   It never sets `bypassPermissions`, `allowDangerouslySkipPermissions` or `allowedTools`.
 - `mcpServers` (ADR-0013 amendment): `{ acp: createSdkMcpServer(...) }` with the role's own
-  tools: for the lead every lead tool except `post_review`, `submit_review` and `report_work`
-  (`LEAD_ROLE_TOOL_NAMES`); `submit_plan` for the planner; `post_review` for a final reviewer;
-  `submit_review` for a change reviewer; `report_work` for helpers and the tester (ADR-0026), plus
-  `start_agent`, `list_agents`, `message_agent`, `stop_agent` and `agent_status` for a helper with
-  `canStartHelpers` (a depth-2 parent helper; the engine scopes each call to its own children);
-  nothing for a follow-up turn. One list (`managedToolNames`) drives both the server and
+  tools: for the lead every lead tool except `post_review`, `submit_review`, `report_work` and
+  `ask_lead` (`LEAD_ROLE_TOOL_NAMES`, which includes `get_review_findings`, ADR-0033); `submit_plan`
+  for the planner; `post_review` for a final reviewer; `submit_review` for a change reviewer;
+  `report_work` for helpers and the tester (ADR-0026); `ask_lead` for helpers, the tester and both
+  reviewers (ADR-0033); plus `start_agent`, `list_agents`, `message_agent`, `stop_agent` and
+  `agent_status` for a helper with `canStartHelpers` (a depth-2 parent helper; the engine scopes
+  each call to its own children); nothing for a follow-up turn. The Codex adapter offers the same
+  sets as dynamic tools. Since ADR-0033 the server gives every role a tool handler. One list (`managedToolNames`) drives both the server and
   `canUseTool`.
 - `systemPrompt` (ADR-0012 amendment): always `{ type: 'preset', preset: 'claude_code' }`.
   When `spec.context` is present and not blank, it is the `append`, cut to at most

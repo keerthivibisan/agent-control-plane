@@ -140,13 +140,26 @@ export function leadCanDecide(d: Draft): boolean {
 }
 
 /**
- * Sends an engine message to the lead when it can read it now: live and not BLOCKED (a message
- * would start a turn past its budget; the resume message after a raise lists what waits instead).
+ * Sends an engine notice to the lead (ADR-0033 §2). It is never skipped here: the server delivers
+ * it now, or holds it in order while the lead cannot take input (BLOCKED: a message would start a
+ * turn past its budget; waiting for the owner; between turns) and delivers it when it can, or
+ * drops it and counts the drop when the lead has ended for good. A run without a lead has nobody
+ * to tell.
  */
 export function notifyLead(d: Draft, text: string): void {
   const lead = d.lead();
-  if (lead === undefined || !isActiveAgentStatus(lead.status) || lead.status === 'BLOCKED') return;
-  d.effects.push({ type: 'send-to-agent', agentRunId: lead.id, text });
+  if (lead === undefined) return;
+  notifyAgent(d, lead.id, text);
+}
+
+/** An engine notice to one agent (the lead, or a depth-2 parent helper), ADR-0033. */
+export function notifyAgent(d: Draft, agentRunId: string, text: string): void {
+  d.effects.push({
+    type: 'send-to-agent',
+    agentRunId,
+    text,
+    message: { from: 'engine', kind: 'notice' },
+  });
 }
 
 /** Sets the lead's "Latest" line to a specific, content-free description of its own action. */
