@@ -101,3 +101,36 @@ Spawn arguments used: `--disable` for `hooks`, `multi_agent`, `plugins`, `apps`,
 
 Not verified: `turn/interrupt` timing, whether a model ever uses `fileChange` approvals in manual
 mode, and whether the overrides also stop native subagents (none were attempted).
+
+## CX-1b: permission profiles deny reads (2026-11-07)
+
+Owner-requested follow-up, same model and login, three short prompts, a throwaway repo and a
+secret file under the home directory (deleted afterwards). Docs:
+[Codex permissions](https://learn.chatgpt.com/docs/permissions.md) (beta).
+
+Profiles are defined at spawn with `-c` and selected per thread with the experimental
+`thread/start` field `permissions` (no `sandbox` field: a legacy `sandbox` setting overrides
+profiles):
+
+```
+-c 'permissions.acp-write.extends=":workspace"'
+-c 'permissions.acp-write.filesystem={"<secret dir>"="deny", ":tmpdir"="deny", ":slash_tmp"="deny"}'
+-c 'permissions.acp-read.extends=":read-only"'
+-c 'permissions.acp-read.filesystem={...same...}'
+-c 'default_permissions="acp-read"'
+```
+
+1. `permissionProfile/list` listed both profiles as allowed. `thread/start` answered with
+   `activePermissionProfile { id, extends }` and the matching sandbox; for `acp-write` it reported
+   `excludeTmpdirEnvVar: true, excludeSlashTmp: true` (the `:tmpdir`/`:slash_tmp` denies).
+2. **Reads are denied on macOS.** Reading the secret through a symlink inside the worktree
+   (`cat notes.txt`, `wc -c notes.txt`) exited 1 in `acp-write`; the secret text never appeared in
+   any output. When the path was named directly, the model saw the policy and did not try.
+3. Inside the profiles: reading the worktree worked (exit 0); `acp-write` could write the worktree
+   (exit 0) but `git commit` exited 128 (`:workspace` keeps `.git` read-only); `acp-read` could not
+   write (exit 1).
+
+Consequence: ADR-0022's `denyRead` can be enforced for Codex by a per-agent profile built from the
+spec's `denyRead` (each agent has its own app-server process, so the `-c` flags are per agent), and
+the same deny list can protect every Codex agent, not only Full auto. Writes outside the worktree
+and run temp dir stay blocked.
