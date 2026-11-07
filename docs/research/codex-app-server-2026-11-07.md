@@ -134,3 +134,28 @@ Consequence: ADR-0022's `denyRead` can be enforced for Codex by a per-agent prof
 spec's `denyRead` (each agent has its own app-server process, so the `-c` flags are per agent), and
 the same deny list can protect every Codex agent, not only Full auto. Writes outside the worktree
 and run temp dir stay blocked.
+
+## CX-7: end-to-end real runs (2026-11-07)
+
+Owner-consented runs of the whole app with both providers: a throwaway project under the home
+directory, a separate data folder, an in-process server on an ephemeral port, Auto edits, one tiny
+ticket (`add(a, b)` plus a test), driver
+`packages/server/tests/verification/codex/real-run/drive.ts`. Aggregates only; the temp roots were
+deleted afterwards.
+
+1. **Codex change reviewer, Claude lead and helper:** the Codex reviewer started with the deny list
+   (its review checkout sits inside the denied data folder), read the change, approved it; the lead
+   merged; the owner's final merge put the files on `main`. Codex usage: 2 records, no null field.
+   This confirms on real Codex that a more specific `read`/`write` entry re-opens a folder inside a
+   denied one.
+2. **Codex lead (`gpt-6.1-sol`, low), Claude helper and reviewer:** the Codex lead called
+   `submit_plan`, `start_agent`, `agent_status`, `view_change`, `merge_change` and `request_review`
+   (all succeeded) as dynamic tools, streamed its chat, and the run completed and merged. Codex
+   usage: 15 records, no null field. Outbox: 2 engine notices delivered.
+
+Both runs: no agent failed to start, no plan or comment text in the server log, no diff text in
+the database (the run-1 check first matched a code line the lead's plan had quoted; plan text is
+stored by design, so the driver now ignores lines the plan or a task holds).
+
+Still not exercised on real Codex: `permissions` on `thread/resume` (no rework or follow-up
+happened), `turn/interrupt` timing, and `fileChange` approvals.

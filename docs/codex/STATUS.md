@@ -2,16 +2,16 @@
 
 Coordinator-owned. Plan: [README.md](README.md).
 
-| WP   | Title                           | Status      | Branch                   | Merged |
-| ---- | ------------------------------- | ----------- | ------------------------ | ------ |
-| CX-0 | ADRs, AGENTS.md, plan, research | done        | `feat/codex-integration` |        |
-| CX-1 | Spike against a real app-server | done        | `feat/codex-integration` |        |
-| CX-2 | Contracts and DB                | done        | `feat/codex-integration` |        |
-| CX-3 | `@acp/adapter-codex`            | done        | `feat/codex-integration` |        |
-| CX-4 | Server                          | done        | `feat/codex-integration` |        |
-| CX-5 | Messaging (ADR-0033)            | done        | `feat/codex-integration` |        |
-| CX-6 | Web                             | done        | `feat/codex-integration` |        |
-| CX-7 | Safety and docs                 | done        | `feat/codex-integration` |        |
+| WP   | Title                           | Status | Branch                   | Merged |
+| ---- | ------------------------------- | ------ | ------------------------ | ------ |
+| CX-0 | ADRs, AGENTS.md, plan, research | done   | `feat/codex-integration` |        |
+| CX-1 | Spike against a real app-server | done   | `feat/codex-integration` |        |
+| CX-2 | Contracts and DB                | done   | `feat/codex-integration` |        |
+| CX-3 | `@acp/adapter-codex`            | done   | `feat/codex-integration` |        |
+| CX-4 | Server                          | done   | `feat/codex-integration` |        |
+| CX-5 | Messaging (ADR-0033)            | done   | `feat/codex-integration` |        |
+| CX-6 | Web                             | done   | `feat/codex-integration` |        |
+| CX-7 | Safety and docs                 | done   | `feat/codex-integration` |        |
 
 ## Log
 
@@ -52,3 +52,7 @@ Coordinator-owned. Plan: [README.md](README.md).
   lead-only tools, ask_lead flood, dropped message, no cross-provider resume, replay counted once);
   security, provider-adapters, usage-accounting, architecture, roadmap docs. Open: the consented real
   end-to-end run (profile re-open inside a denied folder, permissions on resume, mixed-provider run).
+- 2026-11-07 Real runs done (owner consent): Codex reviewer with Claude lead and helper, and Codex
+  lead with Claude helper and reviewer; both completed and merged, all assertions true. Confirmed: the
+  profile re-opens the agent folder inside the denied data folder; dynamic lead tools; Codex usage
+  recorded. Not exercised: permissions on resume, interrupt timing, fileChange approvals.
