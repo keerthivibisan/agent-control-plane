@@ -56,12 +56,48 @@ outputTokens, reasoningOutputTokens }`. No message id.
 networkAccess, excludeTmpdirEnvVar, excludeSlashTmp}` | `externalSandbox` | `dangerFullAccess`.
 - `-c key=value` overrides any `config.toml` value at spawn time.
 
-## Not yet verified (CX-1 spike)
+## CX-1 spike results (2026-11-07)
 
-- Whether `total` is cumulative per thread and survives `thread/resume`; notifications per turn.
-- Whether `dynamicTools` works with the owner's ChatGPT login and this model set.
-- Whether manual mode (read-only sandbox) raises `item/fileChange/requestApproval` for every edit.
-- Whether the sandbox blocks writes to a linked worktree's git directory (commit, branch).
-- Which `-c` overrides disable project `AGENTS.md` loading, user MCP servers, plugins, native
-  subagents and web search.
-- Steer and interrupt timing.
+Real `codex app-server` runs with the owner's consent: model `gpt-6.1-sol`, effort `low`, the
+owner's ChatGPT login, six short prompts in throwaway repos (a main checkout plus a linked
+worktree, the same layout ACP uses). The spike client logged only methods, counts, commands and
+exit codes. The repos were deleted afterwards.
+
+Spawn arguments used: `--disable` for `hooks`, `multi_agent`, `plugins`, `apps`, `remote_plugin`,
+`goals`, `memories`, `image_generation`, `browser_use`, `computer_use`, `guardian_approval`,
+`tool_suggest`, `skill_mcp_dependency_install`, `daemon_auto_start`, `in_app_browser`; and
+`-c project_doc_max_bytes=0 -c mcp_servers={} -c web_search="disabled"`. `initialize` declared
+`experimentalApi: true`.
+
+1. **Login.** `account/read` returned `account.type = "chatgpt"`. That is enough for an
+   availability check; ACP needs no other account data.
+2. **Instructions are isolated.** With `project_doc_max_bytes=0`, `thread/start` returned
+   `instructionSources: []` although the repo had an `AGENTS.md` (a canary instruction that never
+   showed in replies). `developerInstructions` reached the model.
+3. **Usage: one notification per model request.** Each `thread/tokenUsage/updated` carries `last`
+   (that one request) and `total` (cumulative for the thread). For every consecutive pair,
+   `total[n] − total[n−1] = last[n]` exactly. `total` continues across turns and after
+   `thread/resume`. `inputTokens` includes `cachedInputTokens` (for example 11074 input with
+   10624 cached). A steered turn produced an extra short request (1 output token).
+4. **Resume replays the last usage notification.** Right after `thread/resume`, the server sent the
+   previous turn's last notification again with identical `turnId`, `total` and `last`. A dedup key
+   must therefore be stable across that replay.
+5. **Dynamic tools work.** A `function` dynamic tool given on `thread/start` was called through
+   `item/tool/call` with schema-valid arguments; the `{ contentItems, success }` answer was
+   accepted and the turn went on.
+6. **Manual mode intercepts writes.** With sandbox `read-only` and policy `on-request`, the model
+   tried a shell write; the server sent `item/commandExecution/requestApproval` with the command
+   and cwd before running it. `decline` was honoured (item status `declined`, no file written).
+   The edit came as a command, not a `fileChange`, so ACP must screen both request kinds.
+7. **Steer works.** `turn/steer` with `expectedTurnId` was accepted mid-turn and the model followed
+   it in the same turn.
+8. **Git protection holds, except under temp dirs.** In `workspace-write`, with the repo under the
+   home directory, `git add`, `git commit`, `git branch` and `git checkout -b` all exited 128 from
+   a linked worktree, and nothing changed. With the repo under `/tmp`, a branch was created: the
+   default `workspaceWrite` policy also makes `/tmp` and `$TMPDIR` writable
+   (`excludeSlashTmp: false`, `excludeTmpdirEnvVar: false`), and that includes any `.git` there.
+   ACP must refuse a writing Codex agent whose repository's common git directory is inside a
+   writable root (the worktree, `/tmp`, `$TMPDIR`), or pass a `sandboxPolicy` that excludes them.
+
+Not verified: `turn/interrupt` timing, whether a model ever uses `fileChange` approvals in manual
+mode, and whether the overrides also stop native subagents (none were attempted).

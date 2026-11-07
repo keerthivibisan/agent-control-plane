@@ -1,6 +1,7 @@
 # ADR-0032: Usage accounting for managed Codex runs
 
-- **Status:** proposed (the record unit is settled by the CX-1 spike; see "To confirm")
+- **Status:** accepted (project owner go-ahead 2026-11-07; record unit settled by the CX-1 spike,
+  see "Amendment after CX-1")
 - **Date:** 2026-11-07
 - **Deciders:** project owner (CX series, 2026-11-07); implementing agent (draft)
 - **Amends:** [docs/usage-accounting.md](../usage-accounting.md) (a Codex section), ADR-0006 and
@@ -56,6 +57,20 @@ so ids from two providers could collide.
   exactly one request with a stable order, a per-request record (`turn:<id>:<n>`, provenance
   `observed`) replaces decision 2.
 - Whether `cachedInputTokens` is included in `inputTokens`.
+
+## Amendment after CX-1 (2026-11-07, binding; replaces decision 2)
+
+The spike ([research note](../research/codex-app-server-2026-11-07.md), results 3 and 4) showed one
+notification per model request, `last` equal to that request, `total` cumulative across turns and
+resumes, and an identical replay of the last notification after `thread/resume`. So:
+
+- **Record unit: one record per model request.** Each `thread/tokenUsage/updated` becomes one
+  `usage` event with the counts of `last`, provenance `observed`.
+- **Message id:** `"<threadId>:<turnId>:<total.totalTokens>"`. The cumulative total strictly
+  grows with each request and is identical in the replay, so the replay dedups on
+  `(provider, messageId)` and nothing is summed.
+- Decisions 1 and 3–6 stand. `inputTokens` includes `cachedInputTokens` (confirmed), so the
+  subtraction in decision 3 is correct.
 
 ## Alternatives considered
 
