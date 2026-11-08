@@ -28,3 +28,6 @@ Coordinator-owned. Plan: [README.md](README.md).
   "Starting points" section (notes, files with map summaries, not-found list, related files; 3 KiB
   cap); rework keeps them; plan review shows path chips and notes. Gaps: starting points are in
   memory (lost on restart) and not re-added when a rework falls back to a fresh session.
+- 2026-11-09 CM-5 first measurement (haiku, low, 2 tickets x on/off, 1 repeat): all runs
+  succeeded; index cost 1.15 s, 1419 files, 9000 symbols, 2.4 MB; agent differences within noise
+  because the tickets needed almost no discovery. See docs/research/code-map-measurement-2026-11-09.md.
