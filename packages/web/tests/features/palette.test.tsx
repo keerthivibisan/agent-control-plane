@@ -38,6 +38,7 @@ describe('palette commands', () => {
       'page:workflow',
       'page:skills',
       'page:harness',
+      'page:code-map',
       'page:tokens',
       'page:sessions',
       'page:settings',

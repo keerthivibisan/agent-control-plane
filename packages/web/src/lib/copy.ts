@@ -1,5 +1,7 @@
 import type {
   AgentMessageKind,
+  CodeMapErrorCode,
+  CodeMapSkipReason,
   AgentMessageState,
   AgentRunStatus,
   RunStatus,
@@ -15,7 +17,7 @@ import type {
   TicketBranchState,
   ManagedProviderId,
 } from '@acp/core';
-import type { EventDto } from '@acp/core/api';
+import type { CodeMapStatus, EventDto } from '@acp/core/api';
 import { formatCount } from './format';
 import type { TokenCategory } from './tokens';
 
@@ -2083,6 +2085,7 @@ export const SHELL_COPY = {
       workflow: 'Workflow',
       skills: 'Skills & Agents',
       harness: 'Harness',
+      'code-map': 'Code map',
       tokens: 'Tokens',
       sessions: 'Sessions',
       settings: 'Settings',
@@ -4803,4 +4806,130 @@ export const OUTBOX_COPY = {
     dropped: 'The agent ended, so the message never arrived.',
   } satisfies Record<AgentMessageState, string>,
   length: (n: number) => countOf(n, 'character', 'characters'),
+} as const;
+
+/*
+ * The Code map page (ADR-0034 §5, CM-4): the files, symbols and imports ACP indexed for agents,
+ * as a graph by folder with search and a file panel. Paths and names shown there are repository
+ * data, rendered as text only.
+ */
+export const CODE_MAP_COPY = {
+  title: 'Code map',
+  description: 'The files of this project, grouped by folder, with the imports between them.',
+  tip: 'ACP builds this map on your computer from the project’s git repository, without an AI model and without the network. It keeps file paths, symbol names, line numbers and imports, never the source text. Agents use the same map to find code faster.',
+  loading: 'Loading the code map…',
+  status: {
+    label: 'Map status',
+    words: {
+      none: 'Not built',
+      building: 'Building',
+      ready: 'Ready',
+      failed: 'Failed',
+    } satisfies Record<CodeMapStatus, string>,
+    commit: 'Commit',
+    commitTip: (sha: string) => `The map describes commit ${sha}.`,
+    built: 'Built',
+    files: 'Files',
+    indexed: 'Indexed',
+    skipped: 'Skipped',
+    symbols: 'Symbols',
+    unresolved: 'Unresolved imports',
+    unresolvedTip: 'Imports that name no file in the repository, such as packages from a registry.',
+    skippedTip: 'Files too large, binary, generated or over the file limit are not read.',
+    building: 'Building the map. This page checks again every 2 seconds.',
+    buildingSlow: 'The build is taking longer than 5 minutes. Refresh the page to check again.',
+    lastGood: 'Showing the last map that was built.',
+  },
+  refresh: 'Refresh',
+  refreshing: 'Building…',
+  refreshTip: 'Build the map again from the project’s current commit.',
+  empty: {
+    title: 'No code map yet',
+    text: 'The code map is the files, symbols and imports ACP indexed for agents, built on your computer, with no source text stored.',
+    build: 'Build the map',
+  },
+  failed: {
+    title: 'The map could not be built',
+    retry: 'Try again',
+    codes: {
+      git_failed: 'Git could not read the project’s repository.',
+      commit_not_found: 'The commit to map was not found in the project’s repository.',
+      index_failed: 'Reading the project’s files failed.',
+    } satisfies Record<CodeMapErrorCode, string>,
+  },
+  refreshErrors: {
+    no_commits: 'The project folder has no git commit yet. Commit once, then build the map.',
+    fallback: 'The build could not be started.',
+  } as Record<string, string>,
+  graph: {
+    title: 'Files and imports',
+    label: 'Code map graph',
+    minimap: 'Overview of the map',
+    root: 'All files',
+    breadcrumbs: 'Folder',
+    rootGroup: 'Project root',
+    folderLevel:
+      'This view has too many files to draw one by one, so it shows folders. Open a folder to see its files.',
+    truncated: (shown: number, edges: number, total: number) =>
+      `Too large to draw in full: showing ${countOf(shown, 'node')} and ${formatCount(edges)} of ${countOf(total, 'import link')}.`,
+    files: (n: number) => countOf(n, 'file'),
+    openFolder: (path: string) => `Open folder ${path}`,
+    openFile: (path: string) => `Show details for ${path}`,
+    noNodes: 'No files match these filters.',
+    noFiles: 'This folder has no indexed files.',
+    shown: (n: number, total: number) =>
+      n === total ? countOf(total, 'node') : `${formatCount(n)} of ${countOf(total, 'node')}`,
+    test: 'Test',
+  },
+  filters: {
+    label: 'Filters',
+    language: 'Language',
+    allLanguages: 'All languages',
+    hideTests: 'Hide tests',
+    linkedOnly: 'Only files with imports',
+    linkedOnlyTip: 'Hide files that import nothing in the repository and that nothing imports.',
+  },
+  search: {
+    label: 'Search files and symbols',
+    placeholder: 'Search files and symbols…',
+    results: 'Search results',
+    searching: 'Searching…',
+    none: 'Nothing matches.',
+    more: (shown: number, total: number) =>
+      `Showing ${formatCount(shown)} of ${formatCount(total)}.`,
+    clear: 'Clear search',
+    symbol: 'Symbol',
+    file: 'File',
+  },
+  file: {
+    label: 'File details',
+    close: 'Close file details',
+    loading: 'Loading the file…',
+    notFound: 'This file is not in the map.',
+    language: 'Language',
+    size: 'Size',
+    lines: 'Lines',
+    test: 'Test file',
+    skipped: 'Not read',
+    skipReasons: {
+      'too-large': 'Larger than 512 KiB, so it was not read.',
+      binary: 'A binary file, so it was not read.',
+      generated: 'A generated or vendored file, so it was not read.',
+      'file-cap': 'Over the limit of 20,000 files, so it was not read.',
+    } satisfies Record<CodeMapSkipReason, string>,
+    symbols: 'Symbols',
+    noSymbols: 'No top-level symbols.',
+    exported: 'Exported',
+    line: (n: number) => `line ${formatCount(n)}`,
+    imports: 'Imports',
+    noImports: 'No imports of files in the repository.',
+    unresolved: (n: number) =>
+      `${countOf(n, 'import')} that name${n === 1 ? 's' : ''} no file in the repository:`,
+    importedBy: 'Imported by',
+    noImportedBy: 'No file imports this one.',
+    tests: 'Tests',
+    noTests: 'No test imports this file.',
+    showAll: (n: number) => `Show all ${formatCount(n)}`,
+    open: (path: string) => `Show details for ${path}`,
+  },
 } as const;

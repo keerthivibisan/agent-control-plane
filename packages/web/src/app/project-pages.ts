@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   BoardNavIcon,
+  CodeMapIcon,
   HarnessIcon,
   SessionsIcon,
   SettingsIcon,
@@ -37,6 +38,8 @@ export const PROJECT_PAGES: readonly ProjectPageDef[] = [
   { id: 'skills', label: L.skills, icon: SkillsIcon, available: true },
   // R-E.
   { id: 'harness', label: L.harness, icon: HarnessIcon, available: true },
+  // CM-4 (ADR-0034).
+  { id: 'code-map', label: L['code-map'], icon: CodeMapIcon, available: true },
   // R-F.
   { id: 'tokens', label: L.tokens, icon: TokensIcon, available: true },
   { id: 'sessions', label: L.sessions, icon: SessionsIcon, available: true },
