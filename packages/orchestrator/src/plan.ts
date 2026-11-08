@@ -139,7 +139,14 @@ export function submitPlan(
       runId: d.run.id,
       version,
       summary: input.summary,
-      steps: input.steps.map((s) => ({ title: s.title, role: s.role, detail: s.detail })),
+      steps: input.steps.map((s) => ({
+        title: s.title,
+        role: s.role,
+        detail: s.detail,
+        // ADR-0034 §4 (CM-3): the step's starting points, kept with the plan.
+        ...(s.files !== undefined && s.files.length > 0 ? { files: [...new Set(s.files)] } : {}),
+        ...(s.notes !== undefined && s.notes.trim() !== '' ? { notes: s.notes.trim() } : {}),
+      })),
       plannedHelpers: plannedHelpers(input.steps),
       status: 'proposed',
       createdAt: d.now,

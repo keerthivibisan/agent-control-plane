@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import {
   APPROVAL_TIMEOUT_MS,
   HARD_MAX_DEPTH,
+  isEmptyStartingPoints,
   isPathInside,
+  renderStartingPoints,
+  type StartingPoints,
   LeadToolInputs,
   type AgentEffort,
   type AgentRoleKind,
@@ -627,6 +630,8 @@ interface LaunchInput {
    * Full auto) or without (a Full auto block a ticket or run tightened).
    */
   protection?: AgentProtection | undefined;
+  /** ADR-0034 §4 (CM-3): a helper's starting points, rendered with the run's map at launch. */
+  startingPoints?: StartingPoints | undefined;
 }
 
 /** What a pump needs to record a self-recorded provider's usage (`usageRecorder`). */
@@ -1479,6 +1484,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           agentFile,
           canStartHelpers,
           protection,
+          startingPoints: effect.startingPoints,
         });
       })(),
     );
@@ -1639,6 +1645,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           agentFile,
           rework: effect.rework,
           protection,
+          startingPoints: effect.startingPoints,
         });
       })(),
     );
@@ -2118,6 +2125,35 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
   }
 
+  /**
+   * ADR-0034 §4 (CM-3): the prompt with the helper's starting points, rendered from the map of
+   * the run's base commit (paths, names and counts; never file content). Without a ready map,
+   * only the notes and the paths. Never throws: a failure leaves the plain paths.
+   */
+  function withStartingPoints(
+    live: LiveRun,
+    prompt: string,
+    points: StartingPoints | undefined,
+  ): string {
+    if (points === undefined || isEmptyStartingPoints(points)) return prompt;
+    let map: ReturnType<RunCodeMapSource['mapAt']>;
+    const source = deps.codeMap;
+    const commit = runMapCommit(live);
+    if (source !== undefined && commit !== null) {
+      try {
+        map = source.mapAt(live.state.run.projectId, commit);
+      } catch (error) {
+        countDiagnostic('code-map-unavailable');
+        logger.log('warn', 'starting points map unavailable', {
+          runId: live.state.run.id,
+          ...errorFields(error),
+        });
+      }
+    }
+    const section = renderStartingPoints(points, map);
+    return section === '' ? prompt : `${prompt}\n\n${section}`;
+  }
+
   /** ADR-0034 §4: the `code_map` answer, or a thrown refusal the adapter returns to the model. */
   function codeMapReply(live: LiveRun, input: unknown): string {
     const source = deps.codeMap;
@@ -2339,7 +2375,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       agentRunId,
       kind,
       cwd: input.cwd,
-      prompt: input.prompt,
+      prompt: withStartingPoints(live, input.prompt, input.startingPoints),
       // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4); an
       // inherited model of another provider is skipped (ADR-0031).
       model: resolveAgentModel({

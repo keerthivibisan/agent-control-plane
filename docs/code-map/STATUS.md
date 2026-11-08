@@ -7,7 +7,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | CM-0 | ADR-0034, plan                       | done        | `feature/codemap/code-map` |        |
 | CM-1 | Contracts, migration, indexer, API   | done        | `feature/codemap/code-map` |        |
 | CM-2 | Agents: map in context, tool, counts | done        | `feature/codemap/code-map` |        |
-| CM-3 | Plan to helper bundle                | not started |                            |        |
+| CM-3 | Plan to helper bundle                | done        | `feature/codemap/code-map` |        |
 | CM-4 | Web: Code map page                   | done        | `feature/codemap/code-map` |        |
 | CM-5 | Measured real runs, docs             | not started |                            |        |
 
@@ -24,3 +24,7 @@ Coordinator-owned. Plan: [README.md](README.md).
   run), a 4 KiB repository map as a stable context prefix (own allowance, `spec.repoMap`), a
   read-only `code_map` tool for every role including follow-ups (6 KiB answers, no content),
   content-free tool-use counts per agent (migration 0015 `agent_runs.tool_counts`).
+- 2026-11-09 CM-3 done: plan steps and start_agent carry optional files and notes; helpers get a
+  "Starting points" section (notes, files with map summaries, not-found list, related files; 3 KiB
+  cap); rework keeps them; plan review shows path chips and notes. Gaps: starting points are in
+  memory (lost on restart) and not re-added when a rework falls back to a fresh session.

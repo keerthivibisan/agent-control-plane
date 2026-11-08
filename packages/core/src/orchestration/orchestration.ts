@@ -3,7 +3,11 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
-import { MAX_CODE_MAP_PATH_LENGTH } from '../codemap/codemap.js';
+import {
+  MAX_CODE_MAP_PATH_LENGTH,
+  StartingPointFilesSchema,
+  StartingPointNotesSchema,
+} from '../codemap/codemap.js';
 import {
   HelperOutcomeKindSchema,
   VerificationAssessmentInputSchema,
@@ -213,6 +217,13 @@ export const LeadToolInputs = {
      * case), else the helper pool, and otherwise refuses with the list of helper nodes.
      */
     helper: WorkflowNodeIdSchema.optional(),
+    /**
+     * ADR-0034 §4 (CM-3): repository files to start from (at most 20) and the lead's findings.
+     * Hints for the helper's first prompt, never a scope limit. Without them, a lead's start takes
+     * those of the approved plan's step with this helper node and role.
+     */
+    files: StartingPointFilesSchema.optional(),
+    notes: StartingPointNotesSchema.optional(),
   }),
   list_agents: z.object({}),
   message_agent: z.object({ agentId: z.string().min(1), text: z.string().min(1).max(4000) }),
@@ -247,6 +258,10 @@ export const LeadToolInputs = {
            * of helper nodes.
            */
           helper: WorkflowNodeIdSchema.optional(),
+          /** ADR-0034 §4 (CM-3): files the step's helper should start from; a hint, not a limit. */
+          files: StartingPointFilesSchema.optional(),
+          /** ADR-0034 §4 (CM-3): the lead's findings for the step, sent to its helper. */
+          notes: StartingPointNotesSchema.optional(),
         }),
       )
       .min(1)

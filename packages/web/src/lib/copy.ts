@@ -1904,6 +1904,9 @@ export const TICKET_COPY = {
     version: (n: number) => `Version ${formatCount(n)}`,
     helpers: (n: number) => `${formatCount(n)} helper ${n === 1 ? 'agent' : 'agents'} planned`,
     stepRole: 'Done by',
+    /** CM-3: a step's starting points (the lead's files and notes for its helper). */
+    stepFiles: 'Files to start from',
+    stepNotes: "Lead's notes",
     intro:
       'An agent read the code and proposes this plan. No helper agent starts until you approve it.',
     approve: 'Approve plan',

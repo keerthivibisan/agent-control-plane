@@ -114,6 +114,7 @@ export {
 } from './change-commands.js';
 export type { MergeBlocked, SealFailure } from './change-commands.js';
 export { checkStepAttempts, stepAttemptLimit, stepAttempts } from './step-attempts.js';
+export { planStepStartingPoints, startingPointsOf } from './starting-points.js';
 export {
   CHECK_FAILURE_TAIL_MAX_BYTES,
   agentSetupFailed,

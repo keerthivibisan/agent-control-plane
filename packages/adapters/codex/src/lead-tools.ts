@@ -16,7 +16,11 @@ import { cleanFreeText } from './summary.js';
 const DESCRIPTIONS: Record<LeadToolName, string> = {
   start_agent:
     'Start a worker agent with a short role name and one task. It works in its own copy of the ' +
-    'project. The control plane may refuse (limits, budget, run state) and says why.',
+    'project. Optional files (up to 20 repository-relative paths) and notes (your findings: what ' +
+    'you learned, where the code is, constraints) go into its first prompt as starting points; ' +
+    'fill them from what you read or found with code_map. They are hints, not a limit on what it ' +
+    "may change. Without them it gets the matching plan step's. The control plane may refuse " +
+    '(limits, budget, run state) and says why.',
   list_agents: 'List the worker agents you manage, with their status.',
   message_agent:
     'Send a message to one of your worker agents, or answer an agent that asked you a question (ask_lead). The reply says whether it was delivered now, queued for its next turn, or dropped (the agent ended) and why.',
@@ -25,7 +29,7 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
   request_review:
     "Hand the work over when you are done: no helper is working and, with change review, every helper's change is decided. With change review you must call it once every change is decided (merged, discarded or with no changes): nothing goes on until you do. The final review and the owner come next.",
   submit_plan:
-    'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). The owner approves it or asks for changes before any helper can start.',
+    'Submit your plan for this ticket: a short summary and the steps (title, which helper role does it, detail). Give a step files (up to 20 repository-relative paths) and notes (your findings: what you learned, where the code is, constraints) from what you read or found with code_map: its helper starts from them instead of searching again. They are hints, not a limit on what the helper may change. The owner approves the plan or asks for changes before any helper can start.',
   post_review:
     'Post your code review findings as plain text. They become a comment on the ticket for the owner; they do not block or merge anything.',
   view_change:

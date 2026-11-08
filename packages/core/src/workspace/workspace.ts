@@ -5,6 +5,7 @@ import { ManagedProviderIdSchema } from '../domain/provider.js';
 import { WorkflowNodeIdSchema } from './node-id.js';
 import { BranchStrategySchema, TicketBranchPrefsSchema } from './branching.js';
 import { GitCommitSchema } from '../orchestration/orchestration.js';
+import { StartingPointFilesSchema, StartingPointNotesSchema } from '../codemap/codemap.js';
 import type { RunStatus } from '../orchestration/orchestration.js';
 import {
   ChangeReviewerModeSchema,
@@ -139,6 +140,14 @@ export const PlanStepSchema = z.object({
    * version 1 runs, where every step goes to the helper pool.
    */
   helper: WorkflowNodeIdSchema.optional(),
+  /**
+   * ADR-0034 §4 (CM-3): repository files the lead found for this step (at most 20). The helper's
+   * first prompt lists them with their code map neighbourhood: a hint, never a scope limit.
+   * Absent for plans before CM-3.
+   */
+  files: StartingPointFilesSchema.optional(),
+  /** ADR-0034 §4 (CM-3): the lead's findings for this step, sent to its helper. Absent: none. */
+  notes: StartingPointNotesSchema.optional(),
 });
 export type PlanStep = z.infer<typeof PlanStepSchema>;
 

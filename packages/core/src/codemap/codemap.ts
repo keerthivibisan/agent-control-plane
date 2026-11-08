@@ -22,20 +22,47 @@ export const MAX_CODE_MAP_NAME_LENGTH = 512;
 export const MAX_CODE_MAP_SPECIFIER_LENGTH = 1_024;
 export const MAX_CODE_MAP_PATH_LENGTH = 1_024;
 
+/** True for a repository-relative path with `/` separators (no absolute path, `..` or empty segment). */
+function isRepositoryPath(p: string): boolean {
+  return (
+    !p.startsWith('/') &&
+    !/^[A-Za-z]:/.test(p) &&
+    !p.includes('\\') &&
+    !p.includes('\0') &&
+    p.split('/').every((seg) => seg !== '..' && seg !== '.' && seg !== '')
+  );
+}
+
 /** A repository-relative path with `/` separators: no absolute paths, no `..`, no empty segment. */
 export const CodeMapPathSchema = z
   .string()
   .min(1)
   .max(MAX_CODE_MAP_PATH_LENGTH)
+  .refine(isRepositoryPath, 'must be a path inside the repository');
+
+/**
+ * ADR-0034 §4 (CM-3): the starting points a plan step or a `start_agent` call may give a helper.
+ * The files are hints from the lead, never a scope limit; the notes are the lead's findings for
+ * the step (plan text, ADR-0016). Both are data for the helper, never instructions to the app.
+ */
+export const MAX_STARTING_POINT_FILES = 20;
+export const MAX_STARTING_POINT_PATH_LENGTH = 300;
+export const MAX_STARTING_POINT_NOTES = 2_000;
+
+/** A starting-point file: a repository path as in the code map, shorter, with no control characters. */
+export const StartingPointPathSchema = z
+  .string()
+  .min(1)
+  .max(MAX_STARTING_POINT_PATH_LENGTH)
   .refine(
-    (p) =>
-      !p.startsWith('/') &&
-      !/^[A-Za-z]:/.test(p) &&
-      !p.includes('\\') &&
-      !p.includes('\0') &&
-      p.split('/').every((seg) => seg !== '..' && seg !== '.' && seg !== ''),
-    'must be a path inside the repository',
+    (p) => isRepositoryPath(p) && !/\p{Cc}/u.test(p),
+    'must be a file path inside the repository: relative, with / separators, no . or .. segments',
   );
+export const StartingPointFilesSchema = z
+  .array(StartingPointPathSchema)
+  .max(MAX_STARTING_POINT_FILES);
+/** Empty notes mean none. */
+export const StartingPointNotesSchema = z.string().trim().max(MAX_STARTING_POINT_NOTES);
 
 /** A full commit id: the map always names the exact commit it describes (ADR-0034 §3). */
 export const CodeMapCommitSchema = z

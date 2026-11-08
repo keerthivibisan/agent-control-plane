@@ -7,6 +7,7 @@ import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
 import { checkStepAttempts } from './step-attempts.js';
+import { planStepStartingPoints, startingPointsOf } from './starting-points.js';
 import { submitPlan } from './plan.js';
 import {
   checkNodeInstances,
@@ -263,7 +264,7 @@ export function leadToolCall(
     case 'start_agent': {
       const parsed = LeadToolInputs.start_agent.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const { role, task, helper } = parsed.data;
+      const { role, task, helper, files, notes } = parsed.data;
       const policyRefusal = checkStartAgent(state, caller.id, call.registeredProjectIds);
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
       // ADR-0023 §7: the helper node to start. A helper's own helpers belong to its node.
@@ -286,6 +287,11 @@ export function leadToolCall(
       // F-2: replacement helpers for a plan step are bounded.
       const attemptsRefusal = checkStepAttempts(state, node, role);
       if (attemptsRefusal !== null) return { ok: false, refusal: attemptsRefusal };
+      // ADR-0034 §4 (CM-3): the call's own files and notes, else (the lead's starts only) those of
+      // the approved plan's step for this node and role. Data for the prompt, never permissions.
+      const fromStep =
+        caller.kind === 'lead' ? planStepStartingPoints(state, node.id, role) : undefined;
+      const startingPoints = startingPointsOf(files ?? fromStep?.files, notes ?? fromStep?.notes);
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
         // Depth of the new helper: one below its caller; its node must allow helpers of its own.
@@ -310,6 +316,7 @@ export function leadToolCall(
           provider: nodeProvider(program, node.id),
           // Ticket runs record each agent's node (ADR-0019, ADR-0023).
           ...(d.run.ticketId !== null ? { stage: node.id } : {}),
+          ...(startingPoints !== undefined ? { startingPoints } : {}),
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
@@ -325,6 +332,7 @@ export function leadToolCall(
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),
+          ...(startingPoints !== undefined ? { startingPoints } : {}),
         });
         if (d.integration !== undefined) humanized(`Started ${role}`)(d);
         return { value: `Started agent ${id} (${role}).` };

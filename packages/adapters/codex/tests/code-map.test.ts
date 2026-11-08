@@ -44,6 +44,20 @@ describe('code_map dynamic tool (ADR-0034 §4)', () => {
     expect(tool?.description).toContain('never file content');
   });
 
+  it('start_agent and submit_plan take starting points, described as hints (CM-3)', () => {
+    const start = toolInputSchema('start_agent');
+    const props = start['properties'] as Record<string, Record<string, unknown>>;
+    expect(Object.keys(props)).toEqual(['role', 'task', 'helper', 'files', 'notes']);
+    expect(props['files']?.['maxItems']).toBe(20);
+    expect(start['required']).toEqual(['role', 'task']);
+    const tools = dynamicToolsFor(makeSpec({ kind: 'lead', leadTools }));
+    for (const name of ['start_agent', 'submit_plan']) {
+      const description = tools.find((t) => t.name === name)?.description ?? '';
+      expect(description).toContain('code_map');
+      expect(description).toContain('not a limit');
+    }
+  });
+
   it('a follow-up turn may call code_map and nothing else', async () => {
     const handler = vi.fn(() => Promise.resolve('map answer'));
     const server = new FakeAppServer();
