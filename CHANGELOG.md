@@ -9,6 +9,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Code map** (ADR-0034). ACP indexes each project's repository locally (paths, symbols, imports
+  and tests; no source text; no AI model) at a ticket's base commit, re-reading only changed files.
+  Every agent gets a short repository map and a read-only `code_map` tool; plan steps can name
+  files and notes that helpers start from. A new **Code map** page per project shows the files as
+  a folder-grouped graph with import links, search and file details. `ACP_CODE_MAP=off` turns it
+  off. This release adds database migrations 0014 and 0015; back up first.
 - **Codex as a second managed provider** (ADR-0031). Each workflow block, the lead included, can
   run on Claude Code or Codex, and one ticket can mix both. Codex runs through `codex app-server`
   with the owner's own Codex (ChatGPT) login, the same approval modes, lead tools, follow-ups and
