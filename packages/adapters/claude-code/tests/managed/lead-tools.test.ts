@@ -24,6 +24,17 @@ describe('P3-B lead tools (ADR-0012)', () => {
     expect(description).toContain('nothing goes on until you do');
   });
 
+  it('ADR-0033: describes ask_lead, get_review_findings and message_agent delivery', () => {
+    const tools = leadToolDefinitions(() => Promise.resolve(''));
+    const describe_ = (name: string) => tools.find((t) => t.name === name)?.description ?? '';
+    expect(describe_('ask_lead')).toContain('keep working meanwhile');
+    expect(describe_('ask_lead')).toContain('At most 5 open questions');
+    expect(describe_('get_review_findings')).toContain('stored review findings');
+    expect(describe_('message_agent')).toContain('delivered now, queued');
+    const ask = tools.find((t) => t.name === 'ask_lead');
+    expect(Object.keys((ask?.inputSchema ?? {}) as Record<string, unknown>)).toEqual(['question']);
+  });
+
   it('calls the engine handler with the tool name and input and returns its text', async () => {
     const calls: [LeadToolName, unknown][] = [];
     const tools = leadToolDefinitions((name, input) => {

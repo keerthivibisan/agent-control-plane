@@ -5,9 +5,11 @@ import {
   MAX_NODE_DESCRIPTION,
   MAX_NODE_LABEL,
   MAX_NODE_SKILLS,
+  MANAGED_PROVIDERS,
   isEditorNode,
   type AgentEffort,
   type ApprovalMode,
+  type ManagedProviderId,
   type WorkflowGraph,
   type WorkflowNode,
 } from '@acp/core';
@@ -17,7 +19,13 @@ import { Button } from '../../../components/Button';
 import { AlertIcon } from '../../../components/icons';
 import { Menu, MenuLabel } from '../../../components/Menu';
 import { Select, hintClass, labelClass } from '../../../components/Input';
-import { FINISH_COPY, REVIEW_LOOP_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import {
+  FINISH_COPY,
+  PROVIDER_COPY,
+  REVIEW_LOOP_COPY,
+  WORKFLOW_GRAPH_COPY,
+} from '../../../lib/copy';
+import { MODEL_SUGGESTIONS, effectiveProvider } from '../../../lib/providers';
 import { href } from '../../../lib/router';
 import {
   CheckboxField,
@@ -59,6 +67,8 @@ export interface NodePanelContext {
   agents: readonly string[] | undefined;
   agentModels: ReadonlyMap<string, string | null> | undefined;
   projectModel: string | null;
+  /** The project's default provider (ADR-0031); null: none chosen, so Claude Code. */
+  projectProvider: ManagedProviderId | null;
   projectMode: ApprovalMode | null;
   helperLimit: number;
   /** The project's harness, for the Checks blocks' picks; undefined while unknown. */
@@ -103,6 +113,52 @@ function EffortField({
       </Select>
       <span id={`${id}-hint`} className={hintClass}>
         {P.effortHint}
+      </span>
+    </div>
+  );
+}
+
+/** "Project default" in the provider choice; the graph leaves the field out. */
+const PROVIDER_DEFAULT = 'project-default';
+
+/** Which provider runs the block's agents (ADR-0031): Project default, Claude Code or Codex. */
+function ProviderField({
+  value,
+  projectProvider,
+  onChange,
+}: {
+  value: ManagedProviderId | undefined;
+  projectProvider: ManagedProviderId | null;
+  onChange: (next: ManagedProviderId | null) => void;
+}) {
+  const id = useId();
+  const V = PROVIDER_COPY;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" data-testid="provider-field">
+      <label htmlFor={id} className={labelClass}>
+        {V.picker.label}
+      </label>
+      <Select
+        id={id}
+        value={value ?? PROVIDER_DEFAULT}
+        onChange={(e) => {
+          const next = MANAGED_PROVIDERS.find((x) => x === e.target.value);
+          onChange(next ?? null);
+        }}
+        aria-describedby={`${id}-hint`}
+        data-testid="provider-select"
+      >
+        <option value={PROVIDER_DEFAULT}>
+          {V.picker.projectDefault(V.name[effectiveProvider(undefined, projectProvider)])}
+        </option>
+        {MANAGED_PROVIDERS.map((x) => (
+          <option key={x} value={x}>
+            {V.name[x]}
+          </option>
+        ))}
+      </Select>
+      <span id={`${id}-hint`} className={hintClass}>
+        {V.picker.hint}
       </span>
     </div>
   );
@@ -384,8 +440,11 @@ function AgentFields({
   change: (patch: NodePatch) => void;
 }) {
   const fileModel = node.agent === null ? null : (ctx.agentModels?.get(node.agent) ?? null);
+  const provider = effectiveProvider(node.provider, ctx.projectProvider);
   const placeholder =
-    fileModel !== null ? P.modelFromFile(fileModel) : (ctx.projectModel ?? P.modelDefault);
+    fileModel !== null
+      ? P.modelFromFile(fileModel)
+      : (ctx.projectModel ?? P.modelDefaultOf(PROVIDER_COPY.name[provider]));
   const model = node.model ?? '';
   return (
     <div className="flex flex-col gap-5">
@@ -416,6 +475,11 @@ function AgentFields({
         agents={ctx.agents}
         onChange={(agent) => change({ agent })}
       />
+      <ProviderField
+        value={node.provider}
+        projectProvider={ctx.projectProvider}
+        onChange={(provider) => change({ provider })}
+      />
       <TextField
         label={G.model}
         hint={P.modelHint}
@@ -424,6 +488,10 @@ function AgentFields({
         onChange={(v) => change({ model: v.trim() === '' ? null : v })}
         placeholder={placeholder}
         mono
+        suggestions={{
+          label: PROVIDER_COPY.suggestions(PROVIDER_COPY.name[provider]),
+          values: MODEL_SUGGESTIONS[provider],
+        }}
       />
       <EffortField value={node.effort} onChange={(effort) => change({ effort })} />
       <SkillsField

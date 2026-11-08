@@ -118,8 +118,8 @@ describe('P3-F content minimization through the real managed adapter', () => {
     const permissionAnswers: string[] = [];
     const query = scripted(async function* (options, next) {
       const cwd = options.cwd ?? '';
-      // The lead: the only agent with our MCP server.
-      if (options.mcpServers?.['acp'] !== undefined) {
+      // The lead: the only agent in the repo itself (every role has our MCP server since ADR-0033).
+      if (cwd === repo) {
         const sid = 'lead-session';
         yield init(sid);
         let turn = 0;
@@ -170,6 +170,14 @@ describe('P3-F content minimization through the real managed adapter', () => {
     let leadTools: ManagedAgentSpec['leadTools'];
     const adapter: ManagedExecutionAdapter = {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        denyRead: false,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         if (spec.kind === 'lead') leadTools = spec.leadTools;
         return real.start(spec, callbacks);

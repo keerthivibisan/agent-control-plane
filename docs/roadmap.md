@@ -31,10 +31,15 @@ Details: [CHANGELOG.md](../CHANGELOG.md). The plans of the earlier series are in
 | **3 — Managed orchestration**       | runs, a lead and helpers over the Claude Agent SDK, budgets, worktree isolation, cancellation, owner review                                                                                                          | **done** (M1); carried on by Phase 4             |
 | **4 — Agent workspace**             | the board per project, tickets with plan-first runs, project setup, the harness and checks, the agent tree (≤ 6 helpers, depth ≤ 2), the review loop, workflow graphs, GitHub                                        | **done** (v0.0.1 to v0.3.0), improving in v0.3.x |
 | 5 — Harness Lab                     | harness experiments: baseline vs harness-assisted runs, repeated trials, comparisons with variance                                                                                                                   | planned                                          |
-| 6 — Codex adapter                   | `packages/adapters/codex` against Codex's supported app-server interface; contract tests                                                                                                                             | planned                                          |
+| 6 — Codex adapter                   | `packages/adapters/codex` against Codex's supported app-server interface; contract tests                                                                                                                             | managed: in progress; observation: planned       |
 | 7 — Evidence-driven recommendations | recommendations with evidence and measurable acceptance criteria; approval before applying                                                                                                                           | research                                         |
 
 Phase 3's validation runner (P3-G) was replaced by the Phase 4 harness checks.
+
+Codex as a managed provider was brought forward from Phase 6 by the owner (ADR-0031, 2026-11-07):
+any agent block can run on Codex through `codex app-server`, built on `feat/codex-integration`
+([plan](codex/README.md), [status](codex/STATUS.md)). Observation of Codex session files stays in
+Phase 6.
 
 ## Feasibility notes (preliminary estimates, 2026-10-10, not guarantees)
 

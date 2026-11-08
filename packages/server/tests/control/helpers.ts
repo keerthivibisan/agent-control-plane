@@ -60,7 +60,7 @@ export async function setupControl(options: ControlSetupOptions = {}) {
   const control = createControlService({
     db,
     repos,
-    adapter: fake.adapter,
+    adapters: new Map([[fake.adapter.provider, fake.adapter]]),
     workspaces: createWorkspaceManager({ dataDir, git }),
     git,
     dataDir,

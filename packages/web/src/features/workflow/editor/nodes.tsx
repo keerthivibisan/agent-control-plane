@@ -1,4 +1,9 @@
-import { NODE_CAPABILITIES, type ApprovalMode, type WorkflowNode } from '@acp/core';
+import {
+  NODE_CAPABILITIES,
+  type ApprovalMode,
+  type ManagedProviderId,
+  type WorkflowNode,
+} from '@acp/core';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import {
   memo,
@@ -7,6 +12,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { AlertIcon, CheckIcon, SparkIcon, TicketIcon } from '../../../components/icons';
+import { ProviderBadge } from '../../../components/ProviderBadge';
 import { Tooltip } from '../../../components/Tooltip';
 import {
   EFFORT_COPY,
@@ -70,6 +76,8 @@ export interface BlockData {
   agentMissing: boolean;
   /** What the model line says, and whether it is the block's own choice. */
   model: { text: string; own: boolean };
+  /** The provider the block's agents run on (its own, else the project's); null: not an agent block. */
+  provider: ManagedProviderId | null;
   /** The project's approval mode, for "Project default (…)". */
   projectMode: ApprovalMode | null;
   /** The project's helper limit, the pool's instances. */
@@ -508,6 +516,9 @@ export const AgentBlockView = memo(function AgentBlockView({
         >
           {data.model.text}
         </span>
+        {data.provider !== null ? (
+          <ProviderBadge provider={data.provider} testId="block-provider" className="ml-auto" />
+        ) : null}
       </p>
       <div className="mt-auto flex min-w-0 items-center gap-1" data-testid="block-uses">
         <SkillsChip node={node} missing={data.missingSkills} />

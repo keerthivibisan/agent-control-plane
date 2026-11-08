@@ -4,7 +4,7 @@ import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { notifyLead } from './loop.js';
 import { programOf } from './program.js';
-import { launchFieldsFor } from './stages.js';
+import { launchFieldsFor, nodeProvider } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
 import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 
@@ -124,6 +124,7 @@ export function startResolver(
       review: null,
       reportedCostUsd: null,
       stage: node.id,
+      provider: nodeProvider(program, node.id),
       resolution: { operationId: input.operationId },
     };
     d.agents.push(agent);

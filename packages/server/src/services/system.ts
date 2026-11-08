@@ -4,6 +4,7 @@ import type {
   CapabilitiesDto,
   DiagnosticsDto,
   HealthDto,
+  ManagedProviderAvailabilityDto,
   EventDto,
   OverviewDto,
   SessionSnapshotSummaryDto,
@@ -51,6 +52,8 @@ export interface SystemServiceDeps {
   ingestionStats: () => IngestionStats;
   /** True for managed worktree paths (Phase 3), which discovery must not offer as projects. */
   isManagedPath?: (cwd: string) => boolean;
+  /** ADR-0031: each managed provider's availability (the control service's cache). */
+  managedProviders?: () => ManagedProviderAvailabilityDto[];
 }
 
 export interface IngestionStats {
@@ -189,6 +192,7 @@ export function createSystemService(deps: SystemServiceDeps): SystemService {
             parseErrors: d.parseErrors,
           };
         }),
+        ...(deps.managedProviders !== undefined && { managedProviders: deps.managedProviders() }),
         ingestion: {
           pipeline: {
             eventsInvalid: stats.pipeline.eventsInvalid,

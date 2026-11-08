@@ -3,6 +3,7 @@ import type {
   ManagedAgentHandle,
   ManagedAgentSpec,
   ManagedCallbacks,
+  ManagedCapabilities,
   ManagedExecutionAdapter,
   ManagedFailureCode,
 } from '@acp/core';
@@ -246,6 +247,17 @@ function applyFollowUp(options: Options, spec: ManagedAgentSpec, resumeSessionId
  * the owner's plan comments, until `abort()`. A follow-up turn of an ended lead (ADR-0020) takes
  * its one message and ends after that turn.
  */
+/** Claude Code honours every managed capability (ADR-0031) except `denyRead`: its reads are
+ * denied by Full auto's sandbox (`fullAuto.denyRead`), not for every agent. */
+export const CLAUDE_CODE_CAPABILITIES: ManagedCapabilities = Object.freeze({
+  skills: true,
+  profileTools: true,
+  fullAuto: true,
+  denyRead: false,
+  leadTools: true,
+  followUp: true,
+});
+
 export function createManagedClaudeCode(
   options: ManagedClaudeCodeOptions = {},
 ): ManagedExecutionAdapter {
@@ -253,6 +265,7 @@ export function createManagedClaudeCode(
   const env = options.env;
   return {
     provider: 'claude-code',
+    capabilities: CLAUDE_CODE_CAPABILITIES,
     start(spec, callbacks) {
       return startAgent(run, spec, callbacks, env);
     },

@@ -45,11 +45,19 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
   'no-checks-selected',
   'merge-skips-required',
   'no-checks',
+  'model-provider-mismatch',
+  'codex-skills-ignored',
 ];
+/**
+ * CX-4: errors about a block's provider and its mode or agent file, not the graph's shape;
+ * generated graphs run on Claude. Covered in managed-provider-contracts.test.ts.
+ */
+const PROVIDER_CODES: readonly GraphIssueCode[] = ['codex-agent-tools'];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
 const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};
 const STRUCTURAL_CODES = GraphIssueCodeSchema.options.filter(
-  (c) => !WARNING_CODES.includes(c) && EXCLUDED_CODES[c] === undefined,
+  (c) =>
+    !WARNING_CODES.includes(c) && !PROVIDER_CODES.includes(c) && EXCLUDED_CODES[c] === undefined,
 );
 const EDGE_CODES: readonly GraphIssueCode[] = [
   'edge-unknown-node',

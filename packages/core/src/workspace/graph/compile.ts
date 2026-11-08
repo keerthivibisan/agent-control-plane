@@ -49,7 +49,8 @@ function must<T>(value: T | undefined, what: string): T {
   return value;
 }
 
-function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
+function agentNode(node: AgentWorkflowNode, ctx: CompileContext): ProgramAgentNode {
+  const provider = node.provider ?? ctx.projectProvider;
   return {
     id: node.id,
     type: node.type,
@@ -60,6 +61,8 @@ function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
     agent: node.agent,
     // ADR-0028 §1: copied only when set, so a block without one compiles as before.
     ...(node.effort !== undefined ? { effort: node.effort } : {}),
+    // ADR-0031: likewise, so a graph and project without a provider compile as before.
+    ...(provider !== undefined ? { provider } : {}),
   };
 }
 
@@ -88,7 +91,8 @@ function agentNode(node: AgentWorkflowNode): ProgramAgentNode {
  *   otherwise); `ctx.maxReworkRounds` is the review's setting and does not replace it.
  *   An old graph compiles to `{ merge: { required, lead }, branch: null, change: {} }`; a graph
  *   without a block before the merge (ADR-0028 §2) has `merge: null`.
- * - Agent nodes carry their `effort` only when it is set (ADR-0028 §1).
+ * - Agent nodes carry their `effort` only when it is set (ADR-0028 §1), and their `provider`
+ *   (the node's, else `ctx.projectProvider`) only when one is set (ADR-0031).
  */
 export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): WorkflowProgram {
   const errors = validateWorkflowGraph(graph, {
@@ -139,7 +143,7 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   for (const node of graph.nodes) {
     if (node.type !== 'helper') continue;
     helpers.push({
-      ...agentNode(node),
+      ...agentNode(node, ctx),
       type: 'helper',
       description: node.description,
       maxInstances: node.maxInstances,
@@ -151,7 +155,7 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   const pool = nodeOf('helper-pool');
   if (pool !== undefined) {
     helpers.push({
-      ...agentNode(pool),
+      ...agentNode(pool, ctx),
       type: 'helper-pool',
       description: '',
       maxInstances: ctx.maxConcurrentHelpers,
@@ -178,13 +182,13 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
       branchBlock = { ...programBlock(node), place: 'branch', afterStages: finalStages.length };
     } else if (node.type === 'tester') {
       finalStages.push({
-        ...agentNode(node),
+        ...agentNode(node, ctx),
         type: 'tester',
         mode: modeOf(node),
         review: routeOf(node.id),
       });
     } else if (node.type === 'reviewer') {
-      finalStages.push({ ...agentNode(node), type: 'reviewer' });
+      finalStages.push({ ...agentNode(node, ctx), type: 'reviewer' });
     }
     step = flowNext(node.id);
   }
@@ -194,7 +198,7 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   const changeReviewers = graph.nodes
     .filter((n): n is WorkflowNodeOf<'reviewer'> => isChangeReviewer(n) && n.type === 'reviewer')
     .filter((n) => usedReviewers.has(n.id))
-    .map(agentNode);
+    .map((n) => agentNode(n, ctx));
 
   // ADR-0028 §2: optional; the validator allows at most one.
   const mergeNode = graph.nodes.find((n): n is WorkflowNodeOf<'checks'> =>
@@ -227,8 +231,8 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   const planner = nodeOf('planner');
   const gate = must(nodeOf('plan-approval'), 'the plan gate');
   return {
-    lead: agentNode(lead),
-    planner: planner === undefined ? null : agentNode(planner),
+    lead: agentNode(lead, ctx),
+    planner: planner === undefined ? null : agentNode(planner, ctx),
     planAutoApprove: gate.auto && ctx.approvalCeilings.every((c) => c === 'full-auto'),
     helpers,
     changeReviewers,

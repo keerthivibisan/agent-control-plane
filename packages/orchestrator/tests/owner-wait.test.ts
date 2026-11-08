@@ -130,7 +130,12 @@ describe('a rework turn that could not continue its session (P-D)', () => {
     ]);
     // The session is linked as for any start (the server records a second one as a retry).
     expect(effectsOf(r.effects, 'link-session')).toEqual([
-      { type: 'link-session', agentRunId: A, providerSessionId: 'sess-new' },
+      {
+        type: 'link-session',
+        agentRunId: A,
+        provider: 'claude-code',
+        providerSessionId: 'sess-new',
+      },
     ]);
 
     // Its change comes back; the lead's next rework resumes the new session.

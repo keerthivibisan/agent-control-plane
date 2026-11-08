@@ -11,6 +11,7 @@ import {
   CapabilitiesCard,
   FileProblemsCard,
   HealthVerdict,
+  ManagedProvidersCard,
   ParseErrorsCard,
   ReadingCard,
   SkippedCard,
@@ -142,6 +143,9 @@ export function DataHealthPage({ tabs }: { tabs?: ReactNode } = {}) {
                 <UnknownCard unrecognized={d.unrecognized} />
               </div>
               <ReadingCard d={d} />
+              {d.managedProviders !== undefined ? (
+                <ManagedProvidersCard providers={d.managedProviders} />
+              ) : null}
             </div>
           )}
         </QueryView>

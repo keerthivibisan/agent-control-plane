@@ -16,6 +16,9 @@ import {
   type ManagedAgentSpec,
   type ManagedAgentHandle,
   type ManagedExecutionAdapter,
+  type ManagedFailureCode,
+  type ManagedProviderId,
+  type NormalizedEvent,
   type PermissionDecision,
   type PermissionRequest,
   type CompileContext,
@@ -38,6 +41,7 @@ import {
   type ChatMessageDto,
   type ConflictResolutionDto,
   type ConflictResolutionViewDto,
+  type ManagedProviderAvailabilityDto,
   type ReviewDto,
   type RunDetailDto,
   type RunSummaryDto,
@@ -75,10 +79,8 @@ import {
   followUpChat,
   followUpEvent,
   followUpView,
-  isAgentOverBudget,
   isActiveAgentStatus,
   isApprovalOverdue,
-  isLiveAgentStatus,
   isRunOverdue,
   leadHasEnded,
   leadToolCall,
@@ -98,7 +100,6 @@ import {
   viewChangeReply,
   type AllowlistTarget,
   type AllowlistVerdict,
-  type EngineAgent,
   type EngineContext,
   type EngineEffect,
   type EngineResult,
@@ -127,9 +128,19 @@ import {
   type AgentProfiles,
 } from '../workflow/agent-profile.js';
 import { allowlistVerdict, type AllowlistContext } from './allowlist.js';
+import {
+  DENY_READ_UNAVAILABLE_LINE,
+  MANAGED_PROVIDER_NAMES,
+  capabilityRefusal,
+  dropsSkills,
+  skillsIgnoredLine,
+  type CapabilityRefusal,
+} from './capabilities.js';
+import { SELF_RECORDED_USAGE, managedSessionEvents, managedUsageEvent } from './managed-usage.js';
 import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
 import { createConflictResolution } from './conflict-resolution.js';
+import { createMailbox, deliveryLine, emptyMail, type RunMail } from './mailbox.js';
 import { refusalError, workspaceError } from './errors.js';
 import {
   summaryOf,
@@ -207,6 +218,12 @@ export const DEFAULT_RUN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_SWEEP_INTERVAL_MS = 15_000;
 /** Stop all: abort, then give the processes this long before the run is marked cancelled anyway. */
 const DEFAULT_CANCEL_GRACE_MS = 10_000;
+/** CX-4: a provider found unavailable is asked again at most this often (the injected clock). */
+export const AVAILABILITY_RECHECK_MS = 60_000;
+/** CX-4: the reason given when `checkAvailable` itself failed (it should never throw). */
+export const AVAILABILITY_CHECK_FAILED = 'The provider could not be checked.';
+
+type Availability = { ok: true } | { ok: false; reason: string };
 
 export const LEAD_READ_ONLY_MESSAGE =
   'The lead agent works read-only in the project. Start a worker agent to change files or run commands.';
@@ -316,8 +333,11 @@ export interface TicketRunInput {
 export interface ControlServiceDeps {
   db: AcpDatabase;
   repos: Repositories;
-  /** The managed adapter; undefined when managed execution is off. */
-  adapter: ManagedExecutionAdapter | undefined;
+  /**
+   * The managed adapters by provider (ADR-0031 §2); empty when managed execution is off. An agent
+   * runs only on its own provider's adapter, never on another.
+   */
+  adapters: ReadonlyMap<ManagedProviderId, ManagedExecutionAdapter>;
   workspaces: WorkspaceManager;
   /** Used only to re-derive a stored workspace's repository root after a restart. */
   git: GitRunner;
@@ -330,10 +350,21 @@ export interface ControlServiceDeps {
   runTimeoutMs?: number;
   approvalTimeoutMs?: number;
   cancelGraceMs?: number;
+  /**
+   * ADR-0033 §6: how long a change's merge may wait for its required checks. Default 10 minutes;
+   * tests pass a short one.
+   */
+  mergeTimeoutMs?: number;
   /** Interval of the approval-expiry / run-timeout sweep; null disables the timer (tests). */
   sweepIntervalMs?: number | null;
   /** Ingests what is on disk now; awaited before a worker's worktree is removed. */
   flushIngestion?: () => Promise<void>;
+  /**
+   * ADR-0032 §5: ingests the session and usage events of a managed provider ACP does not observe
+   * from files (Codex) through the ingestion pipeline. Omitted: that usage reaches only the run's
+   * budget, as before CX-4.
+   */
+  ingestManaged?: (events: readonly NormalizedEvent[]) => void;
   newId?: () => string;
   csrfToken?: string;
   /** Phase 4 board wiring; omitted for the Phase 3 control panel alone. */
@@ -353,6 +384,8 @@ export interface ControlServiceDeps {
   homeDir?: string;
   /** Claude Code's config folder, also denied to Full auto's sandboxed commands. */
   claudeDir?: string;
+  /** Codex's home (`CODEX_HOME`, else `~/.codex`), also denied to them (CX-4). */
+  codexHome?: string;
   /** Full auto's per-run temp folders and deny-read list; defaults to `<dataDir>/sandbox-tmp`. */
   fullAutoPaths?: FullAutoPaths;
   /** ADR-0026 §4: the attachments' bytes; defaults to `<dataDir>/attachments`. */
@@ -454,6 +487,8 @@ export interface ControlService {
   /** Tests: resolves when no worker start, send or pump step is in flight. */
   idle(): Promise<void>;
   counters(): ControlCounters;
+  /** ADR-0031 (CX-4): each registered managed provider's last availability check. */
+  providerAvailability(): ManagedProviderAvailabilityDto[];
 }
 
 interface LiveRun {
@@ -461,8 +496,11 @@ interface LiveRun {
   handles: Map<string, ManagedAgentHandle>;
   /** Workers whose worktree is being created. */
   starting: Set<string>;
-  /** Messages for workers that are still starting. */
-  pendingSends: Map<string, string[]>;
+  /**
+   * ADR-0033: messages queued for agents that are starting, held for agents that cannot take
+   * input now, and the run's metadata-only outbox. In memory only.
+   */
+  mail: RunMail;
   /** Workspaces created by this process. */
   workspaces: Map<string, Workspace>;
   cancellingSince: number | null;
@@ -485,6 +523,17 @@ interface LiveRun {
 
 /** The most checks an editing agent's brief lists by name and command (ADR-0027 §4). */
 const BRIEF_MAX_CHECKS = 10;
+
+/**
+ * ADR-0033 §2: messages held for the ended lead, put before the owner's message of its next
+ * follow-up turn. Sent, never stored.
+ */
+function heldBlock(texts: readonly string[]): string {
+  return [
+    'Messages that arrived for you after your own work ended, oldest first (for your information; this chat has no control tools):',
+    ...texts.map((t, i) => `${i + 1}. ${t}`),
+  ].join('\n\n');
+}
 
 /** One argument list as the agent would type it (arguments with spaces or quotes are quoted). */
 function commandLine(argv: readonly string[]): string {
@@ -551,6 +600,14 @@ interface LaunchInput {
   protection?: AgentProtection | undefined;
 }
 
+/** What a pump needs to record a self-recorded provider's usage (`usageRecorder`). */
+interface UsageSource {
+  provider: ManagedProviderId;
+  cwd: string;
+  /** The model the server asked for; the `started` event's reported model replaces it. */
+  model: string | null;
+}
+
 /** How a helper or tester is protected at launch (`ManagedAgentSpec.fullAuto` or `.sandbox`). */
 interface AgentProtection {
   autoMode: boolean;
@@ -584,6 +641,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       homeDir: deps.homeDir ?? homedir(),
       dataDir: deps.dataDir,
       ...(deps.claudeDir !== undefined && { claudeDir: deps.claudeDir }),
+      ...(deps.codexHome !== undefined && { codexHome: deps.codexHome }),
     });
   /** Reviewer checkouts in use, for the observation pipeline's roots (by agent run id). */
   const activeCheckouts = new Map<string, { projectId: string; checkout: ReviewCheckout }>();
@@ -605,6 +663,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   const counters: ControlCounters = { diagnostics: {}, leadToolUsesDenied: 0, costWarnings: 0 };
   let closed = false;
   let sweepTimer: ReturnType<typeof setInterval> | undefined;
+  /** CX-4: each provider's last `checkAvailable` result, kept for the server's lifetime. */
+  const availability = new Map<ManagedProviderId, { result: Availability; checkedAt: Date }>();
+  /** CX-4: the check under way per provider, so concurrent starts share one. */
+  const availabilityChecks = new Map<ManagedProviderId, Promise<Availability>>();
 
   /** Agent folders under the data dir: helpers' worktrees and reviewers' checkouts. */
   const worktreesDirs = (() => {
@@ -624,6 +686,19 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
   const ctx = (): EngineContext => ({ now: deps.now(), newId });
 
+  /** ADR-0033: lead/agent message delivery, held messages and the metadata-only outbox. */
+  const mailbox = createMailbox({
+    now: () => deps.now(),
+    newId,
+    logger,
+    countDiagnostic: (code) => countDiagnostic(code),
+    track: (promise) => track(promise),
+    followUpOpen: (live) => {
+      const view = followUpView(live.state, followUpFacts(live as LiveRun));
+      return view !== undefined && view.state !== 'unavailable';
+    },
+  });
+
   /** ADR-0021: the review loop's git effects and the owner's loop actions. */
   const loop = createReviewLoop({
     store,
@@ -640,6 +715,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     track,
     countDiagnostic: (code) => countDiagnostic(code),
     tipGate: (runId, tip) => resolution.tipGateOverride(runId, tip),
+    ...(deps.mergeTimeoutMs !== undefined && { mergeTimeoutMs: deps.mergeTimeoutMs }),
   });
 
   /** ADR-0030: "Update target / Resolve conflicts" operations (server-owned git, policy gate). */
@@ -798,7 +874,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       state,
       handles: new Map(),
       starting: new Set(),
-      pendingSends: new Map(),
+      mail: emptyMail(),
       workspaces: new Map(),
       cancellingSince: state.run.status === 'CANCELLING' ? deps.now().getTime() : null,
       reviewCheckouts: new Map(),
@@ -933,7 +1009,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           startAgent(live, effect);
           break;
         case 'send-to-agent':
-          sendTo(live, effect.agentRunId, effect.text);
+          mailbox.send(live, effect.agentRunId, effect.text, effect.message);
           break;
         case 'interrupt-agent': {
           const handle = live.handles.get(effect.agentRunId);
@@ -942,7 +1018,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           break;
         }
         case 'abort-agent': {
-          live.pendingSends.delete(effect.agentRunId);
+          mailbox.discardQueued(live, effect.agentRunId);
           live.handles.get(effect.agentRunId)?.abort();
           break;
         }
@@ -1082,58 +1158,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // reaches review). The handover's own comes from its effect.
     const ended = endTrigger(prev, live.state);
     if (ended !== null) summaries.schedule(live, ended);
-    const before = new Map(prev.agents.map((a) => [a.id, a]));
-    for (const agent of live.state.agents) {
-      const was = before.get(agent.id);
-      // ADR-0021: a helper whose turn ended (AWAITING_REVIEW) has stopped working too.
-      if (
-        was === undefined ||
-        !isActiveAgentStatus(was.status) ||
-        isActiveAgentStatus(agent.status)
-      ) {
-        continue;
-      }
-      const parent = live.state.agents.find((a) => a.id === agent.parentAgentRunId);
-      if (parent?.kind === 'worker') notifyParent(live, parent, agent);
-    }
+    // ADR-0033 §2: messages held for an agent go to it once it can take input again (the engine
+    // sends each finish notice itself, ADR-0033 §4).
+    mailbox.flush(live);
   }
 
   function countDiagnostic(code: string): void {
     counters.diagnostics[code] = (counters.diagnostics[code] ?? 0) + 1;
-  }
-
-  /**
-   * Depth 2: tells a parent helper that one of its helpers ended. Server text (role and status
-   * only), sent to the agent and never stored. A parent whose own query already ended (held as
-   * `awaitingHelpers`) has no input left to receive it; that is counted, not hidden.
-   */
-  function notifyParent(live: LiveRun, parent: EngineAgent, child: EngineAgent): void {
-    const runId = live.state.run.id;
-    const reachable =
-      isLiveAgentStatus(parent.status) &&
-      parent.awaitingHelpers !== true &&
-      !isAgentOverBudget(parent) &&
-      (live.handles.has(parent.id) || live.starting.has(parent.id));
-    if (!reachable) {
-      countDiagnostic('parent-not-notified');
-      logger.log('info', 'parent helper not notified', {
-        runId,
-        agentRunId: parent.id,
-        childAgentRunId: child.id,
-      });
-      return;
-    }
-    const outcome =
-      child.status === 'SUCCEEDED' || child.status === 'AWAITING_REVIEW'
-        ? 'finished'
-        : child.status === 'CANCELLED'
-          ? 'was stopped'
-          : 'ended without finishing';
-    sendTo(
-      live,
-      parent.id,
-      `Your helper "${child.role}" (${child.id}) ${outcome}. Use agent_status to see where it stands.`,
-    );
   }
 
   function maybeCompleteCancellation(live: LiveRun): void {
@@ -1154,11 +1185,12 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
   }
 
-  function endWithError(live: LiveRun, agentRunId: string): void {
+  function endWithError(live: LiveRun, agentRunId: string, failure?: ManagedFailureCode): void {
     const finished: ManagedAgentEvent = {
       type: 'finished',
       outcome: 'error',
       reportedCostUsd: null,
+      ...(failure !== undefined && { failure }),
     };
     defer(() => {
       apply(live, (s, c) => agentEvent(s, agentRunId, finished, c));
@@ -1174,7 +1206,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   function stillStarting(live: LiveRun, agentRunId: string): boolean {
     const agent = live.state.agents.find((a) => a.id === agentRunId);
     if (!closed && agent?.status === 'STARTING') return true;
-    live.pendingSends.delete(agentRunId);
+    mailbox.discardQueued(live, agentRunId);
     defer(() => maybeCompleteCancellation(live));
     return false;
   }
@@ -1188,9 +1220,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     const runId = live.state.run.id;
     const agentRunId = effect.agentRunId;
     const project = deps.repos.projects.getById(live.state.run.projectId);
-    if (project === undefined || deps.adapter === undefined) {
+    if (project === undefined) {
       logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'unavailable' });
       endWithError(live, agentRunId);
+      return;
+    }
+    // ADR-0031 §2: before any folder is made, an agent whose provider has no adapter ends.
+    if (adapterOf(live, agentRunId) === undefined) {
+      refuseNoAdapter(live, agentRunId);
       return;
     }
     const kind = effect.kind;
@@ -1249,7 +1286,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           const checkout = await (live.reviewCheckouts.get(agentRunId) ?? Promise.resolve(null));
           if (checkout === null) {
             live.starting.delete(agentRunId);
-            live.pendingSends.delete(agentRunId);
+            mailbox.discardQueued(live, agentRunId);
             logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-checkout' });
             endWithError(live, agentRunId);
             return;
@@ -1317,7 +1354,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           ws = await deps.workspaces.create(project.rootPath, runId, agentRunId, options);
         } catch (error) {
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           logger.log('warn', 'agent start failed', {
             runId,
             agentRunId,
@@ -1344,7 +1381,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           });
           await deps.workspaces.discard(ws).catch(() => undefined);
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1370,7 +1407,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             });
           if (!prepared.ok) {
             live.starting.delete(agentRunId);
-            live.pendingSends.delete(agentRunId);
+            mailbox.discardQueued(live, agentRunId);
             const role = live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'A helper';
             logger.log('info', 'agent not started: setup did not pass', { runId, agentRunId });
             defer(() => {
@@ -1400,7 +1437,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // Stopped while its worktree was being made: the worktree stays for review or discard.
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1537,7 +1574,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         if (ws === undefined) {
           live.starting.delete(agentRunId);
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           logger.log('warn', 'agent start failed', { runId, agentRunId, code: 'no-worktree' });
           endWithError(live, agentRunId);
           return;
@@ -1557,7 +1594,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         live.starting.delete(agentRunId);
         if (!stillStarting(live, agentRunId)) return;
         if (protection === null) {
-          live.pendingSends.delete(agentRunId);
+          mailbox.discardQueued(live, agentRunId);
           endWithError(live, agentRunId);
           return;
         }
@@ -1679,9 +1716,11 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         ? undefined
         : store.repos.agentRunSessions
             .listForAgentRun(lead.id)
-            .find((l) => l.provider === 'claude-code' && l.relation === 'primary');
+            // ADR-0031 §7: only a session of the lead's own provider can be resumed.
+            .find((l) => l.provider === lead.provider && l.relation === 'primary');
     return {
-      managed: deps.enabled && deps.adapter !== undefined,
+      // ADR-0031 §7: a follow-up runs only on the lead's own provider.
+      managed: deps.enabled && lead !== undefined && deps.adapters.has(lead.provider),
       leadSessionId: link?.providerSessionId ?? null,
       leadProcessActive:
         lead !== undefined && (live.handles.has(lead.id) || live.starting.has(lead.id)),
@@ -1716,31 +1755,51 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   ): void {
     const runId = live.state.run.id;
     const project = deps.repos.projects.getById(live.state.run.projectId);
-    const adapter = deps.adapter;
+    // ADR-0031 §7: the lead's own provider resumes its session; never another one.
+    const adapter = deps.adapters.get(effect.provider);
     if (project === undefined || adapter === undefined) {
-      logger.log('warn', 'follow-up start failed', { runId, code: 'unavailable' });
+      logger.log('warn', 'follow-up start failed', {
+        runId,
+        code: adapter === undefined ? 'provider-unavailable' : 'unavailable',
+        provider: effect.provider,
+      });
       endFollowUp(live);
       return;
     }
     track(
       (async () => {
+        const available = await checkAvailability(adapter);
+        if (!available.ok) {
+          logger.log('warn', 'follow-up start failed', {
+            runId,
+            code: 'provider-unavailable',
+            provider: effect.provider,
+          });
+          endFollowUp(live);
+          return;
+        }
         const setup = await setupFor(live);
         const agentFile = await agentFileFor(live, project.rootPath, effect);
+        // CX-3b: the follow-up turn is denied the same reads as the lead's own turns.
+        const denied = adapter.capabilities.denyRead ? await loadDenyReadList() : null;
         const turn = live.state.followUp?.turn ?? null;
         if (closed || turn === null) return;
         if (turn.aborting) {
           endFollowUp(live);
           return;
         }
+        // ADR-0033 §2: what was held for the ended lead comes with this turn, oldest first.
+        const held = mailbox.takeHeld(live, effect.agentRunId);
         const spec: ManagedAgentSpec = {
           agentRunId: effect.agentRunId,
           kind: 'lead',
           cwd: project.rootPath,
-          prompt: effect.prompt,
+          prompt: held.length === 0 ? effect.prompt : `${heldBlock(held)}\n\n${effect.prompt}`,
           model: resolveAgentModel({
             stage: effect.model,
             agentFile: agentFile?.model,
             project: setup.model,
+            provider: effect.provider,
           }),
           followUp: { resumeSessionId: effect.resumeSessionId },
         };
@@ -1748,6 +1807,19 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         // ADR-0028 §1: the lead node's effort, as for its own turns.
         if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
+        if (denied === undefined) {
+          logger.log('warn', 'follow-up start failed', { runId, code: 'deny-read' });
+          endFollowUp(live);
+          return;
+        }
+        if (denied !== null) spec.denyRead = [...denied];
+        const refusal = capabilityRefusal(spec, adapter.capabilities, effect.provider);
+        if (refusal !== null) {
+          countDiagnostic(`capability-refused-${refusal.code}`);
+          logger.log('warn', 'follow-up start failed', { runId, code: refusal.code });
+          endFollowUp(live);
+          return;
+        }
         let handle: ManagedAgentHandle;
         try {
           handle = adapter.start(spec, {
@@ -1764,7 +1836,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         }
         live.followUp = handle;
         logger.log('info', 'follow-up turn started', { runId, agentRunId: effect.agentRunId });
-        const pumping = pumpFollowUp(live, handle).catch((error: unknown) => {
+        const usage = { provider: effect.provider, cwd: spec.cwd, model: spec.model };
+        const pumping = pumpFollowUp(live, handle, usage).catch((error: unknown) => {
           logger.log('error', 'follow-up pump failed', errorFields(error));
         });
         pumps.add(pumping);
@@ -1778,11 +1851,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
    * lead's agent record stays as it ended. A stream that ends without `finished` (or throws) ended
    * in an error, which before any answer means the resume failed (the session is gone).
    */
-  async function pumpFollowUp(live: LiveRun, handle: ManagedAgentHandle): Promise<void> {
+  async function pumpFollowUp(
+    live: LiveRun,
+    handle: ManagedAgentHandle,
+    usage: UsageSource,
+  ): Promise<void> {
     const runId = live.state.run.id;
+    const record = usageRecorder(runId, usage);
     try {
       for await (const event of handle.events) {
         if (closed) break;
+        record(event);
         const result = apply(live, (s, c) => followUpEvent(s, event, c));
         if (!result.ok) {
           logger.log('warn', 'follow-up event refused', { runId, code: result.refusal.code });
@@ -1964,25 +2043,168 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
   }
 
+  /** The agent's provider (`EngineAgent.provider`, fixed when it was created). */
+  function providerOf(live: LiveRun, agentRunId: string): ManagedProviderId {
+    return live.state.agents.find((a) => a.id === agentRunId)?.provider ?? 'claude-code';
+  }
+
+  /**
+   * ADR-0031 §2: the adapter of the agent's own provider, or undefined when the server has none.
+   * Never another provider's: the run would record one provider while a different one did the work.
+   */
+  function adapterOf(live: LiveRun, agentRunId: string): ManagedExecutionAdapter | undefined {
+    return deps.adapters.get(providerOf(live, agentRunId));
+  }
+
+  function roleOf(live: LiveRun, agentRunId: string): string {
+    return live.state.agents.find((a) => a.id === agentRunId)?.role ?? 'An agent';
+  }
+
+  /** An agent whose provider has no adapter in this server ends with `provider-unavailable`. */
+  function refuseNoAdapter(live: LiveRun, agentRunId: string): void {
+    const provider = providerOf(live, agentRunId);
+    mailbox.discardQueued(live, agentRunId);
+    countDiagnostic('provider-unavailable');
+    logger.log('warn', 'agent provider has no adapter', {
+      runId: live.state.run.id,
+      agentRunId,
+      provider,
+    });
+    endWithError(live, agentRunId, 'provider-unavailable');
+    appComment(
+      live,
+      `${roleOf(live, agentRunId)} did not start: ${MANAGED_PROVIDER_NAMES[provider]} is not set up on this server.`,
+    );
+  }
+
+  /**
+   * CX-4: the agent ends without running (`failure`), and the ticket says why in one line of app
+   * copy (the adapter's fixed availability sentence, or a capability refusal's line).
+   */
+  function refuseStart(
+    live: LiveRun,
+    agentRunId: string,
+    failure: ManagedFailureCode,
+    code: string,
+    line: string,
+  ): void {
+    mailbox.discardQueued(live, agentRunId);
+    logger.log('warn', 'agent start failed', { runId: live.state.run.id, agentRunId, code });
+    endWithError(live, agentRunId, failure);
+    appComment(live, `${roleOf(live, agentRunId)} did not start: ${line}`);
+  }
+
+  /**
+   * CX-4: the cached availability of a provider when it may be used without asking the adapter:
+   * always for an adapter without `checkAvailable`; an `ok` for the server's lifetime; a failure
+   * for `AVAILABILITY_RECHECK_MS`. Undefined: ask (`checkAvailability`).
+   */
+  function cachedAvailability(adapter: ManagedExecutionAdapter): Availability | undefined {
+    if (adapter.checkAvailable === undefined) return { ok: true };
+    const cached = availability.get(adapter.provider);
+    if (cached === undefined) return undefined;
+    if (cached.result.ok) return cached.result;
+    const age = deps.now().getTime() - cached.checkedAt.getTime();
+    return age < AVAILABILITY_RECHECK_MS ? cached.result : undefined;
+  }
+
+  /** CX-4: the provider's availability, asking the adapter when the cache cannot answer. */
+  function checkAvailability(adapter: ManagedExecutionAdapter): Promise<Availability> {
+    const cached = cachedAvailability(adapter);
+    if (cached !== undefined) return Promise.resolve(cached);
+    const provider = adapter.provider;
+    const running = availabilityChecks.get(provider);
+    if (running !== undefined) return running;
+    const check = (async (): Promise<Availability> => {
+      let result: Availability;
+      try {
+        result = (await adapter.checkAvailable?.()) ?? { ok: true };
+      } catch (error) {
+        logger.log('warn', 'managed provider check failed', { provider, ...errorFields(error) });
+        result = { ok: false, reason: AVAILABILITY_CHECK_FAILED };
+      }
+      availability.set(provider, { result, checkedAt: deps.now() });
+      // The provider id only: never the reason's text or anything about the account.
+      if (result.ok) logger.log('info', 'managed provider available', { provider });
+      else {
+        countDiagnostic('provider-unavailable');
+        logger.log('warn', 'managed provider unavailable', { provider });
+      }
+      return result;
+    })().finally(() => availabilityChecks.delete(provider));
+    availabilityChecks.set(provider, check);
+    return check;
+  }
+
+  /**
+   * Starts the agent once its provider is known to be available (CX-4): at once when the cache
+   * says so, else after the check, holding its messages meanwhile (`starting`). An unavailable
+   * provider ends the agent with `provider-unavailable` and the adapter's reason on the ticket.
+   */
   function launch(live: LiveRun, input: LaunchInput): void {
+    const { agentRunId } = input;
+    const adapter = adapterOf(live, agentRunId);
+    if (adapter === undefined) {
+      refuseNoAdapter(live, agentRunId);
+      return;
+    }
+    const refuse = (reason: string) =>
+      refuseStart(live, agentRunId, 'provider-unavailable', 'provider-unavailable', reason);
+    const cached = cachedAvailability(adapter);
+    // CX-3b: an adapter that denies reads for every agent waits for the deny list once.
+    const waitsForDenyList = adapter.capabilities.denyRead && denyReadList === undefined;
+    if (cached !== undefined && (!cached.ok || !waitsForDenyList)) {
+      if (cached.ok) launchOn(live, input, adapter);
+      else refuse(cached.reason);
+      return;
+    }
+    live.starting.add(agentRunId);
+    track(
+      (async () => {
+        const result = cached ?? (await checkAvailability(adapter));
+        if (result.ok && adapter.capabilities.denyRead) await loadDenyReadList();
+        live.starting.delete(agentRunId);
+        if (!stillStarting(live, agentRunId)) return;
+        if (result.ok) launchOn(live, input, adapter);
+        else refuse(result.reason);
+      })(),
+    );
+  }
+
+  /**
+   * CX-3b: the deny-read list every agent of a `denyRead` adapter gets (`spec.denyRead`), the same
+   * list Full auto uses (`fullAutoDenyRead`). Loaded once; a failure leaves it unset, so the agent
+   * is refused (`launchOn`) and the next start tries again.
+   */
+  let denyReadList: readonly string[] | undefined;
+  async function loadDenyReadList(): Promise<readonly string[] | undefined> {
+    if (denyReadList !== undefined) return denyReadList;
+    try {
+      denyReadList = await fullAutoPaths.denyRead();
+    } catch (error) {
+      countDiagnostic('deny-read-unavailable');
+      logger.log('warn', 'deny-read list failed', errorFields(error));
+    }
+    return denyReadList;
+  }
+
+  function launchOn(live: LiveRun, input: LaunchInput, adapter: ManagedExecutionAdapter): void {
     const runId = live.state.run.id;
     const { agentRunId, kind, setup } = input;
     const canStartHelpers = input.canStartHelpers === true;
-    const adapter = deps.adapter;
-    if (adapter === undefined) {
-      endWithError(live, agentRunId);
-      return;
-    }
+    const provider = adapter.provider;
     const spec: ManagedAgentSpec = {
       agentRunId,
       kind,
       cwd: input.cwd,
       prompt: input.prompt,
-      // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4).
+      // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4); an
+      // inherited model of another provider is skipped (ADR-0031).
       model: resolveAgentModel({
         stage: input.model,
         agentFile: input.agentFile?.model,
         project: setup.model,
+        provider,
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
@@ -1991,15 +2213,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
     const title = sessionTitle(live, agentRunId);
     if (title !== undefined) spec.title = title;
-    // ADR-0026 §3: a ticket run's helpers and tester report their work (`report_work`).
-    const notes = (kind === 'worker' || kind === 'tester') && live.state.run.ticketId !== null;
-    if (kind === 'lead' || kind === 'planner' || kind === 'reviewer' || canStartHelpers || notes) {
-      // A refusal rejects the promise; the adapter returns it to the model as a tool error. The
-      // engine scopes each caller's calls (`leadToolCall`, `controlToolsFor`): a parent helper's
-      // to its own children, the planner's to submit_plan, the reviewer's to post_review, a
-      // helper's or tester's to report_work.
-      spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
-    }
+    // Every role has control tools: since ADR-0033 §3 every helper, the tester and every reviewer
+    // can `ask_lead`, besides a ticket run's `report_work` (ADR-0026 §3). A refusal rejects the
+    // promise; the adapter returns it to the model as a tool error. The engine scopes each caller's
+    // calls (`leadToolCall`, `controlToolsFor`): a parent helper's to its own children, the
+    // planner's to submit_plan, the reviewer's to post_review (and ask_lead), a helper's or
+    // tester's to report_work and ask_lead (report_work only in a ticket run).
+    spec.leadTools = (name, input) => leadTool(live, agentRunId, name, input);
     // A rework turn never starts helpers (ADR-0021 §3).
     if (kind === 'worker' && canStartHelpers && input.rework === undefined) {
       spec.canStartHelpers = true;
@@ -2024,6 +2244,47 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (protection.autoMode) spec.fullAuto = paths;
       else spec.sandbox = paths;
     }
+    // CX-3: the approval mode the gate decides by (`agentModeOf`, already tightened), for an
+    // adapter whose provider enforces it itself (Codex).
+    if (hasReviewableChange(kind)) {
+      const mode = agentModeOf(live, agentRunId);
+      if (mode !== undefined) spec.approvalMode = mode;
+    }
+    // CX-3b: a provider that can deny reads denies the Full auto list to every agent, whatever
+    // its role or mode. Without the list the agent does not start (ADR-0022 fail closed).
+    if (adapter.capabilities.denyRead) {
+      if (denyReadList === undefined) {
+        countDiagnostic('capability-refused-deny-read');
+        refuseStart(
+          live,
+          agentRunId,
+          'sandbox-unavailable',
+          'deny-read',
+          DENY_READ_UNAVAILABLE_LINE,
+        );
+        return;
+      }
+      spec.denyRead = [...denyReadList];
+    }
+    // ADR-0031 §5: refuse what the provider cannot hold; strip only what merely helps.
+    const refusal: CapabilityRefusal | null = capabilityRefusal(
+      spec,
+      adapter.capabilities,
+      provider,
+    );
+    if (refusal !== null) {
+      countDiagnostic(`capability-refused-${refusal.code}`);
+      refuseStart(live, agentRunId, refusal.failure, refusal.code, refusal.line);
+      return;
+    }
+    if (dropsSkills(spec, adapter.capabilities)) {
+      delete spec.skillPlugin;
+      countDiagnostic('skills-not-loaded');
+      logger.log('info', 'project skills not loaded', { runId, agentRunId, provider });
+      // Once per agent run: a rework turn of the same helper says nothing new.
+      if (input.rework === undefined)
+        appComment(live, skillsIgnoredLine(roleOf(live, agentRunId), provider));
+    }
     let handle: ManagedAgentHandle;
     try {
       handle = adapter.start(spec, {
@@ -2036,21 +2297,77 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     }
     live.handles.set(agentRunId, handle);
     logger.log('info', 'agent started', { runId, agentRunId, kind });
-    const queued = live.pendingSends.get(agentRunId);
-    live.pendingSends.delete(agentRunId);
-    for (const text of queued ?? []) sendTo(live, agentRunId, text);
-    const pumping = pump(live, agentRunId, handle).catch((error: unknown) => {
+    mailbox.started(live, agentRunId);
+    const usage = { provider, cwd: spec.cwd, model: spec.model };
+    const pumping = pump(live, agentRunId, handle, usage).catch((error: unknown) => {
       logger.log('error', 'agent pump failed', errorFields(error));
     });
     pumps.add(pumping);
     void pumping.finally(() => pumps.delete(pumping));
   }
 
-  async function pump(live: LiveRun, agentRunId: string, handle: ManagedAgentHandle) {
+  /**
+   * ADR-0032 §5: for a provider whose usage ACP does not read from files (Codex), records the
+   * agent's session (on `started`) and each `usage` event through the ingestion pipeline. Never
+   * throws: a failed write is counted and logged, and the run goes on (its budget still counts
+   * the usage).
+   */
+  function usageRecorder(runId: string, source: UsageSource): (event: ManagedAgentEvent) => void {
+    const ingest = deps.ingestManaged;
+    if (ingest === undefined || !SELF_RECORDED_USAGE.has(source.provider)) return () => undefined;
+    let sessionId: string | null = null;
+    let model = source.model;
+    return (event) => {
+      if (event.type !== 'started' && event.type !== 'usage') return;
+      const observedAt = deps.now().toISOString();
+      let events: NormalizedEvent[];
+      if (event.type === 'started') {
+        sessionId = event.providerSessionId;
+        model = event.model ?? model;
+        events = managedSessionEvents({
+          provider: source.provider,
+          providerSessionId: sessionId,
+          observedAt,
+          cwd: source.cwd,
+          model,
+        });
+      } else {
+        if (sessionId === null) {
+          countDiagnostic('managed-usage-without-session');
+          return;
+        }
+        events = [
+          managedUsageEvent({
+            provider: source.provider,
+            providerSessionId: sessionId,
+            observedAt,
+            messageId: event.messageId,
+            model,
+            tokens: event.tokens,
+          }),
+        ];
+      }
+      try {
+        ingest(events);
+      } catch (error) {
+        countDiagnostic('managed-usage-not-recorded');
+        logger.log('error', 'managed usage not recorded', { runId, ...errorFields(error) });
+      }
+    };
+  }
+
+  async function pump(
+    live: LiveRun,
+    agentRunId: string,
+    handle: ManagedAgentHandle,
+    usage: UsageSource,
+  ) {
     const runId = live.state.run.id;
+    const record = usageRecorder(runId, usage);
     try {
       for await (const event of handle.events) {
         if (closed) break;
+        record(event);
         const result = apply(live, (s, c) => agentEvent(s, agentRunId, event, c));
         if (!result.ok) {
           logger.log('warn', 'agent event refused', {
@@ -2091,30 +2408,6 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       estimatedCostUsd: cost,
       warnAtUsd: limit,
     });
-  }
-
-  function sendTo(live: LiveRun, agentRunId: string, text: string): void {
-    if (live.starting.has(agentRunId)) {
-      const queue = live.pendingSends.get(agentRunId) ?? [];
-      queue.push(text);
-      live.pendingSends.set(agentRunId, queue);
-      return;
-    }
-    const handle = live.handles.get(agentRunId);
-    const runId = live.state.run.id;
-    if (handle === undefined) {
-      logger.log('warn', 'agent message not delivered', { runId, agentRunId, code: 'no-process' });
-      return;
-    }
-    track(
-      handle.send(text).catch((error: unknown) => {
-        logger.log('warn', 'agent message not delivered', {
-          runId,
-          agentRunId,
-          ...errorFields(error),
-        });
-      }),
-    );
   }
 
   /** The approval bridge (ADR-0013 §4): engine → approval row → SSE → owner decision → resolve. */
@@ -2273,6 +2566,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
    * Lead tool calls: the engine validates (ADR-0013); a refusal is returned to the model as an
    * error. ADR-0021: `view_change` gets the change's diff appended (at most 32 KiB in all, sent
    * and never stored); `merge_change` answers once the server's merge is done or blocked.
+   * ADR-0033: `message_agent` and `ask_lead` answer with the message's delivery state;
+   * `get_review_findings` gets the change's stored findings appended (refused when none are).
    */
   async function leadTool(
     live: LiveRun,
@@ -2281,11 +2576,13 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     input: unknown,
   ): Promise<string> {
     const runId = live.state.run.id;
-    const result = apply(live, (s, c) =>
-      leadToolCall(
-        s,
-        { callerAgentRunId: agentRunId, name, input, registeredProjectIds: projectIds() },
-        c,
+    const [result, sends] = mailbox.capture(() =>
+      apply(live, (s, c) =>
+        leadToolCall(
+          s,
+          { callerAgentRunId: agentRunId, name, input, registeredProjectIds: projectIds() },
+          c,
+        ),
       ),
     );
     if (!result.ok) {
@@ -2305,7 +2602,50 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       if (merging === undefined) return result.value;
       return (await merging).reply;
     }
+    if (name === 'message_agent' || name === 'ask_lead') {
+      const sent = sends.find((r) => r.entry?.from === agentRunId);
+      if (sent === undefined) return result.value;
+      return `${result.value.replace(/\.$/, '')}: ${deliveryLine(sent)}`;
+    }
+    if (name === 'get_review_findings') {
+      const target = LeadToolInputs.get_review_findings.safeParse(input);
+      const findings = target.success ? storedFindings(live, target.data.agentId) : null;
+      if (findings === null) {
+        logger.log('info', 'lead tool refused', { runId, tool: name, code: 'no-findings' });
+        throw new Error(
+          'No review findings are stored for that change yet (no review agent has reviewed it). Use view_change to see the change.',
+        );
+      }
+      return `${result.value}\n${findings}`;
+    }
     return result.value;
+  }
+
+  /**
+   * ADR-0033 §5: the latest review agent findings stored for a change (its round's row and the
+   * findings comment, ADR-0021 §6), for the lead; null when none are stored. Sent, never logged.
+   */
+  function storedFindings(live: LiveRun, agentRunId: string): string | null {
+    const rows = store.loopRepos.changeReviews
+      .listForAgentRun(agentRunId)
+      .filter(
+        (r) => r.runId === live.state.run.id && r.reviewer === 'agent' && r.commentId !== null,
+      );
+    const latest = rows
+      .map((r, i) => ({ r, i }))
+      .sort((x, y) => x.r.round - y.r.round || x.i - y.i)
+      .at(-1)?.r;
+    if (latest === undefined || latest.commentId === null) return null;
+    const comment = store.workspaceRepos.comments.getById(latest.commentId);
+    if (comment === undefined) return null;
+    const reviewer =
+      latest.reviewerAgentRunId === null
+        ? 'a review agent'
+        : `${roleOf(live, latest.reviewerAgentRunId)} (agentId ${latest.reviewerAgentRunId})`;
+    return [
+      `Review round ${latest.round}, by ${reviewer}. Verdict: ${latest.verdict ?? 'none'}.`,
+      `Findings:\n${comment.body}`,
+    ].join('\n');
   }
 
   async function workspaceFor(live: LiveRun, row: WorkspaceRow): Promise<Workspace> {
@@ -2326,6 +2666,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       messages: store.repos.messages.list(runId, { limit: MAX_PAGE_SIZE }),
       ...(followUp !== undefined && { followUp }),
     });
+    // ADR-0033 §7: metadata only, the latest entries; absent while the run has none.
+    if (live.mail.outbox.length > 0) dto.outbox = mailbox.outbox(live);
     // ADR-0021: absent for runs before it, so their detail is unchanged.
     const policy = live.state.approvalPolicy;
     if (policy !== undefined) dto.approvalMode = policy.mode;
@@ -3025,5 +3367,23 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     counters: () => ({ ...counters, diagnostics: { ...counters.diagnostics } }),
+
+    providerAvailability() {
+      return [...deps.adapters.values()].map((adapter) => {
+        if (adapter.checkAvailable === undefined) {
+          return { provider: adapter.provider, available: true, reason: null, checkedAt: null };
+        }
+        const cached = availability.get(adapter.provider);
+        if (cached === undefined) {
+          return { provider: adapter.provider, available: null, reason: null, checkedAt: null };
+        }
+        return {
+          provider: adapter.provider,
+          available: cached.result.ok,
+          reason: cached.result.ok ? null : cached.result.reason.slice(0, 300),
+          checkedAt: cached.checkedAt.toISOString(),
+        };
+      });
+    },
   };
 }

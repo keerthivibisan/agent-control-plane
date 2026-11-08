@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 import { Card } from '../../components/Card';
 import { Details } from '../../components/Details';
 import { AlertIcon, CheckIcon } from '../../components/icons';
+import { Pill } from '../../components/Pill';
 import { InfoTip } from '../../components/InfoTip';
 import { RelativeTime } from '../../components/RelativeTime';
-import { fileIssueText, HEALTH_COPY } from '../../lib/copy';
+import { fileIssueText, HEALTH_COPY, PROVIDER_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import type { HealthSummary } from './health-summary';
 
@@ -318,6 +319,66 @@ export function CapabilitiesCard({ caps }: { caps: CapabilitiesDto }) {
           </div>
         ))}
       </div>
+    </Card>
+  );
+}
+
+/**
+ * ADR-0031: whether each managed provider could start agents when the server last checked. The
+ * reason is the adapter's own fixed sentence (no account details), shown as given; a provider no
+ * agent has needed yet reads "Not checked yet", never available.
+ */
+export function ManagedProvidersCard({
+  providers,
+}: {
+  providers: NonNullable<DiagnosticsDto['managedProviders']>;
+}) {
+  const V = PROVIDER_COPY.health;
+  return (
+    <Card title={V.title} description={V.description} testId="health-providers">
+      {providers.length === 0 ? (
+        <p className="text-dim">{V.none}</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-line">
+          {providers.map((p) => {
+            const state =
+              p.available === null ? 'unchecked' : p.available ? 'available' : 'unavailable';
+            return (
+              <li
+                key={p.provider}
+                className="flex flex-wrap items-start gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0"
+                data-testid={`provider-${p.provider}`}
+                data-state={state}
+              >
+                <span className="min-w-32 font-medium">{PROVIDER_COPY.name[p.provider]}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span>
+                    {state === 'available' ? (
+                      <Pill tone="success">{V.available}</Pill>
+                    ) : state === 'unavailable' ? (
+                      <Pill tone="danger">{V.unavailable}</Pill>
+                    ) : (
+                      <Pill tone="neutral">{V.notChecked}</Pill>
+                    )}
+                  </span>
+                  {state === 'unavailable' && p.reason !== null ? (
+                    <span className="text-dim" data-testid="provider-reason">
+                      {p.reason}
+                    </span>
+                  ) : state === 'unchecked' ? (
+                    <span className="text-dim">{V.notCheckedText}</span>
+                  ) : null}
+                </span>
+                {p.checkedAt !== null ? (
+                  <span className="text-caption text-dim" data-testid="provider-checked">
+                    {V.checked} <RelativeTime iso={p.checkedAt} />
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Card>
   );
 }

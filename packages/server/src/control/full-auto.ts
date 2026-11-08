@@ -20,6 +20,8 @@ export const HOME_SECRET_DIRS: readonly string[] = [
   '.docker',
   '.kube',
   '.claude',
+  // CX-4: Codex's login (ADR-0031 owner decision 4), so a Claude agent can't read it.
+  '.codex',
 ];
 
 /** `<dataDir>/sandbox-tmp/<runId>`: one folder per run, removed when the run ends. */
@@ -30,6 +32,8 @@ export interface FullAutoPathsDeps {
   dataDir: string;
   /** Claude Code's config folder when it is not `~/.claude` (`CLAUDE_CONFIG_DIR`). */
   claudeDir?: string;
+  /** Codex's home when it is not `~/.codex` (`CODEX_HOME`), which holds its login (CX-4). */
+  codexHome?: string;
 }
 
 export interface FullAutoPaths {
@@ -38,6 +42,11 @@ export interface FullAutoPaths {
    * use (mode 0700) and resolved through symlinks, and the deny-read list.
    */
   specFor(runId: string): Promise<FullAutoSpec>;
+  /**
+   * CX-3b: the same deny-read list alone, for every agent of an adapter that enforces it for any
+   * role (`ManagedCapabilities.denyRead`, Codex). Built once and shared with `specFor`.
+   */
+  denyRead(): Promise<readonly string[]>;
   /** Removes the run's temp folder (the run ended). Idempotent. */
   remove(runId: string): Promise<void>;
   /** On start: no agent is live, so every run's temp folder is removed. Returns how many. */
@@ -45,7 +54,8 @@ export interface FullAutoPaths {
 }
 
 /**
- * The deny-read list: the home secret folders, the app's data folder and Claude's config folder,
+ * The deny-read list: the home secret folders, the app's data folder, Claude's config folder and
+ * Codex's home,
  * each as given and, when it exists and differs, as resolved through symlinks (macOS `/var` is
  * `/private/var`), so the sandbox matches either spelling.
  */
@@ -54,6 +64,7 @@ export async function fullAutoDenyRead(deps: FullAutoPathsDeps): Promise<string[
     ...HOME_SECRET_DIRS.map((d) => resolve(deps.homeDir, d)),
     resolve(deps.dataDir),
     ...(deps.claudeDir !== undefined ? [resolve(deps.claudeDir)] : []),
+    ...(deps.codexHome !== undefined ? [resolve(deps.codexHome)] : []),
   ];
   const out: string[] = [];
   for (const path of given) {
@@ -67,6 +78,7 @@ export async function fullAutoDenyRead(deps: FullAutoPathsDeps): Promise<string[
 export function createFullAutoPaths(deps: FullAutoPathsDeps): FullAutoPaths {
   const root = join(resolve(deps.dataDir), SANDBOX_TMP_DIR);
   let denyRead: Promise<string[]> | undefined;
+  const denyList = (): Promise<string[]> => (denyRead ??= fullAutoDenyRead(deps));
 
   function dirOf(runId: string): string {
     if (!isSafeId(runId)) throw new Error('unsafe run id for the sandbox temp folder');
@@ -78,9 +90,10 @@ export function createFullAutoPaths(deps: FullAutoPathsDeps): FullAutoPaths {
       const dir = dirOf(runId);
       await mkdir(dir, { recursive: true, mode: 0o700 });
       const tempDir = await realpath(dir);
-      denyRead ??= fullAutoDenyRead(deps);
-      return { tempDir, denyRead: await denyRead };
+      return { tempDir, denyRead: await denyList() };
     },
+
+    denyRead: denyList,
 
     async remove(runId) {
       await rm(dirOf(runId), { recursive: true, force: true });

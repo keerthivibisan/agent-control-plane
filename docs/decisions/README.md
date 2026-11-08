@@ -36,3 +36,6 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0028](0028-agent-effort-optional-checks-finish-block.md)  | Effort per agent, optional Checks blocks, one Finish block     | accepted |
 | [0029](0029-owner-rework-after-restart.md)                 | The owner may send a change back for rework after a restart    | proposed |
 | [0030](0030-conflict-resolution-and-delegated-delivery.md) | Conflict resolution, adaptive verification, delegated delivery | proposed |
+| [0031](0031-codex-provider.md)                             | Codex as a second provider, chosen per workflow stage          | accepted |
+| [0032](0032-codex-usage-accounting.md)                     | Usage accounting for managed Codex runs                        | accepted |
+| [0033](0033-lead-agent-messaging.md)                       | Lead and agent messaging: delivery state, ask_lead, held msgs  | accepted |

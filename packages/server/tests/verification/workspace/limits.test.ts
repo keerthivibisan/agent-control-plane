@@ -127,7 +127,7 @@ describe('P4-H agent tree limits', () => {
     child.finish('success');
     await waitFor(
       () =>
-        parent.sent.some((m) => m.includes(`Your helper "Child" (${child.id}) finished.`))
+        parent.sent.some((m) => m.startsWith(`Child (agentId ${child.id}) finished:`))
           ? true
           : undefined,
       'the parent to hear that its child finished',

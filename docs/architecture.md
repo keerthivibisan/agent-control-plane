@@ -15,7 +15,7 @@ Agent Control Plane (ACP) does two things on one computer:
 
 1. **Observe** Claude Code sessions: read their transcript files, link sessions to the helpers they
    started, and count tokens (sections 3–7).
-2. **Orchestrate** Claude Code agents: run a ticket through a plan, a lead, helpers, reviews,
+2. **Orchestrate** Claude Code agents (and, on `feat/codex-integration`, Codex agents): run a ticket through a plan, a lead, helpers, reviews,
    checks and one owner merge, following a workflow graph the project draws (sections 8–13).
 
 ## 1. Shape: a modular monolith (ADR-0002) [implemented]
@@ -229,6 +229,18 @@ sequenceDiagram
   says so. The engine keeps the new session id for later reworks and tells the lead, and the
   ticket gets a line for the owner.
 
+- **Two providers** (ADR-0031, CX series) **[implemented on `feat/codex-integration`]**. Each
+  agent block (lead, planner, helper, reviewer, tester) runs on Claude or on Codex: the node's
+  provider, else the project's default, else Claude. The server keeps one managed adapter per
+  provider and starts each agent on its own provider's adapter, never on another. An agent's
+  provider is fixed when it starts, so its follow-up or rework resumes only its own provider's
+  session. A provider with no adapter, or one not available, ends the agent with
+  `provider-unavailable`. `@acp/adapter-codex` drives `codex app-server` over stdio with a
+  per-agent permission profile ([provider-adapters §12](provider-adapters.md)). Codex usage is
+  recorded through the pipeline on the `managed` channel
+  ([usage-accounting §10](usage-accounting.md)). Lead/agent messaging (ADR-0033) is the same for
+  both.
+
 The run and agent state machines are in [orchestration-lifecycle.md](orchestration-lifecycle.md).
 
 ## 9. Workflow graphs (ADR-0023, ADR-0027, ADR-0028) [implemented]
@@ -361,8 +373,10 @@ None of these exist yet; do not build them outside their phase ([roadmap.md](roa
 - **Usage reliability (Phase 2):** a versioned pricing table and cost estimation with provenance,
   optional OpenTelemetry ingestion as a second usage source, retention and purge.
 - **Harness Lab (Phase 5):** repeated baseline vs harness-assisted runs and comparisons.
-- **Codex adapter (Phase 6):** `packages/adapters/codex`, implementing the same core contracts. The
-  `Session` and `AgentRun` split ([domain-model.md](domain-model.md)) keeps that open.
+- **Codex observation (Phase 6):** reading Codex's own session files with an `ObservationAdapter`
+  in `packages/adapters/codex`. The managed Codex adapter is built (section 8); observation stays
+  deferred by owner decision (ADR-0031). The `Session` and `AgentRun` split
+  ([domain-model.md](domain-model.md)) keeps that open.
 - **Recommendations (Phase 7):** research.
 
 ## Where to read next

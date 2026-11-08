@@ -14,6 +14,7 @@ import { nameSession, sessionNameFromTitle } from '../../lib/session-name';
 import { Figure, NEW_WORK_TYPES, Share, TOTAL_TYPES } from './figures';
 import { Segmented } from '../../components/Segmented';
 import { tokensHref, type TokensParams } from './tokens-params';
+import { ProviderSubtotals, TokenProviderChip } from './ProviderSubtotals';
 
 const B = TOKENS_COPY.breakdown;
 
@@ -161,7 +162,11 @@ function sessionRows(data: ProjectTokensDto): Row[] {
                 managed: s.managed,
               }).name}
         </a>
-        <span className="font-mono text-caption text-dim">{shortId(s.sessionId)}</span>
+        <span className="flex items-center gap-1.5">
+          {/* CX-6b: a pre-CX server sends no provider; the chip then reads "Unknown". */}
+          <TokenProviderChip provider={s.provider} />
+          <span className="font-mono text-caption text-dim">{shortId(s.sessionId)}</span>
+        </span>
       </span>
     ),
     usage: s.usage,
@@ -201,14 +206,19 @@ function roleRows(data: ProjectTokensDto): Row[] {
 }
 
 function modelRows(data: ProjectTokensDto): Row[] {
+  // One row per (provider, model) since CX-6b, so the key carries the provider when there is one.
   return data.byModel.map((m) => ({
-    key: m.model,
-    name:
-      m.model === 'unknown' ? (
-        <span className="text-dim">{B.unknownModel}</span>
-      ) : (
-        <span className="font-mono text-caption">{m.model}</span>
-      ),
+    key: m.provider === undefined ? m.model : `${m.provider}/${m.model}`,
+    name: (
+      <span className="inline-flex items-center gap-1.5">
+        {m.model === 'unknown' ? (
+          <span className="text-dim">{B.unknownModel}</span>
+        ) : (
+          <span className="font-mono text-caption">{m.model}</span>
+        )}
+        <TokenProviderChip provider={m.provider} />
+      </span>
+    ),
     usage: m.usage,
     headline: m.headline,
   }));
@@ -259,6 +269,7 @@ export function TokensBreakdown({
           options={WORDS.map((w) => ({ value: w, label: B.words[w] }))}
         />
         {note ? <p className="mt-3 text-caption text-dim">{note}</p> : null}
+        <ProviderSubtotals data={data} />
       </div>
       {/* Seven columns fit at 1440; between 1024 and ~1280 the table scrolls inside the card. */}
       <div className="overflow-x-auto border-t border-line">

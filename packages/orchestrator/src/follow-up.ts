@@ -7,6 +7,7 @@ import {
   EMPTY_LEDGER,
   isOverBudget,
   recordUsage,
+  hasLedgerEntry,
 } from './budget.js';
 import { Draft } from './draft.js';
 import { refusal } from './errors.js';
@@ -172,6 +173,7 @@ export function followUpChat(
     d.effects.push({
       type: 'start-follow-up',
       agentRunId: lead.id,
+      provider: lead.provider,
       resumeSessionId,
       prompt: followUpPrompt(message),
       ...(model !== null ? { model } : {}),
@@ -223,8 +225,14 @@ export function followUpEvent(
         }
         turn.resumed = true;
         // A message the run's own ledger already holds was counted for the lead (a replay).
-        if (Object.hasOwn(d.ledger.entries, event.messageId)) return done;
-        turn.ledger = recordUsage(turn.ledger, lead.id, event.messageId, parsed.data);
+        if (hasLedgerEntry(d.ledger, lead.provider, event.messageId)) return done;
+        turn.ledger = recordUsage(
+          turn.ledger,
+          lead.id,
+          lead.provider,
+          event.messageId,
+          parsed.data,
+        );
         turn.budgetTokensUsed = agentBudgetUsage(turn.ledger, lead.id).used;
         if (!turn.aborting && isOverBudget(turn.budgetTokensUsed, turn.budgetLimit)) {
           turn.aborting = true;

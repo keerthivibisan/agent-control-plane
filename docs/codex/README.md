@@ -1,0 +1,92 @@
+# Codex as a second managed provider (CX series): plan
+
+Coordinator-owned. Status: [STATUS.md](STATUS.md). Decisions:
+[ADR-0031](../decisions/0031-codex-provider.md) (accepted),
+[ADR-0032](../decisions/0032-codex-usage-accounting.md) (accepted, amended after CX-1),
+[ADR-0033](../decisions/0033-lead-agent-messaging.md) (accepted). Branch: `feat/codex-integration`
+from `dev`.
+
+## Goal
+
+Each agent block of a workflow graph (lead, planner, helper, reviewer, tester) can run on Claude or
+on Codex, and one ticket run can mix both (owner, 2026-11-04 and 2026-11-07). Codex is built the
+same way as Claude: a managed adapter behind the provider-neutral `ManagedExecutionAdapter`, with
+the same approval modes, ACP tools, follow-ups, usage and UI. Project skills and agent-file tool
+narrowing have no Codex mapping yet: skills are dropped with a ticket line, and a block whose agent
+file narrows tools is refused (ADR-0031 §5). Codex uses the owner's own
+Codex login (ChatGPT) now; an API-key option comes later. The lead/agent messaging fixes from the
+2026-11-03 review ship in the same series because both providers need them.
+
+## How Codex is driven
+
+The adapter spawns `codex app-server` (stdio JSON-RPC, CLI 0.166.0 at the time of writing; see the
+[research note](../research/codex-app-server-2026-11-07.md)) as an argument array with a filtered
+environment. `thread/start` carries the model, the working directory, the approval policy, the
+permission profile, ACP's instructions and the lead tools (as dynamic tools); `turn/start` and `turn/steer`
+deliver messages; approval requests become ACP permission requests. User-level Codex configuration
+is overridden so a managed run sees only what ACP gives it.
+
+| Agent                                  | Profile extends | Codex approval policy |
+| -------------------------------------- | --------------- | --------------------- |
+| lead, planner, reviewer, any follow-up | `:read-only`    | `never`               |
+| worker or tester, `manual` (or absent) | `:read-only`    | `on-request`          |
+| worker or tester, `auto-edits`         | `:workspace`    | `untrusted`           |
+| worker or tester, `auto`               | `:workspace`    | `on-request`          |
+| worker or tester, `full-auto`          | `:workspace`    | `never`               |
+
+Confirmed by the CX-1 and CX-1b spikes and implemented in CX-3b
+(`packages/adapters/codex/src/modes.ts`). Each agent's app-server is spawned with one Codex
+permission profile (`-c permissions.<id>.extends`, `-c permissions.<id>.filesystem`,
+`-c default_permissions`), and `thread/start` (or `thread/resume`) selects it with `permissions`
+and no legacy `sandbox` field, which would override it. The thread's reported
+`activePermissionProfile` must be that profile, or the agent ends with `sandbox-unavailable` before
+any turn. The filesystem entries:
+
+- `deny`: the server's deny list (`spec.denyRead`, set for every Codex agent: the home secret
+  folders, the app's data folder, `~/.claude`, `~/.codex` and `CODEX_HOME`), plus Full auto's
+  list, and `/tmp` (`:slash_tmp`). The temp folder is `:tmpdir`; when the agent has a run temp
+  folder, `TMPDIR` points there, so the host's temp folders are denied by path instead;
+- `read`: the repository's git directories (F-1), the read-only folders, and the agent's folder
+  (with its `.git`, for a `:workspace` profile, whose folder is `write`);
+- `write`: the run's temp folder.
+
+The more specific entry wins in Codex, so the worktree and temp folder (inside the app's data
+folder) stay usable. Full auto and the tightened sandbox therefore run on Codex. A writing agent
+whose repository's git directories lie in a temp folder is still refused (`unsafe-git-location`,
+defence in depth).
+
+## Work packages
+
+| WP   | What                                                                                                                                            | Owned paths                                                                                                             | After |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----- |
+| CX-0 | ADR-0031 accepted and amended, ADR-0032 and -0033, AGENTS.md §1 and §3.8, this plan, the research note                                          | `docs/decisions/**`, `AGENTS.md`, `docs/codex/**`, `docs/research/**`                                                   | —     |
+| CX-1 | Spike against a real `codex app-server` in a disposable repo (owner consent): usage, dynamic tools, approvals, git protection, overrides, steer | scratchpad only; findings in the research note                                                                          | CX-0  |
+| CX-2 | Contracts and DB: provider on the managed adapter, capabilities, `provider` on agent nodes and engine effects, ledger key, migration 0013       | `packages/core/src/{adapters,workspace,api}/**`, `packages/orchestrator/src/{state,budget,stages}.ts`, `packages/db/**` | CX-1  |
+| CX-3 | `@acp/adapter-codex`: transport, adapter, events, approvals, lead tools, modes; tests against a fake app-server                                 | `packages/adapters/codex/**`                                                                                            | CX-2  |
+| CX-4 | Server: adapter registry, routing by node provider, follow-ups, usage persistence, availability, Full auto deny list                            | `packages/server/**`                                                                                                    | CX-3  |
+| CX-5 | Messaging (ADR-0033): delivery state, held messages, `ask_lead`, finish notice, findings on demand, bounded merge                               | `packages/orchestrator/**`, `packages/server/src/control/**`, both adapters' lead tools                                 | CX-2  |
+| CX-6 | Web: provider picker per node, model suggestions, provider badges, Tokens by provider                                                           | `packages/web/**`                                                                                                       | CX-4  |
+| CX-7 | Safety and docs: adversarial refusal tests on the Codex path; security, provider-adapters, usage-accounting, architecture                       | `docs/**`, test files                                                                                                   | all   |
+
+## Where it is documented
+
+- The adapter, its flags, modes, profiles, tools, capabilities and the differences from Claude:
+  [provider-adapters §12](../provider-adapters.md).
+- The Codex process, git protection, deny-read, the `/tmp` finding and the fail-closed rules:
+  [security §4](../security.md).
+- Usage: [usage-accounting §10](../usage-accounting.md), with the Codex scenarios and their tests.
+- Messaging: [orchestration-lifecycle §0.2](../orchestration-lifecycle.md).
+
+## Verification
+
+- Unit tests for every mapping and messaging rule, against a fake app-server
+  (`packages/adapters/codex/tests/`) and fake adapters (server, engine).
+- Adversarial (CX-7): the Codex section of [docs/testing/adversarial.md](../testing/adversarial.md),
+  C1 to C10. A Codex worker's git writes are declined without asking the owner in every mode; a
+  repository in a temp folder, an injected profile path or an unconfirmed profile stop the agent
+  before it runs; reading roles never ask; lead-only tools, an `ask_lead` flood and messages to an
+  ended agent are refused; no resume crosses providers; a replayed usage notification counts once.
+- Still to do, only with the owner's consent, on a throwaway project: real runs with a Codex
+  reviewer and a Claude helper, then a Codex lead and a Claude helper. They should also check what
+  the fake cannot: a more specific profile entry re-opening a folder inside a denied one, and
+  `permissions` on `thread/resume`.

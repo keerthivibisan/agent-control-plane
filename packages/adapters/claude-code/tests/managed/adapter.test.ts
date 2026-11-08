@@ -177,6 +177,17 @@ describe('P3-B createManagedClaudeCode: SDK options (ADR-0012, ADR-0013)', () =>
     expect(adapter.provider).toBe('claude-code');
     expect(() => adapter.start(spec('worker'), callbacks())).toThrow('real Agent SDK');
   });
+
+  it('honours every managed capability but denyRead (ADR-0031, CX-3b)', () => {
+    expect(createManagedClaudeCode().capabilities).toEqual({
+      skills: true,
+      profileTools: true,
+      fullAuto: true,
+      denyRead: false,
+      leadTools: true,
+      followUp: true,
+    });
+  });
 });
 
 describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () => {
@@ -236,7 +247,16 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.mcpServers?.['acp']).toMatchObject({ type: 'sdk', name: 'acp' });
     expect(servers.toolNames).toEqual([
-      ['start_agent', 'list_agents', 'message_agent', 'stop_agent', 'agent_status', 'report_work'],
+      [
+        'start_agent',
+        'list_agents',
+        'message_agent',
+        'stop_agent',
+        'agent_status',
+        'report_work',
+        // ADR-0033 §3
+        'ask_lead',
+      ],
     ]);
     expect(servers.toolNames[0]).not.toContain('submit_plan');
     expect(servers.toolNames[0]).not.toContain('request_review');
@@ -246,12 +266,14 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     servers.toolNames.length = 0;
     optionsFor(spec('lead'));
     // ADR-0021: the change tools are the lead's; post_review and submit_review are reviewers';
-    // report_work is the helpers' and the tester's (ADR-0026 §3).
+    // report_work is the helpers' and the tester's (ADR-0026 §3); ask_lead too (ADR-0033 §3).
     expect(servers.toolNames).toEqual([
       LEAD_TOOL_NAMES.filter(
-        (n) => n !== 'post_review' && n !== 'submit_review' && n !== 'report_work',
+        (n) =>
+          n !== 'post_review' && n !== 'submit_review' && n !== 'report_work' && n !== 'ask_lead',
       ),
     ]);
+    expect(servers.toolNames[0]).toContain('get_review_findings');
     expect(servers.toolNames[0]).not.toContain('report_work');
     expect(servers.toolNames[0]).toContain('submit_plan');
     expect(servers.toolNames[0]).toContain('merge_change');
@@ -262,7 +284,7 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     servers.toolNames.length = 0;
     const handler = () => Promise.resolve('nope');
     optionsFor(spec('worker', { canStartHelpers: false, leadTools: handler }));
-    expect(servers.toolNames).toEqual([['report_work']]);
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
     servers.toolNames.length = 0;
     expect(optionsFor(spec('worker', { canStartHelpers: true })).mcpServers).toEqual({});
     expect(servers.toolNames).toEqual([]);

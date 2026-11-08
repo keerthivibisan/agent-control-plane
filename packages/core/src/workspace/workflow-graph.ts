@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
+import { ManagedProviderIdSchema, type ManagedProviderId } from '../domain/provider.js';
 import { WorkflowNodeIdSchema, type WorkflowNodeId } from './node-id.js';
 import type { AgentRoleKind } from '../orchestration/orchestration.js';
 import { ApprovalModeSchema, HARD_MAX_HELPERS, type ApprovalMode } from './workspace.js';
@@ -90,7 +91,26 @@ const AgentConfig = {
   agent: SkillNameSchema.nullable(),
   /** ADR-0028 §1. Absent on graphs saved before it: the model's default. */
   effort: AgentEffortSchema.optional(),
+  /**
+   * ADR-0031 §1: the provider that runs this node's agents. Absent (every graph saved before it):
+   * the project's default provider (`ProjectAgentSetup.provider`), else Claude Code.
+   */
+  provider: ManagedProviderIdSchema.optional(),
 };
+
+/**
+ * Whether a model id belongs to a provider, by its name only (ADR-0031): Claude's aliases
+ * (`sonnet`, `opus`, `haiku`, `inherit`) and `claude-*` ids are Claude's; `gpt-*`, `o3*`, `o4*`
+ * and `codex*` ids are Codex's. Null when the name says neither (a new or custom id): the
+ * provider decides. Pure; used for the `model-provider-mismatch` warning and model fallbacks.
+ */
+export function modelMatchesProvider(model: string, provider: ManagedProviderId): boolean | null {
+  const id = model.trim().toLowerCase();
+  const claude = ['sonnet', 'opus', 'haiku', 'inherit'].includes(id) || id.startsWith('claude-');
+  const codex = ['gpt-', 'o3', 'o4', 'codex'].some((prefix) => id.startsWith(prefix));
+  if (claude === codex) return null;
+  return provider === 'claude-code' ? claude : codex;
+}
 
 /**
  * The approval mode of a node that edits (helpers and the tester). Null: the project's mode
@@ -410,6 +430,11 @@ export const GraphIssueCodeSchema = z.enum([
   'merge-skips-required',
   // ADR-0028 §2: the workflow has no Checks block at all
   'no-checks',
+  // ADR-0031: a node's model looks like another provider's
+  'model-provider-mismatch',
+  // ADR-0031 §5 (CX-4): what a Codex node cannot run with, as the run start refuses it
+  'codex-agent-tools',
+  'codex-skills-ignored',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -508,6 +533,11 @@ export interface ProgramAgentNode {
   agent: z.infer<typeof SkillNameSchema> | null;
   /** ADR-0028 §1: absent means the model's default. */
   effort?: AgentEffort;
+  /**
+   * ADR-0031 §1: the node's provider, else `CompileContext.projectProvider`. Absent when neither
+   * is set: Claude Code, as for every run before ADR-0031.
+   */
+  provider?: ManagedProviderId;
 }
 
 export interface ProgramHelperNode extends ProgramAgentNode {
@@ -543,6 +573,11 @@ export interface CompileContext {
   maxReworkRounds?: number;
   /** The project's helper limit, the pool's `maxInstances`. */
   maxConcurrentHelpers: number;
+  /**
+   * ADR-0031: the project's default provider (`ProjectAgentSetup.provider`) for agent nodes that
+   * choose none. Absent: Claude Code. Snapshotted with the run like the other fields.
+   */
+  projectProvider?: ManagedProviderId;
 }
 
 /**

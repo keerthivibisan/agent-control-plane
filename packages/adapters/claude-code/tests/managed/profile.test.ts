@@ -165,7 +165,7 @@ describe('agent file tools only narrow (ADR-0019 §6)', () => {
     );
     expect(options.tools).toEqual(['Read', 'Grep']);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
-    expect(servers.toolNames).toEqual([['post_review']]);
+    expect(servers.toolNames).toEqual([['post_review', 'ask_lead']]);
     const use = canUseTool(options);
     await expect(use('mcp__acp__post_review', {}, OURS)).resolves.toMatchObject({
       behavior: 'allow',

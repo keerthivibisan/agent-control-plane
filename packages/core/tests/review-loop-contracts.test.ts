@@ -506,6 +506,8 @@ describe('review-loop tools (ADR-0021 §3)', () => {
       'request_rework',
       'discard_change',
       'ask_owner',
+      // ADR-0033 §5
+      'get_review_findings',
     ]);
     expect([...CHANGE_REVIEWER_TOOL_NAMES]).toEqual(['submit_review']);
     expect([...REVIEW_LOOP_TOOL_NAMES]).toEqual([

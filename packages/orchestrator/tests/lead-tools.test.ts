@@ -107,20 +107,35 @@ describe('lead tool calls', () => {
   it('message_agent sends to a live worker and stores nothing', () => {
     const { state, id } = startWorker(runningRun());
     const r = ok(call(state, 'message_agent', { agentId: id, text: 'also add tests' }));
-    expect(r.effects).toEqual([{ type: 'send-to-agent', agentRunId: id, text: 'also add tests' }]);
+    expect(r.effects).toEqual([
+      {
+        type: 'send-to-agent',
+        agentRunId: id,
+        text: 'also add tests',
+        message: { from: LEAD, kind: 'message' },
+      },
+    ]);
+    // ADR-0033 §1: the server tells the lead the delivery state; the engine never claims it.
+    expect(r.value).toBe('Message for Builder.');
     expect(JSON.stringify(r.state)).not.toContain('also add tests');
   });
 
-  it('message_agent refuses ended and unknown agents', () => {
+  it('message_agent to an ended agent goes to the server (dropped there); unknown is refused', () => {
     const started = startWorker(runningRun());
     const id = started.id;
     let state = started.state;
     state = ok(
       event(state, id, { type: 'finished', outcome: 'success', reportedCostUsd: null }),
     ).state;
-    expect(refused(call(state, 'message_agent', { agentId: id, text: 'x' }))).toBe(
-      'agent-not-live',
-    );
+    // ADR-0033 §1: not a refusal; the server reports it as dropped (the agent has ended).
+    expect(ok(call(state, 'message_agent', { agentId: id, text: 'x' })).effects).toEqual([
+      {
+        type: 'send-to-agent',
+        agentRunId: id,
+        text: 'x',
+        message: { from: LEAD, kind: 'message' },
+      },
+    ]);
     expect(refused(call(state, 'message_agent', { agentId: 'ghost', text: 'x' }))).toBe(
       'unknown-agent',
     );

@@ -75,7 +75,14 @@ describe('policy refusals surface as ErrorDtos or denies', () => {
     await s.startRun();
     s.fake.lead().started();
     const worker = await s.startWorker();
-    expect(worker.spec.leadTools).toBeUndefined();
+    // ADR-0033 §3: a handler for ask_lead; the engine refuses every lead tool from a worker.
+    worker.started();
+    await expect(worker.callLead('start_agent', { role: 'X', task: 'y' })).rejects.toThrow(
+      /Only the lead agent can start agents/,
+    );
+    await expect(worker.callLead('message_agent', { agentId: 'x', text: 'y' })).rejects.toThrow(
+      /Only the lead agent/,
+    );
     await expect(s.fake.lead().callLead('start_agent', { role: '' })).rejects.toThrow(
       /Invalid input/,
     );
@@ -203,6 +210,14 @@ describe('ordering: persisted before effects (orchestration-lifecycle §1)', () 
     const db: { probe?: (id: string) => unknown; countApprovals?: () => number } = {};
     const adapter: ManagedExecutionAdapter = {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        denyRead: false,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         seen.push({ agent: spec.kind, storedStatus: db.probe?.(spec.agentRunId) });
         return inner.adapter.start(spec, callbacks);
@@ -211,7 +226,7 @@ describe('ordering: persisted before effects (orchestration-lifecycle §1)', () 
     const notices: StreamNoticeDto[] = [];
     const s = await setupControl({
       overrides: {
-        adapter,
+        adapters: new Map([[adapter.provider, adapter]]),
         publish: (n) => {
           notices.push(n);
           if (n.kind === 'approval-requested')

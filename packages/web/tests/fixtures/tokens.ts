@@ -58,18 +58,21 @@ export function projectTokens(over: Partial<ProjectTokensDto> = {}): ProjectToke
     bySession: [
       {
         sessionId: 'sess-aaaaaaaa-1',
+        provider: 'claude-code',
         title: 'Fix the login redirect',
         latestEstimatedCost: { provenance: 'estimated', value: 1.25 },
         ...row(totals(t(900, 7_000, 30_000, 800_000), 5, { cacheCreation: 1 })),
       },
       {
         sessionId: 'sess-bbbbbbbb-2',
+        provider: 'claude-code',
         title: null,
         latestEstimatedCost: null,
         ...row(totals(t(500, 4_000, 22_000, 400_000), 3, { input: 1, cacheCreation: 1 })),
       },
       {
         sessionId: 'sess-cccccccc-3',
+        provider: 'claude-code',
         title: 'Lead',
         latestEstimatedCost: { provenance: 'unavailable', value: null },
         ...row(
@@ -105,14 +108,46 @@ export function projectTokens(over: Partial<ProjectTokensDto> = {}): ProjectToke
       { role: 'external', ...row(totals(t(900, 7_000, 30_000, 800_000), 6, { cacheCreation: 1 })) },
     ],
     byModel: [
-      { model: 'claude-opus-4-1', ...row(totals(t(1_400, 11_000, 52_000, 1_200_000), 8)) },
-      { model: 'unknown', ...row(totals(t(null, null, null, null), 1)) },
+      {
+        model: 'claude-opus-4-1',
+        provider: 'claude-code',
+        ...row(totals(t(1_400, 11_000, 52_000, 1_200_000), 8)),
+      },
+      { model: 'unknown', provider: 'claude-code', ...row(totals(t(null, null, null, null), 1)) },
     ],
     ...over,
   };
   // Fixtures must satisfy the real contract, or the tests would pass against a shape the server
   // never sends.
   return ProjectTokensDtoSchema.parse(dto);
+}
+
+/**
+ * CX-6b: the same project with a Codex session too. Both providers report a model named
+ * "shared-model"; Codex reports no cost (ADR-0032 §6).
+ */
+export function mixedProviderTokens(): ProjectTokensDto {
+  const base = projectTokens();
+  const claudeShared = totals(t(1_000, 8_000, 52_000, 1_050_000), 6);
+  const codexShared = totals(t(300, 2_000, 0, 150_000), 2);
+  const codexNoCache = totals(t(100, 1_000, null, null), 1, { cacheCreation: 1, cacheRead: 1 });
+  return projectTokens({
+    bySession: [
+      ...base.bySession,
+      {
+        sessionId: 'thread-dddddddd-4',
+        provider: 'codex',
+        title: 'Codex helper',
+        latestEstimatedCost: { provenance: 'unavailable', value: null },
+        ...row(totals(t(400, 3_000, 0, 150_000), 3, { cacheCreation: 1, cacheRead: 1 })),
+      },
+    ],
+    byModel: [
+      { model: 'shared-model', provider: 'claude-code', ...row(claudeShared) },
+      { model: 'shared-model', provider: 'codex', ...row(codexShared) },
+      { model: 'unknown', provider: 'codex', ...row(codexNoCache) },
+    ],
+  });
 }
 
 /** A project whose sessions never reported usage. */

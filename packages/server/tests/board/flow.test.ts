@@ -373,7 +373,8 @@ describe('cancel, context and depth 2', () => {
     child.started();
     child.finish('success');
     await s.settle();
-    expect(parent.sent.at(-1)).toContain(`Your helper "Child" (${child.id}) finished.`);
+    // ADR-0033 §4: the engine's finish notice (role, outcome, where; no agent text).
+    expect(parent.sent.at(-1)).toMatch(new RegExp(`^Child \\(agentId ${child.id}\\) finished: `));
   });
 
   it('depth 1: helpers get no child tools', async () => {

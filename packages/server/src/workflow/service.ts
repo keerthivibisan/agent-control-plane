@@ -1,5 +1,7 @@
 import {
+  DEFAULT_MANAGED_PROVIDER,
   approvalsOf,
+  isAgentNode,
   isGraphRunnable,
   validateWorkflowGraph,
   type GraphIssue,
@@ -22,6 +24,7 @@ import {
   type Repositories,
 } from '@acp/db';
 import { HttpError, notFound } from '../errors.js';
+import { createAgentProfiles } from './agent-profile.js';
 import { effectiveWorkflow, type EffectiveWorkflow } from './graph.js';
 import {
   listProjectAgentNames,
@@ -93,6 +96,9 @@ function workflowInvalid(issues: readonly GraphIssue[]): HttpError {
 
 export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowService {
   const redesign = createRedesignRepositories(deps.db, { now: deps.now });
+  const agentProfiles = createAgentProfiles(
+    deps.skills?.homeDir !== undefined ? { homeDir: deps.skills.homeDir } : {},
+  );
 
   function project(projectId: string) {
     const p = deps.repos.projects.getById(projectId);
@@ -149,15 +155,44 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
     return { setup, skills, agents };
   }
 
-  function issuesOf(
+  /**
+   * CX-4: the agent files used by Codex nodes whose `tools` narrow the role, read from the
+   * project's checkout. A file that cannot be read is left out: the run start reads it again.
+   */
+  async function toolNarrowingAgents(
+    projectId: string,
+    graph: WorkflowGraph,
+    facts: { setup: ProjectAgentSetup; agents: readonly string[] },
+  ): Promise<string[]> {
+    const names = new Set<string>();
+    for (const node of graph.nodes) {
+      if (!isAgentNode(node) || node.agent === null || !facts.agents.includes(node.agent)) continue;
+      const provider = node.provider ?? facts.setup.provider ?? DEFAULT_MANAGED_PROVIDER;
+      if (provider === 'codex') names.add(node.agent);
+    }
+    if (names.size === 0) return [];
+    const root = project(projectId).rootPath;
+    const narrowing: string[] = [];
+    for (const name of names) {
+      const read = await agentProfiles.read(root, name).catch(() => null);
+      if (read?.ok === true && read.profile.tools !== null) narrowing.push(name);
+    }
+    return narrowing;
+  }
+
+  async function issuesOf(
+    projectId: string,
     graph: WorkflowGraph,
     facts: { setup: ProjectAgentSetup; skills: readonly string[]; agents: readonly string[] },
-  ): GraphIssue[] {
+  ): Promise<GraphIssue[]> {
     return validateWorkflowGraph(graph, {
       skills: facts.skills,
       agents: facts.agents,
       maxConcurrentHelpers: facts.setup.maxConcurrentHelpers,
       projectMode: approvalsOf(facts.setup).mode,
+      // ADR-0031: agent nodes without a provider take the project's default.
+      ...(facts.setup.provider !== undefined && { projectProvider: facts.setup.provider }),
+      toolNarrowingAgents: await toolNarrowingAgents(projectId, graph, facts),
     });
   }
 
@@ -185,7 +220,7 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
       return {
         graph: workflow.graph,
         stored: workflow.stored,
-        issues: issuesOf(workflow.graph, facts),
+        issues: await issuesOf(projectId, workflow.graph, facts),
         ...facts,
         updatedAt: workflow.updatedAt,
       };
@@ -194,7 +229,7 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
       project(projectId);
       const { graph } = UpdateWorkflowGraphRequestSchema.parse(body);
       const facts = await projectFacts(projectId);
-      const issues = issuesOf(graph, facts);
+      const issues = await issuesOf(projectId, graph, facts);
       if (!isGraphRunnable(issues)) throw workflowInvalid(issues);
       const saved = redesign.workflow.putGraph(projectId, graph);
       changed(projectId);
@@ -203,7 +238,7 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
     async validateGraph(projectId, body) {
       project(projectId);
       const { graph } = UpdateWorkflowGraphRequestSchema.parse(body);
-      const issues = issuesOf(graph, await projectFacts(projectId));
+      const issues = await issuesOf(projectId, graph, await projectFacts(projectId));
       return { ok: isGraphRunnable(issues), issues };
     },
     effective,

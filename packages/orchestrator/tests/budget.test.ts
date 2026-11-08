@@ -8,6 +8,8 @@ import {
   budgetOvershoot,
   compareUsage,
   recordUsage,
+  hasLedgerEntry,
+  ledgerKey,
 } from '../src/index.js';
 import type { RunState, UsageLedger } from '../src/index.js';
 import {
@@ -48,7 +50,7 @@ function shuffle<T>(items: readonly T[], random: () => number): T[] {
 
 describe('ledger', () => {
   it('counts output + uncached input + cache write, never cache reads', () => {
-    const l = recordUsage(EMPTY_LEDGER, 'a', 'm1', {
+    const l = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', 'm1', {
       input: 10,
       output: 20,
       cacheCreation: 5,
@@ -62,27 +64,28 @@ describe('ledger', () => {
   });
 
   it('dedups repeated reports of one message and keeps the max-output observation', () => {
-    let l = recordUsage(EMPTY_LEDGER, 'a', 'm1', tokens(5));
-    l = recordUsage(l, 'a', 'm1', tokens(50));
-    l = recordUsage(l, 'a', 'm1', tokens(20));
+    let l = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', 'm1', tokens(5));
+    l = recordUsage(l, 'a', 'claude-code', 'm1', tokens(50));
+    l = recordUsage(l, 'a', 'claude-code', 'm1', tokens(20));
     expect(agentBudgetUsage(l, 'a').used).toBe(60);
-    expect(Object.keys(l.entries)).toEqual(['m1']);
+    expect(Object.keys(l.entries)).toEqual([ledgerKey('claude-code', 'm1')]);
   });
 
   it('never sums cumulative snapshots of one message', () => {
     let l: UsageLedger = EMPTY_LEDGER;
-    for (const out of [1, 2, 3, 4]) l = recordUsage(l, 'a', 'm1', tokens(out, 0, 0, 0));
+    for (const out of [1, 2, 3, 4])
+      l = recordUsage(l, 'a', 'claude-code', 'm1', tokens(out, 0, 0, 0));
     expect(agentBudgetUsage(l, 'a').used).toBe(4);
   });
 
   it('treats a message with no counted category as unavailable, not 0 usage', () => {
-    const l = recordUsage(EMPTY_LEDGER, 'a', 'm1', {
+    const l = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', 'm1', {
       input: null,
       output: null,
       cacheCreation: null,
       cacheRead: 99,
     });
-    expect(budgetTokens(l.entries.m1?.tokens ?? tokens(0))).toBeNull();
+    expect(budgetTokens(l.entries[ledgerKey('claude-code', 'm1')]?.tokens ?? tokens(0))).toBeNull();
     expect(agentBudgetUsage(l, 'a')).toEqual({
       used: 0,
       countedMessages: 0,
@@ -91,23 +94,38 @@ describe('ledger', () => {
   });
 
   it('dedups globally across agents and charges one agent deterministically', () => {
-    let l = recordUsage(EMPTY_LEDGER, 'b', 'm1', tokens(30));
-    l = recordUsage(l, 'a', 'm1', tokens(30));
+    let l = recordUsage(EMPTY_LEDGER, 'b', 'claude-code', 'm1', tokens(30));
+    l = recordUsage(l, 'a', 'claude-code', 'm1', tokens(30));
     expect(agentBudgetUsage(l, 'a').used).toBe(40);
     expect(agentBudgetUsage(l, 'b').used).toBe(0);
   });
 
   it('accepts any messageId, including "__proto__"', () => {
-    const l = recordUsage(EMPTY_LEDGER, 'a', '__proto__', tokens(7, 0, 0, 0));
+    const l = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', '__proto__', tokens(7, 0, 0, 0));
     expect(agentBudgetUsage(l, 'a').used).toBe(7);
-    expect(Object.hasOwn(l.entries, '__proto__')).toBe(true);
+    expect(hasLedgerEntry(l, 'claude-code', '__proto__')).toBe(true);
+  });
+
+  it('keys entries by provider and message id: the same id from two providers is two entries', () => {
+    let l = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', 'm1', tokens(10, 0, 0, 0));
+    l = recordUsage(l, 'b', 'codex', 'm1', tokens(3, 0, 0, 0));
+    l = recordUsage(l, 'b', 'codex', 'm1', tokens(5, 0, 0, 0));
+    expect(Object.values(l.entries).map((e) => [e.provider, e.messageId, e.agentRunIds])).toEqual([
+      ['claude-code', 'm1', ['a']],
+      ['codex', 'm1', ['b']],
+    ]);
+    // Each agent is charged its own provider's message; Codex's repeats keep the max output.
+    expect(agentBudgetUsage(l, 'a').used).toBe(10);
+    expect(agentBudgetUsage(l, 'b').used).toBe(5);
+    expect(hasLedgerEntry(l, 'codex', 'm1')).toBe(true);
+    expect(hasLedgerEntry(l, 'codex', 'm2')).toBe(false);
   });
 
   it('does not mutate the input ledger', () => {
-    const l1 = recordUsage(EMPTY_LEDGER, 'a', 'm1', tokens(1));
+    const l1 = recordUsage(EMPTY_LEDGER, 'a', 'claude-code', 'm1', tokens(1));
     const snapshot = JSON.stringify(l1);
-    recordUsage(l1, 'a', 'm1', tokens(9));
-    recordUsage(l1, 'a', 'm2', tokens(9));
+    recordUsage(l1, 'a', 'claude-code', 'm1', tokens(9));
+    recordUsage(l1, 'a', 'claude-code', 'm2', tokens(9));
     expect(JSON.stringify(l1)).toBe(snapshot);
     expect(Object.keys(EMPTY_LEDGER.entries)).toHaveLength(0);
   });
@@ -159,7 +177,7 @@ describe('property: usage replay order does not change budgets', () => {
 
   const replay = (rs: readonly Report[]): Record<string, number> => {
     let l: UsageLedger = EMPTY_LEDGER;
-    for (const x of rs) l = recordUsage(l, x.agent, x.messageId, x.tokens);
+    for (const x of rs) l = recordUsage(l, x.agent, 'claude-code', x.messageId, x.tokens);
     return Object.fromEntries(
       ['lead', 'w1', 'w2', 'w3', 'w9'].map((a) => [a, agentBudgetUsage(l, a).used]),
     );

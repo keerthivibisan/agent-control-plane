@@ -145,6 +145,8 @@ export interface GraphRunOptions {
   budget?: number;
   /** A legacy (no review loop) graph run. */
   legacy?: boolean;
+  /** ADR-0031: the project's default provider. */
+  projectProvider?: 'claude-code' | 'codex';
 }
 
 export function graphContext(o: GraphRunOptions): CompileContext {
@@ -154,6 +156,7 @@ export function graphContext(o: GraphRunOptions): CompileContext {
     ...(o.reviewer !== undefined ? { reviewer: o.reviewer } : {}),
     ...(o.maxReworkRounds !== undefined ? { maxReworkRounds: o.maxReworkRounds } : {}),
     maxConcurrentHelpers: o.limits?.maxConcurrentHelpers ?? 3,
+    ...(o.projectProvider !== undefined ? { projectProvider: o.projectProvider } : {}),
   };
 }
 

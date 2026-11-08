@@ -2,9 +2,11 @@ import {
   addUsageTotals,
   AgentRoleKindSchema,
   emptyUsageTotals,
+  ProviderIdSchema,
   tokenHeadline,
   type AgentRoleKind,
   type IsoTimestamp,
+  type ProviderId,
   type TokenHeadline,
   type UsageTotals,
 } from '@acp/core';
@@ -22,8 +24,9 @@ import { TOTALS_SELECT, toTotals, type TotalsDbRow } from './usage.js';
  *   unique per `(provider, messageId)` and attributed to its earliest occurrence), so a message a
  *   fork copied is counted once, under the session it was attributed to. Aggregates (direct plus
  *   subagent descendants) are never added, and cumulative snapshots are never summed.
- * - SQL groups the records once by (session, UTC day, model); every breakdown is a fold over those
- *   cells, so each record lands in exactly one row of each breakdown.
+ * - SQL groups the records once by (session, UTC day, provider, model); every breakdown is a fold
+ *   over those cells, so each record lands in exactly one row of each breakdown. Models are
+ *   grouped per provider (ADR-0032 §6): the same model name from two providers stays two rows.
  * - A category is `null` when no contributing record reported it, never 0;
  *   `recordsWithUnavailable` says "partial".
  *
@@ -79,6 +82,8 @@ export interface ProjectTokens extends TokenRow {
   /** Sessions with usage in the range, most new work first. */
   bySession: (TokenRow & {
     sessionId: string;
+    /** The session's own provider. */
+    provider: ProviderId;
     title: string | null;
     /**
      * The session's latest provider-reported running total before the range end (null: no
@@ -90,8 +95,11 @@ export interface ProjectTokens extends TokenRow {
   byTicket: (TokenRow & { ticketId: string; key: string; title: string })[];
   /** In `TOKEN_ROLE_ORDER`; only roles with usage in the range. */
   byRole: (TokenRow & { role: TokenRole })[];
-  /** Most new work first; `null` groups records with no reported model. */
-  byModel: (TokenRow & { model: string | null })[];
+  /**
+   * One row per (provider, model), most new work first; `null` groups a provider's records with no
+   * reported model.
+   */
+  byModel: (TokenRow & { provider: ProviderId; model: string | null })[];
 }
 
 export interface TokenQueries {
@@ -138,11 +146,13 @@ interface CellDbRow extends TotalsDbRow {
   kind: string | null;
   ticket_id: string | null;
   day: string | null;
+  provider: string;
   model: string | null;
 }
 
 interface SessionDbRow {
   id: string;
+  provider: string;
   title: string | null;
   first_seen_at: string;
   last_at: string;
@@ -198,13 +208,14 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
   const cells = c.prepare(`
     WITH ${SCOPED_CTE}
     SELECT sc.session_id AS session_id, sc.kind AS kind, sc.ticket_id AS ticket_id,
-      substr(r.occurred_at, 1, 10) AS day, r.model AS model, ${TOTALS_SELECT}
+      substr(r.occurred_at, 1, 10) AS day, r.provider AS provider, r.model AS model,
+      ${TOTALS_SELECT}
     FROM usage_records r JOIN scoped sc ON sc.session_id = r.session_id
     WHERE (@from IS NULL OR r.occurred_at >= @from) AND (@to IS NULL OR r.occurred_at < @to)
-    GROUP BY r.session_id, day, r.model`);
+    GROUP BY r.session_id, day, r.provider, r.model`);
   const sessions = c.prepare(`
     WITH ${SCOPED_CTE}
-    SELECT s.id, s.title, s.first_seen_at, COALESCE(s.last_event_at, s.last_observed_at) AS last_at
+    SELECT s.id, s.provider, s.title, s.first_seen_at, COALESCE(s.last_event_at, s.last_observed_at) AS last_at
     FROM scoped sc JOIN sessions s ON s.id = sc.session_id`);
   const snapshots = c.prepare(`
     WITH ${SCOPED_CTE}
@@ -229,10 +240,11 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
   const ticketCells = c.prepare(`
     WITH ${SCOPED_CTE}
     SELECT sc.session_id AS session_id, sc.kind AS kind, sc.ticket_id AS ticket_id,
-      substr(r.occurred_at, 1, 10) AS day, r.model AS model, ${TOTALS_SELECT}
+      substr(r.occurred_at, 1, 10) AS day, r.provider AS provider, r.model AS model,
+      ${TOTALS_SELECT}
     FROM usage_records r JOIN scoped sc ON sc.session_id = r.session_id
     WHERE sc.ticket_id = @ticket
-    GROUP BY r.session_id, day, r.model`);
+    GROUP BY r.session_id, day, r.provider, r.model`);
 
   return {
     ticketTokens(projectId, ticketId) {
@@ -267,6 +279,12 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
         (s) => inRange(s) || bySessionTotals.has(s.id),
       ).length;
       const titles = new Map(sessionRows.map((s) => [s.id, s.title]));
+      const providers = new Map(
+        sessionRows.map((s) => [
+          s.id,
+          parseStored(ProviderIdSchema, s.provider, 'sessions', 'provider'),
+        ]),
+      );
       const latest = new Map(
         (snapshots.all(params) as SnapshotDbRow[]).map((s) => [s.session_id, s.reported_cost_usd]),
       );
@@ -276,14 +294,21 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
         runRows.map((r) => r.ticket_id).filter((id): id is string => id !== null),
       );
 
-      const bySession = [...bySessionTotals].map(([sessionId, t]) => ({
-        sessionId,
-        title: titles.get(sessionId) ?? null,
-        latestSnapshot: latest.has(sessionId)
-          ? { reportedCostUsd: latest.get(sessionId) ?? null }
-          : null,
-        ...row(t),
-      }));
+      const bySession = [...bySessionTotals].map(([sessionId, t]) => {
+        const provider = providers.get(sessionId);
+        // Every cell comes from a scoped session, and `sessions` lists exactly those.
+        if (provider === undefined)
+          throw new DbError('invalid_stored_value', 'usage for a session with no row');
+        return {
+          sessionId,
+          provider,
+          title: titles.get(sessionId) ?? null,
+          latestSnapshot: latest.has(sessionId)
+            ? { reportedCostUsd: latest.get(sessionId) ?? null }
+            : null,
+          ...row(t),
+        };
+      });
       bySession.sort(byNewWork((r) => r.sessionId));
 
       const byTicketTotals = fold(all, (cell) => cell.ticket_id ?? undefined);
@@ -310,11 +335,18 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
         return t === undefined ? [] : [{ role, ...row(t) }];
       });
 
-      const byModel = [...fold(all, (cell) => cell.model)].map(([model, t]) => ({
-        model,
-        ...row(t),
-      }));
-      byModel.sort(byNewWork((r) => r.model ?? '￿'));
+      // Keyed by provider and model together; JSON keeps a null model distinct from any name.
+      const byModel = [...fold(all, (cell) => JSON.stringify([cell.provider, cell.model]))].map(
+        ([k, t]) => {
+          const [provider, model] = JSON.parse(k) as [string, string | null];
+          return {
+            provider: parseStored(ProviderIdSchema, provider, 'usage_records', 'provider'),
+            model,
+            ...row(t),
+          };
+        },
+      );
+      byModel.sort(byNewWork((r) => `${r.model ?? '￿'}\u0000${r.provider}`));
 
       const byDay = [...fold(all, (cell) => cell.day ?? undefined)]
         .map(([day, t]) => ({ day, ...row(t) }))

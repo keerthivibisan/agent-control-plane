@@ -297,6 +297,17 @@ export const LeadToolInputs = {
     /** ADR-0030 §4: a resolver's assessment of the combined change (advice for the policy gate). */
     assessment: VerificationAssessmentInputSchema.optional(),
   }),
+  /**
+   * ADR-0033 §3: a helper's, tester's or reviewer's question to its parent (the lead, or the
+   * depth-2 parent helper). It is delivered as a message, never stored; the parent answers with
+   * `message_agent`. The asker keeps working. At most `MAX_OPEN_QUESTIONS` open per agent.
+   */
+  ask_lead: z.object({ question: z.string().trim().min(1).max(2000) }),
+  /**
+   * ADR-0033 §5: the stored review findings of one helper's change again (verdict, findings,
+   * reviewer), from the review loop's records. Refused when none are stored.
+   */
+  get_review_findings: z.object({ agentId: z.string().min(1) }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
@@ -308,6 +319,7 @@ export const CHANGE_DECISION_TOOL_NAMES: readonly LeadToolName[] = Object.freeze
   'request_rework',
   'discard_change',
   'ask_owner',
+  'get_review_findings',
 ]);
 /** The change reviewer's one tool (ADR-0021 §3). */
 export const CHANGE_REVIEWER_TOOL_NAMES: readonly LeadToolName[] = Object.freeze(['submit_review']);
@@ -340,7 +352,28 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   ask_owner: 'Asked the owner about a change',
   submit_review: 'Submitted a change review',
   report_work: 'Reported its work',
+  ask_lead: 'Asked the lead a question',
+  get_review_findings: "Read a change's review findings",
 });
+
+/** ADR-0033 §3: open `ask_lead` questions one agent may have before it is refused. */
+export const MAX_OPEN_QUESTIONS = 5;
+
+/**
+ * ADR-0033 §7: what a lead/agent message is. `message`: the lead's (or a parent helper's)
+ * `message_agent`; `question`: an agent's `ask_lead`; `notice`: an engine notice to a parent.
+ */
+export const AGENT_MESSAGE_KINDS = ['message', 'question', 'notice'] as const;
+export type AgentMessageKind = (typeof AGENT_MESSAGE_KINDS)[number];
+
+/**
+ * ADR-0033 §1, §2: where a message stands. `delivered`: handed to the agent's live process;
+ * `queued`: the agent is starting and gets it once it runs; `held`: the agent cannot take input
+ * now (waiting for the owner, or between turns) and gets it when it can; `dropped`: it never
+ * arrives (the agent ended, or has no process and never will).
+ */
+export const AGENT_MESSAGE_STATES = ['delivered', 'queued', 'held', 'dropped'] as const;
+export type AgentMessageState = (typeof AGENT_MESSAGE_STATES)[number];
 
 function isLeadToolName(name: string): name is LeadToolName {
   return Object.hasOwn(LeadToolInputs, name);

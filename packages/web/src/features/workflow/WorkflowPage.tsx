@@ -130,7 +130,14 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
     [state.past.length, state.future.length],
   );
   const projectMode = approvalsOf(dto.setup).mode;
+  const projectProvider = dto.setup.provider ?? null;
   const helperLimit = dto.setup.maxConcurrentHelpers;
+  // CX-4: the agent files whose tools list narrows the agent, so a Codex block using one is flagged
+  // (`codex-agent-tools`) before the save, as the server does; unknown while the list loads.
+  const toolNarrowingAgents = useMemo(
+    () => agentFiles?.filter((f) => f.tools !== null).map((f) => f.name),
+    [agentFiles],
+  );
   const issues = useMemo(
     () =>
       editorIssues(graph, {
@@ -138,9 +145,20 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
         agents: dto.agents,
         maxConcurrentHelpers: helperLimit,
         projectMode,
+        ...(projectProvider !== null ? { projectProvider } : {}),
+        ...(toolNarrowingAgents !== undefined ? { toolNarrowingAgents } : {}),
         ...(harnessFile !== undefined ? { harness: harnessFile } : {}),
       }),
-    [graph, dto.skills, dto.agents, helperLimit, projectMode, harnessFile],
+    [
+      graph,
+      dto.skills,
+      dto.agents,
+      helperLimit,
+      projectMode,
+      projectProvider,
+      toolNarrowingAgents,
+      harnessFile,
+    ],
   );
   // As drawn: the Finish block stands for the end steps, and owns their problems (ADR-0028 §3).
   const view = useMemo(() => finishView(graph), [graph]);
@@ -163,6 +181,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       agents: dto.agents,
       agentModels,
       projectModel: dto.setup.model,
+      projectProvider,
       projectMode,
       helperLimit,
       harness,
@@ -174,6 +193,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
       dto.agents,
       agentModels,
       dto.setup.model,
+      projectProvider,
       projectMode,
       helperLimit,
       harness,

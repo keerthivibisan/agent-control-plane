@@ -1,4 +1,4 @@
-import { addUsageTotals, IsoTimestampSchema, tokenHeadline } from '@acp/core';
+import { addUsageTotals, IsoTimestampSchema, tokenHeadline, type ProviderId } from '@acp/core';
 import type { ProjectTokensDto, ReportedCostUsdDto, TokenHeadlineDto } from '@acp/core/api';
 import { createRepositories, createTokenQueries, type AcpDatabase, type TokenRow } from '@acp/db';
 import { z } from 'zod';
@@ -73,13 +73,20 @@ export function createTokensService(deps: { db: AcpDatabase; now?: () => Date })
       if (t === undefined) throw notFound(`Project ${projectId} not found`);
 
       // A record with no model and a model literally named "unknown" share the key: merge them, so
-      // the key stays unique and nothing is dropped.
-      const models = new Map<string, TokenRow>();
+      // the key stays unique and nothing is dropped. Rows stay per provider (ADR-0032 §6): the same
+      // model name from two providers is two rows.
+      const models = new Map<string, TokenRow & { provider: ProviderId; model: string }>();
       for (const m of t.byModel) {
-        const key = m.model ?? UNKNOWN_MODEL;
+        const model = m.model ?? UNKNOWN_MODEL;
+        const key = `${m.provider}\u0000${model}`;
         const prev = models.get(key);
         const totals = prev === undefined ? m.totals : addUsageTotals(prev.totals, m.totals);
-        models.set(key, { totals, headline: tokenHeadline(totals.tokens) });
+        models.set(key, {
+          provider: m.provider,
+          model,
+          totals,
+          headline: tokenHeadline(totals.tokens),
+        });
       }
 
       const rows = new Map(
@@ -101,6 +108,7 @@ export function createTokensService(deps: { db: AcpDatabase; now?: () => Date })
           const app = managed.get(s.sessionId);
           return {
             sessionId: s.sessionId,
+            provider: s.provider,
             title: s.title === '' ? null : s.title,
             latestEstimatedCost: costDto(s.latestSnapshot),
             ...(app !== undefined && { managed: app }),
@@ -119,7 +127,11 @@ export function createTokensService(deps: { db: AcpDatabase; now?: () => Date })
           ...rowDto(r),
         })),
         byRole: t.byRole.map((r) => ({ role: r.role, ...rowDto(r) })),
-        byModel: [...models].map(([model, r]) => ({ model, ...rowDto(r) })),
+        byModel: [...models.values()].map((r) => ({
+          model: r.model,
+          provider: r.provider,
+          ...rowDto(r),
+        })),
       };
     },
   };

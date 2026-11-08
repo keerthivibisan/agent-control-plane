@@ -170,6 +170,41 @@ export interface ReviewLoopContext {
    * keeps the workflow's own gate.
    */
   tipGate?: (runId: string, tip: string) => CheckSpec | null;
+  /**
+   * ADR-0033 §6: how long one merge may wait for its required checks (and for the merge queued
+   * before it), in milliseconds. Absent: `MERGE_TIMEOUT_MS`. A git command is never cut off.
+   */
+  mergeTimeoutMs?: number;
+}
+
+/** ADR-0033 §6: a merge waits at most 10 minutes for its checks. */
+export const MERGE_TIMEOUT_MS = 10 * 60 * 1000;
+
+const TIMED_OUT = Symbol('timed-out');
+
+/**
+ * Waits for `promise` until `deadline` (epoch ms). A late result is ignored (a rejection is caught,
+ * so it never goes unhandled); the work itself is not cancelled.
+ */
+async function untilDeadline<T>(
+  promise: Promise<T>,
+  deadline: number,
+): Promise<T | typeof TIMED_OUT> {
+  const left = deadline - Date.now();
+  if (left <= 0) {
+    promise.catch(() => undefined);
+    return TIMED_OUT;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), left);
+  });
+  promise.catch(() => undefined);
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** The change reviewer's brief holds at most this much diff (ADR-0021 §3; sent, never stored). */
@@ -185,6 +220,7 @@ const BLOCKED_HTTP: Readonly<Record<MergeBlocked['reason'], [number, string]>> =
   'checks-failed': [409, 'checks_failed'],
   'ticket-branch-moved': [409, 'ticket_branch_moved'],
   'ticket-branch-checked-out': [409, 'ticket_branch_checked_out'],
+  timeout: [409, 'merge_timeout'],
   failed: [409, 'merge_failed'],
 };
 
@@ -597,8 +633,20 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     effect: Extract<EngineEffect, { type: 'merge-change' }>,
   ): void {
     const id = effect.agentRunId;
-    const run = live.mergeChain.catch(() => undefined).then(() => doMerge(live, effect));
-    live.mergeChain = run;
+    // ADR-0033 §6: the merge's deadline covers waiting for the merge before it and for the
+    // required checks; never a running git command.
+    const timeoutMs = ctx.mergeTimeoutMs ?? MERGE_TIMEOUT_MS;
+    const deadline = Date.now() + timeoutMs;
+    const before = live.mergeChain.catch(() => undefined);
+    const run = (async (): Promise<MergeOutcome> => {
+      if ((await untilDeadline(before, deadline)) === TIMED_OUT) {
+        return timedOut(live, id, timeoutMs, 'queued');
+      }
+      return doMerge(live, effect, deadline, timeoutMs);
+    })();
+    // The next merge still waits for the one before this one, even when this one timed out
+    // in the queue: one merge into the ticket branch at a time.
+    live.mergeChain = Promise.all([before, run.catch(() => undefined)]);
     live.merges.set(id, run);
     ctx.track(
       run.finally(() => {
@@ -607,9 +655,32 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
     );
   }
 
+  /** ADR-0033 §6: the merge timed out; nothing was merged and the change is unchanged. */
+  function timedOut(
+    live: LoopLive,
+    id: string,
+    timeoutMs: number,
+    waiting: 'queued' | 'checks',
+  ): MergeOutcome {
+    const b: MergeBlocked = {
+      reason: 'timeout',
+      minutes: Math.max(1, Math.round(timeoutMs / 60000)),
+    };
+    ctx.countDiagnostic('merge-timeout');
+    logger.log('warn', 'change merge timed out', {
+      runId: live.state.run.id,
+      agentRunId: id,
+      code: waiting,
+    });
+    const r = ctx.apply(live, (s, c) => changeMergeBlocked(s, id, b, c));
+    return { kind: 'blocked', reply: r.ok ? r.value : r.refusal.message, blocked: b };
+  }
+
   async function doMerge(
     live: LoopLive,
     effect: Extract<EngineEffect, { type: 'merge-change' }>,
+    deadline: number,
+    timeoutMs: number,
   ): Promise<MergeOutcome> {
     const runId = live.state.run.id;
     const id = effect.agentRunId;
@@ -649,7 +720,14 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
         return { kind: 'no-changes', reply: r.value, overridden: [] };
       }
       const commit = integrated.commit;
-      const gate = (await ctx.commitChecks()?.gate(runId, id, commit, mergeChecks(live))) ?? {
+      // ADR-0033 §6: only this wait is bounded; the git work before and after it always finishes.
+      const hooks = ctx.commitChecks();
+      const gated =
+        hooks === undefined
+          ? undefined
+          : await untilDeadline(hooks.gate(runId, id, commit, mergeChecks(live)), deadline);
+      if (gated === TIMED_OUT) return timedOut(live, id, timeoutMs, 'checks');
+      const gate = gated ?? {
         passed: true,
         failedRequired: [],
         missing: [],

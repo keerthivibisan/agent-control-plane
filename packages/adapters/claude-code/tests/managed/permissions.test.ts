@@ -201,13 +201,14 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     // ADR-0021: the lead has its five change tools, never post_review or submit_review.
     expect(LEAD_ROLE_TOOL_NAMES).toEqual(
       LEAD_TOOL_NAMES.filter(
-        (n) => n !== 'post_review' && n !== 'submit_review' && n !== 'report_work',
+        (n) =>
+          n !== 'post_review' && n !== 'submit_review' && n !== 'report_work' && n !== 'ask_lead',
       ),
     );
     for (const name of CHANGE_DECISION_TOOL_NAMES) expect(LEAD_ROLE_TOOL_NAMES).toContain(name);
     const { canUseTool, requests } = setup('lead');
-    // ADR-0026 §3: nor the helpers' report_work.
-    for (const name of ['post_review', 'submit_review', 'report_work']) {
+    // ADR-0026 §3: nor the helpers' report_work; ADR-0033 §3: nor ask_lead.
+    for (const name of ['post_review', 'submit_review', 'report_work', 'ask_lead']) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });
@@ -229,13 +230,16 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     ]);
   });
 
-  it('denies a worker every lead tool but report_work without asking (depth 1)', async () => {
+  it('denies a worker every lead tool but report_work and ask_lead without asking (depth 1)', async () => {
     const { canUseTool, requests } = setup('worker');
-    // ADR-0026 §3: its note tool, from our server, runs without asking.
-    await expect(
-      canUseTool('mcp__acp__report_work', {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
-    ).resolves.toEqual({ behavior: 'allow', toolUseID: 'toolu_1' });
-    for (const name of [...LEAD_TOOL_NAMES.filter((n) => n !== 'report_work'), 'unknown']) {
+    // ADR-0026 §3, ADR-0033 §3: its note and question tools, from our server, run without asking.
+    for (const own of ['report_work', 'ask_lead']) {
+      await expect(
+        canUseTool(`mcp__acp__${own}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
+      ).resolves.toEqual({ behavior: 'allow', toolUseID: 'toolu_1' });
+    }
+    const own = new Set<string>(['report_work', 'ask_lead']);
+    for (const name of [...LEAD_TOOL_NAMES.filter((n) => !own.has(n)), 'unknown']) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toEqual({
@@ -274,9 +278,10 @@ describe('P4-I nested helpers: canUseTool for a depth-2 parent helper (ADR-0013 
     expect(managedToolNames(spec('worker', true))).toEqual([
       ...HELPER_PARENT_TOOL_NAMES,
       'report_work',
+      'ask_lead',
     ]);
-    expect(managedToolNames(spec('worker', false))).toEqual(['report_work']);
-    expect(managedToolNames(spec('worker'))).toEqual(['report_work']);
+    expect(managedToolNames(spec('worker', false))).toEqual(['report_work', 'ask_lead']);
+    expect(managedToolNames(spec('worker'))).toEqual(['report_work', 'ask_lead']);
     expect(HELPER_PARENT_TOOL_NAMES).toEqual([
       'start_agent',
       'list_agents',

@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ButtonLink } from '../../components/Button';
 import { EstimatedCost } from '../../components/EstimatedCost';
+import { ProviderBadge } from '../../components/ProviderBadge';
 import { enter, fade } from '../../components/motion';
 import { RelativeTime } from '../../components/RelativeTime';
 import { Skeleton } from '../../components/Skeleton';
@@ -22,6 +23,7 @@ import {
   EFFORT_COPY,
   FOLLOW_UP_COPY,
   NOT_REPORTED,
+  PROVIDER_COPY,
   REVIEW_LOOP_COPY,
   TICKET_COPY,
 } from '../../lib/copy';
@@ -37,6 +39,7 @@ import { ChangeCard } from '../review-loop/ChangeCard';
 import { canRecheckChange, isReviewLoopRun } from '../review-loop/logic';
 import { ChangesTab } from './ChangesTab';
 import { ChecksTab } from './ChecksTab';
+import { OutboxList } from './OutboxList';
 import {
   agentBranch,
   canHoldChat,
@@ -248,9 +251,11 @@ function useAgentEffort(agent: AgentRunDto): AgentEffort | null | undefined {
 
 /** Ids, branch, model and session link (README §5.3 "Details"). Model and cost come from the session. */
 function DetailsTab({
+  run,
   agent,
   review,
 }: {
+  run: RunDetailDto;
   agent: AgentRunDto;
   review: ReviewDto['agents'][number] | undefined;
 }) {
@@ -266,73 +271,84 @@ function DetailsTab({
     value: null,
   };
   return (
-    <dl
-      className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5"
-      data-testid="details"
-    >
-      <Row label={D.kind}>{C.roles[agent.kind].term}</Row>
-      <Row label={D.task}>
-        {agent.task ? (
-          <span className="whitespace-pre-wrap">{agent.task}</span>
-        ) : (
-          <span className="text-dim">{D.noTask}</span>
-        )}
-      </Row>
-      {hasWorktree(agent.kind) ? (
-        <>
-          <Row label={D.branch}>
-            {branch ? (
-              <span className="font-mono text-caption">{branch}</span>
-            ) : (
-              <span className="text-dim">{D.branchUnknown}</span>
-            )}
-          </Row>
-          {review ? (
-            <Row label={D.baseBranch}>
-              <span className="font-mono text-caption">{review.baseBranch}</span>
-            </Row>
-          ) : null}
-        </>
-      ) : null}
-      <Row label={D.model}>
-        {models.length > 0 ? (
-          models.join(', ')
-        ) : (
-          <span className="text-unavailable">{NOT_REPORTED}</span>
-        )}
-      </Row>
-      {effort !== undefined ? (
-        <Row label={EFFORT_COPY.detail}>
-          <span data-testid="details-effort" data-effort={effort ?? 'default'}>
-            {effort === null ? EFFORT_COPY.detailDefault : EFFORT_COPY.word[effort]}
-          </span>
+    <div className="flex flex-col gap-4">
+      <dl
+        className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-5 gap-y-2.5"
+        data-testid="details"
+      >
+        <Row label={D.kind}>{C.roles[agent.kind].term}</Row>
+        <Row label={D.task}>
+          {agent.task ? (
+            <span className="whitespace-pre-wrap">{agent.task}</span>
+          ) : (
+            <span className="text-dim">{D.noTask}</span>
+          )}
         </Row>
-      ) : null}
-      <Row label={D.cost}>
-        <EstimatedCost cost={cost} />
-      </Row>
-      <Row label={D.started}>
-        <RelativeTime iso={agent.createdAt} />
-      </Row>
-      <Row label={D.ended}>
-        <RelativeTime iso={agent.endedAt} fallback={D.notEnded} />
-      </Row>
-      <Row label={D.session}>
-        {agent.sessionId ? (
-          <a href={href.session(agent.sessionId)} className="font-mono text-caption break-all">
-            {agent.sessionId}
-          </a>
-        ) : (
-          <span className="text-dim">{D.noSession}</span>
-        )}
-      </Row>
-      <Row label={D.agentId}>
-        <span className="font-mono text-caption break-all">{agent.id}</span>
-      </Row>
-      <Row label={D.runId}>
-        <span className="font-mono text-caption break-all">{agent.runId}</span>
-      </Row>
-    </dl>
+        {hasWorktree(agent.kind) ? (
+          <>
+            <Row label={D.branch}>
+              {branch ? (
+                <span className="font-mono text-caption">{branch}</span>
+              ) : (
+                <span className="text-dim">{D.branchUnknown}</span>
+              )}
+            </Row>
+            {review ? (
+              <Row label={D.baseBranch}>
+                <span className="font-mono text-caption">{review.baseBranch}</span>
+              </Row>
+            ) : null}
+          </>
+        ) : null}
+        <Row label={D.model}>
+          {models.length > 0 ? (
+            models.join(', ')
+          ) : (
+            <span className="text-unavailable">{NOT_REPORTED}</span>
+          )}
+        </Row>
+        {agent.provider !== undefined ? (
+          <Row label={PROVIDER_COPY.detail}>
+            <span className="inline-flex items-center gap-2" data-testid="details-provider">
+              {PROVIDER_COPY.name[agent.provider]}
+              <ProviderBadge provider={agent.provider} />
+            </span>
+          </Row>
+        ) : null}
+        {effort !== undefined ? (
+          <Row label={EFFORT_COPY.detail}>
+            <span data-testid="details-effort" data-effort={effort ?? 'default'}>
+              {effort === null ? EFFORT_COPY.detailDefault : EFFORT_COPY.word[effort]}
+            </span>
+          </Row>
+        ) : null}
+        <Row label={D.cost}>
+          <EstimatedCost cost={cost} />
+        </Row>
+        <Row label={D.started}>
+          <RelativeTime iso={agent.createdAt} />
+        </Row>
+        <Row label={D.ended}>
+          <RelativeTime iso={agent.endedAt} fallback={D.notEnded} />
+        </Row>
+        <Row label={D.session}>
+          {agent.sessionId ? (
+            <a href={href.session(agent.sessionId)} className="font-mono text-caption break-all">
+              {agent.sessionId}
+            </a>
+          ) : (
+            <span className="text-dim">{D.noSession}</span>
+          )}
+        </Row>
+        <Row label={D.agentId}>
+          <span className="font-mono text-caption break-all">{agent.id}</span>
+        </Row>
+        <Row label={D.runId}>
+          <span className="font-mono text-caption break-all">{agent.runId}</span>
+        </Row>
+      </dl>
+      <OutboxList outbox={run.outbox} agents={run.agents} />
+    </div>
   );
 }
 
@@ -427,7 +443,7 @@ export function SidePanel({
         )}
       </div>
     ) : (
-      <DetailsTab agent={agent} review={review} />
+      <DetailsTab run={run} agent={agent} review={review} />
     );
 
   return (

@@ -162,7 +162,8 @@ describe('workers, approvals, review (the M1 flow)', () => {
       // F-1: every helper brief ends with the branch rule.
       prompt: `Add a health endpoint\n\n${BRANCH_RULE_LINE}`,
     });
-    expect(worker.spec.leadTools).toBeUndefined();
+    // ADR-0033 §3: every helper has a handler (for ask_lead); the engine scopes its calls.
+    expect(worker.spec.leadTools).toBeDefined();
     expect(existsSync(path)).toBe(true);
     worker.started('worker-session-1');
 

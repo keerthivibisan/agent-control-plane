@@ -72,6 +72,8 @@ export const REFUSAL_CODES = [
   'ticket-branch-pending',
   /** F-2: a plan step's helpers lost every attempt the run allows (discarded or not saved). */
   'attempts-exhausted',
+  /** ADR-0033 §3: the agent has the most open `ask_lead` questions; it waits for an answer. */
+  'too-many-questions',
 ] as const;
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 

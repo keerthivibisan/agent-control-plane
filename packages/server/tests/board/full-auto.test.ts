@@ -107,6 +107,8 @@ describe('Full auto (ADR-0022)', () => {
       expect(deny).toContain(join(s.homeDir, dir));
     }
     expect(deny).toContain(join(s.homeDir, '.claude'));
+    // CX-4: Codex's login is denied to a Claude Full auto agent too.
+    expect(deny).toContain(join(s.homeDir, '.codex'));
     expect(deny).toContain(s.dataDir);
     expect(deny).toContain(realpathSync(s.dataDir));
     expect(worker.spec.cwd.startsWith(realpathSync(s.dataDir))).toBe(true);

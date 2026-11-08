@@ -81,6 +81,14 @@ function createTeeAdapter(): {
     sdk,
     adapter: {
       provider: 'claude-code',
+      capabilities: {
+        skills: true,
+        profileTools: true,
+        fullAuto: true,
+        denyRead: false,
+        leadTools: true,
+        followUp: true,
+      },
       start(spec, callbacks) {
         const handle = fake.adapter.start(spec, callbacks);
         current = spec;

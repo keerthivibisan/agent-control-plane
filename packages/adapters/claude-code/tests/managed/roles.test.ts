@@ -171,7 +171,7 @@ describe('planner (ADR-0019): read-only with submit_plan, input kept open', () =
 describe('reviewer (ADR-0019): read-only with post_review, ends after its turn', () => {
   it('gets only post_review and no edit or shell tools', () => {
     const options = optionsFor(spec('reviewer'));
-    expect(servers.toolNames).toEqual([['post_review']]);
+    expect(servers.toolNames).toEqual([['post_review', 'ask_lead']]);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
   });
 
@@ -205,8 +205,8 @@ describe('tester (ADR-0019): a normal worker', () => {
   it('gets only its note tool and keeps the built-in tools, which ask the owner', async () => {
     const cb = callbacks();
     const options = optionsFor(spec('tester'), cb);
-    // ADR-0026 §3: report_work is the tester's one control-plane tool.
-    expect(servers.toolNames).toEqual([['report_work']]);
+    // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead.
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
     const use = canUseTool(options);
@@ -221,7 +221,7 @@ describe('tester (ADR-0019): a normal worker', () => {
 
   it('ignores canStartHelpers: a tester never starts helpers', () => {
     optionsFor(spec('tester', { canStartHelpers: true }));
-    expect(servers.toolNames).toEqual([['report_work']]);
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
   });
 
   it('closes its input after the turn, like a worker', async () => {

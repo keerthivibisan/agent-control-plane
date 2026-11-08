@@ -98,8 +98,8 @@
 
 ## 4. Managed runs (ADR-0013)
 
-- **Processes:** `git` (execFile, argument arrays), the SDK-spawned `claude`, `gh` (below) and the
-  harness's checks and setup steps (`spawn` with `shell: false`, a bare command name, its own
+- **Processes:** `git` (execFile, argument arrays), the SDK-spawned `claude`, the adapter-spawned
+  `codex app-server` (below, ADR-0031), `gh` (below) and the harness's checks and setup steps (`spawn` with `shell: false`, a bare command name, its own
   process group, a filtered environment and a time limit); no text reaches a shell. Managed agents
   never inherit `CLAUDE_CODE_EXIT_AFTER_STOP_DELAY` from the owner's shell.
 - **Isolation:** one git worktree per helper and tester under `<ACP_DATA_DIR>/worktrees/`; the lead,
@@ -148,6 +148,58 @@
   automatic switch is on and no ticket or run mode is stricter than Full auto.
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
+
+### Codex as a managed provider (ADR-0031, CX series) [implemented on `feat/codex-integration`]
+
+Any agent block may run on Codex (ADR-0031). The safety rules stay on for Codex (AGENTS.md
+§3.11); where Codex cannot be held to one, the agent is refused, never run with less. Tests: the
+Codex section of the [adversarial suite](testing/adversarial.md) (C1 to C10).
+
+- **The process and its network.** One `codex app-server` per agent, spawned as an argument array
+  with `shell: false`, with the server's environment minus `ACP_*` and `GIT_*`. It uses the
+  owner's own Codex login (ChatGPT sign-in) under its default home and talks to OpenAI as the Codex
+  CLI always does. That is the same kind of exception as the SDK's `claude` under ADR-0012, and ACP
+  adds no network call of its own. ACP never reads, copies or stores Codex credentials or
+  `~/.codex`: the availability check reads only whether `account/read` names an account type.
+  User-level Codex configuration is overridden for every managed agent: no hooks, plugins, apps,
+  native subagents, memories, browser or computer use, user MCP servers, web search or project
+  `AGENTS.md`.
+- **What blocks git writes.** Codex has no `PreToolUse` hook, so there are three layers:
+  1. the adapter's git guard: every command approval Codex asks for is checked with core's
+     `checkGitCommand` (both the shell wrapper and the inner command) before the gate, and a git
+     write is declined without asking the owner, in every mode;
+  2. the permission profile: `:workspace` keeps the worktree's `.git` read-only, and the
+     repository's git directories are `read` entries, so a command that runs inside the sandbox
+     without an approval cannot write refs (CX-1, CX-1b: `git commit` exited 128);
+  3. the server's ticket-branch guard and seal checks (architecture §13), which do not depend on
+     the provider.
+- **Deny-read.** Every Codex agent, whatever its role or mode, runs under a permission profile
+  that denies reads of the server's deny list: the home secret folders (`.ssh`, `.aws`, `.gnupg`,
+  `.config/gh`, `.netrc`, `.docker`, `.kube`, `.claude`, `.codex`), the app's data folder,
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. The worktree and the run's temp folder inside the data
+  folder are re-opened by more specific entries. Reads elsewhere are not prompted on Codex: only
+  the deny list is blocked (a known difference from Claude, provider-adapters §12.7).
+- **The `/tmp` finding** (CX-1 result 8). Codex's default workspace sandbox also makes `/tmp` and
+  `$TMPDIR` writable, including any `.git` there: a repository under `/tmp` had a branch created.
+  So every profile denies `/tmp` (`:slash_tmp`) and the temp folder, and a writing agent whose
+  repository's git directory or common git directory lies in a writable temp folder ends
+  `unsafe-git-location` before spawn.
+- **Fail closed.** The agent ends before any turn, never with a weaker sandbox, when:
+  - a profile path holds a control character, a newline or a lone surrogate (no TOML injection;
+    `\` and `"` are escaped): `sandbox-unavailable`;
+  - the thread's `activePermissionProfile` is not the agent's profile: `sandbox-unavailable`;
+  - the deny list could not be built: the agent does not start;
+  - the repository's git data is in a writable temp folder: `unsafe-git-location`;
+  - an agent file narrows tools Codex cannot narrow: `provider-unavailable`;
+  - Codex is not installed or not signed in: `provider-unavailable`, with the reason on the ticket.
+- **Reading roles and follow-ups** run `:read-only` with approval policy `never`, and the adapter
+  declines any approval request they make: they never ask the owner.
+- **Control-plane tools** are dynamic tools limited to the role's set; an unoffered or namespaced
+  call answers `success: false` and never reaches the engine, which checks the caller again.
+- **Resume per provider.** A follow-up or rework resumes only a thread of the agent's own
+  provider; a Claude session id never reaches Codex, nor the reverse.
+- **Stored.** Codex usage counts, the thread id and the model id; never prompts, replies, tool I/O
+  or the text of approval requests beyond the redacted summary (ADR-0009, ADR-0015).
 
 ### Session names and run summaries (ADR-0024) [implemented]
 

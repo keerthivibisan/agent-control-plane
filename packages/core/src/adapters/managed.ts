@@ -1,10 +1,13 @@
 import type { TokenCounts } from '../usage/usage.js';
 import type { AgentRoleKind, LeadToolName } from '../orchestration/orchestration.js';
+import type { ManagedProviderId } from '../domain/provider.js';
+import type { ApprovalMode } from '../workspace/workspace.js';
 
 /**
  * Managed execution contract (ADR-0004, ADR-0012). Separate from `ObservationAdapter`: observation
- * reads what happened; managed execution starts and steers runs. The Claude Code implementation
- * wraps the Claude Agent SDK; tests inject a fake.
+ * reads what happened; managed execution starts and steers runs. One adapter per managed provider
+ * (ADR-0031): the Claude Code implementation wraps the Claude Agent SDK, the Codex one the Codex
+ * app-server; tests inject a fake.
  */
 
 export interface ManagedAgentSpec {
@@ -28,16 +31,16 @@ export interface ManagedAgentSpec {
   /** Resolved model id, or null for the provider default. */
   model: string | null;
   /**
-   * ADR-0028 §1: the node's reasoning effort, passed to the Agent SDK's `effort` option. Absent:
-   * the model's default.
+   * ADR-0028 §1: the node's reasoning effort, passed to the provider's reasoning-effort setting
+   * (for Claude: the Agent SDK's `effort` option). Absent: the model's default.
    */
   effort?: 'low' | 'medium' | 'high';
   /**
-   * ADR-0024: the session's display title, set when the session starts (the Agent SDK's `title`
-   * option, which also skips Claude Code's automatic title request), e.g. `WEB-12 · Frontend
+   * ADR-0024: the session's display title, set when the session starts, e.g. `WEB-12 · Frontend
    * helper`. App data only (ticket key and block or role names), at most `MAX_SESSION_TITLE`
-   * characters. Absent: Claude Code titles the session as before. Ignored for follow-ups, whose
-   * resumed session keeps its title.
+   * characters. For Claude: the Agent SDK's `title` option, which also skips Claude Code's
+   * automatic title request; absent, Claude Code titles the session as before. Ignored for
+   * follow-ups, whose resumed session keeps its title.
    */
   title?: string;
   /** Lead only: the fixed tool set (ADR-0012). Workers never get these tools (depth 1). */
@@ -70,16 +73,17 @@ export interface ManagedAgentSpec {
    */
   profile?: { name: string; instructions: string; tools: readonly string[] | null };
   /**
-   * A follow-up turn of an ended lead (ADR-0020): the adapter resumes `resumeSessionId` (SDK
-   * `resume`, never forked, so usage keeps flowing to the original session) in the same `cwd`, with
-   * the read-only toolset and no control-plane tools, and closes the input after one turn.
+   * A follow-up turn of an ended lead (ADR-0020): the adapter resumes `resumeSessionId` (never
+   * forked, so usage keeps flowing to the original session; for Claude: SDK `resume`) in the same
+   * `cwd`, with the read-only toolset and no control-plane tools, and closes the input after one
+   * turn. The session is always one of this adapter's provider (ADR-0031 §7).
    */
   followUp?: { resumeSessionId: string };
   /**
    * A rework turn of a helper or tester (ADR-0021 §3): the agent works again in its own worktree on
-   * the lead's or owner's comments. `resumeSessionId` resumes its earlier session (SDK `resume`,
-   * never forked); null starts a fresh session with the comments in the prompt. A rework turn
-   * never gets `canStartHelpers`.
+   * the lead's or owner's comments. `resumeSessionId` resumes its earlier session of this
+   * adapter's provider (never forked; for Claude: SDK `resume`); null starts a fresh session with
+   * the comments in the prompt. A rework turn never gets `canStartHelpers`.
    */
   rework?: { resumeSessionId: string | null };
   /**
@@ -108,6 +112,21 @@ export interface ManagedAgentSpec {
    * Ignored for the lead, planner and reviewers, and for follow-ups.
    */
   sandbox?: FullAutoSpec;
+  /**
+   * CX-3, for a `worker` or `tester`: the node's effective approval mode, already tightened by the
+   * ticket or run (ADR-0023 §5). The server sets it. An adapter whose provider enforces approvals
+   * itself (Codex maps it to a sandbox and approval policy) reads it, and absent means `manual`
+   * there. The Claude Code adapter ignores it: its gate is the server's `requestPermission`.
+   */
+  approvalMode?: ApprovalMode;
+  /**
+   * CX-3b, for any agent: absolute paths the agent may not read (the user's secret folders, the
+   * app's data folder, Claude's and Codex's config), resolved by the server. Enforced by providers
+   * that can (capability `denyRead`): Codex through a per-agent permission profile that denies
+   * each path. The server sets it only for such an adapter. The Claude Code adapter ignores it and
+   * keeps using `fullAuto.denyRead` and `sandbox.denyRead` as before.
+   */
+  denyRead?: readonly string[];
 }
 
 /** The sandbox paths of a Full auto agent (`ManagedAgentSpec.fullAuto`, ADR-0022). */
@@ -126,10 +145,19 @@ export interface FullAutoSpec {
 }
 
 /**
- * Why a Full auto agent could not run protected (ADR-0022): Claude Code did not start in auto mode
- * (the model or the account does not offer it), or the operating-system sandbox could not start.
+ * Why an agent could not run, or not run protected. The agent ends with outcome `error` and never
+ * runs with weaker guarantees (ADR-0022, ADR-0031 §5).
+ * - `auto-mode-unavailable`: Claude Code did not start in auto mode (the model or the account does
+ *   not offer it).
+ * - `sandbox-unavailable`: the operating-system sandbox could not start.
+ * - `provider-unavailable`: the provider itself could not start (its program is missing, too old,
+ *   or not signed in; `checkAvailable` says why).
+ * - `unsafe-git-location`: the repository's git directory sits where the agent's sandbox can write
+ *   (CX-1: Codex's workspace-write sandbox leaves /tmp and $TMPDIR writable), so the agent could
+ *   commit or move refs itself, which only the app may do (F-1).
  */
-export type ManagedFailureCode = 'auto-mode-unavailable' | 'sandbox-unavailable';
+export type ManagedFailureCode =
+  'auto-mode-unavailable' | 'sandbox-unavailable' | 'provider-unavailable' | 'unsafe-git-location';
 
 /** What a reviewer agent reviews (`ManagedAgentSpec.reviewScope`). */
 export type ReviewScope = 'change' | 'final';
@@ -163,7 +191,10 @@ export type ManagedAgentEvent =
   | { type: 'started'; providerSessionId: string; model: string | null }
   /** A one-line, content-free description of what the agent did (tool name, target). */
   | { type: 'activity'; summary: string }
-  /** Per assistant message; the engine dedups by `messageId` (usage-accounting §4). */
+  /**
+   * Per model response; the engine dedups by `(provider, messageId)` (usage-accounting §4,
+   * ADR-0032), so ids of two providers never collide.
+   */
   | { type: 'usage'; messageId: string; tokens: TokenCounts }
   /** Lead only: text for the owner's chat (ADR-0015). Never emitted for workers. */
   | { type: 'lead-text'; text: string }
@@ -189,7 +220,33 @@ export interface ManagedAgentHandle {
   abort(): void;
 }
 
+/**
+ * What a provider's adapter can honour (ADR-0031 owner decision 3). The server refuses a node that
+ * needs a missing capability rather than running it with weaker guarantees.
+ */
+export interface ManagedCapabilities {
+  /** Project skills (`ManagedAgentSpec.skillPlugin`). */
+  skills: boolean;
+  /** An agent file's `tools` narrowing the role's tools (`ManagedAgentSpec.profile.tools`). */
+  profileTools: boolean;
+  /** Full auto and the tightened sandbox (`ManagedAgentSpec.fullAuto`, `sandbox`). */
+  fullAuto: boolean;
+  /** Read denial for every agent (`ManagedAgentSpec.denyRead`), enforced by the provider. */
+  denyRead: boolean;
+  /** The lead's control tools (`ManagedAgentSpec.leadTools`). */
+  leadTools: boolean;
+  /** Follow-up turns resuming a saved session (`ManagedAgentSpec.followUp`). */
+  followUp: boolean;
+}
+
 export interface ManagedExecutionAdapter {
-  readonly provider: 'claude-code';
+  readonly provider: ManagedProviderId;
+  readonly capabilities: ManagedCapabilities;
   start(spec: ManagedAgentSpec, callbacks: ManagedCallbacks): ManagedAgentHandle;
+  /**
+   * Whether the provider can start agents now (installed, a supported version, signed in). Never
+   * reads or returns credentials; `reason` is a short owner-facing sentence. Absent: always
+   * available.
+   */
+  checkAvailable?(): Promise<{ ok: true } | { ok: false; reason: string }>;
 }

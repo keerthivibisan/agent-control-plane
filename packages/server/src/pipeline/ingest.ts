@@ -82,8 +82,10 @@ function keyOf(row: SessionRow): SessionKey {
   };
 }
 
-function originOf(event: NormalizedEvent): 'demo' | 'external' {
-  return event.provider === 'demo' ? 'demo' : 'external';
+/** ADR-0032 §5: a session the server recorded from a managed run itself (Codex) is `managed`. */
+function originOf(event: NormalizedEvent): 'demo' | 'external' | 'managed' {
+  if (event.provider === 'demo') return 'demo';
+  return event.source.channel === 'managed' ? 'managed' : 'external';
 }
 
 /** Hook deliveries carry no provider timestamp; the delivery time is the best live evidence. */
@@ -157,7 +159,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const observedSessions = new Set<string>();
     const messages = new Map<
       string,
-      { provider: NormalizedEvent['provider']; messageId: string }
+      {
+        provider: NormalizedEvent['provider'];
+        messageId: string;
+        channel: NormalizedEvent['source']['channel'];
+      }
     >();
     const edgeScopes = new Map<string, { provider: NormalizedEvent['provider']; id: string }>();
     const scopeOf = (e: NormalizedEvent) => `${e.provider}\u0000${e.providerSessionId ?? ''}`;
@@ -228,6 +234,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           messages.set(`${event.provider}\u0000${event.payload.messageId}`, {
             provider: event.provider,
             messageId: event.payload.messageId,
+            channel: event.source.channel,
           });
           observedSessions.add(sessionId);
           break;
@@ -268,7 +275,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
     }
 
-    for (const m of messages.values()) rebuildUsageRecord(m.provider, m.messageId);
+    for (const m of messages.values()) rebuildUsageRecord(m.provider, m.messageId, m.channel);
     for (const scope of edgeScopes.values()) deriveSubagentEdges(scope.provider, scope.id);
     if (observedSessions.size > 0) deriveContinuation([...observedSessions]);
     if (checkpoint !== null) repos.checkpoints.set(checkpoint);
@@ -358,7 +365,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     return moved;
   }
 
-  function rebuildUsageRecord(provider: NormalizedEvent['provider'], messageId: string): void {
+  function rebuildUsageRecord(
+    provider: NormalizedEvent['provider'],
+    messageId: string,
+    channel: NormalizedEvent['source']['channel'],
+  ): void {
     const observations = repos.usage.listObservationsByMessage(provider, messageId);
     const group = [...groupObservationsByMessage(observations).values()][0] ?? [];
     const draft = buildUsageRecord(group);
@@ -386,7 +397,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       observationCount: draft.observationCount,
       conflict: draft.conflict,
       attributionAmbiguous: draft.attributionAmbiguous,
-      source: provider === 'demo' ? 'demo' : 'transcript',
+      // ADR-0032 §5: a managed provider's own usage (Codex) keeps its channel; the rest is read
+      // from transcripts.
+      source: provider === 'demo' ? 'demo' : channel === 'managed' ? 'managed' : 'transcript',
     });
   }
 

@@ -3,10 +3,13 @@ import {
   AgentRunSchema,
   AgentRunStatusSchema,
   HARD_MAX_DEPTH,
+  DEFAULT_MANAGED_PROVIDER,
+  ManagedProviderIdSchema,
   type AgentRoleKind,
   type AgentRun,
   type AgentRunStatus,
   type IsoTimestamp,
+  type ManagedProviderId,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
 import type { RepositoryContext } from '../../internal/context.js';
@@ -33,16 +36,20 @@ export interface AgentRunInsertInput {
   budgetTokensLimit?: number;
   /** Defaults to `QUEUED`. */
   status?: AgentRunStatus;
+  /** ADR-0031: the provider that runs the agent. Defaults to Claude Code. */
+  provider?: ManagedProviderId;
 }
 
 /**
  * A stored agent run. `sessionId` is the observed top-level session for the agent's primary
  * provider session (agent_run_sessions), or null until the observation pipeline has ingested it.
  * `budgetTokensLimit` is not in core's `AgentRun` yet (proposed): it starts at the run's cap and
- * grows when the owner approves a budget raise.
+ * grows when the owner approves a budget raise. `provider` (ADR-0031, migration 0013) is not in it
+ * either: rows stored before 0013 read as Claude Code.
  */
 export interface StoredAgentRun extends AgentRun {
   budgetTokensLimit: number;
+  provider: ManagedProviderId;
 }
 
 export interface AgentRunStatusUpdate {
@@ -82,18 +89,27 @@ interface AgentRunDbRow {
   session_id: string | null;
   budget_tokens_used: number;
   budget_tokens_limit: number;
+  provider: string;
   created_at: string;
   ended_at: string | null;
 }
 
 const T = 'agent_runs';
 
-const SELECT = `SELECT a.id, a.run_id, a.parent_agent_run_id, a.kind, a.role, a.task, a.status,
-    s.id AS session_id, a.budget_tokens_used, a.budget_tokens_limit, a.created_at, a.ended_at
+/**
+ * `provider` is read only where migration 0013 added it; on an older database (only the migration
+ * tests build repositories on one) every agent reads as Claude Code, which is what ran them.
+ */
+function selectSql(hasProvider: boolean): string {
+  const provider = hasProvider ? 'a.provider' : `'${DEFAULT_MANAGED_PROVIDER}' AS provider`;
+  return `SELECT a.id, a.run_id, a.parent_agent_run_id, a.kind, a.role, a.task, a.status,
+    s.id AS session_id, a.budget_tokens_used, a.budget_tokens_limit, ${provider}, a.created_at,
+    a.ended_at
   FROM agent_runs a
   LEFT JOIN agent_run_sessions l ON l.agent_run_id = a.id AND l.relation = 'primary'
   LEFT JOIN sessions s ON s.provider = l.provider AND s.provider_session_id = l.provider_session_id
     AND s.provider_agent_id = ''`;
+}
 
 function toAgentRun(row: AgentRunDbRow): StoredAgentRun {
   const run = parseStored(
@@ -115,15 +131,20 @@ function toAgentRun(row: AgentRunDbRow): StoredAgentRun {
     '*',
   );
   const limit = parseStored(positiveInt, row.budget_tokens_limit, T, 'budget_tokens_limit');
-  return { ...run, budgetTokensLimit: limit };
+  const provider = parseStored(ManagedProviderIdSchema, row.provider, T, 'provider');
+  return { ...run, budgetTokensLimit: limit, provider };
 }
 
 export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepository {
   const c = ctx.connection;
+  const hasProvider = (c.pragma(`table_info(${T})`) as { name: string }[]).some(
+    (col) => col.name === 'provider',
+  );
+  const SELECT = selectSql(hasProvider);
   const insert = c.prepare(
     `INSERT INTO ${T} (id, run_id, parent_agent_run_id, kind, role, task, status,
-       budget_tokens_used, budget_tokens_limit, created_at, ended_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL)`,
+       budget_tokens_used, budget_tokens_limit, created_at, ended_at${hasProvider ? ', provider' : ''})
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, NULL${hasProvider ? ', ?' : ''})`,
   );
   const byId = c.prepare(`${SELECT} WHERE a.id = ?`);
   const forRun = c.prepare(`${SELECT} WHERE a.run_id = ? ORDER BY a.created_at, a.rowid`);
@@ -166,6 +187,11 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
       role: parseInput(shape.role, input.role, 'agent role'),
       task: parseInput(shape.task, input.task, 'agent task'),
       status: parseInput(AgentRunStatusSchema, input.status ?? 'QUEUED', 'agent status'),
+      provider: parseInput(
+        ManagedProviderIdSchema,
+        input.provider ?? DEFAULT_MANAGED_PROVIDER,
+        'agent provider',
+      ),
       budgetTokensLimit:
         input.budgetTokensLimit === undefined
           ? undefined
@@ -183,6 +209,9 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
   return {
     insert(input) {
       const valid = validate(input);
+      if (!hasProvider && valid.provider !== DEFAULT_MANAGED_PROVIDER) {
+        throw new DbError('invalid_input', 'this database cannot store an agent provider yet');
+      }
       return c.transaction((): StoredAgentRun => {
         const cap = runCap.get(valid.runId) as number | undefined;
         if (cap === undefined) throw new DbError('not_found', 'orchestration run not found');
@@ -213,6 +242,7 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
             valid.status,
             valid.budgetTokensLimit ?? cap,
             ctx.now().toISOString(),
+            ...(hasProvider ? [valid.provider] : []),
           ),
         );
         // The row was just inserted in this transaction.

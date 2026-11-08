@@ -1,6 +1,7 @@
 import { fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { formatShare } from '../../src/lib/copy';
+import { formatCount } from '../../src/lib/format';
 import { TokensPage } from '../../src/features/tokens/TokensPage';
 import {
   presetDays,
@@ -9,7 +10,13 @@ import {
   tokensHref,
 } from '../../src/features/tokens/tokens-params';
 import { fakeServer, renderWithApi } from '../helpers';
-import { emptyProjectTokens, headlineOf, projectTokens, totals } from '../fixtures/tokens';
+import {
+  emptyProjectTokens,
+  headlineOf,
+  mixedProviderTokens,
+  projectTokens,
+  totals,
+} from '../fixtures/tokens';
 
 beforeAll(() => {
   // Recharts' ResponsiveContainer observes its parent's size; jsdom has no ResizeObserver.
@@ -323,5 +330,67 @@ describe('TokensPage (R-F)', () => {
     renderPage('', {});
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.queryByRole('group', { name: 'Tokens at a glance' })).toBeNull();
+  });
+});
+
+describe('Tokens page by provider (CX-6b)', () => {
+  const rowOf = (table: HTMLElement, key: string) =>
+    table.querySelector(`[data-row="${key}"]`) as HTMLElement;
+  const chip = (el: HTMLElement) => within(el).getByTestId('provider-badge');
+
+  it('keeps one model name from two providers in two rows, each with its chip', async () => {
+    renderPage('by=model', { [PATH]: mixedProviderTokens() });
+    const models = await screen.findByRole('table', { name: 'Tokens by model' });
+    expect(within(models).getAllByText('shared-model')).toHaveLength(2);
+    expect(chip(rowOf(models, 'claude-code/shared-model')).textContent).toBe('Claude');
+    expect(chip(rowOf(models, 'codex/shared-model')).textContent).toBe('Codex');
+    expect(chip(rowOf(models, 'codex/unknown')).getAttribute('data-provider')).toBe('codex');
+  });
+
+  it('shows the session’s provider; a Codex session’s cost reads "Not reported"', async () => {
+    renderPage('', { [PATH]: mixedProviderTokens() });
+    const table = await screen.findByRole('table', { name: 'Tokens by session' });
+    expect(chip(rowOf(table, 'sess-aaaaaaaa-1')).textContent).toBe('Claude');
+    const codex = rowOf(table, 'thread-dddddddd-4');
+    expect(chip(codex).textContent).toBe('Codex');
+    const cost = within(codex).getByTestId('cost');
+    expect(cost.textContent).toContain('Not reported');
+    expect(cost.getAttribute('data-provenance')).toBe('unavailable');
+  });
+
+  it('subtotals tokens per provider, with cost only where the provider reports it', async () => {
+    renderPage('', { [PATH]: mixedProviderTokens() });
+    const list = await screen.findByRole('list', { name: 'Tokens by provider' });
+    const item = (p: string) => list.querySelector(`[data-subtotal="${p}"]`) as HTMLElement;
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    // Claude: 1,000 + 8,000 new work; Codex: (300 + 2,000) + (100 + 1,000).
+    expect(
+      item('claude-code').querySelector('[data-figure="newWork"] [data-state="available"]')
+        ?.textContent,
+    ).toBe(formatCount(9_000, 'compact'));
+    expect(
+      item('codex').querySelector('[data-figure="newWork"] [data-state="available"]')?.textContent,
+    ).toBe(formatCount(3_400, 'compact'));
+    // One Codex record lacked the cache types: its total is partial, not 0-filled.
+    expect(within(item('codex')).getByText('Partial')).toBeTruthy();
+    const cost = (p: string) => within(item(p)).getByTestId('provider-cost');
+    expect(cost('claude-code').textContent).toBe('Per session');
+    expect(cost('codex').textContent).toBe('Not reported');
+    expect(cost('codex').getAttribute('data-provenance')).toBe('unavailable');
+    // ADR-0032 §6: no dollar figure is ever added across providers.
+    expect(list.textContent).not.toMatch(/\$/);
+  });
+
+  it('shows no subtotals for one provider, and "Unknown" for a pre-CX row', async () => {
+    const base = projectTokens();
+    const old = {
+      ...base,
+      bySession: base.bySession.map(({ provider: _p, ...s }) => s),
+      byModel: base.byModel.map(({ provider: _p, ...m }) => m),
+    };
+    renderPage('by=model', { [PATH]: old });
+    const models = await screen.findByRole('table', { name: 'Tokens by model' });
+    expect(chip(rowOf(models, 'claude-opus-4-1')).textContent).toBe('Unknown');
+    expect(screen.queryByTestId('provider-subtotals')).toBeNull();
   });
 });

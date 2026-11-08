@@ -1,4 +1,5 @@
 import type { ApprovalMode, HarnessManifest } from '../workspace.js';
+import { DEFAULT_MANAGED_PROVIDER, type ManagedProviderId } from '../../domain/provider.js';
 import { HARD_MAX_HELPERS } from '../workspace.js';
 import { checkSelectionIssues } from '../harness-select.js';
 import {
@@ -7,6 +8,7 @@ import {
   WORKFLOW_NODE_TYPES,
   isAgentNode,
   isEditorNode,
+  modelMatchesProvider,
   type GraphIssue,
   type GraphIssueCode,
   type WorkflowEdge,
@@ -50,6 +52,17 @@ export interface ValidateGraphContext {
    * checked against it (`checkSelectionIssues`, warnings only). Absent: not checked.
    */
   harness?: Pick<HarnessManifest, 'checks'> | null;
+  /**
+   * The project's default provider, for agent nodes without their own (`model-provider-mismatch`).
+   * Absent: Claude Code.
+   */
+  projectProvider?: ManagedProviderId;
+  /**
+   * CX-4: the project's agent files whose `tools` narrow the role's tools. A Codex node using one
+   * gets `codex-agent-tools` (Codex cannot apply the narrowing, so the agent would be refused).
+   * Absent: not checked.
+   */
+  toolNarrowingAgents?: readonly string[];
 }
 
 /**
@@ -711,6 +724,57 @@ function checkModes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Iss
   }
 }
 
+const PROVIDER_NAMES: Readonly<Record<ManagedProviderId, string>> = Object.freeze({
+  'claude-code': 'Claude',
+  codex: 'Codex',
+});
+
+/**
+ * ADR-0031: a node whose model looks like the other provider's gets a warning, never a refusal
+ * (the name is only a hint; the provider decides). Unknown names are not flagged.
+ */
+function checkModelProviders(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
+  for (const node of graph.nodes) {
+    if (!isAgentNode(node) || node.model === null) continue;
+    const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
+    if (modelMatchesProvider(node.model, provider) !== false) continue;
+    issues.warning(
+      'model-provider-mismatch',
+      `${q(node)} runs on ${PROVIDER_NAMES[provider]}, but its model "${node.model}" looks like a model of another provider. Choose a ${PROVIDER_NAMES[provider]} model or change the block's provider.`,
+      { nodeId: node.id },
+    );
+  }
+}
+
+/**
+ * ADR-0031 §5 (CX-4): the run start refuses a Codex agent that cannot be held to its block's
+ * setup, so the editor says so first. An agent file that narrows tools (Codex cannot apply the
+ * narrowing) is an error; project skills, which Codex leaves out, are a warning. Full auto runs on
+ * Codex since CX-3b (its permission profiles deny reads of private files).
+ */
+function checkCodexNodes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
+  for (const node of graph.nodes) {
+    if (!isAgentNode(node)) continue;
+    const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
+    if (provider !== 'codex') continue;
+    const narrowing = ctx.toolNarrowingAgents;
+    if (narrowing !== undefined && node.agent !== null && narrowing.includes(node.agent)) {
+      issues.error(
+        'codex-agent-tools',
+        `${q(node)} runs on Codex with the agent file "${node.agent}", which limits the agent's tools. Codex cannot apply that limit yet, so the agent would not start. Remove the file's tools list, choose another file or run the block on Claude.`,
+        { nodeId: node.id },
+      );
+    }
+    if (node.skills.length > 0) {
+      issues.warning(
+        'codex-skills-ignored',
+        `${q(node)} runs on Codex, which cannot load project skills yet: its skills are left out.`,
+        { nodeId: node.id },
+      );
+    }
+  }
+}
+
 /** ADR-0028 §2: the editor warns (never refuses) when a workflow has no Checks block at all. */
 export const NO_CHECKS_MESSAGE = 'No checks: changes merge after review only.';
 
@@ -736,8 +800,8 @@ function checkInstances(graph: WorkflowGraph, ctx: ValidateGraphContext, issues:
  * Any `error` means the graph cannot be saved or started; warnings never block. The order is
  * fixed: ids, edges (in graph order), counts and labels, plan path, review routes, change
  * reviewers, rework, assignment, merge path, final chain, Checks blocks, cycles, reachability,
- * then the warnings (files, modes, instances, `no-checks`, and the Checks blocks' selection last,
- * when `ctx.harness` is given). Within a rule, issues follow graph order.
+ * Codex nodes (their errors and the skills warning), then the warnings (files, modes, instances, model providers, `no-checks`, and the Checks blocks'
+ * selection last, when `ctx.harness` is given). Within a rule, issues follow graph order.
  *
  * The graph must already have `WorkflowGraphSchema`'s shape; this checks what the shape cannot.
  * Every path rule reads only the edges that pass `canConnect`, so a refused edge is reported once,
@@ -763,9 +827,11 @@ export function validateWorkflowGraph(
   checkCheckBlocks(scope);
   checkCycles(scope);
   checkReachable(scope);
+  checkCodexNodes(graph, ctx, issues);
   checkFiles(graph, ctx, issues);
   checkModes(graph, ctx, issues);
   checkInstances(graph, ctx, issues);
+  checkModelProviders(graph, ctx, issues);
   checkNoChecks(graph, issues);
   if (ctx.harness !== undefined) issues.list.push(...checkSelectionIssues(graph, ctx.harness));
   return issues.list;

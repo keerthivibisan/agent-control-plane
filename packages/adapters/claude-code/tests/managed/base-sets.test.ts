@@ -187,10 +187,10 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
     const control: Record<AgentRoleKind, unknown[]> = {
       lead: [expect.arrayContaining(['submit_plan', 'start_agent'])],
       planner: [['submit_plan']],
-      reviewer: [['post_review']],
-      // ADR-0026 §3: the helper's and tester's note.
-      worker: [['report_work']],
-      tester: [['report_work']],
+      reviewer: [['post_review', 'ask_lead']],
+      // ADR-0026 §3: the helper's and tester's note; ADR-0033 §3: their question to the lead.
+      worker: [['report_work', 'ask_lead']],
+      tester: [['report_work', 'ask_lead']],
     };
     for (const kind of ALL_KINDS) {
       const options = optionsFor(spec(kind));

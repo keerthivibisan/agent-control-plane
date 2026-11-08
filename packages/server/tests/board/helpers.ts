@@ -27,7 +27,7 @@ import { createCheckRunner, createMainChecks } from '../../src/harness/index.js'
 import type { CodeHostService } from '../../src/code-host/index.js';
 import type { Logger } from '../../src/logger.js';
 import { createGitRunner, createWorkspaceManager } from '../../src/workspace/index.js';
-import { createFakeManagedAdapter } from '../control/fake-adapter.js';
+import { createFakeManagedAdapter, type FakeAdapterOptions } from '../control/fake-adapter.js';
 import { setupApp } from '../helpers.js';
 import { GIT_TEST_ENV, makeRepo, tempDir } from '../workspace/helpers.js';
 
@@ -82,6 +82,15 @@ export interface BoardSetupOptions {
   legacyRuns?: boolean;
   /** ADR-0025: the code host (a fake `gh` over a local bare remote); omitted, none. */
   codeHost?: CodeHostService;
+  /**
+   * ADR-0031 (CX-4): also register a scripted Codex adapter (`codex` in the result), with these
+   * options. Omitted: the server has the Claude fake only.
+   */
+  codex?: Omit<FakeAdapterOptions, 'provider'>;
+  /** ADR-0033 §6: the merge's wait for its checks, in milliseconds (tests: a short one). */
+  mergeTimeoutMs?: number;
+  /** Changes the board's control hooks once they are wired (a test's own merge gate, …). */
+  patchHooks?: (hooks: ControlWorkspaceHooks) => void;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -102,6 +111,10 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const dataDir = reopen?.dataDir ?? tempDir('acp-board-data-');
   const git = createGitRunner({ env: GIT_TEST_ENV });
   const fake = createFakeManagedAdapter();
+  const codex =
+    options.codex === undefined
+      ? undefined
+      : createFakeManagedAdapter({ ...options.codex, provider: 'codex' });
   const clock = { now: BOARD_NOW };
   const now = () => clock.now;
   const hooks: ControlWorkspaceHooks = {};
@@ -111,7 +124,14 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
   const control = createControlService({
     db,
     repos,
-    adapter: fake.adapter,
+    adapters: new Map([
+      [fake.adapter.provider, fake.adapter],
+      ...(codex !== undefined ? ([[codex.adapter.provider, codex.adapter]] as const) : []),
+    ]),
+    // ADR-0032 §5: Codex usage goes through the same pipeline as the app's.
+    ingestManaged: (events) => {
+      base.pipeline.ingestEvents(events);
+    },
     workspaces,
     git,
     dataDir,
@@ -127,6 +147,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     claudeDir: join(homeDir, '.claude'),
     workspace: hooks,
     ...(options.codeHost !== undefined && { codeHost: options.codeHost }),
+    ...(options.mergeTimeoutMs !== undefined && { mergeTimeoutMs: options.mergeTimeoutMs }),
   });
   const workspace = createWorkspaceRepositories(db, { now });
   const harness = createProjectHarness({ repos, workspace, now, logger });
@@ -163,6 +184,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     ...(options.legacyRuns === true && { legacyTicketRuns: true }),
   });
   Object.assign(hooks, board.controlHooks());
+  options.patchHooks?.(hooks);
   const workflow = createWorkflowService({
     db,
     repos,
@@ -255,6 +277,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     homeDir,
     checks,
     fake,
+    codex,
     repo,
     project,
     dataDir,

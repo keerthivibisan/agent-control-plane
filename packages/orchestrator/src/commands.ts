@@ -30,6 +30,7 @@ import { IllegalTransitionError, refusal } from './errors.js';
 import { abortFollowUpTurn } from './follow-up.js';
 import type { Refusal } from './errors.js';
 import { checkRunLimits, DEFAULT_RUN_LIMITS } from './limits.js';
+import { finishNotices } from './messaging.js';
 import {
   checkPlanApproved,
   checkProjectRegistered,
@@ -51,6 +52,7 @@ import {
   isReadOnlyRole,
   isStageAgent,
   launchFieldsFor,
+  nodeProvider,
   nextStage,
 } from './stages.js';
 import { effectiveMode, programOf } from './program.js';
@@ -86,6 +88,7 @@ export function applyCommand<T>(
     const outcome = body(draft);
     if (isRefusal(outcome)) return { ok: false, refusal: outcome };
     draft.reconcile();
+    finishNotices(draft, draft.activeAtStart);
     draft.trackOwnerWait();
     draft.flushCheckoutRemovals();
     return { ok: true, state: draft.finish(), effects: draft.effects, value: outcome.value };
@@ -315,6 +318,7 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     budgetTokensUsed: 0,
     createdAt: now,
     endedAt: null,
+    provider: nodeProvider(program, program.lead.id),
     budgetLimit: budget.maxTokensPerAgent,
     latestActivity: null,
     review: null,
@@ -362,6 +366,7 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
         kind: 'planner',
         role: 'Planner',
         stage: plannerNode.id,
+        provider: nodeProvider(program, plannerNode.id),
       };
       d.agents.push(planner);
       d.setAgentStatus(planner, 'STARTING');
@@ -464,6 +469,7 @@ export function agentEvent(
         d.effects.push({
           type: 'link-session',
           agentRunId: agent.id,
+          provider: agent.provider,
           providerSessionId: event.providerSessionId,
         });
         // ADR-0021: a rework turn resumes the helper's first session; keep it (evidence only).
@@ -491,7 +497,7 @@ export function agentEvent(
           d.effects.push({ type: 'diagnostic', code: 'invalid-usage', agentRunId });
           return done;
         }
-        d.ledger = recordUsage(d.ledger, agent.id, event.messageId, parsed.data);
+        d.ledger = recordUsage(d.ledger, agent.id, agent.provider, event.messageId, parsed.data);
         // A message reported by another agent too may move charges; refresh everyone's total.
         for (const a of d.agents) if (a.id !== agent.id) d.enforceBudget(a, true);
         d.enforceBudget(agent, false);
@@ -615,10 +621,22 @@ export const FULL_AUTO_FAILURE_ACTIVITY: Readonly<Record<ManagedFailureCode, str
     "Could not start: Claude Code's auto mode is not available for this model or account (Full auto needs it)",
   'sandbox-unavailable':
     'Could not start: the operating-system sandbox is not available on this computer (Full auto needs it)',
+  'provider-unavailable':
+    'Could not start: its provider is not available on this computer (not installed, too old or not signed in)',
+  'unsafe-git-location':
+    "Could not start: the project's git folder is where the agent's sandbox could change it",
 };
 
 /** The engine's message to the lead about it: every later helper would fail the same way. */
 export function fullAutoFailureNote(role: string, id: string, code: ManagedFailureCode): string {
+  // ADR-0031: the provider's own refusals are not about Full auto, so they say so plainly.
+  if (code === 'provider-unavailable' || code === 'unsafe-git-location') {
+    const reason =
+      code === 'provider-unavailable'
+        ? 'its provider is not available on this computer'
+        : "the project's git folder is where its sandbox could change it";
+    return `${role} (agentId ${id}) could not start: ${reason}, so it did no work and never ran unprotected. Every helper of the same provider would fail the same way: do not start more of them. Once every change is decided, call request_review so the owner sees why.`;
+  }
   const why =
     code === 'auto-mode-unavailable'
       ? "Claude Code's auto mode is not available for this model or account"
@@ -850,8 +868,15 @@ export function expireApprovals(
  * Stops one agent (owner's Stop, or `stop_agent` from the lead or a parent helper): its helpers
  * first (depth 2), then the agent; each one's open approvals are denied before it is aborted.
  */
-export function stopAgent(state: RunState, agentRunId: string, ctx: EngineContext): EngineResult {
+export function stopAgent(
+  state: RunState,
+  agentRunId: string,
+  ctx: EngineContext,
+  /** The agent that stopped it (`stop_agent`): its tool reply says so; it gets no finish notice. */
+  byAgentRunId?: string,
+): EngineResult {
   return applyCommand(state, ctx, (d) => {
+    if (byAgentRunId !== undefined) d.noFinishNoticeTo = byAgentRunId;
     const agent = d.agent(agentRunId);
     if (agent === undefined) return refusal('unknown-agent', 'Unknown agent.');
     if (!isLiveAgentStatus(agent.status)) {

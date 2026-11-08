@@ -1,6 +1,6 @@
-import { approvalsOf } from '@acp/core';
+import { MANAGED_PROVIDERS, approvalsOf, type ManagedProviderId } from '@acp/core';
 import type { ContextCandidateDto, ProjectAgentSetupDto, ProjectDto } from '@acp/core/api';
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Button, ButtonLink } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { AutomationCard } from './AutomationCard';
@@ -16,7 +16,7 @@ import {
   sameBranching,
   validateBranching,
 } from '../branching/strategy-form';
-import { labelClass } from '../../components/Input';
+import { Select, hintClass, labelClass } from '../../components/Input';
 import { PageHeader } from '../../components/PageHeader';
 import { QueryView } from '../../components/QueryView';
 import { ThemeChoice } from '../../components/ThemeSwitch';
@@ -28,7 +28,15 @@ import {
   schemas,
   updateProjectSetup,
 } from '../../lib/api';
-import { BRANCHING_COPY, PROJECT_SETUP_COPY, REVIEW_LOOP_COPY, SHELL_COPY } from '../../lib/copy';
+import {
+  BRANCHING_COPY,
+  PROJECT_SETUP_COPY,
+  PROVIDER_COPY,
+  REVIEW_LOOP_COPY,
+  SHELL_COPY,
+  WORKFLOW_GRAPH_COPY,
+} from '../../lib/copy';
+import { MODEL_SUGGESTIONS, effectiveProvider } from '../../lib/providers';
 import { useApiQuery } from '../../lib/query';
 import type { QueryState } from '../../lib/query-store';
 import { href } from '../../lib/router';
@@ -70,6 +78,44 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** The project's default provider (ADR-0031): Claude Code or Codex. */
+function ProviderSelect({
+  value,
+  onChange,
+}: {
+  value: ManagedProviderId;
+  onChange: (next: ManagedProviderId) => void;
+}) {
+  const id = useId();
+  const V = PROVIDER_COPY;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" data-testid="settings-provider">
+      <label htmlFor={id} className={labelClass}>
+        {V.settings.label}
+      </label>
+      <Select
+        id={id}
+        value={value}
+        onChange={(e) => {
+          const next = MANAGED_PROVIDERS.find((x) => x === e.target.value);
+          if (next !== undefined) onChange(next);
+        }}
+        aria-describedby={`${id}-hint`}
+        className="max-w-xs"
+      >
+        {MANAGED_PROVIDERS.map((x) => (
+          <option key={x} value={x}>
+            {V.name[x]}
+          </option>
+        ))}
+      </Select>
+      <span id={`${id}-hint`} className={hintClass}>
+        {V.settings.hint}
+      </span>
+    </div>
+  );
+}
+
 /**
  * The project and context cards in one form. The PUT body is the setup as saved now with only
  * these fields changed, so a limit saved on the Workflow page meanwhile is never overwritten.
@@ -96,7 +142,12 @@ function SettingsForm({
   const [branching, setBranching] = useState(savedBranching);
   const branchErrors = validateBranching(branching);
   const branchingChanged = !sameBranching(branching, savedBranching);
-  const dirty = !sameSettings(draft, saved) || branchingChanged;
+  // ADR-0031: Claude Code when the setup names none. Choosing Claude Code again saves null, which
+  // clears the stored choice (the same as none).
+  const savedProvider = effectiveProvider(undefined, setup.provider);
+  const [provider, setProvider] = useState<ManagedProviderId>(savedProvider);
+  const providerChanged = provider !== savedProvider;
+  const dirty = !sameSettings(draft, saved) || branchingChanged || providerChanged;
 
   const change = (patch: Partial<SetupDraft>) => {
     setJustSaved(false);
@@ -114,7 +165,11 @@ function SettingsForm({
     setErrors({});
     if (!b.ok) return;
     // Absent keeps the stored strategy; `null` removes it (None).
-    const request = branchingChanged ? { ...r.request, branching: b.branching } : r.request;
+    const withBranching = branchingChanged ? { ...r.request, branching: b.branching } : r.request;
+    // Absent keeps the stored provider; `null` removes it (Claude Code).
+    const request = providerChanged
+      ? { ...withBranching, provider: provider === 'claude-code' ? null : provider }
+      : withBranching;
     if ((await save.run(project.id, request)) !== null) setJustSaved(true);
   };
 
@@ -150,8 +205,23 @@ function SettingsForm({
               error={errors.model}
               value={draft.model}
               onChange={(v) => change({ model: v })}
-              placeholder={C.agents.modelPlaceholder}
+              placeholder={
+                provider === 'claude-code'
+                  ? C.agents.modelPlaceholder
+                  : WORKFLOW_GRAPH_COPY.panel.modelDefaultOf(PROVIDER_COPY.name[provider])
+              }
               mono
+              suggestions={{
+                label: PROVIDER_COPY.suggestions(PROVIDER_COPY.name[provider]),
+                values: MODEL_SUGGESTIONS[provider],
+              }}
+            />
+            <ProviderSelect
+              value={provider}
+              onChange={(next) => {
+                setJustSaved(false);
+                setProvider(next);
+              }}
             />
           </div>
         </div>
@@ -198,6 +268,7 @@ function SettingsForm({
               onClick={() => {
                 setDraft(saved);
                 setBranching(savedBranching);
+                setProvider(savedProvider);
                 setErrors({});
               }}
               disabled={save.pending}

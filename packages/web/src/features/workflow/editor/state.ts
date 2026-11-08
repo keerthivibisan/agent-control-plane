@@ -5,6 +5,7 @@ import {
   NODE_CAPABILITIES,
   canConnect,
   type AgentEffort,
+  type ManagedProviderId,
   type AgentWorkflowNode,
   type ApprovalMode,
   type CheckBlockPlace,
@@ -84,6 +85,8 @@ export interface NodePatch {
   select?: CheckSelection;
   /** An agent block's effort (ADR-0028 §1); null: the model's default (the field is dropped). */
   effort?: AgentEffort | null;
+  /** An agent block's provider (ADR-0031); null: the project's default (the field is dropped). */
+  provider?: ManagedProviderId | null;
 }
 
 /**
@@ -682,10 +685,20 @@ function withEffort<N extends AgentWorkflowNode>(
   return (effort === null ? rest : { ...rest, effort }) as N;
 }
 
+/** An agent block with the patch's provider: set, or dropped for the project's default. */
+function withProvider<N extends AgentWorkflowNode>(
+  node: N,
+  provider: ManagedProviderId | null | undefined,
+): N {
+  if (provider === undefined) return node;
+  const { provider: _old, ...rest } = node;
+  return (provider === null ? rest : { ...rest, provider }) as N;
+}
+
 /** Applies the patch's fields that the node's kind has; the others are ignored. */
 export function patchNode(node: WorkflowNode, patch: NodePatch): WorkflowNode {
   const next = patchFields(node, patch);
-  return 'skills' in next ? withEffort(next, patch.effort) : next;
+  return 'skills' in next ? withProvider(withEffort(next, patch.effort), patch.provider) : next;
 }
 
 function patchFields(node: WorkflowNode, patch: NodePatch): WorkflowNode {

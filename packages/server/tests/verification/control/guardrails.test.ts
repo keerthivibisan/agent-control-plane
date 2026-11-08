@@ -121,7 +121,8 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
     let leadTools: ((name: 'start_agent', input: unknown) => Promise<string>) | undefined;
     const query: ManagedQueryFn = ({ prompt, options }) => {
       const input = prompt[Symbol.asyncIterator]();
-      const kind = options.mcpServers?.['acp'] === undefined ? 'worker' : 'lead';
+      // Since ADR-0033 every role has our MCP server (ask_lead); the lead runs in the repo itself.
+      const kind = options.cwd === repo ? 'lead' : 'worker';
       const cwd = options.cwd ?? '';
       async function* script() {
         yield { type: 'system', subtype: 'init', session_id: `s-${kind}`, model: 'm' };
@@ -151,6 +152,14 @@ describe('P3-F tool permissions through the real managed adapter (scripted SDK q
       logger: silentLogger,
       adapter: {
         provider: 'claude-code',
+        capabilities: {
+          skills: true,
+          profileTools: true,
+          fullAuto: true,
+          denyRead: false,
+          leadTools: true,
+          followUp: true,
+        },
         start(spec, callbacks) {
           if (spec.kind === 'lead') leadTools = spec.leadTools;
           return real.start(spec, callbacks);

@@ -111,6 +111,66 @@ the real runs of 2026-10-21 passed with every review route
   run is `NEEDS_REVIEW` and never times out. When the timeout stops a run, a helper whose change
   waits for review ends `CANCELLED` (as with Stop all) and the other live agents end `TIMED_OUT`.
 
+## 0.2 Lead and agent messaging (ADR-0033) [implemented]
+
+Verified with engine tests (`packages/orchestrator/tests/messaging.test.ts`) and server tests with
+the fake managed adapter (`packages/server/tests/control/messaging.test.ts`). Provider-neutral: the
+engine and the server decide; both adapters only offer the tools (the same role sets from core,
+`managedToolNames`). Not yet tried in a real run.
+
+- **Delivery state.** `message_agent` and `ask_lead` answer with where the message stands:
+  - `delivered`: handed to the agent's live process;
+  - `queued`: the agent is starting and gets it once it runs;
+  - `queued` (held): the agent cannot take input now (waiting for the owner, BLOCKED over budget,
+    the lead waiting for an approved plan, or an ended lead between follow-up turns) and gets it in
+    order when it can;
+  - `dropped`, with a reason: the agent has ended, its change is under review, it only waits for its
+    helpers, or it has no process. It never arrives.
+
+  A message to an ended helper is no longer a refusal; it is reported as dropped. Every drop of any
+  input (also plain input such as the owner's chat) is counted in diagnostics (`message-dropped`)
+  and logged with ids only; nothing is dropped silently.
+
+- **Held messages.** Engine notices and messages for an agent that cannot take input are held in
+  memory, in order, and delivered when it can again (it leaves BLOCKED or WAITING_APPROVAL; for
+  the ended lead, they open its next follow-up turn's prompt). At most 50 are held per agent; past
+  that the oldest is dropped and counted (`held-message-dropped`). They do not survive a restart.
+  After a budget raise the resume message comes first, then the held messages.
+- **`ask_lead(question)`** (1 to 2000 characters): every helper, the tester and every reviewer
+  (change and final) can ask the agent that started it: its parent helper at depth 2, else the
+  lead. The parent gets `<role> (agentId <id>) asks: <question>` and answers with `message_agent`,
+  which also reaches a tester or reviewer that asked. The asker keeps working. At most 5 questions
+  stay open per agent; a further one is refused (`too-many-questions`) until the parent's next
+  `message_agent` to it, which answers them all. The lead and the planner do not have it.
+- **Finish notice.** When a helper, the tester or a reviewer stops working (finished, failed or
+  stopped), its parent gets one notice with its role, the outcome and where its work is, never the
+  agent's text. None is sent while the run is stopping, after a restart, to the agent that stopped
+  it itself (`stop_agent`), or to a parent helper stopped in the same command. In a review-loop run
+  the lead already hears of each change through the loop (ready for review, the review agent's
+  verdict, a stopped helper's work), so a change-tracked agent and a change reviewer add no second
+  notice to the lead.
+- **`get_review_findings(agent)`** (lead, review-loop runs): the latest stored review agent findings
+  of a change (round, reviewer, verdict, findings text) from the `change_reviews` row and its ticket
+  comment. Refused when none are stored.
+- **Bounded merge.** A merge (the lead's `merge_change` or the owner's) waits at most 10 minutes for
+  the merge queued before it and for its required checks' gate. On timeout nothing is merged, the
+  change keeps its state (the lead may merge again, rework, discard or ask the owner) and the lead
+  is told; it is counted (`merge-timeout`). A running git command is never cut off: only these
+  waits are bounded.
+- **Outbox (metadata only).** Each run keeps, in memory, the latest 200 lead/agent messages as
+  metadata: id, sender (an agent run or `engine`), recipient, kind (`message`, `question`,
+  `notice`), state, created and delivered times, the text's length and its SHA-256. Never the text;
+  nothing goes in the database. The run detail returns it as `outbox` while the run is held in
+  memory and has entries.
+
+## 0.3 Provider per agent (ADR-0031) [implemented on `feat/codex-integration`]
+
+Each agent takes its provider (Claude or Codex) from its workflow node, else the project's
+default, else Claude, when it starts, and keeps it. Its starts, rework turns, session link, usage
+and the lead's follow-up all carry that provider; the server routes each to that provider's
+adapter only. The state machines below are the same for both providers. Details:
+[provider-adapters §12](provider-adapters.md).
+
 ## 1. Principles
 
 - The LLM plans and recommends. **The engine enforces** concurrency, budgets, permissions, workspace

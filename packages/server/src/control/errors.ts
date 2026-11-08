@@ -45,6 +45,7 @@ const REFUSAL_STATUS: Readonly<Record<RefusalCode, number>> = {
   'handed-over': 409,
   // F-2: a plan step's helpers lost every attempt the run allows.
   'attempts-exhausted': 409,
+  'too-many-questions': 429,
   'ticket-branch-pending': 409,
 };
 
