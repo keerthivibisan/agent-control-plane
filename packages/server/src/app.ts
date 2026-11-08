@@ -13,6 +13,8 @@ import { createTokensRouter } from './routes/tokens.js';
 import { createWorkflowRouter } from './routes/workflow.js';
 import { createSkillsRouter, type SkillsRouterDeps } from './routes/skills.js';
 import { createAgentsRouter, type AgentsRouterDeps } from './routes/agents.js';
+import { createCodeMapRouter } from './routes/code-map.js';
+import type { CodeMapService } from './codemap/service.js';
 import type { BoardService } from './board/service.js';
 import type { ControlService } from './control/service.js';
 import type { Services } from './services/index.js';
@@ -41,6 +43,11 @@ export interface AppDeps {
   skills?: Omit<SkillsRouterDeps, 'csrfToken'>;
   /** Project agent definitions (R-D; ADR-0018 amendment); mounted like the skills routes. */
   agents?: Omit<AgentsRouterDeps, 'csrfToken'>;
+  /**
+   * The project code map (ADR-0034). Reads are always mounted with it; the refresh POST only with
+   * the control panel, which owns the CSRF token.
+   */
+  codeMap?: CodeMapService;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -62,6 +69,9 @@ export function createApp(deps: AppDeps): Express {
   );
   if (deps.tokens !== undefined) app.use('/api', createTokensRouter(deps.tokens));
   if (deps.control !== undefined) app.use('/api', createControlRouter(deps.control));
+  if (deps.codeMap !== undefined) {
+    app.use('/api', createCodeMapRouter(deps.codeMap, deps.control?.csrfToken));
+  }
   if (deps.control !== undefined && deps.board !== undefined) {
     app.use('/api', createBoardRouter(deps.board, deps.control.csrfToken));
     if (deps.workflow !== undefined) {

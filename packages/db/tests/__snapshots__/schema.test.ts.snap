@@ -169,6 +169,59 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
   },
   {
     "columns": [
+      "project_id TEXT NOT NULL PK1",
+      "blob_sha TEXT NOT NULL PK2",
+      "indexer_version INTEGER NOT NULL",
+      "data TEXT NOT NULL",
+    ],
+    "foreignKeys": [
+      "project_id -> projects(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (project_id, blob_sha)",
+    ],
+    "table": "code_map_blobs",
+  },
+  {
+    "columns": [
+      "manifest_id TEXT NOT NULL PK1",
+      "path TEXT NOT NULL PK2",
+      "blob_sha TEXT NOT NULL",
+      "size_bytes INTEGER NOT NULL",
+      "data TEXT NOT NULL",
+    ],
+    "foreignKeys": [
+      "manifest_id -> code_map_manifests(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (manifest_id, path)",
+      "code_map_entries_blob (blob_sha)",
+    ],
+    "table": "code_map_entries",
+  },
+  {
+    "columns": [
+      "id TEXT NOT NULL PK1",
+      "project_id TEXT NOT NULL",
+      "commit_sha TEXT NOT NULL",
+      "built_at TEXT NOT NULL",
+      "indexer_version INTEGER NOT NULL",
+      "counts TEXT NULL",
+      "status TEXT NOT NULL",
+      "error TEXT NULL",
+    ],
+    "foreignKeys": [
+      "project_id -> projects(id) ON DELETE CASCADE",
+    ],
+    "indexes": [
+      "UNIQUE (pk) (id)",
+      "UNIQUE (u) (project_id, commit_sha)",
+      "code_map_manifests_project (project_id, built_at)",
+    ],
+    "table": "code_map_manifests",
+  },
+  {
+    "columns": [
       "id TEXT NOT NULL PK1",
       "run_id TEXT NOT NULL",
       "project_id TEXT NOT NULL",

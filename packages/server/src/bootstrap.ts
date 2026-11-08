@@ -7,6 +7,7 @@ import { createDemoAdapter } from '@acp/adapter-demo';
 import type { ManagedExecutionAdapter, ManagedProviderId, ObservationAdapter } from '@acp/core';
 import {
   createQueries,
+  createCodeMapRepositories,
   createRepositories,
   createHarnessRepositories,
   createReviewLoopRepositories,
@@ -19,6 +20,7 @@ import { createProjectHarness } from './board/harness.js';
 import { createBoardService } from './board/service.js';
 import { createWorkflowService } from './workflow/service.js';
 import { createTokensService } from './tokens/service.js';
+import { createCodeMapService } from './codemap/service.js';
 import { createAgentsService, createSkillsService } from './skills/index.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
@@ -341,6 +343,14 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     board,
     workflow,
     tokens: createTokensService({ db }),
+    // ADR-0034: built on the owner's refresh (CM-1); CM-2 calls ensureForCommit at run start.
+    codeMap: createCodeMapService({
+      repo: createCodeMapRepositories(db).codeMap,
+      projectOf: (projectId) => repos.projects.getById(projectId),
+      git,
+      logger,
+      now,
+    }),
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),

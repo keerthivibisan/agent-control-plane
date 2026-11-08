@@ -5,3 +5,4 @@ export * from './redesign.js';
 export * from './code-host.js';
 export * from './activity.js';
 export * from './conflict-resolution.js';
+export * from './code-map.js';
