@@ -240,7 +240,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     },
     workspace: workspaceHooks,
     codeHost,
-    codeMap,
+    // CM-5: with ACP_CODE_MAP=off the runs get no map source; `code_map` then refuses.
+    ...(config.codeMap === 'on' && { codeMap }),
     ...options.control,
   });
   controlRef.current = controlService;

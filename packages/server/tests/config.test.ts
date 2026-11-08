@@ -41,6 +41,12 @@ describe('loadConfig', () => {
     );
   });
 
+  it('ACP_CODE_MAP: on by default, off accepted, anything else refused (CM-5)', () => {
+    expect(loadConfig({}, { homeDir: home }).codeMap).toBe('on');
+    expect(loadConfig({ ACP_CODE_MAP: 'off' }, { homeDir: home }).codeMap).toBe('off');
+    expect(() => loadConfig({ ACP_CODE_MAP: 'no' }, { homeDir: home })).toThrow(/ACP_CODE_MAP/);
+  });
+
   it('rejects inverted status thresholds', () => {
     expect(() =>
       loadConfig({ ACP_ACTIVE_WINDOW_MS: '5000', ACP_STALE_AFTER_MS: '1000' }, { homeDir: home }),

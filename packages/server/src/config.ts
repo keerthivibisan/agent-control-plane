@@ -36,6 +36,8 @@ const EnvSchema = z.object({
       'ACP_CODEX_BIN must be one program name or path',
     )
     .default('codex'),
+  // ADR-0034 CM-5: `off` keeps ticket runs from building or using a code map (measured runs).
+  ACP_CODE_MAP: z.enum(['on', 'off'], { error: 'ACP_CODE_MAP must be on or off' }).default('on'),
 });
 
 export interface ServerConfig {
@@ -66,6 +68,12 @@ export interface ServerConfig {
   readonly runTimeoutMs: number;
   /** The Codex program for managed Codex agents (ADR-0031): `codex` on the PATH by default. */
   readonly codexBin: string;
+  /**
+   * ADR-0034 (CM-5): `off` gives ticket runs no code map: no build at run start, no repository map,
+   * no map summaries in a helper's starting points, and the `code_map` tool (still offered) refuses.
+   * The Code map page and its refresh still work. Default `on`.
+   */
+  readonly codeMap: 'on' | 'off';
 }
 
 export class ConfigError extends Error {
@@ -112,5 +120,6 @@ export function loadConfig(
     managed: e.ACP_MANAGED ?? 'auto',
     runTimeoutMs: e.ACP_RUN_TIMEOUT_MS,
     codexBin: e.ACP_CODEX_BIN,
+    codeMap: e.ACP_CODE_MAP,
   };
 }

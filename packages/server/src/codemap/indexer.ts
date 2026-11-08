@@ -99,7 +99,8 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
   const parse = deps.parse ?? parseScript;
   const concurrency = deps.concurrency ?? 8;
   const maxFiles = deps.maxFiles ?? MAX_CODE_MAP_FILES;
-  const git = (args: string[], cwd: string) => deps.git(args, { cwd });
+  const git = (args: string[], cwd: string, input?: string) =>
+    deps.git(args, input === undefined ? { cwd } : { cwd, input });
 
   async function readTree(
     cwd: string,
@@ -127,17 +128,65 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
     return { entries, invalidPaths };
   }
 
+  /**
+   * Reads blobs through `git cat-file --batch`, one process per chunk (at most 500 objects or
+   * 16 MiB), instead of one process per blob: a first build of a large repository would otherwise
+   * start thousands of processes. A missing object is simply absent from the result.
+   */
+  async function readBlobs(
+    cwd: string,
+    entries: readonly TreeEntry[],
+  ): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const chunks: TreeEntry[][] = [];
+    let chunk: TreeEntry[] = [];
+    let bytes = 0;
+    for (const e of entries) {
+      if (chunk.length > 0 && (chunk.length >= 500 || bytes + e.size > 16 * 1024 * 1024)) {
+        chunks.push(chunk);
+        chunk = [];
+        bytes = 0;
+      }
+      chunk.push(e);
+      bytes += e.size;
+    }
+    if (chunk.length > 0) chunks.push(chunk);
+    await mapBounded(chunks, Math.min(concurrency, 4), async (part) => {
+      const { raw } = await git(
+        ['cat-file', '--batch'],
+        cwd,
+        `${part.map((e) => e.sha).join('\n')}\n`,
+      );
+      if (raw === undefined) throw new CodeMapBuildError('git_failed');
+      let offset = 0;
+      while (offset < raw.length) {
+        const newline = raw.indexOf(0x0a, offset);
+        if (newline === -1) break;
+        const [sha, type, size] = raw.toString('utf8', offset, newline).split(' ');
+        if (type === 'missing' || size === undefined || sha === undefined) {
+          offset = newline + 1;
+          continue;
+        }
+        const end = newline + 1 + Number(size);
+        out.set(sha, raw.toString('utf8', newline + 1, end));
+        // The content is followed by one newline.
+        offset = end + 1;
+      }
+    });
+    return out;
+  }
+
   async function readBlob(cwd: string, sha: string): Promise<string> {
     return (await git(['cat-file', 'blob', sha], cwd)).stdout;
   }
 
-  async function analyse(cwd: string, entry: TreeEntry): Promise<CodeMapBlob> {
+  function analyse(entry: TreeEntry, text: string | undefined): CodeMapBlob {
     const language = languageOf(entry.path);
     const empty = { lineCount: 0, symbols: [], imports: [] };
     if (entry.size > MAX_CODE_MAP_FILE_BYTES) {
       return { language, sizeBytes: entry.size, ...empty, skipped: { reason: 'too-large' } };
     }
-    const text = await readBlob(cwd, entry.sha);
+    if (text === undefined) throw new CodeMapBuildError('git_failed');
     // A NUL in the first 8 KiB (decoded text keeps U+0000 where the byte was).
     if (text.slice(0, CODE_MAP_BINARY_SNIFF_BYTES).includes('\0')) {
       return { language, sizeBytes: entry.size, ...empty, skipped: { reason: 'binary' } };
@@ -231,10 +280,12 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
           !isScriptLanguage(blob.language);
         if ((blob === undefined || stale) && !todo.has(e.sha)) todo.set(e.sha, e);
       }
-      const analysed = await mapBounded([...todo.values()], concurrency, async (e) => ({
-        blobSha: e.sha,
-        blob: await analyse(cwd, e),
-      }));
+      const pending = [...todo.values()];
+      const texts = await readBlobs(
+        cwd,
+        pending.filter((e) => e.size <= MAX_CODE_MAP_FILE_BYTES),
+      );
+      const analysed = pending.map((e) => ({ blobSha: e.sha, blob: analyse(e, texts.get(e.sha)) }));
       for (let i = 0; i < analysed.length; i += 500) {
         deps.repo.putBlobs(project.id, analysed.slice(i, i + 500));
       }

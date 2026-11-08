@@ -97,6 +97,7 @@ start with a message naming the variable.
 | `ACP_CLAUDE_DIR`       | `$CLAUDE_CONFIG_DIR`, else `~/.claude` | the Claude Code data folder to read (read-only)                                                                              |
 | `ACP_MODE`             | `live`                                 | `live`, or `demo` for sample data                                                                                            |
 | `ACP_MANAGED`          | on in live mode, off in demo mode      | `off` turns managed agent runs off; the app then only observes sessions                                                      |
+| `ACP_CODE_MAP`         | `on`                                   | `off` gives ticket runs no code map (for measured comparisons); the Code map page still works                                |
 | `ACP_POLL_INTERVAL_MS` | `5000`                                 | how often session files are checked for new records                                                                          |
 | `ACP_ACTIVE_WINDOW_MS` | `120000` (2 minutes)                   | a session with activity this recent counts as running                                                                        |
 | `ACP_STALE_AFTER_MS`   | `1800000` (30 minutes)                 | a session idle this long counts as inactive; must be at least `ACP_ACTIVE_WINDOW_MS`                                         |
