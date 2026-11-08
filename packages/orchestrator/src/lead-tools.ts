@@ -79,11 +79,17 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
  *   reviewers also `ask_lead` (ADR-0033 §3);
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
  *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
- * - tester: `report_work` in a ticket run, and `ask_lead`.
+ * - tester: `report_work` in a ticket run, and `ask_lead`;
+ * - every agent: the read-only `code_map` (ADR-0034 §4).
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
   const agent = state.agents.find((a) => a.id === agentRunId);
   if (agent === undefined) return [];
+  return [...roleControlTools(state, agent), 'code_map'];
+}
+
+/** The role's own tools, without the read-only `code_map` every agent has (ADR-0034 §4). */
+function roleControlTools(state: RunState, agent: EngineAgent): readonly string[] {
   const kind: AgentRoleKind = agent.kind;
   switch (kind) {
     case 'lead':
@@ -93,6 +99,7 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'ask_lead' &&
+          n !== 'code_map' &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
@@ -141,6 +148,13 @@ export function leadToolCall(
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
   const loop = state.integration !== undefined;
+  if (call.name === 'code_map') {
+    // ADR-0034 §4: any agent of the run may look up the code map; it changes no engine state.
+    // The server answers from the map of the run's base commit, or refuses without one.
+    const parsed = LeadToolInputs.code_map.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return readOnly(state, '');
+  }
   if (call.name === 'ask_lead') {
     // ADR-0033 §3: helpers, the tester and reviewers ask their parent; the lead and planner don't.
     if (caller.kind === 'lead' || caller.kind === 'planner') {

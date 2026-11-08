@@ -344,8 +344,16 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
  */
 function followUpGate(spec: ManagedAgentSpec): CanUseTool {
   const allowed: ReadonlySet<string> = new Set(followUpToolNames(spec));
+  // ADR-0034 §4: the read-only `code_map` from our server, when the server gave a handler.
+  const ownTools: ReadonlySet<string> = new Set(
+    spec.leadTools === undefined ? [] : managedToolNames(spec),
+  );
   return (toolName, input, options): Promise<PermissionResult> => {
     const toolUseID = options.toolUseID;
+    const own = leadToolName(toolName);
+    if (own !== null && ownTools.has(own) && fromLeadServer(options)) {
+      return Promise.resolve({ behavior: 'allow', toolUseID });
+    }
     if (allowed.has(toolName) && readsOnlyInside(toolName, input, spec, options)) {
       return Promise.resolve({ behavior: 'allow', toolUseID });
     }

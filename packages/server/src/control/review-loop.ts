@@ -1300,6 +1300,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
   }
 
   return {
+    planFor,
     refOf,
     release,
     openPullRequest,

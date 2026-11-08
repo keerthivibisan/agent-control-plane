@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { controlToolLabel, redact } from '@acp/core';
+import type { ToolUseCategory } from '@acp/core';
 
 /** Approval and activity summaries are capped here (ADR-0013, `PermissionRequest.summary`). */
 export const MAX_SUMMARY_LENGTH = 200;
@@ -69,6 +70,29 @@ export function commandActivity(command: string): string {
   if (!COMMAND_NAME_RE.test(name)) return 'Run a command';
   const sub = words[start + 1];
   return sub !== undefined && SUBCOMMAND_RE.test(sub) ? `Run ${name} ${sub}` : `Run ${name}`;
+}
+
+const READ_COMMANDS: ReadonlySet<string> = new Set(['cat', 'head', 'tail', 'less']);
+const SEARCH_COMMANDS: ReadonlySet<string> = new Set(['rg', 'grep', 'find', 'ls', 'fd']);
+
+/**
+ * ADR-0034 (CM-2): the measurement category of a command, from its first command name (and the
+ * word after it) inside Codex's shell wrapper: `read` (`cat`, `head`, `tail`, `less`, `sed -n`),
+ * `search` (`rg`, `grep`, `find`, `ls`, `fd`, `git grep`), else `shell`. Nothing is kept.
+ */
+export function commandCategory(command: string): ToolUseCategory {
+  const words = unwrapShellCommand(command)
+    .split(/\s+/)
+    .filter((w) => w !== '');
+  const start = words.findIndex((w) => !ENV_ASSIGNMENT_RE.test(w));
+  if (start < 0) return 'shell';
+  const name = (words[start] ?? '').replace(/^.*[\\/]/, '');
+  const next = words[start + 1];
+  if (READ_COMMANDS.has(name)) return 'read';
+  if (name === 'sed') return next !== undefined && /^-n/.test(next) ? 'read' : 'shell';
+  if (SEARCH_COMMANDS.has(name)) return 'search';
+  if (name === 'git' && next === 'grep') return 'search';
+  return 'shell';
 }
 
 /** An approval summary for a command: `Run <inner command>`, redacted and capped. */

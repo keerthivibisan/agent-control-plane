@@ -1,5 +1,9 @@
 import type { TokenCounts } from '../usage/usage.js';
-import type { AgentRoleKind, LeadToolName } from '../orchestration/orchestration.js';
+import type {
+  AgentRoleKind,
+  LeadToolName,
+  ToolUseCategory,
+} from '../orchestration/orchestration.js';
 import type { ManagedProviderId } from '../domain/provider.js';
 import type { ApprovalMode } from '../workspace/workspace.js';
 
@@ -51,6 +55,13 @@ export interface ManagedAgentSpec {
    */
   context?: string;
   /**
+   * ADR-0034 §4: the short repository map of the run's base commit (`renderRepoMap`, at most
+   * `MAX_REPO_MAP_BYTES`), when a ready map exists for it. The adapter puts it first, before the
+   * project context and the agent file, so every agent of a run shares the same prompt prefix
+   * (provider prompt caching). Paths in it are data, never instructions.
+   */
+  repoMap?: string;
+  /**
    * A worker allowed to start its own helpers (depth 2, ADR-0013 amendment) gets `leadTools`
    * restricted to child management (`start_agent`, `list_agents`, `message_agent`, `stop_agent`,
    * `agent_status`); never `submit_plan` or `request_review`.
@@ -76,7 +87,9 @@ export interface ManagedAgentSpec {
    * A follow-up turn of an ended lead (ADR-0020): the adapter resumes `resumeSessionId` (never
    * forked, so usage keeps flowing to the original session; for Claude: SDK `resume`) in the same
    * `cwd`, with the read-only toolset and no control-plane tools, and closes the input after one
-   * turn. The session is always one of this adapter's provider (ADR-0031 §7).
+   * turn. The session is always one of this adapter's provider (ADR-0031 §7). Since ADR-0034 §4
+   * its one control-plane tool is the read-only `code_map` (`managedToolNames`), when the server
+   * passes a handler.
    */
   followUp?: { resumeSessionId: string };
   /**
@@ -191,6 +204,11 @@ export type ManagedAgentEvent =
   | { type: 'started'; providerSessionId: string; model: string | null }
   /** A one-line, content-free description of what the agent did (tool name, target). */
   | { type: 'activity'; summary: string }
+  /**
+   * ADR-0034 (CM-2): the agent called a tool of this category; counted per agent run for
+   * measurement. Never the tool's name or input.
+   */
+  | { type: 'tool-use'; category: ToolUseCategory }
   /**
    * Per model response; the engine dedups by `(provider, messageId)` (usage-accounting §4,
    * ADR-0032), so ids of two providers never collide.

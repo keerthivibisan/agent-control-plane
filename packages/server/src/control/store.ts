@@ -233,6 +233,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       if (next.budgetTokensUsed !== 0) {
         repos.agentRuns.setBudgetTokensUsed(next.id, next.budgetTokensUsed);
       }
+      if (next.toolCounts !== undefined) repos.agentRuns.setToolCounts(next.id, next.toolCounts);
       if (next.stage !== undefined) redesignRepos.runAudit.setAgentStage(next.id, next.stage);
       return;
     }
@@ -250,6 +251,10 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
     if (prev.budgetLimit !== next.budgetLimit) {
       repos.agentRuns.setBudgetTokensLimit(next.id, next.budgetLimit);
+    }
+    // CM-2: the engine replaces the counts object on every counted call.
+    if (next.toolCounts !== undefined && prev.toolCounts !== next.toolCounts) {
+      repos.agentRuns.setToolCounts(next.id, next.toolCounts);
     }
     if (next.review !== null && prev.review !== next.review) {
       const ws = repos.workspaces.getByAgentRun(next.id);
@@ -583,6 +588,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
             ? null
             : (workspaces.get(a.id)?.reviewState ?? (loop ? 'no-changes' : 'pending')),
         reportedCostUsd: null,
+        ...(a.toolCounts !== null && { toolCounts: a.toolCounts }),
         ...withStage(stages.get(a.id) ?? null),
         ...changeOf(changes.get(a.id), workspaces.get(a.id)),
       }));

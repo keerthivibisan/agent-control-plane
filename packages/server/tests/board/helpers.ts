@@ -21,6 +21,7 @@ import { createAgentProfiles } from '../../src/workflow/agent-profile.js';
 import {
   createControlService,
   type ControlService,
+  type ControlServiceDeps,
   type ControlWorkspaceHooks,
 } from '../../src/control/service.js';
 import { createCheckRunner, createMainChecks } from '../../src/harness/index.js';
@@ -91,6 +92,8 @@ export interface BoardSetupOptions {
   mergeTimeoutMs?: number;
   /** Changes the board's control hooks once they are wired (a test's own merge gate, …). */
   patchHooks?: (hooks: ControlWorkspaceHooks) => void;
+  /** Extra control service deps (CM-2: the code map source and its wait window). */
+  control?: Partial<ControlServiceDeps>;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -148,6 +151,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     workspace: hooks,
     ...(options.codeHost !== undefined && { codeHost: options.codeHost }),
     ...(options.mergeTimeoutMs !== undefined && { mergeTimeoutMs: options.mergeTimeoutMs }),
+    ...options.control,
   });
   const workspace = createWorkspaceRepositories(db, { now });
   const harness = createProjectHarness({ repos, workspace, now, logger });

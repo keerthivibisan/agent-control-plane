@@ -7,6 +7,8 @@ import {
   ReworkRoundsSchema,
   TicketKeySchema,
   TokenCountsSchema,
+  ToolUseCategorySchema,
+  addToolUse,
   WorkflowGraphInvalidError,
   WorkflowGraphSchema,
   redact,
@@ -490,6 +492,17 @@ export function agentEvent(
       case 'activity':
         agent.latestActivity = cleanSummary(event.summary, 'Working');
         return done;
+
+      case 'tool-use': {
+        // ADR-0034 (CM-2): a content-free count per category; a value outside the list is dropped.
+        const category = ToolUseCategorySchema.safeParse(event.category);
+        if (!category.success) {
+          d.effects.push({ type: 'diagnostic', code: 'invalid-tool-use', agentRunId });
+          return done;
+        }
+        agent.toolCounts = addToolUse(agent.toolCounts, category.data);
+        return done;
+      }
 
       case 'usage': {
         const parsed = TokenCountsSchema.safeParse(event.tokens);

@@ -5,17 +5,20 @@ import {
   HARD_MAX_DEPTH,
   DEFAULT_MANAGED_PROVIDER,
   ManagedProviderIdSchema,
+  ToolUseCountsSchema,
   type AgentRoleKind,
   type AgentRun,
   type AgentRunStatus,
   type IsoTimestamp,
   type ManagedProviderId,
+  type ToolUseCounts,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
 import type { RepositoryContext } from '../../internal/context.js';
 import {
   parseInput,
   parseStored,
+  parseStoredJson,
   placeholders,
   toStoredTimestampOrNull,
 } from '../../internal/validate.js';
@@ -45,11 +48,13 @@ export interface AgentRunInsertInput {
  * provider session (agent_run_sessions), or null until the observation pipeline has ingested it.
  * `budgetTokensLimit` is not in core's `AgentRun` yet (proposed): it starts at the run's cap and
  * grows when the owner approves a budget raise. `provider` (ADR-0031, migration 0013) is not in it
- * either: rows stored before 0013 read as Claude Code.
+ * either: rows stored before 0013 read as Claude Code. `toolCounts` (CM-2, migration 0015): the
+ * agent's content-free tool calls by category; null when none were counted.
  */
 export interface StoredAgentRun extends AgentRun {
   budgetTokensLimit: number;
   provider: ManagedProviderId;
+  toolCounts: ToolUseCounts | null;
 }
 
 export interface AgentRunStatusUpdate {
@@ -76,6 +81,11 @@ export interface AgentRunsRepository {
   setBudgetTokensUsed(id: string, used: number): StoredAgentRun | undefined;
   /** Raises (or sets) the agent's cap after a `budget-raise` approval. */
   setBudgetTokensLimit(id: string, limit: number): StoredAgentRun | undefined;
+  /**
+   * CM-2: stores the agent's tool-call counts by category (`ToolUseCountsSchema`). Throws
+   * `invalid_input` on a database before migration 0015.
+   */
+  setToolCounts(id: string, counts: ToolUseCounts): StoredAgentRun | undefined;
 }
 
 interface AgentRunDbRow {
@@ -90,6 +100,7 @@ interface AgentRunDbRow {
   budget_tokens_used: number;
   budget_tokens_limit: number;
   provider: string;
+  tool_counts: string | null;
   created_at: string;
   ended_at: string | null;
 }
@@ -99,12 +110,14 @@ const T = 'agent_runs';
 /**
  * `provider` is read only where migration 0013 added it; on an older database (only the migration
  * tests build repositories on one) every agent reads as Claude Code, which is what ran them.
+ * `tool_counts` likewise only where 0015 added it; before, no counts.
  */
-function selectSql(hasProvider: boolean): string {
+function selectSql(hasProvider: boolean, hasToolCounts: boolean): string {
   const provider = hasProvider ? 'a.provider' : `'${DEFAULT_MANAGED_PROVIDER}' AS provider`;
+  const toolCounts = hasToolCounts ? 'a.tool_counts' : 'NULL AS tool_counts';
   return `SELECT a.id, a.run_id, a.parent_agent_run_id, a.kind, a.role, a.task, a.status,
-    s.id AS session_id, a.budget_tokens_used, a.budget_tokens_limit, ${provider}, a.created_at,
-    a.ended_at
+    s.id AS session_id, a.budget_tokens_used, a.budget_tokens_limit, ${provider}, ${toolCounts},
+    a.created_at, a.ended_at
   FROM agent_runs a
   LEFT JOIN agent_run_sessions l ON l.agent_run_id = a.id AND l.relation = 'primary'
   LEFT JOIN sessions s ON s.provider = l.provider AND s.provider_session_id = l.provider_session_id
@@ -132,15 +145,19 @@ function toAgentRun(row: AgentRunDbRow): StoredAgentRun {
   );
   const limit = parseStored(positiveInt, row.budget_tokens_limit, T, 'budget_tokens_limit');
   const provider = parseStored(ManagedProviderIdSchema, row.provider, T, 'provider');
-  return { ...run, budgetTokensLimit: limit, provider };
+  const toolCounts =
+    row.tool_counts === null
+      ? null
+      : parseStoredJson(ToolUseCountsSchema, row.tool_counts, T, 'tool_counts');
+  return { ...run, budgetTokensLimit: limit, provider, toolCounts };
 }
 
 export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepository {
   const c = ctx.connection;
-  const hasProvider = (c.pragma(`table_info(${T})`) as { name: string }[]).some(
-    (col) => col.name === 'provider',
-  );
-  const SELECT = selectSql(hasProvider);
+  const columns = (c.pragma(`table_info(${T})`) as { name: string }[]).map((col) => col.name);
+  const hasProvider = columns.includes('provider');
+  const hasToolCounts = columns.includes('tool_counts');
+  const SELECT = selectSql(hasProvider, hasToolCounts);
   const insert = c.prepare(
     `INSERT INTO ${T} (id, run_id, parent_agent_run_id, kind, role, task, status,
        budget_tokens_used, budget_tokens_limit, created_at, ended_at${hasProvider ? ', provider' : ''})
@@ -167,6 +184,9 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
   const currentStatus = c.prepare(`SELECT status FROM ${T} WHERE id = ?`).pluck();
   const setUsed = c.prepare(`UPDATE ${T} SET budget_tokens_used = ? WHERE id = ?`);
   const setLimit = c.prepare(`UPDATE ${T} SET budget_tokens_limit = ? WHERE id = ?`);
+  const setCounts = hasToolCounts
+    ? c.prepare(`UPDATE ${T} SET tool_counts = ? WHERE id = ?`)
+    : null;
 
   function getById(id: string): StoredAgentRun | undefined {
     const row = byId.get(id) as AgentRunDbRow | undefined;
@@ -292,6 +312,13 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
     setBudgetTokensLimit(id, limit) {
       const valid = parseInput(positiveInt, limit, 'budgetTokensLimit');
       return setLimit.run(valid, id).changes > 0 ? getById(id) : undefined;
+    },
+    setToolCounts(id, counts) {
+      const valid = parseInput(ToolUseCountsSchema, counts, 'toolCounts');
+      if (setCounts === null) {
+        throw new DbError('invalid_input', 'this database cannot store tool counts yet');
+      }
+      return setCounts.run(JSON.stringify(valid), id).changes > 0 ? getById(id) : undefined;
     },
   };
 }

@@ -391,14 +391,15 @@ describe('lead tools', () => {
       dynamicToolsFor(spec).map((t) => t.name);
     expect(names({ kind: 'lead', leadTools })).toContain('get_review_findings');
     expect(names({ kind: 'lead', leadTools })).not.toContain('ask_lead');
-    expect(names({ kind: 'planner', leadTools })).toEqual(['submit_plan']);
-    expect(names({ kind: 'worker', leadTools })).toEqual(['report_work', 'ask_lead']);
+    expect(names({ kind: 'planner', leadTools })).toEqual(['submit_plan', 'code_map']);
+    expect(names({ kind: 'worker', leadTools })).toEqual(['report_work', 'ask_lead', 'code_map']);
     expect(names({ kind: 'worker', canStartHelpers: true, leadTools })).toContain('ask_lead');
-    expect(names({ kind: 'tester', leadTools })).toEqual(['report_work', 'ask_lead']);
-    expect(names({ kind: 'reviewer', leadTools })).toEqual(['post_review', 'ask_lead']);
+    expect(names({ kind: 'tester', leadTools })).toEqual(['report_work', 'ask_lead', 'code_map']);
+    expect(names({ kind: 'reviewer', leadTools })).toEqual(['post_review', 'ask_lead', 'code_map']);
     expect(names({ kind: 'reviewer', reviewScope: 'change', leadTools })).toEqual([
       'submit_review',
       'ask_lead',
+      'code_map',
     ]);
     for (const kind of ['worker', 'tester', 'reviewer', 'planner'] as const) {
       expect(names({ kind, leadTools })).not.toContain('get_review_findings');

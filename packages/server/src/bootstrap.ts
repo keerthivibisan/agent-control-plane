@@ -209,6 +209,15 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     ...(options.codeHost?.cli !== undefined && { cli: options.codeHost.cli }),
     ...(options.codeHost?.ghCommand !== undefined && { ghCommand: options.codeHost.ghCommand }),
   });
+  // ADR-0034: built on the owner's refresh (CM-1) and, for a ticket run's base commit, when the
+  // run starts (CM-2: the control service calls ensureForCommit; agents read the map).
+  const codeMap = createCodeMapService({
+    repo: createCodeMapRepositories(db).codeMap,
+    projectOf: (projectId) => repos.projects.getById(projectId),
+    git,
+    logger,
+    now,
+  });
   const controlService = createControlService({
     db,
     repos,
@@ -231,6 +240,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     },
     workspace: workspaceHooks,
     codeHost,
+    codeMap,
     ...options.control,
   });
   controlRef.current = controlService;
@@ -343,14 +353,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     board,
     workflow,
     tokens: createTokensService({ db }),
-    // ADR-0034: built on the owner's refresh (CM-1); CM-2 calls ensureForCommit at run start.
-    codeMap: createCodeMapService({
-      repo: createCodeMapRepositories(db).codeMap,
-      projectOf: (projectId) => repos.projects.getById(projectId),
-      git,
-      logger,
-      now,
-    }),
+    codeMap,
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),

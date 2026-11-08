@@ -25,13 +25,15 @@ describe('managedToolNames', () => {
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('report_work');
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('ask_lead');
     expect(LEAD_ROLE_TOOL_NAMES).toContain('get_review_findings');
-    expect(managedToolNames({ kind: 'planner' })).toEqual(['submit_plan']);
-    expect(managedToolNames({ kind: 'reviewer' })).toEqual(['post_review', 'ask_lead']);
+    expect(LEAD_ROLE_TOOL_NAMES).toContain('code_map');
+    expect(managedToolNames({ kind: 'planner' })).toEqual(['submit_plan', 'code_map']);
+    expect(managedToolNames({ kind: 'reviewer' })).toEqual(['post_review', 'ask_lead', 'code_map']);
     expect(managedToolNames({ kind: 'reviewer', reviewScope: 'change' })).toEqual([
       'submit_review',
       'ask_lead',
+      'code_map',
     ]);
-    expect(managedToolNames({ kind: 'worker' })).toEqual(['report_work', 'ask_lead']);
+    expect(managedToolNames({ kind: 'worker' })).toEqual(['report_work', 'ask_lead', 'code_map']);
     expect(managedToolNames({ kind: 'worker', canStartHelpers: true })).toEqual([
       'start_agent',
       'list_agents',
@@ -40,11 +42,27 @@ describe('managedToolNames', () => {
       'agent_status',
       'report_work',
       'ask_lead',
+      'code_map',
     ]);
     expect(managedToolNames({ kind: 'tester', canStartHelpers: true })).toEqual([
       'report_work',
       'ask_lead',
+      'code_map',
     ]);
+  });
+
+  it('ADR-0034 §4: code_map for every role, follow-ups included', () => {
+    const specs = [
+      { kind: 'lead' },
+      { kind: 'planner' },
+      { kind: 'reviewer' },
+      { kind: 'reviewer', reviewScope: 'change' },
+      { kind: 'worker' },
+      { kind: 'worker', canStartHelpers: true },
+      { kind: 'tester' },
+      { kind: 'lead', followUp: { resumeSessionId: 's' } },
+    ] as const;
+    for (const spec of specs) expect(managedToolNames(spec)).toContain('code_map');
   });
 
   it('ADR-0033: ask_lead for helpers, the tester and reviewers; get_review_findings for the lead', () => {
@@ -55,8 +73,10 @@ describe('managedToolNames', () => {
     expect(withTool('get_review_findings')).toEqual(['lead']);
   });
 
-  it('gives a follow-up no tool at all', () => {
-    expect(managedToolNames({ kind: 'lead', followUp: { resumeSessionId: 's' } })).toEqual([]);
+  it('gives a follow-up only the read-only code_map (ADR-0034 §4)', () => {
+    expect(managedToolNames({ kind: 'lead', followUp: { resumeSessionId: 's' } })).toEqual([
+      'code_map',
+    ]);
   });
 });
 

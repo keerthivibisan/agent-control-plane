@@ -1,4 +1,10 @@
-import { isFollowUp, MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, SkillNameSchema } from '@acp/core';
+import {
+  isFollowUp,
+  MAX_AGENT_BYTES,
+  MAX_CONTEXT_BYTES,
+  MAX_REPO_MAP_BYTES,
+  SkillNameSchema,
+} from '@acp/core';
 import type { ManagedAgentSpec } from '@acp/core';
 import { offeredToolNames } from './lead-tools.js';
 import { capUtf8 } from './summary.js';
@@ -9,6 +15,9 @@ import { capUtf8 } from './summary.js';
  * states the role's limits itself, then appends what the Claude adapter appends to its system
  * prompt: the project context (`MAX_CONTEXT_BYTES`) and the stage agent file's instructions
  * (`MAX_AGENT_BYTES`; its `tools` list is not supported, capability `profileTools: false`).
+ * The repository map (ADR-0034 §4, `MAX_REPO_MAP_BYTES`) comes first of all, before the role
+ * lines (which name the agent's own folder), so every agent of a run shares the same prefix for
+ * the provider's prompt caching.
  */
 
 const ROLE_LINES: Readonly<Record<ManagedAgentSpec['kind'], string>> = {
@@ -50,7 +59,10 @@ export function developerInstructionsFor(spec: ManagedAgentSpec): string {
   if (dirs.length > 0) {
     lines.push(`You may also read these folders (read only): ${dirs.join(', ')}.`);
   }
-  const parts = [lines.join('\n')];
+  const parts: string[] = [];
+  const repoMap = spec.repoMap ?? '';
+  if (repoMap.trim() !== '') parts.push(capUtf8(repoMap, MAX_REPO_MAP_BYTES));
+  parts.push(lines.join('\n'));
   const context = spec.context ?? '';
   if (context.trim() !== '') parts.push(capUtf8(context, MAX_CONTEXT_BYTES));
   const profile = spec.profile;

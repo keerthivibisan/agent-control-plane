@@ -75,8 +75,16 @@ describe('follow-up turn through the chat route', () => {
       cwd: s.repo,
       followUp: { resumeSessionId: `sess-${lead.id}` },
     });
-    // No control-plane tools, no skills, and the preface before the owner's words.
-    expect(turn.spec.leadTools).toBeUndefined();
+    // Only the read-only code_map tool (ADR-0034 §4), no skills, and the preface before the
+    // owner's words. Without a code map it refuses; any other tool is refused outright.
+    const tools = turn.spec.leadTools;
+    if (tools === undefined) throw new Error('expected the code_map handler');
+    await expect(tools('code_map', { action: 'search', query: 'store' })).rejects.toThrow(
+      'no code map for this commit yet',
+    );
+    await expect(tools('start_agent', { role: 'x', task: 'y' })).rejects.toThrow(
+      'you can only read the project and answer',
+    );
     expect(turn.spec.skillPlugin).toBeUndefined();
     expect(turn.spec.prompt.startsWith(FOLLOW_UP_PREFACE)).toBe(true);
     expect(turn.spec.prompt.endsWith('Why a store?')).toBe(true);

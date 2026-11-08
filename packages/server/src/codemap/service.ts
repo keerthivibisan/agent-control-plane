@@ -60,6 +60,14 @@ export interface CodeMapService {
    * stored. Throws `CodeMapBuildError` when the build fails (the failure is recorded).
    */
   ensureForCommit(projectId: string, commit: string): Promise<CodeMapManifest>;
+  /**
+   * CM-2: the ready map of exactly `commit` with its files, for agents (the repository map and the
+   * `code_map` tool); undefined while it is not built, failed or unknown. Never builds.
+   */
+  mapAt(
+    projectId: string,
+    commit: string,
+  ): { manifest: CodeMapManifest; files: readonly CodeMapFile[] } | undefined;
   graph(projectId: string, query: unknown): CodeMapGraphDto;
   file(projectId: string, query: unknown): CodeMapFileDto;
   search(projectId: string, query: unknown): CodeMapSearchDto;
@@ -252,6 +260,12 @@ export function createCodeMapService(deps: CodeMapServiceDeps): CodeMapService {
       }
       const outcome = await build(project, commit);
       return toCodeMapManifest(outcome.record);
+    },
+    mapAt(projectId, commit) {
+      if (!CodeMapCommitSchema.safeParse(commit).success) return undefined;
+      const record = deps.repo.getManifest(projectId, commit);
+      if (record === undefined || record.status !== 'ready') return undefined;
+      return { manifest: toCodeMapManifest(record), files: filesOf(record) };
     },
     graph(projectId, query) {
       const q = parseQuery(CodeMapGraphQuerySchema, query);

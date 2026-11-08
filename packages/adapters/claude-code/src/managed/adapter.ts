@@ -7,7 +7,7 @@ import type {
   ManagedExecutionAdapter,
   ManagedFailureCode,
 } from '@acp/core';
-import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, SkillNameSchema } from '@acp/core';
+import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, MAX_REPO_MAP_BYTES, SkillNameSchema } from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { applyProtection, classifyStartupError, launchProtectionOf } from './full-auto.js';
@@ -112,6 +112,8 @@ export function agentFileHeading(name: string): string {
  * The SDK system prompt for one agent: always Claude Code's own prompt (coordinator decision
  * 2026-10-13 — leaving it unset makes SDK 0.3.296 send an empty prompt, so agents would lack
  * Claude Code's tool and safety guidance), with appended, in this order:
+ * - the repository map of the run's base commit (ADR-0034 §4), capped at `MAX_REPO_MAP_BYTES`:
+ *   first, so every agent of a run shares the same prompt prefix (provider prompt caching);
  * - the project context when there is any (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`;
  * - the stage agent file's instructions (ADR-0019 §6) under a heading naming the file, capped at
  *   `MAX_AGENT_BYTES`.
@@ -119,6 +121,8 @@ export function agentFileHeading(name: string): string {
  */
 export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['systemPrompt']> {
   const parts: string[] = [];
+  const repoMap = spec.repoMap ?? '';
+  if (repoMap.trim() !== '') parts.push(capUtf8(repoMap, MAX_REPO_MAP_BYTES));
   const context = spec.context ?? '';
   if (context.trim() !== '') parts.push(capUtf8(context, MAX_CONTEXT_BYTES));
   const profile = spec.profile;
@@ -221,8 +225,9 @@ export function buildOptions(
  *   its id and usage keeps flowing to the lead through its session link; `cwd` is the lead's own
  *   folder (the caller passes the project root), where the session is stored;
  * - answers only: the `tools` base set is `Read`, `Grep`, `Glob` (narrowed further by the lead
- *   stage's agent file), with the read-only `disallowedTools` plus subagents; no MCP server at all
- *   (no control-plane tools); no skills plugin;
+ *   stage's agent file), with the read-only `disallowedTools` plus subagents; our MCP server only
+ *   with the read-only `code_map` (ADR-0034 §4, when the server passes a handler; `buildOptions`
+ *   set it from `managedToolNames`); no skills plugin;
  * - the options are passed again in full, since a resumed process restores none of them.
  * `allowedTools` is never set. The input closes after the one turn (`specKeepsInputOpen`).
  */
@@ -231,7 +236,6 @@ function applyFollowUp(options: Options, spec: ManagedAgentSpec, resumeSessionId
   options.forkSession = false;
   options.tools = [...followUpToolNames(spec)];
   options.disallowedTools = [...FOLLOW_UP_DISALLOWED_TOOLS];
-  options.mcpServers = {};
   delete options.plugins;
   delete options.skills;
 }

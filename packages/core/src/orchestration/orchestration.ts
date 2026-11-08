@@ -3,6 +3,7 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
+import { MAX_CODE_MAP_PATH_LENGTH } from '../codemap/codemap.js';
 import {
   HelperOutcomeKindSchema,
   VerificationAssessmentInputSchema,
@@ -195,6 +196,12 @@ export type AgentRun = z.infer<typeof AgentRunSchema>;
 /** Most characters in a managed session's title (`ManagedAgentSpec.title`, ADR-0024). */
 export const MAX_SESSION_TITLE = 120;
 
+/** ADR-0034 §4: what the `code_map` tool can look up. */
+export const CODE_MAP_TOOL_ACTIONS = ['find_symbol', 'file', 'neighbors', 'search'] as const;
+export type CodeMapToolAction = (typeof CODE_MAP_TOOL_ACTIONS)[number];
+/** Most characters in a `code_map` query. */
+export const CODE_MAP_TOOL_MAX_QUERY = 200;
+
 /** Inputs of the lead agent's tools (ADR-0012). The engine validates every call (ADR-0013). */
 export const LeadToolInputs = {
   start_agent: z.object({
@@ -308,6 +315,19 @@ export const LeadToolInputs = {
    * reviewer), from the review loop's records. Refused when none are stored.
    */
   get_review_findings: z.object({ agentId: z.string().min(1) }),
+  /**
+   * ADR-0034 §4: a read-only lookup in the project code map at the run's base commit, for every
+   * role. Answers are paths, names and line numbers, never file content. `query` is a symbol name
+   * (`find_symbol`) or a search text (`search`); `path` a repository path (`file`, `neighbors`);
+   * `depth` the neighbourhood's import hops (default 1). Which fields each action needs, and the
+   * path rules, are checked when it is answered.
+   */
+  code_map: z.object({
+    action: z.enum(CODE_MAP_TOOL_ACTIONS),
+    query: z.string().trim().min(1).max(CODE_MAP_TOOL_MAX_QUERY).optional(),
+    path: z.string().min(1).max(MAX_CODE_MAP_PATH_LENGTH).optional(),
+    depth: z.union([z.literal(1), z.literal(2)]).optional(),
+  }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
@@ -354,7 +374,55 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   report_work: 'Reported its work',
   ask_lead: 'Asked the lead a question',
   get_review_findings: "Read a change's review findings",
+  code_map: 'Looked up the code map',
 });
+
+// ---------------------------------------------------------------- tool-use counts (CM-2)
+
+/**
+ * ADR-0034 (CM-2): what kind of tool an agent used, for content-free measurement. `read`: reading a
+ * file; `search`: listing or searching files; `edit`: changing files; `shell`: any other command;
+ * `code_map`: the code map tool; `other`: everything else (other control-plane tools, skills, web).
+ * Never a tool's name or input.
+ */
+export const TOOL_USE_CATEGORIES = [
+  'read',
+  'search',
+  'edit',
+  'shell',
+  'code_map',
+  'other',
+] as const;
+export const ToolUseCategorySchema = z.enum(TOOL_USE_CATEGORIES);
+export type ToolUseCategory = z.infer<typeof ToolUseCategorySchema>;
+
+const toolUseCount = z.number().int().nonnegative();
+/** Tool calls of one agent run by category (`agent_runs.tool_counts`, `AgentRunDto.toolCounts`). */
+export const ToolUseCountsSchema = z.object({
+  read: toolUseCount,
+  search: toolUseCount,
+  edit: toolUseCount,
+  shell: toolUseCount,
+  code_map: toolUseCount,
+  other: toolUseCount,
+});
+export type ToolUseCounts = z.infer<typeof ToolUseCountsSchema>;
+
+/** Counts with one more call of `category` (a new object; `counts` absent means none so far). */
+export function addToolUse(
+  counts: ToolUseCounts | undefined,
+  category: ToolUseCategory,
+): ToolUseCounts {
+  const base: ToolUseCounts = counts ?? {
+    read: 0,
+    search: 0,
+    edit: 0,
+    shell: 0,
+    code_map: 0,
+    other: 0,
+  };
+  return { ...base, [category]: base[category] + 1 };
+}
 
 /** ADR-0033 §3: open `ask_lead` questions one agent may have before it is refused. */
 export const MAX_OPEN_QUESTIONS = 5;

@@ -35,6 +35,7 @@ exports[`0001_observability schema (B3) > matches the schema snapshot (columns, 
       "ended_at TEXT NULL",
       "stage TEXT NULL",
       "provider TEXT NOT NULL DEFAULT 'claude-code'",
+      "tool_counts TEXT NULL",
     ],
     "foreignKeys": [
       "parent_agent_run_id -> agent_runs(id) ON DELETE CASCADE",

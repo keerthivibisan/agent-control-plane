@@ -1,7 +1,7 @@
 import { emitsChatText } from '@acp/core';
 import type { ManagedAgentEvent, ManagedAgentSpec, TokenCounts } from '@acp/core';
 import { z } from 'zod';
-import { commandActivity, fileChangeActivity, toolActivity } from './summary.js';
+import { commandActivity, commandCategory, fileChangeActivity, toolActivity } from './summary.js';
 
 /**
  * Maps app-server notifications (CLI 0.166.0) to `ManagedAgentEvent`s. Each one is validated at
@@ -95,17 +95,35 @@ export function usageEvent(params: unknown): ManagedAgentEvent | null {
   return { type: 'usage', messageId: `${threadId}:${turnId}:${total}`, tokens };
 }
 
-function itemStartedActivity(item: unknown, cwd: string): ManagedAgentEvent | null {
+/**
+ * A started item's activity line and its measurement category (CM-2): a command by its name, a
+ * file change as `edit`, ACP's `code_map` dynamic tool as `code_map`, any other tool as `other`.
+ */
+function itemStartedEvents(item: unknown, cwd: string): ManagedAgentEvent[] {
   const command = CommandItemSchema.safeParse(item);
-  if (command.success) return { type: 'activity', summary: commandActivity(command.data.command) };
+  if (command.success) {
+    return [
+      { type: 'activity', summary: commandActivity(command.data.command) },
+      { type: 'tool-use', category: commandCategory(command.data.command) },
+    ];
+  }
   const change = FileChangeItemSchema.safeParse(item);
   if (change.success) {
     const paths = change.data.changes.map((c) => c.path);
-    return { type: 'activity', summary: fileChangeActivity(paths, cwd) };
+    return [
+      { type: 'activity', summary: fileChangeActivity(paths, cwd) },
+      { type: 'tool-use', category: 'edit' },
+    ];
   }
   const tool = ToolItemSchema.safeParse(item);
-  if (tool.success) return { type: 'activity', summary: toolActivity(tool.data.tool) };
-  return null;
+  if (tool.success) {
+    const codeMap = tool.data.type === 'dynamicToolCall' && tool.data.tool === 'code_map';
+    return [
+      { type: 'activity', summary: toolActivity(tool.data.tool) },
+      { type: 'tool-use', category: codeMap ? 'code_map' : 'other' },
+    ];
+  }
+  return [];
 }
 
 export function mapNotification(
@@ -117,8 +135,8 @@ export function mapNotification(
     case 'item/started': {
       const parsed = ItemSchema.safeParse(params);
       if (!parsed.success) return NOTHING;
-      const event = itemStartedActivity(parsed.data.item, spec.cwd);
-      return event === null ? NOTHING : { events: [event], lifecycle: null };
+      const events = itemStartedEvents(parsed.data.item, spec.cwd);
+      return events.length === 0 ? NOTHING : { events, lifecycle: null };
     }
     case 'item/completed': {
       // Chat text for the owner (ADR-0015) from the lead and the planner only; never a worker's.

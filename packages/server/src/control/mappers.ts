@@ -69,6 +69,7 @@ export function toAgentDto(
         : null,
     branch: workspace?.branch ?? null,
     provider: agent.provider,
+    ...(agent.toolCounts !== undefined && { toolCounts: agent.toolCounts }),
     createdAt: agent.createdAt,
     endedAt: agent.endedAt,
   };

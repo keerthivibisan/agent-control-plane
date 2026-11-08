@@ -44,6 +44,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     'Ask the agent that started you (the lead, or your parent helper) one short question. It gets it as a message and answers with a message to you; keep working meanwhile. The reply says whether it was delivered, queued or dropped. At most 5 open questions at a time.',
   get_review_findings:
     "Get the stored review findings of one helper's change again: the review agent's verdict and findings text. Refused when no review agent has reviewed it.",
+  code_map:
+    "Look up the project's code map at the run's base commit: paths, symbol names and line numbers, never file content. action find_symbol (query: a symbol name) says where it is declared; file (path) lists its exports, imports, importers and tests; neighbors (path, depth 1 or 2) lists files linked to it by imports; search (query) matches symbol names and paths. Use it before broad searches, then read only the files you need. Refused when no map is built yet.",
 };
 
 /** A `DynamicToolSpec` of the `function` kind (CLI 0.166.0). */

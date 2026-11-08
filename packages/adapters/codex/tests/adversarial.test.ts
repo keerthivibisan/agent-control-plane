@@ -249,7 +249,7 @@ describe('CX-7 C6: a Codex worker cannot call lead-only tools', () => {
     const offered = (
       server.requests('thread/start')[0]?.params?.['dynamicTools'] as { name: string }[]
     ).map((t) => t.name);
-    expect(offered).toEqual(['report_work', 'ask_lead']);
+    expect(offered).toEqual(['report_work', 'ask_lead', 'code_map']);
     const call = (tool: string, namespace: string | null = null) =>
       server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: {} });
     for (const tool of [

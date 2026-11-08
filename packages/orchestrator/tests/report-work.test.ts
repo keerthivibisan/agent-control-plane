@@ -28,7 +28,7 @@ describe('report_work (ADR-0026 §3)', () => {
     const start = effectsOf(started.effects, 'start-agent')[0];
     expect(start?.prompt).toBe(`Build the API\n\n${BRANCH_RULE_LINE}\n\n${AGENT_NOTE_LINE}`);
     const s = helper(s0, 'API', 'wa');
-    expect(controlToolsFor(s, A)).toEqual(['report_work', 'ask_lead']);
+    expect(controlToolsFor(s, A)).toEqual(['report_work', 'ask_lead', 'code_map']);
     // Never the lead's, and the lead may not call it.
     expect(controlToolsFor(s, LEAD)).not.toContain('report_work');
     expect(refused(leadTool(s, 'report_work', { note: 'Done.' }))).toBe('not-lead');
@@ -71,13 +71,13 @@ describe('report_work (ADR-0026 §3)', () => {
 
   it('is not for planners or reviewers', () => {
     const s = readyForReview(helper(loopRunning(), 'API', 'wa'), A);
-    expect(controlToolsFor(s, RA)).toEqual(['submit_review', 'ask_lead']);
+    expect(controlToolsFor(s, RA)).toEqual(['submit_review', 'ask_lead', 'code_map']);
     expect(refused(leadTool(s, 'report_work', { note: 'x' }, 'n', RA))).toBe('not-lead');
   });
 
   it('a run without a ticket offers no note tool and no note line', () => {
     const { state, id } = startWorker(runningRun());
-    expect(controlToolsFor(state, id)).toEqual(['ask_lead']);
+    expect(controlToolsFor(state, id)).toEqual(['ask_lead', 'code_map']);
     expect(refused(leadTool(state, 'report_work', { note: 'x' }, 'n', id))).toBe('invalid-input');
     expect(withAgentNoteLine('Do it', false)).toBe('Do it');
   });

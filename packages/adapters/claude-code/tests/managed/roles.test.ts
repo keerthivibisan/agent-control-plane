@@ -128,7 +128,7 @@ async function oneTurn(kind: AgentRoleKind) {
 describe('planner (ADR-0019): read-only with submit_plan, input kept open', () => {
   it('gets only submit_plan and no edit or shell tools', () => {
     const options = optionsFor(spec('planner'));
-    expect(servers.toolNames).toEqual([['submit_plan']]);
+    expect(servers.toolNames).toEqual([['submit_plan', 'code_map']]);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
     expect(options.disallowedTools).toEqual(
       expect.arrayContaining(['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit']),
@@ -171,7 +171,7 @@ describe('planner (ADR-0019): read-only with submit_plan, input kept open', () =
 describe('reviewer (ADR-0019): read-only with post_review, ends after its turn', () => {
   it('gets only post_review and no edit or shell tools', () => {
     const options = optionsFor(spec('reviewer'));
-    expect(servers.toolNames).toEqual([['post_review', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['post_review', 'ask_lead', 'code_map']]);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
   });
 
@@ -206,7 +206,7 @@ describe('tester (ADR-0019): a normal worker', () => {
     const cb = callbacks();
     const options = optionsFor(spec('tester'), cb);
     // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead.
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
     const use = canUseTool(options);
@@ -221,7 +221,7 @@ describe('tester (ADR-0019): a normal worker', () => {
 
   it('ignores canStartHelpers: a tester never starts helpers', () => {
     optionsFor(spec('tester', { canStartHelpers: true }));
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
   });
 
   it('closes its input after the turn, like a worker', async () => {

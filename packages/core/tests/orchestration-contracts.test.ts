@@ -64,8 +64,17 @@ describe('lead tools', () => {
         // ADR-0033: questions to the parent, and review findings on demand
         'ask_lead',
         'get_review_findings',
+        // ADR-0034: the read-only code map lookup
+        'code_map',
       ].sort(),
     );
+    const cm = LeadToolInputs.code_map;
+    expect(cm.safeParse({ action: 'find_symbol', query: 'createApp' }).success).toBe(true);
+    expect(cm.safeParse({ action: 'neighbors', path: 'src/a.ts', depth: 2 }).success).toBe(true);
+    expect(cm.safeParse({ action: 'neighbors', path: 'src/a.ts', depth: 3 }).success).toBe(false);
+    expect(cm.safeParse({ action: 'read_file', path: 'src/a.ts' }).success).toBe(false);
+    expect(cm.safeParse({ action: 'search', query: 'x'.repeat(201) }).success).toBe(false);
+    expect(cm.safeParse({ action: 'search', query: '  ' }).success).toBe(false);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'Which token?' }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: ' ' }).success).toBe(false);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2000) }).success).toBe(true);

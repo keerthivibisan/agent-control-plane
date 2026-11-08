@@ -24,6 +24,7 @@ import type {
   ReviewState,
   CompileContext,
   TicketPlan,
+  ToolUseCounts,
   WorkflowGraph,
   WorkflowNodeId,
 } from '@acp/core';
@@ -49,6 +50,11 @@ export interface EngineAgent extends AgentRun {
   budgetLimit: number;
   /** Latest content-free activity line from the adapter, redacted and capped at 200 characters. */
   latestActivity: string | null;
+  /**
+   * ADR-0034 (CM-2): this agent's tool calls by category (`tool-use` events), content-free.
+   * Absent until the first one; persisted in `agent_runs.tool_counts`.
+   */
+  toolCounts?: ToolUseCounts;
   /** Null for the lead and for live workers; `pending` once a worker ends, until the owner decides. */
   review: ReviewState | null;
   /** Provider-reported cost of this agent's query; always an estimate, never summed. */
@@ -615,7 +621,8 @@ export type EngineEffect =
         /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
         | 'full-auto-unavailable'
         /** P-D: a rework turn could not resume the helper's session and started a new one. */
-        | 'rework-session-replaced';
+        | 'rework-session-replaced'
+        | 'invalid-tool-use';
       agentRunId: string;
     };
 

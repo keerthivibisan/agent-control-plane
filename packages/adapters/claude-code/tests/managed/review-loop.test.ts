@@ -80,13 +80,14 @@ describe('change reviewer (reviewScope: change)', () => {
     expect(managedToolNames(spec({ reviewScope: 'change' }))).toEqual([
       'submit_review',
       'ask_lead',
+      'code_map',
     ]);
-    expect(CHANGE_REVIEWER_ROLE_TOOL_NAMES).toEqual(['submit_review', 'ask_lead']);
+    expect(CHANGE_REVIEWER_ROLE_TOOL_NAMES).toEqual(['submit_review', 'ask_lead', 'code_map']);
     expect(managedToolNames(spec({ reviewScope: 'final' }))).toEqual(REVIEWER_TOOL_NAMES);
-    expect(managedToolNames(spec({}))).toEqual(['post_review', 'ask_lead']);
+    expect(managedToolNames(spec({}))).toEqual(['post_review', 'ask_lead', 'code_map']);
 
     const options = optionsFor(spec({ reviewScope: 'change' }));
-    expect(servers.toolNames).toEqual([['submit_review', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['submit_review', 'ask_lead', 'code_map']]);
     expect(options.tools).toEqual(['Read', 'Grep', 'Glob']);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
   });
@@ -109,7 +110,9 @@ describe('change reviewer (reviewScope: change)', () => {
     await expect(gate('mcp__acp__submit_review', {}, ours)).resolves.toMatchObject({
       behavior: 'allow',
     });
-    for (const name of LEAD_TOOL_NAMES.filter((n) => n !== 'submit_review' && n !== 'ask_lead')) {
+    for (const name of LEAD_TOOL_NAMES.filter(
+      (n) => n !== 'submit_review' && n !== 'ask_lead' && n !== 'code_map',
+    )) {
       await expect(gate(`mcp__acp__${name}`, {}, ours)).resolves.toEqual({
         behavior: 'deny',
         message: DENY_CHANGE_REVIEWER_TOOL,

@@ -21,6 +21,7 @@ import {
   RunStatusSchema,
   TicketBranchNameSchema,
   TicketBranchStateSchema,
+  ToolUseCountsSchema,
 } from '../orchestration/orchestration.js';
 import {
   AllowRuleSchema,
@@ -59,6 +60,11 @@ export const AgentRunDtoSchema = z.object({
   branch: z.string().min(1).nullable(),
   /** ADR-0031: the provider that runs the agent. Absent from servers before it (Claude Code). */
   provider: ManagedProviderIdSchema.optional(),
+  /**
+   * ADR-0034 (CM-2): the agent's tool calls by category, content-free (no names, no input).
+   * Absent when none were counted (and from servers before CM-2).
+   */
+  toolCounts: ToolUseCountsSchema.optional(),
   createdAt: IsoTimestampSchema,
   endedAt: IsoTimestampSchema.nullable(),
 });
