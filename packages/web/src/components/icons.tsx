@@ -2,6 +2,7 @@ import {
   Activity,
   ArrowLeftRight,
   ArrowRight,
+  BotMessageSquare,
   Bug,
   ChartColumn,
   Check,
@@ -21,6 +22,7 @@ import {
   Plus,
   ScrollText,
   Search,
+  SendHorizontal,
   Settings,
   ShieldCheck,
   Sparkle,
@@ -106,3 +108,7 @@ export const CloseIcon = icon(X, 'CloseIcon');
 // Ticket comments the app writes itself (v0.3.0, ADR-0024): the run summary and the merge line.
 export const RunSummaryIcon = icon(ScrollText, 'RunSummaryIcon');
 export const MergeIcon = icon(GitMerge, 'MergeIcon');
+
+// The project assistant (ADR-0035, AS-2): its floating button and the send button.
+export const AssistantIcon = icon(BotMessageSquare, 'AssistantIcon');
+export const SendIcon = icon(SendHorizontal, 'SendIcon');

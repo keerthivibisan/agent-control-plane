@@ -111,6 +111,16 @@ import {
   CodeMapSearchDtoSchema,
   CodeMapSummaryDtoSchema,
 } from '@acp/core/api';
+// The project assistant (ADR-0035, AS-2).
+import {
+  AssistantMessageRequestSchema,
+  AssistantModeRequestSchema,
+  AssistantProposalDtoSchema,
+  AssistantSessionDtoSchema,
+  AssistantStartRequestSchema,
+  type AssistantMode,
+  type AssistantStartRequest,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -1505,4 +1515,92 @@ export function isCodeMapPath(projectId: string): (key: string) => boolean {
 /** Starts a build of the project's HEAD commit; answers at once with the summary (`building`). */
 export function refreshCodeMap(client: ApiClient, projectId: string) {
   return controlPost(client, codeMapPaths.refresh(projectId), {}, codeMapSchemas.summary);
+}
+
+// --- The project assistant (ADR-0035, AS-2) -----------------------------------------------------
+//
+// Served by AS-1 under /api/projects/:id/assistant: POST session (CSRF) → 201 AssistantSessionDto,
+// 409 `provider_unavailable` with the reason in its message; GET session → the DTO or 404;
+// POST session/messages, session/mode (CSRF) → the DTO; POST session/end (CSRF) → 204;
+// POST proposals/:id/apply and /discard (CSRF) → AssistantProposalDto, 409 once decided.
+// GET stream: server-sent events, unnamed `data:` frames (AssistantStreamEvent) with an `id:`.
+// Nothing about the chat is cached: the panel keeps it in its own state for the page's life.
+
+export const assistantPaths = {
+  session: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/assistant/session`,
+  messages: (projectId: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/assistant/session/messages`,
+  mode: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/assistant/session/mode`,
+  end: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/assistant/session/end`,
+  apply: (projectId: string, proposalId: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/assistant/proposals/${enc(proposalId)}/apply`,
+  discard: (projectId: string, proposalId: string) =>
+    `${API_BASE}/projects/${enc(projectId)}/assistant/proposals/${enc(proposalId)}/discard`,
+  stream: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/assistant/stream`,
+} as const;
+
+/** The project's current chat, or null when it has none (404). */
+export async function getAssistantSession(client: ApiClient, projectId: string) {
+  try {
+    return await client.get(assistantPaths.session(projectId), AssistantSessionDtoSchema);
+  } catch (e) {
+    if (e instanceof ApiError && e.kind === 'http' && e.status === 404) return null;
+    throw e;
+  }
+}
+
+export async function startAssistant(
+  client: ApiClient,
+  projectId: string,
+  input: AssistantStartRequest,
+) {
+  const path = assistantPaths.session(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(AssistantStartRequestSchema, input, path),
+    AssistantSessionDtoSchema,
+  );
+}
+
+export async function sendAssistantMessage(client: ApiClient, projectId: string, text: string) {
+  const path = assistantPaths.messages(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(AssistantMessageRequestSchema, { text }, path),
+    AssistantSessionDtoSchema,
+  );
+}
+
+export async function setAssistantMode(client: ApiClient, projectId: string, mode: AssistantMode) {
+  const path = assistantPaths.mode(projectId);
+  return controlPost(
+    client,
+    path,
+    checked(AssistantModeRequestSchema, { mode }, path),
+    AssistantSessionDtoSchema,
+  );
+}
+
+export function endAssistant(client: ApiClient, projectId: string) {
+  return controlPost(client, assistantPaths.end(projectId), {}, NoContentSchema);
+}
+
+export function applyAssistantProposal(client: ApiClient, projectId: string, proposalId: string) {
+  return controlPost(
+    client,
+    assistantPaths.apply(projectId, proposalId),
+    {},
+    AssistantProposalDtoSchema,
+  );
+}
+
+export function discardAssistantProposal(client: ApiClient, projectId: string, proposalId: string) {
+  return controlPost(
+    client,
+    assistantPaths.discard(projectId, proposalId),
+    {},
+    AssistantProposalDtoSchema,
+  );
 }

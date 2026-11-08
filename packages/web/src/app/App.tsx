@@ -113,7 +113,7 @@ function Root({ eventSource }: { eventSource: EventSourceFactory | null }) {
   const route = useRoute();
   const stream = useEventStream(useQueryStore(), eventSource);
   return (
-    <Shell route={route} stream={stream}>
+    <Shell route={route} stream={stream} assistantEventSource={eventSource}>
       <Screen route={route} />
     </Shell>
   );
