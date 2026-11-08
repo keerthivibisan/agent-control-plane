@@ -7,7 +7,13 @@ import type {
   ManagedExecutionAdapter,
   ManagedFailureCode,
 } from '@acp/core';
-import { MAX_AGENT_BYTES, MAX_CONTEXT_BYTES, MAX_REPO_MAP_BYTES, SkillNameSchema } from '@acp/core';
+import {
+  ASSISTANT_INSTRUCTIONS,
+  MAX_AGENT_BYTES,
+  MAX_CONTEXT_BYTES,
+  MAX_REPO_MAP_BYTES,
+  SkillNameSchema,
+} from '@acp/core';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { applyProtection, classifyStartupError, launchProtectionOf } from './full-auto.js';
@@ -116,7 +122,8 @@ export function agentFileHeading(name: string): string {
  *   first, so every agent of a run shares the same prompt prefix (provider prompt caching);
  * - the project context when there is any (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`;
  * - the stage agent file's instructions (ADR-0019 §6) under a heading naming the file, capped at
- *   `MAX_AGENT_BYTES`.
+ *   `MAX_AGENT_BYTES`;
+ * - for the project assistant (ADR-0035), its role instructions (`ASSISTANT_INSTRUCTIONS`).
  * The stage brief is the first user message, so it follows both.
  */
 export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['systemPrompt']> {
@@ -131,6 +138,7 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
       `${agentFileHeading(profile.name)}\n${capUtf8(profile.instructions, MAX_AGENT_BYTES)}`,
     );
   }
+  if (spec.kind === 'assistant') parts.push(ASSISTANT_INSTRUCTIONS);
   if (parts.length === 0) return { type: 'preset', preset: 'claude_code' };
   return { type: 'preset', preset: 'claude_code', append: parts.join('\n\n') };
 }

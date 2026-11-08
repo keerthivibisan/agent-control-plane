@@ -6,7 +6,7 @@ import { GitBranchNameSchema } from '../workspace/branching.js';
 import {
   AGENT_MESSAGE_KINDS,
   AGENT_MESSAGE_STATES,
-  AgentRoleKindSchema,
+  RunAgentKindSchema,
   AgentRunStatusSchema,
   ApprovalKindSchema,
   ApprovalStatusSchema,
@@ -46,7 +46,7 @@ export const AgentRunDtoSchema = z.object({
   id: z.string().min(1),
   runId: z.string().min(1),
   parentAgentRunId: z.string().min(1).nullable(),
-  kind: AgentRoleKindSchema,
+  kind: RunAgentKindSchema,
   role: z.string().min(1),
   task: z.string().min(1).nullable(),
   status: AgentRunStatusSchema,

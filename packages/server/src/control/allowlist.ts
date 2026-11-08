@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, sep } from 'node:path';
-import type { AgentRoleKind, HarnessCheck, ProjectAllowlist, ProjectApprovals } from '@acp/core';
+import type { HarnessCheck, ProjectAllowlist, ProjectApprovals, RunAgentKind } from '@acp/core';
 import { evaluateAllowlist, type AllowlistTarget, type AllowlistVerdict } from '@acp/orchestrator';
 import type { Workspace } from '../workspace/index.js';
 
@@ -32,7 +32,7 @@ export interface AllowlistVerdictInput {
   /** The helper's own worktree; null when it has none (then edits ask). */
   workspace: Pick<Workspace, 'path' | 'cwd'> | null;
   /** The asking agent's real role (ADR-0019: the tester is covered like a helper). Default worker. */
-  agentKind?: AgentRoleKind;
+  agentKind?: RunAgentKind;
 }
 
 /**

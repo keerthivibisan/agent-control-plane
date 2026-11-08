@@ -1,4 +1,8 @@
-import { CHANGE_DECISION_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
+import {
+  ASSISTANT_CONTROL_TOOL_NAMES,
+  CHANGE_DECISION_TOOL_NAMES,
+  LEAD_TOOL_NAMES,
+} from '@acp/core';
 import type { ManagedAgentSpec, PermissionDecision, PermissionRequest } from '@acp/core';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it } from 'vitest';
@@ -202,13 +206,24 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
     expect(LEAD_ROLE_TOOL_NAMES).toEqual(
       LEAD_TOOL_NAMES.filter(
         (n) =>
-          n !== 'post_review' && n !== 'submit_review' && n !== 'report_work' && n !== 'ask_lead',
+          n !== 'post_review' &&
+          n !== 'submit_review' &&
+          n !== 'report_work' &&
+          n !== 'ask_lead' &&
+          // ADR-0035: the project assistant's own tools.
+          !ASSISTANT_CONTROL_TOOL_NAMES.includes(n),
       ),
     );
     for (const name of CHANGE_DECISION_TOOL_NAMES) expect(LEAD_ROLE_TOOL_NAMES).toContain(name);
     const { canUseTool, requests } = setup('lead');
     // ADR-0026 §3: nor the helpers' report_work; ADR-0033 §3: nor ask_lead.
-    for (const name of ['post_review', 'submit_review', 'report_work', 'ask_lead']) {
+    for (const name of [
+      'post_review',
+      'submit_review',
+      'report_work',
+      'ask_lead',
+      ...ASSISTANT_CONTROL_TOOL_NAMES,
+    ]) {
       await expect(
         canUseTool(`mcp__acp__${name}`, {}, opts({ mcpServer: { name: 'acp', source: 'sdk' } })),
       ).resolves.toEqual({ behavior: 'deny', message: DENY_NOT_YOUR_TOOL, toolUseID: 'toolu_1' });

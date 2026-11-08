@@ -5,7 +5,7 @@ import {
   migrateWorkflowV1,
 } from '@acp/core';
 import type {
-  AgentRoleKind,
+  RunAgentKind,
   ApprovalMode,
   CompileContext,
   EffectiveNodeMode,
@@ -143,7 +143,7 @@ export function runGraphOf(view: ProgramView): WorkflowGraph {
 // ------------------------------------------------------------------ nodes of agents
 
 /** The node an agent was started for, by its recorded stage, or by its role for old rows. */
-const ROLE_NODE_FALLBACK: Readonly<Record<AgentRoleKind, WorkflowNodeId>> = Object.freeze({
+const ROLE_NODE_FALLBACK: Readonly<Record<RunAgentKind, WorkflowNodeId>> = Object.freeze({
   planner: 'plan',
   lead: 'orchestrate',
   worker: 'helpers',

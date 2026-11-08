@@ -14,6 +14,8 @@ import { createWorkflowRouter } from './routes/workflow.js';
 import { createSkillsRouter, type SkillsRouterDeps } from './routes/skills.js';
 import { createAgentsRouter, type AgentsRouterDeps } from './routes/agents.js';
 import { createCodeMapRouter } from './routes/code-map.js';
+import { createAssistantRouter } from './routes/assistant.js';
+import type { AssistantService } from './assistant/index.js';
 import type { CodeMapService } from './codemap/service.js';
 import type { BoardService } from './board/service.js';
 import type { ControlService } from './control/service.js';
@@ -48,6 +50,10 @@ export interface AppDeps {
    * the control panel, which owns the CSRF token.
    */
   codeMap?: CodeMapService;
+  /**
+   * The project assistant (ADR-0035); mounted with the control panel, which owns the CSRF token.
+   */
+  assistant?: AssistantService;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -83,6 +89,12 @@ export function createApp(deps: AppDeps): Express {
     if (deps.agents !== undefined) {
       app.use('/api', createAgentsRouter({ ...deps.agents, csrfToken: deps.control.csrfToken }));
     }
+  }
+  if (deps.control !== undefined && deps.assistant !== undefined) {
+    app.use(
+      '/api',
+      createAssistantRouter({ assistant: deps.assistant, csrfToken: deps.control.csrfToken }),
+    );
   }
   app.use('/api', notFoundHandler);
   if (deps.staticDir !== undefined) mountStatic(app, deps.staticDir);

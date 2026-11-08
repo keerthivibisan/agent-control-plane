@@ -1,4 +1,4 @@
-import type { AgentRoleKind, ChangeDecider, CheckRun, TicketComment } from '@acp/core';
+import type { ChangeDecider, RunAgentKind, CheckRun, TicketComment } from '@acp/core';
 import type { StreamNoticeDto } from '@acp/core/api';
 import {
   isActiveAgentStatus,
@@ -186,13 +186,13 @@ export interface RunSummaryFacts {
     merged: number;
     tipChecks: CheckTally | null;
   } | null;
-  tokens: { kind: AgentRoleKind; agents: number; tokens: number }[];
+  tokens: { kind: RunAgentKind; agents: number; tokens: number }[];
   note: string | null;
 }
 
-const KIND_ORDER: readonly AgentRoleKind[] = ['planner', 'lead', 'worker', 'reviewer', 'tester'];
+const KIND_ORDER: readonly RunAgentKind[] = ['planner', 'lead', 'worker', 'reviewer', 'tester'];
 /** Who used the tokens: one agent of the kind, then several. */
-const KIND_WORDS: Readonly<Record<AgentRoleKind, readonly [string, string]>> = {
+const KIND_WORDS: Readonly<Record<RunAgentKind, readonly [string, string]>> = {
   planner: ['the planner', 'planners'],
   lead: ['the lead', 'leads'],
   worker: ['1 helper', 'helpers'],

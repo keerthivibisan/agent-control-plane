@@ -182,6 +182,9 @@ export const DENY_WORKER_LEAD_TOOL =
 export const DENY_HELPER_LEAD_TOOL =
   'Helper agents can only start, list, message, stop and check their own helpers, and report their work.';
 export const DENY_NOT_YOUR_TOOL = 'This control-plane tool is not available to this agent.';
+/** ADR-0035: the project assistant never reaches ticket agents or other roles' tools. */
+export const DENY_ASSISTANT_TOOL =
+  'The project assistant can only use ticket_status, project_info, propose_skill, propose_agent and code_map.';
 export const DENY_READ_ONLY = 'This agent only reads files inside its folder.';
 export const DENY_NO_DECISION = 'The owner did not approve this action.';
 export const DENY_ABORTED = 'The agent was stopped.';
@@ -282,11 +285,13 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
         }
         const message = isChangeReviewer(spec)
           ? DENY_CHANGE_REVIEWER_TOOL
-          : kind === 'planner' || kind === 'reviewer'
-            ? DENY_ROLE_TOOL[kind]
-            : spec.canStartHelpers === true && kind === 'worker'
-              ? DENY_HELPER_LEAD_TOOL
-              : DENY_WORKER_LEAD_TOOL;
+          : kind === 'assistant'
+            ? DENY_ASSISTANT_TOOL
+            : kind === 'planner' || kind === 'reviewer'
+              ? DENY_ROLE_TOOL[kind]
+              : spec.canStartHelpers === true && kind === 'worker'
+                ? DENY_HELPER_LEAD_TOOL
+                : DENY_WORKER_LEAD_TOOL;
         return { behavior: 'deny', message, toolUseID };
       }
       if (name !== null && ownTools.has(name) && fromLeadServer(options)) {

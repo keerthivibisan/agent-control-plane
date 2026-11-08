@@ -1,10 +1,10 @@
 import {
   addUsageTotals,
-  AgentRoleKindSchema,
+  RunAgentKindSchema,
   emptyUsageTotals,
   ProviderIdSchema,
   tokenHeadline,
-  type AgentRoleKind,
+  type RunAgentKind,
   type IsoTimestamp,
   type ProviderId,
   type TokenHeadline,
@@ -46,7 +46,7 @@ export interface TokensRange {
   to?: IsoTimestamp | undefined;
 }
 
-export type TokenRole = AgentRoleKind | 'external';
+export type TokenRole = RunAgentKind | 'external';
 
 /** Workflow order (plan → orchestrate → helpers → review → tests), then sessions outside the app. */
 export const TOKEN_ROLE_ORDER: readonly TokenRole[] = [
@@ -266,7 +266,7 @@ export function createTokenQueries(db: AcpDatabase): TokenQueries {
       const roleOf = (cell: CellDbRow): TokenRole =>
         cell.kind === null
           ? 'external'
-          : parseStored(AgentRoleKindSchema, cell.kind, 'agent_runs', 'kind');
+          : parseStored(RunAgentKindSchema, cell.kind, 'agent_runs', 'kind');
 
       const totals = fold(all, () => 'all').get('all') ?? emptyUsageTotals();
       const bySessionTotals = fold(all, (cell) => cell.session_id);

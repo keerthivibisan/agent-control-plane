@@ -222,6 +222,8 @@ describe('CX-7 C5: a read-only Codex role never asks the owner', () => {
     ['reviewer', { kind: 'reviewer' }],
     ['change reviewer', { kind: 'reviewer', reviewScope: 'change' }],
     ['a follow-up turn', { kind: 'lead', followUp: { resumeSessionId: 'thr-lead' } }],
+    // ADR-0035 §6: the project assistant.
+    ['the project assistant', { kind: 'assistant' }],
   ];
   for (const [title, overrides] of readers) {
     it(`${title}: command and file-change approvals are declined`, async () => {
@@ -266,6 +268,51 @@ describe('CX-7 C6: a Codex worker cannot call lead-only tools', () => {
     // A namespaced spelling of an offered tool is not that tool.
     expect((await call('report_work', 'acp')).result).toMatchObject({ success: false });
     expect(leadTools).not.toHaveBeenCalled();
+    handle.abort();
+  });
+});
+
+describe('ADR-0035: the Codex project assistant', () => {
+  it('runs read-only with the deny list, its own tools only, its instructions and an open input', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('two tickets open'));
+    const spec = makeSpec({
+      kind: 'assistant',
+      cwd: repo(),
+      denyRead: ['/home/synthetic/.codex'],
+      leadTools,
+    });
+    expect(codexModes(spec)).toMatchObject({
+      approvalPolicy: 'never',
+      profile: { id: 'acp-read', extends: ':read-only' },
+    });
+    expect(codexModes(spec).profile.filesystem['/home/synthetic/.codex']).toBe('deny');
+    const { server, handle } = start(spec);
+    await settle();
+    const thread = server.requests('thread/start')[0]?.params ?? {};
+    const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+    expect(offered).toEqual([
+      'ticket_status',
+      'project_info',
+      'propose_skill',
+      'propose_agent',
+      'code_map',
+    ]);
+    expect(String(thread['developerInstructions'])).toContain(
+      'You are the project assistant for this project',
+    );
+    const call = (tool: string, args: object = {}) =>
+      server.request('item/tool/call', { callId: 'c', namespace: null, tool, arguments: args });
+    for (const tool of ['start_agent', 'message_agent', 'stop_agent', 'merge_change']) {
+      expect((await call(tool)).result, tool).toMatchObject({ success: false });
+    }
+    expect(leadTools).not.toHaveBeenCalled();
+    expect((await call('ticket_status')).result).toMatchObject({ success: true });
+    expect(leadTools).toHaveBeenCalledWith('ticket_status', {});
+    // Its input stays open after a turn, like the lead's chat.
+    server.completeTurn('turn-1');
+    await settle();
+    await handle.send('And WEB-12?');
+    expect(server.requests('turn/start')).toHaveLength(2);
     handle.abort();
   });
 });

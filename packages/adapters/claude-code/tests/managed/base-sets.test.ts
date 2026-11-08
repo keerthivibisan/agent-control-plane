@@ -49,8 +49,15 @@ vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => {
 });
 
 const CWD = '/work/acp/checkouts/run-1/agent-1';
-const ALL_KINDS: readonly AgentRoleKind[] = ['lead', 'planner', 'worker', 'reviewer', 'tester'];
-const READING_KINDS: readonly AgentRoleKind[] = ['lead', 'planner', 'reviewer'];
+const ALL_KINDS: readonly AgentRoleKind[] = [
+  'lead',
+  'planner',
+  'worker',
+  'reviewer',
+  'tester',
+  'assistant',
+];
+const READING_KINDS: readonly AgentRoleKind[] = ['lead', 'planner', 'reviewer', 'assistant'];
 const EDITING_KINDS: readonly AgentRoleKind[] = ['worker', 'tester'];
 const PLUGIN = {
   path: '/data/runs/run-1/skills-plugin',
@@ -140,6 +147,7 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
       reviewer: ['Read', 'Grep', 'Glob'],
       worker: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
       tester: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
+      assistant: ['Read', 'Grep', 'Glob'],
     };
     for (const kind of ALL_KINDS) {
       expect(optionsFor(spec(kind)).tools).toEqual(expected[kind]);
@@ -191,10 +199,12 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
       // ADR-0026 §3: the helper's and tester's note; ADR-0033 §3: their question to the lead.
       worker: [['report_work', 'ask_lead', 'code_map']],
       tester: [['report_work', 'ask_lead', 'code_map']],
+      // ADR-0035: the assistant's four tools and the code map; never a ticket control tool.
+      assistant: [['code_map', 'ticket_status', 'project_info', 'propose_skill', 'propose_agent']],
     };
     for (const kind of ALL_KINDS) {
       const options = optionsFor(spec(kind));
-      if (kind === 'planner' || kind === 'reviewer') {
+      if (kind === 'planner' || kind === 'reviewer' || kind === 'assistant') {
         expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
       } else if (kind === 'lead') {
         expect(options).not.toHaveProperty('disallowedTools');

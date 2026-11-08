@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
+import { RunAgentKindSchema } from '../orchestration/orchestration.js';
 import { ProjectSchema } from '../domain/project.js';
 import { ManagedProviderIdSchema, ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
@@ -109,7 +109,7 @@ export const SessionSummaryDtoSchema = z.object({
       runId: z.string().min(1),
       agentRunId: z.string().min(1),
       ticketKey: z.string().min(1).nullable(),
-      kind: AgentRoleKindSchema,
+      kind: RunAgentKindSchema,
       label: z.string().min(1).max(120),
     })
     .optional(),

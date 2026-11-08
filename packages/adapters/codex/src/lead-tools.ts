@@ -50,6 +50,15 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     "Get the stored review findings of one helper's change again: the review agent's verdict and findings text. Refused when no review agent has reviewed it.",
   code_map:
     "Look up the project's code map at the run's base commit: paths, symbol names and line numbers, never file content. action find_symbol (query: a symbol name) says where it is declared; file (path) lists its exports, imports, importers and tests; neighbors (path, depth 1 or 2) lists files linked to it by imports; search (query) matches symbol names and paths. Use it before broad searches, then read only the files you need. Refused when no map is built yet.",
+  // ADR-0035: the project assistant's tools, answered by the server.
+  ticket_status:
+    "Get the project's tickets: status, current run, agents (role, provider, status, latest activity), approvals waiting for the owner and plan steps. Pass ticketKey (e.g. WEB-12) for one ticket; without it, every open ticket.",
+  project_info:
+    "Get the project's settings (provider, model, approval mode), its workflow nodes, harness checks, and the existing skills and agent definitions (slug, name, description). Look here before proposing a skill or agent.",
+  propose_skill:
+    'Propose a project skill: slug and the complete SKILL.md text, starting with front matter (name equal to the slug, and description). The owner sees it and applies it, or the app writes it at once in Auto mode. An existing skill is replaced only with replace: true, after the owner agreed.',
+  propose_agent:
+    'Propose a project agent definition: slug and the complete .claude/agents/<slug>.md text, starting with front matter (name equal to the slug, description, optional tools and model). The owner sees it and applies it, or the app writes it at once in Auto mode. An existing one is replaced only with replace: true, after the owner agreed.',
 };
 
 /** A `DynamicToolSpec` of the `function` kind (CLI 0.166.0). */

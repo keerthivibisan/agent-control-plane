@@ -1,5 +1,6 @@
 import type {
   AgentRoleKind,
+  RunAgentKind,
   CheckRunStatus,
   PlannerMode,
   RunStatus,
@@ -211,7 +212,7 @@ export function hasWorktree(kind: AgentRoleKind): boolean {
 }
 
 /** Order of the agent tree's roots: the flow's order (plan, orchestrate, review, tests). */
-export const ROOT_ORDER: Readonly<Record<AgentRoleKind, number>> = {
+export const ROOT_ORDER: Readonly<Record<RunAgentKind, number>> = {
   planner: 0,
   lead: 1,
   worker: 2,

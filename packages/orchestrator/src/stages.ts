@@ -1,7 +1,7 @@
 import { DEFAULT_MANAGED_PROVIDER, modelMatchesProvider, reviewStageOf } from '@acp/core';
 import type {
   AgentEffort,
-  AgentRoleKind,
+  RunAgentKind,
   ManagedProviderId,
   OrchestrationRun,
   ProjectWorkflow,
@@ -47,7 +47,7 @@ interface BriefView extends AgentsView, ProgramView {
 export type PostMergeStage = WorkflowNodeId;
 
 /** The stage each role works in. Every agent of a ticket run records it (`EngineAgent.stage`). */
-export const ROLE_STAGE: Readonly<Record<AgentRoleKind, WorkflowStageId>> = Object.freeze({
+export const ROLE_STAGE: Readonly<Record<RunAgentKind, WorkflowStageId>> = Object.freeze({
   planner: 'plan',
   lead: 'orchestrate',
   worker: 'helpers',
@@ -67,22 +67,22 @@ export function isSeparatePlanner(state: WorkflowView): boolean {
 
 /** The agent that writes and revises the plan: the planner when there is one, else the lead. */
 export function planningAgent(state: AgentsView & WorkflowView): EngineAgent | undefined {
-  const kind: AgentRoleKind = isSeparatePlanner(state) ? 'planner' : 'lead';
+  const kind: RunAgentKind = isSeparatePlanner(state) ? 'planner' : 'lead';
   return state.agents.find((a) => a.kind === kind);
 }
 
 /** Roles whose change the owner reviews (merge or discard): helpers and the tester. */
-export function hasReviewableChange(kind: AgentRoleKind): boolean {
+export function hasReviewableChange(kind: RunAgentKind): boolean {
   return kind === 'worker' || kind === 'tester';
 }
 
 /** Roles counted against the helper limit: the reviewer and the tester count as one helper each. */
-export function countsAsHelper(kind: AgentRoleKind): boolean {
+export function countsAsHelper(kind: RunAgentKind): boolean {
   return kind === 'worker' || kind === 'reviewer' || kind === 'tester';
 }
 
 /** Roles the engine starts after the merge. */
-export function isPostMergeRole(kind: AgentRoleKind): boolean {
+export function isPostMergeRole(kind: RunAgentKind): boolean {
   return kind === 'reviewer' || kind === 'tester';
 }
 
@@ -103,7 +103,7 @@ export function isStageAgent(agent: Pick<EngineAgent, 'kind' | 'reviewsAgentRunI
  * Roles that only read and never ask to edit or run anything (ADR-0019). The lead is read-only
  * too, but the server denies its tool uses itself (ADR-0013 §2), so it is not listed here.
  */
-export function isReadOnlyRole(kind: AgentRoleKind): boolean {
+export function isReadOnlyRole(kind: RunAgentKind): boolean {
   return kind === 'planner' || kind === 'reviewer';
 }
 
@@ -154,7 +154,7 @@ export function hasFinalStages(state: WorkflowView): boolean {
  * The role name of a final stage's agent: version 1's `Reviewer` and `Tester` for the version 1
  * node ids, else the node's label.
  */
-export function finalStageRole(node: { id: WorkflowNodeId; kind: AgentRoleKind; label: string }) {
+export function finalStageRole(node: { id: WorkflowNodeId; kind: RunAgentKind; label: string }) {
   if (node.id === 'code-review') return 'Reviewer';
   if (node.id === 'unit-tests') return 'Tester';
   return node.label.slice(0, 60);
@@ -181,7 +181,7 @@ export function skillLine(name: string): string {
 
 /** The stages an agent of this role works in: in `lead` mode the lead plans and orchestrates. */
 export function stagesForRole(
-  kind: AgentRoleKind,
+  kind: RunAgentKind,
   workflow: Pick<ProjectWorkflow, 'plannerMode'> | undefined,
 ): WorkflowStageId[] {
   if (kind === 'lead') {
@@ -215,7 +215,7 @@ function agentStage(
  * The project skills mapped to this role's stages, distinct, in stage order (bare names, as in
  * `.claude/skills/<name>`). The server builds the skills plugin from them.
  */
-export function skillsFor(workflow: ProjectWorkflow | undefined, kind: AgentRoleKind): string[] {
+export function skillsFor(workflow: ProjectWorkflow | undefined, kind: RunAgentKind): string[] {
   if (workflow === undefined) return [];
   const names: string[] = [];
   for (const stage of stagesForRole(kind, workflow)) {
@@ -229,10 +229,7 @@ export function skillsFor(workflow: ProjectWorkflow | undefined, kind: AgentRole
  * The skill lines for an agent of this role, one per distinct skill of its stages. No file
  * content is injected, and a missing skill does not block the run.
  */
-export function skillLinesFor(
-  workflow: ProjectWorkflow | undefined,
-  kind: AgentRoleKind,
-): string[] {
+export function skillLinesFor(workflow: ProjectWorkflow | undefined, kind: RunAgentKind): string[] {
   return skillsFor(workflow, kind).map(skillLine);
 }
 
@@ -240,7 +237,7 @@ export function skillLinesFor(
 export function withSkills(
   prompt: string,
   workflow: ProjectWorkflow | undefined,
-  kind: AgentRoleKind,
+  kind: RunAgentKind,
 ): string {
   const lines = skillLinesFor(workflow, kind);
   return lines.length === 0 ? prompt : `${prompt}\n\n${lines.join('\n')}`;
@@ -252,7 +249,7 @@ export function withSkills(
  */
 export function stageModelFor(
   workflow: ProjectWorkflow | undefined,
-  kind: AgentRoleKind,
+  kind: RunAgentKind,
 ): string | null {
   if (workflow === undefined) return null;
   for (const stage of [...stagesForRole(kind, workflow)].reverse()) {
@@ -269,7 +266,7 @@ export function stageModelFor(
  */
 export function stageAgentFor(
   workflow: ProjectWorkflow | undefined,
-  kind: AgentRoleKind,
+  kind: RunAgentKind,
 ): string | null {
   if (workflow === undefined) return null;
   for (const stage of [...stagesForRole(kind, workflow)].reverse()) {
@@ -338,7 +335,7 @@ export function resolveAgentModel(input: {
 export function launchFields(
   prompt: string,
   workflow: ProjectWorkflow | undefined,
-  kind: AgentRoleKind,
+  kind: RunAgentKind,
 ): { prompt: string; model?: string; skills?: string[]; agent?: string } {
   const model = stageModelFor(workflow, kind);
   const skills = skillsFor(workflow, kind);

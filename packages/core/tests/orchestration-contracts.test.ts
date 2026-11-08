@@ -66,6 +66,11 @@ describe('lead tools', () => {
         'get_review_findings',
         // ADR-0034: the read-only code map lookup
         'code_map',
+        // ADR-0035: the project assistant's tools
+        'ticket_status',
+        'project_info',
+        'propose_skill',
+        'propose_agent',
       ].sort(),
     );
     const cm = LeadToolInputs.code_map;
