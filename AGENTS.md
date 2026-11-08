@@ -21,10 +21,13 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   the merged v0.4.0 release. The ADR and CR review labels still need maintainer reconciliation
   with the safety wording below. Plan and status:
   [docs/conflict-resolution/](docs/conflict-resolution/README.md).
-- **Codex as a second managed provider (CX series, ADR-0031 accepted 2026-11-07):** in progress
-  on `feat/codex-integration`, brought forward from Phase 6 by the owner. Each workflow block
-  picks Claude or Codex. Plan and status: [docs/codex/](docs/codex/README.md). Observation of
-  Codex session files stays out of scope.
+- **Codex as a second managed provider (CX series, ADR-0031 accepted 2026-11-07):** merged into
+  `dev` (PR #18). Each workflow block picks Claude or Codex. Plan and status:
+  [docs/codex/](docs/codex/README.md). Observation of Codex session files stays out of scope.
+- **Code map (CM series, ADR-0034 accepted 2026-11-08):** in progress on
+  `feature/codemap/code-map`. A local, deterministic code map per project for agents (a short
+  repository map, a `code_map` tool, plan-to-helper context) and a Code map page for people. Plan
+  and status: [docs/code-map/](docs/code-map/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):

@@ -39,3 +39,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0031](0031-codex-provider.md)                             | Codex as a second provider, chosen per workflow stage          | accepted |
 | [0032](0032-codex-usage-accounting.md)                     | Usage accounting for managed Codex runs                        | accepted |
 | [0033](0033-lead-agent-messaging.md)                       | Lead and agent messaging: delivery state, ask_lead, held msgs  | accepted |
+| [0034](0034-code-map.md)                                   | A local code map per project, for agents and the owner         | accepted |
