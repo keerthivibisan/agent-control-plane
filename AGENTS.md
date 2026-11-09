@@ -32,6 +32,10 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   `feature/assistant/project-assistant`. A floating chat on project pages (ticket status, project
   questions, writing skills and agent definitions in Approve or Auto mode); the chat is kept for the
   session only. Plan and status: [docs/assistant/](docs/assistant/README.md).
+- **Flexible workflows (AR series, ADR-0037 accepted 2026-11-09):** in progress on
+  `feature/workflow/arrows`. One Agent block whose role comes from typed, labelled arrows
+  (research, plan, implement, review, test, custom); several planners with the owner picking one;
+  review fan-out; workflow graph version 3. Plan and status: [docs/arrows/](docs/arrows/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):
