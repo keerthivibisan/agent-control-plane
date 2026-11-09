@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AbsolutePathSchema } from '../domain/project.js';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { ManagedProviderIdSchema } from '../domain/provider.js';
+import { RunStatusSchema } from '../orchestration/orchestration.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
@@ -219,3 +220,38 @@ export const PlanDecisionRequestSchema = z
     message: 'say what should change',
     path: ['comment'],
   });
+
+/**
+ * ADR-0036: a run that keeps a project from being removed (it has not ended). The ticket fields are
+ * null for a control-panel run without a ticket.
+ */
+export const ProjectRemovalActiveRunDtoSchema = z.object({
+  runId: z.string().min(1),
+  ticketId: z.string().min(1).nullable(),
+  ticketKey: z.string().min(1).nullable(),
+  ticketTitle: z.string().nullable(),
+  status: RunStatusSchema,
+});
+export type ProjectRemovalActiveRunDto = z.infer<typeof ProjectRemovalActiveRunDtoSchema>;
+
+/** Why removal is refused right now: a run has not ended, or a check or setup is running. */
+export const ProjectRemovalBusyReasonSchema = z.enum(['active-runs', 'checks-running']);
+export type ProjectRemovalBusyReason = z.infer<typeof ProjectRemovalBusyReasonSchema>;
+
+/**
+ * ADR-0036: `GET /api/projects/:id/removal`, what removing the project from ACP deletes. The
+ * folder, its git repository, branches, sessions and usage are always kept, so they are not
+ * counted. `busy` true: `DELETE /api/projects/:id` answers 409 `project_busy`.
+ */
+export const ProjectRemovalPreviewDtoSchema = z.object({
+  projectId: z.string().min(1),
+  name: z.string().min(1),
+  rootPath: AbsolutePathSchema,
+  tickets: count,
+  runs: count,
+  attachments: count,
+  activeRuns: z.array(ProjectRemovalActiveRunDtoSchema),
+  busy: z.boolean(),
+  busyReason: ProjectRemovalBusyReasonSchema.optional(),
+});
+export type ProjectRemovalPreviewDto = z.infer<typeof ProjectRemovalPreviewDtoSchema>;
