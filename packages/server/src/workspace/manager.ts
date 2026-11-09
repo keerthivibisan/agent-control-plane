@@ -219,8 +219,14 @@ export interface WorkspaceManager {
   /**
    * On start: removes worktrees under the data dir that are not in `keep` (the workspaces the
    * database still references, including NEEDS_REVIEW ones, whose work must stay reviewable).
+   * A worktree of a run `runExists` says is gone (its project was removed, ADR-0036) is deleted
+   * with the file system only: no git command, and its branch stays. Without `runExists`, every
+   * orphan's worktree and branch are removed with git.
    */
-  cleanupOrphans(keep: Iterable<{ runId: string; agentId: string }>): Promise<CleanupResult>;
+  cleanupOrphans(
+    keep: Iterable<{ runId: string; agentId: string }>,
+    runExists?: (runId: string) => boolean,
+  ): Promise<CleanupResult>;
 
   // ------------------------------------------------------------- ADR-0021 ticket branch
 
@@ -338,8 +344,11 @@ export interface WorkspaceManager {
   /** A temporary detached checkout of `commit` under `<dataDir>/ticket-checkouts/<runId>/`. */
   checkoutCommit(projectRoot: string, runId: string, commit: string): Promise<CommitCheckout>;
   removeCheckout(checkout: CommitCheckout): Promise<void>;
-  /** On start: removes every temporary commit checkout (none survives a restart). */
-  cleanupCheckouts(): Promise<number>;
+  /**
+   * On start: removes every temporary commit checkout (none survives a restart). One of a run
+   * `runExists` says is gone (ADR-0036) is deleted with the file system only, no git command.
+   */
+  cleanupCheckouts(runExists?: (runId: string) => boolean): Promise<number>;
 
   // ------------------------------------------------------------- ADR-0030 conflict resolution
 
@@ -990,7 +999,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
       });
       await removeIfEmpty(join(await worktreesRoot(), w.runId));
     },
-    async cleanupOrphans(keep) {
+    async cleanupOrphans(keep, runExists) {
       const keepSet = new Set<string>();
       for (const k of keep) keepSet.add(`${k.runId}/${k.agentId}`);
       const root = await worktreesRoot();
@@ -1008,7 +1017,11 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
             continue;
           }
           try {
-            await removeOrphan(join(runDir, agentId), branchFor(runId, agentId));
+            if (runExists !== undefined && !runExists(runId)) {
+              await removeWorktree(null, join(runDir, agentId));
+            } else {
+              await removeOrphan(join(runDir, agentId), branchFor(runId, agentId));
+            }
             result.removed.push({ runId, agentId });
           } catch (error) {
             result.failed++;
@@ -1496,7 +1509,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
         : remove());
     },
 
-    async cleanupCheckouts() {
+    async cleanupCheckouts(runExists) {
       const root = await checkoutsRoot();
       let removed = 0;
       for (const runEntry of await readdir(root, { withFileTypes: true })) {
@@ -1506,6 +1519,11 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
           if (!entry.isDirectory()) continue;
           const path = join(runDir, entry.name);
           try {
+            if (runExists !== undefined && !runExists(runEntry.name)) {
+              await removeWorktree(null, path);
+              removed++;
+              continue;
+            }
             // Ask git only when the folder is the top of a worktree (see removeOrphan).
             const top = await probe(['rev-parse', '--show-toplevel'], path);
             const isCheckout = top !== null && top !== '' && (await realpath(top)) === path;

@@ -221,6 +221,30 @@ real `claude` and `codex` never run.
 
 No `knownGap`: every case passes today.
 
+## Removing a project (RM-2, `feature/projects/remove-project`)
+
+Removing a project from ACP (ADR-0036) deletes ACP's records and its own folders in the data
+directory, never the project folder or its repository. These cases feed the removal paths it must
+never delete, and check the startup cleanup of a deleted run's leftovers. Everything is synthetic:
+throwaway repositories and temp data directories.
+
+| File                                                  | Proves                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/server/tests/board/project-removal.test.ts` | R1 to R5: removal and the startup cleanup delete nothing outside the data dir. |
+| `packages/server/tests/workspace/manager.test.ts`     | R5 at the manager: no git command for a deleted run's worktree.                |
+
+| Id  | Case                                                                                                          | Expected refusal                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| R1  | A forged `managed_workspaces` row whose path is a folder outside the data dir                                 | not deleted; its file is unchanged; the removal still succeeds.                                         |
+| R2  | `runs/<runId>` in the data dir is a symlink to a folder outside it                                            | the real path is outside, so nothing is deleted; the target's file is unchanged.                        |
+| R3  | A recorded workspace path that is the project folder itself, or a run folder that contains the project folder | refused (protected path); every file of the project folder is unchanged.                                |
+| R4  | The data dir itself, `.` or `../` as a path to delete                                                         | refused.                                                                                                |
+| R5  | At startup, an agent worktree and a review checkout of a run whose row is gone                                | deleted with the file system only: no git command for them, no `branch -D`, every ref of the repo kept. |
+
+During a removal no git command runs at all (the full removal test records every git call), and
+the project folder's files and `git for-each-ref` output are identical before and after. No
+`knownGap`: every case passes today.
+
 ## How to add a case
 
 1. **Server.** Write
@@ -254,6 +278,7 @@ pnpm --filter @acp/orchestrator exec vitest run tests/adversarial --maxWorkers=2
 pnpm --filter @acp/adapter-claude-code exec vitest run tests/managed/adversarial-commands.test.ts
 pnpm --filter @acp/adapter-codex exec vitest run tests/adversarial.test.ts
 pnpm --filter @acp/server exec vitest run tests/assistant
+pnpm --filter @acp/server exec vitest run tests/board/project-removal.test.ts
 ```
 
 The server suite takes about a minute. The others take a few seconds. All of them also run in

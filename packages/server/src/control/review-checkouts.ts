@@ -45,8 +45,11 @@ export interface ReviewCheckouts {
     commit?: string,
   ): Promise<ReviewCheckout>;
   remove(checkout: ReviewCheckout): Promise<void>;
-  /** On start: removes every checkout under the folder (no reviewer survives a restart). */
-  cleanupOrphans(): Promise<number>;
+  /**
+   * On start: removes every checkout under the folder (no reviewer survives a restart). One of a
+   * run `runExists` says is gone (ADR-0036) is deleted with the file system only, no git command.
+   */
+  cleanupOrphans(runExists?: (runId: string) => boolean): Promise<number>;
   /** The folder all checkouts live in (managed paths are never offered as new projects). */
   readonly dir: string;
 }
@@ -164,7 +167,7 @@ export function createReviewCheckouts(deps: ReviewCheckoutsDeps): ReviewCheckout
       await removeRunDirIfEmpty(join(await root(), checkout.runId));
     },
 
-    async cleanupOrphans() {
+    async cleanupOrphans(runExists) {
       const base = await root();
       let removed = 0;
       for (const runEntry of await readdir(base, { withFileTypes: true })) {
@@ -173,6 +176,15 @@ export function createReviewCheckouts(deps: ReviewCheckoutsDeps): ReviewCheckout
         for (const entry of await readdir(runDir, { withFileTypes: true })) {
           if (!entry.isDirectory() || !isSafeId(entry.name)) continue;
           const path = join(runDir, entry.name);
+          if (runExists !== undefined && !runExists(runEntry.name)) {
+            try {
+              await removePath(null, path);
+              removed++;
+            } catch (error) {
+              logger.log('warn', 'review checkout cleanup failed', errorFields(error));
+            }
+            continue;
+          }
           // Ask git only when the folder is the top of a worktree; otherwise git would search
           // parent folders and could answer for an unrelated repository.
           const top = await probe(['rev-parse', '--show-toplevel'], path);

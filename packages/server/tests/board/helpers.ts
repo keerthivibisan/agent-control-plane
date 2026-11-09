@@ -27,7 +27,15 @@ import {
 import { createCheckRunner, createMainChecks } from '../../src/harness/index.js';
 import type { CodeHostService } from '../../src/code-host/index.js';
 import type { Logger } from '../../src/logger.js';
-import { createGitRunner, createWorkspaceManager } from '../../src/workspace/index.js';
+import {
+  createGitRunner,
+  createWorkspaceManager,
+  type GitRunner,
+} from '../../src/workspace/index.js';
+import {
+  createProjectRemovalService,
+  type ProjectRemovalDeps,
+} from '../../src/projects/removal.js';
 import { createFakeManagedAdapter, type FakeAdapterOptions } from '../control/fake-adapter.js';
 import { setupApp } from '../helpers.js';
 import { GIT_TEST_ENV, makeRepo, tempDir } from '../workspace/helpers.js';
@@ -94,6 +102,8 @@ export interface BoardSetupOptions {
   patchHooks?: (hooks: ControlWorkspaceHooks) => void;
   /** Extra control service deps (CM-2: the code map source and its wait window). */
   control?: Partial<ControlServiceDeps>;
+  /** ADR-0036: the assistant and code map the project removal service stops first. */
+  removal?: Pick<ProjectRemovalDeps, 'assistant' | 'codeMap'>;
 }
 
 export async function setupBoard(options: BoardSetupOptions = {}) {
@@ -112,7 +122,13 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     repos.projects.getByRootPath(repo) ??
     repos.projects.insert({ name: 'web-app', rootPath: repo });
   const dataDir = reopen?.dataDir ?? tempDir('acp-board-data-');
-  const git = createGitRunner({ env: GIT_TEST_ENV });
+  const realGit = createGitRunner({ env: GIT_TEST_ENV });
+  /** Every git command the server ran, with its working directory (ADR-0036 tests). */
+  const gitCalls: { args: readonly string[]; cwd: string }[] = [];
+  const git: GitRunner = (args, runOptions) => {
+    gitCalls.push({ args, cwd: runOptions.cwd });
+    return realGit(args, runOptions);
+  };
   const fake = createFakeManagedAdapter();
   const codex =
     options.codex === undefined
@@ -198,6 +214,16 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     skills: { homeDir },
   });
   await control.start();
+  const projectRemoval = createProjectRemovalService({
+    db,
+    repos,
+    control,
+    checks,
+    ...options.removal,
+    dataDir,
+    logger,
+    publish: base.publish,
+  });
   const app = createApp({
     config: base.config,
     logger,
@@ -215,6 +241,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     control,
     board,
     workflow,
+    projectRemoval,
   });
   const token = control.csrfToken;
   const send = (method: 'post' | 'put' | 'patch' | 'delete', path: string, body?: unknown) => {
@@ -286,6 +313,7 @@ export async function setupBoard(options: BoardSetupOptions = {}) {
     project,
     dataDir,
     git,
+    gitCalls,
     clock,
     token,
     workspace,

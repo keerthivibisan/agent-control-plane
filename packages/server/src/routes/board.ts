@@ -52,13 +52,9 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
   // streams); compressed request bodies are refused rather than inflated.
   const raw = express.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES, inflate: false });
 
-  // Projects: create a repository, remove from the app, setup, harness, context files.
+  // Projects: create a repository, setup, harness, context files (removal: project-removal.ts).
   router.post('/projects/new', csrf, json, async (req, res) => {
     res.status(201).json(out(ProjectDtoSchema, await board.createRepoProject(req.body)));
-  });
-  router.delete('/projects/:id', csrf, (req, res) => {
-    board.removeProject(param(req.params['id']));
-    res.status(204).end();
   });
   router.get('/projects/:id/setup', async (req, res) => {
     res.json(out(ProjectAgentSetupDtoSchema, await board.getSetup(param(req.params['id']))));

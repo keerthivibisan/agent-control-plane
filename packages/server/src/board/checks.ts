@@ -109,6 +109,11 @@ export interface CheckService {
     spec?: CheckSpec,
     options?: CommitChecksOptions,
   ): void;
+  /**
+   * ADR-0036: a check or setup step of the project is running now (an agent's, a commit's, a new
+   * worktree's setup or "Run checks now" on main), so the project cannot be removed.
+   */
+  projectBusy(projectId: string): boolean;
   /** Tests: resolves when no background check run is in flight. */
   idle(): Promise<void>;
   close(): Promise<void>;
@@ -194,7 +199,18 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
   const mainRunning = new Set<string>();
   const controllers = new Map<string, AbortController>();
   const tasks = new Set<Promise<void>>();
+  /** ADR-0036: checks and setup steps running now, per project. */
+  const projectWork = new Map<string, number>();
   let closed = false;
+
+  function enter(projectId: string): void {
+    projectWork.set(projectId, (projectWork.get(projectId) ?? 0) + 1);
+  }
+  function leave(projectId: string): void {
+    const left = (projectWork.get(projectId) ?? 1) - 1;
+    if (left <= 0) projectWork.delete(projectId);
+    else projectWork.set(projectId, left);
+  }
 
   function controllerFor(runId: string): AbortController {
     let c = controllers.get(runId);
@@ -294,6 +310,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     const project = deps.repos.projects.getById(state.run.projectId);
     if (project === undefined) throw notFound(`Project ${state.run.projectId} not found`);
     running.add(agentRunId);
+    enter(project.id);
     try {
       const harness = await deps.harness.read(project);
       const manifest = harness?.manifest ?? null;
@@ -325,6 +342,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
       return stored;
     } finally {
       running.delete(agentRunId);
+      leave(project.id);
     }
   }
 
@@ -355,6 +373,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     running.add(key);
     // Also blocks the legacy gate's "running" for this agent while its commit is checked.
     if (agentRunId !== null) running.add(agentRunId);
+    enter(project.id);
     let checkout: Awaited<ReturnType<typeof deps.checkouts.checkoutCommit>> | undefined;
     try {
       let root: string;
@@ -443,6 +462,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
     } finally {
       running.delete(key);
       if (agentRunId !== null) running.delete(agentRunId);
+      leave(project.id);
       if (checkout !== undefined) {
         await deps.checkouts.removeCheckout(checkout).catch((error: unknown) => {
           logger.log('warn', 'check checkout removal failed', { runId, ...errorFields(error) });
@@ -556,14 +576,20 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
         logger.log('warn', 'setup refused in the project checkout', { runId: input.runId });
         return { ok: false, reason: "Setup never runs in the project's own folder." };
       }
-      const failed = await setupIn(
-        project,
-        input.cwd,
-        input.runId,
-        input.agentRunId,
-        input.commit,
-        controllerFor(input.runId).signal,
-      );
+      enter(project.id);
+      let failed: Awaited<ReturnType<typeof setupIn>>;
+      try {
+        failed = await setupIn(
+          project,
+          input.cwd,
+          input.runId,
+          input.agentRunId,
+          input.commit,
+          controllerFor(input.runId).signal,
+        );
+      } finally {
+        leave(project.id);
+      }
       if (failed !== null) {
         logger.log('info', 'worktree setup did not pass', {
           runId: input.runId,
@@ -648,6 +674,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
         throw new HttpError(409, 'checks_running', 'The checks are already running on main');
       }
       mainRunning.add(projectId);
+      enter(projectId);
       try {
         const result = await deps.mainChecks.run({
           projectRoot: project.rootPath,
@@ -663,6 +690,7 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
         throw error;
       } finally {
         mainRunning.delete(projectId);
+        leave(projectId);
       }
     },
 
@@ -676,6 +704,10 @@ export function createCheckService(deps: CheckServiceDeps): CheckService {
         .filter((r) => r.required && r.status !== 'passed')
         .map((r) => r.name);
       return { failedRequired, running: running.has(agentRunId) };
+    },
+
+    projectBusy(projectId) {
+      return (projectWork.get(projectId) ?? 0) > 0;
     },
 
     abortRun(runId) {
