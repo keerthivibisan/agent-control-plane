@@ -1,11 +1,13 @@
 import {
   ProjectWorkflowGraphSchema,
+  ProjectWorkflowGraphV3Schema,
   ProjectWorkflowSchema,
   StoredWorkflowJsonSchema,
   WorkflowGraphSchema,
   defaultProjectWorkflow,
   type ProjectWorkflow,
   type ProjectWorkflowGraph,
+  type ProjectWorkflowGraphV3,
   type WorkflowGraph,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
@@ -17,11 +19,14 @@ import { guardWrite } from '../orchestration/shared.js';
 export type ProjectWorkflowInput = Omit<ProjectWorkflow, 'updatedAt'>;
 
 /**
- * What a project's workflow row holds (ADR-0023 §9): a version 2 graph, a version 1 workflow saved
- * before graphs, or nothing yet (the default version 1 workflow, dated at the project's
- * registration so repeated reads agree).
+ * What a project's workflow row holds (ADR-0023 §9, ADR-0037 §6): a version 3 or version 2 graph,
+ * a version 1 workflow saved before graphs, or nothing yet (the default version 1 workflow, dated
+ * at the project's registration so repeated reads agree). Each is returned as stored; the server
+ * migrates (`storedWorkflowGraphV3`). `putGraph` still writes version 2 until the API carries
+ * version 3 (AR-4), so a version 3 row is read but not yet written here.
  */
 export type StoredProjectWorkflow =
+  | { kind: 'v3'; graph: ProjectWorkflowGraphV3 }
   | { kind: 'v2'; graph: ProjectWorkflowGraph }
   | { kind: 'v1'; workflow: ProjectWorkflow }
   | { kind: 'default'; workflow: ProjectWorkflow };
@@ -34,7 +39,7 @@ export class WorkflowStoredAsGraphError extends DbError {
   readonly projectId: string;
 
   constructor(projectId: string) {
-    super('conflict', 'project workflow: stored as a workflow graph (version 2)');
+    super('conflict', 'project workflow: stored as a workflow graph (version 2 or 3)');
     this.name = 'WorkflowStoredAsGraphError';
     this.projectId = projectId;
   }
@@ -76,6 +81,17 @@ const COLUMNS = 'project_id, workflow, updated_at';
 
 function toStored(row: WorkflowDbRow): StoredProjectWorkflow {
   const json = parseStoredJson(StoredWorkflowJsonSchema, row.workflow, T, 'workflow');
+  if ('version' in json && json.version === 3) {
+    return {
+      kind: 'v3',
+      graph: parseStored(
+        ProjectWorkflowGraphV3Schema,
+        { projectId: row.project_id, graph: json.graph, updatedAt: row.updated_at },
+        T,
+        '*',
+      ),
+    };
+  }
   if ('version' in json) {
     return {
       kind: 'v2',
@@ -131,7 +147,7 @@ export function createProjectWorkflowRepository(ctx: RepositoryContext): Project
     get(projectId) {
       const s = stored(projectId);
       if (s === undefined) return undefined;
-      if (s.kind === 'v2') throw new WorkflowStoredAsGraphError(projectId);
+      if (s.kind === 'v2' || s.kind === 'v3') throw new WorkflowStoredAsGraphError(projectId);
       return s.workflow;
     },
     stored,

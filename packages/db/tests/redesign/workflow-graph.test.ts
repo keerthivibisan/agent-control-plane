@@ -3,6 +3,7 @@ import {
   defaultProjectWorkflow,
   migrateWorkflowV1,
   workflowTemplate,
+  workflowTemplateV3,
   type CompileContext,
   type WorkflowGraph,
 } from '@acp/core';
@@ -74,6 +75,26 @@ describe('project workflow repository: version 1 or 2 (ADR-0023 §9)', () => {
     const graph = migrateWorkflowV1(base, { projectMode: 'auto-edits' });
     redesign.workflow.putGraph(projectId, graph);
     expect(redesign.workflow.stored(projectId)).toMatchObject({ kind: 'v2' });
+  });
+
+  it('reads a version 3 graph row as stored, and refuses a version 1 write over it (ADR-0037)', () => {
+    const { redesign, db, projectId } = setup();
+    const v3 = workflowTemplateV3('reviewer-helper-loop', { planner: true });
+    db.connection
+      .prepare('INSERT INTO project_workflow (project_id, workflow, updated_at) VALUES (?, ?, ?)')
+      .run(projectId, JSON.stringify({ version: 3, graph: v3 }), '2026-11-09T10:00:00.000Z');
+    expect(redesign.workflow.stored(projectId)).toEqual({
+      kind: 'v3',
+      graph: { projectId, graph: v3, updatedAt: '2026-11-09T10:00:00.000Z' },
+    });
+    expect(thrown(() => redesign.workflow.get(projectId))).toBeInstanceOf(
+      WorkflowStoredAsGraphError,
+    );
+    const base = defaultProjectWorkflow(projectId, '2026-10-18T09:00:00.000Z');
+    expect(
+      thrown(() => redesign.workflow.put({ projectId, plannerMode: 'lead', stages: base.stages })),
+    ).toBeInstanceOf(WorkflowStoredAsGraphError);
+    expect(redesign.workflow.stored(projectId)).toMatchObject({ kind: 'v3' });
   });
 
   it('refuses a version 1 read or write once a graph is stored, keeping the graph', () => {
