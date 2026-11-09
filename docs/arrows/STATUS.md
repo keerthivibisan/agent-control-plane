@@ -17,3 +17,11 @@ Coordinator-owned. Plan: [README.md](README.md).
 - 2026-11-09 Planned on the owner's request: one Agent block with roles derived from typed,
   labelled arrows; research and custom arrows; several planners with the owner picking one; review
   fan-out. AR-0 done.
+- 2026-11-09 AR-1 (core) ready for review on `feature/workflow/arrows`: graph version 3 schemas
+  (`WorkflowGraphV3Schema`; the unversioned names stay version 2 until AR-4/AR-5), `deriveRoles`,
+  `canConnectV3`, `validateWorkflowGraphV3`, `compileWorkflowV3` (`compileWorkflow` takes both
+  versions and runs it), `migrateWorkflowV2`/`downgradeWorkflowV3`/`storedWorkflowGraphV3`,
+  `workflowTemplateV3`, v3 generators and mutations. The pool is `pool: true` on a helper agent.
+  `researcher` is not yet a `RunAgentKind` (left to AR-2). A migrated v2 graph compiles to the same
+  program for every template, generated and enumerated graph. The DB reads a v3 row; the server
+  serves it as v2 until AR-4.
