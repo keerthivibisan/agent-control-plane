@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ASSISTANT_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
 import type { ApprovalMode, ManagedAgentSpec, PermissionRequest } from '@acp/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createManagedCodex } from '../src/adapter.js';
@@ -313,6 +314,28 @@ describe('ADR-0035: the Codex project assistant', () => {
     await settle();
     await handle.send('And WEB-12?');
     expect(server.requests('turn/start')).toHaveLength(2);
+    handle.abort();
+  });
+
+  it('A6: every lead, helper and reviewer tool, or a namespaced assistant tool, is success:false', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('ok'));
+    const spec = makeSpec({ kind: 'assistant', cwd: repo(), leadTools });
+    const { server, handle, requestPermission } = start(spec);
+    await settle();
+    const call = (tool: string, namespace: string | null = null) =>
+      server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: {} });
+    const forbidden = LEAD_TOOL_NAMES.filter((n) => !ASSISTANT_TOOL_NAMES.includes(n));
+    expect(forbidden).toEqual(expect.arrayContaining(['ask_lead', 'message_agent', 'start_agent']));
+    for (const tool of forbidden) {
+      expect((await call(tool)).result, tool).toMatchObject({ success: false });
+    }
+    expect((await call('propose_skill', 'acp')).result).toMatchObject({ success: false });
+    expect(leadTools).not.toHaveBeenCalled();
+    // Command and file-change approvals are declined without asking anyone (C5 for this role).
+    expect((await commandApproval(server, 'git commit -m x')).result).toEqual({
+      decision: 'decline',
+    });
+    expect(requestPermission).not.toHaveBeenCalled();
     handle.abort();
   });
 });

@@ -276,4 +276,36 @@ status --hostname=github.com` are judged by their exit code only; their output i
   provider, number, URL, state, check time and the last pushed commit (migration 0008). No token,
   user or remote URL.
 
+### The project assistant (ADR-0035) [implemented on `feature/assistant/project-assistant`]
+
+A floating chat on project pages runs one managed agent of the read-only `assistant` role in the
+project's checkout. Tests: the "Project assistant" section of the
+[adversarial suite](testing/adversarial.md) (A1 to A7).
+
+- **Read-only role.** It reads the project's files and answers from five tools: `ticket_status`,
+  `project_info`, `code_map`, `propose_skill` and `propose_agent`. It is not part of any ticket
+  run. Every other control tool (`start_agent`, `message_agent`, `stop_agent`, `merge_change`,
+  `ask_lead`, `submit_plan`, `report_work` and the rest) is refused by the adapter and again by the
+  server, on Claude and on Codex. So it cannot start, stop or message ticket agents.
+- **Every permission request is denied.** The server answers each one with "The project assistant
+  is read-only" and never asks the owner; nothing reaches the approval queue. On Claude the gate
+  also denies edits, commands, web and subagent tools, reads outside the folder and its own tools
+  from another MCP server. On Codex it runs the `:read-only` profile with the deny list and
+  approval policy `never`, and the adapter declines every approval request.
+- **Writes only through the ADR-0018 writer.** A proposal is the full text of
+  `.claude/skills/<slug>/SKILL.md` or `.claude/agents/<slug>.md`, nothing else. The slug must match
+  `^[a-z0-9][a-z0-9-]{0,63}$`, so traversal, absolute paths, dots and uppercase are refused; an
+  extra path in the tool input is ignored. The front matter, the 64 KiB cap and the symlink checks
+  are the Skills & Agents page's own: a symlinked `.claude`, `.claude/skills`, `.claude/agents` or
+  file is refused, and nothing is written outside the repository. An existing file is replaced
+  only with `replace: true`; a file that appeared after the proposal is not overwritten.
+- **Approve and Auto.** In Approve (the default) the app writes only when the owner clicks Apply;
+  in Auto it writes at once, because the owner's switch is the action (ADR-0035 §5). The mode is
+  the owner's setting. Text in tickets, files or tool results cannot change it or apply a
+  proposal. Committing stays the owner's step.
+- **Session only.** The chat, its proposals and the stream's replay buffer live in the server's
+  memory and go when the chat ends (owner, idle after 30 minutes, the 300k token budget, a new
+  chat or a server stop). Nothing about the chat reaches the database or the logs: logs carry ids,
+  codes and counts only. Usage is recorded as for any managed session.
+
 See [orchestration-lifecycle.md](orchestration-lifecycle.md).

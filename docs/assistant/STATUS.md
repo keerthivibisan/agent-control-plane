@@ -7,7 +7,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | AS-0 | ADR-0035, plan                 | done        | `feature/assistant/project-assistant` |        |
 | AS-1 | Role, tools, service, API      | done        | `feature/assistant/project-assistant` |        |
 | AS-2 | Web: floating panel            | done        | `feature/assistant/project-assistant` |        |
-| AS-3 | Safety tests, docs, real check | not started |                                       |        |
+| AS-3 | Safety tests, docs, real check | in-progress | `feature/assistant/project-assistant` |        |
 
 ## Log
 
@@ -21,3 +21,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 - 2026-11-09 AS-2 done: floating button and panel on project pages (provider, model, effort, mode
   badge, budget meter, suggested prompts, chat, proposal cards with preview and Apply/Discard, bottom
   sheet on narrow screens). Pending proposals stay decidable after switching to Auto.
+- 2026-11-09 AS-3 in progress: adversarial cases A1 to A7 (server
+  `tests/assistant/adversarial.test.ts`, plus A6 in both adapters' tests), no bug found; docs in
+  security.md, provider-adapters.md (§11.1, §12.4), testing/adversarial.md and the README's "How it
+  works" and "Using it". The consented real check is still to do.

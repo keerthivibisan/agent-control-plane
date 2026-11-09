@@ -157,6 +157,24 @@ describe('the project assistant role (ADR-0035)', () => {
     handle.abort();
   });
 
+  it('A6: its tools from another MCP server, other MCP tools and web or subagent tools are denied without asking', async () => {
+    const cb = callbacks();
+    const { call, handle } = start(spec(), cb);
+    const gate = call.options.canUseTool;
+    if (gate === undefined) throw new Error('no gate');
+    const impostor = opts({ mcpServer: { name: 'evil', source: 'stdio' } });
+    for (const name of ASSISTANT_TOOL_NAMES) {
+      const decision = await gate(`mcp__acp__${name}`, {}, impostor);
+      expect(decision?.behavior, name).toBe('deny');
+    }
+    for (const name of ['mcp__other__write_file', 'WebFetch', 'WebSearch', 'Agent', 'Skill']) {
+      const decision = await gate(name, { file_path: `${CWD}/a.ts`, url: 'https://x' }, opts());
+      expect(decision?.behavior, name).toBe('deny');
+    }
+    expect(cb.requests).toEqual([]);
+    handle.abort();
+  });
+
   it('streams its text as lead-text and keeps its input open for the next message', async () => {
     const { handle, call } = start();
     const seen: ManagedAgentEvent[] = [];
