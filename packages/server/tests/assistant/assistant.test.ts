@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCodeMapRepositories, createRepositories } from '@acp/db';
 import type { AssistantProposalDto, AssistantStreamEvent } from '@acp/core/api';
@@ -104,6 +104,16 @@ describe('assistant sessions (ADR-0035 §2, §4)', () => {
     expect(refused.status).toBe(409);
     expect(refused.body.error?.message).toBe('codex is not signed in');
     expect((await s.post('/session', { effort: 'max' })).status).toBe(400);
+    expect((await s.get('/session')).status).toBe(404);
+  });
+
+  it('refuses a project whose folder is gone, before any agent starts', async () => {
+    const s = await setup();
+    rmSync(s.repo, { recursive: true, force: true });
+    const refused = await s.post('/session', {});
+    expect(refused.status).toBe(409);
+    expect(refused.body.error?.code).toBe('project_folder_missing');
+    expect(s.fake.agents).toHaveLength(0);
     expect((await s.get('/session')).status).toBe(404);
   });
 

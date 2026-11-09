@@ -152,7 +152,11 @@ export function useAssistant({
 
   const showError = useCallback(
     (e: unknown, provider: ManagedProviderId) => {
-      const unavailable = e instanceof ApiError && e.kind === 'http' && e.status === 409;
+      const unavailable =
+        e instanceof ApiError &&
+        e.kind === 'http' &&
+        e.status === 409 &&
+        e.code === 'provider_unavailable';
       dispatch({
         type: 'append',
         item: {

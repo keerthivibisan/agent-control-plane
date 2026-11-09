@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import {
   ASSISTANT_TOOL_NAMES,
   LeadToolInputs,
@@ -563,6 +564,15 @@ export function createAssistantService(deps: AssistantServiceDeps): AssistantSer
           "This provider cannot offer the assistant's tools",
         );
       }
+      // A project whose folder was moved or deleted: the provider cannot start there, and the SDK's
+      // own error for a missing folder is misleading ("binary failed to launch").
+      if (!(await isFolder(project.rootPath))) {
+        throw new HttpError(
+          409,
+          'project_folder_missing',
+          "The project's folder was not found. It may have been moved or deleted.",
+        );
+      }
       const available = await deps.checkProvider(request.provider);
       if (!available.ok) {
         throw new HttpError(409, 'provider_unavailable', available.reason.slice(0, 300));
@@ -734,5 +744,13 @@ export function createAssistantService(deps: AssistantServiceDeps): AssistantSer
         ...errorFields(error),
       });
     }
+  }
+}
+
+async function isFolder(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
   }
 }
