@@ -20,7 +20,7 @@ import {
 import type { CodeMapEntryInput, CodeMapManifestRecord, CodeMapRepository } from '@acp/db';
 import type { Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/git.js';
-import { CodeMapBuildError } from './errors.js';
+import { CodeMapBuildCancelled, CodeMapBuildError } from './errors.js';
 import { parseScript, type SourceParser } from './ts-parser.js';
 
 /**
@@ -91,8 +91,20 @@ async function mapBounded<T, R>(
   return out;
 }
 
+export interface CodeMapIndexOptions {
+  /**
+   * ADR-0036: checked right before each write; true throws `CodeMapBuildCancelled` and nothing
+   * more is written (the project was removed while the build ran).
+   */
+  cancelled?: () => boolean;
+}
+
 export interface CodeMapIndexer {
-  indexCommit(project: CodeMapIndexProject, commit: string): Promise<CodeMapIndexOutcome>;
+  indexCommit(
+    project: CodeMapIndexProject,
+    commit: string,
+    options?: CodeMapIndexOptions,
+  ): Promise<CodeMapIndexOutcome>;
 }
 
 export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
@@ -242,7 +254,11 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
   }
 
   return {
-    async indexCommit(project, commit) {
+    async indexCommit(project, commit, options = {}) {
+      const stopIfCancelled = () => {
+        if (options.cancelled?.() === true) throw new CodeMapBuildCancelled();
+      };
+      stopIfCancelled();
       const existing = deps.repo.getManifest(project.id, commit);
       if (existing?.status === 'ready' && existing.indexerVersion === CODE_MAP_INDEXER_VERSION) {
         return { record: existing, reused: true, analysedBlobs: 0 };
@@ -286,6 +302,8 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
         pending.filter((e) => e.size <= MAX_CODE_MAP_FILE_BYTES),
       );
       const analysed = pending.map((e) => ({ blobSha: e.sha, blob: analyse(e, texts.get(e.sha)) }));
+      // Writes follow each check synchronously, so a removal in between cannot slip past it.
+      stopIfCancelled();
       for (let i = 0; i < analysed.length; i += 500) {
         deps.repo.putBlobs(project.id, analysed.slice(i, i + 500));
       }
@@ -311,6 +329,7 @@ export function createCodeMapIndexer(deps: CodeMapIndexerDeps): CodeMapIndexer {
         rows.push({ path: e.path, blobSha: e.sha, sizeBytes: e.size, data });
       }
       const counts = countCodeMap(files, { generated, fileCap });
+      stopIfCancelled();
       const record = deps.repo.insertManifest({
         projectId: project.id,
         commit,

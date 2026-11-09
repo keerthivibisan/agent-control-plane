@@ -25,7 +25,7 @@ import { badRequest, HttpError, notFound } from '../errors.js';
 import { errorFields, type Logger } from '../logger.js';
 import type { GitRunner } from '../workspace/git.js';
 import { GitCommandError } from '../workspace/errors.js';
-import { CodeMapBuildError } from './errors.js';
+import { CodeMapBuildCancelled, CodeMapBuildError } from './errors.js';
 import { createCodeMapIndexer, type CodeMapIndexOutcome } from './indexer.js';
 import type { SourceParser } from './ts-parser.js';
 
@@ -71,6 +71,12 @@ export interface CodeMapService {
   graph(projectId: string, query: unknown): CodeMapGraphDto;
   file(projectId: string, query: unknown): CodeMapFileDto;
   search(projectId: string, query: unknown): CodeMapSearchDto;
+  /**
+   * ADR-0036: the project is being removed. Its queued builds never start and a running one drops
+   * its result without writing; nothing is recorded as a failure. Synchronous, so the caller can
+   * delete the project's rows right after.
+   */
+  forget(projectId: string): void;
   /** Resolves when no build is running or queued (tests, shutdown). */
   idle(): Promise<void>;
 }
@@ -112,6 +118,9 @@ export function createCodeMapService(deps: CodeMapServiceDeps): CodeMapService {
   const active = new Map<string, number>();
   const background = new Set<Promise<unknown>>();
   const fileCache = new Map<string, CodeMapFile[]>();
+  /** ADR-0036: bumped by `forget`; a build started under an older generation writes nothing. */
+  const generations = new Map<string, number>();
+  const generationOf = (projectId: string) => generations.get(projectId) ?? 0;
 
   function projectOrThrow(projectId: string): Project {
     const project = deps.projectOf(projectId);
@@ -119,10 +128,21 @@ export function createCodeMapService(deps: CodeMapServiceDeps): CodeMapService {
     return project;
   }
 
-  async function runBuild(project: Project, commit: string): Promise<CodeMapIndexOutcome> {
+  async function runBuild(
+    project: Project,
+    commit: string,
+    generation: number,
+  ): Promise<CodeMapIndexOutcome> {
+    const cancelled = () => generationOf(project.id) !== generation;
     try {
-      return await indexer.indexCommit({ id: project.id, rootPath: project.rootPath }, commit);
+      return await indexer.indexCommit({ id: project.id, rootPath: project.rootPath }, commit, {
+        cancelled,
+      });
     } catch (error) {
+      if (error instanceof CodeMapBuildCancelled || cancelled()) {
+        deps.logger.log('info', 'code map build dropped', {});
+        throw new CodeMapBuildCancelled();
+      }
       const code = errorCodeOf(error);
       deps.logger.log('warn', 'code map build failed', { code, ...errorFields(error) });
       if (CodeMapCommitSchema.safeParse(commit).success) {
@@ -148,7 +168,8 @@ export function createCodeMapService(deps: CodeMapServiceDeps): CodeMapService {
     if (existing !== undefined) return existing;
     active.set(project.id, (active.get(project.id) ?? 0) + 1);
     const previous = queues.get(project.id) ?? Promise.resolve();
-    const promise = previous.then(() => runBuild(project, commit));
+    const generation = generationOf(project.id);
+    const promise = previous.then(() => runBuild(project, commit, generation));
     const settled = promise.then(
       () => undefined,
       () => undefined,
@@ -286,6 +307,10 @@ export function createCodeMapService(deps: CodeMapServiceDeps): CodeMapService {
       const q = parseQuery(CodeMapSearchQuerySchema, query);
       const record = mapOf(projectId, q.commit);
       return { ...searchCodeMap(filesOf(record), q.q), commit: record.commit, query: q.q };
+    },
+    forget(projectId) {
+      generations.set(projectId, generationOf(projectId) + 1);
+      fileCache.clear();
     },
     async idle() {
       while (background.size > 0 || pending.size > 0) {

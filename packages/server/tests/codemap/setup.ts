@@ -35,7 +35,9 @@ export interface CodeMapSetup {
   commit(files: Record<string, string | Buffer | null>, message?: string): string;
 }
 
-export function setupCodeMap(options: { maxFiles?: number; logger?: Logger } = {}): CodeMapSetup {
+export function setupCodeMap(
+  options: { maxFiles?: number; logger?: Logger; onParse?: (path: string) => void } = {},
+): CodeMapSetup {
   const db = openDatabase(join(tempDir('acp-cm-db-'), 'cm.sqlite'));
   dbs.push(db);
   const repos = createRepositories(db);
@@ -57,6 +59,7 @@ export function setupCodeMap(options: { maxFiles?: number; logger?: Logger } = {
     now: () => new Date((t += 1000)),
     parse: (path, text) => {
       parsed.push(path);
+      options.onParse?.(path);
       return parseScript(path, text);
     },
     ...(options.maxFiles !== undefined && { maxFiles: options.maxFiles }),

@@ -15,6 +15,8 @@ import { createSkillsRouter, type SkillsRouterDeps } from './routes/skills.js';
 import { createAgentsRouter, type AgentsRouterDeps } from './routes/agents.js';
 import { createCodeMapRouter } from './routes/code-map.js';
 import { createAssistantRouter } from './routes/assistant.js';
+import { createProjectRemovalRouter } from './routes/project-removal.js';
+import type { ProjectRemovalService } from './projects/removal.js';
 import type { AssistantService } from './assistant/index.js';
 import type { CodeMapService } from './codemap/service.js';
 import type { BoardService } from './board/service.js';
@@ -54,6 +56,8 @@ export interface AppDeps {
    * The project assistant (ADR-0035); mounted with the control panel, which owns the CSRF token.
    */
   assistant?: AssistantService;
+  /** Removing a project from ACP (ADR-0036); mounted with the control panel (CSRF token). */
+  projectRemoval?: ProjectRemovalService;
   /** Built web UI directory; omitted in tests and when the web package has not been built. */
   staticDir?: string;
 }
@@ -89,6 +93,9 @@ export function createApp(deps: AppDeps): Express {
     if (deps.agents !== undefined) {
       app.use('/api', createAgentsRouter({ ...deps.agents, csrfToken: deps.control.csrfToken }));
     }
+  }
+  if (deps.control !== undefined && deps.projectRemoval !== undefined) {
+    app.use('/api', createProjectRemovalRouter(deps.projectRemoval, deps.control.csrfToken));
   }
   if (deps.control !== undefined && deps.assistant !== undefined) {
     app.use(
