@@ -201,6 +201,79 @@ describe('reviewer (ADR-0019): read-only with post_review, ends after its turn',
   });
 });
 
+describe('researcher (ADR-0037 §3): read-only with report_findings, ends after its turn', () => {
+  it('gets report_findings, ask_lead and code_map, and no edit or shell tools', () => {
+    const options = optionsFor(spec('researcher'));
+    expect(servers.toolNames).toEqual([['ask_lead', 'report_findings', 'code_map']]);
+    expect(options.tools).toEqual(['Read', 'Grep', 'Glob']);
+    expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
+    expect(options.permissionMode).toBe('default');
+    expect(JSON.stringify(options.systemPrompt)).toContain(
+      'Finish with exactly one report_findings call',
+    );
+  });
+
+  it('even with helpers asked for, never gets a child-management tool', () => {
+    optionsFor(spec('researcher', { canStartHelpers: true }));
+    expect(servers.toolNames).toEqual([['ask_lead', 'report_findings', 'code_map']]);
+  });
+
+  it('adversarial: Write, Edit, Bash, merge_change and start_agent are refused without asking', async () => {
+    const cb = callbacks();
+    const use = canUseTool(optionsFor(spec('researcher'), cb));
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    for (const name of ['report_findings', 'ask_lead', 'code_map']) {
+      await expect(use(`mcp__acp__${name}`, {}, ours)).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+    }
+    for (const name of [
+      'merge_change',
+      'start_agent',
+      'message_agent',
+      'submit_plan',
+      'post_review',
+      'submit_review',
+      'report_work',
+      'request_review',
+    ]) {
+      const result = await use(`mcp__acp__${name}`, {}, ours);
+      expect(result).toMatchObject({ behavior: 'deny' });
+      expect(JSON.stringify(result)).toContain('The researcher can only report its findings');
+    }
+    for (const [tool, input] of [
+      ['Write', { file_path: `${CWD}/a.ts`, content: 'x' }],
+      ['Edit', { file_path: `${CWD}/a.ts`, old_string: 'a', new_string: 'b' }],
+      ['MultiEdit', { file_path: `${CWD}/a.ts`, edits: [] }],
+      ['NotebookEdit', { notebook_path: `${CWD}/a.ipynb` }],
+      ['Bash', { command: 'rm -rf .' }],
+    ] as const) {
+      await expect(use(tool, input, toolOpts())).resolves.toEqual({
+        behavior: 'deny',
+        message: DENY_READ_ONLY,
+        toolUseID: 'toolu_1',
+      });
+    }
+    // An `mcp__acp__` name from another server is not ours, and is never allowed either.
+    await expect(
+      use('mcp__acp__report_findings', {}, toolOpts({ mcpServer: { name: 'x', source: 'stdio' } })),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    await expect(use('Read', { file_path: `${CWD}/a.ts` }, toolOpts())).resolves.toMatchObject({
+      behavior: 'allow',
+    });
+    await expect(use('Read', { file_path: '/etc/hosts' }, toolOpts())).resolves.toMatchObject({
+      behavior: 'deny',
+    });
+    expect(cb.requests).toEqual([]);
+  });
+
+  it('closes its input after the turn and never publishes its text', async () => {
+    const { events, stillOpen } = await oneTurn('researcher');
+    expect(stillOpen).toBe(false);
+    expect(events.some((e) => e.type === 'lead-text')).toBe(false);
+  });
+});
+
 describe('tester (ADR-0019): a normal worker', () => {
   it('gets only its note tool and keeps the built-in tools, which ask the owner', async () => {
     const cb = callbacks();

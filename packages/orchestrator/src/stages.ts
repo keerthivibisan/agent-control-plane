@@ -53,6 +53,8 @@ export const ROLE_STAGE: Readonly<Record<RunAgentKind, WorkflowStageId>> = Objec
   worker: 'helpers',
   reviewer: 'code-review',
   tester: 'unit-tests',
+  // ADR-0037 §3: research happens before and for planning; each researcher records its own node.
+  researcher: 'plan',
 });
 
 /** The agent's recorded node, or the stage of its role (rows stored before stages existed). */
@@ -76,9 +78,12 @@ export function hasReviewableChange(kind: RunAgentKind): boolean {
   return kind === 'worker' || kind === 'tester';
 }
 
-/** Roles counted against the helper limit: the reviewer and the tester count as one helper each. */
+/**
+ * Roles counted against the helper limit: the reviewer, the tester and the researcher (ADR-0037)
+ * count as one helper each.
+ */
 export function countsAsHelper(kind: RunAgentKind): boolean {
-  return kind === 'worker' || kind === 'reviewer' || kind === 'tester';
+  return kind === 'worker' || kind === 'reviewer' || kind === 'tester' || kind === 'researcher';
 }
 
 /** Roles the engine starts after the merge. */
@@ -100,11 +105,12 @@ export function isStageAgent(agent: Pick<EngineAgent, 'kind' | 'reviewsAgentRunI
 }
 
 /**
- * Roles that only read and never ask to edit or run anything (ADR-0019). The lead is read-only
+ * Roles that only read and never ask to edit or run anything (ADR-0019; the researcher, ADR-0037
+ * §3). The lead is read-only
  * too, but the server denies its tool uses itself (ADR-0013 §2), so it is not listed here.
  */
 export function isReadOnlyRole(kind: RunAgentKind): boolean {
-  return kind === 'planner' || kind === 'reviewer';
+  return kind === 'planner' || kind === 'reviewer' || kind === 'researcher';
 }
 
 /** At least one helper's change was merged; the post-merge stages have something to work on. */

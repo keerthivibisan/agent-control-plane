@@ -726,11 +726,11 @@ export interface ProgramFinalReviewerNode extends ProgramAgentNode {
 
 /**
  * A researcher (ADR-0037 §3): a read-only agent that runs before the agents it researches for and
- * whose findings go into their prompts. Not a `RunAgentKind` yet (AR-2 adds the kind), so it has
- * no `kind`.
+ * whose findings go into their prompts. Its `kind` is the read-only `researcher` run kind.
  */
 export interface ProgramResearcherNode extends Omit<ProgramAgentNode, 'type' | 'kind'> {
   type: 'researcher';
+  kind: 'researcher';
   /** The research arrows out of it, in graph order. */
   targets: readonly ProgramArrowTarget[];
 }

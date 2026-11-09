@@ -225,6 +225,8 @@ describe('CX-7 C5: a read-only Codex role never asks the owner', () => {
     ['a follow-up turn', { kind: 'lead', followUp: { resumeSessionId: 'thr-lead' } }],
     // ADR-0035 §6: the project assistant.
     ['the project assistant', { kind: 'assistant' }],
+    // ADR-0037 §3: the researcher.
+    ['a researcher', { kind: 'researcher' }],
   ];
   for (const [title, overrides] of readers) {
     it(`${title}: command and file-change approvals are declined`, async () => {
@@ -269,6 +271,60 @@ describe('CX-7 C6: a Codex worker cannot call lead-only tools', () => {
     // A namespaced spelling of an offered tool is not that tool.
     expect((await call('report_work', 'acp')).result).toMatchObject({ success: false });
     expect(leadTools).not.toHaveBeenCalled();
+    handle.abort();
+  });
+});
+
+describe('ADR-0037 §3: the Codex researcher', () => {
+  it('runs read-only, offers report_findings, ask_lead and code_map, and its instructions', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('recorded'));
+    const spec = makeSpec({ kind: 'researcher', cwd: repo(), leadTools });
+    expect(codexModes(spec)).toMatchObject({
+      approvalPolicy: 'never',
+      profile: { id: 'acp-read', extends: ':read-only' },
+    });
+    const { server, handle } = start(spec);
+    await settle();
+    const thread = server.requests('thread/start')[0]?.params ?? {};
+    const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+    expect(offered).toEqual(['report_findings', 'ask_lead', 'code_map']);
+    expect(String(thread['developerInstructions'])).toContain(
+      'Finish with exactly one report_findings call',
+    );
+    const call = (tool: string, args: object = {}) =>
+      server.request('item/tool/call', { callId: 'c', namespace: null, tool, arguments: args });
+    expect(
+      (await call('report_findings', { findings: 'src/a.ts parses it.' })).result,
+    ).toMatchObject({ success: true });
+    expect(leadTools).toHaveBeenCalledWith('report_findings', { findings: 'src/a.ts parses it.' });
+    handle.abort();
+  });
+
+  it('adversarial: merge_change, start_agent and every other tool are success:false; writes declined', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('ok'));
+    const { server, handle, requestPermission } = start(
+      makeSpec({ kind: 'researcher', cwd: repo(), leadTools }),
+    );
+    await settle();
+    const call = (tool: string, namespace: string | null = null) =>
+      server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: {} });
+    const own = ['report_findings', 'ask_lead', 'code_map'];
+    const forbidden = LEAD_TOOL_NAMES.filter((n) => !own.includes(n));
+    expect(forbidden).toEqual(expect.arrayContaining(['merge_change', 'start_agent']));
+    for (const tool of forbidden) {
+      expect((await call(tool)).result, tool).toMatchObject({ success: false });
+    }
+    expect((await call('report_findings', 'acp')).result).toMatchObject({ success: false });
+    expect(leadTools).not.toHaveBeenCalled();
+    for (const command of ['touch notes.md', 'rm -rf src', 'git commit -m x']) {
+      expect((await commandApproval(server, command)).result).toEqual({ decision: 'decline' });
+    }
+    const edit = await server.request('item/fileChange/requestApproval', {
+      itemId: 'i',
+      reason: 'write a file',
+    });
+    expect(edit.result).toEqual({ decision: 'decline' });
+    expect(requestPermission).not.toHaveBeenCalled();
     handle.abort();
   });
 });

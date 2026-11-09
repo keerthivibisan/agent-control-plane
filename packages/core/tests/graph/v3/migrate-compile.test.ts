@@ -157,6 +157,7 @@ describe('compile: the new program fields', () => {
       {
         id: 'research-claude',
         type: 'researcher',
+        kind: 'researcher',
         label: 'Claude research',
         model: 'haiku',
         skills: [],
@@ -167,6 +168,7 @@ describe('compile: the new program fields', () => {
       {
         id: 'research-codex',
         type: 'researcher',
+        kind: 'researcher',
         label: 'Codex research',
         model: null,
         skills: [],

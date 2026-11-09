@@ -18,6 +18,7 @@ import {
   MessageSquareText,
   Play,
   Scale,
+  Search,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ const ICON: Record<Item['type'], LucideIcon> = {
   'agent-ended': CircleCheck,
   'agent-note': MessageSquareText,
   review: Eye,
+  research: Search,
   note: MessageSquareText,
   decision: Scale,
   'run-facts': ClipboardList,
@@ -64,6 +66,7 @@ const ICON: Record<Item['type'], LucideIcon> = {
 
 const TONE: Partial<Record<Item['type'], MarkerTone>> = {
   review: 'accent',
+  research: 'accent',
   merge: 'done',
   'pull-request': 'success',
 };
@@ -74,12 +77,32 @@ function ItemIcon({ item, size = 14 }: { item: Item; size?: number }) {
 }
 
 /** Item types drawn as a box with the text written for the ticket; the rest are event lines. */
-const BOXED: ReadonlySet<Item['type']> = new Set(['agent-note', 'review', 'note', 'decision']);
+const BOXED: ReadonlySet<Item['type']> = new Set([
+  'agent-note',
+  'review',
+  'research',
+  'note',
+  'decision',
+]);
 
 /** The parts of the item's title after its actor's name, so the name is said once, in bold. */
 function TitleWithActor({ item }: { item: Item }) {
   const { label } = item.actor;
   const rest = item.title.startsWith(label) ? item.title.slice(label.length) : null;
+  if (item.type === 'research') {
+    // ADR-0037 §3: a researcher's findings, drawn like a review's with a "Research" label.
+    return (
+      <>
+        <Pill tone="accent" testId="comment-author" title={A.researchTip}>
+          {label}
+        </Pill>
+        <Pill tone="neutral" testId="research-label">
+          {A.research}
+        </Pill>
+        <span className="text-ink">{rest ?? item.title}</span>
+      </>
+    );
+  }
   if (item.type === 'review') {
     return (
       <>
@@ -237,7 +260,7 @@ function ItemView({
   }
 
   if (BOXED.has(item.type) && item.body !== null) {
-    const reviewer = item.type === 'review';
+    const reviewer = item.type === 'review' || item.type === 'research';
     return (
       <Row
         author={author}

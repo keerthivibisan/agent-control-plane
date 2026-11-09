@@ -276,6 +276,8 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'ask_lead' &&
+          // ADR-0037 §3: the researcher's findings note.
+          n !== 'report_findings' &&
           // ADR-0035: the project assistant's own tools.
           !ASSISTANT_CONTROL_TOOL_NAMES.includes(n),
       ),

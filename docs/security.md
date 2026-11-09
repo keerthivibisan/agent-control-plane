@@ -117,8 +117,10 @@
 - **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
   (ADR-0015); never worker conversation content. Logs never include chat text. Later phases add
   the owner-facing ticket text of ADR-0016, ADR-0019 and ADR-0021 (plans, review findings, the
-  lead's change notes), with ADR-0024 the run summary comments (below), and with ADR-0026 the
-  helpers' and the tester's short work notes and the owner's attachments.
+  lead's change notes), with ADR-0024 the run summary comments (below), with ADR-0026 the
+  helpers' and the tester's short work notes and the owner's attachments, and with ADR-0037 §3
+  the researchers' findings notes (`report_findings`, redacted, at most 16,384 characters, stored
+  as ticket comments of kind `research` like review findings).
 
 ### Approval modes per workflow block (ADR-0023) [implemented]
 

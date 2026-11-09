@@ -221,6 +221,31 @@ real `claude` and `codex` never run.
 
 No `knownGap`: every case passes today.
 
+## Researcher (AR-2, `feature/workflow/arrows`)
+
+The researcher (ADR-0037 §3) is a read-only agent that investigates in the project folder and
+ends with one `report_findings` note. These cases make it misbehave on both providers and assert a
+refusal. Everything is synthetic: the fake Claude query, the scripted Codex app-server, and the
+fake managed adapter for the server. Until the AR-3 engine starts researchers, the server test
+turns one lead `start_agent` into a researcher start, as the engine will emit it.
+
+| File                                                        | Proves                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `packages/adapters/claude-code/tests/managed/roles.test.ts` | R1, R2 on Claude: the gate and the SDK options.                                      |
+| `packages/adapters/codex/tests/adversarial.test.ts`         | R1, R2 on Codex: the read-only profile, `never`, and the dynamic tools (also C5).    |
+| `packages/orchestrator/tests/report-findings.test.ts`       | R3, R4: the engine refuses other tools to a researcher and checks `report_findings`. |
+| `packages/server/tests/board/researcher.test.ts`            | R5: the server's folder, gate and stored note for a researcher.                      |
+
+| Id  | Case                                                                                                                                                                                                                                 | Expected refusal                                                                                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | A Claude researcher uses `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `Bash`; a Codex researcher gets command and file-change approvals                                                                                           | Claude: denied with the read-only message, never asked (the tools are also out of its context); Codex: `decline`, never asked.  |
+| R2  | A researcher calls `merge_change`, `start_agent`, `message_agent`, `submit_plan`, `post_review`, `submit_review`, `report_work`, `request_review` (or any other non-researcher tool, or an impostor or namespaced `report_findings`) | Claude: denied ("The researcher can only report its findings"); Codex: `success: false`; the engine's handler is never reached. |
+| R3  | The engine gets the same calls from a researcher (lead tools, change tools, other roles' notes, assistant tools)                                                                                                                     | refused `not-lead`; no effect.                                                                                                  |
+| R4  | `report_findings` empty, blank, over 16,384 characters, a second time, after the turn ended, while the run is stopping, or in a run without a ticket                                                                                 | refused (`invalid-input`, `agent-not-live`, `run-cancelling`); the first note stays.                                            |
+| R5  | A researcher asks the server's gate for `Edit`, `Write` or `Bash`; calls `merge_change`, `start_agent`, `report_work` or `submit_plan`                                                                                               | denied with the researcher's read-only message, no approval stored; each tool call rejected, no agent starts, no agent note.    |
+
+No `knownGap`: every case passes today.
+
 ## How to add a case
 
 1. **Server.** Write

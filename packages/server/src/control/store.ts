@@ -33,6 +33,7 @@ import type {
   TicketPlan,
   WorkflowNodeId,
 } from '@acp/core';
+import { researchCommentBodies } from './research-findings.js';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -491,6 +492,22 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           agentRunId: effect.agentRunId,
           body: effect.body,
         });
+        continue;
+      }
+      if (effect.type === 'record-findings') {
+        // ADR-0037 §3: the researcher's findings, owner-facing like a reviewer's (ADR-0021 §6),
+        // already redacted and capped by the engine. A note longer than a comment body is kept
+        // whole as consecutive parts.
+        for (const body of researchCommentBodies(effect.text)) {
+          workspaceRepos.comments.insert({
+            ticketId: effect.ticketId,
+            runId: effect.runId,
+            author: 'app',
+            body,
+            kind: 'research',
+            agentRunId: effect.agentRunId,
+          });
+        }
         continue;
       }
       if (effect.type === 'chat-message') {

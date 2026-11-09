@@ -87,6 +87,7 @@ export {
 } from './agent-note.js';
 export { noChangeLine } from './change-commands.js';
 export { reportWork } from './report-tool.js';
+export { cleanFindings, reportFindings } from './findings-tool.js';
 export {
   RESOLVER_ROLE,
   abandonResolver,

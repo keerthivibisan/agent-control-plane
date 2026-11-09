@@ -240,6 +240,7 @@ export function compileWorkflowV3(graph: WorkflowGraphV3, ctx: CompileContext): 
   const researchers: ProgramResearcherNode[] = agentsWithRole(index, 'researcher').map((n) => ({
     ...launchFields(n, ctx),
     type: 'researcher',
+    kind: 'researcher',
     targets: edgesOfTypeV3(edges, 'research')
       .filter((e) => e.from === n.id)
       .map((e): ProgramArrowTarget => ({ nodeId: e.to, ...arrowNotes(e) })),

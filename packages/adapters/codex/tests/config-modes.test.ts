@@ -121,7 +121,7 @@ describe('codexModes', () => {
     [cwd]: 'write',
   };
 
-  it.each(['lead', 'planner', 'reviewer', 'assistant'] as const)(
+  it.each(['lead', 'planner', 'reviewer', 'assistant', 'researcher'] as const)(
     '%s is read-only and never asks',
     (kind) => {
       expect(codexModes(makeSpec({ kind, cwd }))).toEqual({
@@ -130,6 +130,16 @@ describe('codexModes', () => {
       });
     },
   );
+
+  it('ADR-0037 §3: a researcher stays read-only and never asks, whatever its approval mode', () => {
+    for (const approvalMode of ['manual', 'auto-edits', 'auto', 'full-auto'] as const) {
+      const spec = makeSpec({ kind: 'researcher', cwd, approvalMode });
+      expect(codexModes(spec)).toEqual({
+        approvalPolicy: 'never',
+        profile: { id: 'acp-read', extends: ':read-only', filesystem: readOnly },
+      });
+    }
+  });
 
   it('a follow-up is read-only and never asks, even for a worker', () => {
     const spec = makeSpec({ kind: 'worker', cwd, followUp: { resumeSessionId: 't' } });

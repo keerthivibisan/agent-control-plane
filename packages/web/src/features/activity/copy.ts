@@ -89,11 +89,16 @@ export const ACTIVITY_COPY = {
   ticketFiles: 'Ticket branch files',
   pullRequest: 'Pull request',
   opensOnGitHub: '(opens on GitHub)',
+  /** ADR-0037 §3: the label on a researcher's findings note. */
+  research: 'Research',
+  researchTip:
+    'Findings of a read-only researcher agent, written for the agents it researches for. It never edits files.',
   /** Labels the page uses for actors in what it reads from the ticket's own comments. */
   actor: {
     owner: 'You',
     lead: 'Lead',
     reviewer: 'Reviewer',
+    researcher: 'Researcher',
     app: 'Agent Control Plane',
     agent: 'Agent',
   },
@@ -104,6 +109,7 @@ export const ACTIVITY_COPY = {
     plan: (v: number) => `Plan version ${formatCount(v)}`,
     agentNote: (who: string) => `${who} reported what it did`,
     review: 'Reviewer findings',
+    research: 'Research findings',
     note: 'Note from the lead',
     runFacts: 'Run facts',
     system: 'Agent Control Plane',

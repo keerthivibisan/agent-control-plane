@@ -149,6 +149,9 @@ const ROLE_NODE_FALLBACK: Readonly<Record<RunAgentKind, WorkflowNodeId>> = Objec
   worker: 'helpers',
   reviewer: 'code-review',
   tester: 'unit-tests',
+  // ADR-0037: a researcher always records its node; old rows never hold one. Research belongs to
+  // planning, so the fallback is the plan node.
+  researcher: 'plan',
 });
 
 export function agentNodeId(agent: Pick<EngineAgent, 'kind' | 'stage'>): WorkflowNodeId {

@@ -41,7 +41,8 @@ export interface CodexModes {
  *
  * | Agent                                   | Profile extends | Approval policy |
  * | --------------------------------------- | --------------- | --------------- |
- * | lead, planner, reviewer, any follow-up  | `:read-only`    | `never`         |
+ * | lead, planner, reviewer, researcher,    | `:read-only`    | `never`         |
+ * | any follow-up                           |                 |                 |
  * | worker or tester, `manual` (or absent)  | `:read-only`    | `on-request`    |
  * | worker or tester, `auto-edits`          | `:workspace`    | `untrusted`     |
  * | worker or tester, `auto`                | `:workspace`    | `on-request`    |

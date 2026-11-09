@@ -1747,6 +1747,10 @@ export const TICKET_COPY = {
       term: 'Tester agent',
       tip: 'An agent that writes unit tests for the merged change in its own copy. You review and merge them like any change.',
     },
+    researcher: {
+      term: 'Researcher agent',
+      tip: 'A read-only agent that investigates the project before others plan or work, and reports its findings with file paths. It never edits files.',
+    },
   },
   speaker: {
     owner: 'You',
@@ -2324,7 +2328,8 @@ export const HARNESS_PAGE_COPY = {
 // --- Project Tokens page (redesign R-F, wp/r-f-tokens) -------------------------------------------
 
 export type TokensBreakdownWord = 'session' | 'ticket' | 'role' | 'model';
-export type TokensRoleWord = 'planner' | 'lead' | 'worker' | 'reviewer' | 'tester' | 'external';
+export type TokensRoleWord =
+  'researcher' | 'planner' | 'lead' | 'worker' | 'reviewer' | 'tester' | 'external';
 
 /** "94%"; below 1% keeps one decimal so a small share never reads as 0%. */
 export function formatShare(share: number): string {
@@ -2438,6 +2443,7 @@ export const TOKENS_COPY = {
     worker: { word: 'Helpers', tip: 'Do parts of the work, each in its own copy of the project.' },
     reviewer: { word: 'Reviewer', tip: 'Reviews the merged change.' },
     tester: { word: 'Tester', tip: 'Writes unit tests for the change.' },
+    researcher: { word: 'Researcher', tip: 'Investigates the project and reports findings.' },
     external: {
       word: 'Outside the app',
       tip: 'Sessions you started yourself in Claude Code, not by an agent run.',

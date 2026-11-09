@@ -190,7 +190,14 @@ export interface RunSummaryFacts {
   note: string | null;
 }
 
-const KIND_ORDER: readonly RunAgentKind[] = ['planner', 'lead', 'worker', 'reviewer', 'tester'];
+const KIND_ORDER: readonly RunAgentKind[] = [
+  'researcher',
+  'planner',
+  'lead',
+  'worker',
+  'reviewer',
+  'tester',
+];
 /** Who used the tokens: one agent of the kind, then several. */
 const KIND_WORDS: Readonly<Record<RunAgentKind, readonly [string, string]>> = {
   planner: ['the planner', 'planners'],
@@ -198,6 +205,7 @@ const KIND_WORDS: Readonly<Record<RunAgentKind, readonly [string, string]>> = {
   worker: ['1 helper', 'helpers'],
   reviewer: ['1 reviewer', 'reviewers'],
   tester: ['1 tester', 'testers'],
+  researcher: ['1 researcher', 'researchers'],
 };
 
 function plural(n: number, one: string, many = `${one}s`): string {

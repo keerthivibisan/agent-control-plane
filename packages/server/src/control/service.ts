@@ -242,6 +242,9 @@ export const PLANNER_READ_ONLY_MESSAGE =
   'The planner works read-only in the project. Write the plan with submit_plan; helpers make the changes after approval.';
 export const REVIEWER_READ_ONLY_MESSAGE =
   'The reviewer only reads the merged result. Post your findings with post_review.';
+/** ADR-0037 §3: a researcher's tool use the adapter's gate did not settle: denied, never asked. */
+export const RESEARCHER_READ_ONLY_MESSAGE =
+  'The researcher works read-only in the project. Report what you found with report_findings.';
 /** A follow-up turn's tool use the adapter's gate did not settle (ADR-0020): denied, never asked. */
 export const FOLLOW_UP_READ_ONLY_MESSAGE =
   'This run has ended: you can only read the project and answer. New work needs a new run.';
@@ -1084,6 +1087,10 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // ADR-0026 §3: stored in the same transaction (RunStore.commit); no text is logged.
           logger.log('info', 'agent note stored', { runId, agentRunId: effect.agentRunId });
           break;
+        case 'record-findings':
+          // ADR-0037 §3: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'research findings stored', { runId, agentRunId: effect.agentRunId });
+          break;
         // ADR-0030: the resolver's report, seal and end go to its conflict-resolution operation.
         case 'helper-outcome':
           resolution.onHelperOutcome(effect.agentRunId, effect.outcome, effect.assessment);
@@ -1277,7 +1284,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       model: effect.model,
       effort: effect.effort,
     };
-    if (kind === 'lead' || kind === 'planner') {
+    // ADR-0037 §3: a researcher reads the owner's tree like the planner, with no worktree.
+    if (kind === 'lead' || kind === 'planner' || kind === 'researcher') {
       if (
         hooks.agentSetup === undefined &&
         effect.skills === undefined &&
@@ -1527,7 +1535,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   ): Promise<{ prompt: string; readOnlyDirs?: string[] }> {
     const list = ticketAttachments(live);
     if (list.length === 0) return { prompt };
-    const inRunFolder = kind === 'lead' || kind === 'planner';
+    const inRunFolder = kind === 'lead' || kind === 'planner' || kind === 'researcher';
     const dir = inRunFolder
       ? runAttachmentsDir(live.state.run.id, agentRunId)
       : join(cwd, AGENT_ATTACHMENTS_DIR);
@@ -2610,12 +2618,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return Promise.resolve({ allow: false, message: LEAD_READ_ONLY_MESSAGE });
     }
     if (isReadOnlyRole(kind)) {
-      // ADR-0019: the planner and the reviewer only read; their tool uses are denied the same way.
+      // ADR-0019: the planner, the reviewer and the researcher (ADR-0037 §3) only read; their
+      // tool uses are denied the same way.
       countDiagnostic('read-only-tool-denied');
       logger.log('info', 'read-only agent tool use denied', { runId, agentRunId, kind });
       return Promise.resolve({
         allow: false,
-        message: kind === 'planner' ? PLANNER_READ_ONLY_MESSAGE : REVIEWER_READ_ONLY_MESSAGE,
+        message:
+          kind === 'planner'
+            ? PLANNER_READ_ONLY_MESSAGE
+            : kind === 'researcher'
+              ? RESEARCHER_READ_ONLY_MESSAGE
+              : REVIEWER_READ_ONLY_MESSAGE,
       });
     }
     const target = allowlistTarget(request.toolName, toolInputOf(request));

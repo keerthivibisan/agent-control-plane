@@ -314,6 +314,12 @@ export interface RunState {
    * order. Used for the lead's brief of the approved plan. In memory with the live run.
    */
   planStepHelpers?: Readonly<Record<string, readonly WorkflowNodeId[]>>;
+  /**
+   * ADR-0037 §3: each researcher's findings note (`report_findings`), by agent run id, redacted
+   * and capped. Kept for the agents it researches for (AR-3 routes it to them); stored as a ticket
+   * comment of kind `research` by the server. In memory with the live run; one note per researcher.
+   */
+  findingsByAgent?: Readonly<Record<string, string>>;
 }
 
 /** `RunState.ownerWait`: the run's waits for the owner so far. */
@@ -361,7 +367,7 @@ export interface EngineContext {
  * I/O itself. Effects carry ids and engine-generated text only, except `send-to-agent`/`start-agent`
  * (the owner's chat, a lead's message or task for a worker), `chat-message` (ADR-0015) and the
  * owner-facing notes kept as ticket comments (`review-comment`, `change-comment`,
- * `handover-summary`, `agent-note`).
+ * `handover-summary`, `agent-note`, `record-findings`).
  */
 export type EngineEffect =
   | {
@@ -599,6 +605,12 @@ export type EngineEffect =
    * kind `agent-note` (a later note replaces it).
    */
   | { type: 'agent-note'; agentRunId: string; body: string }
+  /**
+   * ADR-0037 §3: a researcher's `report_findings` note, redacted and capped at
+   * `MAX_RESEARCH_FINDINGS_CHARS`. Stored with the transition as ticket comments of kind `research`
+   * with the agent run (owner-facing findings, like a reviewer's, ADR-0021 §6).
+   */
+  | { type: 'record-findings'; agentRunId: string; ticketId: string; runId: string; text: string }
   /**
    * ADR-0030 §5: the helper's reported outcome (and a resolver's assessment). The server records it
    * on the agent's conflict-resolution operation when it has one; nothing else is stored.

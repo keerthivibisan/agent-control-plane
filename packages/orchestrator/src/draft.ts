@@ -96,6 +96,8 @@ export class Draft {
   readonly graphContext: CompileContext | undefined;
   /** Helper nodes of each submitted plan's steps (`RunState.planStepHelpers`). */
   planStepHelpers: Record<string, readonly WorkflowNodeId[]> | undefined;
+  /** Researchers' findings notes by agent run (`RunState.findingsByAgent`, ADR-0037 §3). */
+  findingsByAgent: Record<string, string> | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -135,6 +137,8 @@ export class Draft {
     this.graphContext = state.graphContext;
     this.planStepHelpers =
       state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
+    this.findingsByAgent =
+      state.findingsByAgent === undefined ? undefined : { ...state.findingsByAgent };
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.activeAtStart = new Set(
       state.agents.filter((a) => isActiveAgentStatus(a.status)).map((a) => a.id),
@@ -637,6 +641,7 @@ export class Draft {
     if (this.graph !== undefined) state.graph = this.graph;
     if (this.graphContext !== undefined) state.graphContext = this.graphContext;
     if (this.planStepHelpers !== undefined) state.planStepHelpers = this.planStepHelpers;
+    if (this.findingsByAgent !== undefined) state.findingsByAgent = this.findingsByAgent;
     return state;
   }
 
