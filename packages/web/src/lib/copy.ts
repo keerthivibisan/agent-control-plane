@@ -4970,14 +4970,25 @@ export const ASSISTANT_COPY = {
   },
   empty:
     'Ask about your tickets and this project, or describe what you need and the assistant drafts skills and agent files for you.',
+  /** Example prompts: a click puts the prompt in the input to edit, never sends it. */
   suggestions: [
-    { label: 'What’s the status of my tickets?', send: true },
-    { label: 'Configure agents and skills for this project', send: true },
-    { label: 'Here are my project’s needs, generate skills and agents', send: false },
+    {
+      label: 'Ticket status',
+      prompt: 'What’s the status of my tickets? Start with anything waiting for me.',
+    },
+    {
+      label: 'Configure agents and skills',
+      prompt:
+        'Look at this project and suggest skills and agents for it. Ask me what you need to know before you draft any file.',
+    },
+    {
+      label: 'Generate from my project’s needs',
+      prompt:
+        'Here are my project’s needs. Please generate skills and agents for them.\n\nWhat the project is:\n\nHow we work (languages, tests, reviews):\n\nWhat I want the agents to do:\n',
+    },
   ],
-  template:
-    'Here are my project’s needs. Please generate skills and agents for them.\n\nWhat the project is:\n\nHow we work (languages, tests, reviews):\n\nWhat I want the agents to do:\n',
-  suggestionsLabel: 'Suggested prompts',
+  suggestionsLabel: 'Example prompts',
+  suggestionsHint: 'Pick one to start from. You can edit it before you send.',
   you: 'You',
   assistant: 'Assistant',
   working: 'Working…',

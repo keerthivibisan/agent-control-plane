@@ -8,13 +8,14 @@ import { Pill } from '../../components/Pill';
 import { ASSISTANT_COPY, PROVIDER_COPY } from '../../lib/copy';
 import { formatCount } from '../../lib/format';
 import { MODEL_SUGGESTIONS } from '../../lib/providers';
+import { MarkdownPreview } from '../skills/markdown';
 import { ProposalCard } from './ProposalCard';
 import { defaultModel, live, type AssistantChat, type AssistantPickers } from './use-assistant';
 
 const C = ASSISTANT_COPY;
 const MODES: readonly AssistantMode[] = ['approve', 'auto'];
 
-const pickerClass = `${fieldClass} h-7 min-h-7 w-full px-2 py-0 text-caption`;
+const pickerClass = `${fieldClass} h-8 min-h-8 w-full px-2 py-0 text-caption`;
 
 /** Budget tokens used of the session's soft cap, as a thin bar with the numbers beside it. */
 function BudgetMeter({ used, limit }: { used: number; limit: number }) {
@@ -121,13 +122,15 @@ export function AssistantPanel({
     }
   };
 
+  /** An example prompt goes into the input for the owner to edit; it is never sent from here. */
   const suggestion = (s: (typeof C.suggestions)[number]) => {
-    if (s.send) {
-      void send(s.label);
-      return;
+    setInput(s.prompt);
+    const el = inputRef.current;
+    if (el) {
+      el.focus();
+      // After React writes the value: the caret at the end, ready to type.
+      requestAnimationFrame(() => el.setSelectionRange(s.prompt.length, s.prompt.length));
     }
-    setInput(C.template);
-    inputRef.current?.focus();
   };
 
   return (
@@ -137,7 +140,7 @@ export function AssistantPanel({
       aria-label={C.dialog(projectName)}
       onKeyDown={onPanelKey}
       data-testid="assistant-panel"
-      className="fixed inset-x-0 bottom-0 z-40 flex h-[85dvh] flex-col overflow-hidden rounded-t-overlay border border-line bg-panel text-ink shadow-pop sm:inset-x-auto sm:right-6 sm:bottom-22 sm:h-[min(600px,calc(100dvh-var(--spacing-topbar)-7rem))] sm:w-[400px] sm:rounded-overlay"
+      className="fixed inset-x-0 bottom-0 z-40 flex h-[85dvh] flex-col overflow-hidden rounded-t-overlay border border-line bg-panel text-ink shadow-pop sm:inset-x-auto sm:right-6 sm:bottom-22 sm:h-[min(720px,calc(100dvh-var(--spacing-topbar)-7rem))] sm:w-[460px] sm:rounded-overlay"
     >
       <header className="flex flex-col gap-2 border-b border-line bg-subtle px-3 py-2.5">
         <div className="flex items-center gap-2">
@@ -157,7 +160,7 @@ export function AssistantPanel({
             <CloseIcon size={16} />
           </Button>
         </div>
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
           <label className="flex min-w-0 flex-col gap-0.5">
             <span className="text-micro text-dim">{C.provider}</span>
             <select
@@ -295,25 +298,34 @@ export function AssistantPanel({
         role="log"
         aria-label={C.messages}
         aria-live="polite"
-        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3 py-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
       >
         {chat.items.length === 0 && session?.status !== 'working' ? (
           <div className="flex flex-col gap-3 py-2" data-testid="assistant-empty">
-            <p className="text-caption text-dim">{C.empty}</p>
-            <ul aria-label={C.suggestionsLabel} className="flex flex-col items-start gap-1.5">
-              {C.suggestions.map((s) => (
-                <li key={s.label}>
-                  <button
-                    type="button"
-                    className="rounded-full border border-line bg-control px-3 py-1 text-left text-caption text-ink transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-50"
-                    disabled={chat.sending || closed}
-                    onClick={() => suggestion(s)}
-                  >
-                    {s.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <p className="text-body leading-relaxed text-dim">{C.empty}</p>
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-micro font-semibold tracking-wide text-dim uppercase">
+                {C.suggestionsLabel}
+              </h3>
+              <ul aria-label={C.suggestionsLabel} className="flex flex-col gap-1.5">
+                {C.suggestions.map((s) => (
+                  <li key={s.label}>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col gap-0.5 rounded-control border border-line bg-control px-3 py-2 text-left transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-50"
+                      disabled={chat.sending || closed}
+                      onClick={() => suggestion(s)}
+                    >
+                      <span className="text-caption font-semibold text-ink">{s.label}</span>
+                      <span className="line-clamp-2 text-caption text-dim">
+                        {s.prompt.split('\n')[0]}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-micro text-dim">{C.suggestionsHint}</p>
+            </div>
           </div>
         ) : null}
         {chat.items.map((item) => {
@@ -322,7 +334,7 @@ export function AssistantPanel({
               return (
                 <div
                   key={item.key}
-                  className="max-w-[85%] self-end rounded-card rounded-br-sm bg-accent-soft px-3 py-2 text-caption whitespace-pre-wrap break-words text-ink"
+                  className="max-w-[85%] self-end rounded-card rounded-br-sm bg-accent-soft px-3.5 py-2 text-body leading-relaxed whitespace-pre-wrap break-words text-ink"
                   data-testid="assistant-owner"
                 >
                   <span className="sr-only">{C.you}: </span>
@@ -333,18 +345,19 @@ export function AssistantPanel({
               return (
                 <div
                   key={item.key}
-                  className="max-w-[92%] self-start rounded-card rounded-bl-sm border border-line bg-subtle px-3 py-2 text-caption whitespace-pre-wrap break-words text-ink"
+                  className="w-full self-start rounded-card rounded-bl-sm border border-line bg-subtle px-3.5 py-2.5 text-body break-words text-ink"
                   data-testid="assistant-text"
                 >
                   <span className="sr-only">{C.assistant}: </span>
-                  {item.text}
+                  {/* Model text as React elements only (no HTML), links shown as text. */}
+                  <MarkdownPreview source={item.text} empty="" compact />
                 </div>
               );
             case 'activity':
               return (
                 <p
                   key={item.key}
-                  className="self-start pl-1 font-mono text-micro text-dim"
+                  className="flex items-center gap-1.5 self-start pl-1 text-micro text-dim before:size-1 before:rounded-full before:bg-line-strong before:content-['']"
                   data-testid="assistant-activity"
                 >
                   {item.text}
@@ -411,13 +424,13 @@ export function AssistantPanel({
               ref={inputRef}
               aria-label={C.input}
               placeholder={C.placeholder}
-              rows={2}
+              rows={3}
               maxLength={MAX_ASSISTANT_MESSAGE}
               value={input}
               disabled={chat.sending}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onInputKey}
-              className={`${fieldClass} max-h-40 min-h-14 flex-1 resize-none text-caption`}
+              className={`${fieldClass} max-h-48 min-h-16 flex-1 resize-none text-body leading-relaxed`}
             />
             <Button
               variant="primary"

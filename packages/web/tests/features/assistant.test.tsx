@@ -201,24 +201,29 @@ describe('assistant panel', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  it('shows the empty state; a chip sends its prompt', async () => {
+  it('shows the empty state; every example only fills the input, never sends', () => {
     const { s } = renderDock();
     const dialog = openPanel();
     expect(within(dialog).getByTestId('assistant-empty').textContent).toContain(C.empty);
-    fireEvent.click(within(dialog).getByRole('button', { name: C.suggestions[0].label }));
-    await waitFor(() =>
-      expect(s.calls.find((c) => c.path === assistantPaths.messages(P))?.body).toEqual({
-        text: C.suggestions[0].label,
-      }),
-    );
+    for (const example of C.suggestions) {
+      fireEvent.click(within(dialog).getByRole('button', { name: new RegExp(example.label) }));
+      expect((input() as HTMLTextAreaElement).value).toBe(example.prompt);
+    }
+    expect(posts(s)).toEqual([]);
   });
 
-  it('the template chip only fills the input', () => {
+  it('an example can be edited, then sent with Enter', async () => {
     const { s } = renderDock();
     const dialog = openPanel();
-    fireEvent.click(within(dialog).getByRole('button', { name: C.suggestions[2].label }));
-    expect((input() as HTMLTextAreaElement).value).toBe(C.template);
-    expect(posts(s)).toEqual([]);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: new RegExp(C.suggestions[0].label) }),
+    );
+    const text = `${C.suggestions[0].prompt} Only open ones.`;
+    fireEvent.change(input(), { target: { value: text } });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    await waitFor(() =>
+      expect(s.calls.find((c) => c.path === assistantPaths.messages(P))?.body).toEqual({ text }),
+    );
   });
 
   it('the first message starts a session with the pickers, then posts the message', async () => {
@@ -269,6 +274,25 @@ describe('assistant panel', () => {
       `${C.assistant}: Two tickets are in review.`,
     ]);
     expect(screen.queryByTestId('assistant-working')).toBeNull();
+  });
+
+  it('renders the reply as Markdown elements, never as HTML', async () => {
+    const { es } = await startChat();
+    es.emit(
+      {
+        type: 'text',
+        full: '**Skills**\n\n1. `new-post`: scaffolds a post\n2. [docs](https://x.test) <img src=x onerror=alert(1)>',
+      },
+      2,
+    );
+    const reply = screen.getByTestId('assistant-text');
+    expect(within(reply).getByText('Skills').tagName).toBe('STRONG');
+    expect(within(reply).getByText('new-post').tagName).toBe('CODE');
+    expect(reply.querySelectorAll('ol > li')).toHaveLength(2);
+    expect(reply.textContent).not.toContain('**');
+    // Links are text and raw HTML stays text.
+    expect(reply.querySelector('a, img')).toBeNull();
+    expect(reply.textContent).toContain('<img src=x onerror=alert(1)>');
   });
 
   it('applies a proposal: the card shows, Apply posts, the state updates in place', async () => {

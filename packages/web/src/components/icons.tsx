@@ -1,8 +1,8 @@
 import {
+  MessagesSquare,
   Activity,
   ArrowLeftRight,
   ArrowRight,
-  BotMessageSquare,
   Bug,
   ChartColumn,
   Check,
@@ -110,5 +110,5 @@ export const RunSummaryIcon = icon(ScrollText, 'RunSummaryIcon');
 export const MergeIcon = icon(GitMerge, 'MergeIcon');
 
 // The project assistant (ADR-0035, AS-2): its floating button and the send button.
-export const AssistantIcon = icon(BotMessageSquare, 'AssistantIcon');
+export const AssistantIcon = icon(MessagesSquare, 'AssistantIcon');
 export const SendIcon = icon(SendHorizontal, 'SendIcon');
