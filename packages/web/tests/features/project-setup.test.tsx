@@ -388,6 +388,7 @@ describe('Remove from ACP (ADR-0036)', () => {
     attachments: 2,
     activeRuns: [],
     busy: false,
+    folderExists: true,
     ...over,
   });
   const removed = () => new Response(null, { status: 204 });
@@ -399,6 +400,27 @@ describe('Remove from ACP (ADR-0036)', () => {
 
   afterEach(() => {
     window.localStorage.clear();
+  });
+
+  it('says when the folder is gone, and still removes the project', async () => {
+    const s = server({
+      [`${P}/removal`]: preview({ folderExists: false }),
+      [`DELETE ${P}`]: removed,
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    const summary = await within(dialog).findByTestId('remove-project-summary');
+    expect(within(summary).getByTestId('remove-project-folder-missing').textContent).toContain(
+      '/work/web-app was not found',
+    );
+    expect(within(summary).queryByText(/and everything in it/)).toBeNull();
+    expect(within(summary).queryByText(/git worktree prune/)).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('Type web-app to confirm'), {
+      target: { value: 'web-app' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove project' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/projects'));
+    expect(s.calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual([P]);
   });
 
   it('says what goes and what stays, and removes only once the name is typed exactly', async () => {

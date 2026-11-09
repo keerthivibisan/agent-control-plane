@@ -122,6 +122,16 @@ function RemoveProjectDialog({ project, onClose }: { project: ProjectDto; onClos
 function Summary({ preview }: { preview: ProjectRemovalPreviewDto }) {
   return (
     <div className="flex flex-col gap-3" data-testid="remove-project-summary">
+      {!preview.folderExists ? (
+        <p
+          role="status"
+          data-testid="remove-project-folder-missing"
+          className="flex items-start gap-2.5 rounded-control border border-warning/30 bg-warning-soft px-3 py-2.5 break-all"
+        >
+          <AlertIcon size={16} className="mt-0.5 shrink-0 text-warning" />
+          <span>{R.folderMissing(preview.rootPath)}</span>
+        </p>
+      ) : null}
       <section>
         <h3 className="text-caption font-semibold text-danger">{R.deletedTitle}</h3>
         <ul className="mt-1 list-disc pl-5 text-dim">
@@ -133,14 +143,14 @@ function Summary({ preview }: { preview: ProjectRemovalPreviewDto }) {
       <section>
         <h3 className="text-caption font-semibold text-ink">{R.keptTitle}</h3>
         <ul className="mt-1 list-disc pl-5 text-dim">
-          {R.kept(preview.rootPath).map((line) => (
+          {(preview.folderExists ? R.kept(preview.rootPath) : [R.keptMissing]).map((line) => (
             <li key={line} className="break-all">
               {line}
             </li>
           ))}
         </ul>
       </section>
-      <p className={hintClass}>{R.pruneNote}</p>
+      {preview.folderExists ? <p className={hintClass}>{R.pruneNote}</p> : null}
     </div>
   );
 }

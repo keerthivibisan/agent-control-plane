@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+} from 'node:fs';
 import { join, relative } from 'node:path';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
@@ -105,6 +113,7 @@ describe('GET /api/projects/:id/removal (ADR-0036)', () => {
       attachments: 1,
       activeRuns: [],
       busy: false,
+      folderExists: true,
     });
     expectError(await s.get('/api/projects/nope/removal'), 404, 'not_found');
   });
@@ -229,6 +238,21 @@ describe('DELETE /api/projects/:id (ADR-0036)', () => {
     expect(s.repos.sessions.getById(sessionId)?.projectId).toBe(again.id);
     expect(count(s, 'tickets', 'project_id = ?', again.id)).toBe(0);
   }, 60_000);
+
+  it('removes a project whose folder was moved or deleted, with its ACP folders', async () => {
+    const s = await setupBoard();
+    const { runId } = await endedTicket(s);
+    const folders = runFolders(s, runId);
+    rmSync(s.repo, { recursive: true, force: true });
+    const preview = ProjectRemovalPreviewDtoSchema.parse(
+      (await s.get(`/api/projects/${s.project.id}/removal`)).body,
+    );
+    expect(preview).toMatchObject({ folderExists: false, busy: false, tickets: 1, runs: 1 });
+    expect((await s.send('delete', `/api/projects/${s.project.id}`)).status).toBe(204);
+    expect(s.repos.projects.getById(s.project.id)).toBeUndefined();
+    expect(count(s, 'tickets', 'project_id = ?', s.project.id)).toBe(0);
+    for (const path of folders.all) expect(existsSync(path)).toBe(false);
+  });
 
   it('keeps an attachment file another project still uses', async () => {
     const s = await setupBoard();

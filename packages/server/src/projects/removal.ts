@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { statSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import type { ProjectRemovalPreviewDto, StreamNoticeDto } from '@acp/core/api';
 import {
@@ -93,6 +94,7 @@ export function createProjectRemovalService(deps: ProjectRemovalDeps): ProjectRe
       projectId,
       name: project.name,
       rootPath: project.rootPath,
+      folderExists: isFolder(project.rootPath),
       tickets: counts.tickets,
       runs: counts.runs,
       attachments: counts.attachments,
@@ -215,4 +217,13 @@ export function createProjectRemovalService(deps: ProjectRemovalDeps): ProjectRe
       return result;
     },
   };
+}
+
+/** A moved or deleted project folder is still removable (ADR-0036); the dialog says so. */
+function isFolder(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
 }

@@ -1641,6 +1641,9 @@ export const PROJECT_SETUP_COPY = {
         'Its git repository and every branch, the acp/ branches included',
         'Claude Code sessions and token usage (they show with no project)',
       ],
+      folderMissing: (rootPath: string) =>
+        `The folder ${rootPath} was not found; it may have been moved or deleted. Removing clears ACP’s records for this project only.`,
+      keptMissing: 'Claude Code sessions and token usage (they show with no project)',
       pruneNote:
         'Git may list the removed agent worktrees as prunable; run git worktree prune in the repository to clear them.',
       busyTitle: 'Stop these runs first',
