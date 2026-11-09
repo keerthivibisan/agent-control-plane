@@ -92,8 +92,11 @@
   uses `demo.sqlite` beside it). The directory is created with mode 0700, and the database and the
   hook token with mode 0600. Agent worktrees, review checkouts and attachments live under the same
   directory.
-- **Retention:** kept until the user deletes it. Removing a project from the app keeps its history;
-  a purge of a project's sessions, events and usage is **[planned, Phase 2]**.
+- **Retention:** kept until the user deletes it. Removing a project from the app (ADR-0036) deletes
+  its tickets, runs and other ACP records and ACP's own checkout folders for it, with the file
+  system only and only inside the data directory; no git command runs on the repository and its
+  folder is never touched. Its sessions, events and usage are kept, detached; a purge of those is
+  **[planned, Phase 2]**.
 - The database never stores credentials.
 
 ## 4. Managed runs (ADR-0013)

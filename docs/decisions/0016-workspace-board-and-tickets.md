@@ -29,6 +29,8 @@ approval of a plan first (docs/history/phase-4/README.md).
   as ticket comments too.)
 - **Tickets are cancelled, never deleted.** A project with tickets cannot be removed from the app
   (409); its folder is never deleted.
+  (Amended by ADR-0036: removing a project deletes its tickets and runs; its folder and repository
+  are still never touched.)
 
 ## Consequences
 
