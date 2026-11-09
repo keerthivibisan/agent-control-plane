@@ -44,6 +44,7 @@ import { ActionError } from '../control/bits';
 import { useSetupAction } from './actions';
 import { TextField } from './fields';
 import { ContextPicker } from './SetupSections';
+import { RemoveProjectButton } from './RemoveProject';
 import { draftFromSetup, draftToRequest, type SetupDraft, type SetupErrors } from './setup-form';
 
 const C = PROJECT_SETUP_COPY;
@@ -385,6 +386,9 @@ function SettingsBody({ project }: { project: ProjectDto }) {
             <AlertIcon size={16} className="mt-0.5 shrink-0 text-danger" />
             <span>{S.dangerText}</span>
           </p>
+          <div className="mt-3">
+            <RemoveProjectButton project={project} />
+          </div>
         </Card>
       </div>
     </div>
