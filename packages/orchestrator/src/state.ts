@@ -111,6 +111,53 @@ export interface EngineAgent extends AgentRun {
    * has them already. In memory with the live run.
    */
   startingPoints?: StartingPoints;
+  /**
+   * ADR-0037 §2: the agents whose output note (findings, plan, review, work note) this agent was
+   * given through a research or custom arrow, in its brief or as a notice, so none is sent twice.
+   * In memory with the live run; absent until the first.
+   */
+  receivedFrom?: readonly string[];
+}
+
+/** ADR-0037 §5: one change reviewer of a review fan-out and what it gave. */
+export interface FanOutReview {
+  nodeId: WorkflowNodeId;
+  agentRunId: string;
+  verdict: ChangeVerdict | null;
+  /** Its findings as submitted (redacted, capped); null without a verdict. */
+  findings: string | null;
+}
+
+/**
+ * ADR-0037 §5: a change reviewed by several change reviewers. The decision waits for every one:
+ * each submits its review or ends without one ("no verdict"). In memory with the live run.
+ */
+export interface EngineFanOut {
+  /** Reviewer nodes not started yet (no helper slot was free), in route order. */
+  pending: readonly WorkflowNodeId[];
+  reviews: readonly FanOutReview[];
+}
+
+/**
+ * ADR-0037 §4: one planner's plan in a run with two or more planners. Every planner submits one;
+ * the owner approves one option, which becomes the run's plan (`RunState.plans`); the others are
+ * kept as `not-chosen`. In memory with the live run (AR-4 stores the drafts).
+ */
+export interface PlanOption {
+  id: string;
+  /** The planner that submitted it, and its node. */
+  agentRunId: string;
+  nodeId: WorkflowNodeId;
+  /** The planner node's label (owner text from the graph). */
+  label: string;
+  summary: string;
+  steps: TicketPlan['steps'];
+  plannedHelpers: number;
+  /** The helper node each step resolved to (ADR-0023 §7), when the graph has named helpers. */
+  stepHelpers?: readonly WorkflowNodeId[];
+  /** `superseded`: the owner asked every planner for changes; a new option follows. */
+  status: 'proposed' | 'chosen' | 'not-chosen' | 'superseded';
+  createdAt: string;
 }
 
 /**
@@ -176,6 +223,11 @@ export interface EngineChange {
    * `MAX_FAILED_MERGES` the change goes to the owner. Absent means none. In memory with the run.
    */
   failedMerges?: number;
+  /**
+   * ADR-0037 §5: the round's review fan-out, when the change's route has two or more change
+   * reviewers. `reviewerAgentRunId` is then the first of them. Absent otherwise.
+   */
+  fanOut?: EngineFanOut;
 }
 
 /**
@@ -306,7 +358,7 @@ export interface RunState {
    * compiled with. Absent: a version 1 run, which compiles its `workflow` migrated
    * (`programOf`). The program itself is never stored.
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   /** The context `graph` compiles with (project mode, ticket and run ceilings, overrides). */
   graphContext?: CompileContext;
   /**
@@ -320,6 +372,26 @@ export interface RunState {
    * comment of kind `research` by the server. In memory with the live run; one note per researcher.
    */
   findingsByAgent?: Readonly<Record<string, string>>;
+  /**
+   * ADR-0037 §2: the output note of agents that hand off through a custom arrow (a planner's
+   * plan, a change reviewer's verdict and findings, a final reviewer's posts, a helper's or
+   * tester's `report_work` note), redacted and capped. Researchers' notes stay in
+   * `findingsByAgent`. Only agents of nodes with an outgoing research or custom arrow. In memory.
+   */
+  outputNotes?: Readonly<Record<string, string>>;
+  /**
+   * ADR-0037 §2: agents whose output was handed on along their node's research and custom arrows
+   * (it finished: it gave its note, or ended without one). Each is handed on once. In memory.
+   */
+  deliveredFrom?: readonly string[];
+  /**
+   * ADR-0037 §2: the first message of an agent the engine created but holds (QUEUED) until the
+   * agents it waits for finished: a planner, or the lead when it plans, behind its researchers.
+   * By agent run id. In memory; owner text only (the ticket brief).
+   */
+  pendingBriefs?: Readonly<Record<string, string>>;
+  /** ADR-0037 §4: the plan options of a run with two or more planners, oldest first. */
+  planOptions?: readonly PlanOption[];
 }
 
 /** `RunState.ownerWait`: the run's waits for the owner so far. */
