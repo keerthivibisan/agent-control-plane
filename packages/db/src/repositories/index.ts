@@ -56,7 +56,7 @@ export type {
   RecentEventsQuery,
   StoredEvent,
 } from './events.js';
-export type { ProjectsRepository } from './projects.js';
+export type { ProjectHistoryCounts, ProjectRemoval, ProjectsRepository } from './projects.js';
 export {
   SESSION_ORIGINS,
   sessionKeyOf,
