@@ -25,3 +25,9 @@ Coordinator-owned. Plan: [README.md](README.md).
   `researcher` is not yet a `RunAgentKind` (left to AR-2). A migrated v2 graph compiles to the same
   program for every template, generated and enumerated graph. The DB reads a v3 row; the server
   serves it as v2 until AR-4.
+- 2026-11-09 AR-2 (researcher role) ready for review on `feature/workflow/arrows`: `researcher`
+  is a `RunAgentKind` (read-only, project folder, no worktree; Claude read-only base set, Codex
+  `:read-only` with `never`); new tool `report_findings` (1 to 16,384 characters, once per
+  researcher) emits `record-findings`, kept in `RunState.findingsByAgent` for AR-3 and stored as
+  ticket comments of kind `research` (author `app`, split into "(part i of n)" bodies over 8,000
+  characters, the `ticket_comments.body` check). No migration. Adversarial rows R1 to R5.
