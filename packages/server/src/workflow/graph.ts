@@ -1,5 +1,6 @@
 import {
   WORKFLOW_STAGES,
+  downgradeWorkflowV3,
   graphRunDefaults,
   isAgentNode,
   migrateWorkflowV1,
@@ -21,6 +22,7 @@ import type { StoredProjectWorkflow } from '@acp/db';
  * project's approval mode. One answer for the Workflow page, the run start and the "used by" chips.
  */
 export interface EffectiveWorkflow {
+  /** `v2`: a stored graph (version 2, or version 3 served as version 2 until AR-4). */
   stored: 'v2' | 'v1' | 'default';
   graph: WorkflowGraph;
   /** The version 1 workflow the graph was migrated from; absent for a stored graph. */
@@ -29,12 +31,31 @@ export interface EffectiveWorkflow {
   updatedAt: string | null;
 }
 
+/** A stored version 3 graph that this server cannot serve as version 2 yet (ADR-0037, AR-4). */
+export class WorkflowGraphVersionError extends Error {
+  override readonly name = 'WorkflowGraphVersionError';
+  constructor(reason: string) {
+    super(
+      `The project's workflow uses version 3 features this server cannot serve yet: ${reason}.`,
+    );
+  }
+}
+
 export function effectiveWorkflow(
   stored: StoredProjectWorkflow,
   projectMode: ApprovalMode,
 ): EffectiveWorkflow {
   if (stored.kind === 'v2') {
     return { stored: 'v2', graph: stored.graph.graph, updatedAt: stored.graph.updatedAt };
+  }
+  if (stored.kind === 'v3') {
+    // ADR-0037: the API, the editor and run snapshots still carry version 2 (AR-4, AR-5), so a
+    // version 3 graph is served as version 2. Nothing writes one yet; one that version 2 cannot
+    // say (researchers, custom arrows, several planners, a fan-out, labels) is refused plainly
+    // rather than served with parts missing.
+    const down = downgradeWorkflowV3(stored.graph.graph);
+    if (!down.ok) throw new WorkflowGraphVersionError(down.reason);
+    return { stored: 'v2', graph: down.graph, updatedAt: stored.graph.updatedAt };
   }
   return {
     stored: stored.kind,
