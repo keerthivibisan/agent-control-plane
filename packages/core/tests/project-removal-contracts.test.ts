@@ -11,6 +11,7 @@ const BASE = {
   attachments: 1,
   activeRuns: [],
   busy: false,
+  folderExists: true,
 };
 
 describe('project removal preview', () => {

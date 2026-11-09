@@ -253,5 +253,7 @@ export const ProjectRemovalPreviewDtoSchema = z.object({
   activeRuns: z.array(ProjectRemovalActiveRunDtoSchema),
   busy: z.boolean(),
   busyReason: ProjectRemovalBusyReasonSchema.optional(),
+  /** False when the project folder was moved or deleted: removal clears ACP's records only. */
+  folderExists: z.boolean(),
 });
 export type ProjectRemovalPreviewDto = z.infer<typeof ProjectRemovalPreviewDtoSchema>;
