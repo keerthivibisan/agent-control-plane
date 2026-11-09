@@ -79,7 +79,7 @@ function v1Route(
   const r = reviewStageOf(v1);
   const leadRounds = override.rounds ?? r.maxReworkRounds;
   return r.reviewer === 'agent' && override.reviewer === undefined
-    ? { by: 'agent', reviewer: 'review', then: 'lead', leadRounds }
+    ? { by: 'agent', reviewer: 'review', reviewers: ['review'], then: 'lead', leadRounds }
     : { by: 'lead', leadRounds };
 }
 
