@@ -1,7 +1,12 @@
-import type { ManagedAgentEvent, ManagedAgentSpec, ManagedFailureCode } from '@acp/core';
+import type {
+  ManagedAgentEvent,
+  ManagedAgentSpec,
+  ManagedFailureCode,
+  ToolUseCategory,
+} from '@acp/core';
 import { z } from 'zod';
 import { classifyStartupError } from './full-auto.js';
-import { emitsChatText } from './permissions.js';
+import { emitsChatText, LEAD_TOOL_PREFIX } from './permissions.js';
 import { activitySummary } from './summary.js';
 
 /**
@@ -44,6 +49,8 @@ const AssistantSchema = z.looseObject({
 const TextBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() });
 const ToolUseBlockSchema = z.looseObject({
   type: z.literal('tool_use'),
+  /** The tool use's id; only used to count each call once (CM-2), never emitted. */
+  id: z.string().min(1).nullable().catch(null),
   name: z.string().min(1),
   input: z.unknown(),
 });
@@ -86,9 +93,33 @@ export interface MappedMessage {
 export interface MapperState {
   /** `started` is emitted once: the CLI re-sends `system/init` on every turn of a headless run. */
   started: boolean;
+  /**
+   * CM-2: tool use ids already counted, so a frame repeated by the stream is counted once. Kept
+   * in memory for the agent's life; ids only.
+   */
+  countedToolUses?: Set<string>;
 }
 
 const NOTHING: MappedMessage = { events: [], result: null };
+
+const READ_TOOLS: ReadonlySet<string> = new Set(['Read', 'NotebookRead']);
+const SEARCH_TOOLS: ReadonlySet<string> = new Set(['Grep', 'Glob', 'LS']);
+const EDIT_TOOLS: ReadonlySet<string> = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
+const SHELL_TOOLS: ReadonlySet<string> = new Set(['Bash', 'BashOutput', 'KillShell']);
+
+/**
+ * ADR-0034 (CM-2): the measurement category of a Claude Code tool, from its name alone: `read`
+ * (`Read`, `NotebookRead`), `search` (`Grep`, `Glob`, `LS`), `edit`, `shell` (`Bash` and its
+ * background tools), `code_map` (our `mcp__acp__code_map`), else `other`.
+ */
+export function toolUseCategory(toolName: string): ToolUseCategory {
+  if (READ_TOOLS.has(toolName)) return 'read';
+  if (SEARCH_TOOLS.has(toolName)) return 'search';
+  if (EDIT_TOOLS.has(toolName)) return 'edit';
+  if (SHELL_TOOLS.has(toolName)) return 'shell';
+  if (toolName === `${LEAD_TOOL_PREFIX}code_map`) return 'code_map';
+  return 'other';
+}
 
 export function mapSdkMessage(
   message: unknown,
@@ -108,7 +139,9 @@ export function mapSdkMessage(
   }
 
   const assistant = AssistantSchema.safeParse(message);
-  if (assistant.success) return { events: assistantEvents(assistant.data, spec), result: null };
+  if (assistant.success) {
+    return { events: assistantEvents(assistant.data, spec, state), result: null };
+  }
 
   const result = ResultSchema.safeParse(message);
   if (result.success) {
@@ -131,6 +164,7 @@ export function mapSdkMessage(
 function assistantEvents(
   a: z.infer<typeof AssistantSchema>,
   spec: Pick<ManagedAgentSpec, 'kind' | 'cwd'>,
+  state: MapperState,
 ): ManagedAgentEvent[] {
   const events: ManagedAgentEvent[] = [];
   // Lead text goes to the owner's chat (ADR-0015); subagent frames (`parent_tool_use_id` set) are
@@ -143,6 +177,12 @@ function assistantEvents(
         type: 'activity',
         summary: activitySummary(toolUse.data.name, toolUse.data.input, spec.cwd),
       });
+      const id = toolUse.data.id;
+      const counted = (state.countedToolUses ??= new Set());
+      if (id === null || !counted.has(id)) {
+        if (id !== null) counted.add(id);
+        events.push({ type: 'tool-use', category: toolUseCategory(toolUse.data.name) });
+      }
       continue;
     }
     if (!leadMainThread) continue;

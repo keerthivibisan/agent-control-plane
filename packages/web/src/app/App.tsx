@@ -2,6 +2,7 @@ import { ButtonLink } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { AllProjectsPage } from '../features/all-projects/AllProjectsPage';
 import { BoardPage } from '../features/board/BoardPage';
+import { CodeMapPage } from '../features/code-map/CodeMapPage';
 import { ControlPanel } from '../features/control/ControlPanel';
 import { HarnessPage } from '../features/harness/HarnessPage';
 import { NewProjectWizard } from '../features/project-setup/NewProjectWizard';
@@ -75,6 +76,8 @@ function ProjectScreen({ route }: { route: Extract<Route, { name: 'project' }> }
       return <HarnessPage key={projectId} projectId={projectId} />;
     case 'workflow':
       return <WorkflowPage key={projectId} projectId={projectId} />;
+    case 'code-map':
+      return <CodeMapPage key={projectId} projectId={projectId} />;
   }
 }
 

@@ -165,7 +165,7 @@ describe('agent file tools only narrow (ADR-0019 §6)', () => {
     );
     expect(options.tools).toEqual(['Read', 'Grep']);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
-    expect(servers.toolNames).toEqual([['post_review', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['post_review', 'ask_lead', 'code_map']]);
     const use = canUseTool(options);
     await expect(use('mcp__acp__post_review', {}, OURS)).resolves.toMatchObject({
       behavior: 'allow',
@@ -183,7 +183,7 @@ describe('agent file tools only narrow (ADR-0019 §6)', () => {
     const options = optionsFor(spec('planner', { profile: profile(['Edit', 'MultiEdit']) }));
     expect(options.tools).toEqual([]);
     expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
-    expect(servers.toolNames).toEqual([['submit_plan']]);
+    expect(servers.toolNames).toEqual([['submit_plan', 'code_map']]);
     await expect(canUseTool(options)('mcp__acp__submit_plan', {}, OURS)).resolves.toMatchObject({
       behavior: 'allow',
     });

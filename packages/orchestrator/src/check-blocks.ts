@@ -279,6 +279,10 @@ function reworkForChecks(
     ...launchFieldsFor(d.program(), stageOf(agent), checkReworkPrompt(agent, failed, roundText)),
     rework: { resumeSessionId: agent.sessionId },
     ...d.launchModeFields(agent),
+    // ADR-0034 §4 (CM-3): only a fresh session needs its starting points again.
+    ...(agent.sessionId === null && agent.startingPoints !== undefined
+      ? { startingPoints: agent.startingPoints }
+      : {}),
   });
   // Like the reviewer loop's direct route: the lead is told each round (names only).
   notifyLead(

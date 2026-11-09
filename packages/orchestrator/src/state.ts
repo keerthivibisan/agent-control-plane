@@ -23,7 +23,9 @@ import type {
   ReviewScope,
   ReviewState,
   CompileContext,
+  StartingPoints,
   TicketPlan,
+  ToolUseCounts,
   WorkflowGraph,
   WorkflowNodeId,
 } from '@acp/core';
@@ -49,6 +51,11 @@ export interface EngineAgent extends AgentRun {
   budgetLimit: number;
   /** Latest content-free activity line from the adapter, redacted and capped at 200 characters. */
   latestActivity: string | null;
+  /**
+   * ADR-0034 (CM-2): this agent's tool calls by category (`tool-use` events), content-free.
+   * Absent until the first one; persisted in `agent_runs.tool_counts`.
+   */
+  toolCounts?: ToolUseCounts;
   /** Null for the lead and for live workers; `pending` once a worker ends, until the owner decides. */
   review: ReviewState | null;
   /** Provider-reported cost of this agent's query; always an estimate, never summed. */
@@ -98,6 +105,12 @@ export interface EngineAgent extends AgentRun {
    * `message_agent` from the parent answers them all). Absent means none. In memory with the run.
    */
   openQuestions?: number;
+  /**
+   * ADR-0034 §4 (CM-3): the files and notes this helper started from (its `start_agent` call's,
+   * else its plan step's). A rework turn in a fresh session gets them again; a resumed session
+   * has them already. In memory with the live run.
+   */
+  startingPoints?: StartingPoints;
 }
 
 /**
@@ -424,6 +437,12 @@ export type EngineEffect =
        * or run tightened its mode: tightening never removes a protection.
        */
       sandbox?: boolean;
+      /**
+       * ADR-0034 §4 (CM-3): a helper's starting points (the lead's files and notes). The server
+       * renders them with the run's code map (`renderStartingPoints`) and adds them to `prompt`.
+       * Absent when there are none, and on a rework turn that resumes its session (it has them).
+       */
+      startingPoints?: StartingPoints;
     }
   /**
    * Before a reviewer's `start-agent` (ADR-0019): create a temporary detached checkout and start
@@ -615,7 +634,8 @@ export type EngineEffect =
         /** ADR-0022: a Full auto agent ended because auto mode or the sandbox was unavailable. */
         | 'full-auto-unavailable'
         /** P-D: a rework turn could not resume the helper's session and started a new one. */
-        | 'rework-session-replaced';
+        | 'rework-session-replaced'
+        | 'invalid-tool-use';
       agentRunId: string;
     };
 

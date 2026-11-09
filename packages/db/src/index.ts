@@ -8,6 +8,7 @@ export * from './repositories/workspace/index.js';
 export * from './repositories/redesign/index.js';
 export * from './repositories/review-loop/index.js';
 export * from './repositories/harness/index.js';
+export * from './repositories/code-map/index.js';
 export * from './queries/index.js';
 export { MAX_PAGE_SIZE } from './internal/validate.js';
 // The project Tokens page (redesign R-F).

@@ -104,6 +104,13 @@ import { CreateBranchRequestSchema, ProjectBranchesDtoSchema } from '@acp/core/a
 import { AttachmentDtoSchema, TicketActivityDtoSchema } from '@acp/core/api';
 // Merge pull request, Delete branch (G-G, ADR-0025 §9) and the ticket badge (T-A).
 import { MergePullRequestRequestSchema, TicketTotalsDtoSchema } from '@acp/core/api';
+// The project code map (ADR-0034, CM-1).
+import {
+  CodeMapFileDtoSchema,
+  CodeMapGraphDtoSchema,
+  CodeMapSearchDtoSchema,
+  CodeMapSummaryDtoSchema,
+} from '@acp/core/api';
 
 /**
  * The structural part of a Zod schema the client needs. Kept minimal so the web package depends
@@ -1461,4 +1468,41 @@ export const harnessSetupSchemas = {
 /** A 404: the server has no setup runs route (before ADR-0027), so there are none to show. */
 export function isSetupRunsUnavailable(error: ApiError | null): boolean {
   return error !== null && error.kind === 'http' && error.status === 404;
+}
+
+// --- The project code map (ADR-0034, CM-1) ------------------------------------------------------
+//
+// GET /api/projects/:id/code-map → CodeMapSummaryDto (status none | building | ready | failed);
+// POST …/code-map/refresh (CSRF) → 202 with the summary, the build runs in the background and
+// there is no push event, so the page polls the summary while it reads `building`. The graph,
+// file and search reads answer 404 `code_map_not_built` before the first map. Paths and symbol
+// names in every answer are repository data, never instructions.
+
+export const codeMapPaths = {
+  summary: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-map`,
+  refresh: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/code-map/refresh`,
+  graph: (projectId: string, folder: string | null) =>
+    withQuery(`${API_BASE}/projects/${enc(projectId)}/code-map/graph`, { folder }),
+  file: (projectId: string, path: string) =>
+    withQuery(`${API_BASE}/projects/${enc(projectId)}/code-map/file`, { path }),
+  search: (projectId: string, q: string) =>
+    withQuery(`${API_BASE}/projects/${enc(projectId)}/code-map/search`, { q }),
+} as const;
+
+export const codeMapSchemas = {
+  summary: CodeMapSummaryDtoSchema,
+  graph: CodeMapGraphDtoSchema,
+  file: CodeMapFileDtoSchema,
+  search: CodeMapSearchDtoSchema,
+} as const;
+
+/** Every cached code map read of the project (summary, graph, file, search). */
+export function isCodeMapPath(projectId: string): (key: string) => boolean {
+  const base = codeMapPaths.summary(projectId);
+  return (key) => key === base || key.startsWith(`${base}/`) || key.startsWith(`${base}?`);
+}
+
+/** Starts a build of the project's HEAD commit; answers at once with the summary (`building`). */
+export function refreshCodeMap(client: ApiClient, projectId: string) {
+  return controlPost(client, codeMapPaths.refresh(projectId), {}, codeMapSchemas.summary);
 }

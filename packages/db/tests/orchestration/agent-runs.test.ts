@@ -18,6 +18,7 @@ describe('agent runs repository (P3-C)', () => {
       budgetTokensUsed: 0,
       budgetTokensLimit: BUDGET.maxTokensPerAgent,
       provider: 'claude-code',
+      toolCounts: null,
       createdAt: lead.createdAt,
       endedAt: null,
     });
@@ -32,6 +33,32 @@ describe('agent runs repository (P3-C)', () => {
       'Worker 2',
     ]);
     expect(store.orch.agentRuns.getById('missing')).toBeUndefined();
+  });
+
+  it('stores tool-call counts as validated JSON (CM-2, migration 0015)', () => {
+    const store = setupOrchestration();
+    const { lead } = runWithAgents(store, 0);
+    const counts = { read: 3, search: 2, edit: 1, shell: 0, code_map: 4, other: 1 };
+    expect(store.orch.agentRuns.setToolCounts(lead.id, counts)?.toolCounts).toEqual(counts);
+    expect(store.orch.agentRuns.getById(lead.id)?.toolCounts).toEqual(counts);
+    expect(store.orch.agentRuns.setToolCounts('missing', counts)).toBeUndefined();
+    expect(
+      thrown(() => store.orch.agentRuns.setToolCounts(lead.id, { ...counts, read: -1 })),
+    ).toMatchObject({ code: 'invalid_input' });
+    // Unknown keys are stripped by the schema: only the six counts are ever stored.
+    store.orch.agentRuns.setToolCounts(lead.id, { ...counts, names: ['Read'] } as typeof counts);
+    const raw = store.db.connection
+      .prepare('SELECT tool_counts FROM agent_runs WHERE id = ?')
+      .pluck()
+      .get(lead.id) as string;
+    expect(Object.keys(JSON.parse(raw) as object).sort()).toEqual([
+      'code_map',
+      'edit',
+      'other',
+      'read',
+      'search',
+      'shell',
+    ]);
   });
 
   it('enforces the lead/worker shape, depth <= 2, one lead, and same-run parents', () => {

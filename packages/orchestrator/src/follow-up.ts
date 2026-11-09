@@ -214,7 +214,9 @@ export function followUpEvent(
         }
         return done;
 
+      // A follow-up turn's tool uses are not counted either: the lead's agent run has ended (CM-2).
       case 'activity':
+      case 'tool-use':
         return done;
 
       case 'usage': {

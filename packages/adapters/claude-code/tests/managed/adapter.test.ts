@@ -256,6 +256,8 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
         'report_work',
         // ADR-0033 §3
         'ask_lead',
+        // ADR-0034 §4
+        'code_map',
       ],
     ]);
     expect(servers.toolNames[0]).not.toContain('submit_plan');
@@ -284,7 +286,7 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     servers.toolNames.length = 0;
     const handler = () => Promise.resolve('nope');
     optionsFor(spec('worker', { canStartHelpers: false, leadTools: handler }));
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead']]);
+    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
     servers.toolNames.length = 0;
     expect(optionsFor(spec('worker', { canStartHelpers: true })).mcpServers).toEqual({});
     expect(servers.toolNames).toEqual([]);

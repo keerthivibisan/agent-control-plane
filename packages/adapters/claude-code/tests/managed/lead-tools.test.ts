@@ -14,7 +14,19 @@ describe('P3-B lead tools (ADR-0012)', () => {
       'role',
       'task',
       'helper',
+      // CM-3: the helper's starting points.
+      'files',
+      'notes',
     ]);
+  });
+
+  it('tells the lead to give helpers starting points, as hints and not limits (CM-3)', () => {
+    const tools = leadToolDefinitions(() => Promise.resolve(''));
+    for (const name of ['start_agent', 'submit_plan']) {
+      const description = tools.find((t) => t.name === name)?.description ?? '';
+      expect(description).toContain('code_map');
+      expect(description).toContain('not a limit');
+    }
   });
 
   it('tells the lead that request_review must be called once every change is decided (RL-F)', () => {

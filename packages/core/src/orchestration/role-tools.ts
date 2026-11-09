@@ -35,6 +35,12 @@ export const AGENT_NOTE_TOOL_NAMES: readonly LeadToolName[] = ['report_work'];
 export const ASK_LEAD_TOOL_NAMES: readonly LeadToolName[] = ['ask_lead'];
 
 /**
+ * ADR-0034 §4: the read-only `code_map` tool. Every role has it, follow-up turns included: it
+ * changes nothing, and answers with paths, names and line numbers only.
+ */
+export const CODE_MAP_TOOL_NAMES: readonly LeadToolName[] = ['code_map'];
+
+/**
  * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
  * B) and `submit_review` (ADR-0021 §3), and the helpers' `report_work` (ADR-0026 §3). That
  * includes the five change tools of the review loop (`view_change`, `merge_change`,
@@ -49,27 +55,39 @@ export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.fil
     !ASK_LEAD_TOOL_NAMES.includes(name),
 );
 
-/** A helper's and the tester's own tools: the note and the question to the parent. */
+/** A helper's and the tester's own tools: the note, the question to the parent, the code map. */
 const WORKER_TOOL_NAMES: readonly LeadToolName[] = [
   ...AGENT_NOTE_TOOL_NAMES,
   ...ASK_LEAD_TOOL_NAMES,
+  ...CODE_MAP_TOOL_NAMES,
 ];
 
-/** The planner's one tool (ADR-0019): it writes and revises the plan, nothing else. */
-export const PLANNER_TOOL_NAMES: readonly LeadToolName[] = ['submit_plan'];
+/**
+ * The planner's tools (ADR-0019): it writes and revises the plan; plus the read-only `code_map`
+ * (ADR-0034 §4).
+ */
+export const PLANNER_TOOL_NAMES: readonly LeadToolName[] = ['submit_plan', ...CODE_MAP_TOOL_NAMES];
 /**
  * The final reviewer's tools (ADR-0019, decision B): its findings become ticket comments; plus
- * `ask_lead` (ADR-0033 §3).
+ * `ask_lead` (ADR-0033 §3) and `code_map` (ADR-0034 §4).
  */
-export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = ['post_review', ...ASK_LEAD_TOOL_NAMES];
+export const REVIEWER_TOOL_NAMES: readonly LeadToolName[] = [
+  'post_review',
+  ...ASK_LEAD_TOOL_NAMES,
+  ...CODE_MAP_TOOL_NAMES,
+];
 /**
  * A change reviewer's tools (ADR-0021 §3, `reviewScope: 'change'`): its verdict and findings go
- * to the lead, and the findings become a ticket comment; plus `ask_lead` (ADR-0033 §3).
+ * to the lead, and the findings become a ticket comment; plus `ask_lead` (ADR-0033 §3) and
+ * `code_map` (ADR-0034 §4).
  */
 export const CHANGE_REVIEWER_ROLE_TOOL_NAMES: readonly LeadToolName[] = [
   ...CHANGE_REVIEWER_TOOL_NAMES,
   ...ASK_LEAD_TOOL_NAMES,
+  ...CODE_MAP_TOOL_NAMES,
 ];
+/** A follow-up turn of an ended lead (ADR-0020 §2) answers only: the read-only `code_map`. */
+export const FOLLOW_UP_TOOL_NAMES: readonly LeadToolName[] = CODE_MAP_TOOL_NAMES;
 
 /** True for a reviewer of one helper's change rather than of the final result (ADR-0021). */
 export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewScope'>): boolean {
@@ -83,15 +101,16 @@ export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewSc
  *   (`reviewScope: 'change'`, ADR-0021), and `ask_lead`;
  * - worker: `report_work` (ADR-0026 §3) and `ask_lead` (ADR-0033 §3), plus the child-management
  *   subset with `canStartHelpers` (depth 2);
- * - tester: `report_work` and `ask_lead` (it is a worker that never starts helpers).
+ * - tester: `report_work` and `ask_lead` (it is a worker that never starts helpers);
+ * - every role, and a follow-up turn, also gets the read-only `code_map` (ADR-0034 §4).
  * An adapter builds both what the model sees and what its gate allows from this one list, so the
  * two cannot disagree. The engine checks every call again (`leadToolCall`).
  */
 export function managedToolNames(
   spec: Pick<ManagedAgentSpec, 'kind' | 'followUp' | 'reviewScope' | 'canStartHelpers'>,
 ): readonly LeadToolName[] {
-  // A follow-up turn of an ended lead answers only (ADR-0020 §2): no control-plane tool at all.
-  if (spec.followUp !== undefined) return [];
+  // A follow-up turn of an ended lead answers only (ADR-0020 §2): the read-only code map alone.
+  if (spec.followUp !== undefined) return FOLLOW_UP_TOOL_NAMES;
   switch (spec.kind) {
     case 'lead':
       return LEAD_ROLE_TOOL_NAMES;

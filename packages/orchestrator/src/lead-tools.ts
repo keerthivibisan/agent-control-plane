@@ -7,6 +7,7 @@ import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
 import { checkStepAttempts } from './step-attempts.js';
+import { planStepStartingPoints, startingPointsOf } from './starting-points.js';
 import { submitPlan } from './plan.js';
 import {
   checkNodeInstances,
@@ -79,11 +80,17 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
  *   reviewers also `ask_lead` (ADR-0033 §3);
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
  *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
- * - tester: `report_work` in a ticket run, and `ask_lead`.
+ * - tester: `report_work` in a ticket run, and `ask_lead`;
+ * - every agent: the read-only `code_map` (ADR-0034 §4).
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
   const agent = state.agents.find((a) => a.id === agentRunId);
   if (agent === undefined) return [];
+  return [...roleControlTools(state, agent), 'code_map'];
+}
+
+/** The role's own tools, without the read-only `code_map` every agent has (ADR-0034 §4). */
+function roleControlTools(state: RunState, agent: EngineAgent): readonly string[] {
   const kind: AgentRoleKind = agent.kind;
   switch (kind) {
     case 'lead':
@@ -93,6 +100,7 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'ask_lead' &&
+          n !== 'code_map' &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
@@ -141,6 +149,13 @@ export function leadToolCall(
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
   }
   const loop = state.integration !== undefined;
+  if (call.name === 'code_map') {
+    // ADR-0034 §4: any agent of the run may look up the code map; it changes no engine state.
+    // The server answers from the map of the run's base commit, or refuses without one.
+    const parsed = LeadToolInputs.code_map.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return readOnly(state, '');
+  }
   if (call.name === 'ask_lead') {
     // ADR-0033 §3: helpers, the tester and reviewers ask their parent; the lead and planner don't.
     if (caller.kind === 'lead' || caller.kind === 'planner') {
@@ -249,7 +264,7 @@ export function leadToolCall(
     case 'start_agent': {
       const parsed = LeadToolInputs.start_agent.safeParse(call.input);
       if (!parsed.success) return invalid(parsed.error);
-      const { role, task, helper } = parsed.data;
+      const { role, task, helper, files, notes } = parsed.data;
       const policyRefusal = checkStartAgent(state, caller.id, call.registeredProjectIds);
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
       // ADR-0023 §7: the helper node to start. A helper's own helpers belong to its node.
@@ -272,6 +287,11 @@ export function leadToolCall(
       // F-2: replacement helpers for a plan step are bounded.
       const attemptsRefusal = checkStepAttempts(state, node, role);
       if (attemptsRefusal !== null) return { ok: false, refusal: attemptsRefusal };
+      // ADR-0034 §4 (CM-3): the call's own files and notes, else (the lead's starts only) those of
+      // the approved plan's step for this node and role. Data for the prompt, never permissions.
+      const fromStep =
+        caller.kind === 'lead' ? planStepStartingPoints(state, node.id, role) : undefined;
+      const startingPoints = startingPointsOf(files ?? fromStep?.files, notes ?? fromStep?.notes);
       return applyCommand(state, ctx, (d) => {
         const id = d.freshId();
         // Depth of the new helper: one below its caller; its node must allow helpers of its own.
@@ -296,6 +316,7 @@ export function leadToolCall(
           provider: nodeProvider(program, node.id),
           // Ticket runs record each agent's node (ADR-0019, ADR-0023).
           ...(d.run.ticketId !== null ? { stage: node.id } : {}),
+          ...(startingPoints !== undefined ? { startingPoints } : {}),
         };
         d.agents.push(worker);
         d.setAgentStatus(worker, 'STARTING');
@@ -311,6 +332,7 @@ export function leadToolCall(
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),
+          ...(startingPoints !== undefined ? { startingPoints } : {}),
         });
         if (d.integration !== undefined) humanized(`Started ${role}`)(d);
         return { value: `Started agent ${id} (${role}).` };

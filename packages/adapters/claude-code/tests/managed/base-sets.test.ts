@@ -186,11 +186,11 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
   it('keeps disallowedTools for the planner and reviewer only, and the control tools', () => {
     const control: Record<AgentRoleKind, unknown[]> = {
       lead: [expect.arrayContaining(['submit_plan', 'start_agent'])],
-      planner: [['submit_plan']],
-      reviewer: [['post_review', 'ask_lead']],
+      planner: [['submit_plan', 'code_map']],
+      reviewer: [['post_review', 'ask_lead', 'code_map']],
       // ADR-0026 §3: the helper's and tester's note; ADR-0033 §3: their question to the lead.
-      worker: [['report_work', 'ask_lead']],
-      tester: [['report_work', 'ask_lead']],
+      worker: [['report_work', 'ask_lead', 'code_map']],
+      tester: [['report_work', 'ask_lead', 'code_map']],
     };
     for (const kind of ALL_KINDS) {
       const options = optionsFor(spec(kind));

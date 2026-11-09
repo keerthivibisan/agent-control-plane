@@ -17,6 +17,7 @@ import {
   List,
   Monitor,
   Moon,
+  Network,
   Plus,
   ScrollText,
   Search,
@@ -81,6 +82,8 @@ export const BoardNavIcon = icon(SquareKanban, 'BoardNavIcon');
 export const WorkflowIcon = icon(Workflow, 'WorkflowIcon');
 export const SkillsIcon = icon(Sparkles, 'SkillsIcon');
 export const HarnessIcon = icon(ShieldCheck, 'HarnessIcon');
+// The Code map page (ADR-0034, CM-4).
+export const CodeMapIcon = icon(Network, 'CodeMapIcon');
 export const SettingsIcon = icon(Settings, 'SettingsIcon');
 export const GridIcon = icon(LayoutGrid, 'GridIcon');
 export const SearchIcon = icon(Search, 'SearchIcon');

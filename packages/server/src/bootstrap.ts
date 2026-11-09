@@ -7,6 +7,7 @@ import { createDemoAdapter } from '@acp/adapter-demo';
 import type { ManagedExecutionAdapter, ManagedProviderId, ObservationAdapter } from '@acp/core';
 import {
   createQueries,
+  createCodeMapRepositories,
   createRepositories,
   createHarnessRepositories,
   createReviewLoopRepositories,
@@ -19,6 +20,7 @@ import { createProjectHarness } from './board/harness.js';
 import { createBoardService } from './board/service.js';
 import { createWorkflowService } from './workflow/service.js';
 import { createTokensService } from './tokens/service.js';
+import { createCodeMapService } from './codemap/service.js';
 import { createAgentsService, createSkillsService } from './skills/index.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
@@ -207,6 +209,15 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     ...(options.codeHost?.cli !== undefined && { cli: options.codeHost.cli }),
     ...(options.codeHost?.ghCommand !== undefined && { ghCommand: options.codeHost.ghCommand }),
   });
+  // ADR-0034: built on the owner's refresh (CM-1) and, for a ticket run's base commit, when the
+  // run starts (CM-2: the control service calls ensureForCommit; agents read the map).
+  const codeMap = createCodeMapService({
+    repo: createCodeMapRepositories(db).codeMap,
+    projectOf: (projectId) => repos.projects.getById(projectId),
+    git,
+    logger,
+    now,
+  });
   const controlService = createControlService({
     db,
     repos,
@@ -229,6 +240,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     },
     workspace: workspaceHooks,
     codeHost,
+    // CM-5: with ACP_CODE_MAP=off the runs get no map source; `code_map` then refuses.
+    ...(config.codeMap === 'on' && { codeMap }),
     ...options.control,
   });
   controlRef.current = controlService;
@@ -341,6 +354,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     board,
     workflow,
     tokens: createTokensService({ db }),
+    codeMap,
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),

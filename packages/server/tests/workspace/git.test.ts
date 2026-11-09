@@ -23,12 +23,25 @@ function fakeExec(result: { code?: string | number; stdout?: string; stderr?: st
 }
 
 describe('createGitRunner', () => {
+  it('writes input to stdin and returns the raw bytes (cat-file --batch)', async () => {
+    const written: string[] = [];
+    const execFile: ExecFileFn = (_file, _args, _options, callback) => {
+      setImmediate(() => callback(null, Buffer.from([0x61, 0x00, 0x62]), Buffer.alloc(0)));
+      return { stdin: { end: (data: string) => written.push(data) } };
+    };
+    const run = createGitRunner({ execFile });
+    const result = await run(['cat-file', '--batch'], { cwd: '/repo', input: 'abc\n' });
+    expect(written).toEqual(['abc\n']);
+    expect([...(result.raw ?? [])]).toEqual([0x61, 0x00, 0x62]);
+  });
+
   it('calls execFile("git", args) with shell off, a buffer limit and a timeout', async () => {
     const { execFile, seen } = fakeExec({ stdout: 'ok\n' });
     const run = createGitRunner({ execFile, timeoutMs: 1234 });
     expect(await run(['status', '--porcelain'], { cwd: '/repo' })).toEqual({
       stdout: 'ok\n',
       truncated: false,
+      raw: Buffer.from('ok\n'),
     });
     expect(seen).toHaveLength(1);
     const [call] = seen;

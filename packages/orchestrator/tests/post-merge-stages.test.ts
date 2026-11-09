@@ -88,7 +88,7 @@ describe('code review stage', () => {
 
   it('has only post_review, never edits or runs commands', () => {
     const s = ok(merged(REVIEW_ONLY)).state;
-    expect(controlToolsFor(s, REVIEWER)).toEqual(['post_review', 'ask_lead']);
+    expect(controlToolsFor(s, REVIEWER)).toEqual(['post_review', 'ask_lead', 'code_map']);
     expect(
       refused(
         leadToolCall(
@@ -154,7 +154,7 @@ describe('unit tests stage', () => {
     expect(start).toMatchObject({ kind: 'tester', agentRunId: TESTER });
     expect(start.prompt.startsWith(TESTER_TASK)).toBe(true);
     // ADR-0026 §3: the tester's one tool is its note.
-    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work', 'ask_lead']);
+    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work', 'ask_lead', 'code_map']);
     expect(start.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
   });
 

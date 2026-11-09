@@ -104,10 +104,10 @@ describe('follow-up options (ADR-0020 §2, §4)', () => {
     expect(options.cwd).toBe(ROOT);
   });
 
-  it('is answers-only: read-only tools, no control-plane tools, no MCP server, no skills', () => {
+  it('is answers-only: read-only tools, only the code_map control tool, no skills', () => {
     const options = optionsFor(
       spec({
-        // Even with lead tools and a skills plugin handed over, none reach a follow-up turn.
+        // Lead tools and a skills plugin handed over: only code_map (ADR-0034 §4) reaches it.
         leadTools: () => Promise.resolve('ok'),
         skillPlugin: { path: '/data/runs/run-1/skills-plugin', skills: ['acp-skills:x'] },
       }),
@@ -117,10 +117,42 @@ describe('follow-up options (ADR-0020 §2, §4)', () => {
     expect(options.disallowedTools).toEqual(
       expect.arrayContaining([...READ_ONLY_DISALLOWED_TOOLS, 'Agent', 'Task']),
     );
-    expect(options.mcpServers).toEqual({});
-    expect(servers.toolNames).toEqual([]);
+    expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
+    expect(servers.toolNames).toEqual([['code_map']]);
     expect(options.plugins).toBeUndefined();
     expect(options.skills).toBeUndefined();
+  });
+
+  it('has no MCP server at all without a handler', () => {
+    const options = optionsFor(spec());
+    expect(options.mcpServers).toEqual({});
+    expect(servers.toolNames).toEqual([]);
+  });
+
+  it('allows our code_map without asking, and no other control tool (ADR-0034 §4)', async () => {
+    const cb = callbacks();
+    const use = canUseTool(optionsFor(spec({ leadTools: () => Promise.resolve('ok') }), cb));
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    await expect(use('mcp__acp__code_map', { action: 'search' }, ours)).resolves.toEqual({
+      behavior: 'allow',
+      toolUseID: 'toolu_1',
+    });
+    // The same name from another server is not ours.
+    await expect(
+      use('mcp__acp__code_map', {}, toolOpts({ mcpServer: { name: 'acp', source: 'stdio' } })),
+    ).resolves.toMatchObject({ behavior: 'deny', message: DENY_FOLLOW_UP });
+    for (const name of ['start_agent', 'request_review', 'message_agent']) {
+      await expect(use(`mcp__acp__${name}`, {}, ours)).resolves.toMatchObject({
+        behavior: 'deny',
+        message: DENY_FOLLOW_UP,
+      });
+    }
+    // Without a handler even code_map is denied.
+    const bare = canUseTool(optionsFor(spec(), cb));
+    await expect(bare('mcp__acp__code_map', {}, ours)).resolves.toMatchObject({
+      behavior: 'deny',
+    });
+    expect(cb.requests).toEqual([]);
   });
 
   it('keeps the safety settings of every managed agent and never sets allowedTools', () => {

@@ -3,7 +3,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 /**
  * Hash routes (no router dependency), project first (docs/history/redesign/README.md §3):
  *
- * - `#/p/:projectId/<page>` for the seven project pages, `#/p/:projectId/skills/:name` for one
+ * - `#/p/:projectId/<page>` for the project pages, `#/p/:projectId/skills/:name` for one
  *   skill, `#/p/:projectId/tickets/:ticketId` for a ticket (`?tab=files&change=…` is its Files
  *   changed tab; the older review pages `…/tickets/:ticketId/files` and
  *   `…/tickets/:ticketId/changes/:agentRunId` redirect there), and
@@ -21,6 +21,7 @@ export const PROJECT_PAGE_IDS = [
   'workflow',
   'skills',
   'harness',
+  'code-map',
   'tokens',
   'sessions',
   'settings',

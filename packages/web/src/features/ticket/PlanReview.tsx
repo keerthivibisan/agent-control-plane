@@ -41,6 +41,25 @@ export function PlanBody({ plan }: { plan: TicketPlanDto }) {
               {s.detail.length > 0 ? (
                 <p className="text-caption whitespace-pre-wrap text-dim">{s.detail}</p>
               ) : null}
+              {s.files !== undefined && s.files.length > 0 ? (
+                <ul className="flex flex-wrap gap-1.5" aria-label={C.stepFiles}>
+                  {s.files.map((f) => (
+                    <li
+                      key={f}
+                      className="max-w-full truncate rounded border border-line bg-panel px-1.5 py-0.5 font-mono text-micro text-dim"
+                      title={f}
+                    >
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {s.notes !== undefined && s.notes.length > 0 ? (
+                <p className="text-caption whitespace-pre-wrap text-dim">
+                  <span className="font-medium text-ink">{C.stepNotes}: </span>
+                  {s.notes}
+                </p>
+              ) : null}
             </div>
           </li>
         ))}

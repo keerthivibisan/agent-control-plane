@@ -141,7 +141,8 @@ describe('R-V: the follow-up turn of an ended lead (HTTP, SSE, real adapter opti
       followUp: { resumeSessionId: `sess-${lead.id}` },
       profile: { name: 'lead-style', tools: ['Read', 'Bash'] },
     });
-    expect(turn.spec.leadTools).toBeUndefined();
+    // ADR-0034 §4: the read-only code_map is its one control-plane tool.
+    expect(turn.spec.leadTools).toBeDefined();
     expect(turn.spec.skillPlugin).toBeUndefined();
     const sdk = b.sdkFor(lead.id, true);
     expect(sdk.resume).toBe(`sess-${lead.id}`);
@@ -151,7 +152,7 @@ describe('R-V: the follow-up turn of an ended lead (HTTP, SSE, real adapter opti
     expect(sdk.disallowedTools).toEqual(
       expect.arrayContaining(['Bash', 'Edit', 'Write', 'Agent', 'Task']),
     );
-    expect(sdk.mcpServers).toEqual({});
+    expect(Object.keys(sdk.mcpServers ?? {})).toEqual(['acp']);
     expect(sdk.plugins).toBeUndefined();
     expect(sdk.skills).toBeUndefined();
     expect(sdk.allowedTools).toBeUndefined();

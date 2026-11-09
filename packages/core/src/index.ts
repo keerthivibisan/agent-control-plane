@@ -29,3 +29,4 @@ export * from './workspace/graph/index.js';
 export * from './workspace/harness-select.js';
 export * from './workspace/conflict-resolution.js';
 export * from './workspace/git-guard.js';
+export * from './codemap/index.js';

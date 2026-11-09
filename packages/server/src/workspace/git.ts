@@ -14,11 +14,15 @@ export interface GitRunOptions {
    * over the hard limit is an error.
    */
   maxOutputBytes?: number;
+  /** Written to git's stdin and closed (e.g. object ids for `cat-file --batch`). */
+  input?: string;
 }
 
 export interface GitResult {
   stdout: string;
   truncated: boolean;
+  /** The untruncated stdout bytes, for output whose byte offsets matter (`cat-file --batch`). */
+  raw?: Buffer;
 }
 
 /** Runs `git <args>`; rejects with `GitCommandError` on a non-zero exit. */
@@ -40,17 +44,19 @@ type ExecFileCallback = (
   stderr: Buffer,
 ) => void;
 
-/** The subset of `child_process.execFile` used here; injectable so tests can assert its calls. */
+/**
+ * The subset of `child_process.execFile` used here; injectable so tests can assert its calls. It
+ * returns the child's stdin when it has one, so `input` can be written.
+ */
 export type ExecFileFn = (
   file: string,
   args: string[],
   options: ExecFileOptions,
   callback: ExecFileCallback,
-) => void;
+) => { stdin?: { end(data: string): unknown } | null } | void;
 
-const defaultExecFile: ExecFileFn = (file, args, options, callback) => {
+const defaultExecFile: ExecFileFn = (file, args, options, callback) =>
   nodeExecFile(file, args, options, callback);
-};
 
 /** Large enough for any manifest; a review diff uses `maxOutputBytes` instead. */
 const HARD_OUTPUT_LIMIT = 64 * 1024 * 1024;
@@ -83,10 +89,10 @@ export function createGitRunner(options: GitRunnerOptions = {}): GitRunner {
   });
   const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  return (args, { cwd, maxOutputBytes }) =>
+  return (args, { cwd, maxOutputBytes, input }) =>
     new Promise<GitResult>((resolve, reject) => {
       const limit = maxOutputBytes ?? HARD_OUTPUT_LIMIT;
-      execFile(
+      const child = execFile(
         'git',
         [...args],
         {
@@ -100,7 +106,7 @@ export function createGitRunner(options: GitRunnerOptions = {}): GitRunner {
         },
         (error, stdout, stderr) => {
           if (error === null) {
-            resolve({ stdout: stdout.toString('utf8'), truncated: false });
+            resolve({ stdout: stdout.toString('utf8'), truncated: false, raw: stdout });
             return;
           }
           if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' && maxOutputBytes !== undefined) {
@@ -116,6 +122,7 @@ export function createGitRunner(options: GitRunnerOptions = {}): GitRunner {
           );
         },
       );
+      if (input !== undefined) child?.stdin?.end(input);
     });
 }
 

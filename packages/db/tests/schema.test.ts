@@ -56,6 +56,9 @@ const HARNESS_TABLES = ['setup_runs'];
 /** Added by 0012 (CR-B, ADR-0030: conflict resolution). */
 const RESOLUTION_TABLES = ['conflict_resolutions'];
 
+/** Added by 0014 (CM-1, ADR-0034: the code map). */
+const CODE_MAP_TABLES = ['code_map_blobs', 'code_map_entries', 'code_map_manifests'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -144,6 +147,7 @@ describe('0001_observability schema (B3)', () => {
         ...ACTIVITY_TABLES,
         ...HARNESS_TABLES,
         ...RESOLUTION_TABLES,
+        ...CODE_MAP_TABLES,
       ].sort(),
     );
   });

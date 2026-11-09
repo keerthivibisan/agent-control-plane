@@ -106,7 +106,7 @@ describe('startResolver', () => {
 
   it('has no child tools and blocks the owner merge while it works', () => {
     const { s } = started();
-    expect(controlToolsFor(s, R)).toEqual(['report_work', 'ask_lead']);
+    expect(controlToolsFor(s, R)).toEqual(['report_work', 'ask_lead', 'code_map']);
     expect(checkTicketBranchAction(s, 'merge')?.code).toBeDefined();
   });
 });

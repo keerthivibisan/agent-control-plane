@@ -633,12 +633,14 @@ exports[`legacy runs are unchanged by the review loop > a control-panel run from
       "agent_status",
       "request_review",
       "submit_plan",
+      "code_map",
     ],
     "step": "tools-lead",
   },
   {
     "result": [
       "ask_lead",
+      "code_map",
     ],
     "step": "tools-worker",
   },
@@ -2314,6 +2316,7 @@ Before you finish, call report_work with 2 to 4 plain sentences on what you did 
     "result": [
       "report_work",
       "ask_lead",
+      "code_map",
     ],
     "step": "tools-tester",
   },

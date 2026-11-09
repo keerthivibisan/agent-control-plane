@@ -766,6 +766,11 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
         ...launchFieldsFor(d.program(), stageOf(agent), prompt),
         rework: { resumeSessionId: agent.sessionId },
         ...d.launchModeFields(agent),
+        // ADR-0034 §4 (CM-3): a resumed session has its starting points already; a fresh one
+        // gets them again.
+        ...(agent.sessionId === null && agent.startingPoints !== undefined
+          ? { startingPoints: agent.startingPoints }
+          : {}),
       });
       const done = `Asked ${role} to rework its change (round ${change.round}).`;
       if (byOwner) notifyLead(d, `The owner decided: ${done}`);

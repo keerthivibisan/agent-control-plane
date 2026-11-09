@@ -146,7 +146,7 @@ describe('separate planner: plan, revise, approve', () => {
       );
       expect(refused(r)).toBe('not-lead');
     }
-    expect(controlToolsFor(s, PLANNER)).toEqual(['submit_plan']);
+    expect(controlToolsFor(s, PLANNER)).toEqual(['submit_plan', 'code_map']);
     expect(controlToolsFor(s, LEAD)).not.toContain('submit_plan');
     expect(controlToolsFor(s, LEAD)).not.toContain('post_review');
     expect(controlToolsFor(s, LEAD)).toContain('start_agent');

@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import {
   APPROVAL_TIMEOUT_MS,
   HARD_MAX_DEPTH,
+  isEmptyStartingPoints,
   isPathInside,
+  renderStartingPoints,
+  type StartingPoints,
   LeadToolInputs,
   type AgentEffort,
   type AgentRoleKind,
@@ -139,6 +142,14 @@ import {
 import { SELF_RECORDED_USAGE, managedSessionEvents, managedUsageEvent } from './managed-usage.js';
 import { createFullAutoPaths, FULL_AUTO_DENIED_MESSAGE, type FullAutoPaths } from './full-auto.js';
 import { createCsrfToken } from './csrf.js';
+import {
+  CODE_MAP_WAIT_MS,
+  codeMapToolReply,
+  repoMapText,
+  startRunCodeMap,
+  type RunCodeMap,
+  type RunCodeMapSource,
+} from './code-map.js';
 import { createConflictResolution } from './conflict-resolution.js';
 import { createMailbox, deliveryLine, emptyMail, type RunMail } from './mailbox.js';
 import { refusalError, workspaceError } from './errors.js';
@@ -390,6 +401,14 @@ export interface ControlServiceDeps {
   fullAutoPaths?: FullAutoPaths;
   /** ADR-0026 §4: the attachments' bytes; defaults to `<dataDir>/attachments`. */
   attachmentFiles?: AttachmentFiles;
+  /**
+   * ADR-0034 §4 (CM-2): the project code map. A ticket run builds its base commit's map in the
+   * background; agents get the repository map and the `code_map` tool from it. Omitted: no map,
+   * and `code_map` refuses.
+   */
+  codeMap?: RunCodeMapSource;
+  /** How long the first launches wait for the run's map; default `CODE_MAP_WAIT_MS` (15 s). */
+  codeMapWaitMs?: number;
 }
 
 export interface ControlCounters {
@@ -519,7 +538,20 @@ interface LiveRun {
   mergeChain: Promise<unknown>;
   /** ADR-0021: the latest commit whose checks were started per agent. */
   checkTargets: Map<string, string>;
+  /**
+   * ADR-0034 (CM-2): the run's code map, started when the ticket run was created in this process;
+   * a run loaded after a restart has only the cached repository map (its commit comes from the
+   * ticket branch record).
+   */
+  codeMap?: RunCodeMap;
+  repoMap?: { commit: string; text: string };
 }
+
+/** A code map source with no maps: `code_map` then refuses (no `deps.codeMap`). */
+const NO_MAP_SOURCE: RunCodeMapSource = {
+  ensureForCommit: () => Promise.reject(new Error('no code map')),
+  mapAt: () => undefined,
+};
 
 /** The most checks an editing agent's brief lists by name and command (ADR-0027 §4). */
 const BRIEF_MAX_CHECKS = 10;
@@ -598,6 +630,8 @@ interface LaunchInput {
    * Full auto) or without (a Full auto block a ticket or run tightened).
    */
   protection?: AgentProtection | undefined;
+  /** ADR-0034 §4 (CM-3): a helper's starting points, rendered with the run's map at launch. */
+  startingPoints?: StartingPoints | undefined;
 }
 
 /** What a pump needs to record a self-recorded provider's usage (`usageRecorder`). */
@@ -1450,6 +1484,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           agentFile,
           canStartHelpers,
           protection,
+          startingPoints: effect.startingPoints,
         });
       })(),
     );
@@ -1610,6 +1645,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           agentFile,
           rework: effect.rework,
           protection,
+          startingPoints: effect.startingPoints,
         });
       })(),
     );
@@ -1804,6 +1840,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           followUp: { resumeSessionId: effect.resumeSessionId },
         };
         if (setup.context.trim() !== '') spec.context = setup.context;
+        const repoMap = repoMapFor(live);
+        if (repoMap !== undefined) spec.repoMap = repoMap;
+        // ADR-0034 §4: a follow-up turn's one control-plane tool is the read-only code map; the
+        // handler refuses anything else, whatever the adapter offers.
+        // Only for a provider that can offer tools (else the turn would be refused for it).
+        const leadId = effect.agentRunId;
+        if (adapter.capabilities.leadTools) {
+          spec.leadTools = (name, toolInput) =>
+            name === 'code_map'
+              ? leadTool(live, leadId, name, toolInput)
+              : Promise.reject(new Error(FOLLOW_UP_READ_ONLY_MESSAGE));
+        }
         // ADR-0028 §1: the lead node's effort, as for its own turns.
         if (effect.effort !== undefined) spec.effort = effect.effort;
         if (agentFile !== undefined) spec.profile = agentFile.profile;
@@ -2003,6 +2051,117 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     );
   }
 
+  /**
+   * ADR-0034 (CM-2): builds the map of the run's base commit in the background. A failure is a
+   * diagnostic count and a log line with a short code, never a run failure.
+   */
+  function startCodeMap(live: LiveRun): void {
+    const source = deps.codeMap;
+    if (source === undefined) return;
+    const runId = live.state.run.id;
+    live.codeMap = startRunCodeMap({
+      source,
+      projectId: live.state.run.projectId,
+      baseCommit: () => runBaseCommit(live),
+      waitMs: deps.codeMapWaitMs ?? CODE_MAP_WAIT_MS,
+      onFailure: (code) => {
+        countDiagnostic('code-map-unavailable');
+        logger.log('warn', 'run code map not built', { runId, code });
+      },
+    });
+  }
+
+  /**
+   * The commit the run's ticket branch starts at: the recorded one once it exists, else where it
+   * would start now (`checkTicketBranchPlan`), else the project's HEAD. Null when none resolves.
+   */
+  async function runBaseCommit(live: LiveRun): Promise<string | null> {
+    const recorded = store.loopRepos.ticketBranches.getByRun(live.state.run.id);
+    if (recorded !== undefined) return recorded.baseCommit;
+    const project = deps.repos.projects.getById(live.state.run.projectId);
+    if (project === undefined) return null;
+    const key = ticketKeyOf(live.state);
+    if (key !== null) {
+      try {
+        const plan = loop.planFor(live, key);
+        return (await deps.workspaces.checkTicketBranchPlan(project.rootPath, plan)).commit;
+      } catch {
+        // A plan the manager refuses now is refused again at plan approval; the map uses HEAD.
+      }
+    }
+    try {
+      const head = await deps.git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], {
+        cwd: project.rootPath,
+      });
+      const commit = head.stdout.trim();
+      return /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(commit) ? commit : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The commit whose map the run's agents use: the one built at run start, else the record's. */
+  function runMapCommit(live: LiveRun): string | null {
+    return (
+      live.codeMap?.commit ??
+      store.loopRepos.ticketBranches.getByRun(live.state.run.id)?.baseCommit ??
+      null
+    );
+  }
+
+  /** The repository map for an agent's context, when the run's map is ready. Never throws. */
+  function repoMapFor(live: LiveRun): string | undefined {
+    const source = deps.codeMap;
+    if (source === undefined) return undefined;
+    try {
+      return repoMapText(source, live.state.run.projectId, runMapCommit(live), live);
+    } catch (error) {
+      countDiagnostic('code-map-unavailable');
+      logger.log('warn', 'repository map unavailable', {
+        runId: live.state.run.id,
+        ...errorFields(error),
+      });
+      return undefined;
+    }
+  }
+
+  /**
+   * ADR-0034 §4 (CM-3): the prompt with the helper's starting points, rendered from the map of
+   * the run's base commit (paths, names and counts; never file content). Without a ready map,
+   * only the notes and the paths. Never throws: a failure leaves the plain paths.
+   */
+  function withStartingPoints(
+    live: LiveRun,
+    prompt: string,
+    points: StartingPoints | undefined,
+  ): string {
+    if (points === undefined || isEmptyStartingPoints(points)) return prompt;
+    let map: ReturnType<RunCodeMapSource['mapAt']>;
+    const source = deps.codeMap;
+    const commit = runMapCommit(live);
+    if (source !== undefined && commit !== null) {
+      try {
+        map = source.mapAt(live.state.run.projectId, commit);
+      } catch (error) {
+        countDiagnostic('code-map-unavailable');
+        logger.log('warn', 'starting points map unavailable', {
+          runId: live.state.run.id,
+          ...errorFields(error),
+        });
+      }
+    }
+    const section = renderStartingPoints(points, map);
+    return section === '' ? prompt : `${prompt}\n\n${section}`;
+  }
+
+  /** ADR-0034 §4: the `code_map` answer, or a thrown refusal the adapter returns to the model. */
+  function codeMapReply(live: LiveRun, input: unknown): string {
+    const source = deps.codeMap;
+    const commit = runMapCommit(live);
+    if (source === undefined) return codeMapToolReply(NO_MAP_SOURCE, '', null, input);
+    return codeMapToolReply(source, live.state.run.projectId, commit, input);
+  }
+
   /** Read once per run, so every agent of the run gets the same context. Never rejects. */
   function setupFor(live: LiveRun): Promise<AgentSetup> {
     const read = hooks.agentSetup;
@@ -2142,6 +2301,25 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
    * provider ends the agent with `provider-unavailable` and the adapter's reason on the ticket.
    */
   function launch(live: LiveRun, input: LaunchInput): void {
+    // ADR-0034 (CM-2): while the run's map is being built, a launch waits for it at most until
+    // the run's wait window ends (15 s after the run started); then it goes on without it.
+    const waiting = live.codeMap?.waiting ?? null;
+    if (waiting === null) {
+      launchAvailable(live, input);
+      return;
+    }
+    const { agentRunId } = input;
+    live.starting.add(agentRunId);
+    track(
+      waiting.then(() => {
+        live.starting.delete(agentRunId);
+        if (!stillStarting(live, agentRunId)) return;
+        launchAvailable(live, input);
+      }),
+    );
+  }
+
+  function launchAvailable(live: LiveRun, input: LaunchInput): void {
     const { agentRunId } = input;
     const adapter = adapterOf(live, agentRunId);
     if (adapter === undefined) {
@@ -2197,7 +2375,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       agentRunId,
       kind,
       cwd: input.cwd,
-      prompt: input.prompt,
+      prompt: withStartingPoints(live, input.prompt, input.startingPoints),
       // ADR-0019 §6: the stage's model, else the agent file's, else the project's (Phase 4); an
       // inherited model of another provider is skipped (ADR-0031).
       model: resolveAgentModel({
@@ -2208,6 +2386,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       }),
     };
     if (setup.context.trim() !== '') spec.context = setup.context;
+    const repoMap = repoMapFor(live);
+    if (repoMap !== undefined) spec.repoMap = repoMap;
     // ADR-0028 §1: only when the node sets one (absent: the model's default).
     if (input.effort !== undefined) spec.effort = input.effort;
     // ADR-0024 §1: named when it starts, from app data only (ticket key and block label).
@@ -2590,6 +2770,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       throw new Error(result.refusal.message);
     }
     logger.log('info', 'lead tool called', { runId, tool: name });
+    if (name === 'code_map') return codeMapReply(live, input);
     if (name === 'view_change') {
       const target = LeadToolInputs.view_change.safeParse(input);
       if (!target.success) return result.value;
@@ -3224,6 +3405,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       commit(null, result.state, result.effects, inTransaction && (() => inTransaction(runId)));
       const live = newLive(result.state);
       runs.set(runId, live);
+      startCodeMap(live);
       notify('runs-changed', live);
       perform(live, result.effects);
       afterCommit(null, live.state);
