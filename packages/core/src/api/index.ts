@@ -6,3 +6,4 @@ export * from './code-host.js';
 export * from './activity.js';
 export * from './conflict-resolution.js';
 export * from './code-map.js';
+export * from './assistant.js';

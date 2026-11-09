@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { ManagedProviderIdSchema, type ManagedProviderId } from '../domain/provider.js';
 import { WorkflowNodeIdSchema, type WorkflowNodeId } from './node-id.js';
-import type { AgentRoleKind } from '../orchestration/orchestration.js';
+import type { RunAgentKind } from '../orchestration/orchestration.js';
 import { ApprovalModeSchema, HARD_MAX_HELPERS, type ApprovalMode } from './workspace.js';
 import {
   MAX_REWORK_ROUNDS,
@@ -260,7 +260,7 @@ export type EditorWorkflowNode = WorkflowNodeOf<'helper-pool' | 'helper' | 'test
  */
 export interface NodeCapabilities {
   /** The agent role kind, or null for a gate. */
-  kind: AgentRoleKind | null;
+  kind: RunAgentKind | null;
   /** Edits files in its own worktree (and so has an approval mode and a reviewable change). */
   edits: boolean;
   /** At most this many nodes of the type in one graph. */
@@ -526,7 +526,7 @@ export type ReviewRoute =
 export interface ProgramAgentNode {
   id: WorkflowNodeId;
   type: AgentWorkflowNode['type'];
-  kind: AgentRoleKind;
+  kind: RunAgentKind;
   label: string;
   model: string | null;
   skills: readonly z.infer<typeof SkillNameSchema>[];

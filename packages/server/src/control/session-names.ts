@@ -1,5 +1,5 @@
 import { MAX_SESSION_TITLE } from '@acp/core';
-import type { AgentRoleKind, WorkflowProgram } from '@acp/core';
+import type { RunAgentKind, WorkflowProgram } from '@acp/core';
 import {
   agentNodeId,
   helperNodeOf,
@@ -25,7 +25,7 @@ import {
  */
 
 /** The role word when an agent has no workflow block (control-panel runs, unknown nodes). */
-export const ROLE_WORDS: Readonly<Record<AgentRoleKind, string>> = Object.freeze({
+export const ROLE_WORDS: Readonly<Record<RunAgentKind, string>> = Object.freeze({
   lead: 'Lead',
   planner: 'Planner',
   worker: 'Helper',

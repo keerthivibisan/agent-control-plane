@@ -1,5 +1,10 @@
-import { CHANGE_DECISION_TOOL_NAMES, LEAD_TOOL_NAMES, LeadToolInputs } from '@acp/core';
-import type { AgentRoleKind, LeadToolName } from '@acp/core';
+import {
+  ASSISTANT_CONTROL_TOOL_NAMES,
+  CHANGE_DECISION_TOOL_NAMES,
+  LEAD_TOOL_NAMES,
+  LeadToolInputs,
+} from '@acp/core';
+import type { LeadToolName, RunAgentKind } from '@acp/core';
 import type { z } from 'zod';
 import { beginChangeMerge, recordChangeDecision } from './change-commands.js';
 import { applyCommand, requestReview, stopAgent } from './commands.js';
@@ -91,7 +96,7 @@ export function controlToolsFor(state: RunState, agentRunId: string): readonly s
 
 /** The role's own tools, without the read-only `code_map` every agent has (ADR-0034 §4). */
 function roleControlTools(state: RunState, agent: EngineAgent): readonly string[] {
-  const kind: AgentRoleKind = agent.kind;
+  const kind: RunAgentKind = agent.kind;
   switch (kind) {
     case 'lead':
       return LEAD_TOOL_NAMES.filter(
@@ -101,6 +106,7 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
           n !== 'report_work' &&
           n !== 'ask_lead' &&
           n !== 'code_map' &&
+          !ASSISTANT_CONTROL_TOOL_NAMES.includes(n) &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
@@ -147,6 +153,20 @@ export function leadToolCall(
   const caller = state.agents.find((a) => a.id === call.callerAgentRunId);
   if (caller === undefined) {
     return { ok: false, refusal: refusal('unknown-agent', 'Unknown calling agent.') };
+  }
+  // ADR-0035: the project assistant is never an agent of a run. Its tools are answered by the
+  // server's assistant service, never by the engine; a stored row claiming the role is refused.
+  if ((caller.kind as string) === 'assistant') {
+    return {
+      ok: false,
+      refusal: refusal('not-lead', 'The project assistant is not part of a ticket run.'),
+    };
+  }
+  if (ASSISTANT_CONTROL_TOOL_NAMES.includes(call.name)) {
+    return {
+      ok: false,
+      refusal: refusal('not-lead', 'Only the project assistant has this tool.'),
+    };
   }
   const loop = state.integration !== undefined;
   if (call.name === 'code_map') {
@@ -551,6 +571,16 @@ export function leadToolCall(
       if (!parsed.success) return invalid(parsed.error);
       return submitReview(state, caller.id, parsed.data, ctx);
     }
+
+    // Refused above (ADR-0035): only the project assistant has these.
+    case 'ticket_status':
+    case 'project_info':
+    case 'propose_skill':
+    case 'propose_agent':
+      return {
+        ok: false,
+        refusal: refusal('not-lead', 'Only the project assistant has this tool.'),
+      };
   }
 }
 

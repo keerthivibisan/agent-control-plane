@@ -28,6 +28,10 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   `feature/codemap/code-map`. A local, deterministic code map per project for agents (a short
   repository map, a `code_map` tool, plan-to-helper context) and a Code map page for people. Plan
   and status: [docs/code-map/](docs/code-map/README.md).
+- **Project assistant (AS series, ADR-0035 accepted 2026-11-09):** in progress on
+  `feature/assistant/project-assistant`. A floating chat on project pages (ticket status, project
+  questions, writing skills and agent definitions in Approve or Auto mode); the chat is kept for the
+  session only. Plan and status: [docs/assistant/](docs/assistant/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):

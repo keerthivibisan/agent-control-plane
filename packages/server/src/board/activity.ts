@@ -1,6 +1,6 @@
 import { COMMENTS_TAB_KINDS } from '@acp/core';
 import type {
-  AgentRoleKind,
+  RunAgentKind,
   AgentRunStatus,
   ChangeDecider,
   ChangeDecision,
@@ -84,7 +84,7 @@ function namesOf(input: ActivityInput, entry: ActivityRun) {
     if (r.reviewerAgentRunId !== null) reviewed.set(r.reviewerAgentRunId, r.agentRunId);
   }
   const agents = new Map<string, EngineAgent>((state?.agents ?? []).map((a) => [a.id, a]));
-  const label = (agentRunId: string | null, fallback: AgentRoleKind): string => {
+  const label = (agentRunId: string | null, fallback: RunAgentKind): string => {
     if (agentRunId === null || state === undefined) return ROLE_WORDS[fallback];
     return (
       agentName({
@@ -95,7 +95,7 @@ function namesOf(input: ActivityInput, entry: ActivityRun) {
       })?.label ?? ROLE_WORDS[agents.get(agentRunId)?.kind ?? fallback]
     );
   };
-  const actor = (agentRunId: string | null, fallback: AgentRoleKind): Actor => {
+  const actor = (agentRunId: string | null, fallback: RunAgentKind): Actor => {
     const kind = (agentRunId === null ? undefined : agents.get(agentRunId)?.kind) ?? fallback;
     return { kind, label: label(agentRunId, kind), agentRunId };
   };

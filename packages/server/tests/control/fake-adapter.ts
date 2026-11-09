@@ -144,6 +144,8 @@ export interface FakeManagedAdapter {
   /** The first lead start (the run's own lead, not a later follow-up turn). */
   lead(): FakeAgent;
   workers(): FakeAgent[];
+  /** The latest project assistant session (ADR-0035, `kind: 'assistant'`). */
+  assistant(): FakeAgent;
 }
 
 /** What Codex's adapter honours (`CODEX_CAPABILITIES` of `@acp/adapter-codex`, CX-3). */
@@ -181,6 +183,11 @@ export function createFakeManagedAdapter(options: FakeAdapterOptions = {}): Fake
       return lead;
     },
     workers: () => agents.filter((a) => a.spec.kind === 'worker'),
+    assistant: () => {
+      const assistant = agents.findLast((a) => a.spec.kind === 'assistant');
+      if (assistant === undefined) throw new Error('the assistant has not started');
+      return assistant;
+    },
     adapter: {
       provider,
       capabilities:

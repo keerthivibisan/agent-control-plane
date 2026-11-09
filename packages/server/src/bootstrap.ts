@@ -22,6 +22,8 @@ import { createWorkflowService } from './workflow/service.js';
 import { createTokensService } from './tokens/service.js';
 import { createCodeMapService } from './codemap/service.js';
 import { createAgentsService, createSkillsService } from './skills/index.js';
+import { createAssistantService } from './assistant/index.js';
+import { fullAutoDenyRead } from './control/full-auto.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
 import { ensureHookToken } from './hooks/token.js';
@@ -336,6 +338,32 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     workflowOf: (projectId) => workflow.effective(projectId),
   });
 
+  // ADR-0035: the project assistant, a read-only chat session per project, in memory only.
+  const assistant = createAssistantService({
+    adapters: managedAdapters,
+    checkProvider: (provider) => controlService.checkProvider(provider),
+    projectOf: (projectId) => repos.projects.getById(projectId),
+    board,
+    workflowOf: (projectId) => workflow.effective(projectId),
+    skills,
+    agents,
+    ...(config.codeMap === 'on' && { codeMap }),
+    // CX-3b: the same deny-read list as the run's agents (the home secrets, the data folder,
+    // Claude's and Codex's config).
+    denyRead: () =>
+      fullAutoDenyRead({
+        homeDir: config.homeDir,
+        dataDir: config.dataDir,
+        claudeDir: config.claudeDir,
+        codexHome: config.codexHome,
+      }),
+    ingestManaged: (events) => {
+      pipeline.ingestEvents(events);
+    },
+    now,
+    logger,
+  });
+
   const app = createApp({
     config,
     logger,
@@ -357,6 +385,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     codeMap,
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
+    ...(controlService.enabled && { assistant }),
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();
@@ -375,6 +404,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       s.once('error', reject);
     });
   } catch (error) {
+    assistant.close();
     await checks.close();
     await controlService.close();
     db.close();
@@ -395,6 +425,8 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
       await scheduler.stop();
       // A running check is stopped; agents are aborted without recording anything, and the next
       // start marks them NEEDS_REVIEW.
+      // ADR-0035: the assistant's chats end with the app; nothing about them remains.
+      assistant.close();
       await checks.close();
       await controlService.close();
       db.close();

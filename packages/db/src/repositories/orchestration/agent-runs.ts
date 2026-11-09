@@ -1,12 +1,12 @@
 import {
-  AgentRoleKindSchema,
+  RunAgentKindSchema,
   AgentRunSchema,
   AgentRunStatusSchema,
   HARD_MAX_DEPTH,
   DEFAULT_MANAGED_PROVIDER,
   ManagedProviderIdSchema,
   ToolUseCountsSchema,
-  type AgentRoleKind,
+  type RunAgentKind,
   type AgentRun,
   type AgentRunStatus,
   type IsoTimestamp,
@@ -30,7 +30,7 @@ export interface AgentRunInsertInput {
    * `lead`: no parent, no task. `worker`: a parent in the same run (the lead, or a helper of the
    * lead: at most HARD_MAX_DEPTH levels), and a task.
    */
-  kind: AgentRoleKind;
+  kind: RunAgentKind;
   parentAgentRunId: string | null;
   role: string;
   /** The worker's task text (ADR-0015); null for the lead. */
@@ -195,7 +195,7 @@ export function createAgentRunsRepository(ctx: RepositoryContext): AgentRunsRepo
 
   function validate(input: AgentRunInsertInput) {
     const shape = AgentRunSchema.shape;
-    const kind = parseInput(AgentRoleKindSchema, input.kind, 'agent kind');
+    const kind = parseInput(RunAgentKindSchema, input.kind, 'agent kind');
     const valid = {
       runId: parseInput(shape.runId, input.runId, 'agent runId'),
       kind,

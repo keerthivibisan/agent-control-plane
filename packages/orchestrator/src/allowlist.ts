@@ -9,7 +9,7 @@ import {
   isSafeCommandToken,
 } from '@acp/core';
 import type {
-  AgentRoleKind,
+  RunAgentKind,
   AllowRule,
   ApprovalMode,
   CommandPattern,
@@ -185,7 +185,7 @@ export interface AllowlistInput {
    * Only helpers are covered (README §4.1 step 3), and the tester, whose allowlist is the
    * helpers' (ADR-0019); the lead always asks, and the planner and reviewer never edit.
    */
-  agentKind: AgentRoleKind;
+  agentKind: RunAgentKind;
   /** From `allowlistTarget`; null asks. */
   target: AllowlistTarget | null;
   /**

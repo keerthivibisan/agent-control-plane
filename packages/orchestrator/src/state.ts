@@ -1,7 +1,7 @@
 import type {
   AgentEffort,
   AgentMessageKind,
-  AgentRoleKind,
+  RunAgentKind,
   AgentRun,
   CheckSelection,
   HelperOutcomeKind,
@@ -367,7 +367,7 @@ export type EngineEffect =
   | {
       type: 'start-agent';
       agentRunId: string;
-      kind: AgentRoleKind;
+      kind: RunAgentKind;
       role: string;
       /** First user message: the owner's first chat message or the ticket brief (lead), or the task (worker). */
       prompt: string;

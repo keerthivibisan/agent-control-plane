@@ -12,7 +12,7 @@ import {
   type StartingPoints,
   LeadToolInputs,
   type AgentEffort,
-  type AgentRoleKind,
+  type RunAgentKind,
   type Attachment,
   type FullAutoSpec,
   type ManagedAgentEvent,
@@ -234,7 +234,7 @@ export const AVAILABILITY_RECHECK_MS = 60_000;
 /** CX-4: the reason given when `checkAvailable` itself failed (it should never throw). */
 export const AVAILABILITY_CHECK_FAILED = 'The provider could not be checked.';
 
-type Availability = { ok: true } | { ok: false; reason: string };
+export type Availability = { ok: true } | { ok: false; reason: string };
 
 export const LEAD_READ_ONLY_MESSAGE =
   'The lead agent works read-only in the project. Start a worker agent to change files or run commands.';
@@ -508,6 +508,11 @@ export interface ControlService {
   counters(): ControlCounters;
   /** ADR-0031 (CX-4): each registered managed provider's last availability check. */
   providerAvailability(): ManagedProviderAvailabilityDto[];
+  /**
+   * ADR-0035: whether a registered provider can start an agent now, through the same cache and
+   * check as a run's agents (CX-4). Unregistered: not available.
+   */
+  checkProvider(provider: ManagedProviderId): Promise<Availability>;
 }
 
 interface LiveRun {
@@ -607,7 +612,7 @@ function withBriefLines(prompt: string, lines: readonly string[]): string {
 /** What `launch` needs from a `start-agent` effect. */
 interface LaunchInput {
   agentRunId: string;
-  kind: AgentRoleKind;
+  kind: RunAgentKind;
   cwd: string;
   prompt: string;
   setup: AgentSetup;
@@ -1515,7 +1520,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function withAttachments(
     live: LiveRun,
     agentRunId: string,
-    kind: AgentRoleKind,
+    kind: RunAgentKind,
     cwd: string,
     projectRoot: string,
     prompt: string,
@@ -2594,7 +2599,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   function askOwner(
     live: LiveRun,
     agentRunId: string,
-    kind: AgentRoleKind,
+    kind: RunAgentKind,
     request: PermissionRequest,
   ): Promise<PermissionDecision> {
     const runId = live.state.run.id;
@@ -2640,7 +2645,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function fullAutoGate(
     live: LiveRun,
     agentRunId: string,
-    kind: AgentRoleKind,
+    kind: RunAgentKind,
     request: PermissionRequest,
     target: AllowlistTarget | null,
     readAllowlist: ControlWorkspaceHooks['allowlist'],
@@ -2669,7 +2674,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   async function checkAllowlist(
     live: LiveRun,
     agentRunId: string,
-    agentKind: AgentRoleKind,
+    agentKind: RunAgentKind,
     target: AllowlistTarget,
     readAllowlist: NonNullable<ControlWorkspaceHooks['allowlist']>,
   ): Promise<AllowlistVerdict | undefined> {
@@ -3549,6 +3554,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     },
 
     counters: () => ({ ...counters, diagnostics: { ...counters.diagnostics } }),
+
+    checkProvider(provider) {
+      const adapter = deps.adapters.get(provider);
+      if (adapter === undefined) {
+        return Promise.resolve({
+          ok: false,
+          reason: 'This provider is not set up on this server.',
+        });
+      }
+      return checkAvailability(adapter);
+    },
 
     providerAvailability() {
       return [...deps.adapters.values()].map((adapter) => {

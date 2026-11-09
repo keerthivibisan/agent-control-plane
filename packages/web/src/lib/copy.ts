@@ -4936,3 +4936,86 @@ export const CODE_MAP_COPY = {
     open: (path: string) => `Show details for ${path}`,
   },
 } as const;
+
+// --- The project assistant (ADR-0035, AS-2) -----------------------------------------------------
+
+import type { AssistantMode, AssistantProposalKind, AssistantProposalState } from '@acp/core/api';
+
+/** The floating project assistant: its button, panel, chat and proposal cards. */
+export const ASSISTANT_COPY = {
+  open: 'Open the project assistant',
+  close: 'Close the project assistant',
+  title: 'Project assistant',
+  dialog: (project: string) => `Project assistant for ${project}`,
+  provider: 'Provider',
+  model: 'Model',
+  modelDefault: 'Provider default',
+  effort: 'Effort',
+  efforts: { low: 'Low', medium: 'Medium', high: 'High' } satisfies Record<AgentEffort, string>,
+  modeLabel: 'Mode',
+  modes: { approve: 'Approve', auto: 'Auto' } satisfies Record<AssistantMode, string>,
+  modeTips: {
+    approve: 'Shows each skill or agent file for you to apply or discard.',
+    auto: 'Writes skills and agent files without asking.',
+  } satisfies Record<AssistantMode, string>,
+  budget: (used: string, limit: string) => `${used} of ${limit} tokens`,
+  budgetLabel: 'Budget used',
+  newChat: 'New chat',
+  end: 'End',
+  restart: {
+    question: 'Start a new chat?',
+    text: 'Changing the provider, model or effort ends this chat.',
+    confirm: 'Start a new chat',
+    cancel: 'Cancel',
+  },
+  empty:
+    'Ask about your tickets and this project, or describe what you need and the assistant drafts skills and agent files for you.',
+  /** Example prompts: a click puts the prompt in the input to edit, never sends it. */
+  suggestions: [
+    {
+      label: 'Ticket status',
+      prompt: 'What’s the status of my tickets? Start with anything waiting for me.',
+    },
+    {
+      label: 'Configure agents and skills',
+      prompt:
+        'Look at this project and suggest skills and agents for it. Ask me what you need to know before you draft any file.',
+    },
+    {
+      label: 'Generate from my project’s needs',
+      prompt:
+        'Here are my project’s needs. Please generate skills and agents for them.\n\nWhat the project is:\n\nHow we work (languages, tests, reviews):\n\nWhat I want the agents to do:\n',
+    },
+  ],
+  suggestionsLabel: 'Example prompts',
+  suggestionsHint: 'Pick one to start from. You can edit it before you send.',
+  you: 'You',
+  assistant: 'Assistant',
+  working: 'Working…',
+  input: 'Message the assistant',
+  placeholder: 'Ask a question… (Enter sends, Shift+Enter adds a line)',
+  send: 'Send',
+  messages: 'Chat',
+  unavailable: (reason: string) => `The provider is not available: ${reason}`,
+  codexHint: 'Run codex login in a terminal, then try again.',
+  failed: (reason: string) => `The assistant stopped: ${reason}`,
+  badEvent: 'An update from the server could not be read.',
+  ended: 'This chat has ended.',
+  startNew: 'Start a new chat',
+  proposal: {
+    kinds: { skill: 'Skill', agent: 'Agent' } satisfies Record<AssistantProposalKind, string>,
+    replaces: 'Replaces existing file',
+    preview: 'Preview',
+    apply: 'Apply',
+    discard: 'Discard',
+    applyLabel: (path: string) => `Apply ${path}`,
+    discardLabel: (path: string) => `Discard ${path}`,
+    states: {
+      pending: 'Waiting for you',
+      applied: 'Applied',
+      discarded: 'Discarded',
+      written: 'Written (Auto)',
+      failed: 'Failed',
+    } satisfies Record<AssistantProposalState, string>,
+  },
+} as const;

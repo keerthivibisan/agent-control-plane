@@ -141,17 +141,26 @@ const HEADING_CLASS: Record<number, string> = {
   6: 'font-medium',
 };
 
-export function MarkdownPreview({ source, empty }: { source: string; empty: string }) {
+/** `compact`: chat-sized spacing, and headings no bigger than bold text (the assistant's replies). */
+export function MarkdownPreview({
+  source,
+  empty,
+  compact = false,
+}: {
+  source: string;
+  empty: string;
+  compact?: boolean;
+}) {
   const blocks = parseMarkdown(source);
   if (blocks.length === 0) return <p className="text-dim">{empty}</p>;
   return (
-    <div className="flex flex-col gap-3 leading-relaxed">
+    <div className={`flex flex-col leading-relaxed ${compact ? 'gap-2' : 'gap-3'}`}>
       {blocks.map((b, n) => {
         switch (b.kind) {
           case 'heading': {
             const Tag = `h${b.level}` as 'h1';
             return (
-              <Tag key={n} className={HEADING_CLASS[b.level]}>
+              <Tag key={n} className={compact ? 'font-semibold' : HEADING_CLASS[b.level]}>
                 {renderInline(b.text)}
               </Tag>
             );
@@ -176,7 +185,10 @@ export function MarkdownPreview({ source, empty }: { source: string; empty: stri
           case 'list': {
             const List = b.ordered ? 'ol' : 'ul';
             return (
-              <List key={n} className={`${b.ordered ? 'list-decimal' : 'list-disc'} pl-6`}>
+              <List
+                key={n}
+                className={`${b.ordered ? 'list-decimal' : 'list-disc'} ${compact ? 'flex flex-col gap-1 pl-5' : 'pl-6'}`}
+              >
                 {b.items.map((item, j) => (
                   <li key={j}>{renderInline(item)}</li>
                 ))}

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { DemoBanner } from '../components/DemoBanner';
 import { ErrorNotice } from '../components/ErrorNotice';
+import { AssistantDock } from '../features/assistant/AssistantDock';
 import { NewTicketDialog } from '../features/board/NewTicketDialog';
 import { CommandPalette } from '../features/palette/CommandPalette';
 import { paths, schemas } from '../lib/api';
 import { useApiQuery } from '../lib/query';
 import { href, navigate, routeProjectId, type Route } from '../lib/router';
-import type { StreamState } from '../lib/useEventStream';
+import type { EventSourceFactory, StreamState } from '../lib/useEventStream';
 import { readLastProject, rememberLastProject, validLastProject } from './last-project';
 import { fullWidth, pageKey } from './nav';
 import { PageTransition } from './PageTransition';
@@ -43,10 +44,13 @@ function usePaletteShortcut(toggle: () => void) {
 export function Shell({
   route,
   stream,
+  assistantEventSource = null,
   children,
 }: {
   route: Route;
   stream: StreamState;
+  /** Opens the project assistant's stream (ADR-0035); null: no live chat updates (tests). */
+  assistantEventSource?: EventSourceFactory | null;
   children: ReactNode;
 }) {
   const health = useApiQuery(paths.health(), schemas.health);
@@ -95,6 +99,9 @@ export function Shell({
             <DemoBanner mode={mode} />
             <main
               className={`mx-auto w-full min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 ${
+                // Project pages keep their last lines clear of the assistant's floating button.
+                inRoute !== null ? 'pb-24 sm:pb-24' : ''
+              } ${
                 // C-D: Files changed uses the whole width, like GitHub's.
                 fullWidth(route, window.location.hash) ? 'wide:px-8' : 'max-w-content wide:px-10'
               }`}
@@ -105,6 +112,14 @@ export function Shell({
             </main>
           </div>
         </div>
+        {inRoute !== null ? (
+          <AssistantDock
+            key={inRoute}
+            projectId={inRoute}
+            projectName={projects.data?.find((p) => p.id === inRoute)?.name ?? inRoute}
+            eventSource={assistantEventSource}
+          />
+        ) : null}
         {paletteOpen ? (
           <CommandPalette
             projects={projects.data ?? []}

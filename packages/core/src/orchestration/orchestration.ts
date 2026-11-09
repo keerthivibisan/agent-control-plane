@@ -3,6 +3,7 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
 import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
+import { MAX_AGENT_BYTES, MAX_SKILL_BYTES, SkillNameSchema } from '../workspace/workflow.js';
 import {
   MAX_CODE_MAP_PATH_LENGTH,
   StartingPointFilesSchema,
@@ -60,9 +61,27 @@ export const AgentRunStatusSchema = z.enum([
 ]);
 export type AgentRunStatus = z.infer<typeof AgentRunStatusSchema>;
 
-/** `lead` talks with the owner and starts workers; `worker` does one task in its own worktree. */
-export const AgentRoleKindSchema = z.enum(['lead', 'worker', 'planner', 'reviewer', 'tester']);
+/**
+ * `lead` talks with the owner and starts workers; `worker` does one task in its own worktree.
+ * `assistant` (ADR-0035) is the project assistant's read-only chat session: never part of a ticket
+ * run, so the engine never creates one and refuses it as a plan or workflow role.
+ */
+export const AgentRoleKindSchema = z.enum([
+  'lead',
+  'worker',
+  'planner',
+  'reviewer',
+  'tester',
+  'assistant',
+]);
 export type AgentRoleKind = z.infer<typeof AgentRoleKindSchema>;
+/**
+ * The roles an agent of a run can have: every role except `assistant` (ADR-0035), which is never
+ * part of a run. Persisted agent runs and their DTOs use this, so an assistant can never be stored
+ * or launched as a run's agent.
+ */
+export const RunAgentKindSchema = AgentRoleKindSchema.exclude(['assistant']);
+export type RunAgentKind = z.infer<typeof RunAgentKindSchema>;
 
 export const ReviewStateSchema = z.enum(['pending', 'merged', 'discarded', 'no-changes']);
 export type ReviewState = z.infer<typeof ReviewStateSchema>;
@@ -183,7 +202,7 @@ export const AgentRunSchema = z.object({
   runId: z.string().min(1),
   /** Null for the lead agent; the lead's id for workers (depth 1). */
   parentAgentRunId: z.string().min(1).nullable(),
-  kind: AgentRoleKindSchema,
+  kind: RunAgentKindSchema,
   /** Short role name chosen by the lead, e.g. "API builder". */
   role: z.string().min(1).max(60),
   /** The task text given to a worker (owner-facing; ADR-0015). Null for the lead. */
@@ -343,6 +362,28 @@ export const LeadToolInputs = {
     path: z.string().min(1).max(MAX_CODE_MAP_PATH_LENGTH).optional(),
     depth: z.union([z.literal(1), z.literal(2)]).optional(),
   }),
+  // The project assistant's tools (ADR-0035 §3), answered by the server's assistant service. Only
+  // the `assistant` role gets them; the engine refuses them from every agent of a run.
+  /** One ticket's state by key (e.g. `WEB-12`), or every open ticket of the project. */
+  ticket_status: z.object({ ticketKey: z.string().trim().min(1).max(40).optional() }),
+  /** The project's settings, workflow, harness checks, and existing skills and agents. */
+  project_info: z.object({}),
+  /**
+   * A complete `.claude/skills/<slug>/SKILL.md` (front matter included), checked by the same
+   * rules as the Skills & Agents page (ADR-0018). `replace` must be true to replace an existing
+   * skill, and only after the owner agreed.
+   */
+  propose_skill: z.object({
+    slug: SkillNameSchema,
+    content: z.string().min(1).max(MAX_SKILL_BYTES),
+    replace: z.boolean().optional(),
+  }),
+  /** A complete `.claude/agents/<slug>.md`, as for `propose_skill`. */
+  propose_agent: z.object({
+    slug: SkillNameSchema,
+    content: z.string().min(1).max(MAX_AGENT_BYTES),
+    replace: z.boolean().optional(),
+  }),
 } as const;
 export type LeadToolName = keyof typeof LeadToolInputs;
 export const LEAD_TOOL_NAMES = Object.keys(LeadToolInputs) as LeadToolName[];
@@ -355,6 +396,13 @@ export const CHANGE_DECISION_TOOL_NAMES: readonly LeadToolName[] = Object.freeze
   'discard_change',
   'ask_owner',
   'get_review_findings',
+]);
+/** The project assistant's own control tools (ADR-0035 §3); no other role gets them. */
+export const ASSISTANT_CONTROL_TOOL_NAMES: readonly LeadToolName[] = Object.freeze([
+  'ticket_status',
+  'project_info',
+  'propose_skill',
+  'propose_agent',
 ]);
 /** The change reviewer's one tool (ADR-0021 §3). */
 export const CHANGE_REVIEWER_TOOL_NAMES: readonly LeadToolName[] = Object.freeze(['submit_review']);
@@ -390,6 +438,10 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   ask_lead: 'Asked the lead a question',
   get_review_findings: "Read a change's review findings",
   code_map: 'Looked up the code map',
+  ticket_status: 'Checked the tickets',
+  project_info: 'Read the project settings',
+  propose_skill: 'Proposed a skill',
+  propose_agent: 'Proposed an agent definition',
 });
 
 // ---------------------------------------------------------------- tool-use counts (CM-2)

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ProviderIdSchema } from '../domain/provider.js';
 import { IsoTimestampSchema } from '../domain/time.js';
-import { AgentRoleKindSchema } from '../orchestration/orchestration.js';
+import { RunAgentKindSchema } from '../orchestration/orchestration.js';
 import {
   AgentToolNameSchema,
   MAX_AGENT_BYTES,
@@ -296,7 +296,7 @@ export const ProjectTokensDtoSchema = z.object({
   ),
   /** `external`: sessions started outside the app (not an agent run). */
   byRole: z.array(
-    z.object({ role: z.union([AgentRoleKindSchema, z.literal('external')]), ...UsageRowBase }),
+    z.object({ role: z.union([RunAgentKindSchema, z.literal('external')]), ...UsageRowBase }),
   ),
   /**
    * One row per (provider, model): the same model name from two providers is two rows, so usage

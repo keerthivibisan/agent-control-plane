@@ -21,6 +21,7 @@ import {
   Plus,
   ScrollText,
   Search,
+  SendHorizontal,
   Settings,
   ShieldCheck,
   Sparkle,
@@ -106,3 +107,28 @@ export const CloseIcon = icon(X, 'CloseIcon');
 // Ticket comments the app writes itself (v0.3.0, ADR-0024): the run summary and the merge line.
 export const RunSummaryIcon = icon(ScrollText, 'RunSummaryIcon');
 export const MergeIcon = icon(GitMerge, 'MergeIcon');
+
+// The project assistant (ADR-0035, AS-2): its floating button and the send button.
+export const SendIcon = icon(SendHorizontal, 'SendIcon');
+
+/**
+ * The project assistant (ADR-0035): a filled four-point star with a small companion, the common
+ * mark for an AI assistant. Drawn here rather than lucide's `Sparkles`, which is the Skills icon.
+ */
+export function AssistantIcon({ size = 18, ...rest }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+      {...rest}
+    >
+      <path d="M10 3c.55 4.6 3.4 7.45 8 8-4.6.55-7.45 3.4-8 8-.55-4.6-3.4-7.45-8-8 4.6-.55 7.45-3.4 8-8Z" />
+      <path d="M19 2c.22 1.65 1.15 2.58 2.8 2.8-1.65.22-2.58 1.15-2.8 2.8-.22-1.65-1.15-2.58-2.8-2.8 1.65-.22 2.58-1.15 2.8-2.8Z" />
+      <path d="M18.5 16c.15 1.1.75 1.7 1.85 1.85-1.1.15-1.7.75-1.85 1.85-.15-1.1-.75-1.7-1.85-1.85 1.1-.15 1.7-.75 1.85-1.85Z" />
+    </svg>
+  );
+}

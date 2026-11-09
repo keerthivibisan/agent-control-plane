@@ -1,4 +1,4 @@
-import { LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES } from '@acp/core';
+import { ASSISTANT_CONTROL_TOOL_NAMES, LEAD_TOOL_NAMES, MAX_CONTEXT_BYTES } from '@acp/core';
 import type {
   ManagedAgentEvent,
   ManagedAgentSpec,
@@ -272,7 +272,12 @@ describe('P4-I context and nested helpers (ADR-0012, ADR-0013 amendments)', () =
     expect(servers.toolNames).toEqual([
       LEAD_TOOL_NAMES.filter(
         (n) =>
-          n !== 'post_review' && n !== 'submit_review' && n !== 'report_work' && n !== 'ask_lead',
+          n !== 'post_review' &&
+          n !== 'submit_review' &&
+          n !== 'report_work' &&
+          n !== 'ask_lead' &&
+          // ADR-0035: the project assistant's own tools.
+          !ASSISTANT_CONTROL_TOOL_NAMES.includes(n),
       ),
     ]);
     expect(servers.toolNames[0]).toContain('get_review_findings');

@@ -407,6 +407,16 @@ against the fake `query` only.
     file. None of the extra install tools (`SendMessage`, `CronCreate`, `RemoteTrigger`, web
     tools, `Task`) came back.
 
+- **The project assistant** (`kind: 'assistant'`, ADR-0035) **[implemented; fake-query tests]**:
+  - `tools: ['Read', 'Grep', 'Glob']`, `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`,
+    `permissionMode: 'default'`, `settingSources: []`, no skills plugin and no agent file.
+  - Its `acp` server offers only `code_map`, `ticket_status`, `project_info`, `propose_skill` and
+    `propose_agent` (`ASSISTANT_TOOL_NAMES`). The gate denies every other `mcp__acp__*` tool
+    without asking ("The project assistant can only use …"), its own tools from another MCP
+    server, and anything that is not a read inside its folder (a read-only role).
+  - The system prompt's `append` is the repository map (when one is ready) and then
+    `ASSISTANT_INSTRUCTIONS` from core.
+  - Its text is `lead-text`, and its input stays open after a turn, like the lead's chat.
 - `canUseTool`:
   - Denies, without asking, any built-in (non-`mcp__`) tool outside the agent's effective set
     (`agentToolNames`), a second layer behind the SDK `tools` list: "This tool is not part of
@@ -647,6 +657,14 @@ through `item/tool/call`. A tool the role was not offered, a namespaced name or 
 `success: false` without reaching the engine. A throw answers `success: false` with a redacted
 message. A follow-up turn gets no tools. CX-1 result 5 confirmed dynamic tools on a real server;
 dynamic tools after `thread/resume` (a rework turn's `report_work`) are not yet verified.
+
+**The project assistant** (`kind: 'assistant'`, ADR-0035) **[implemented; fake app-server
+tests]**: it runs the read-only profile (`acp-read`, extending `:read-only`) with the server's deny
+list and approval policy `never`, and the adapter declines every command or file-change approval
+it asks for. Its dynamic tools are `ticket_status`, `project_info`, `propose_skill`,
+`propose_agent` and `code_map`; any other tool, or a namespaced one, answers `success: false`. Its
+developer instructions are `ASSISTANT_INSTRUCTIONS`, the same words the Claude adapter appends.
+Its input stays open after a turn, and its text is `lead-text`.
 
 ### 12.5 Events and usage
 

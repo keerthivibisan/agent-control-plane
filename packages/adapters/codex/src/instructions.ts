@@ -1,4 +1,5 @@
 import {
+  ASSISTANT_INSTRUCTIONS,
   isFollowUp,
   MAX_AGENT_BYTES,
   MAX_CONTEXT_BYTES,
@@ -29,6 +30,8 @@ const ROLE_LINES: Readonly<Record<ManagedAgentSpec['kind'], string>> = {
   worker:
     'You are a helper agent. Do the task you are given by changing files in this folder only.',
   tester: 'You are the tester. Check the work and fix tests by changing files in this folder only.',
+  // ADR-0035: the project assistant's own instructions, the same words the Claude adapter gives.
+  assistant: ASSISTANT_INSTRUCTIONS,
 };
 
 /** The F-1 rule in the wording of the git guard's refusal (`gitGuardMessage` in core). */
