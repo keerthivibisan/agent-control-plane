@@ -2,12 +2,12 @@
 
 Coordinator-owned. Plan: [README.md](README.md).
 
-| WP   | Title                          | Status      | Branch                                | Merged |
-| ---- | ------------------------------ | ----------- | ------------------------------------- | ------ |
-| AS-0 | ADR-0035, plan                 | done        | `feature/assistant/project-assistant` |        |
-| AS-1 | Role, tools, service, API      | done        | `feature/assistant/project-assistant` |        |
-| AS-2 | Web: floating panel            | done        | `feature/assistant/project-assistant` |        |
-| AS-3 | Safety tests, docs, real check | in-progress | `feature/assistant/project-assistant` |        |
+| WP   | Title                          | Status | Branch                                | Merged |
+| ---- | ------------------------------ | ------ | ------------------------------------- | ------ |
+| AS-0 | ADR-0035, plan                 | done   | `feature/assistant/project-assistant` |        |
+| AS-1 | Role, tools, service, API      | done   | `feature/assistant/project-assistant` |        |
+| AS-2 | Web: floating panel            | done   | `feature/assistant/project-assistant` |        |
+| AS-3 | Safety tests, docs, real check | done   | `feature/assistant/project-assistant` |        |
 
 ## Log
 
@@ -25,3 +25,9 @@ Coordinator-owned. Plan: [README.md](README.md).
   `tests/assistant/adversarial.test.ts`, plus A6 in both adapters' tests), no bug found; docs in
   security.md, provider-adapters.md (§11.1, §12.4), testing/adversarial.md and the README's "How it
   works" and "Using it". The consented real check is still to do.
+- 2026-11-09 Fix: a project whose folder is gone is refused at start (409 `project_folder_missing`);
+  before, the SDK failed to spawn and the chat ended with the generic error.
+- 2026-11-09 AS-3 done. Real check (owner consent), Claude `haiku`, effort low, Approve, on a real
+  project through the preview server: the agent called the tools, answered "no open tickets" and
+  proposed `.claude/skills/as3-check/SKILL.md` (133 B) as a pending card in about 6 s; Discard
+  left no file; ending the chat logged `owner`. Only ids, kinds and reasons reached the log.
