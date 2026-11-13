@@ -784,6 +784,8 @@ export const ticketPaths = {
   comments: (id: string) => `${API_BASE}/tickets/${enc(id)}/comments`,
   planDecision: (id: string, planId: string) =>
     `${API_BASE}/tickets/${enc(id)}/plans/${enc(planId)}/decision`,
+  /** ADR-0037 §4: the plan options of the ticket's current run (several planners). */
+  planOptionDecision: (id: string) => `${API_BASE}/tickets/${enc(id)}/plan-options/decision`,
   start: (id: string) => `${API_BASE}/tickets/${enc(id)}/start`,
   runChecks: (runId: string) => `${API_BASE}/runs/${enc(runId)}/checks`,
   agentChecks: (runId: string, agentId: string) =>
@@ -857,6 +859,24 @@ export async function decidePlan(
   input: PlanDecisionRequest,
 ) {
   const path = ticketPaths.planDecision(ticketId, planId);
+  return controlPost(
+    client,
+    path,
+    checked(PlanDecisionRequestSchema, input, path),
+    TicketDetailDtoSchema,
+  );
+}
+
+/**
+ * ADR-0037 §4: approve one of several planners' plans (`planOptionId`), or ask every planner for
+ * changes (a comment is required).
+ */
+export async function decidePlanOption(
+  client: ApiClient,
+  ticketId: string,
+  input: PlanDecisionRequest,
+) {
+  const path = ticketPaths.planOptionDecision(ticketId);
   return controlPost(
     client,
     path,

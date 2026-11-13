@@ -459,6 +459,51 @@ function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): Tick
   };
 }
 
+export const OPTION_A = 'option-a';
+export const OPTION_B = 'option-b';
+
+/** ADR-0037 §4: one planner's plan option (a run with several planners). */
+function planOption(id: string, index: number, label: string, over: Json = {}): Json {
+  const base = plan(id, index === 1 ? 1 : 2, 'proposed');
+  return {
+    id,
+    ticketId: TICKET_ID,
+    runId: RUN_ID,
+    optionIndex: index,
+    agentRunId: index === 1 ? PLANNER : `${PLANNER}-2`,
+    nodeId: index === 1 ? 'plan' : 'plan-codex',
+    label,
+    summary: base['summary'],
+    steps: base['steps'],
+    plannedHelpers: base['plannedHelpers'],
+    status: 'proposed',
+    planId: null,
+    createdAt: base['createdAt'],
+    decidedAt: null,
+    ...over,
+  };
+}
+
+/**
+ * ADR-0037 §4: plan review with two planners (Claude and Codex). No plan is proposed yet: the
+ * owner approves one of the two options, which becomes the run's plan.
+ */
+export function planOptionsScenario(): TicketScenario {
+  const run = runDetail('PLAN_REVIEW', [lead('RUNNING', 18_400, 'Used tool: Read')]);
+  return scenario({
+    ticket: ticket('ACTIVE', 'PLAN_REVIEW'),
+    runs: [runSummary(RUN_ID, 'PLAN_REVIEW'), OLD_RUN],
+    currentRun: run,
+    plans: [],
+    planOptions: [
+      planOption(OPTION_A, 1, 'Claude planner'),
+      planOption(OPTION_B, 2, 'Codex planner'),
+    ],
+    comments: [],
+    checks: [],
+  });
+}
+
 /** Plan review: version 2 waits for the owner; version 1 was sent back with a comment. */
 export function planReviewScenario(): TicketScenario {
   const run = runDetail('PLAN_REVIEW', [lead('RUNNING', 18_400, 'Used tool: Read')]);

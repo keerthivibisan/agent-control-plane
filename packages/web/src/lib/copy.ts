@@ -1963,6 +1963,18 @@ export const TICKET_COPY = {
     earlier: (n: number) => `Earlier versions (${formatCount(n)})`,
     yourComment: 'Your comment',
     waitingNewVersion: 'A new version of the plan is being written.',
+    // ADR-0037 §4: several planners' plans, side by side.
+    optionsTitle: 'Plans',
+    optionsIntro: (n: number) =>
+      n === 1
+        ? 'The other planners ended without a plan. No helper agent starts until you approve this one.'
+        : `${formatCount(n)} planners each wrote a plan. Approve the one the lead should carry out; the others are kept as not chosen. No helper agent starts until you approve one.`,
+    optionsLabel: 'Plans to choose from',
+    optionBy: (label: string) => `By ${label}`,
+    approveThis: 'Approve this plan',
+    approveThisLabel: (label: string) => `Approve the plan by ${label}`,
+    optionsCommentHint:
+      'Required when you request changes. Every planner gets it and writes a new plan.',
   },
   ticket: {
     title: 'Ticket',
