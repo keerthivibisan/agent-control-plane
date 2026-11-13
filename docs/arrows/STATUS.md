@@ -7,7 +7,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | AR-0 | ADR-0037, plan                             | done        | `feature/workflow/arrows` |        |
 | AR-1 | Core: v3 graph, roles, validator, compile  | done        | `feature/workflow/arrows` |        |
 | AR-2 | Researcher role                            | done        | `feature/workflow/arrows` |        |
-| AR-3 | Engine: research, hand-offs, plans, review | paused      | `feature/workflow/arrows` |        |
+| AR-3 | Engine: research, hand-offs, plans, review | in-progress | `feature/workflow/arrows` |        |
 | AR-4 | Server and DB                              | not started |                           |        |
 | AR-5 | Web editor and plan approval               | not started |                           |        |
 | AR-6 | Safety, docs, real run                     | not started |                           |        |
@@ -54,3 +54,5 @@ Paused on the owner's request while AR-3 was starting. To resume:
   the Full auto temp folder to any role with `fullAuto`; restrict it to editing roles.
 - 2026-11-09 Paused on the owner's request: AR-3 had only its state types (WIP commit); AR-5a had
   not started. See "Resume here".
+- 2026-11-13 Resumed. Merged dev (ADR-0036); the AR-3 WIP builds again (graph type left v2). AR-3
+  and AR-5a restarted in parallel.
