@@ -10,26 +10,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | AR-3 | Engine: research, hand-offs, plans, review | done   | `feature/workflow/arrows` |        |
 | AR-4 | Server and DB                              | done   | `feature/workflow/arrows` |        |
 | AR-5 | Web editor and plan approval               | done   | `feature/workflow/arrows` |        |
-| AR-6 | Safety, docs, real run                     | review | `feature/workflow/arrows` |        |
-
-## Resume here (paused 2026-11-09)
-
-Paused on the owner's request while AR-3 was starting. To resume:
-
-1. In `.claude/worktrees/arrows` (branch `feature/workflow/arrows`), the last commit is a **WIP**
-   commit (`wip(orchestrator): AR-3 engine state types`) that does not typecheck: `state.ts` uses
-   `AnyWorkflowGraph` without importing it. Fix the import first (or drop the commit and restart
-   AR-3 from `65c7993`).
-2. Continue **AR-3** (engine) with the brief in the plan (README.md, "Engine" 1–5): v3 run
-   snapshots, pre-plan research stage, lead-started researchers, custom hand-offs, several planners
-   (no auto-approve with 2 or more), review fan-out; graph-correctness simulator for v3.
-3. **AR-5a** (editor on v3: Agent block and presets, arrow menu with Custom, label and purpose,
-   role badges) can run in parallel in its own worktree from the AR-2 commit `65c7993`: it touches
-   only `packages/web`, converts v2 API graphs with `migrateWorkflowV2` / `downgradeWorkflowV3`
-   behind one adapter module, and gates saving v3-only parts with `canSaveToServer(graph)` until
-   AR-4. It had not started (no work lost).
-4. Then AR-4 (server and DB: v3 API, plan options storage), AR-5b (side-by-side plan picker), AR-6
-   (safety, docs, real run; includes restricting Codex's Full auto temp folder to editing roles).
+| AR-6 | Safety, docs, real run                     | done   | `feature/workflow/arrows` |        |
 
 ## Log
 
@@ -103,3 +84,6 @@ Paused on the owner's request while AR-3 was starting. To resume:
   and findings comment, and the decision is recorded once, on a row of its own; the engine's round
   effect carries every fan-out reviewer. No migration (no unique constraint blocked it). The lead's
   `view_change` lists each reviewer's verdict. See `docs/research/arrows-real-run-2026-11-13.md`.
+- 2026-11-13 Coordinator: AR-6 done. Real run (owner consent) completed: two researchers (Claude,
+  Codex) before the planner, review fan-out (Claude, Codex); the fan-out row bug it found is fixed
+  (`e7d5d34`). Series ready for a PR to `dev`.
