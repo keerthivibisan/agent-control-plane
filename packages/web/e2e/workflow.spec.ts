@@ -76,7 +76,7 @@ async function serve(page: Page, initial: Json, opts: { refuse?: boolean } = {})
         await route.fulfill({ status: 422, json: workflowInvalidError() });
         return;
       }
-      current = { ...current, graph: body['graph'], stored: 'v2' };
+      current = { ...current, graph: body['graph'], stored: 'v3' };
     }
     await route.fulfill({ json: current });
   });

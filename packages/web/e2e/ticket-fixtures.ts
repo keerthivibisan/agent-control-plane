@@ -5,6 +5,8 @@
  * them. Roles, tasks, paths, outputs and the diff are invented. Never import this from src/.
  */
 
+import { asServerGraph } from './graph-v3.js';
+
 export const TICKET_ID = 't-12';
 export const PROJECT_ID = 'p-web';
 export const RUN_ID = 'run-2';
@@ -334,10 +336,10 @@ export const PROJECT_GRAPH_PATH = `/api/projects/${PROJECT_ID}/workflow-graph`;
  * `GET /api/projects/:id/workflow-graph` for the same project: `projectWorkflow(o)` migrated, as
  * the server serves a version 1 project (`stored: 'v1'`). The graph is exactly what core's
  * `migrateWorkflowV1` gives in this Auto edits project (tests/features/ticket-options.test.tsx
- * checks that). With `stored: 'v2'` it is the same graph saved in the editor.
+ * checks that). With `stored: 'v3'` it is the same graph saved in the editor.
  */
 export function projectGraph(
-  o: { separate?: boolean; postMerge?: boolean; stored?: 'v1' | 'v2' } = {},
+  o: { separate?: boolean; postMerge?: boolean; stored?: 'v1' | 'v3' } = {},
 ): Json {
   const pw = projectWorkflow(o);
   const wf = pw['workflow'] as Json;
@@ -410,13 +412,14 @@ export function projectGraph(
     legacyV1: { plannerMode: wf['plannerMode'], stages: wf['stages'] },
   };
   return {
-    graph,
+    // ADR-0037: the server sends version 3 (a version 1 project's migration, or a saved graph).
+    graph: asServerGraph(graph),
     stored: o.stored ?? 'v1',
     issues: [],
     setup: pw['setup'],
     skills: pw['skills'],
     agents: [],
-    updatedAt: o.stored === 'v2' ? '2026-10-14T08:00:00.000Z' : wf['updatedAt'],
+    updatedAt: o.stored === 'v3' ? '2026-10-14T08:00:00.000Z' : wf['updatedAt'],
   };
 }
 

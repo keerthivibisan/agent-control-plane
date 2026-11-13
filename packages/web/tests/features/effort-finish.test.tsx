@@ -8,7 +8,9 @@ import {
   workflowTemplate,
   type WorkflowGraph,
   type WorkflowGraphV3,
+  WorkflowGraphV3Schema,
 } from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { WorkflowGraphDtoSchema, type WorkflowGraphDto } from '@acp/core/api';
 import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -63,7 +65,9 @@ beforeAll(() => {
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
 const GRAPH = `${BASE}/workflow-graph`;
 const parse = (dto: unknown): WorkflowGraphDto => WorkflowGraphDtoSchema.parse(dto);
-const graphOf = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
+/** A fixture graph (version 2), or a graph the page sent (version 3) in its version 2 form. */
+const graphOf = (g: unknown): WorkflowGraph =>
+  (g as { version?: unknown }).version === 3 ? sentAsV2(g) : WorkflowGraphSchema.parse(g);
 
 const GIT_FLOW = {
   preset: 'git-flow',
@@ -80,8 +84,8 @@ function server(initial: unknown) {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
   });
@@ -216,7 +220,7 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
   });
 
   it('Add block → Checks offers the three places; the merge block’s panel can remove it', async () => {
-    const { server: s } = render(graphDto({ graph: customGraph(), stored: 'v2' }));
+    const { server: s } = render(graphDto({ graph: customGraph(), stored: 'v3' }));
     await screen.findByTestId('graph-editor');
     fireEvent.click(screen.getByTestId('add-block'));
     const merge = screen.getByTestId('palette-checks-merge');
@@ -333,7 +337,7 @@ describe('the Finish block (ADR-0028 §3)', () => {
     const { server: s } = render(
       graphDto({
         graph: customGraph(),
-        stored: 'v2',
+        stored: 'v3',
         setup: setupFixture({
           approvals: { mode: 'auto-edits', commands: [] },
           branching: GIT_FLOW,

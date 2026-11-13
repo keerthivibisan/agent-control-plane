@@ -55,8 +55,6 @@ const run = (graph: WorkflowGraphV3, ...actions: EditorAction[]): EditorState =>
   actions.reduce(editorReducer, initialEditorState(graph));
 const errors = (g: WorkflowGraphV3) =>
   validateWorkflowGraphV3(g).filter((i) => i.severity === 'error');
-const errorsV2 = (g: WorkflowGraph) =>
-  validateWorkflowGraph(g).filter((i) => i.severity === 'error');
 const has = (g: WorkflowGraphV3, type: string, from: string, to: string) =>
   g.edges.some((e) => e.type === type && e.from === from && e.to === to);
 /** The blocks whose derived role is `kind`. */
@@ -470,21 +468,21 @@ describe('templates and restore', () => {
       projectMode: 'full-auto',
       legacyV1: legacy,
     });
+    // ADR-0037: templates are version 3; the planner is an agent with a plan arrow.
+    expect(g.version).toBe(3);
     expect(g.nodes.find((n) => n.type === 'plan-approval')).toMatchObject({ auto: true });
-    expect(g.nodes.some((n) => n.type === 'planner')).toBe(true);
+    expect(graphRoles(g).kinds.get('plan')).toBe('planner');
     expect(g.legacyV1).toEqual(legacy);
-    expect(errorsV2(g)).toEqual([]);
+    expect(validateWorkflowGraphV3(g).filter((i) => i.severity === 'error')).toEqual([]);
     const ask = templateGraph('reviewer-helper-loop', { planner: false, projectMode: 'auto' });
     expect(ask.nodes.find((n) => n.type === 'plan-approval')).toMatchObject({ auto: false });
-    expect(validateWorkflowGraph(ask, { projectMode: 'auto' })).toEqual([]);
+    expect(validateWorkflowGraphV3(ask, { projectMode: 'auto' })).toEqual([]);
   });
 
   it('restores the version 1 setup with core’s migration', () => {
     const legacy = parse(migratedGraph()).legacyV1;
     if (legacy === undefined) throw new Error('fixture has no legacyV1');
-    expect(sameGraph(v3(restoredGraph(legacy, 'auto-edits')), v3(parse(migratedGraph())))).toBe(
-      true,
-    );
+    expect(sameGraph(restoredGraph(legacy, 'auto-edits'), v3(parse(migratedGraph())))).toBe(true);
   });
 
   it('the wizard saves nothing for the default, and a custom graph for "Build my own"', () => {
@@ -492,6 +490,6 @@ describe('templates and restore', () => {
     expect(isDefaultChoice({ template: 'todays-setup', planner: true })).toBe(false);
     const own = choiceGraph({ template: 'custom', planner: false }, 'auto-edits');
     expect(own.template).toBe('custom');
-    expect(sameGraph(v3({ ...own, template: 'todays-setup' }), todays())).toBe(true);
+    expect(sameGraph({ ...own, template: 'todays-setup' }, todays())).toBe(true);
   });
 });

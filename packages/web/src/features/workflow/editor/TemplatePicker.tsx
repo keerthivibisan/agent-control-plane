@@ -12,7 +12,6 @@ import { AlertIcon } from '../../../components/icons';
 import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { CheckboxField, ChoiceCards } from '../../project-setup/fields';
 import { graphRoles } from './roles';
-import { fromServerGraph } from './server-graph';
 import { restoredGraph, templateGraph } from './templates';
 
 type WorkflowGraph = WorkflowGraphV3;
@@ -108,11 +107,7 @@ export function TemplatePicker({
             variant="primary"
             className="w-fit"
             onClick={() =>
-              choose(
-                fromServerGraph(
-                  templateGraph(template, { planner, projectMode, legacyV1: legacy }),
-                ),
-              )
+              choose(templateGraph(template, { planner, projectMode, legacyV1: legacy }))
             }
           >
             {T.use}
@@ -124,10 +119,7 @@ export function TemplatePicker({
             >
               <h3 className="text-title font-semibold">{T.restoreTitle}</h3>
               <p className="text-caption text-dim">{T.restoreText}</p>
-              <Button
-                className="w-fit"
-                onClick={() => choose(fromServerGraph(restoredGraph(legacy, projectMode)))}
-              >
+              <Button className="w-fit" onClick={() => choose(restoredGraph(legacy, projectMode))}>
                 {T.restore}
               </Button>
             </section>

@@ -113,9 +113,10 @@ test('a default project: the migrated workflow loads; a saved graph is stored as
   await expect(page.getByTestId('saved')).toHaveText('Saved');
 
   const after = await graphOf(request, projectId);
-  expect(after.stored).toBe('v2');
+  // ADR-0037: stored as version 3; the helper is an Agent block with an implement arrow.
+  expect(after.stored).toBe('v3');
   expect(after.graph.nodes.find((n) => n.id === 'helper-1')).toMatchObject({
-    type: 'helper',
+    type: 'agent',
     label: 'Frontend helper',
   });
   expect(after.graph.legacyV1).toBeDefined();
@@ -237,9 +238,9 @@ test('the new-project wizard saves the chosen template as the project’s graph'
   const projectId = /#\/p\/([^/]+)\/board$/.exec(page.url())?.[1] ?? '';
 
   const dto = await graphOf(request, projectId);
-  expect(dto.stored).toBe('v2');
+  expect(dto.stored).toBe('v3');
   expect(dto.graph.template).toBe('reviewer-helper-loop');
-  expect(dto.graph.nodes.some((n) => n.type === 'planner')).toBe(true);
+  expect(dto.graph.edges).toContainEqual(expect.objectContaining({ type: 'plan', from: 'plan' }));
   expect(dto.graph.edges).toContainEqual(
     expect.objectContaining({ type: 'rework', from: 'review', to: 'helpers' }),
   );
@@ -289,8 +290,9 @@ test('run options read the defaults of a graph saved in the editor', async ({ pa
   await page.getByTestId('save-workflow').click();
   await expect(page.getByTestId('saved')).toHaveText('Saved');
   const saved = await graphOf(request, projectId);
-  expect(saved.stored).toBe('v2');
-  expect(saved.graph.nodes.some((n) => n.type === 'reviewer')).toBe(false);
+  expect(saved.stored).toBe('v3');
+  // No change reviewer left: no agent sends findings to the lead.
+  expect(saved.graph.edges.some((e) => e.type === 'findings')).toBe(false);
   expect(saved.graph.edges).toContainEqual(
     expect.objectContaining({ type: 'rework', from: 'orchestrate', to: 'helpers', maxRounds: 4 }),
   );

@@ -86,7 +86,7 @@ function graph() {
         },
       ],
     },
-    stored: 'v2',
+    stored: 'v3',
   });
 }
 

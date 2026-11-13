@@ -3317,6 +3317,7 @@ export const REVIEW_LOOP_COPY = {
 
 /** What a block is called by its kind on the live graph; a reviewer's word depends on its scope. */
 type LiveBlockKind =
+  | 'researcher'
   | 'planner'
   | 'lead'
   | 'helper-pool'
@@ -3329,7 +3330,10 @@ type LiveBlockKind =
   | 'checks'
   | 'ticket-merge'
   | 'owner-merge'
-  | 'done';
+  | 'done'
+  // ADR-0037: an agent block without one role; a run's validated graph never has one.
+  | 'agent'
+  | 'mixed';
 
 export const WORKFLOW_LIVE_COPY = {
   graph: {
@@ -3337,6 +3341,7 @@ export const WORKFLOW_LIVE_COPY = {
     tip: 'The blocks and links are this run’s workflow as it was when the run started, with the models, skills and approval modes it runs with. Click a block, or an agent on it, to show that agent in the side panel.',
     label: 'This run’s workflow',
     kinds: {
+      researcher: 'Researcher',
       planner: 'Planner',
       lead: 'Lead',
       'helper-pool': 'Helper pool',
@@ -3350,6 +3355,8 @@ export const WORKFLOW_LIVE_COPY = {
       'ticket-merge': 'Ticket branch',
       'owner-merge': 'You',
       done: 'Done',
+      agent: 'Agent',
+      mixed: 'Agent',
     } satisfies Record<LiveBlockKind, string>,
     gateTitle: {
       'plan-approval': 'Approve the plan',
@@ -3381,13 +3388,18 @@ export const WORKFLOW_LIVE_COPY = {
     directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
     links: {
       flow: 'Next step',
-      assigns: 'Assigns work',
+      implement: 'Assigns work',
       review: 'Sends its change for review',
       findings: 'Sends its findings',
       rework: 'Sends the change back for rework',
       merge: 'Merges through',
+      plan: 'Sends its plan for approval',
+      test: 'Next step',
+      research: 'Sends its research',
+      custom: 'Hands over its work',
     },
-    linkName: (kind: string, from: string, to: string) => `${kind}: from ${from} to ${to}`,
+    linkName: (kind: string, from: string, to: string, purpose: string | null = null) =>
+      `${kind}: from ${from} to ${to}${purpose === null ? '' : `. Why: ${purpose}`}`,
     changes: 'Changes',
   },
   ceiling: {

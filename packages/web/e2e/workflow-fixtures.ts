@@ -10,6 +10,8 @@ export const WF_PROJECT_ID = 'p-web';
 export const WF_CSRF = 'csrf-token-0123456789abcdef0123456789abcdef';
 export const SKILLS = ['code-review', 'plan-tickets', 'unit-tests'] as const;
 
+import { asServerGraph } from './graph-v3.js';
+
 type Json = Record<string, unknown>;
 
 const T = (min: number) => new Date(Date.UTC(2026, 9, 16, 9, min)).toISOString();
@@ -267,7 +269,7 @@ export function customGraph(): Json {
 
 /** `GET /api/projects/:id/workflow-graph`. Defaults: the migrated graph in an Auto edits project. */
 export function graphDto(over: Json = {}): Json {
-  return {
+  const dto: Json = {
     graph: migratedGraph(),
     stored: 'v1',
     issues: [],
@@ -277,11 +279,13 @@ export function graphDto(over: Json = {}): Json {
     updatedAt: null,
     ...over,
   };
+  // ADR-0037: the server sends version 3.
+  return { ...dto, graph: asServerGraph(dto['graph']) };
 }
 
 /** The same project with the hand-built graph stored. */
 export function customGraphDto(): Json {
-  return graphDto({ graph: customGraph(), stored: 'v2', updatedAt: T(3) });
+  return graphDto({ graph: customGraph(), stored: 'v3', updatedAt: T(3) });
 }
 
 /** A 422 `workflow_invalid` answer to a PUT (the server's issues come from …/validate). */

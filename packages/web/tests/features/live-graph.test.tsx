@@ -1,4 +1,9 @@
-import { validateWorkflowGraph, WorkflowGraphSchema, type WorkflowGraph } from '@acp/core';
+import {
+  migrateWorkflowV2,
+  validateWorkflowGraph,
+  WorkflowGraphSchema,
+  type WorkflowGraphV3,
+} from '@acp/core';
 import {
   RunDetailDtoSchema,
   RunWorkflowGraphDtoSchema,
@@ -122,8 +127,8 @@ describe('the live graph model', () => {
   });
 
   it('keeps the positions the owner gave the blocks in the editor', () => {
-    const graph = WorkflowGraphSchema.parse(directLoopGraph());
-    const moved: WorkflowGraph = {
+    const graph = migrateWorkflowV2(WorkflowGraphSchema.parse(directLoopGraph()));
+    const moved: WorkflowGraphV3 = {
       ...graph,
       nodes: graph.nodes.map((n) =>
         n.id === 'review' ? { ...n, position: { x: 900, y: 10 } } : n,
@@ -191,16 +196,18 @@ describe('the live graph model', () => {
   it('picks the working agent of a block, and maps blocks to the side panel', () => {
     const agents = runOf().agents.filter((a) => a.kind === 'reviewer');
     expect(agentToShow(agents)?.id).toBe(L_REV2);
-    const graph = WorkflowGraphSchema.parse(directLoopGraph());
-    const node = (id: string) => {
-      const n = graph.nodes.find((x) => x.id === id);
+    // ADR-0037: a block maps by its derived role.
+    const g = buildLiveGraph(dto(), runOf());
+    const kind = (id: string) => {
+      const n = g.nodes.find((x) => x.id === id);
       if (n === undefined) throw new Error(id);
-      return n;
+      return n.data.kind;
     };
-    expect(stageOfBlock(node('review'))).toBe('review');
-    expect(stageOfBlock(node('code-review'))).toBe('code-review');
-    expect(stageOfBlock(node('api-helper'))).toBe('helpers');
-    expect(stageOfBlock(node('orchestrate'))).toBe('orchestrate');
+    expect(stageOfBlock(kind('review'))).toBe('review');
+    expect(stageOfBlock(kind('code-review'))).toBe('code-review');
+    expect(stageOfBlock(kind('api-helper'))).toBe('helpers');
+    expect(stageOfBlock(kind('orchestrate'))).toBe('orchestrate');
+    expect(stageOfBlock('researcher')).toBe('orchestrate');
   });
 
   it('finds a held final stage only while the run waits in review with nobody on it', () => {

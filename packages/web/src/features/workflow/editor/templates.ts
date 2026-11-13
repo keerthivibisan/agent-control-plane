@@ -1,14 +1,14 @@
 import {
-  migrateWorkflowV1,
-  workflowTemplate,
+  migrateWorkflowV1ToV3,
+  workflowTemplateV3,
   type ApprovalMode,
   type LegacyWorkflowV1,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
   type WorkflowTemplateId,
 } from '@acp/core';
 
 /**
- * A template's graph for this project (core's `workflowTemplate`). The plan approval step asks
+ * A template's graph for this project (core's `workflowTemplateV3`, ADR-0037). The plan approval step asks
  * unless the project runs in Full auto, the same rule `migrateWorkflowV1` follows, so a Full auto
  * project gets no "Full auto but the plan still asks" warning from a fresh template. The earlier
  * setup (`legacyV1`) is kept, so "Restore my earlier setup" stays possible after a template.
@@ -16,8 +16,8 @@ import {
 export function templateGraph(
   id: WorkflowTemplateId,
   opts: { planner: boolean; projectMode: ApprovalMode; legacyV1?: LegacyWorkflowV1 | undefined },
-): WorkflowGraph {
-  const graph = workflowTemplate(id, { planner: opts.planner });
+): WorkflowGraphV3 {
+  const graph = workflowTemplateV3(id, { planner: opts.planner });
   return {
     ...graph,
     nodes: graph.nodes.map((n) =>
@@ -31,6 +31,6 @@ export function templateGraph(
 export function restoredGraph(
   legacyV1: LegacyWorkflowV1,
   projectMode: ApprovalMode,
-): WorkflowGraph {
-  return migrateWorkflowV1(legacyV1, { projectMode });
+): WorkflowGraphV3 {
+  return migrateWorkflowV1ToV3(legacyV1, { projectMode });
 }

@@ -31,7 +31,6 @@ import { editorIssues, hasErrors } from './editor/issues';
 import { IssueCounter, IssuesList, type EditorIssue } from './editor/IssuesList';
 import { NodePanel, type NodePanelContext } from './editor/NodePanel';
 import { saveWorkflowGraph } from './editor/save';
-import { canSaveToServer, fromServerGraph, serverForm } from './editor/server-graph';
 import { historyReducer, initialHistoryState } from './editor/history';
 import { sameGraph, type Selection } from './editor/state';
 import { TemplatePicker } from './editor/TemplatePicker';
@@ -109,8 +108,8 @@ function EditorHeader({ actions, status }: { actions: ReactNode; status: ReactNo
  */
 function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGraphDto }) {
   const store = useQueryStore();
-  // The editor works on version 3 (ADR-0037); the server's graph comes in through one adapter.
-  const saved = useMemo(() => fromServerGraph(dto.graph), [dto.graph]);
+  // The editor and the server both work on version 3 (ADR-0037).
+  const saved = dto.graph;
   const [state, dispatch] = useReducer(historyReducer, saved, initialHistoryState);
   const [templates, setTemplates] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
@@ -167,12 +166,9 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   const view = useMemo(() => finishView(graph), [graph]);
   const shownIssues = useMemo(() => finishIssues(issues, graph, view), [issues, graph, view]);
   const blocked = hasErrors(issues);
-  // A graph with parts the server can't store yet stays editable but can't be saved (AR-4 lifts it).
-  const saveCheck = useMemo(() => canSaveToServer(graph), [graph]);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warningCount = issues.length - errorCount;
-  const dirty =
-    !sameGraph(serverForm(graph), saved) && !(stored !== null && sameGraph(graph, stored));
+  const dirty = !sameGraph(graph, saved) && !(stored !== null && sameGraph(graph, stored));
   useUnsavedGuard(dirty, S.leave);
 
   const agentModels = useMemo(
@@ -213,7 +209,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   }, []);
 
   const save = async () => {
-    if (blocked || pending || !saveCheck.ok) return;
+    if (blocked || pending) return;
     setPending(true);
     setRefused(null);
     const sent = graph;
@@ -333,10 +329,8 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
             <Button
               variant="primary"
               onClick={() => void save()}
-              disabled={!dirty || blocked || pending || !saveCheck.ok}
-              aria-describedby={
-                blocked ? 'workflow-save-blocked' : !saveCheck.ok ? 'workflow-save-v3' : undefined
-              }
+              disabled={!dirty || blocked || pending}
+              aria-describedby={blocked ? 'workflow-save-blocked' : undefined}
               data-testid="save-workflow"
             >
               {pending ? S.saving : S.save}
@@ -344,20 +338,6 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           </>
         }
       />
-      {!blocked && !saveCheck.ok ? (
-        <p
-          id="workflow-save-v3"
-          role="status"
-          className="flex items-start gap-2 rounded-card border border-warning/30 bg-warning-soft px-4 py-3 text-warning"
-          data-testid="save-v3-only"
-          data-parts={saveCheck.parts.join(' ')}
-        >
-          <AlertIcon size={15} className="mt-0.5 shrink-0" />
-          <span className="min-w-0">
-            {EDITOR_COPY.save.v3Only(saveCheck.parts.map((p) => EDITOR_COPY.save.parts[p]))}
-          </span>
-        </p>
-      ) : null}
       {refused !== null ? (
         <div className="flex flex-col gap-1.5" data-testid="save-refusal">
           <p

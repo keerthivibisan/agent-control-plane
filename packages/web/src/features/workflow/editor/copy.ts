@@ -6,9 +6,6 @@ import type { AgentKind } from './roles';
 export type PresetKey =
   'agent' | 'researcher' | 'planner' | 'helper' | 'change-reviewer' | 'final-reviewer' | 'tester';
 
-/** The parts of a version 3 workflow the server can't store until it takes version 3 (AR-4). */
-export type V3OnlyPart = 'research' | 'custom' | 'planners' | 'fan-out' | 'words';
-
 /*
  * The editor's words added by v0.3.0 D-C (the clearer Workflow editor). They sit next to the
  * editor rather than in lib/copy.ts because D-C owns only `features/workflow/**`; the rest of the
@@ -212,17 +209,6 @@ export const EDITOR_COPY = {
     counter: (n: number, max: number) => `${n}/${max}`,
     counterLabel: (n: number, max: number) => `${n} of ${max} characters`,
     tooLong: (max: number) => `Use at most ${max} characters.`,
-  },
-  save: {
-    v3Only: (parts: readonly string[]) =>
-      `The server can’t store ${parts.join(', ')} yet, so this workflow can’t be saved. You can keep editing; remove them to save.`,
-    parts: {
-      research: 'research arrows',
-      custom: 'custom arrows',
-      planners: 'more than one planner',
-      'fan-out': 'a change sent to more than one reviewer',
-      words: 'arrow labels or purposes',
-    } satisfies Record<V3OnlyPart, string>,
   },
   block: {
     skills: (n: number) => (n === 0 ? 'No skills' : countOf(n, 'skill')),

@@ -1,9 +1,11 @@
 import {
   WorkflowGraphSchema,
   migrateWorkflowV2,
-  validateWorkflowGraph,
   type WorkflowGraph,
+  WorkflowGraphV3Schema,
+  validateWorkflowGraphV3,
 } from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import {
   AgentRunDtoSchema,
   WorkflowGraphDtoSchema,
@@ -76,7 +78,9 @@ type Json = Record<string, unknown>;
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
 const GRAPH = `${BASE}/workflow-graph`;
 const parse = (dto: unknown): WorkflowGraphDto => WorkflowGraphDtoSchema.parse(dto);
-const graphOf = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
+/** A fixture graph (version 2), or a graph the page sent (version 3) in its version 2 form. */
+const graphOf = (g: unknown): WorkflowGraph =>
+  (g as { version?: unknown }).version === 3 ? sentAsV2(g) : WorkflowGraphSchema.parse(g);
 
 function renderEditor(initial: unknown) {
   let current = parse(initial);
@@ -85,8 +89,8 @@ function renderEditor(initial: unknown) {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
   });
@@ -168,7 +172,7 @@ describe('provider per agent block', () => {
     renderEditor(
       graphDto({
         graph: customGraph(),
-        stored: 'v2',
+        stored: 'v3',
         setup: setupFixture({
           approvals: { mode: 'auto-edits', commands: [] },
           provider: 'codex',
@@ -340,7 +344,9 @@ describe('provider chips on the live graph and in the agent’s Details', () => 
   });
 
   it('liveProvider: the agents’ provider first, then the block’s own, else null', () => {
-    const node = graphOf(customGraph()).nodes.find((n) => n.id === 'orchestrate');
+    const node = migrateWorkflowV2(graphOf(customGraph())).nodes.find(
+      (n) => n.id === 'orchestrate',
+    );
     if (node === undefined) throw new Error('fixture');
     const agent = AgentRunDtoSchema.parse({
       id: 'a1',
@@ -358,7 +364,7 @@ describe('provider chips on the live graph and in the agent’s Details', () => 
       createdAt: T1,
       endedAt: null,
     });
-    // The live graph reads the run's version 2 graph: the block with a provider of its own.
+    // The live graph reads the run's version 3 graph: the block with a provider of its own.
     const codexNode = { ...node, provider: 'codex' as const };
     expect(liveProvider(node, [])).toBeNull();
     expect(liveProvider(codexNode, [])).toBe('codex');

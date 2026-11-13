@@ -1,4 +1,4 @@
-import { NODE_CAPABILITIES, type ManagedProviderId, type WorkflowNode } from '@acp/core';
+import type { ManagedProviderId, WorkflowNodeV3 } from '@acp/core';
 import type { AgentRunDto } from '@acp/core/api';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
@@ -19,9 +19,11 @@ import {
   MergeIcon,
   OwnCopyIcon,
   ReadOnlyIcon,
+  ResearcherIcon,
   ROLE_ICON,
   YouIcon,
 } from '../workflow/icons';
+import { isEditingKind, type BlockKind } from '../workflow/editor/roles';
 import { DONE_RING, STATE_RING, StateFrame } from './live-frame';
 import { kindWord, type LiveBlock } from './live-graph';
 
@@ -37,7 +39,7 @@ const MODE_WORD = REVIEW_LOOP_COPY.modes.word;
 
 export interface LiveGraphActions {
   /** Shows one agent in the side panel. */
-  selectAgent: (agent: AgentRunDto, node: WorkflowNode) => void;
+  selectAgent: (agent: AgentRunDto, kind: BlockKind) => void;
 }
 
 export const LiveGraphContext = createContext<LiveGraphActions>({ selectAgent: () => undefined });
@@ -121,14 +123,17 @@ function Eyebrow({
   );
 }
 
-function RoleIcon({ node }: { node: WorkflowNode }) {
+function RoleIcon({ kind }: { kind: BlockKind }) {
   const props = { size: 13, className: 'shrink-0' };
-  switch (node.type) {
+  switch (kind) {
+    case 'researcher':
+      return <ResearcherIcon {...props} />;
     case 'planner':
       return <ROLE_ICON.planner {...props} />;
     case 'lead':
       return <ROLE_ICON.lead {...props} />;
-    case 'reviewer':
+    case 'reviewer-change':
+    case 'reviewer-final':
       return <ROLE_ICON.reviewer {...props} />;
     case 'tester':
       return <ROLE_ICON.tester {...props} />;
@@ -138,7 +143,7 @@ function RoleIcon({ node }: { node: WorkflowNode }) {
 }
 
 /** The model the block's agent gets, as far as the snapshot says. */
-function modelText(node: WorkflowNode): { text: string; own: boolean } {
+function modelText(node: WorkflowNodeV3): { text: string; own: boolean } {
   if (!('model' in node)) return { text: '', own: false };
   if (node.model !== null) return { text: node.model, own: true };
   return { text: node.agent !== null ? G.fileOrProjectModel : G.projectModel, own: false };
@@ -150,7 +155,7 @@ function modelText(node: WorkflowNode): { text: string; own: boolean } {
  * default that has no agent yet): the snapshot doesn't carry the default, so nothing is guessed.
  */
 export function liveProvider(
-  node: WorkflowNode,
+  node: WorkflowNodeV3,
   agents: readonly AgentRunDto[],
 ): ManagedProviderId | null {
   const reported = agents.find((a) => a.provider !== undefined)?.provider;
@@ -169,7 +174,15 @@ function agentDot(agent: AgentRunDto): string {
 const SHOWN_AGENTS = 2;
 
 /** The block's agents: each shows itself in the side panel; the rest are counted. */
-function Agents({ node, agents }: { node: WorkflowNode; agents: readonly AgentRunDto[] }) {
+function Agents({
+  node,
+  kind,
+  agents,
+}: {
+  node: WorkflowNodeV3;
+  kind: BlockKind;
+  agents: readonly AgentRunDto[];
+}) {
   const { selectAgent } = useContext(LiveGraphContext);
   if (agents.length === 0) return null;
   // The ones working now first, then the newest.
@@ -200,7 +213,7 @@ function Agents({ node, agents }: { node: WorkflowNode; agents: readonly AgentRu
             data-status={a.status}
             onClick={(e) => {
               e.stopPropagation();
-              selectAgent(a, node);
+              selectAgent(a, kind);
             }}
           >
             <span aria-hidden="true" className={`size-1.5 shrink-0 ${agentDot(a)}`} />
@@ -225,9 +238,9 @@ function Agents({ node, agents }: { node: WorkflowNode; agents: readonly AgentRu
 
 /** An agent block: kind, name, model, skills and agent file, the run's mode, its agents. */
 export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
-  const { node } = data;
+  const { node, kind } = data;
   if (!('skills' in node)) return null;
-  const edits = NODE_CAPABILITIES[node.type].edits;
+  const edits = isEditingKind(kind);
   const lead = node.type === 'lead';
   const model = modelText(node);
   const provider = liveProvider(node, data.agents);
@@ -238,12 +251,12 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
           lead ? 'border-ink/70' : 'border-line'
         }`}
         data-testid={`live-node-${node.id}`}
-        data-kind={node.type}
+        data-kind={kind}
       >
         <Handles />
         <Eyebrow
-          icon={<RoleIcon node={node} />}
-          left={kindWord(node)}
+          icon={<RoleIcon kind={kind} />}
+          left={kindWord(node, kind)}
           right={
             <Tooltip
               content={edits ? G.ownCopy : G.readOnly}
@@ -338,7 +351,9 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
             </p>
           </Tooltip>
         ) : null}
-        {!edits || data.agents.length > 0 ? <Agents node={node} agents={data.agents} /> : null}
+        {!edits || data.agents.length > 0 ? (
+          <Agents node={node} kind={kind} agents={data.agents} />
+        ) : null}
       </div>
     </StateFrame>
   );
@@ -391,7 +406,7 @@ export function LiveGateBlock({ data }: NodeProps<LiveBlock>) {
         data-kind={node.type}
       >
         <Handles />
-        <Eyebrow icon={icon} left={kindWord(node)} accent={you} />
+        <Eyebrow icon={icon} left={kindWord(node, data.kind)} accent={you} />
         <span className="truncate font-semibold tracking-[-0.006em]">
           {node.type === 'plan-approval'
             ? G.gateTitle['plan-approval']

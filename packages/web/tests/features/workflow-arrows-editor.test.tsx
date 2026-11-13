@@ -4,9 +4,9 @@ import {
   WorkflowGraphSchema,
   canConnectV3,
   migrateWorkflowV2,
-  validateWorkflowGraph,
   validateWorkflowGraphV3,
   type WorkflowGraphV3,
+  WorkflowGraphV3Schema,
 } from '@acp/core';
 import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -22,12 +22,6 @@ import { toFlowEdges } from '../../src/features/workflow/editor/flow';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
 import { linkChoices, linkOutcome } from '../../src/features/workflow/editor/linking';
 import { graphRoles } from '../../src/features/workflow/editor/roles';
-import {
-  canSaveToServer,
-  fromServerGraph,
-  serverForm,
-  toServerGraph,
-} from '../../src/features/workflow/editor/server-graph';
 import {
   editorReducer,
   initialEditorState,
@@ -64,7 +58,7 @@ beforeAll(() => {
   });
 });
 
-const base = (): WorkflowGraphV3 => fromServerGraph(WorkflowGraphSchema.parse(migratedGraph()));
+const base = (): WorkflowGraphV3 => migrateWorkflowV2(WorkflowGraphSchema.parse(migratedGraph()));
 const run = (graph: WorkflowGraphV3, ...actions: EditorAction[]): EditorState =>
   actions.reduce(editorReducer, initialEditorState(graph));
 const kindOf = (g: WorkflowGraphV3, id: string) => graphRoles(g).kinds.get(id);
@@ -260,41 +254,6 @@ describe('roles and arrows', () => {
   });
 });
 
-describe('the server adapter (until AR-4)', () => {
-  it('a version 2 graph round-trips; a v2-expressible editor graph saves as version 2', () => {
-    const v2 = WorkflowGraphSchema.parse(migratedGraph());
-    expect(toServerGraph(fromServerGraph(v2))).toEqual(v2);
-    const s = run(base(), { type: 'add', item: 'helper' }, { type: 'add', item: 'planner' });
-    expect(canSaveToServer(s.graph)).toEqual({ ok: true });
-    const sent = toServerGraph(s.graph);
-    expect(sent?.version).toBe(2);
-    expect(sent?.nodes.find((n) => n.id === 'helper-1')?.type).toBe('helper');
-    expect(sent?.edges.some((e) => e.type === 'assigns' && e.to === 'helper-1')).toBe(true);
-    expect(serverForm(s.graph)).toEqual(fromServerGraph(sent ?? v2));
-  });
-
-  it('names every version 3 part the server can’t store yet', () => {
-    const g = base();
-    const parts = (graph: WorkflowGraphV3) => {
-      const c = canSaveToServer(graph);
-      return c.ok ? [] : c.parts;
-    };
-    expect(parts(run(g, { type: 'add', item: 'researcher' }).graph)).toEqual(['research']);
-    expect(
-      parts(run(g, { type: 'add', item: 'planner' }, { type: 'add', item: 'planner' }).graph),
-    ).toEqual(['planners']);
-    const id = g.edges[0]?.id ?? '';
-    expect(parts(run(g, { type: 'update-edge', id, patch: { purpose: 'why' } }).graph)).toEqual([
-      'words',
-    ]);
-    const custom = run(g, { type: 'connect', from: 'review', to: 'helpers', edgeType: 'custom' });
-    expect(parts(custom.graph)).toEqual(['custom']);
-    const fanOut = run(g, { type: 'add', item: 'change-reviewer', near: 'helpers' }).graph;
-    expect(parts(fanOut)).toEqual(['fan-out']);
-    expect(toServerGraph(fanOut)).toBeNull();
-  });
-});
-
 // ---------------------------------------------------------------- the page
 
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
@@ -307,8 +266,8 @@ function render() {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
   });
@@ -399,35 +358,22 @@ describe('Workflow page on version 3', () => {
     expect(puts(server)).toHaveLength(0);
   });
 
-  it('a version 3 graph shows why it can’t be saved yet and is never sent', async () => {
+  it('saves a version 3 graph as it is: a researcher with a labelled arrow (AR-4)', async () => {
     const { server } = render();
     await screen.findByTestId('graph-editor');
     addBlock(/^Researcher/);
     await waitFor(() => expect(role('research').dataset.role).toBe('researcher'));
-    const notice = await screen.findByTestId('save-v3-only');
-    expect(notice.dataset.parts).toBe('research');
-    expect(notice.textContent).toContain('research arrows');
+    // The server stores version 3 now: no "can't be saved yet" notice.
+    expect(screen.queryByTestId('save-v3-only')).toBeNull();
     const save = screen.getByTestId('save-workflow');
-    expect(save.hasAttribute('disabled')).toBe(true);
-    expect(save.getAttribute('aria-describedby')).toBe('workflow-save-v3');
-    fireEvent.click(save);
-    expect(puts(server)).toHaveLength(0);
-    // Removing the v3 part makes it savable again, as version 2.
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Remove block' }));
-    await waitFor(() => expect(screen.queryByTestId('save-v3-only')).toBeNull());
-    addBlock(/^Final reviewer/);
     await waitFor(() => expect(save.hasAttribute('disabled')).toBe(false));
     fireEvent.click(save);
     await screen.findByTestId('saved');
     const body = puts(server)[0]?.body as { graph: unknown };
-    const sent = WorkflowGraphSchema.parse(body.graph);
-    expect(sent.version).toBe(2);
-    expect(sent.nodes.find((n) => n.id === 'code-review')).toMatchObject({
-      type: 'reviewer',
-      scope: 'final',
-    });
+    const sent = WorkflowGraphV3Schema.parse(body.graph);
+    expect(sent.version).toBe(3);
+    expect(sent.edges.some((e) => e.type === 'research' && e.from === 'research')).toBe(true);
     // The refetched graph equals what was sent: no "Unsaved changes".
     expect(screen.queryByTestId('unsaved')).toBeNull();
-    expect(migrateWorkflowV2(sent).nodes.some((n) => n.id === 'code-review')).toBe(true);
   });
 });

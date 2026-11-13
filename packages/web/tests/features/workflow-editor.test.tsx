@@ -1,4 +1,10 @@
-import { WorkflowGraphSchema, validateWorkflowGraph, type GraphIssue } from '@acp/core';
+import {
+  validateWorkflowGraph,
+  type GraphIssue,
+  WorkflowGraphV3Schema,
+  validateWorkflowGraphV3,
+} from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { WorkflowGraphDtoSchema, type WorkflowGraphDto } from '@acp/core/api';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -58,8 +64,8 @@ function server(initial: unknown, extra: RouteTable = {}) {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
     ...extra,
@@ -209,7 +215,7 @@ describe('Workflow page: the graph editor', () => {
     fireEvent.click(saveButton());
     await screen.findByTestId('saved');
     const body = puts(s)[0]?.body as { graph: unknown };
-    const graph = WorkflowGraphSchema.parse(body.graph);
+    const graph = sentAsV2(body.graph);
     expect(validateWorkflowGraph(graph).filter((i) => i.severity === 'error')).toEqual([]);
     expect(graph.template).toBe('custom');
     expect(graph.nodes.find((n) => n.id === 'helper-1')).toMatchObject({
