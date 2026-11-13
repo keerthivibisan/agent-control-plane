@@ -2,6 +2,7 @@ import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import {
   defaultProjectWorkflow,
+  migrateWorkflowV2,
   type ProjectWorkflow,
   type SkillName,
   type WorkflowGraph,
@@ -81,7 +82,7 @@ export function setupSkills(
   };
   const workflowOf = (): WorkflowUse =>
     state.graph !== undefined
-      ? { graph: state.graph }
+      ? { graph: migrateWorkflowV2(state.graph) }
       : effectiveWorkflow({ kind: 'v1', workflow: state.workflow }, 'auto-edits');
   // A stand-in home folder: the real one (and its ~/.claude) is never consulted.
   const homeDir = tempDir('acp-skills-home-');

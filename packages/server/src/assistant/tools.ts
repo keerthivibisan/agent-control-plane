@@ -1,9 +1,9 @@
 import {
   approvalsOf,
   DEFAULT_MANAGED_PROVIDER,
-  NODE_CAPABILITIES,
+  deriveRoles,
   type ProjectAgentSetup,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import {
   ASSISTANT_TOOL_ANSWER_BYTES,
@@ -37,7 +37,7 @@ export function capAnswer(text: string, maxBytes = ASSISTANT_TOOL_ANSWER_BYTES):
 
 export interface AssistantToolSources {
   board: Pick<BoardService, 'listTickets' | 'ticket' | 'getSetup' | 'harnessStatus'>;
-  workflowOf: (projectId: string) => Promise<{ graph: WorkflowGraph }>;
+  workflowOf: (projectId: string) => Promise<{ graph: WorkflowGraphV3 }>;
   skills: Pick<SkillsService, 'list'>;
   agents: Pick<AgentsService, 'list'>;
 }
@@ -110,14 +110,18 @@ function setupLines(setup: ProjectAgentSetup): string[] {
   ];
 }
 
-function workflowLines(graph: WorkflowGraph): string[] {
+function workflowLines(graph: WorkflowGraphV3): string[] {
   const lines = ['Workflow nodes:'];
+  // ADR-0037: an agent block's role comes from its arrows.
+  const roles = deriveRoles(graph);
   for (const node of graph.nodes) {
-    const kind = NODE_CAPABILITIES[node.type].kind;
-    if (kind === null || !('model' in node)) {
+    if (node.type !== 'agent' && node.type !== 'lead') {
       lines.push(`  - ${node.id} (${node.type}): ${oneLine(node.label, 60)}`);
       continue;
     }
+    const derived = roles.get(node.id);
+    const type =
+      node.type === 'agent' && derived?.ok === true ? `agent, ${derived.role.role}` : node.type;
     const parts = [
       `model ${node.model ?? 'default'}`,
       ...(node.provider !== undefined ? [`provider ${node.provider}`] : []),
@@ -125,7 +129,7 @@ function workflowLines(graph: WorkflowGraph): string[] {
       ...(node.skills.length > 0 ? [`skills ${node.skills.join(', ')}`] : []),
       ...(node.agent !== null ? [`agent ${node.agent}`] : []),
     ];
-    lines.push(`  - ${node.id} (${node.type}): ${oneLine(node.label, 60)}; ${parts.join('; ')}`);
+    lines.push(`  - ${node.id} (${type}): ${oneLine(node.label, 60)}; ${parts.join('; ')}`);
   }
   return lines;
 }

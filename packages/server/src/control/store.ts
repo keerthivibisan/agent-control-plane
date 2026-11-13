@@ -24,14 +24,17 @@ import {
   type EngineApproval,
   type EngineChange,
   type EngineEffect,
+  type PlanOption,
   type RunState,
 } from '@acp/orchestrator';
-import type {
-  ManagedProviderId,
-  OrchestrationRun,
-  PlanStep,
-  TicketPlan,
-  WorkflowNodeId,
+import {
+  MAX_NODE_LABEL,
+  type ManagedProviderId,
+  type OrchestrationRun,
+  type PlanStep,
+  type TicketPlan,
+  type TicketPlanOption,
+  type WorkflowNodeId,
 } from '@acp/core';
 import { researchCommentBodies } from './research-findings.js';
 import { hasReviewableChange } from './roles.js';
@@ -379,6 +382,59 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
   }
 
+  /**
+   * ADR-0037 §4: the plan options of a run with several planners (migration 0016). New options are
+   * stored with the engine's id; a decided one is written after the plans (`syncPlans`), so the
+   * chosen option's plan (`plan-option-decided`'s `planId`) already exists.
+   */
+  function syncPlanOptions(
+    prev: readonly PlanOption[],
+    next: RunState,
+    effects: readonly EngineEffect[],
+  ): void {
+    const ticketId = next.run.ticketId;
+    const options = next.planOptions ?? [];
+    if (ticketId === null || options.length === 0) return;
+    const chosenPlans = new Map<string, string>();
+    for (const effect of effects) {
+      if (
+        effect.type === 'plan-option-decided' &&
+        effect.planOptionId !== null &&
+        effect.planId !== null
+      ) {
+        chosenPlans.set(effect.planOptionId, effect.planId);
+      }
+    }
+    const before = new Map(prev.map((o) => [o.id, o]));
+    for (const option of options) {
+      const old = before.get(option.id);
+      if (old === undefined) {
+        withId(option.id, () =>
+          workspaceRepos.planOptions.insert({
+            ticketId,
+            runId: next.run.id,
+            agentRunId: option.agentRunId,
+            nodeId: option.nodeId,
+            // The planner node's label; an agent's role when the node has none (never longer).
+            label: option.label.slice(0, MAX_NODE_LABEL),
+            summary: option.summary,
+            steps: withStepHelpers(option.steps, option.stepHelpers),
+            plannedHelpers: option.plannedHelpers,
+          }),
+        );
+      }
+      if (option.status === 'proposed' || old?.status === option.status) continue;
+      const planId = chosenPlans.get(option.id);
+      if (option.status === 'chosen' && planId === undefined) {
+        throw new DbError('conflict', 'a chosen plan option without its plan');
+      }
+      workspaceRepos.planOptions.decide(option.id, option.status, {
+        ...(option.status === 'chosen' && planId !== undefined && { planId }),
+        at: next.run.updatedAt,
+      });
+    }
+  }
+
   function applyDataEffects(next: RunState, effects: readonly EngineEffect[]): void {
     const runId = next.run.id;
     for (const effect of effects) {
@@ -564,6 +620,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           syncApproval(prevApprovals.get(approval.id), approval);
         }
         syncPlans(prev?.plans ?? [], next.plans ?? [], next.planStepHelpers);
+        syncPlanOptions(prev?.planOptions ?? [], next, effects);
         applyDataEffects(next, effects);
       });
     },
@@ -641,6 +698,9 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         state.plans = withPlanDeciders(workspaceRepos.plans.listForRun(runId), snapshot);
         const stepHelpers = stepHelpersOf(state.plans);
         if (stepHelpers !== undefined) state.planStepHelpers = stepHelpers;
+        // ADR-0037 §4: a run with several planners keeps its options across a restart.
+        const options = workspaceRepos.planOptions.listForRun(runId);
+        if (options.length > 0) state.planOptions = options.map(engineOption);
       }
       return state;
     },
@@ -677,6 +737,24 @@ function withStepHelpers(
     const helper = helpers?.[i];
     return helper === undefined ? { ...step } : { ...step, helper };
   });
+}
+
+/** A stored plan option as the engine holds it: the steps' helper nodes back in `stepHelpers`. */
+function engineOption(option: TicketPlanOption): PlanOption {
+  const helpers = option.steps.map((s) => s.helper);
+  const all = helpers.length > 0 && helpers.every((h): h is WorkflowNodeId => h !== undefined);
+  return {
+    id: option.id,
+    agentRunId: option.agentRunId,
+    nodeId: option.nodeId,
+    label: option.label,
+    summary: option.summary,
+    steps: option.steps.map(({ helper: _helper, ...step }) => step),
+    plannedHelpers: option.plannedHelpers,
+    ...(all && { stepHelpers: helpers }),
+    status: option.status,
+    createdAt: option.createdAt,
+  };
 }
 
 /** The engine's per-plan step nodes, from plans whose every step has a stored helper node. */

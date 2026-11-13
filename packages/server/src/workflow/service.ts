@@ -1,13 +1,13 @@
 import {
   DEFAULT_MANAGED_PROVIDER,
   approvalsOf,
-  isAgentNode,
   isGraphRunnable,
-  validateWorkflowGraph,
+  toWorkflowGraphV3,
+  validateWorkflowGraphV3,
   type GraphIssue,
   type ProjectAgentSetup,
   type ProjectWorkflow,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import {
   UpdateWorkflowGraphRequestSchema,
@@ -25,7 +25,7 @@ import {
 } from '@acp/db';
 import { HttpError, notFound } from '../errors.js';
 import { createAgentProfiles } from './agent-profile.js';
-import { effectiveWorkflow, type EffectiveWorkflow } from './graph.js';
+import { effectiveWorkflow, isAgentNodeV3, type EffectiveWorkflow } from './graph.js';
 import {
   listProjectAgentNames,
   listProjectSkillNames,
@@ -35,10 +35,11 @@ import {
 /**
  * A project's workflow (docs/history/redesign/README.md §4.2, ADR-0019; ADR-0023 graphs).
  *
- * - **Version 2, the graph** (`/workflow-graph`): the stored graph, or the version 1 workflow
- *   (stored or the default) migrated with the project's approval mode. A PUT is validated with
- *   `validateWorkflowGraph` (the same function the editor and the run start use) and stored as
- *   version 2 only without errors (422 `workflow_invalid` otherwise).
+ * - **The graph** (`/workflow-graph`, version 3 since ADR-0037): the stored graph (a version 2 one
+ *   migrated), or the version 1 workflow (stored or the default) migrated with the project's
+ *   approval mode. A PUT takes version 3, or version 2 from an older client (migrated first); it
+ *   is validated with `validateWorkflowGraphV3` (the same function the editor and the run start
+ *   use) and stored as version 3 only without errors (422 `workflow_invalid` otherwise).
  * - **Version 1** (`/workflow`, until WG-V removes it): which optional stages run, and each agent
  *   stage's model and skill. It answers 409 `workflow_is_graph` once the project stores a graph,
  *   so an older page can never silently overwrite one.
@@ -161,12 +162,13 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
    */
   async function toolNarrowingAgents(
     projectId: string,
-    graph: WorkflowGraph,
+    graph: WorkflowGraphV3,
     facts: { setup: ProjectAgentSetup; agents: readonly string[] },
   ): Promise<string[]> {
     const names = new Set<string>();
     for (const node of graph.nodes) {
-      if (!isAgentNode(node) || node.agent === null || !facts.agents.includes(node.agent)) continue;
+      if (!isAgentNodeV3(node) || node.agent === null || !facts.agents.includes(node.agent))
+        continue;
       const provider = node.provider ?? facts.setup.provider ?? DEFAULT_MANAGED_PROVIDER;
       if (provider === 'codex') names.add(node.agent);
     }
@@ -182,10 +184,10 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
 
   async function issuesOf(
     projectId: string,
-    graph: WorkflowGraph,
+    graph: WorkflowGraphV3,
     facts: { setup: ProjectAgentSetup; skills: readonly string[]; agents: readonly string[] },
   ): Promise<GraphIssue[]> {
-    return validateWorkflowGraph(graph, {
+    return validateWorkflowGraphV3(graph, {
       skills: facts.skills,
       agents: facts.agents,
       maxConcurrentHelpers: facts.setup.maxConcurrentHelpers,
@@ -227,17 +229,18 @@ export function createWorkflowService(deps: WorkflowServiceDeps): WorkflowServic
     },
     async putGraph(projectId, body) {
       project(projectId);
-      const { graph } = UpdateWorkflowGraphRequestSchema.parse(body);
+      // An older client's version 2 graph is migrated first (lossless) and stored as version 3.
+      const graph = toWorkflowGraphV3(UpdateWorkflowGraphRequestSchema.parse(body).graph);
       const facts = await projectFacts(projectId);
       const issues = await issuesOf(projectId, graph, facts);
       if (!isGraphRunnable(issues)) throw workflowInvalid(issues);
       const saved = redesign.workflow.putGraph(projectId, graph);
       changed(projectId);
-      return { graph: saved.graph, stored: 'v2', issues, ...facts, updatedAt: saved.updatedAt };
+      return { graph: saved.graph, stored: 'v3', issues, ...facts, updatedAt: saved.updatedAt };
     },
     async validateGraph(projectId, body) {
       project(projectId);
-      const { graph } = UpdateWorkflowGraphRequestSchema.parse(body);
+      const graph = toWorkflowGraphV3(UpdateWorkflowGraphRequestSchema.parse(body).graph);
       const issues = await issuesOf(projectId, graph, await projectFacts(projectId));
       return { ok: isGraphRunnable(issues), issues };
     },

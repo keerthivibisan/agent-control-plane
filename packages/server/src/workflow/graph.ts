@@ -1,65 +1,55 @@
 import {
   WORKFLOW_STAGES,
-  downgradeWorkflowV3,
-  graphRunDefaults,
-  isAgentNode,
-  migrateWorkflowV1,
+  graphRunDefaultsV3,
+  migrateWorkflowV1ToV3,
+  migrateWorkflowV2,
   stagesUsingAgent,
   stagesUsingSkill,
   type ApprovalMode,
   type ProjectWorkflow,
   type RunOptions,
   type SkillName,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
+  type WorkflowNodeV3,
+  type WorkflowNodeV3Of,
   type WorkflowStageId,
 } from '@acp/core';
 import type { NodeUseDto } from '@acp/core/api';
 import type { StoredProjectWorkflow } from '@acp/db';
 
 /**
- * A project's effective workflow graph (ADR-0023 §9, docs/history/workflow-graph/README.md §4): the
- * stored version 2 graph, or the version 1 workflow (stored, or the default) migrated with the
- * project's approval mode. One answer for the Workflow page, the run start and the "used by" chips.
+ * A project's effective workflow graph (ADR-0023 §9, ADR-0037 §6), always version 3: the stored
+ * version 3 graph, a stored version 2 graph migrated (lossless), or the version 1 workflow (stored,
+ * or the default) migrated with the project's approval mode. One answer for the Workflow page, the
+ * run start and the "used by" chips.
  */
 export interface EffectiveWorkflow {
-  /** `v2`: a stored graph (version 2, or version 3 served as version 2 until AR-4). */
-  stored: 'v2' | 'v1' | 'default';
-  graph: WorkflowGraph;
+  /** What the project stores: a version 3 or 2 graph, a version 1 workflow, or nothing. */
+  stored: 'v3' | 'v2' | 'v1' | 'default';
+  graph: WorkflowGraphV3;
   /** The version 1 workflow the graph was migrated from; absent for a stored graph. */
   v1?: ProjectWorkflow;
   /** When the owner last saved it; null when nothing is stored (the default). */
   updatedAt: string | null;
 }
 
-/** A stored version 3 graph that this server cannot serve as version 2 yet (ADR-0037, AR-4). */
-export class WorkflowGraphVersionError extends Error {
-  override readonly name = 'WorkflowGraphVersionError';
-  constructor(reason: string) {
-    super(
-      `The project's workflow uses version 3 features this server cannot serve yet: ${reason}.`,
-    );
-  }
-}
-
 export function effectiveWorkflow(
   stored: StoredProjectWorkflow,
   projectMode: ApprovalMode,
 ): EffectiveWorkflow {
-  if (stored.kind === 'v2') {
-    return { stored: 'v2', graph: stored.graph.graph, updatedAt: stored.graph.updatedAt };
-  }
   if (stored.kind === 'v3') {
-    // ADR-0037: the API, the editor and run snapshots still carry version 2 (AR-4, AR-5), so a
-    // version 3 graph is served as version 2. Nothing writes one yet; one that version 2 cannot
-    // say (researchers, custom arrows, several planners, a fan-out, labels) is refused plainly
-    // rather than served with parts missing.
-    const down = downgradeWorkflowV3(stored.graph.graph);
-    if (!down.ok) throw new WorkflowGraphVersionError(down.reason);
-    return { stored: 'v2', graph: down.graph, updatedAt: stored.graph.updatedAt };
+    return { stored: 'v3', graph: stored.graph.graph, updatedAt: stored.graph.updatedAt };
+  }
+  if (stored.kind === 'v2') {
+    return {
+      stored: 'v2',
+      graph: migrateWorkflowV2(stored.graph.graph),
+      updatedAt: stored.graph.updatedAt,
+    };
   }
   return {
     stored: stored.kind,
-    graph: migrateWorkflowV1(stored.workflow, { projectMode }),
+    graph: migrateWorkflowV1ToV3(stored.workflow, { projectMode }),
     v1: stored.workflow,
     updatedAt: stored.kind === 'v1' ? stored.workflow.updatedAt : null,
   };
@@ -78,21 +68,28 @@ export function projectRunDefaults(
   workflow: Pick<EffectiveWorkflow, 'graph'>,
   approvalMode: ApprovalMode,
 ): RunOptions {
-  return { approvalMode, ...graphRunDefaults(workflow.graph) };
+  return { approvalMode, ...graphRunDefaultsV3(workflow.graph) };
 }
 
 /** What a skill or agent file is: an agent node's `skills` entry, or its `agent`. */
 export type ProjectFileKind = 'skill' | 'agent';
 
+/** A node that runs an agent (the lead or an agent block), so it has skills and an agent file. */
+export function isAgentNodeV3(
+  node: WorkflowNodeV3,
+): node is WorkflowNodeV3Of<'agent'> | WorkflowNodeV3Of<'lead'> {
+  return node.type === 'agent' || node.type === 'lead';
+}
+
 /** The agent nodes of the graph that use the skill or agent file, in graph order. */
 export function nodesUsing(
-  graph: WorkflowGraph,
+  graph: WorkflowGraphV3,
   kind: ProjectFileKind,
   name: SkillName,
 ): NodeUseDto[] {
   const out: NodeUseDto[] = [];
   for (const node of graph.nodes) {
-    if (!isAgentNode(node)) continue;
+    if (!isAgentNodeV3(node)) continue;
     const uses = kind === 'skill' ? node.skills.includes(name) : node.agent === name;
     if (uses) out.push({ nodeId: node.id, label: node.label });
   }

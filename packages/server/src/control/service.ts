@@ -31,8 +31,8 @@ import {
   type RegisteredRoot,
   type RunBudget,
   type RunStatus,
+  type AnyWorkflowGraph,
   type TicketPlan,
-  type WorkflowGraph,
 } from '@acp/core';
 import {
   ApprovalDecisionRequestSchema,
@@ -75,6 +75,7 @@ import {
   createRun,
   decideApproval,
   decidePlan,
+  decidePlanOption,
   deriveRunWorkflow,
   deriveRunWorkflowGraph,
   effectiveMode,
@@ -95,7 +96,7 @@ import {
   recordReview,
   recoverAfterRestart,
   requestPermission,
-  runGraphOf,
+  runGraphV3Of,
   runLimits,
   stopAgent,
   stopFollowUp,
@@ -107,6 +108,7 @@ import {
   type EngineEffect,
   type EngineResult,
   type CreateRunInput,
+  type PlanOption,
   type FollowUpFacts,
   type PlanDecision,
   type Refusal,
@@ -326,6 +328,8 @@ export interface TicketRunInput {
   leadPrompt: string;
   /** Separate planner mode (ADR-0019): the planner's brief (`ticketRunPrompts`). */
   plannerPrompt?: string;
+  /** ADR-0037 §3: the ticket part of every researcher's brief (`ticketResearcherPrompt`). */
+  researcherPrompt?: string;
   /** The project's workflow, snapshotted with the run (ADR-0019). */
   workflow?: ProjectWorkflow;
   limits: RunLimits;
@@ -336,9 +340,10 @@ export interface TicketRunInput {
   approvals?: ProjectApprovals;
   /**
    * ADR-0023: the project's workflow graph, validated, snapshotted with the run and compiled with
-   * `graphContext` (both or neither). Absent: the version 1 `workflow` (legacy test runs).
+   * `graphContext` (both or neither); version 3 from the board (ADR-0037). Absent: the version 1
+   * `workflow` (legacy test runs).
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   graphContext?: CompileContext;
   /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
   inTransaction?: (runId: string) => void;
@@ -496,6 +501,16 @@ export interface ControlService {
   runWorkflowGraph(runId: string): RunWorkflowGraphDto;
   /** The owner's decision on the plan waiting in PLAN_REVIEW; returns the decided plan. */
   decidePlan(runId: string, planId: string, decision: PlanDecision, comment?: string): TicketPlan;
+  /**
+   * ADR-0037 §4: the owner's decision on the plan options of a run with several planners
+   * (`decidePlanOption`): approve one (`planOptionId`, required when two or more wait) or ask
+   * every planner for changes (a comment is required). Returns the chosen option, or null.
+   */
+  decidePlanOption(
+    runId: string,
+    decision: PlanDecision,
+    input: { planOptionId?: string; comment?: string },
+  ): PlanOption | null;
   /** The run's engine state if this process holds it (live or loaded); never loads it. */
   peek(runId: string): RunState | undefined;
   /** A worker's worktree, when it has one that still exists. */
@@ -3472,6 +3487,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             ticketId: input.ticketId,
             leadPrompt: input.leadPrompt,
             ...(input.plannerPrompt !== undefined && { plannerPrompt: input.plannerPrompt }),
+            ...(input.researcherPrompt !== undefined && {
+              researcherPrompt: input.researcherPrompt,
+            }),
           },
           ...(input.workflow !== undefined && { workflow: input.workflow }),
           ...(input.reviewLoop !== undefined && { reviewLoop: input.reviewLoop }),
@@ -3512,7 +3530,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     runWorkflowGraph(runId) {
       const state = get(runId).state;
-      return { runId, graph: runGraphOf(state), ...deriveRunWorkflowGraph(state) };
+      return { runId, graph: runGraphV3Of(state), ...deriveRunWorkflowGraph(state) };
     },
 
     ticketBranch(runId) {
@@ -3590,6 +3608,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       const plan = applyOrThrow(live, (s, c) => decidePlan(s, planId, decision, c, comment));
       logger.log('info', 'plan decided by owner', { runId, planId, decision });
       return plan;
+    },
+
+    decidePlanOption(runId, decision, input) {
+      const live = get(runId);
+      const option = applyOrThrow(live, (s, c) => decidePlanOption(s, decision, c, input));
+      logger.log('info', 'plan option decided by owner', {
+        runId,
+        planOptionId: option?.id ?? null,
+        decision,
+      });
+      return option;
     },
 
     peek(runId) {
