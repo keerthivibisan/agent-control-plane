@@ -43,6 +43,7 @@ import {
   CreateRepoProjectRequestSchema,
   HarnessStatusDtoSchema,
   ProjectAgentSetupDtoSchema,
+  ProjectRemovalPreviewDtoSchema,
   UpdateProjectSetupRequestSchema,
 } from '@acp/core/api';
 // Ticket page (Phase 4, P4-G). `CheckRunDtoSchema` and `TicketDetailDtoSchema` are imported above.
@@ -661,6 +662,21 @@ export const projectSetupSchemas = {
   contextCandidates: ContextCandidateDtoSchema.array(),
   ticket: TicketDtoSchema,
 } as const;
+
+/** ADR-0036: what removing a project from ACP deletes, and whether it is refused right now. */
+export const projectRemovalPaths = {
+  preview: (projectId: string) => `${API_BASE}/projects/${enc(projectId)}/removal`,
+} as const;
+export const projectRemovalSchemas = { preview: ProjectRemovalPreviewDtoSchema } as const;
+
+/**
+ * DELETE /api/projects/:id (204, ADR-0036): deletes ACP's records for the project and its own
+ * folders in the data dir, never the project folder or its repository. 409 `project_busy` while a
+ * run has not ended or checks run.
+ */
+export function removeProject(client: ApiClient, projectId: string): Promise<void> {
+  return controlDelete(client, paths.project(projectId));
+}
 
 /** True for the cached setup, harness and context-file paths of one project. */
 export function isProjectSetupPath(projectId: string): (key: string) => boolean {

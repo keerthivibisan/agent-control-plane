@@ -42,8 +42,9 @@ validation; and retention.
 - **R:** `id`, `name`, `rootPath`, `createdAt`, `updatedAt`. **O (later):** `providerPreferences`.
 - **Identity:** `id`; `rootPath` unique after `realpath` normalization.
 - **Relations:** has many Sessions (by association) and, later, Tasks.
-- **Lifecycle:** registered, then optionally renamed, then unregistered. Unregistering detaches
-  sessions (`project_id = NULL`). It does not delete history unless the user explicitly purges it.
+- **Lifecycle:** registered, then optionally renamed, then removed (ADR-0036). Removing detaches
+  sessions (`project_id = NULL`) and keeps them and their usage; it deletes the project's tickets,
+  runs and other ACP records, never its folder or repository.
 - **Validation:** absolute path; it must exist and be a directory when registered; nested roots are
   allowed (longest match wins).
 - **Retention:** kept until the user deletes it.

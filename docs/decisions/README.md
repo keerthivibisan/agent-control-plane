@@ -41,4 +41,5 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0033](0033-lead-agent-messaging.md)                       | Lead and agent messaging: delivery state, ask_lead, held msgs  | accepted |
 | [0034](0034-code-map.md)                                   | A local code map per project, for agents and the owner         | accepted |
 | [0035](0035-project-assistant.md)                          | A project assistant chat on every project page                 | accepted |
+| [0036](0036-removing-a-project.md)                         | Removing a project from ACP                                    | accepted |
 | [0037](0037-agent-blocks-and-typed-arrows.md)              | One Agent block, roles from typed arrows (workflow graph v3)   | accepted |

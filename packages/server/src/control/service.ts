@@ -516,6 +516,17 @@ export interface ControlService {
    * check as a run's agents (CX-4). Unregistered: not available.
    */
   checkProvider(provider: ManagedProviderId): Promise<Availability>;
+  /**
+   * ADR-0036: the project's runs that keep it from being removed, oldest first: a run that has not
+   * ended (database or memory), one whose agents, follow-up turn or merges are still at work in
+   * this process, or one with a conflict resolution under way.
+   */
+  activeRuns(projectId: string): { runId: string; status: RunStatus }[];
+  /**
+   * ADR-0036: drops what this process holds in memory for runs whose rows were deleted (a removed
+   * project). Only call it for runs `activeRuns` did not list.
+   */
+  forgetRuns(runIds: readonly string[]): void;
 }
 
 interface LiveRun {
@@ -3104,21 +3115,54 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
     if (live.state.run.status === 'REVIEW') resolveEmptyReviews(live);
   }
 
+  const runExists = (runId: string) => store.repos.runs.getById(runId) !== undefined;
+
   return {
     enabled: deps.enabled,
     csrfToken,
     attachmentFiles,
 
+    activeRuns(projectId) {
+      const active = new Map<string, RunStatus>();
+      for (const run of store.repos.runs.listByStatus(NON_TERMINAL)) {
+        if (run.projectId === projectId) active.set(run.id, run.status);
+      }
+      for (const live of runs.values()) {
+        const run = live.state.run;
+        if (run.projectId !== projectId) continue;
+        const working =
+          NON_TERMINAL.includes(run.status) ||
+          live.handles.size > 0 ||
+          live.starting.size > 0 ||
+          live.followUp !== undefined ||
+          live.merges.size > 0;
+        if (working) active.set(run.id, run.status);
+      }
+      for (const op of store.loopRepos.conflictResolutions.listActive()) {
+        if (op.projectId !== projectId || active.has(op.runId)) continue;
+        const status =
+          runs.get(op.runId)?.state.run.status ?? store.repos.runs.getById(op.runId)?.status;
+        if (status !== undefined) active.set(op.runId, status);
+      }
+      return [...active].map(([runId, status]) => ({ runId, status }));
+    },
+
+    forgetRuns(runIds) {
+      for (const runId of runIds) runs.delete(runId);
+    },
+
     async start() {
       // No agent survives a restart: reviewers' checkouts and skills plugins are temporary
       // (ADR-0019). Removed even with managed agents off, since nothing can use them.
       try {
-        const checkouts = await reviewCheckouts.cleanupOrphans();
+        // ADR-0036: a folder of a run whose row is gone (a removed project) is deleted with the
+        // file system only: no git command on the owner's repository, no branch deleted.
+        const checkouts = await reviewCheckouts.cleanupOrphans(runExists);
         const plugins = await skillsPlugins.cleanupAll();
         // ADR-0022: Full auto's per-run sandbox temp folders.
         const sandboxTemp = await fullAutoPaths.cleanupAll();
         // ADR-0021: temporary checkouts of ticket branch tips (checks, update from base).
-        const tipCheckouts = await deps.workspaces.cleanupCheckouts();
+        const tipCheckouts = await deps.workspaces.cleanupCheckouts(runExists);
         logger.log('info', 'temporary agent folders cleaned', {
           checkouts,
           plugins,
@@ -3137,7 +3181,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         .listActive()
         .map((w) => ({ runId: w.runId, agentId: w.agentRunId }));
       try {
-        const result = await deps.workspaces.cleanupOrphans(keep);
+        const result = await deps.workspaces.cleanupOrphans(keep, runExists);
         logger.log('info', 'orphan worktrees cleaned', {
           removed: result.removed.length,
           kept: result.kept,

@@ -1620,7 +1620,43 @@ export const PROJECT_SETUP_COPY = {
     saveFailed: "Your changes couldn't be saved.",
     danger: 'Danger zone',
     dangerText:
-      'Removing a project from this app isn’t available yet. When it is, it will never delete the folder or its git history, and it won’t be possible while the project has tickets or runs.',
+      'Removing the project deletes its tickets and runs from this app. The folder and its git repository stay exactly as they are.',
+    remove: {
+      button: 'Remove from ACP',
+      title: (name: string) => `Remove ${name} from ACP?`,
+      description: 'This can’t be undone.',
+      loading: 'Counting what this removes…',
+      loadFailed: 'Couldn’t check what removing this project would delete.',
+      deletedTitle: 'Deleted from ACP',
+      deleted: (n: { tickets: number; runs: number; attachments: number }) => [
+        `${n.tickets} ${n.tickets === 1 ? 'ticket' : 'tickets'}, with their comments and plans`,
+        `${n.runs} agent ${n.runs === 1 ? 'run' : 'runs'}, with their reviews and branch records`,
+        `${n.attachments} ${n.attachments === 1 ? 'attachment' : 'attachments'}`,
+        'The workflow, settings, check history and code map',
+        'ACP’s own copies of the project (agent worktrees and checkouts)',
+      ],
+      keptTitle: 'Kept',
+      kept: (rootPath: string) => [
+        `The folder ${rootPath} and everything in it`,
+        'Its git repository and every branch, the acp/ branches included',
+        'Claude Code sessions and token usage (they show with no project)',
+      ],
+      folderMissing: (rootPath: string) =>
+        `The folder ${rootPath} was not found; it may have been moved or deleted. Removing clears ACP’s records for this project only.`,
+      keptMissing: 'Claude Code sessions and token usage (they show with no project)',
+      pruneNote:
+        'Git may list the removed agent worktrees as prunable; run git worktree prune in the repository to clear them.',
+      busyTitle: 'Stop these runs first',
+      busy: 'This project has runs that haven’t ended. Stop them, then remove the project.',
+      checksBusy: 'Checks or setup steps are running for this project. Wait for them to finish.',
+      runLabel: (key: string | null, title: string | null) =>
+        key !== null && title !== null ? `${key} ${title}` : 'A run without a ticket',
+      confirmLabel: (name: string) => `Type ${name} to confirm`,
+      cancel: 'Cancel',
+      confirm: 'Remove project',
+      removing: 'Removing…',
+      failed: 'The project wasn’t removed.',
+    },
   },
 } as const;
 

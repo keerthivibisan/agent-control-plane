@@ -220,22 +220,13 @@ describe('harness routes', () => {
 });
 
 describe('DELETE /api/projects/:id', () => {
-  it('refuses a project with tickets (409) and removes one without history', async () => {
+  it('removes a project with its tickets (ADR-0036; project-removal.test.ts has the rest)', async () => {
     const s = await setupBoard();
     await s.createTicket();
-    expectError(
-      await s.send('delete', `/api/projects/${s.project.id}`),
-      409,
-      'project_has_history',
-    );
-    expect(s.repos.projects.getById(s.project.id)).toBeDefined();
-
-    const other = s.repos.projects.insert({ name: 'other', rootPath: tempDir('acp-other-') });
-    await s.get(`/api/projects/${other.id}/setup`);
-    expectError(await request(s.app).delete(`/api/projects/${other.id}`), 403, 'csrf_missing');
-    expect((await s.send('delete', `/api/projects/${other.id}`)).status).toBe(204);
-    expect(s.repos.projects.getById(other.id)).toBeUndefined();
-    expectError(await s.send('delete', `/api/projects/${other.id}`), 404, 'not_found');
+    expectError(await request(s.app).delete(`/api/projects/${s.project.id}`), 403, 'csrf_missing');
+    expect((await s.send('delete', `/api/projects/${s.project.id}`)).status).toBe(204);
+    expect(s.repos.projects.getById(s.project.id)).toBeUndefined();
+    expectError(await s.send('delete', `/api/projects/${s.project.id}`), 404, 'not_found');
   });
 });
 

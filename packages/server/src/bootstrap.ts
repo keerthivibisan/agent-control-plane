@@ -23,6 +23,7 @@ import { createTokensService } from './tokens/service.js';
 import { createCodeMapService } from './codemap/service.js';
 import { createAgentsService, createSkillsService } from './skills/index.js';
 import { createAssistantService } from './assistant/index.js';
+import { createProjectRemovalService } from './projects/removal.js';
 import { fullAutoDenyRead } from './control/full-auto.js';
 import type { ServerConfig } from './config.js';
 import { HttpError } from './errors.js';
@@ -364,6 +365,19 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     logger,
   });
 
+  // ADR-0036: removing a project from ACP (its records and ACP's own folders, never the repo).
+  const projectRemoval = createProjectRemovalService({
+    db,
+    repos,
+    control: controlService,
+    checks,
+    assistant,
+    codeMap,
+    dataDir: config.dataDir,
+    logger,
+    publish: (n) => notifier.publish(n),
+  });
+
   const app = createApp({
     config,
     logger,
@@ -386,6 +400,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     skills: { skills, projectOf: (projectId) => repos.projects.getById(projectId) },
     agents: { agents, projectOf: (projectId) => repos.projects.getById(projectId) },
     ...(controlService.enabled && { assistant }),
+    projectRemoval,
     ...(options.staticDir !== undefined && { staticDir: options.staticDir }),
   });
   await controlService.start();

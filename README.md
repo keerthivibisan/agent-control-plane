@@ -152,6 +152,9 @@ allowed them.
   request and Delete branch. Conflict recovery can delegate push/PR delivery under explicit project
   policy; defaults remain manual. The app never reads or stores a token.
 - Attachments on tickets (up to 10 MB each); agents get read-only copies, never committed.
+- **Remove from ACP** (Settings, after you type the project's name): deletes the project's
+  tickets, runs and the app's own copies of it. The folder, its git repository and every branch,
+  and its sessions and token usage stay. Refused while a run has not ended.
 - Light, Dark or System theme.
 
 ## Quick start

@@ -358,7 +358,7 @@ export interface RunState {
    * compiled with. Absent: a version 1 run, which compiles its `workflow` migrated
    * (`programOf`). The program itself is never stored.
    */
-  graph?: AnyWorkflowGraph;
+  graph?: WorkflowGraph;
   /** The context `graph` compiles with (project mode, ticket and run ceilings, overrides). */
   graphContext?: CompileContext;
   /**

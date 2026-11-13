@@ -23,6 +23,17 @@ export function rememberLastProject(id: string): void {
   }
 }
 
+/** ADR-0036: a removed project is no longer remembered (by the app or the old board key). */
+export function forgetLastProject(id: string): void {
+  try {
+    for (const key of [KEY, BOARD_KEY]) {
+      if (window.localStorage.getItem(key) === id) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Unavailable storage remembers nothing anyway.
+  }
+}
+
 /** The remembered project if it still exists, else null. */
 export function validLastProject(
   projects: readonly { id: string }[],

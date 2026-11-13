@@ -30,7 +30,7 @@ function server(routes: RouteTable = {}, initialSetup = setup()) {
   });
   const csrf: (string | null)[] = [];
   const fetch: FetchLike = (input, init) => {
-    if (init?.method === 'POST' || init?.method === 'PUT') {
+    if (init?.method === 'POST' || init?.method === 'PUT' || init?.method === 'DELETE') {
       csrf.push(((init.headers ?? {}) as Record<string, string>)['X-ACP-CSRF'] ?? null);
     }
     return base.fetch(input, init);
@@ -330,7 +330,7 @@ describe('Project settings (#/p/:id/settings, docs/redesign/README.md §4.7)', (
     expect(s.calls.some((c) => c.path === `${P}/harness`)).toBe(false);
 
     expect(
-      within(screen.getByTestId('settings-danger')).getByText(/never delete the folder/),
+      within(screen.getByTestId('settings-danger')).getByText(/folder and its git repository stay/),
     ).toBeTruthy();
   });
 
@@ -375,6 +375,168 @@ describe('Project settings (#/p/:id/settings, docs/redesign/README.md §4.7)', (
     expect(
       await screen.findByText(/Your changes couldn't be saved\. key already used/),
     ).toBeTruthy();
+  });
+});
+
+describe('Remove from ACP (ADR-0036)', () => {
+  const preview = (over: object = {}) => ({
+    projectId: PROJECT_ID,
+    name: 'web-app',
+    rootPath: '/work/web-app',
+    tickets: 3,
+    runs: 1,
+    attachments: 2,
+    activeRuns: [],
+    busy: false,
+    folderExists: true,
+    ...over,
+  });
+  const removed = () => new Response(null, { status: 204 });
+
+  async function openDialog() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from ACP' }));
+    return screen.findByTestId('remove-project-dialog');
+  }
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('says when the folder is gone, and still removes the project', async () => {
+    const s = server({
+      [`${P}/removal`]: preview({ folderExists: false }),
+      [`DELETE ${P}`]: removed,
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    const summary = await within(dialog).findByTestId('remove-project-summary');
+    expect(within(summary).getByTestId('remove-project-folder-missing').textContent).toContain(
+      '/work/web-app was not found',
+    );
+    expect(within(summary).queryByText(/and everything in it/)).toBeNull();
+    expect(within(summary).queryByText(/git worktree prune/)).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('Type web-app to confirm'), {
+      target: { value: 'web-app' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove project' }));
+    await waitFor(() => expect(window.location.hash).toBe('#/projects'));
+    expect(s.calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual([P]);
+  });
+
+  it('says what goes and what stays, and removes only once the name is typed exactly', async () => {
+    window.localStorage.setItem('acp.lastProject', PROJECT_ID);
+    window.localStorage.setItem('acp.board.lastProject', 'other-project');
+    const s = server({ [`${P}/removal`]: preview(), [`DELETE ${P}`]: removed });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    expect(within(dialog).getByRole('heading', { name: 'Remove web-app from ACP?' })).toBeTruthy();
+    const summary = await within(dialog).findByTestId('remove-project-summary');
+    expect(within(summary).getByText(/3 tickets, with their comments and plans/)).toBeTruthy();
+    expect(within(summary).getByText(/1 agent run,/)).toBeTruthy();
+    expect(within(summary).getByText('2 attachments')).toBeTruthy();
+    expect(
+      within(summary).getByText(/The folder \/work\/web-app and everything in it/),
+    ).toBeTruthy();
+    expect(within(summary).getByText(/every branch, the acp\/ branches included/)).toBeTruthy();
+    expect(within(summary).getByText(/sessions and token usage/)).toBeTruthy();
+    expect(within(summary).getByText(/git worktree prune/)).toBeTruthy();
+
+    const confirm = within(dialog).getByRole('button', { name: 'Remove project' });
+    const field = within(dialog).getByLabelText('Type web-app to confirm');
+    expect(confirm).toHaveProperty('disabled', true);
+    for (const wrong of ['web', 'Web-app', 'web-app ']) {
+      fireEvent.change(field, { target: { value: wrong } });
+      expect(confirm).toHaveProperty('disabled', true);
+    }
+    fireEvent.change(field, { target: { value: 'web-app' } });
+    expect(confirm).toHaveProperty('disabled', false);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(window.location.hash).toBe('#/projects'));
+    expect(s.calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual([P]);
+    expect(s.csrf).toEqual([CSRF]);
+    expect(window.localStorage.getItem('acp.lastProject')).toBeNull();
+    expect(window.localStorage.getItem('acp.board.lastProject')).toBe('other-project');
+  });
+
+  it('lists the runs to stop first, with links, and keeps Remove disabled', async () => {
+    const s = server({
+      [`${P}/removal`]: preview({
+        busy: true,
+        busyReason: 'active-runs',
+        activeRuns: [
+          {
+            runId: 'run-1',
+            ticketId: 'ticket-1',
+            ticketKey: 'WEB-4',
+            ticketTitle: 'Dark mode',
+            status: 'RUNNING',
+          },
+          { runId: 'run-2', ticketId: null, ticketKey: null, ticketTitle: null, status: 'QUEUED' },
+        ],
+      }),
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    const busy = await within(dialog).findByTestId('remove-project-busy');
+    expect(within(busy).getByText(/runs that haven’t ended/)).toBeTruthy();
+    expect(within(busy).getByRole('link', { name: 'WEB-4 Dark mode' }).getAttribute('href')).toBe(
+      `#/p/${PROJECT_ID}/tickets/ticket-1`,
+    );
+    expect(
+      within(busy).getByRole('link', { name: 'A run without a ticket' }).getAttribute('href'),
+    ).toBe(`#/p/${PROJECT_ID}/runs/run-2`);
+    expect(within(dialog).queryByTestId('remove-project-summary')).toBeNull();
+    expect(within(dialog).queryByLabelText('Type web-app to confirm')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Remove project' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  });
+
+  it('says when running checks hold the removal', async () => {
+    const s = server({
+      [`${P}/removal`]: preview({ busy: true, busyReason: 'checks-running' }),
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    expect(await within(dialog).findByText(/Checks or setup steps are running/)).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Remove project' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  });
+
+  it('shows a refusal, refreshes the preview and stays on the page', async () => {
+    window.location.hash = `#/p/${PROJECT_ID}/settings`;
+    const s = server({
+      [`${P}/removal`]: preview(),
+      [`DELETE ${P}`]: jsonResponse(409, {
+        error: { code: 'project_busy', message: 'A run started.', requestId: 'r-9' },
+      }),
+    });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    fireEvent.change(await within(dialog).findByLabelText('Type web-app to confirm'), {
+      target: { value: 'web-app' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove project' }));
+    expect(
+      await within(dialog).findByText(/The project wasn’t removed\. A run started\./),
+    ).toBeTruthy();
+    await waitFor(() =>
+      expect(s.calls.filter((c) => c.path === `${P}/removal`).length).toBeGreaterThan(1),
+    );
+    expect(window.location.hash).toBe(`#/p/${PROJECT_ID}/settings`);
+  });
+
+  it('Cancel closes the dialog without removing anything', async () => {
+    const s = server({ [`${P}/removal`]: preview() });
+    renderWithApi(<ProjectSettings id={PROJECT_ID} />, s);
+    const dialog = await openDialog();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByTestId('remove-project-dialog')).toBeNull());
+    expect(s.calls.some((c) => c.method === 'DELETE')).toBe(false);
   });
 });
 

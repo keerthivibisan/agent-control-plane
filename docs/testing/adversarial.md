@@ -221,6 +221,30 @@ real `claude` and `codex` never run.
 
 No `knownGap`: every case passes today.
 
+## Removing a project (RM-2, `feature/projects/remove-project`)
+
+Removing a project from ACP (ADR-0036) deletes ACP's records and its own folders in the data
+directory, never the project folder or its repository. These cases feed the removal paths it must
+never delete, and check the startup cleanup of a deleted run's leftovers. Everything is synthetic:
+throwaway repositories and temp data directories.
+
+| File                                                  | Proves                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `packages/server/tests/board/project-removal.test.ts` | R1 to R5: removal and the startup cleanup delete nothing outside the data dir. |
+| `packages/server/tests/workspace/manager.test.ts`     | R5 at the manager: no git command for a deleted run's worktree.                |
+
+| Id  | Case                                                                                                          | Expected refusal                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| R1  | A forged `managed_workspaces` row whose path is a folder outside the data dir                                 | not deleted; its file is unchanged; the removal still succeeds.                                         |
+| R2  | `runs/<runId>` in the data dir is a symlink to a folder outside it                                            | the real path is outside, so nothing is deleted; the target's file is unchanged.                        |
+| R3  | A recorded workspace path that is the project folder itself, or a run folder that contains the project folder | refused (protected path); every file of the project folder is unchanged.                                |
+| R4  | The data dir itself, `.` or `../` as a path to delete                                                         | refused.                                                                                                |
+| R5  | At startup, an agent worktree and a review checkout of a run whose row is gone                                | deleted with the file system only: no git command for them, no `branch -D`, every ref of the repo kept. |
+
+During a removal no git command runs at all (the full removal test records every git call), and
+the project folder's files and `git for-each-ref` output are identical before and after. No
+`knownGap`: every case passes today.
+
 ## Researcher (AR-2, `feature/workflow/arrows`)
 
 The researcher (ADR-0037 §3) is a read-only agent that investigates in the project folder and
@@ -229,20 +253,20 @@ refusal. Everything is synthetic: the fake Claude query, the scripted Codex app-
 fake managed adapter for the server. Until the AR-3 engine starts researchers, the server test
 turns one lead `start_agent` into a researcher start, as the engine will emit it.
 
-| File                                                        | Proves                                                                               |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `packages/adapters/claude-code/tests/managed/roles.test.ts` | R1, R2 on Claude: the gate and the SDK options.                                      |
-| `packages/adapters/codex/tests/adversarial.test.ts`         | R1, R2 on Codex: the read-only profile, `never`, and the dynamic tools (also C5).    |
-| `packages/orchestrator/tests/report-findings.test.ts`       | R3, R4: the engine refuses other tools to a researcher and checks `report_findings`. |
-| `packages/server/tests/board/researcher.test.ts`            | R5: the server's folder, gate and stored note for a researcher.                      |
+| File                                                        | Proves                                                                                 |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `packages/adapters/claude-code/tests/managed/roles.test.ts` | RS1, RS2 on Claude: the gate and the SDK options.                                      |
+| `packages/adapters/codex/tests/adversarial.test.ts`         | RS1, RS2 on Codex: the read-only profile, `never`, and the dynamic tools (also C5).    |
+| `packages/orchestrator/tests/report-findings.test.ts`       | RS3, RS4: the engine refuses other tools to a researcher and checks `report_findings`. |
+| `packages/server/tests/board/researcher.test.ts`            | RS5: the server's folder, gate and stored note for a researcher.                       |
 
 | Id  | Case                                                                                                                                                                                                                                 | Expected refusal                                                                                                                |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | A Claude researcher uses `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `Bash`; a Codex researcher gets command and file-change approvals                                                                                           | Claude: denied with the read-only message, never asked (the tools are also out of its context); Codex: `decline`, never asked.  |
-| R2  | A researcher calls `merge_change`, `start_agent`, `message_agent`, `submit_plan`, `post_review`, `submit_review`, `report_work`, `request_review` (or any other non-researcher tool, or an impostor or namespaced `report_findings`) | Claude: denied ("The researcher can only report its findings"); Codex: `success: false`; the engine's handler is never reached. |
-| R3  | The engine gets the same calls from a researcher (lead tools, change tools, other roles' notes, assistant tools)                                                                                                                     | refused `not-lead`; no effect.                                                                                                  |
-| R4  | `report_findings` empty, blank, over 16,384 characters, a second time, after the turn ended, while the run is stopping, or in a run without a ticket                                                                                 | refused (`invalid-input`, `agent-not-live`, `run-cancelling`); the first note stays.                                            |
-| R5  | A researcher asks the server's gate for `Edit`, `Write` or `Bash`; calls `merge_change`, `start_agent`, `report_work` or `submit_plan`                                                                                               | denied with the researcher's read-only message, no approval stored; each tool call rejected, no agent starts, no agent note.    |
+| RS1 | A Claude researcher uses `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `Bash`; a Codex researcher gets command and file-change approvals                                                                                           | Claude: denied with the read-only message, never asked (the tools are also out of its context); Codex: `decline`, never asked.  |
+| RS2 | A researcher calls `merge_change`, `start_agent`, `message_agent`, `submit_plan`, `post_review`, `submit_review`, `report_work`, `request_review` (or any other non-researcher tool, or an impostor or namespaced `report_findings`) | Claude: denied ("The researcher can only report its findings"); Codex: `success: false`; the engine's handler is never reached. |
+| RS3 | The engine gets the same calls from a researcher (lead tools, change tools, other roles' notes, assistant tools)                                                                                                                     | refused `not-lead`; no effect.                                                                                                  |
+| RS4 | `report_findings` empty, blank, over 16,384 characters, a second time, after the turn ended, while the run is stopping, or in a run without a ticket                                                                                 | refused (`invalid-input`, `agent-not-live`, `run-cancelling`); the first note stays.                                            |
+| RS5 | A researcher asks the server's gate for `Edit`, `Write` or `Bash`; calls `merge_change`, `start_agent`, `report_work` or `submit_plan`                                                                                               | denied with the researcher's read-only message, no approval stored; each tool call rejected, no agent starts, no agent note.    |
 
 No `knownGap`: every case passes today.
 
@@ -279,6 +303,7 @@ pnpm --filter @acp/orchestrator exec vitest run tests/adversarial --maxWorkers=2
 pnpm --filter @acp/adapter-claude-code exec vitest run tests/managed/adversarial-commands.test.ts
 pnpm --filter @acp/adapter-codex exec vitest run tests/adversarial.test.ts
 pnpm --filter @acp/server exec vitest run tests/assistant
+pnpm --filter @acp/server exec vitest run tests/board/project-removal.test.ts
 ```
 
 The server suite takes about a minute. The others take a few seconds. All of them also run in

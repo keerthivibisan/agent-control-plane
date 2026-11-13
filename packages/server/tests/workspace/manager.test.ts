@@ -424,6 +424,29 @@ describe('cleanupOrphans', () => {
     const { manager } = setup();
     expect(await manager.cleanupOrphans([])).toEqual({ removed: [], kept: 0, failed: 0 });
   });
+
+  it('removes a deleted run’s worktree with the file system only, keeping its branch (ADR-0036)', async () => {
+    const { manager, calls } = setup();
+    const repo = makeRepo();
+    const gone = await manager.create(repo, RUN, AGENT);
+    const ended = await manager.create(repo, 'ended-run', 'a1');
+    const before = calls.length;
+
+    const result = await manager.cleanupOrphans([], (runId) => runId !== RUN);
+
+    expect(result.removed).toHaveLength(2);
+    expect(existsSync(gone.path)).toBe(false);
+    expect(existsSync(ended.path)).toBe(false);
+    // The deleted run's branch stays; the existing (ended) run's orphan goes as before.
+    const branches = git(repo, 'branch', '--list', '--format=%(refname:short)', 'acp/*').trim();
+    expect(branches).toBe(gone.branch);
+    // No git command ran in or for the deleted run's worktree.
+    for (const call of calls.slice(before)) {
+      expect(call.options.cwd).not.toBe(gone.path);
+      expect(call.args).not.toContain(gone.branch);
+      expect(call.args).not.toContain(gone.path);
+    }
+  });
 });
 
 describe('no shell (ADR-0013 §1)', () => {

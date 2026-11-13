@@ -171,7 +171,6 @@ export function workflowCannotRun(errors: number, first: string): HttpError {
 
 export interface BoardService {
   createRepoProject(body: unknown): Promise<ProjectDto>;
-  removeProject(projectId: string): void;
   getSetup(projectId: string): Promise<ProjectAgentSetup>;
   putSetup(projectId: string, body: unknown): ProjectAgentSetup;
   harnessStatus(projectId: string): Promise<HarnessStatusDto>;
@@ -790,24 +789,6 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       // A new repository has no harness yet: checks are not pre-approved until one exists.
       ensureSetup(ws, { id: created.id, name: created.name }, { harnessExists: false });
       return created;
-    },
-
-    removeProject(projectId) {
-      project(projectId);
-      // ADR-0016: tickets are never deleted, so a project with tickets (or runs) stays registered.
-      if (
-        ws.tickets.countForProject(projectId) > 0 ||
-        orch.runs.list({ projectId, limit: 1 }).length > 0
-      ) {
-        throw new HttpError(
-          409,
-          'project_has_history',
-          'This project has tickets or agent runs, which are kept as history, so it stays in the app',
-        );
-      }
-      deps.repos.projects.remove(projectId);
-      notice('projects-changed', { projectId });
-      logger.log('info', 'project removed', { projectId });
     },
 
     getSetup: setupFor,
