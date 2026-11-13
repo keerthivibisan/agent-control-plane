@@ -1,15 +1,23 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { validateWorkflowGraph, type ManagedAgentSpec } from '@acp/core';
+import {
+  deriveRoles,
+  validateWorkflowGraph,
+  validateWorkflowGraphV3,
+  type ManagedAgentSpec,
+} from '@acp/core';
 import type { AgentMessageMetaDto } from '@acp/core/api';
 import { createFakeManagedAdapter } from '../../../control/fake-adapter.js';
 import {
+  ARROWS_NODES,
   CHANGE_REVIEWER,
   CODEX_MODEL,
   LEAD,
   POOL,
   SCENARIO_IDS,
+  arrowsChecks,
+  arrowsGraph,
   codexChecks,
   observeManaged,
   outboxCounts,
@@ -17,7 +25,9 @@ import {
   recordOf,
   scenarioGraph,
   summarizeUsage,
+  tokensByProvider,
   type StartRecord,
+  type TimelineEntry,
 } from './record.js';
 
 /*
@@ -42,6 +52,105 @@ describe('the CX real-run driver (fake adapters only)', () => {
     expect(parseScenario('lead')).toBe('lead');
     expect(parseScenario(undefined)).toBeNull();
     expect(parseScenario('a')).toBeNull();
+    expect(parseScenario('arrows')).toBe('arrows');
+  });
+
+  it('scenario arrows: a valid version 3 graph with researchers, a planner and a fan-out', () => {
+    const graph = arrowsGraph('haiku');
+    expect(validateWorkflowGraphV3(graph, { projectMode: 'auto-edits' })).toEqual([]);
+    const roles = deriveRoles(graph);
+    const role = (id: string) => {
+      const r = roles.get(id);
+      return r?.ok === true ? r.role : null;
+    };
+    const n = ARROWS_NODES;
+    expect(role(n.researcherClaude)).toEqual({ role: 'researcher' });
+    expect(role(n.researcherCodex)).toEqual({ role: 'researcher' });
+    expect(role(n.planner)).toEqual({ role: 'planner' });
+    expect(role(n.reviewerClaude)).toEqual({ role: 'reviewer', scope: 'change' });
+    expect(role(n.reviewerCodex)).toEqual({ role: 'reviewer', scope: 'change' });
+    const research = graph.edges.filter((e) => e.type === 'research');
+    expect(research.map((e) => [e.from, e.to, e.label])).toEqual([
+      [n.researcherClaude, n.planner, 'Repo layout'],
+      [n.researcherCodex, n.planner, 'Repo layout'],
+    ]);
+    for (const node of graph.nodes) {
+      if (node.type !== 'agent' && node.type !== 'lead') continue;
+      const codex = node.id === n.researcherCodex || node.id === n.reviewerCodex;
+      expect([node.provider, node.model, node.effort]).toEqual(
+        codex ? ['codex', CODEX_MODEL, 'low'] : ['claude-code', 'haiku', 'low'],
+      );
+    }
+  });
+
+  it('arrowsChecks: start order, research notes and a decided two-provider fan-out', () => {
+    const t = (
+      event: 'start' | 'finish',
+      start: number,
+      provider: 'claude-code' | 'codex',
+      kind: TimelineEntry['kind'],
+    ): TimelineEntry => ({ event, start, provider, kind });
+    const timeline = [
+      t('start', 0, 'claude-code', 'researcher'),
+      t('start', 1, 'codex', 'researcher'),
+      t('finish', 0, 'claude-code', 'researcher'),
+      t('finish', 1, 'codex', 'researcher'),
+      t('start', 2, 'claude-code', 'planner'),
+    ];
+    const review = (provider: string, decision: string | null) => ({
+      change: 'h1',
+      round: 0,
+      reviewer: 'agent',
+      reviewerProvider: provider,
+      verdict: 'approve',
+      decision,
+    });
+    const ok = arrowsChecks(
+      timeline,
+      [review('claude-code', 'merge'), review('codex', 'merge')],
+      [120, 80],
+    );
+    expect(ok).toMatchObject({
+      startOrder: ['claude-code:researcher', 'codex:researcher', 'claude-code:planner'],
+      researchersBothProviders: true,
+      researchersBeforePlanner: true,
+      researchersFinishedBeforePlanner: true,
+      researchComments: 2,
+      fanOutRounds: 1,
+      fanOutDecided: true,
+    });
+    const late = arrowsChecks(
+      [timeline[0]!, timeline[4]!, timeline[1]!],
+      [review('codex', null)],
+      [],
+    );
+    expect(late).toMatchObject({
+      researchersBothProviders: true,
+      researchersBeforePlanner: false,
+      fanOutRounds: 0,
+      fanOutDecided: false,
+    });
+  });
+
+  it('tokensByProvider sums the deduplicated usage rows, a null as nothing', () => {
+    expect(
+      tokensByProvider([
+        {
+          provider: 'codex',
+          input_tokens: 5,
+          output_tokens: null,
+          cache_creation_tokens: 0,
+          cache_read_tokens: 2,
+        },
+        {
+          provider: 'codex',
+          input_tokens: 1,
+          output_tokens: 3,
+          cache_creation_tokens: null,
+          cache_read_tokens: null,
+        },
+      ]),
+    ).toEqual({ codex: { input: 6, output: 3, cacheCreation: 0, cacheRead: 2 } });
   });
 
   for (const id of SCENARIO_IDS) {
