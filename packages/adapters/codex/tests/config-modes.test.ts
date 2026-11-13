@@ -6,7 +6,7 @@ import {
   profileOverrides,
   tomlString,
 } from '../src/config.js';
-import { codexModes, profileFilesystem } from '../src/modes.js';
+import { codexModes, profileFilesystem, tempDirOf } from '../src/modes.js';
 import type { CodexProfile } from '../src/modes.js';
 import { makeSpec } from './helpers/fake-app-server.js';
 
@@ -200,7 +200,13 @@ describe('profileFilesystem', () => {
 
   it('denies every deny list and /tmp, then re-opens git dirs, read-only dirs, the folder and the temp folder', () => {
     const entries = profileFilesystem(
-      { cwd, fullAuto, denyRead: ['/home/u/.codex', '/data'], readOnlyDirs: ['/data/runs/r/att'] },
+      {
+        kind: 'worker',
+        cwd,
+        fullAuto,
+        denyRead: ['/home/u/.codex', '/data'],
+        readOnlyDirs: ['/data/runs/r/att'],
+      },
       ':workspace',
       ['/tmp', '/var/folders/x/T'],
     );
@@ -223,12 +229,12 @@ describe('profileFilesystem', () => {
   });
 
   it('without a run temp folder denies :tmpdir and leaves the host folders to it', () => {
-    const entries = profileFilesystem({ cwd }, ':read-only', ['/var/folders/x/T']);
+    const entries = profileFilesystem({ kind: 'worker', cwd }, ':read-only', ['/var/folders/x/T']);
     expect(entries).toEqual({ ':slash_tmp': 'deny', ':tmpdir': 'deny', [cwd]: 'read' });
   });
 
   it('takes the tightened sandbox paths like Full auto ones', () => {
-    const entries = profileFilesystem({ cwd, sandbox: fullAuto }, ':read-only');
+    const entries = profileFilesystem({ kind: 'tester', cwd, sandbox: fullAuto }, ':read-only');
     expect(entries).toMatchObject({
       '/home/u/.ssh': 'deny',
       '/data': 'deny',
@@ -240,10 +246,45 @@ describe('profileFilesystem', () => {
 
   it('never loosens a deny of the exact same path', () => {
     const entries = profileFilesystem(
-      { cwd, denyRead: [cwd, '/repo/.git'], fullAuto: { ...fullAuto, denyRead: [] } },
+      {
+        kind: 'worker',
+        cwd,
+        denyRead: [cwd, '/repo/.git'],
+        fullAuto: { ...fullAuto, denyRead: [] },
+      },
       ':workspace',
     );
     expect(entries[cwd]).toBe('deny');
     expect(entries['/repo/.git']).toBe('deny');
+  });
+
+  // AR-6: the Full auto temp folder is write access, so only an editing role may get it, whatever
+  // its arrows say (ADR-0037 §1). The server never sets it for others; this is the adapter's own
+  // line of defence.
+  it.each(['planner', 'researcher', 'reviewer', 'lead'] as const)(
+    'gives a %s no writable temp folder even when it carries Full auto or sandbox paths',
+    (kind) => {
+      for (const paths of [{ fullAuto }, { sandbox: fullAuto }]) {
+        const entries = profileFilesystem({ kind, cwd, ...paths }, ':read-only', [
+          '/var/folders/x/T',
+        ]);
+        expect(entries['/data/sandbox-tmp/run-1']).toBeUndefined();
+        expect(Object.values(entries)).not.toContain('write');
+        expect(entries[':tmpdir']).toBe('deny');
+        expect(entries['/home/u/.ssh']).toBe('deny');
+        expect(tempDirOf({ kind, ...paths })).toBeNull();
+        const modes = codexModes(makeSpec({ kind, cwd, approvalMode: 'full-auto', ...paths }));
+        expect(modes.approvalPolicy).toBe('never');
+        expect(modes.profile.extends).toBe(':read-only');
+        expect(Object.values(modes.profile.filesystem)).not.toContain('write');
+      }
+    },
+  );
+
+  it.each(['worker', 'tester'] as const)('keeps the temp folder writable for a %s', (kind) => {
+    expect(tempDirOf({ kind, fullAuto })).toBe('/data/sandbox-tmp/run-1');
+    expect(profileFilesystem({ kind, cwd, fullAuto }, ':workspace')).toMatchObject({
+      '/data/sandbox-tmp/run-1': 'write',
+    });
   });
 });
