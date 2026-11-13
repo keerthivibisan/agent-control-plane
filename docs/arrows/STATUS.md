@@ -56,3 +56,14 @@ Paused on the owner's request while AR-3 was starting. To resume:
   not started. See "Resume here".
 - 2026-11-13 Resumed. Merged dev (ADR-0036); the AR-3 WIP builds again (graph type left v2). AR-3
   and AR-5a restarted in parallel.
+- 2026-11-13 AR-3 (engine) ready for review on `feature/workflow/arrows`: v3 run snapshots
+  (`RunState.graph` any version; the DB snapshot parser takes v3); researchers before planning
+  (chains in order, parallel within the helper limit) and held planners or planning lead, whose
+  brief quotes each finding as data with the arrow's label and purpose; the lead starts every
+  other researcher with `start_agent` (findings reach it as a notice); custom hand-offs (start
+  brief or notice, once per source; engine-started targets wait for unfinished sources); several
+  planners → plan options, PLAN_REVIEW once all submitted or ended, `decidePlanOption` (no
+  auto-approve); review fan-out (any rework wins, direct only on a direct route, "no verdict"
+  told to the lead). Deferred: storing plan drafts and serving v3 run graphs (AR-4,
+  `runGraphOf` throws `RunGraphVersionError` for a v3-only run graph), `researcherPrompt` wiring
+  in the server (AR-4).
