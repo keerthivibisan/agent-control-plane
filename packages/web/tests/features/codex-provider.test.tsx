@@ -1,4 +1,9 @@
-import { WorkflowGraphSchema, validateWorkflowGraph, type WorkflowGraph } from '@acp/core';
+import {
+  WorkflowGraphSchema,
+  migrateWorkflowV2,
+  validateWorkflowGraph,
+  type WorkflowGraph,
+} from '@acp/core';
 import {
   AgentRunDtoSchema,
   WorkflowGraphDtoSchema,
@@ -201,7 +206,7 @@ describe('provider per agent block', () => {
   });
 
   it('patchNode sets and clears provider on agent blocks only', () => {
-    const g = graphOf(customGraph());
+    const g = migrateWorkflowV2(graphOf(customGraph()));
     const lead = g.nodes.find((n) => n.id === 'orchestrate');
     const ticket = g.nodes.find((n) => n.id === 'ticket');
     if (lead === undefined || ticket === undefined) throw new Error('fixture');
@@ -353,7 +358,8 @@ describe('provider chips on the live graph and in the agent’s Details', () => 
       createdAt: T1,
       endedAt: null,
     });
-    const codexNode = patchNode(node, { provider: 'codex' });
+    // The live graph reads the run's version 2 graph: the block with a provider of its own.
+    const codexNode = { ...node, provider: 'codex' as const };
     expect(liveProvider(node, [])).toBeNull();
     expect(liveProvider(codexNode, [])).toBe('codex');
     expect(liveProvider(codexNode, [{ ...agent, provider: 'claude-code' }])).toBe('claude-code');

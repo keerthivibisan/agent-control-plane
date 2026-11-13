@@ -1,14 +1,17 @@
-import type { WorkflowEdgeType, WorkflowGraph, WorkflowNodeId } from '@acp/core';
+import type { WorkflowEdgeTypeV3, WorkflowGraphV3, WorkflowNodeId } from '@acp/core';
 import { FINISH_COPY } from '../../../lib/copy';
 import { finishView } from '../finish';
 import type { LinkTarget } from './nodes';
 import { refusalFor, refusalTarget, resolveLink, type LinkOption } from './state';
 
+type WorkflowEdgeType = WorkflowEdgeTypeV3;
+type WorkflowGraph = WorkflowGraphV3;
+
 /**
  * Linking blocks, the pure parts (v0.3.1 P-C): where a dropped link ends (magnetic snapping), the
  * links "Link to…" offers, and moving an end of a link. Whether a link may exist is always core's
- * `canConnect` through `resolveLink` (state.ts), so every way of linking (drag, click, the menus,
- * moving an end) makes exactly the links the server accepts.
+ * `canConnectV3` through `resolveLink` (state.ts), so every way of linking (drag, click, the
+ * menus, moving an end) makes exactly the links core accepts.
  */
 
 /** How far (screen pixels) from a valid block a dropped link still snaps onto it. */
@@ -84,9 +87,12 @@ export function anchorOn(
 
 /** What dropping (or clicking) a link from `from` onto `to`, both as drawn, does. */
 export type LinkOutcome =
-  /** Exactly one kind fits: the link is made at once. */
+  /** Exactly one kind fits, and it is not Custom: the link is made at once. */
   | { kind: 'link'; from: WorkflowNodeId; to: WorkflowNodeId; type: WorkflowEdgeType }
-  /** Several kinds fit: the owner picks one by the drop point. */
+  /**
+   * Several kinds fit, or Custom does (ADR-0037 §2: a hand-off between two agents is always the
+   * owner's choice, never made for them): the owner picks one by the drop point.
+   */
   | { kind: 'choose'; option: LinkOption }
   /** None fits: refused in `canConnect`'s own words. */
   | { kind: 'refused'; message: string }
@@ -105,7 +111,7 @@ export function linkOutcome(
     return { kind: 'refused', message: refusalFor(graph, from, refusalTarget(graph, to)) };
   }
   const [only, ...more] = option.types;
-  if (only !== undefined && more.length === 0) {
+  if (only !== undefined && more.length === 0 && only !== 'custom') {
     return { kind: 'link', from: option.from, to: option.to, type: only };
   }
   return { kind: 'choose', option };

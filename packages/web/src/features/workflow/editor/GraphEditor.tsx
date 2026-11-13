@@ -1,9 +1,9 @@
 import type {
   NodePosition,
-  WorkflowEdgeType,
-  WorkflowGraph,
-  WorkflowNode,
+  WorkflowEdgeTypeV3,
+  WorkflowGraphV3,
   WorkflowNodeId,
+  WorkflowNodeV3,
 } from '@acp/core';
 import * as RadixPopover from '@radix-ui/react-popover';
 import {
@@ -74,7 +74,11 @@ import { Palette } from './Palette';
 import { tidyGraph, type EditorAction, type Selection } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
+const A = EDITOR_COPY.arrows;
 const Z = EDITOR_COPY.zoom;
+type WorkflowEdgeType = WorkflowEdgeTypeV3;
+type WorkflowGraph = WorkflowGraphV3;
+type WorkflowNode = WorkflowNodeV3;
 const T = EDITOR_COPY.toolbar;
 const FIT = { padding: 0.1, maxZoom: 1 } as const;
 const MIN_ZOOM = 0.3;
@@ -342,12 +346,13 @@ function EdgeChoice({
                 type="button"
                 onClick={() => onChoose(t)}
                 className="flex flex-col items-start gap-0.5 rounded-control px-2 py-1.5 text-left transition-colors hover:bg-hover focus-visible:-outline-offset-2"
+                data-testid={`edge-choice-${t}`}
               >
                 <span className="flex items-center gap-2 font-medium">
                   <LinkSample type={t} />
-                  {G.edges[t]}
+                  {A.names[t]}
                 </span>
-                <span className="pl-9 text-caption text-dim">{G.edgeText[t]}</span>
+                <span className="pl-9 text-caption text-dim">{A.text[t]}</span>
               </button>
             ))}
           </div>
@@ -726,7 +731,9 @@ function Canvas({
         dispatch({ type: 'refuse', message: result.message });
       } else if (result.kind === 'ok') {
         const [only] = result.types;
-        if (result.types.length === 1 && only !== undefined) {
+        // A moved arrow becomes a custom hand-off only when the owner picks it (ADR-0037 §2).
+        const kept = g.edges.find((e) => e.id === r.id)?.type === only;
+        if (result.types.length === 1 && only !== undefined && (only !== 'custom' || kept)) {
           dispatch({
             type: 'reconnect',
             id: r.id,

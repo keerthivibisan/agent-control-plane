@@ -1,4 +1,4 @@
-import { approvalsOf, type WorkflowGraph } from '@acp/core';
+import { approvalsOf, type WorkflowGraphV3 } from '@acp/core';
 import type { WorkflowGraphDto } from '@acp/core/api';
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
@@ -31,6 +31,7 @@ import { editorIssues, hasErrors } from './editor/issues';
 import { IssueCounter, IssuesList, type EditorIssue } from './editor/IssuesList';
 import { NodePanel, type NodePanelContext } from './editor/NodePanel';
 import { saveWorkflowGraph } from './editor/save';
+import { canSaveToServer, fromServerGraph, serverForm } from './editor/server-graph';
 import { historyReducer, initialHistoryState } from './editor/history';
 import { sameGraph, type Selection } from './editor/state';
 import { TemplatePicker } from './editor/TemplatePicker';
@@ -44,7 +45,7 @@ const H = EDITOR_COPY.header;
 /** The last save the server refused: its error, and its issues for the graph that was sent. */
 interface Refused {
   error: ApiError;
-  graph: WorkflowGraph;
+  graph: WorkflowGraphV3;
   issues: EditorIssue[] | null;
 }
 
@@ -108,13 +109,15 @@ function EditorHeader({ actions, status }: { actions: ReactNode; status: ReactNo
  */
 function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGraphDto }) {
   const store = useQueryStore();
-  const [state, dispatch] = useReducer(historyReducer, dto.graph, initialHistoryState);
+  // The editor works on version 3 (ADR-0037); the server's graph comes in through one adapter.
+  const saved = useMemo(() => fromServerGraph(dto.graph), [dto.graph]);
+  const [state, dispatch] = useReducer(historyReducer, saved, initialHistoryState);
   const [templates, setTemplates] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const [pending, setPending] = useState(false);
   const [refused, setRefused] = useState<Refused | null>(null);
   /** The graph the last save stored, until the refetch brings it back as `dto.graph`. */
-  const [stored, setStored] = useState<WorkflowGraph | null>(null);
+  const [stored, setStored] = useState<WorkflowGraphV3 | null>(null);
   const agentFiles = useApiQuery(workflowPaths.agents(projectId), workflowSchemas.agents).data;
   // The harness's checks, for the Checks blocks' picks (ADR-0027); unknown while it loads.
   const harness = useApiQuery(
@@ -164,9 +167,12 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   const view = useMemo(() => finishView(graph), [graph]);
   const shownIssues = useMemo(() => finishIssues(issues, graph, view), [issues, graph, view]);
   const blocked = hasErrors(issues);
+  // A graph with parts the server can't store yet stays editable but can't be saved (AR-4 lifts it).
+  const saveCheck = useMemo(() => canSaveToServer(graph), [graph]);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warningCount = issues.length - errorCount;
-  const dirty = !sameGraph(graph, dto.graph) && !(stored !== null && sameGraph(graph, stored));
+  const dirty =
+    !sameGraph(serverForm(graph), saved) && !(stored !== null && sameGraph(graph, stored));
   useUnsavedGuard(dirty, S.leave);
 
   const agentModels = useMemo(
@@ -207,7 +213,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   }, []);
 
   const save = async () => {
-    if (blocked || pending) return;
+    if (blocked || pending || !saveCheck.ok) return;
     setPending(true);
     setRefused(null);
     const sent = graph;
@@ -316,7 +322,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
               <Button
                 onClick={() => {
                   setRefused(null);
-                  dispatch({ type: 'replace', graph: dto.graph });
+                  dispatch({ type: 'replace', graph: saved });
                 }}
                 disabled={pending}
                 data-testid="discard-workflow"
@@ -327,8 +333,10 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
             <Button
               variant="primary"
               onClick={() => void save()}
-              disabled={!dirty || blocked || pending}
-              aria-describedby={blocked ? 'workflow-save-blocked' : undefined}
+              disabled={!dirty || blocked || pending || !saveCheck.ok}
+              aria-describedby={
+                blocked ? 'workflow-save-blocked' : !saveCheck.ok ? 'workflow-save-v3' : undefined
+              }
               data-testid="save-workflow"
             >
               {pending ? S.saving : S.save}
@@ -336,6 +344,20 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           </>
         }
       />
+      {!blocked && !saveCheck.ok ? (
+        <p
+          id="workflow-save-v3"
+          role="status"
+          className="flex items-start gap-2 rounded-card border border-warning/30 bg-warning-soft px-4 py-3 text-warning"
+          data-testid="save-v3-only"
+          data-parts={saveCheck.parts.join(' ')}
+        >
+          <AlertIcon size={15} className="mt-0.5 shrink-0" />
+          <span className="min-w-0">
+            {EDITOR_COPY.save.v3Only(saveCheck.parts.map((p) => EDITOR_COPY.save.parts[p]))}
+          </span>
+        </p>
+      ) : null}
       {refused !== null ? (
         <div className="flex flex-col gap-1.5" data-testid="save-refusal">
           <p

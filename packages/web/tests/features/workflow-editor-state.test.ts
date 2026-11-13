@@ -3,9 +3,12 @@ import {
   defaultProjectWorkflow,
   isGraphRunnable,
   migrateWorkflowV1,
+  migrateWorkflowV2,
   validateWorkflowGraph,
+  validateWorkflowGraphV3,
   workflowTemplate,
   type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
@@ -19,6 +22,7 @@ import {
 import { countConflicts, drawnLinks } from '../../src/features/workflow/editor/routing';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
 import { layoutGraph, sizeOf } from '../../src/features/workflow/editor/layout';
+import { graphRoles } from '../../src/features/workflow/editor/roles';
 import {
   allowedEdgeTypes,
   edgeIdFor,
@@ -39,17 +43,25 @@ import {
 /*
  * WG-D: the graph editor's pure parts. The reducer (add, remove, connect, refused links,
  * positions, the forced planner and final-chain wiring), the layout, the React Flow mapping and the
- * fixtures the page and e2e tests share. Every link rule is core's `canConnect`, so these tests
- * check the editor uses it, not the rules themselves (WG-A's tests do).
+ * fixtures the page and e2e tests share. Every link rule is core's `canConnectV3`, so these tests
+ * check the editor uses it, not the rules themselves (core's tests do). The editor works on version
+ * 3 (ADR-0037, AR-5a): the version 2 fixtures and templates are migrated first, as the page does.
  */
 
 const parse = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
-const todays = () => workflowTemplate('todays-setup');
-const run = (graph: WorkflowGraph, ...actions: EditorAction[]): EditorState =>
+const v3 = (g: WorkflowGraph): WorkflowGraphV3 => migrateWorkflowV2(g);
+const todays = () => v3(workflowTemplate('todays-setup'));
+const run = (graph: WorkflowGraphV3, ...actions: EditorAction[]): EditorState =>
   actions.reduce(editorReducer, initialEditorState(graph));
-const errors = (g: WorkflowGraph) => validateWorkflowGraph(g).filter((i) => i.severity === 'error');
-const has = (g: WorkflowGraph, type: string, from: string, to: string) =>
+const errors = (g: WorkflowGraphV3) =>
+  validateWorkflowGraphV3(g).filter((i) => i.severity === 'error');
+const errorsV2 = (g: WorkflowGraph) =>
+  validateWorkflowGraph(g).filter((i) => i.severity === 'error');
+const has = (g: WorkflowGraphV3, type: string, from: string, to: string) =>
   g.edges.some((e) => e.type === type && e.from === from && e.to === to);
+/** The blocks whose derived role is `kind`. */
+const withKind = (g: WorkflowGraphV3, kind: string) =>
+  g.nodes.filter((n) => graphRoles(g).kinds.get(n.id) === kind);
 
 describe('fixtures', () => {
   it('parse as WorkflowGraphDto, and the migrated graph is core’s migration of the default', () => {
@@ -61,7 +73,7 @@ describe('fixtures', () => {
       { plannerMode: v1.plannerMode, stages: v1.stages },
       { projectMode: 'auto-edits' },
     );
-    expect(sameGraph(parse(migratedGraph()), migrated)).toBe(true);
+    expect(sameGraph(v3(parse(migratedGraph())), v3(migrated))).toBe(true);
   });
 
   it('the hand-built graph is valid, with warnings only for its missing skill and agent file', () => {
@@ -80,16 +92,17 @@ describe('fixtures', () => {
 describe('editor reducer: adding blocks', () => {
   it('adds a named helper with a free id and label, selects it, and marks the graph custom', () => {
     const s = run(todays(), { type: 'add', item: 'helper' }, { type: 'add', item: 'helper' });
-    const helpers = s.graph.nodes.filter((n) => n.type === 'helper');
+    const helpers = withKind(s.graph, 'helper');
     expect(helpers.map((n) => [n.id, n.label])).toEqual([
       ['helper-1', 'Helper 1'],
       ['helper-2', 'Helper 2'],
     ]);
     expect(s.selection).toEqual({ kind: 'node', id: 'helper-2' });
     expect(s.graph.template).toBe('custom');
-    // A new named helper is not linked yet: the problems say so.
+    // The preset draws the lead's implement arrow; its review route is the owner's choice.
+    expect(has(s.graph, 'implement', 'orchestrate', 'helper-1')).toBe(true);
     const codes = errors(s.graph).map((i) => `${i.code}:${i.nodeId ?? ''}`);
-    expect(codes).toContain('not-assigned:helper-1');
+    expect(codes).not.toContain('not-assigned:helper-1');
     expect(codes).toContain('no-review-route:helper-1');
   });
 
@@ -97,7 +110,7 @@ describe('editor reducer: adding blocks', () => {
     const added = run(todays(), { type: 'add', item: 'planner' });
     const g = added.graph;
     expect(has(g, 'flow', 'ticket', 'plan')).toBe(true);
-    expect(has(g, 'flow', 'plan', 'plan-approval')).toBe(true);
+    expect(has(g, 'plan', 'plan', 'plan-approval')).toBe(true);
     expect(has(g, 'flow', 'plan-approval', 'orchestrate')).toBe(true);
     expect(has(g, 'flow', 'ticket', 'orchestrate')).toBe(false);
     expect(errors(g)).toEqual([]);
@@ -115,7 +128,7 @@ describe('editor reducer: adding blocks', () => {
     );
     const g = s.graph;
     expect(has(g, 'flow', 'ticket-merge', 'code-review')).toBe(true);
-    expect(has(g, 'flow', 'code-review', 'unit-tests')).toBe(true);
+    expect(has(g, 'test', 'code-review', 'unit-tests')).toBe(true);
     expect(has(g, 'flow', 'unit-tests', 'owner-merge')).toBe(true);
     expect(has(g, 'flow', 'ticket-merge', 'owner-merge')).toBe(false);
     // The final reviewer is complete; the tester still needs its review route.
@@ -123,21 +136,22 @@ describe('editor reducer: adding blocks', () => {
       'no-review-route:unit-tests',
     ]);
     const without = editorReducer(s, { type: 'remove-node', id: 'code-review' });
-    expect(has(without.graph, 'flow', 'ticket-merge', 'unit-tests')).toBe(true);
+    expect(has(without.graph, 'test', 'ticket-merge', 'unit-tests')).toBe(true);
   });
 
-  it('respects NODE_CAPABILITIES: one planner and one pool; the palette says why', () => {
-    const g = parse(customGraph());
-    for (const item of ['planner', 'helper-pool'] as const) {
-      const a = paletteAvailability(g, item);
-      expect(a.ok).toBe(false);
-      if (!a.ok) expect(a.reason).toMatch(/can have only one/);
-      expect(run(g, { type: 'add', item }).graph).toBe(g);
-    }
+  it('respects core’s counts per role: two testers at most; several planners are fine', () => {
+    const g = v3(parse(customGraph()));
+    // ADR-0037 §4: a second planner joins the plan path, and you pick one plan.
+    expect(paletteAvailability(g, 'planner').ok).toBe(true);
+    const two = run(g, { type: 'add', item: 'planner' }).graph;
+    expect(withKind(two, 'planner').map((n) => n.id)).toEqual(['plan', 'plan-2']);
+    expect(has(two, 'plan', 'plan-2', 'plan-approval')).toBe(true);
+    expect(has(two, 'flow', 'ticket', 'plan-2')).toBe(true);
+    expect(errors(two)).toEqual([]);
     expect(paletteAvailability(g, 'helper').ok).toBe(true);
     let s = initialEditorState(g);
     for (let i = 0; i < 10; i += 1) s = editorReducer(s, { type: 'add', item: 'tester' });
-    expect(s.graph.nodes.filter((n) => n.type === 'tester')).toHaveLength(2);
+    expect(withKind(s.graph, 'tester')).toHaveLength(2);
     const t = paletteAvailability(s.graph, 'tester');
     expect(!t.ok && t.reason).toMatch(/2 of this block/);
   });
@@ -155,21 +169,21 @@ describe('editor reducer: removing, connecting, moving', () => {
     expect(errors(s.graph).map((i) => i.code)).toContain('no-review-route');
   });
 
-  it('connects only what canConnect allows, and refuses the rest in its words', () => {
-    const s = run(todays(), { type: 'add', item: 'helper' });
+  it('connects only what canConnectV3 allows, and refuses the rest in its words', () => {
+    const s = run(todays(), { type: 'add', item: 'agent' });
     const ok = editorReducer(s, {
       type: 'connect',
       from: 'orchestrate',
-      to: 'helper-1',
-      edgeType: 'assigns',
+      to: 'agent-1',
+      edgeType: 'implement',
     });
-    expect(has(ok.graph, 'assigns', 'orchestrate', 'helper-1')).toBe(true);
-    expect(ok.selection).toEqual({ kind: 'edge', id: 'assigns-orchestrate-helper-1' });
+    expect(has(ok.graph, 'implement', 'orchestrate', 'agent-1')).toBe(true);
+    expect(ok.selection).toEqual({ kind: 'edge', id: 'implement-orchestrate-agent-1' });
     expect(ok.refusal).toBeNull();
-    // A helper can't merge: refused, the graph unchanged, the message is canConnect's.
+    // A helper can't merge: refused, the graph unchanged, the message is core's.
     const refused = editorReducer(ok, {
       type: 'connect',
-      from: 'helper-1',
+      from: 'agent-1',
       to: 'checks',
       edgeType: 'merge',
     });
@@ -179,18 +193,22 @@ describe('editor reducer: removing, connecting, moving', () => {
     const dup = editorReducer(ok, {
       type: 'connect',
       from: 'orchestrate',
-      to: 'helper-1',
-      edgeType: 'assigns',
+      to: 'agent-1',
+      edgeType: 'implement',
     });
-    expect(dup.refusal).toMatch(/already has a assigns link/);
+    expect(dup.refusal).toMatch(/already has a implement link/);
     expect(editorReducer(dup, { type: 'dismiss-refusal' }).refusal).toBeNull();
   });
 
   it('lists the link kinds that fit two blocks, and explains why none does', () => {
     const g = todays();
     expect(allowedEdgeTypes(g, 'orchestrate', 'helpers')).toEqual([]); // both already there
+    const agent = run(g, { type: 'add', item: 'agent' }).graph;
+    expect(allowedEdgeTypes(agent, 'orchestrate', 'agent-1')).toEqual(['implement']);
+    expect(allowedEdgeTypes(agent, 'agent-1', 'orchestrate')).toEqual(['research']);
+    expect(allowedEdgeTypes(agent, 'agent-1', 'review')).toEqual(['research', 'custom']);
     const s = run(g, { type: 'add', item: 'helper' });
-    expect(allowedEdgeTypes(s.graph, 'orchestrate', 'helper-1')).toEqual(['assigns', 'rework']);
+    expect(allowedEdgeTypes(s.graph, 'orchestrate', 'helper-1')).toEqual(['rework']);
     expect(allowedEdgeTypes(s.graph, 'helper-1', 'orchestrate')).toEqual(['review']);
     expect(allowedEdgeTypes(s.graph, 'helper-1', 'checks')).toEqual([]);
     expect(refusalFor(s.graph, 'helper-1', 'checks')).toMatch(
@@ -279,7 +297,7 @@ describe('issues, layout and the canvas mapping', () => {
   });
 
   it('keeps saved positions and lays out the rest left to right without overlaps', () => {
-    const g = parse(customGraph());
+    const g = v3(parse(customGraph()));
     const moved = {
       ...g,
       nodes: g.nodes.map((n) => (n.id === 'plan' ? { ...n, position: { x: 5, y: 6 } } : n)),
@@ -317,7 +335,7 @@ describe('issues, layout and the canvas mapping', () => {
   });
 
   it('maps blocks and links for React Flow: kinds, removability, back links, labels', () => {
-    const g = parse(customGraph());
+    const g = v3(parse(customGraph()));
     const ctx: BlockContext = {
       skills: ['plan-tickets'],
       agents: ['db-migrator'],
@@ -431,15 +449,15 @@ describe('linking and drawing (v0.3.0 D-C)', () => {
 
   it('draws every template without links crossing, the dense hand-built graph with one', () => {
     const templates = [
-      workflowTemplate('lead-only'),
+      v3(workflowTemplate('lead-only')),
       todays(),
-      workflowTemplate('reviewer-helper-loop'),
-      workflowTemplate('todays-setup', { planner: true }),
+      v3(workflowTemplate('reviewer-helper-loop')),
+      v3(workflowTemplate('todays-setup', { planner: true })),
     ];
     for (const g of templates) expect(countConflicts(drawnLinks(g, layoutGraph(g)))).toBe(0);
     // Two helpers stacked, the lead assigning both and reworking the first: its rework loop has to
     // cross the line to the second (there is no way round in rows).
-    const custom = parse(customGraph());
+    const custom = v3(parse(customGraph()));
     expect(countConflicts(drawnLinks(custom, layoutGraph(custom)))).toBeLessThanOrEqual(1);
   });
 });
@@ -455,7 +473,7 @@ describe('templates and restore', () => {
     expect(g.nodes.find((n) => n.type === 'plan-approval')).toMatchObject({ auto: true });
     expect(g.nodes.some((n) => n.type === 'planner')).toBe(true);
     expect(g.legacyV1).toEqual(legacy);
-    expect(errors(g)).toEqual([]);
+    expect(errorsV2(g)).toEqual([]);
     const ask = templateGraph('reviewer-helper-loop', { planner: false, projectMode: 'auto' });
     expect(ask.nodes.find((n) => n.type === 'plan-approval')).toMatchObject({ auto: false });
     expect(validateWorkflowGraph(ask, { projectMode: 'auto' })).toEqual([]);
@@ -464,7 +482,9 @@ describe('templates and restore', () => {
   it('restores the version 1 setup with core’s migration', () => {
     const legacy = parse(migratedGraph()).legacyV1;
     if (legacy === undefined) throw new Error('fixture has no legacyV1');
-    expect(sameGraph(restoredGraph(legacy, 'auto-edits'), parse(migratedGraph()))).toBe(true);
+    expect(sameGraph(v3(restoredGraph(legacy, 'auto-edits')), v3(parse(migratedGraph())))).toBe(
+      true,
+    );
   });
 
   it('the wizard saves nothing for the default, and a custom graph for "Build my own"', () => {
@@ -472,6 +492,6 @@ describe('templates and restore', () => {
     expect(isDefaultChoice({ template: 'todays-setup', planner: true })).toBe(false);
     const own = choiceGraph({ template: 'custom', planner: false }, 'auto-edits');
     expect(own.template).toBe('custom');
-    expect(sameGraph({ ...own, template: 'todays-setup' }, todays())).toBe(true);
+    expect(sameGraph(v3({ ...own, template: 'todays-setup' }), todays())).toBe(true);
   });
 });

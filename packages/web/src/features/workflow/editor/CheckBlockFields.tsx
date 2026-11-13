@@ -5,7 +5,7 @@ import {
   type CheckSelection,
   type HarnessCheck,
   type HarnessStatus,
-  type WorkflowGraph,
+  type WorkflowGraphV3 as WorkflowGraph,
 } from '@acp/core';
 import { useId, type Dispatch, type ReactNode } from 'react';
 import { AlertIcon, CheckIcon } from '../../../components/icons';
