@@ -7,8 +7,10 @@ import {
   agentEvent,
   decidePlan,
   decidePlanOption,
+  deriveRunWorkflowGraph,
   ownerChat,
   programOf,
+  runGraphV3Of,
   ticketBranchCreated,
 } from '../src/index.js';
 import type { EngineEffect, RunState } from '../src/index.js';
@@ -615,5 +617,34 @@ describe('review fan-out (ADR-0037 §5)', () => {
       'review-2',
     ]);
     expect(changeOf(freed.state, 'fa-1').state).toBe('reviewing');
+  });
+});
+
+describe('the live run graph on version 3 (AR-4)', () => {
+  const graph = v3Graph({
+    planner: true,
+    pool: false,
+    planners: [{ id: 'plan-2', label: 'Codex planner' }],
+    researchers: [{ id: 'r1', label: 'Claude research', to: [{ to: 'plan', label: 'Notes' }] }],
+  });
+
+  it('serves the graph with its labels and gives researchers and each planner node a state', () => {
+    const r = ok(createV3Run(graph));
+    expect(runGraphV3Of(r.state)).toEqual(graph);
+    const nodes = new Map(deriveRunWorkflowGraph(r.state).nodes.map((n) => [n.nodeId, n]));
+    const researcher = r.state.agents.find((a) => a.kind === 'researcher');
+    expect(nodes.get('r1')).toEqual({
+      nodeId: 'r1',
+      state: 'active',
+      agentRunIds: [researcher?.id],
+    });
+    // The researched planner waits (QUEUED) for the research, the other one works; each node
+    // lists its own planner.
+    expect(nodes.get('plan')?.state).toBe('waiting');
+    expect(nodes.get('plan-2')?.state).toBe('active');
+    expect(nodes.get('plan')?.agentRunIds).toHaveLength(1);
+    expect(nodes.get('plan-2')?.agentRunIds).toHaveLength(1);
+    expect(nodes.get('plan')?.agentRunIds).not.toEqual(nodes.get('plan-2')?.agentRunIds);
+    expect(nodes.get('plan-approval')?.state).toBe('active');
   });
 });
