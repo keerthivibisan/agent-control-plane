@@ -319,18 +319,32 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     if (allowRule !== (prev?.allowRule ?? null)) loopRepos.approvalRules.set(next.id, allowRule);
   }
 
-  /** The `change_reviews` row of (agent, round), creating it when the round is new. */
+  /**
+   * The `change_reviews` row of (agent, round), creating it when the round is new. A review
+   * agent's row is its own: with a review fan-out (ADR-0037 §5) each reviewer of the round has one,
+   * keyed by its agent run.
+   */
   function roundRow(
     runId: string,
     agentRunId: string,
     round: number,
     reviewer: { kind: 'agent' | 'lead' | 'owner'; agentRunId: string | null },
   ) {
-    // The latest row of the round: a round the lead passed to the owner gets a second row.
-    const existing = loopRepos.changeReviews
+    const rows = loopRepos.changeReviews
       .listForAgentRun(agentRunId)
-      .filter((r) => r.round === round)
-      .at(-1);
+      .filter((r) => r.round === round);
+    const own =
+      reviewer.kind === 'agent' && reviewer.agentRunId !== null
+        ? rows.find((r) => r.reviewerAgentRunId === reviewer.agentRunId)
+        : undefined;
+    // Another review agent's row of the round is never this reviewer's (fan-out).
+    const othersOnly =
+      own === undefined &&
+      reviewer.kind === 'agent' &&
+      reviewer.agentRunId !== null &&
+      rows.some((r) => r.reviewerAgentRunId !== null);
+    // Otherwise the latest row of the round: a round the lead passed to the owner gets a second row.
+    const existing = own ?? (othersOnly ? undefined : rows.at(-1));
     if (existing !== undefined) return existing;
     return loopRepos.changeReviews.insert({
       runId,
@@ -468,6 +482,47 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       }
       if (effect.type === 'change-round') {
         // ADR-0021 §3: one row per review round and decision; no text (notes are comments).
+        if (effect.reviewers !== undefined) {
+          // ADR-0037 §5, a review fan-out: one row per reviewer with its own verdict; the
+          // decision gets a row of its own (below), so no reviewer's row reads as the decider's.
+          for (const r of effect.reviewers) {
+            const own = roundRow(runId, effect.agentRunId, effect.round, {
+              kind: 'agent',
+              agentRunId: r.agentRunId,
+            });
+            if (r.verdict !== null && own.verdict !== r.verdict) {
+              loopRepos.changeReviews.setVerdict(own.id, r.verdict, null);
+            }
+          }
+          if (effect.decision === null || effect.decidedBy === null) continue;
+          const latest = loopRepos.changeReviews
+            .listForAgentRun(effect.agentRunId)
+            .filter((r) => r.round === effect.round && r.reviewerAgentRunId === null)
+            .at(-1);
+          // A second decision on the round (the owner's, after the lead asked): its own row.
+          const row =
+            latest !== undefined &&
+            (latest.decision === null || latest.decision === effect.decision)
+              ? latest
+              : loopRepos.changeReviews.insert({
+                  runId,
+                  agentRunId: effect.agentRunId,
+                  round: effect.round,
+                  reviewer:
+                    effect.decidedBy === 'owner'
+                      ? 'owner'
+                      : effect.decidedBy === 'lead'
+                        ? 'lead'
+                        : 'agent',
+                });
+          if (row.decision === null) {
+            loopRepos.changeReviews.decide(row.id, {
+              decision: effect.decision,
+              decidedBy: effect.decidedBy,
+            });
+          }
+          continue;
+        }
         let row = roundRow(runId, effect.agentRunId, effect.round, {
           kind: effect.reviewer,
           agentRunId: effect.reviewerAgentRunId,

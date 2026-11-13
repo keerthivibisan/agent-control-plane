@@ -531,6 +531,14 @@ export function arrowsChecks(
       })),
     ),
     fanOutRounds: fanOut.length,
-    fanOutDecided: fanOut.length > 0 && fanOut.every((rs) => rs.some((r) => r.decision !== null)),
+    // The round's decision is on a row of its own (the lead's or owner's), or on a reviewer's row
+    // when the reviewers send the change back themselves (ADR-0037 §5).
+    fanOutDecided:
+      fanOut.length > 0 &&
+      fanOut.every((rs) =>
+        reviews.some(
+          (r) => r.change === rs[0]?.change && r.round === rs[0]?.round && r.decision !== null,
+        ),
+      ),
   };
 }

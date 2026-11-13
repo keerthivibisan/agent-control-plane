@@ -611,6 +611,13 @@ export type EngineEffect =
       verdict: ChangeVerdict | null;
       decision: ChangeDecision | null;
       decidedBy: ChangeDecider | null;
+      /**
+       * ADR-0037 §5: a review fan-out's started reviewers, each with its own verdict, in start
+       * order. Each gets its own row of the round (upsert by (agentRunId, round, reviewer's
+       * agentRunId)); `verdict` above is then the combined one and is not stored on any reviewer's
+       * row, and the decision gets a row of its own. Absent for a single reviewer.
+       */
+      reviewers?: readonly { agentRunId: string; verdict: ChangeVerdict | null }[];
     }
   /**
    * The lead's or owner's note on a change (rework comments, discard reason, question for the

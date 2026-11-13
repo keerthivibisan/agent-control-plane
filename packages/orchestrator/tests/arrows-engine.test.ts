@@ -617,6 +617,54 @@ describe('review fan-out (ADR-0037 §5)', () => {
       'review-2',
     ]);
     expect(changeOf(freed.state, 'fa-1').state).toBe('reviewing');
+    // The newly started reviewer's row is written with the first one's (one row per reviewer).
+    expect(effectsOf(freed.effects, 'change-round').at(-1)?.reviewers).toEqual([
+      { agentRunId: 'rv-1', verdict: 'approve' },
+      { agentRunId: 'nx-1', verdict: null },
+    ]);
+  });
+
+  it('every round effect carries each reviewer with its own verdict, and the decision', () => {
+    const r = reviewed('agent');
+    expect(effectsOf(r.effects, 'change-round').at(-1)?.reviewers).toEqual([
+      { agentRunId: 'rv-1', verdict: null },
+      { agentRunId: 'rv-2', verdict: null },
+    ]);
+    let s = ok(ev(r.state, 'rv-1', started('rv-1'))).state;
+    s = ok(ev(s, 'rv-2', started('rv-2'))).state;
+    const first = ok(
+      leadTool(s, 'submit_review', { verdict: 'approve', findings: 'Fine.' }, 'x', 'rv-1'),
+    );
+    const second = ok(
+      leadTool(first.state, 'submit_review', { verdict: 'rework', findings: 'No.' }, 'y', 'rv-2'),
+    );
+    expect(
+      [...first.effects, ...second.effects]
+        .filter((e) => e.type === 'review-comment')
+        .map((e) => e.agentRunId),
+    ).toEqual(['rv-1', 'rv-2']);
+    expect(effectsOf(second.effects, 'change-round').at(-1)).toMatchObject({
+      verdict: 'rework',
+      decision: null,
+      reviewers: [
+        { agentRunId: 'rv-1', verdict: 'approve' },
+        { agentRunId: 'rv-2', verdict: 'rework' },
+      ],
+    });
+    const view = ok(leadTool(second.state, 'view_change', { agentId: 'fa-1' }, 'v'));
+    expect(view.value).toContain('Review agent Change reviewer: verdict approve.');
+    expect(view.value).toContain('Review agent Codex reviewer: verdict rework.');
+    const decided = ok(
+      leadTool(second.state, 'request_rework', { agentId: 'fa-1', comments: 'Fix it.' }, 'z'),
+    );
+    expect(effectsOf(decided.effects, 'change-round')[0]).toMatchObject({
+      decision: 'rework',
+      decidedBy: 'lead',
+      reviewers: [
+        { agentRunId: 'rv-1', verdict: 'approve' },
+        { agentRunId: 'rv-2', verdict: 'rework' },
+      ],
+    });
   });
 });
 

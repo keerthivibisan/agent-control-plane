@@ -105,9 +105,11 @@ describe('the CX real-run driver (fake adapters only)', () => {
       verdict: 'approve',
       decision,
     });
+    // One row per reviewer, and the lead's decision on a row of its own.
+    const decision = { ...review('claude-code', 'merge'), reviewer: 'lead', verdict: null };
     const ok = arrowsChecks(
       timeline,
-      [review('claude-code', 'merge'), review('codex', 'merge')],
+      [review('claude-code', null), review('codex', null), { ...decision, reviewerProvider: null }],
       [120, 80],
     );
     expect(ok).toMatchObject({

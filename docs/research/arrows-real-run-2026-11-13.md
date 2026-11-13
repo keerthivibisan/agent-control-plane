@@ -124,6 +124,25 @@ by `(change, round, reviewerAgentRunId)` for agent reviews, so each reviewer get
 keep the lead's or owner's decision on the round's decision row; add a server store test with two
 reviewers of one round.
 
+**Fixed (2026-11-13, after the run, on `feature/workflow/arrows`).** No schema change: migration
+0006 has no unique constraint on `change_reviews (agent_run_id, round)`, so no migration was needed.
+
+- Engine: while a change has a fan-out, every `change-round` effect carries `reviewers`, each
+  started reviewer's agent run with its own verdict (`emitRound`), and a round effect is emitted when
+  a waiting reviewer starts later.
+- Store: a review agent's row of the round is keyed by its agent run (`roundRow`), so each
+  reviewer's `review-comment` sets the verdict and findings comment on its own row. With a fan-out
+  the decision goes on a row of its own (reviewer `lead`, `owner`, or `agent` when the reviewers
+  send the change back themselves), never on a reviewer's row; the owner's later decision gets a
+  further row as before. A single reviewer's rows are unchanged.
+- Readers: the change card lists each reviewer's row with its verdict and findings and the decision
+  once; the lead's `view_change` lists each review agent's verdict by its block's label; the
+  driver's `fanOutDecided` check reads the round's decision from any of its rows.
+- Tests: `packages/server/tests/board/review-fanout.test.ts` (two reviewers, mixed verdicts, the
+  lead's rework: three rows; fails on the old store), the engine's fan-out tests in
+  `packages/orchestrator/tests/arrows-engine.test.ts`, and a change-card test in
+  `packages/web/tests/features/review-loop-ticket.test.tsx`.
+
 ### Observations (no bug)
 
 - The planner's first `submit_plan` and one lead `start_agent` call were refused and corrected by

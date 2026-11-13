@@ -189,6 +189,13 @@ export function emitRound(
     verdict: change.verdict,
     decision: decided?.decision ?? null,
     decidedBy: decided?.by ?? null,
+    // ADR-0037 §5: every started reviewer of a fan-out, so each verdict lands on its own row.
+    ...(change.fanOut !== undefined && {
+      reviewers: change.fanOut.reviews.map((r) => ({
+        agentRunId: r.agentRunId,
+        verdict: r.verdict,
+      })),
+    }),
   });
 }
 
@@ -275,7 +282,7 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
   for (const agent of changeAgents(d)) {
     const change = agent.change;
     if (change?.state !== 'reviewing' || change.fanOut === undefined) continue;
-    startPendingReviewers(d, agent, change);
+    if (startPendingReviewers(d, agent, change)) emitRound(d, agent);
     if (fanOutComplete(d, change)) decideFanOut(d, agent);
   }
   assignReviewers(d);
@@ -478,20 +485,22 @@ function startChangeReviewer(
 // ------------------------------------------------------------------ review fan-out (ADR-0037 §5)
 
 /** The label of a change reviewer node, for the lead's notice and role names. */
-function reviewerLabel(d: Draft, nodeId: string): string {
-  return d.program().changeReviewers.find((n) => n.id === nodeId)?.label ?? nodeId;
+function reviewerLabel(view: ProgramView, nodeId: string): string {
+  return programOf(view).changeReviewers.find((n) => n.id === nodeId)?.label ?? nodeId;
 }
 
 /**
  * Starts the fan-out's reviewers that still wait, in route order, while helper slots are free and
- * no custom arrow holds one back. `change.reviewerAgentRunId` is the first one started.
+ * no custom arrow holds one back. `change.reviewerAgentRunId` is the first one started. True when
+ * it started one.
  */
-function startPendingReviewers(d: Draft, helper: EngineAgent, change: EngineChange): void {
+function startPendingReviewers(d: Draft, helper: EngineAgent, change: EngineChange): boolean {
   const route = reviewRouteOf(d.program(), helper);
   const direct = route.by === 'agent' && route.then === 'direct';
   const { maxConcurrentHelpers } = runLimits(d);
   let fan = change.fanOut;
-  if (fan === undefined) return;
+  if (fan === undefined) return false;
+  const started = fan.reviews.length;
   const total = fan.pending.length + fan.reviews.length;
   for (const nodeId of fan.pending) {
     if (activeHelperCount(d) >= maxConcurrentHelpers) break;
@@ -506,6 +515,7 @@ function startPendingReviewers(d: Draft, helper: EngineAgent, change: EngineChan
     if (change.reviewerAgentRunId === null) change.reviewerAgentRunId = reviewer.id;
     launchChangeReviewer(d, reviewer, helper, change, nodeId, direct, total);
   }
+  return fan.reviews.length > started;
 }
 
 /**
@@ -1063,7 +1073,17 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
     lines.push('Not saved yet: the helper stopped before finishing; a merge saves it first.');
   }
   if (change.turnFailed) lines.push("The helper's last turn ended with an error.");
-  if (change.reviewer === 'agent') {
+  if (change.reviewer === 'agent' && change.fanOut !== undefined) {
+    // ADR-0037 §5: each review agent's own verdict (its findings were sent to the lead).
+    for (const r of change.fanOut.reviews) {
+      lines.push(
+        `Review agent ${reviewerLabel(view, r.nodeId)}: ${r.verdict === null ? 'no verdict' : `verdict ${r.verdict}`}.`,
+      );
+    }
+    if (change.fanOut.pending.length > 0) {
+      lines.push(`Review agents not started yet: ${change.fanOut.pending.length}.`);
+    }
+  } else if (change.reviewer === 'agent') {
     lines.push(
       change.verdict === null
         ? 'Review agent: no verdict.'

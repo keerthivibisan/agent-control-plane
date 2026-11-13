@@ -98,3 +98,8 @@ Paused on the owner's request while AR-3 was starting. To resume:
   updated for the version 3 editor; a plan picker spec with two planners on the review-loop-live
   server. Docs: architecture §9, orchestration lifecycle, security ("Roles from arrows"),
   provider adapters (researcher on both), README, CHANGELOG.
+- 2026-11-13 Fixed the AR-6 real run's bug: a review fan-out stored one `change_reviews` row per
+  round. Each reviewer now has its own row of the round (keyed by its agent run) with its verdict
+  and findings comment, and the decision is recorded once, on a row of its own; the engine's round
+  effect carries every fan-out reviewer. No migration (no unique constraint blocked it). The lead's
+  `view_change` lists each reviewer's verdict. See `docs/research/arrows-real-run-2026-11-13.md`.
