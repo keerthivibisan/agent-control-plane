@@ -1,6 +1,13 @@
 import type { ManagedProviderId, WorkflowNodeV3 } from '@acp/core';
 import type { AgentRunDto } from '@acp/core/api';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import {
+  BaseEdge,
+  Handle,
+  Position,
+  getSmoothStepPath,
+  type EdgeProps,
+  type NodeProps,
+} from '@xyflow/react';
 import { createContext, useContext, type ReactNode } from 'react';
 import { CheckIcon, TicketIcon } from '../../components/icons';
 import { ProviderBadge } from '../../components/ProviderBadge';
@@ -25,7 +32,7 @@ import {
 } from '../workflow/icons';
 import { isEditingKind, type BlockKind } from '../workflow/editor/roles';
 import { DONE_RING, STATE_RING, StateFrame } from './live-frame';
-import { kindWord, type LiveBlock } from './live-graph';
+import { kindWord, type LiveBlock, type LiveLink } from './live-graph';
 
 const G = WORKFLOW_LIVE_COPY.graph;
 const MODE_WORD = REVIEW_LOOP_COPY.modes.word;
@@ -475,6 +482,73 @@ export function LiveFinishBlock({ data }: NodeProps<LiveBlock>) {
     </StateFrame>
   );
 }
+
+/**
+ * A link of the run's graph: a square step line with the owner's label on it, as React Flow's own
+ * step edge draws it. An arrow with a purpose (ADR-0037 §2) gets a wider invisible stroke that
+ * takes the pointer, so hovering the arrow shows the owner's words as its tooltip; the canvas is
+ * otherwise read-only, so nothing else on the link reacts to the pointer.
+ */
+function LiveLinkView({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+  label,
+  labelStyle,
+  labelBgStyle,
+  labelBgPadding,
+  labelBgBorderRadius,
+  data,
+}: EdgeProps<LiveLink>) {
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    borderRadius: 0,
+  });
+  const purpose = data?.purpose ?? null;
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        labelX={labelX}
+        labelY={labelY}
+        interactionWidth={0}
+        {...(markerEnd !== undefined ? { markerEnd } : {})}
+        {...(style !== undefined ? { style } : {})}
+        {...(label !== undefined ? { label } : {})}
+        {...(labelStyle !== undefined ? { labelStyle } : {})}
+        {...(labelBgStyle !== undefined ? { labelBgStyle } : {})}
+        {...(labelBgPadding !== undefined ? { labelBgPadding } : {})}
+        {...(labelBgBorderRadius !== undefined ? { labelBgBorderRadius } : {})}
+      />
+      {purpose !== null ? (
+        <path
+          d={path}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={14}
+          style={{ pointerEvents: 'stroke' }}
+          data-testid={`live-link-purpose-${id}`}
+        >
+          <title>{purpose}</title>
+        </path>
+      ) : null}
+    </>
+  );
+}
+
+export const liveLinkTypes = { link: LiveLinkView };
 
 // Module level: React Flow wants the same object on every render.
 export const liveBlockTypes = {

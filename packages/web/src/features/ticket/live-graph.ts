@@ -373,7 +373,8 @@ export function buildLiveGraph(
       source: e.from,
       target: e.to,
       ...handlesFor(e, byId, positions),
-      type: 'step',
+      // `LiveGraphNodes.liveLinkTypes`: a step line whose purpose is its hover text.
+      type: 'link',
       selectable: false,
       focusable: false,
       ariaLabel: G.linkName(

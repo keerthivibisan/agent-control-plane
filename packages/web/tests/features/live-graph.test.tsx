@@ -10,7 +10,8 @@ import {
   WorkflowGraphDtoSchema,
   type RunWorkflowGraphDto,
 } from '@acp/core/api';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderPlain, screen, waitFor, within } from '@testing-library/react';
+import { Position } from '@xyflow/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   LIVE_GRAPH_PATH,
@@ -40,6 +41,7 @@ import {
   reworkCounts,
   stageOfBlock,
 } from '../../src/features/ticket/live-graph';
+import { liveLinkTypes } from '../../src/features/ticket/LiveGraphNodes';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
@@ -363,5 +365,55 @@ describe('the live graph on the ticket page', () => {
     });
     await screen.findByTestId('agent-canvas');
     expect(screen.queryByTestId('live-workflow')).toBeNull();
+  });
+});
+
+describe('arrow purpose on the live graph (ADR-0037 §2, AR-6)', () => {
+  const PURPOSE = 'Why the lead hands this over: the owner’s words.';
+
+  function withPurpose(): RunWorkflowGraphDto {
+    const d = dto();
+    const [first, ...rest] = d.graph.edges;
+    if (first === undefined) throw new Error('no edge');
+    return { ...d, graph: { ...d.graph, edges: [{ ...first, purpose: PURPOSE }, ...rest] } };
+  }
+
+  it('draws every link with the live link view, carrying the purpose', () => {
+    const d = withPurpose();
+    const g = buildLiveGraph(d, runOf());
+    expect(new Set(g.edges.map((e) => e.type))).toEqual(new Set(['link']));
+    const id = d.graph.edges[0]?.id;
+    expect(g.edges.find((e) => e.id === id)?.data?.purpose).toBe(PURPOSE);
+    expect(g.edges.find((e) => e.id === id)?.ariaLabel).toContain(PURPOSE);
+  });
+
+  it('shows the purpose as the hover text of the arrow, and nothing for an arrow without one', () => {
+    const Link = liveLinkTypes.link;
+    const props = (purpose: string | null) =>
+      ({
+        id: 'flow-a-b',
+        source: 'a',
+        target: 'b',
+        sourceX: 0,
+        sourceY: 0,
+        targetX: 100,
+        targetY: 80,
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        data: { type: 'flow', purpose, direct: false, reworks: 0 },
+      }) as unknown as Parameters<typeof Link>[0];
+    const { container, rerender } = renderPlain(
+      <svg>
+        <Link {...props(PURPOSE)} />
+      </svg>,
+    );
+    const hit = container.querySelector('[data-testid="live-link-purpose-flow-a-b"]');
+    expect(hit?.querySelector('title')?.textContent).toBe(PURPOSE);
+    rerender(
+      <svg>
+        <Link {...props(null)} />
+      </svg>,
+    );
+    expect(container.querySelector('[data-testid="live-link-purpose-flow-a-b"]')).toBeNull();
   });
 });

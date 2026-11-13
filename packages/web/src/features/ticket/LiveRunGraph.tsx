@@ -13,7 +13,12 @@ import { REVIEW_LOOP_COPY, TICKET_COPY, WORKFLOW_LIVE_COPY } from '../../lib/cop
 import type { BlockKind } from '../workflow/editor/roles';
 import { agentToShow, buildLiveGraph, heldBlock, stageOfBlock, type LiveBlock } from './live-graph';
 import { HeldNotice, ReviewerFindingsLink, type LiveWorkflowProps } from './live-parts';
-import { LiveGraphContext, liveBlockTypes, type LiveGraphActions } from './LiveGraphNodes';
+import {
+  LiveGraphContext,
+  liveBlockTypes,
+  liveLinkTypes,
+  type LiveGraphActions,
+} from './LiveGraphNodes';
 
 const G = WORKFLOW_LIVE_COPY.graph;
 
@@ -127,6 +132,7 @@ export function LiveRunGraph({
               nodes={graph.nodes}
               edges={graph.edges}
               nodeTypes={liveBlockTypes}
+              edgeTypes={liveLinkTypes}
               onNodeClick={onNodeClick}
               nodesDraggable={false}
               nodesConnectable={false}
