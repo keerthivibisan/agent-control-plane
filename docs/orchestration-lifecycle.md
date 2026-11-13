@@ -57,6 +57,13 @@ the real runs of 2026-10-21 passed with every review route
 - **Several planners** (ADR-0037 §4): every planner submits a plan option; plan review opens once
   each has submitted or ended, and the owner approves one option (never automatically, even in
   Full auto). It becomes the run's plan; the others are stored as not chosen.
+- **Research before planning** (ADR-0037 §2–3): read-only researchers wired to a planner (or to
+  the lead when it plans) start first, in parallel within the helper limit and in arrow order
+  along a chain; the planner starts once each has reported its findings or ended. A researcher
+  wired to the lead after planning is started by the lead with `start_agent`; its findings reach
+  the lead as a notice. Findings and arrow purposes reach agents only as quoted data.
+- **Custom hand-offs** (ADR-0037 §2): when the source agent is done, its output note goes to the
+  target, in its start brief or as a notice; a target the engine starts waits for its sources.
 - **Plan approval** creates the ticket branch from its start branch: named by the project's
   branching strategy, or `acp/<KEY>` (`acp/<KEY>-r<n>` for a later run) without one (ADR-0025).
   The lead hears of the approval only once the branch exists. Helpers and the tester start
@@ -64,6 +71,10 @@ the real runs of 2026-10-21 passed with every review route
 - **A helper's turn ends:** the agent goes to `AWAITING_REVIEW` (no process, no helper slot), its
   worktree is committed (sealed) and, when the workflow places a Checks block on the change, its
   checks run on that commit (ADR-0027, ADR-0028).
+- **Review fan-out** (ADR-0037 §5): a change with several reviewers waits for every verdict. Any
+  `rework` means rework (straight back to the helper on a direct route while rounds are left);
+  otherwise the lead decides, told each verdict and each "no verdict". Nothing merges on a partial
+  set of verdicts.
 - **Review:** a read-only review agent (default; it gets a detached checkout of the sealed commit
   and a diff of at most 64 KiB in its brief, sent, never stored) or the lead reviews the oldest
   ready change first. The review agent's findings become a ticket comment.

@@ -275,6 +275,16 @@ flowchart LR
   approves one (`POST /api/tickets/:id/plan-options/decision` with `planOptionId`), which becomes
   the run's plan in `ticket_plans` exactly like a single planner's; the others are kept as not
   chosen. Request changes goes to every planner. A run with one planner is decided as before.
+- **Roles from arrows (ADR-0037 §1–3, §5).** `deriveRoles` (core, pure) gives each Agent block one
+  role from its arrows; a block with none or two is a validation error. The role is the agent's
+  run `kind`, so tools, worktree, approvals and read-only rules follow it as before: no arrow,
+  block setting or run mode gives a planner, researcher or reviewer edit rights. Researchers run
+  read-only in the project folder before the planner (or planning lead) they research for, or
+  when the lead starts one wired to it; their `report_findings` note reaches the target's brief.
+  A custom arrow orders two agents and hands the source's output note to the target. A change can
+  go to several reviewers; any `rework` verdict means rework, and the lead hears every verdict,
+  including "no verdict". Arrow labels and purposes are the owner's text but reach agents only as
+  quoted data. The live run graph shows each arrow's label, and its purpose on hover.
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or

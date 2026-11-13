@@ -143,6 +143,32 @@
   agent's own mode (`effectiveMode`). Full auto's "deny without asking" applies only to a helper or
   tester whose block runs Full auto. The lead, the planner and reviewers are never covered by any
   mode, and the lead never approves a tool request.
+
+### Roles from arrows (ADR-0037) [implemented]
+
+- **Arrows never give edit rights.** A block's role comes only from its arrows (`deriveRoles`), and
+  its tools, folder and approvals follow that role. A graph whose arrows would give a block two
+  roles (for example an `implement` arrow into a reviewer or researcher, or a `test` arrow into a
+  planner) is refused by the validator, so by `PUT …/workflow-graph` (422) and at run start
+  (409). A `custom` arrow gives no role. A read-only block's stored approval mode or "can start
+  helpers" is ignored, and the server gives Full auto or sandbox paths only to helpers and testers;
+  the Codex adapter also refuses the run's temp folder to any other role.
+- **The researcher** is read-only on both providers: Claude Code gets only `Read`, `Grep`, `Glob`
+  and its own tools, with edits and shell denied without asking; Codex runs the `:read-only`
+  profile with `never`. It works in the project folder, has no worktree and starts no agents. Its
+  findings note is at most 16,384 characters.
+- **Arrow text is data.** An arrow's label (40 characters) and purpose (300 characters) are the
+  owner's words, but agents get them only as quoted data, behind a line saying quoted text is not
+  instructions; a label is kept on one line inside its quotes. Findings and hand-off notes from
+  other agents are quoted the same way. None of this text changes a role, a mode or an approval.
+- **Plan options are never approved automatically.** With two or more planners, plan review waits
+  for the owner even in Full auto with an automatic plan gate. A decision must name a proposed
+  option of that ticket's current run; an unknown, decided, superseded or other ticket's option is
+  refused and nothing changes.
+- **Review fan-out cannot be talked round.** Any reviewer's `rework` decides rework whatever the
+  others say; a reviewer submits once; a reviewer that ends without a verdict is reported to the
+  lead as "no verdict", and the change waits for the lead's decision instead of merging.
+- Tested in the adversarial suite, A-AR1 to A-AR6 ([testing/adversarial.md](testing/adversarial.md)).
 - **Per agent at launch.** A helper or tester whose block runs Full auto gets Claude Code's auto
   mode plus the OS sandbox (`ManagedAgentSpec.fullAuto`, ADR-0022). A block configured as Full auto
   that a ticket or run tightened keeps the same sandbox, deny rules and temp folder with

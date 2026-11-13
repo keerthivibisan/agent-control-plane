@@ -129,6 +129,10 @@ allowed them.
 - Draw how a ticket flows on the Workflow page: a planner, named helpers such as "Frontend
   helper", a helper pool, change and final reviewers, a tester, Checks blocks and the Finish
   block. Start from a template or build your own.
+- Every agent is one Agent block whose role comes from its arrows. Add read-only researchers that
+  feed a planner or the lead, several planners whose plans you compare side by side and pick from,
+  several reviewers per change (any "rework" wins), and custom arrows that hand one agent's output
+  to another. Each arrow can carry a label and your reason, which agents get as quoted data.
 - Each agent block has its own model, effort (Low, Medium, High), skills, agent file and approval
   mode. A ticket's or run's mode can only make a block more careful, never less.
 - Links that make no sense are refused, and no workflow can switch off a safety rule: only helpers
@@ -247,7 +251,8 @@ automatically on start; back up your data folder before an upgrade). What works 
 
 - observing Claude Code sessions, their helper agents and token usage, live;
 - projects, the board, plan-first ticket runs with a lead, helpers, reviewers and a tester;
-- editable workflow graphs, approval modes up to Full auto, effort per agent;
+- editable workflow graphs (one Agent block with roles from its arrows, researchers, several
+  planners, review fan-out), approval modes up to Full auto, effort per agent;
 - the harness (setup steps and checks), Checks blocks in the workflow;
 - the pull-request-like ticket page, attachments, agent notes and run summaries;
 - GitHub (create or connect a repository, push, open and merge pull requests) and branching

@@ -2,15 +2,15 @@
 
 Coordinator-owned. Plan: [README.md](README.md).
 
-| WP   | Title                                      | Status      | Branch                    | Merged |
-| ---- | ------------------------------------------ | ----------- | ------------------------- | ------ |
-| AR-0 | ADR-0037, plan                             | done        | `feature/workflow/arrows` |        |
-| AR-1 | Core: v3 graph, roles, validator, compile  | done        | `feature/workflow/arrows` |        |
-| AR-2 | Researcher role                            | done        | `feature/workflow/arrows` |        |
-| AR-3 | Engine: research, hand-offs, plans, review | done        | `feature/workflow/arrows` |        |
-| AR-4 | Server and DB                              | done        | `feature/workflow/arrows` |        |
-| AR-5 | Web editor and plan approval               | done        | `feature/workflow/arrows` |        |
-| AR-6 | Safety, docs, real run                     | in-progress | `feature/workflow/arrows` |        |
+| WP   | Title                                      | Status | Branch                    | Merged |
+| ---- | ------------------------------------------ | ------ | ------------------------- | ------ |
+| AR-0 | ADR-0037, plan                             | done   | `feature/workflow/arrows` |        |
+| AR-1 | Core: v3 graph, roles, validator, compile  | done   | `feature/workflow/arrows` |        |
+| AR-2 | Researcher role                            | done   | `feature/workflow/arrows` |        |
+| AR-3 | Engine: research, hand-offs, plans, review | done   | `feature/workflow/arrows` |        |
+| AR-4 | Server and DB                              | done   | `feature/workflow/arrows` |        |
+| AR-5 | Web editor and plan approval               | done   | `feature/workflow/arrows` |        |
+| AR-6 | Safety, docs, real run                     | review | `feature/workflow/arrows` |        |
 
 ## Resume here (paused 2026-11-09)
 
@@ -88,3 +88,13 @@ Paused on the owner's request while AR-3 was starting. To resume:
 - 2026-11-13 Coordinator: AR-4 and AR-5b accepted. Plan options live in a new table
   `ticket_plan_options` (migration 0016) instead of new columns on `ticket_plans`: rebuilding that
   table inside the migration would cascade-delete comments pointing at plans.
+- 2026-11-13 AR-6 (safety, cleanup, e2e, docs) ready for review on `feature/workflow/arrows`;
+  the consented real run is left to the coordinator. Adversarial "Flexible workflows" A-AR1 to
+  A-AR6 (core, engine, both adapters, server routes). Two fixes: an arrow label could break out
+  of its quotes in a brief with a line break (now one line, `inlineLabel`); the Codex adapter gave
+  the Full auto temp folder to any role carrying one (now workers and testers only, `tempDirOf`).
+  `researcher.test.ts` uses the AR-3 engine (no mock); the server's `graph-helpers.ts` builds
+  version 3 graphs; the live run graph shows an arrow's purpose on hover. E2E: the workflow specs
+  updated for the version 3 editor; a plan picker spec with two planners on the review-loop-live
+  server. Docs: architecture §9, orchestration lifecycle, security ("Roles from arrows"),
+  provider adapters (researcher on both), README, CHANGELOG.
