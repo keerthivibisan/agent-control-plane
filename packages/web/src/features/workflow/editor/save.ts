@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from '@acp/core';
+import type { WorkflowGraphV3 } from '@acp/core';
 import type { WorkflowGraphDto } from '@acp/core/api';
 import {
   ApiError,
@@ -7,6 +7,7 @@ import {
   type ApiClient,
 } from '../../../lib/api';
 import type { EditorIssue } from './IssuesList';
+import { toServerGraph } from './server-graph';
 
 export type SaveResult =
   | { ok: true; dto: WorkflowGraphDto }
@@ -35,13 +36,19 @@ export function isWorkflowInvalid(e: ApiError): boolean {
  * Saves the graph (PUT …/workflow-graph). When the server refuses it as invalid (422), its own
  * issues are fetched from POST …/workflow-graph/validate, a contract DTO, so the owner sees exactly
  * what the server objects to; the error body's shape isn't part of the contract. If that call
- * fails too, the refusal is still reported, without the list.
+ * fails too, the refusal is still reported, without the list. The editor's version 3 graph is
+ * sent in the server's version (`server-graph.ts`); a graph the server can't store yet is refused
+ * here without a request (the page disables Save for it first).
  */
 export async function saveWorkflowGraph(
   client: ApiClient,
   projectId: string,
-  graph: WorkflowGraph,
+  editorGraph: WorkflowGraphV3,
 ): Promise<SaveResult> {
+  const graph = toServerGraph(editorGraph);
+  if (graph === null) {
+    return { ok: false, error: toApiError(new Error('version 3 workflow')), issues: null };
+  }
   try {
     return { ok: true, dto: await updateWorkflowGraph(client, projectId, { graph }) };
   } catch (e) {

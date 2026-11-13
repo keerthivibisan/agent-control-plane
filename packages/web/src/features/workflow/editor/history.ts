@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from '@acp/core';
+import type { WorkflowGraphV3 } from '@acp/core';
 import {
   editorReducer,
   initialEditorState,
@@ -8,10 +8,12 @@ import {
   type EditorState,
 } from './state';
 
+type WorkflowGraph = WorkflowGraphV3;
+
 /**
  * Undo and redo for the graph editor (v0.3.1 P-C), around the pure editor reducer. Every action
  * that changes the graph (a link added, removed or moved, a block added, removed or moved, a panel
- * edit, a template, Tidy layout) puts the graph before it on the undo stack; selecting, refusing
+ * edit, an arrow's label or purpose, a template, Tidy layout) puts the graph before it on the undo stack; selecting, refusing
  * and other actions that leave the graph as it was are not recorded. Typing in one field is one
  * step: consecutive edits of the same fields of one block (or one link's rounds) share an entry.
  * The stacks hold at most `HISTORY_LIMIT` graphs. Unsaved changes still follow the graph alone,
@@ -42,6 +44,9 @@ export function initialHistoryState(graph: WorkflowGraph): HistoryState {
 function groupOf(action: EditorAction): string | null {
   if (action.type === 'update-node') {
     return `update:${action.id}:${Object.keys(action.patch).sort().join(',')}`;
+  }
+  if (action.type === 'update-edge') {
+    return `edge:${action.id}:${Object.keys(action.patch).sort().join(',')}`;
   }
   if (action.type === 'set-rounds') return `rounds:${action.id}`;
   return null;

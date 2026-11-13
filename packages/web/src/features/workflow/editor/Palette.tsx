@@ -1,12 +1,12 @@
-import type { WorkflowGraph } from '@acp/core';
+import type { WorkflowGraphV3 } from '@acp/core';
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
 import { useState, type Dispatch, type MouseEvent } from 'react';
 import { buttonClass } from '../../../components/Button';
 import { CheckIcon, ChevronDownIcon, PlusSmallIcon } from '../../../components/icons';
 import { floatingClass } from '../../../components/Menu';
-import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
-import { ROLE_ICON } from '../icons';
-import { EDITOR_COPY } from './copy';
+import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
+import { AgentBlockIcon, ResearcherIcon, ROLE_ICON } from '../icons';
+import { EDITOR_COPY, type PresetKey } from './copy';
 import {
   checksAvailability,
   paletteAvailability,
@@ -15,18 +15,27 @@ import {
 } from './state';
 
 const P = WORKFLOW_GRAPH_COPY.palette;
+const N = EDITOR_COPY.palette;
 const T = EDITOR_COPY.toolbar;
+type WorkflowGraph = WorkflowGraphV3;
 
-/** The menu's two groups, in the palette's order. */
-const GROUPS: readonly { label: string; items: readonly PaletteItemKey[] }[] = [
-  { label: T.agents, items: ['planner', 'helper', 'helper-pool'] },
-  { label: T.checkers, items: ['change-reviewer', 'final-reviewer', 'tester'] },
+/**
+ * The menu's agent groups (ADR-0037): the one Agent block, then the presets, each an agent with
+ * its arrow already drawn. The helper pool is a helper with "This helper is the helper pool" on.
+ */
+const GROUPS: readonly { label: string; items: readonly PresetKey[] }[] = [
+  { label: N.agentGroup, items: ['agent'] },
+  {
+    label: N.presetGroup,
+    items: ['researcher', 'planner', 'helper', 'change-reviewer', 'final-reviewer', 'tester'],
+  },
 ];
 
-const ITEM_ICON: Readonly<Record<PaletteItemKey, (typeof ROLE_ICON)['lead']>> = {
+const ITEM_ICON: Readonly<Record<PresetKey, (typeof ROLE_ICON)['lead']>> = {
+  agent: AgentBlockIcon,
+  researcher: ResearcherIcon,
   planner: ROLE_ICON.planner,
   helper: ROLE_ICON.helper,
-  'helper-pool': ROLE_ICON.helper,
   'change-reviewer': ROLE_ICON.reviewer,
   'final-reviewer': ROLE_ICON.reviewer,
   tester: ROLE_ICON.tester,
@@ -87,10 +96,12 @@ function AddChecksItem({
 function AddItem({
   item,
   graph,
+  near,
   dispatch,
 }: {
-  item: PaletteItemKey;
+  item: PresetKey;
   graph: WorkflowGraph;
+  near: string | undefined;
   dispatch: Dispatch<EditorAction>;
 }) {
   const availability = paletteAvailability(graph, item);
@@ -98,7 +109,7 @@ function AddItem({
   return (
     <RadixMenu.Item
       disabled={!availability.ok}
-      onSelect={() => dispatch({ type: 'add', item })}
+      onSelect={() => dispatch({ type: 'add', item, near })}
       data-testid={`palette-${item}`}
       className={ITEM_CLASS}
     >
@@ -106,9 +117,9 @@ function AddItem({
         <Icon size={15} />
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="font-medium text-ink group-data-[disabled]:text-dim">{P.items[item]}</span>
+        <span className="font-medium text-ink group-data-[disabled]:text-dim">{N.items[item]}</span>
         <span className="text-caption text-dim" data-testid="palette-hint">
-          {availability.ok ? P.hints[item] : availability.reason}
+          {availability.ok ? N.hints[item] : availability.reason}
         </span>
       </span>
     </RadixMenu.Item>
@@ -116,9 +127,10 @@ function AddItem({
 }
 
 /**
- * "Add block": a menu button over the blocks the owner can add, in three groups (agents; reviewers
- * and testers; checks), each limited by `NODE_CAPABILITIES` or the Checks blocks' places. The new
- * block lands in its kind's place and is selected, so its settings open at once.
+ * "Add block": a menu button over the blocks the owner can add, in three groups (the Agent block;
+ * the presets, an agent with its arrow drawn; checks), each limited by core's counts per role or
+ * the Checks blocks' places. The new block lands in its role's place and is selected, so its
+ * settings open at once.
  */
 export function Palette({
   graph,
@@ -127,7 +139,7 @@ export function Palette({
 }: {
   graph: WorkflowGraph;
   dispatch: Dispatch<EditorAction>;
-  /** The selected block: a change Checks block is linked from it when it may be. */
+  /** The selected block: a change Checks block or a change reviewer is linked from it. */
   selectedNode?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
@@ -164,7 +176,13 @@ export function Palette({
                 {group.label}
               </RadixMenu.Label>
               {group.items.map((item) => (
-                <AddItem key={item} item={item} graph={graph} dispatch={dispatch} />
+                <AddItem
+                  key={item}
+                  item={item}
+                  graph={graph}
+                  near={selectedNode}
+                  dispatch={dispatch}
+                />
               ))}
             </RadixMenu.Group>
           ))}

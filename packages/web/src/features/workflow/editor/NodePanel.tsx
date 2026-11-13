@@ -6,12 +6,12 @@ import {
   MAX_NODE_LABEL,
   MAX_NODE_SKILLS,
   MANAGED_PROVIDERS,
-  isEditorNode,
   type AgentEffort,
   type ApprovalMode,
   type ManagedProviderId,
-  type WorkflowGraph,
-  type WorkflowNode,
+  type WorkflowGraphV3,
+  type WorkflowNodeV3,
+  type WorkflowNodeV3Of,
 } from '@acp/core';
 import type { HarnessStatusDto } from '@acp/core/api';
 import { useId, type Dispatch, type ReactNode } from 'react';
@@ -44,10 +44,15 @@ import { EDITOR_COPY } from './copy';
 import { IssueRow, type EditorIssue } from './IssuesList';
 import { LinkChoiceItems } from './LinkMenu';
 import { drawnLabel, linkChoices } from './linking';
-import { RoleIcon, kindText, kindWord } from './nodes';
+import { RoleIcon, asAgentKind, kindText, kindWord } from './nodes';
+import { blockKind, isEditingKind, isRoleProblem, type BlockKind } from './roles';
 import { isRemovable, type EditorAction, type NodePatch } from './state';
 
+type WorkflowGraph = WorkflowGraphV3;
+type WorkflowNode = WorkflowNodeV3;
 const G = WORKFLOW_GRAPH_COPY;
+const A = EDITOR_COPY.arrows;
+const R = EDITOR_COPY.roles;
 const P = WORKFLOW_GRAPH_COPY.panel;
 const M = REVIEW_LOOP_COPY.modes;
 const E = EDITOR_COPY.issues;
@@ -371,12 +376,12 @@ function LinksSection({
       ) : (
         <ul className="flex flex-col gap-1.5" aria-label={P.links} data-testid="node-links">
           {outgoing.map((e) => {
-            const name = G.edgeName(G.edges[e.type], node.label, label(e.to));
+            const name = G.edgeName(e.label ?? A.names[e.type], node.label, label(e.to));
             return (
               <li key={e.id} className="flex items-center gap-2 text-caption">
                 <LinkSample type={e.type} />
-                <span className="min-w-0 flex-1">
-                  <span className="text-dim">{G.edges[e.type]}</span> →{' '}
+                <span className="min-w-0 flex-1" title={e.purpose}>
+                  <span className="text-dim">{e.label ?? A.names[e.type]}</span> →{' '}
                   <span className="font-medium">{label(e.to)}</span>
                 </span>
                 <button
@@ -429,13 +434,49 @@ function nameError(label: string): string | undefined {
   return undefined;
 }
 
-/** The fields of an agent block: name, model, skills, agent file, then its kind's own settings. */
+/**
+ * An agent block's role (ADR-0037 §1): what its arrows make it, and why it has none or two. The
+ * role is never set here: it changes with the arrows.
+ */
+function RoleSection({ kind }: { kind: BlockKind }) {
+  const agentKind = asAgentKind(kind);
+  const problem = isRoleProblem(kind);
+  return (
+    <section
+      className={`flex flex-col gap-1 rounded-control border px-3 py-2.5 ${
+        problem ? 'border-danger/35 bg-danger-soft' : 'border-line bg-sunken'
+      }`}
+      data-testid="role-section"
+      data-role={agentKind}
+      data-problem={problem ? 'true' : 'false'}
+    >
+      <h4 className="flex items-center gap-1.5 text-caption font-semibold">
+        <span className="text-dim">{R.roleTitle}:</span>
+        <span className={problem ? 'text-danger' : 'text-ink'}>{R.badge[agentKind]}</span>
+      </h4>
+      <p className={`text-caption ${problem ? 'text-danger' : 'text-dim'}`}>
+        {problem ? R.kindText[agentKind] : R.roleHint}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The fields of an agent block or the lead: name, model, skills, agent file and provider for all;
+ * then what its derived role uses (ADR-0037): a helper's description, instances and pool switch,
+ * "may start helpers" for helpers, and the approval mode only for the roles that edit.
+ */
 function AgentFields({
   node,
+  kind,
+  poolTaken,
   ctx,
   change,
 }: {
-  node: Extract<WorkflowNode, { skills: unknown }>;
+  node: WorkflowNodeV3Of<'agent' | 'lead'>;
+  kind: BlockKind;
+  /** Another block is the helper pool already. */
+  poolTaken: boolean;
   ctx: NodePanelContext;
   change: (patch: NodePatch) => void;
 }) {
@@ -446,26 +487,31 @@ function AgentFields({
       ? P.modelFromFile(fileModel)
       : (ctx.projectModel ?? P.modelDefaultOf(PROVIDER_COPY.name[provider]));
   const model = node.model ?? '';
+  const agent = node.type === 'agent' ? node : null;
+  const helper = kind === 'helper';
+  const worker = helper || kind === 'helper-pool';
+  const description = agent?.description ?? '';
   return (
     <div className="flex flex-col gap-5">
+      {agent !== null ? <RoleSection kind={kind} /> : null}
       <TextField
         label={P.name}
-        hint={node.type === 'helper' ? P.helperNameHint : P.nameHint}
+        hint={helper ? P.helperNameHint : P.nameHint}
         error={nameError(node.label)}
         value={node.label}
         onChange={(label) => change({ label })}
       />
-      {node.type === 'helper' ? (
+      {agent !== null && helper ? (
         <TextAreaField
           label={P.description}
           hint={P.descriptionHint}
           error={
-            node.description.trim().length > MAX_NODE_DESCRIPTION
+            description.trim().length > MAX_NODE_DESCRIPTION
               ? P.descriptionTooLong(MAX_NODE_DESCRIPTION)
               : undefined
           }
-          value={node.description}
-          onChange={(description) => change({ description })}
+          value={description}
+          onChange={(next) => change({ description: next })}
           rows={3}
         />
       ) : null}
@@ -473,12 +519,12 @@ function AgentFields({
         projectId={ctx.projectId}
         value={node.agent}
         agents={ctx.agents}
-        onChange={(agent) => change({ agent })}
+        onChange={(next) => change({ agent: next })}
       />
       <ProviderField
         value={node.provider}
         projectProvider={ctx.projectProvider}
-        onChange={(provider) => change({ provider })}
+        onChange={(next) => change({ provider: next })}
       />
       <TextField
         label={G.model}
@@ -499,46 +545,42 @@ function AgentFields({
         skills={ctx.skills}
         onChange={(skills) => change({ skills })}
       />
-      {node.type === 'reviewer' ? (
-        <ChoiceCards<'change' | 'final'>
-          legend={P.scope}
-          name={`scope-${node.id}`}
-          value={node.scope}
-          columns={1}
-          options={(['change', 'final'] as const).map((s) => ({
-            value: s,
-            label: P.scopes[s],
-            hint: P.scopeHints[s],
-          }))}
-          onChange={(scope) => change({ scope })}
+      {agent !== null && worker ? (
+        <CheckboxField
+          label={R.pool}
+          hint={R.poolHint}
+          checked={agent.pool === true}
+          disabled={agent.pool !== true && poolTaken}
+          onChange={(pool) => change({ pool })}
+          testId="pool-toggle"
         />
       ) : null}
-      {node.type === 'helper' ? (
+      {agent !== null && helper ? (
         <NumberChoice
           legend={P.maxInstances}
           hint={P.maxInstancesHint(ctx.helperLimit)}
           name={`instances-${node.id}`}
-          value={node.maxInstances}
+          value={agent.maxInstances ?? 1}
           choices={INSTANCE_CHOICES}
           onChange={(maxInstances) => change({ maxInstances })}
           valueText={P.maxInstancesValue}
         />
       ) : null}
-      {node.type === 'helper' || node.type === 'helper-pool' ? (
+      {agent !== null && worker ? (
         <CheckboxField
           label={P.canStartHelpers}
           hint={P.canStartHelpersHint}
-          checked={node.canStartHelpers}
+          checked={agent.canStartHelpers === true}
           onChange={(canStartHelpers) => change({ canStartHelpers })}
         />
       ) : null}
-      {isEditorNode(node) ? (
+      {agent !== null && isEditingKind(kind) ? (
         <ModeField
-          value={node.approvalMode}
+          value={agent.approvalMode ?? null}
           projectMode={ctx.projectMode}
           onChange={(approvalMode) => change({ approvalMode })}
         />
-      ) : (
+      ) : isRoleProblem(kind) ? null : (
         <p
           className="rounded-control border border-line bg-sunken px-3 py-2.5 text-caption text-dim"
           data-testid="no-mode"
@@ -573,33 +615,38 @@ export function NodePanel({
   onClose: () => void;
 }) {
   const change = (patch: NodePatch) => dispatch({ type: 'update-node', id: node.id, patch });
+  const kind = blockKind(graph, node);
   if (node.type === 'owner-merge' && finishParts(graph) !== null) {
     return (
       <FinishPanel node={node} target={ctx.target ?? null} issues={issues} onClose={onClose} />
     );
   }
+  const poolTaken = graph.nodes.some(
+    (n) => n.id !== node.id && n.type === 'agent' && n.pool === true,
+  );
   return (
     <div
       className="flex flex-col"
       data-testid="node-panel"
       data-node={node.id}
       data-kind={node.type}
+      data-role={kind}
     >
       <PanelHeading
-        icon={<RoleIcon node={node} />}
-        eyebrow={kindWord(node)}
+        icon={<RoleIcon node={node} kind={kind} />}
+        eyebrow={kindWord(node, kind)}
         title={
           node.type === 'plan-approval' || node.type === 'owner-merge'
             ? G.gateTitle[node.type]
             : node.label
         }
-        text={kindText(node)}
+        text={kindText(node, kind)}
         onClose={onClose}
       />
       <PanelIssues issues={issues} title={E.blockTitle} />
       <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
-        {'skills' in node ? (
-          <AgentFields node={node} ctx={ctx} change={change} />
+        {node.type === 'agent' || node.type === 'lead' ? (
+          <AgentFields node={node} kind={kind} poolTaken={poolTaken} ctx={ctx} change={change} />
         ) : isChecksNode(node) ? (
           <CheckBlockFields
             node={node}
@@ -655,7 +702,7 @@ function FinishPanel({
   return (
     <div className="flex flex-col" data-testid="node-panel" data-node={node.id} data-kind="finish">
       <PanelHeading
-        icon={<RoleIcon node={node} />}
+        icon={<RoleIcon node={node} kind="owner-merge" />}
         eyebrow={FINISH_COPY.kind}
         title={FINISH_COPY.title}
         text={FINISH_COPY.panelText(target)}
