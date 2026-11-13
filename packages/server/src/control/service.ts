@@ -1161,6 +1161,25 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             planId: effect.planId,
           });
           break;
+        // ADR-0037 §4: several planners' plan options. The options live with the run until AR-4
+        // stores the drafts; the chosen plan is stored like any approved plan (`plan-decided`).
+        case 'plan-option-submitted':
+          logger.log('info', 'plan option submitted', {
+            runId,
+            planOptionId: effect.planOptionId,
+          });
+          break;
+        case 'plan-options-ready':
+          logger.log('info', 'plan options ready', { runId, count: effect.planOptionIds.length });
+          break;
+        case 'plan-option-decided':
+          logger.log('info', 'plan option decided', {
+            runId,
+            status: effect.status,
+            planId: effect.planId,
+            notChosen: effect.notChosen.length,
+          });
+          break;
         case 'budget-overshoot':
           logger.log('warn', 'agent over budget', {
             runId,
