@@ -1,68 +1,51 @@
 import { existsSync } from 'node:fs';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MAX_RESEARCH_FINDINGS_CHARS } from '@acp/core';
 import { TicketActivityDtoSchema } from '@acp/core/api';
-import type * as Orchestrator from '@acp/orchestrator';
 import { researchCommentBodies } from '../../src/control/research-findings.js';
 import { RESEARCHER_READ_ONLY_MESSAGE } from '../../src/control/service.js';
+import { putGraph, templateV3, withResearcherV3 } from './graph-helpers.js';
 import { setupBoard } from './helpers.js';
-import { FILES, approved, type Board } from './loop-helpers.js';
+import { FILES, type Board } from './loop-helpers.js';
 
 /*
- * ADR-0037 §3 (AR-2) through the server: the read-only researcher starts in the project folder
- * with no worktree, approval mode or sandbox, every tool use that reaches the gate is denied
+ * ADR-0037 §3 (AR-2, AR-6) through the server: the read-only researcher starts in the project
+ * folder with no worktree, approval mode or sandbox, every tool use that reaches the gate is denied
  * without asking the owner, and its `report_findings` note is stored as ticket comments of kind
- * `research` and shown on the Conversation tab. The engine starts researchers from AR-3; until
- * then this test turns one lead `start_agent` (role `Researcher`) into a researcher start, as
- * the AR-3 engine will emit it. The fake managed adapter plays every agent. Synthetic data only.
+ * `research` and shown on the Conversation tab. The researcher is started by the AR-3 engine
+ * itself: the project's version 3 workflow wires it to the lead, who plans, so it runs first
+ * (research before planning). The fake managed adapter plays every agent. Synthetic data only.
  */
 
-const RESEARCHER_ROLE = 'Researcher';
 const CANARY = 'CANARY-AR-2-7K';
 
-vi.mock('@acp/orchestrator', async (importOriginal) => {
-  const original = await importOriginal<typeof Orchestrator>();
-  const leadToolCall: typeof original.leadToolCall = (state, call, ctx) => {
-    const r = original.leadToolCall(state, call, ctx);
-    const role = (call.input as { role?: unknown } | null)?.role;
-    if (!r.ok || call.name !== 'start_agent' || role !== RESEARCHER_ROLE) return r;
-    const start = r.effects.find((e) => e.type === 'start-agent');
-    if (start === undefined) return r;
-    const id = start.agentRunId;
-    return {
-      ...r,
-      state: {
-        ...r.state,
-        agents: r.state.agents.map((a) => (a.id === id ? { ...a, kind: 'researcher' } : a)),
-      },
-      effects: r.effects.map((e) =>
-        e.type === 'start-agent' && e.agentRunId === id ? { ...e, kind: 'researcher' } : e,
-      ),
-    };
-  };
-  return { ...original, leadToolCall };
-});
-
+/** A ticket started on a workflow whose researcher reports to the planning lead; it is running. */
 async function researcherOf(s: Board) {
-  const lead = s.fake.agents.filter((a) => a.spec.kind === 'lead').at(-1);
-  if (lead === undefined) throw new Error('no lead');
-  expect(
-    await lead.callLead('start_agent', {
-      role: RESEARCHER_ROLE,
-      task: 'Find where the theme is set.',
+  await putGraph(
+    s,
+    withResearcherV3(templateV3('lead-only'), 'scout', 'Scout', 'orchestrate', {
+      purpose: 'Find where the theme is set.',
     }),
-  ).toContain('Started agent');
+  );
+  const ticket = await s.createTicket('Add dark mode');
+  expect((await s.post(`/api/tickets/${ticket.id}/move`, { status: 'READY' })).status).toBe(200);
+  const started = await s.post(`/api/tickets/${ticket.id}/start`);
+  expect(started.status, JSON.stringify(started.body).slice(0, 400)).toBe(200);
   await s.settle();
+  // Research before planning: the engine started the researcher, and the lead waits for it.
+  expect(s.fake.agents.filter((a) => a.spec.kind === 'lead')).toEqual([]);
   const researcher = s.fake.agents.filter((a) => a.spec.kind === 'researcher').at(-1);
   if (researcher === undefined) throw new Error('the researcher did not start');
-  return researcher;
+  const runId = (await s.detail(ticket.id)).currentRun?.id ?? '';
+  return { ticket, runId, researcher };
 }
 
 describe('the researcher through the server (ADR-0037 §3)', () => {
   it('starts in the project folder with no worktree and is denied every gated tool use', async () => {
     const s = await setupBoard({ files: FILES });
-    const { ticket, runId } = await approved(s);
-    const researcher = await researcherOf(s);
+    const { ticket, runId, researcher } = await researcherOf(s);
+    expect(researcher.spec.prompt).toContain('Add dark mode');
+    expect(researcher.spec.prompt).toContain('> Find where the theme is set.');
     expect(researcher.spec.cwd).toBe(s.project.rootPath);
     expect(existsSync(s.worktree(runId, researcher.id))).toBe(false);
     expect(researcher.spec).not.toHaveProperty('approvalMode');
@@ -82,8 +65,7 @@ describe('the researcher through the server (ADR-0037 §3)', () => {
 
   it('stores report_findings as research comments, whole, and shows them on Conversation', async () => {
     const s = await setupBoard({ files: FILES });
-    const { ticket } = await approved(s);
-    const researcher = await researcherOf(s);
+    const { ticket, researcher } = await researcherOf(s);
     researcher.started();
     await s.settle();
     // Longer than one comment body (8,000): kept whole as parts.
@@ -120,12 +102,15 @@ describe('the researcher through the server (ADR-0037 §3)', () => {
       (a) => a.id === researcher.id,
     );
     expect(agent?.status).toBe('SUCCEEDED');
+    // The planning lead starts once the research is done, with the findings quoted as data.
+    const lead = s.fake.agents.find((a) => a.spec.kind === 'lead');
+    expect(lead?.spec.prompt).toContain(`> ${CANARY} src/app.ts sets the theme.`);
+    expect(lead?.spec.prompt).toContain('quoted data');
   });
 
   it('adversarial: a researcher calling merge_change, start_agent or report_work is refused', async () => {
     const s = await setupBoard({ files: FILES });
-    const { ticket } = await approved(s);
-    const researcher = await researcherOf(s);
+    const { ticket, researcher } = await researcherOf(s);
     researcher.started();
     await s.settle();
     const before = s.fake.agents.length;

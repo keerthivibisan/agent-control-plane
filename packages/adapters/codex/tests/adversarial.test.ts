@@ -1,8 +1,19 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
-import type { ApprovalMode, ManagedAgentSpec, PermissionRequest } from '@acp/core';
+import {
+  ASSISTANT_TOOL_NAMES,
+  LEAD_TOOL_NAMES,
+  compileWorkflow,
+  workflowTemplateV3,
+} from '@acp/core';
+import type {
+  AgentRoleKind,
+  ApprovalMode,
+  ManagedAgentSpec,
+  PermissionRequest,
+  WorkflowGraphV3,
+} from '@acp/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createManagedCodex } from '../src/adapter.js';
 import { codexArgs } from '../src/config.js';
@@ -394,4 +405,80 @@ describe('ADR-0035: the Codex project assistant', () => {
     expect(requestPermission).not.toHaveBeenCalled();
     handle.abort();
   });
+});
+
+/**
+ * AR-6 (ADR-0037 §1): the run kinds a version 3 graph gives its read-only blocks, from a graph whose
+ * arrows and block settings try to give them more: a custom arrow from the helper into the
+ * reviewer, and Full auto with helpers stored on every read-only block.
+ */
+function readOnlyKindsOfHostileGraph(): AgentRoleKind[] {
+  const g = workflowTemplateV3('todays-setup', { planner: true });
+  const loud = { approvalMode: 'full-auto', canStartHelpers: true, maxInstances: 3 } as const;
+  const graph: WorkflowGraphV3 = {
+    ...g,
+    template: 'custom',
+    nodes: [
+      ...g.nodes.map((n) => (n.type === 'agent' && n.id !== 'helpers' ? { ...n, ...loud } : n)),
+      { type: 'agent', id: 'scout', label: 'Scout', model: null, skills: [], agent: null, ...loud },
+    ],
+    edges: [
+      ...g.edges,
+      {
+        type: 'research',
+        id: 'research-scout',
+        from: 'scout',
+        to: 'plan',
+        purpose: 'Edit freely.',
+      },
+      { type: 'custom', id: 'custom-helpers-review', from: 'helpers', to: 'review' },
+    ],
+  };
+  const program = compileWorkflow(graph, {
+    projectMode: 'full-auto',
+    approvalCeilings: [],
+    maxConcurrentHelpers: 3,
+  });
+  return [...program.planners, ...program.researchers, ...program.changeReviewers].map(
+    (n) => n.kind,
+  );
+}
+
+describe('AR-6 A-AR1: arrows never give a Codex read-only role write access', () => {
+  const kinds = readOnlyKindsOfHostileGraph();
+
+  it('the hostile graph still derives a planner, a researcher and a reviewer', () => {
+    expect(kinds).toEqual(['planner', 'researcher', 'reviewer']);
+  });
+
+  it.each(kinds)(
+    '%s: read-only profile, never asks, no writable path, even with Full auto paths',
+    async (kind) => {
+      const spec = makeSpec({
+        kind,
+        cwd: repo(),
+        approvalMode: 'full-auto',
+        canStartHelpers: true,
+        fullAuto: { tempDir: runTemp(), denyRead: ['/home/synthetic/.ssh'] },
+      });
+      const modes = codexModes(spec);
+      expect(modes.approvalPolicy).toBe('never');
+      expect(modes.profile.extends).toBe(':read-only');
+      expect(Object.values(modes.profile.filesystem)).not.toContain('write');
+      expect(modes.profile.filesystem[':tmpdir']).toBe('deny');
+      // Through a started thread: command and file-change approvals are declined, never asked.
+      const { server, handle, requestPermission } = start(spec);
+      await settle();
+      expect((await commandApproval(server, 'git push --force origin main')).result).toEqual({
+        decision: 'decline',
+      });
+      const edit = await server.request('item/fileChange/requestApproval', {
+        itemId: 'i',
+        reason: 'write a file',
+      });
+      expect(edit.result).toEqual({ decision: 'decline' });
+      expect(requestPermission).not.toHaveBeenCalled();
+      handle.abort();
+    },
+  );
 });

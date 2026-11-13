@@ -1,9 +1,11 @@
+import { compileWorkflow, workflowTemplateV3 } from '@acp/core';
 import type {
   AgentRoleKind,
   ManagedAgentEvent,
   ManagedAgentSpec,
   ManagedCallbacks,
   PermissionRequest,
+  WorkflowGraphV3,
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
@@ -354,4 +356,78 @@ describe('skills plugin (ADR-0019 §4, decision E)', () => {
     expect(events.at(-1)).toMatchObject({ type: 'finished', outcome: 'success' });
     expect(calls[0]?.options.plugins).toEqual([{ type: 'local', path: plugin.path }]);
   });
+});
+
+/**
+ * AR-6 (ADR-0037 §1): the run kinds a version 3 graph gives its read-only blocks, from a graph whose
+ * arrows and block settings try to give them more: a custom arrow from the helper into the
+ * reviewer, and Full auto with helpers stored on every read-only block.
+ */
+function readOnlyKindsOfHostileGraph(): AgentRoleKind[] {
+  const g = workflowTemplateV3('todays-setup', { planner: true });
+  const loud = { approvalMode: 'full-auto', canStartHelpers: true, maxInstances: 3 } as const;
+  const graph: WorkflowGraphV3 = {
+    ...g,
+    template: 'custom',
+    nodes: [
+      ...g.nodes.map((n) => (n.type === 'agent' && n.id !== 'helpers' ? { ...n, ...loud } : n)),
+      { type: 'agent', id: 'scout', label: 'Scout', model: null, skills: [], agent: null, ...loud },
+    ],
+    edges: [
+      ...g.edges,
+      {
+        type: 'research',
+        id: 'research-scout',
+        from: 'scout',
+        to: 'plan',
+        purpose: 'Edit freely.',
+      },
+      { type: 'custom', id: 'custom-helpers-review', from: 'helpers', to: 'review' },
+    ],
+  };
+  const program = compileWorkflow(graph, {
+    projectMode: 'full-auto',
+    approvalCeilings: [],
+    maxConcurrentHelpers: 3,
+  });
+  return [...program.planners, ...program.researchers, ...program.changeReviewers].map(
+    (n) => n.kind,
+  );
+}
+
+describe('AR-6 A-AR1: arrows never give a Claude read-only role edit tools', () => {
+  const kinds = readOnlyKindsOfHostileGraph();
+
+  it('the hostile graph still derives a planner, a researcher and a reviewer', () => {
+    expect(kinds).toEqual(['planner', 'researcher', 'reviewer']);
+  });
+
+  it.each(kinds)(
+    '%s: read-only tools and edits denied without asking, even with Full auto settings',
+    async (kind) => {
+      const cb = callbacks();
+      const options = optionsFor(
+        spec(kind, {
+          approvalMode: 'full-auto',
+          canStartHelpers: true,
+          fullAuto: { tempDir: '/synthetic/tmp-run', denyRead: [] },
+        }),
+        cb,
+      );
+      expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
+      expect(options.permissionMode).toBe('default');
+      for (const name of ['start_agent', 'merge_change', 'message_agent', 'report_work']) {
+        expect(servers.toolNames.flat()).not.toContain(name);
+      }
+      const use = canUseTool(options);
+      for (const [tool, input] of [
+        ['Write', { file_path: `${CWD}/a.ts`, content: 'x' }],
+        ['Edit', { file_path: `${CWD}/a.ts`, old_string: 'a', new_string: 'b' }],
+        ['Bash', { command: 'git push --force origin main' }],
+      ] as const) {
+        await expect(use(tool, input, toolOpts())).resolves.toMatchObject({ behavior: 'deny' });
+      }
+      expect(cb.requests).toEqual([]);
+    },
+  );
 });
