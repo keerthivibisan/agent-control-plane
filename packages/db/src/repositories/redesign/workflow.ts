@@ -4,11 +4,13 @@ import {
   ProjectWorkflowSchema,
   StoredWorkflowJsonSchema,
   WorkflowGraphSchema,
+  WorkflowGraphV3Schema,
   defaultProjectWorkflow,
+  migrateWorkflowV2,
+  type AnyWorkflowGraph,
   type ProjectWorkflow,
   type ProjectWorkflowGraph,
   type ProjectWorkflowGraphV3,
-  type WorkflowGraph,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
 import type { RepositoryContext } from '../../internal/context.js';
@@ -22,8 +24,8 @@ export type ProjectWorkflowInput = Omit<ProjectWorkflow, 'updatedAt'>;
  * What a project's workflow row holds (ADR-0023 §9, ADR-0037 §6): a version 3 or version 2 graph,
  * a version 1 workflow saved before graphs, or nothing yet (the default version 1 workflow, dated
  * at the project's registration so repeated reads agree). Each is returned as stored; the server
- * migrates (`storedWorkflowGraphV3`). `putGraph` still writes version 2 until the API carries
- * version 3 (AR-4), so a version 3 row is read but not yet written here.
+ * migrates (`storedWorkflowGraphV3`). `putGraph` writes version 3 (AR-4); version 2 and 1 rows
+ * are read as stored until the owner saves again.
  */
 export type StoredProjectWorkflow =
   | { kind: 'v3'; graph: ProjectWorkflowGraphV3 }
@@ -52,7 +54,7 @@ export interface ProjectWorkflowRepository {
    * the project stores a graph (read it with `stored`).
    */
   get(projectId: string): ProjectWorkflow | undefined;
-  /** What the project stores, version 1 or 2, or its default. Undefined for an unknown project. */
+  /** What the project stores, version 1, 2 or 3, or its default. Undefined for an unknown project. */
   stored(projectId: string): StoredProjectWorkflow | undefined;
   /** Whether the owner has saved a workflow of either version (false: the default applies). */
   isStored(projectId: string): boolean;
@@ -62,12 +64,13 @@ export interface ProjectWorkflowRepository {
    */
   put(input: ProjectWorkflowInput): ProjectWorkflow;
   /**
-   * Stores the project's workflow graph as `{version: 2, graph}`, replacing whatever was stored (a
-   * version 1 workflow included: the graph is what runs from now on). Only the shape is checked
-   * here; whether the graph may run is `validateWorkflowGraph`'s answer, which the server asks
-   * first. `not_found` for an unknown project.
+   * Stores the project's workflow graph as `{version: 3, graph}` (ADR-0037 §6), replacing whatever
+   * was stored (a version 1 workflow included: the graph is what runs from now on). A version 2
+   * graph is migrated first (`migrateWorkflowV2`, lossless). Only the shape is checked here;
+   * whether the graph may run is `validateWorkflowGraphV3`'s answer, which the server asks first.
+   * `not_found` for an unknown project.
    */
-  putGraph(projectId: string, graph: WorkflowGraph): ProjectWorkflowGraph;
+  putGraph(projectId: string, graph: AnyWorkflowGraph): ProjectWorkflowGraphV3;
 }
 
 interface WorkflowDbRow {
@@ -170,14 +173,17 @@ export function createProjectWorkflowRepository(ctx: RepositoryContext): Project
     },
     putGraph(projectId, graph) {
       const at = ctx.now().toISOString();
-      const valid = parseInput(WorkflowGraphSchema, graph, 'workflow graph');
-      const json = JSON.stringify({ version: 2, graph: valid });
+      const valid =
+        graph.version === 2
+          ? migrateWorkflowV2(parseInput(WorkflowGraphSchema, graph, 'workflow graph'))
+          : parseInput(WorkflowGraphV3Schema, graph, 'workflow graph');
+      const json = JSON.stringify({ version: 3, graph: valid });
       const row = guardWrite(
         'project workflow',
         () => upsertGraph.get(projectId, json, at) as WorkflowDbRow,
       );
       const saved = toStored(row);
-      if (saved.kind !== 'v2') {
+      if (saved.kind !== 'v3') {
         throw new DbError('invalid_stored_value', 'project workflow: the graph did not read back');
       }
       return saved.graph;
