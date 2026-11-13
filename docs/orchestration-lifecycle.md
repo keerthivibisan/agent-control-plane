@@ -54,6 +54,9 @@ the real runs of 2026-10-21 passed with every review route
     check run unasked.
   - _Auto:_ Auto edits plus the project's command allowlist (safe tokens only, a bare first word,
     `git` read-only). Each auto-approved request is recorded with its rule (`allowRule`).
+- **Several planners** (ADR-0037 §4): every planner submits a plan option; plan review opens once
+  each has submitted or ended, and the owner approves one option (never automatically, even in
+  Full auto). It becomes the run's plan; the others are stored as not chosen.
 - **Plan approval** creates the ticket branch from its start branch: named by the project's
   branching strategy, or `acp/<KEY>` (`acp/<KEY>-r<n>` for a later run) without one (ADR-0025).
   The lead hears of the approval only once the branch exists. Helpers and the tester start

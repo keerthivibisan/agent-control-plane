@@ -70,3 +70,18 @@ Paused on the owner's request while AR-3 was starting. To resume:
 - 2026-11-13 Coordinator: AR-3 accepted; AR-5a (editor on v3, `84e6373`) merged from
   `feature/workflow/arrows-editor`. Full check green except load timeouts (Microsoft Defender at
   ~270% CPU) that pass alone. Next: AR-4 with AR-5b (plan picker) in one pass.
+- 2026-11-13 AR-4 (server and DB) ready for review on `feature/workflow/arrows`: the workflow API,
+  the run graph and new run snapshots carry version 3 (`stored` adds `v3`; a `PUT` stores version
+  3 and still takes version 2, migrated; `WorkflowGraphVersionError` removed); the board passes
+  `ticketResearcherPrompt` for graphs with researchers; migration 0016 adds `ticket_plan_options`
+  (`ticket_plans` not rebuilt: a rebuild inside the migration transaction would cascade into plan
+  comments) and the run store keeps the options across commits and restarts; `TicketDetailDto`
+  gains `planOptions` and `POST /api/tickets/:id/plan-options/decision` calls `decidePlanOption`
+  (`planOptionId` required with two or more). `deriveRunWorkflowGraph` reads the v3 graph by
+  derived role (researchers included); the live graph draws researchers and arrow labels; the
+  editor saves version 3 (adapter and "can't store yet" notice removed; templates and the wizard
+  are version 3). API fuzz moved to the v3 generator.
+- 2026-11-13 AR-5b (plan picker) ready for review: in plan review with plan options, the
+  Comments tab shows the plans side by side (stacked below 1024px), each with its planner,
+  summary, steps and "Approve this plan"; one Request changes box goes to every planner. A
+  single planner's plan card is unchanged.

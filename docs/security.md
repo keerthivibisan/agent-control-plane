@@ -128,7 +128,8 @@
 ### Approval modes per workflow block (ADR-0023) [implemented]
 
 - **Validated graphs only.** A project's workflow graph is saved (`PUT
-/api/projects/:id/workflow-graph`) only when `validateWorkflowGraph` finds no error (422
+/api/projects/:id/workflow-graph`, version 3 since ADR-0037) only when `validateWorkflowGraphV3`
+  finds no error (422
   `workflow_invalid` otherwise), and a ticket run starts only on a graph that validates and
   compiles (409 `workflow_invalid`, no run created). The validator is the same pure function the
   editor uses. A version 1 workflow is migrated on read; a version 1 write never replaces a stored
