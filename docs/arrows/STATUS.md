@@ -8,9 +8,9 @@ Coordinator-owned. Plan: [README.md](README.md).
 | AR-1 | Core: v3 graph, roles, validator, compile  | done        | `feature/workflow/arrows` |        |
 | AR-2 | Researcher role                            | done        | `feature/workflow/arrows` |        |
 | AR-3 | Engine: research, hand-offs, plans, review | done        | `feature/workflow/arrows` |        |
-| AR-4 | Server and DB                              | not started |                           |        |
-| AR-5 | Web editor and plan approval               | in-progress | `feature/workflow/arrows` |        |
-| AR-6 | Safety, docs, real run                     | not started |                           |        |
+| AR-4 | Server and DB                              | done        | `feature/workflow/arrows` |        |
+| AR-5 | Web editor and plan approval               | done        | `feature/workflow/arrows` |        |
+| AR-6 | Safety, docs, real run                     | in-progress | `feature/workflow/arrows` |        |
 
 ## Resume here (paused 2026-11-09)
 
@@ -85,3 +85,6 @@ Paused on the owner's request while AR-3 was starting. To resume:
   Comments tab shows the plans side by side (stacked below 1024px), each with its planner,
   summary, steps and "Approve this plan"; one Request changes box goes to every planner. A
   single planner's plan card is unchanged.
+- 2026-11-13 Coordinator: AR-4 and AR-5b accepted. Plan options live in a new table
+  `ticket_plan_options` (migration 0016) instead of new columns on `ticket_plans`: rebuilding that
+  table inside the migration would cascade-delete comments pointing at plans.
