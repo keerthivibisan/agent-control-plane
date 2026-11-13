@@ -1,5 +1,11 @@
 import { defaultProjectWorkflow, migrateWorkflowV1 } from '@acp/core';
-import type { ApprovalMode, CompileContext, PlanStep, WorkflowGraph } from '@acp/core';
+import type {
+  AnyWorkflowGraph,
+  ApprovalMode,
+  CompileContext,
+  PlanStep,
+  WorkflowGraph,
+} from '@acp/core';
 import { programOf } from '../../src/index.js';
 import { agentModeOf } from './golden.js';
 import { endInvariants, stepInvariants } from './invariants.js';
@@ -24,6 +30,9 @@ function explored(point: ChoicePoint): readonly string[] {
     case 'approval':
     case 'legacy-review':
       return point.options.slice(0, 1);
+    case 'plans':
+      // ADR-0037 §4: any option may be chosen; a request for changes repeats planning.
+      return point.options.filter((o) => o !== 'request-changes');
     case 'turn':
     case 'tester-turn':
       // A first turn may change files, change nothing or fail; a rework turn changes files.
@@ -130,7 +139,7 @@ export interface GraphRunSetup {
  * A simulator config for a ticket run of `graph`: one plan step per helper node (a named helper's
  * label as its role, `Store` for the pool), started with the node's helper id.
  */
-export function graphSimConfig(graph: WorkflowGraph, o: GraphRunSetup = {}): SimConfig {
+export function graphSimConfig(graph: AnyWorkflowGraph, o: GraphRunSetup = {}): SimConfig {
   const context: CompileContext = {
     projectMode: o.projectMode ?? 'manual',
     approvalCeilings: o.ceilings ?? [],
@@ -169,7 +178,7 @@ export function v1Graph(workflow: Parameters<typeof migrateWorkflowV1>[0]): Work
 /** A readable failure: the graph, the setup and the choices that broke an invariant. */
 export function describeFailure(
   name: string,
-  graph: WorkflowGraph,
+  graph: AnyWorkflowGraph,
   result: Pick<Exploration, 'violation'>,
   setup: GraphRunSetup = {},
 ): string {
@@ -224,6 +233,21 @@ export function exploreGraph(
   } else {
     focuses =
       full || roles.length <= 1 ? [undefined] : [...roles.map((r) => new Set([r])), testers];
+  }
+  // ADR-0037: the researchers' outcomes and the owner's pick among several plans branch together
+  // in one more focus (the editing nodes take their default answers there).
+  const program = config.extra?.graph === undefined ? undefined : config.extra;
+  if (
+    program?.graph !== undefined &&
+    program.graphContext !== undefined &&
+    onlyNodes === undefined
+  ) {
+    const p = programOf({ graph: program.graph, graphContext: program.graphContext });
+    const v3 = [
+      ...p.researchers.map((r) => r.id),
+      ...(p.planners.length > 1 ? [String(p.planners.length)] : []),
+    ];
+    if (v3.length > 0 && !focuses.includes(undefined)) focuses.push(new Set(v3));
   }
   let runs = 0;
   let exhaustive = true;

@@ -2,16 +2,21 @@ import { redact, TicketCommentSchema } from '@acp/core';
 import type { ChangeVerdict } from '@acp/core';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
-import { isOverBudget } from './budget.js';
-import type { Draft } from './draft.js';
-import { runLimits } from './limits.js';
-import { activeHelperCount, applyDecision, emitRound, leadCanDecide, notifyLead } from './loop.js';
-import { editingNodeOf, reviewRouteOf } from './program.js';
-import type { EngineAgent } from './state.js';
-import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS, stageOf } from './stages.js';
+import { recordOutputNote } from './handoffs.js';
+import {
+  applyDecision,
+  decideFanOut,
+  directReworkAllowed,
+  emitRound,
+  fanOutComplete,
+  leadCanDecide,
+  notifyLead,
+} from './loop.js';
+import { reviewRouteOf } from './program.js';
+import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS } from './stages.js';
 import type { EngineContext, EngineResult, RunState } from './state.js';
 import { cleanSummary } from './summary.js';
-import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
+import { isLiveAgentStatus } from './transitions.js';
 
 /**
  * The reviewer's one control-plane tool (ADR-0019 §2, decision B): `post_review` turns its
@@ -73,6 +78,8 @@ export function postReview(
     }
     reviewer.reviewPosts = posted + 1;
     d.effects.push({ type: 'review-comment', agentRunId: reviewer.id, body });
+    // ADR-0037 §2: the posts add up to the final reviewer's output note for its custom arrows.
+    recordOutputNote(d, reviewer, body, true);
     if (loop) notifyLead(d, `Final code review finding:\n\n${body}`);
     return { value: 'Posted to the ticket. Post more findings, or finish if you are done.' };
   });
@@ -104,6 +111,46 @@ export function submitReview(
     }
     const helper = d.agent(reviewer.reviewsAgentRunId ?? '');
     const change = helper?.change;
+    // ADR-0037 §5: one reviewer of a fan-out; the decision waits for every one.
+    const fan = change?.state === 'reviewing' ? change.fanOut : undefined;
+    if (helper !== undefined && change !== undefined && fan !== undefined) {
+      const mine = fan.reviews.find((r) => r.agentRunId === reviewer.id);
+      if (mine === undefined || mine.verdict !== null) {
+        return refusal(
+          'run-not-active',
+          'Your review was already submitted, or the change was decided; end your turn now.',
+        );
+      }
+      const body = cleanReviewBody(input.findings);
+      if (!TicketCommentSchema.shape.body.safeParse(body).success) {
+        return refusal('invalid-input', 'The findings are empty.');
+      }
+      change.fanOut = {
+        ...fan,
+        reviews: fan.reviews.map((r) =>
+          r.agentRunId === reviewer.id ? { ...r, verdict: input.verdict, findings: body } : r,
+        ),
+      };
+      reviewer.reviewPosts = 1;
+      reviewer.latestActivity = cleanSummary(
+        `Reviewed ${helper.role}'s change: ${input.verdict}`,
+        'Reviewed a change',
+      );
+      d.effects.push({
+        type: 'review-comment',
+        agentRunId: reviewer.id,
+        body,
+        changeOf: helper.id,
+        round: change.round,
+        verdict: input.verdict,
+      });
+      recordOutputNote(d, reviewer, `Verdict: ${input.verdict}\n\n${body}`);
+      if (fanOutComplete(d, change)) decideFanOut(d, helper);
+      return {
+        value:
+          'Submitted. The decision waits for every review agent of this change. Your review is done: end your turn now.',
+      };
+    }
     if (
       helper === undefined ||
       change?.state !== 'reviewing' ||
@@ -127,7 +174,7 @@ export function submitReview(
     const reworkDirect =
       directRounds !== null &&
       input.verdict === 'rework' &&
-      directReworkAllowed(d, helper, reviewer, directRounds);
+      directReworkAllowed(d, helper, [reviewer], directRounds);
     change.state = reworkDirect ? 'decision' : leadCanDecide(d) ? 'decision' : 'needs-owner';
     reviewer.reviewPosts = 1;
     reviewer.latestActivity = cleanSummary(
@@ -142,6 +189,8 @@ export function submitReview(
       round: change.round,
       verdict: input.verdict,
     });
+    // ADR-0037 §2: the verdict and findings are the reviewer's output note for its custom arrows.
+    recordOutputNote(d, reviewer, `Verdict: ${input.verdict}\n\n${body}`);
     emitRound(d, helper);
     if (reworkDirect) {
       applyDecision(d, helper, { decision: 'rework', by: 'reviewer', comments: body });
@@ -167,34 +216,4 @@ export function submitReview(
     );
     return { value: 'Submitted. Your review is done: end your turn now.' };
   });
-}
-
-/**
- * Whether a change reviewer on route "direct" may send the change back itself (ADR-0023 §4): it
- * has rounds left, the run is going, the helper waits for its review within its budget, and a
- * helper slot is free (the reviewer itself is done, so it does not hold one) as well as room in
- * the helper's node.
- */
-function directReworkAllowed(
-  d: Draft,
-  helper: EngineAgent,
-  reviewer: EngineAgent,
-  rounds: number,
-): boolean {
-  const change = helper.change;
-  if (change === undefined || (change.reviewerRounds ?? 0) >= rounds) return false;
-  if (!['RUNNING', 'BLOCKED', 'REVIEW'].includes(d.run.status)) return false;
-  if (helper.status !== 'AWAITING_REVIEW' || change.merging) return false;
-  if (isOverBudget(helper.budgetTokensUsed, helper.budgetLimit)) return false;
-  const others = activeHelperCount(d) - (isActiveAgentStatus(reviewer.status) ? 1 : 0);
-  if (others >= runLimits(d).maxConcurrentHelpers) return false;
-  const node = editingNodeOf(d.program(), helper);
-  if (node !== undefined && node.type !== 'tester') {
-    const id = stageOf(helper);
-    const live = d.agents.filter(
-      (a) => a.kind === helper.kind && stageOf(a) === id && isActiveAgentStatus(a.status),
-    ).length;
-    if (live >= node.maxInstances) return false;
-  }
-  return true;
 }

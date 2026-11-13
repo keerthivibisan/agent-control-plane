@@ -481,8 +481,14 @@ export function changeReviewerBrief(
   helper: Pick<EngineAgent, 'role' | 'task'>,
   round: number,
   direct = false,
+  reviewers = 1,
 ): string {
   const task = helper.task ?? '(no task text)';
+  // ADR-0037 §5: one of several review agents of the change.
+  const fanOut =
+    reviewers > 1
+      ? `You are one of ${reviewers} review agents of this change; the decision waits for all of you, any "rework" verdict sends it back${direct ? ' to the helper' : ''}, and the lead sees every verdict.`
+      : null;
   return [
     `Review one helper’s change for "${state.run.title}"${round > 0 ? ` (after rework round ${round})` : ''}.`,
     `The helper "${helper.role}" was asked to: ${task.length <= BRIEF_TASK_MAX_CHARS ? task : `${task.slice(0, BRIEF_TASK_MAX_CHARS - 1)}…`}`,
@@ -491,5 +497,8 @@ export function changeReviewerBrief(
     direct
       ? 'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They become a comment on the ticket. "rework" sends the change straight back to the helper with your findings (while rework rounds are left); "approve" passes it to the lead, who merges or decides. You never merge anything. Then you are done.'
       : 'When you are done, call submit_review once with your verdict ("approve" or "rework") and your findings as plain text. They go to the lead, who decides, and become a comment on the ticket. Your verdict is advice; it does not merge or block anything. Then you are done.',
-  ].join('\n\n');
+    fanOut,
+  ]
+    .filter((l) => l !== null)
+    .join('\n\n');
 }

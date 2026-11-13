@@ -11,6 +11,7 @@ import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
+import { agentsOfNode, researcherForStart, startResearcher, withHandoffs } from './handoffs.js';
 import { checkStepAttempts } from './step-attempts.js';
 import { planStepStartingPoints, startingPointsOf } from './starting-points.js';
 import { submitPlan } from './plan.js';
@@ -37,7 +38,7 @@ import {
 } from './stages.js';
 import type { Draft } from './draft.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
-import { isLiveAgentStatus } from './transitions.js';
+import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
 import { agentDepth } from './tree.js';
 
@@ -314,6 +315,31 @@ export function leadToolCall(
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
       // ADR-0023 §7: the helper node to start. A helper's own helpers belong to its node.
       const program = programOf(state);
+      // ADR-0037 §3: the lead starts the researchers that do not run before planning.
+      const research =
+        caller.kind === 'lead' ? researcherForStart(program, { helper, role }) : null;
+      if (research !== null) {
+        if (!research.ok) {
+          return { ok: false, refusal: refusal('invalid-input', research.message) };
+        }
+        const node = research.node;
+        if (agentsOfNode(state, node.id).some((a) => isActiveAgentStatus(a.status))) {
+          return {
+            ok: false,
+            refusal: refusal(
+              'too-many-agents',
+              `${node.label} is already researching; wait for its findings.`,
+            ),
+          };
+        }
+        return applyCommand(state, ctx, (d) => {
+          const agent = startResearcher(d, node, { parentAgentRunId: caller.id, task });
+          if (d.integration !== undefined) humanized(`Started ${node.label}`)(d);
+          return {
+            value: `Started researcher ${agent.id} (${node.label}). Its findings reach the agents it researches for${node.targets.some((t) => t.nodeId === program.lead.id) ? ', you included, as a message' : ''}.`,
+          };
+        });
+      }
       const resolved =
         caller.kind === 'worker'
           ? (() => {
@@ -373,7 +399,12 @@ export function leadToolCall(
           kind: 'worker',
           role,
           // ADR-0026 §3: a ticket run's helper ends with its note (`report_work`).
-          ...launchFieldsFor(program, node.id, helperBrief(task, d.run.ticketId !== null)),
+          ...launchFieldsFor(
+            program,
+            node.id,
+            // ADR-0037 §2: plus hand-offs to the helper's node from agents already done.
+            withHandoffs(d, worker, helperBrief(task, d.run.ticketId !== null)),
+          ),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),

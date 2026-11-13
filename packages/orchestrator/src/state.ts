@@ -26,7 +26,7 @@ import type {
   StartingPoints,
   TicketPlan,
   ToolUseCounts,
-  WorkflowGraph,
+  AnyWorkflowGraph,
   WorkflowNodeId,
 } from '@acp/core';
 import type { z } from 'zod';
@@ -113,8 +113,8 @@ export interface EngineAgent extends AgentRun {
   startingPoints?: StartingPoints;
   /**
    * ADR-0037 §2: the agents whose output note (findings, plan, review, work note) this agent was
-   * given through a research or custom arrow, in its brief or as a notice, so none is sent twice.
-   * In memory with the live run; absent until the first.
+   * given through a research or custom arrow, in its brief or as a notice, so none is sent twice
+   * (`handoffs.ts`). In memory with the live run; absent until the first.
    */
   receivedFrom?: readonly string[];
 }
@@ -127,6 +127,8 @@ export interface FanOutReview {
   /** Its findings as submitted (redacted, capped); null without a verdict. */
   findings: string | null;
 }
+// A review whose verdict is null and whose agent is no longer live ended without a verdict ("no
+// verdict"); the lead is told so with the other verdicts.
 
 /**
  * ADR-0037 §5: a change reviewed by several change reviewers. The decision waits for every one:
@@ -155,7 +157,7 @@ export interface PlanOption {
   plannedHelpers: number;
   /** The helper node each step resolved to (ADR-0023 §7), when the graph has named helpers. */
   stepHelpers?: readonly WorkflowNodeId[];
-  /** `superseded`: the owner asked every planner for changes; a new option follows. */
+  /** `superseded`: the owner asked every planner for changes, or the planner submitted again. */
   status: 'proposed' | 'chosen' | 'not-chosen' | 'superseded';
   createdAt: string;
 }
@@ -356,9 +358,10 @@ export interface RunState {
   /**
    * The workflow graph the run follows (ADR-0023), snapshotted at creation with the context it is
    * compiled with. Absent: a version 1 run, which compiles its `workflow` migrated
-   * (`programOf`). The program itself is never stored.
+   * (`programOf`). The program itself is never stored. Version 2 or 3 (ADR-0037): `programOf`
+   * compiles either, so a run keeps the version it started with.
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   /** The context `graph` compiles with (project mode, ticket and run ceilings, overrides). */
   graphContext?: CompileContext;
   /**
@@ -373,24 +376,29 @@ export interface RunState {
    */
   findingsByAgent?: Readonly<Record<string, string>>;
   /**
-   * ADR-0037 §2: the output note of agents that hand off through a custom arrow (a planner's
+   * ADR-0037 §2: the output note of agents whose node hands off along a custom arrow (a planner's
    * plan, a change reviewer's verdict and findings, a final reviewer's posts, a helper's or
    * tester's `report_work` note), redacted and capped. Researchers' notes stay in
-   * `findingsByAgent`. Only agents of nodes with an outgoing research or custom arrow. In memory.
+   * `findingsByAgent`. In memory with the live run.
    */
   outputNotes?: Readonly<Record<string, string>>;
   /**
-   * ADR-0037 §2: agents whose output was handed on along their node's research and custom arrows
-   * (it finished: it gave its note, or ended without one). Each is handed on once. In memory.
-   */
-  deliveredFrom?: readonly string[];
-  /**
    * ADR-0037 §2: the first message of an agent the engine created but holds (QUEUED) until the
-   * agents it waits for finished: a planner, or the lead when it plans, behind its researchers.
-   * By agent run id. In memory; owner text only (the ticket brief).
+   * agents it waits for finished: a planner, or the lead when it plans, behind its researchers
+   * and custom arrows. By agent run id; removed when the agent starts. In memory; owner text only
+   * (the ticket brief).
    */
   pendingBriefs?: Readonly<Record<string, string>>;
-  /** ADR-0037 §4: the plan options of a run with two or more planners, oldest first. */
+  /**
+   * ADR-0037 §3: the ticket part of a researcher's brief (`ticketResearcherPrompt`), kept for the
+   * run's researchers, engine-started or started by the lead. In memory; owner text only.
+   */
+  researchBrief?: string;
+  /**
+   * ADR-0037 §4: the plan options of a run with two or more planners, oldest first. The owner
+   * approves one (`decidePlanOption`); it becomes the run's approved plan in `plans`. In memory
+   * with the live run (AR-4 stores the drafts).
+   */
   planOptions?: readonly PlanOption[];
 }
 
@@ -704,6 +712,26 @@ export type EngineEffect =
   | { type: 'plan-submitted'; planId: string }
   /** The owner approved a plan (run → RUNNING) or asked for changes (run → PLANNING). */
   | { type: 'plan-decided'; planId: string; status: 'approved' | 'changes-requested' }
+  /**
+   * ADR-0037 §4 (two or more planners): a planner submitted a plan option; it is in
+   * `state.planOptions`. AR-4 stores the drafts; the run stays PLANNING until every planner
+   * submitted or ended.
+   */
+  | { type: 'plan-option-submitted'; planOptionId: string }
+  /** ADR-0037 §4: every planner submitted or ended: the options wait for the owner (PLAN_REVIEW). */
+  | { type: 'plan-options-ready'; planOptionIds: readonly string[] }
+  /**
+   * ADR-0037 §4: the owner chose one option (`chosen`; its plan is `planId` in `state.plans`, with
+   * a `plan-decided` effect too) and the other proposed options are `notChosen`; or asked every
+   * planner for changes (`changes-requested`; the proposed options are superseded).
+   */
+  | {
+      type: 'plan-option-decided';
+      status: 'chosen' | 'changes-requested';
+      planOptionId: string | null;
+      planId: string | null;
+      notChosen: readonly string[];
+    }
   /** Usage passed the soft cap; report how far (ADR-0014). */
   | { type: 'budget-overshoot'; agentRunId: string; used: number; limit: number; overshoot: number }
   /** Content-free diagnostics: count them, never log the payload. */

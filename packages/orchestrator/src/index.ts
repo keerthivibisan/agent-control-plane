@@ -22,12 +22,14 @@ export {
   LEAD_ROLE,
   approvedPlan,
   decidePlan,
+  decidePlanOption,
   isFullAuto,
   pendingPlan,
   plannedHelpers,
   ticketLeadPrompt,
   ticketOrchestratorPrompt,
   ticketPlannerPrompt,
+  ticketResearcherPrompt,
   ticketRunPrompts,
 } from './plan.js';
 export type { PlanDecision, PromptOptions } from './plan.js';
@@ -88,6 +90,22 @@ export {
 export { noChangeLine } from './change-commands.js';
 export { reportWork } from './report-tool.js';
 export { cleanFindings, reportFindings } from './findings-tool.js';
+export {
+  HANDOFF_DATA_LINE,
+  MAX_OUTPUT_NOTE_CHARS,
+  agentsOfNode,
+  heldByHandoff,
+  incomingArrows,
+  isHandoffDone,
+  leadStartedResearchers,
+  outputNoteOf,
+  planningNodeIds,
+  prePlanResearchers,
+  researcherBriefLines,
+  researcherForStart,
+} from './handoffs.js';
+export type { IncomingArrow, ResearcherResolution } from './handoffs.js';
+export { isMultiPlanner, multiPlannerLine, proposedOptions } from './plan-options.js';
 export {
   RESOLVER_ROLE,
   abandonResolver,
@@ -151,6 +169,9 @@ export {
   resolveHelper,
   reviewRouteOf,
   runGraphOf,
+  runGraphV3Of,
+  RunGraphVersionError,
+  researcherNode,
   testerNodeOf,
 } from './program.js';
 export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';

@@ -13,6 +13,7 @@ import { cleanSummary } from './summary.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
+import { heldByHandoff, withHandoffs } from './handoffs.js';
 import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
 import {
@@ -250,6 +251,8 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
   for (const agent of changeAgents(d)) {
     const change = agent.change;
     if (change?.state !== 'reviewing' || change.reviewerAgentRunId === null) continue;
+    // ADR-0037 §5: a fan-out waits for every reviewer (below).
+    if (change.fanOut !== undefined) continue;
     const reviewer = d.agent(change.reviewerAgentRunId);
     if (reviewer !== undefined && isLiveAgentStatus(reviewer.status)) continue;
     change.state = 'decision';
@@ -266,6 +269,14 @@ export function sweepLoop(d: Draft, stopped: readonly string[]): void {
         change.state === 'decision' || (change.state === 'reviewing' && change.reviewer === 'lead');
       if (atLead && !change.merging) change.state = 'needs-owner';
     }
+  }
+  // ADR-0037 §5: start the fan-out reviewers that waited for a slot; decide a complete fan-out
+  // (a reviewer that ended without a verdict counts as "no verdict").
+  for (const agent of changeAgents(d)) {
+    const change = agent.change;
+    if (change?.state !== 'reviewing' || change.fanOut === undefined) continue;
+    startPendingReviewers(d, agent, change);
+    if (fanOutComplete(d, change)) decideFanOut(d, agent);
   }
   assignReviewers(d);
 }
@@ -366,18 +377,30 @@ function assignReviewers(d: Draft): void {
     }
     // A review agent counts as one helper (ADR-0021 §5); without a slot the change waits.
     if (activeHelperCount(d) >= maxConcurrentHelpers) continue;
+    // ADR-0037 §5: several reviewers review the change; the decision waits for all of them.
+    if (route.reviewers.length > 1) {
+      change.state = 'reviewing';
+      change.reviewer = 'agent';
+      change.reviewerAgentRunId = null;
+      change.verdict = null;
+      change.fanOut = { pending: [...route.reviewers], reviews: [] };
+      startPendingReviewers(d, helper, change);
+      emitRound(d, helper);
+      continue;
+    }
+    // ADR-0037 §2: the reviewer waits while an agent it gets a custom arrow from is unfinished.
+    if (heldByHandoff(d, route.reviewer)) continue;
     startChangeReviewer(d, helper, change, route.reviewer, route.then === 'direct');
   }
 }
 
-function startChangeReviewer(
+/** A change reviewer of `reviewerNode` for the helper's change, STARTING (no effects yet). */
+function newChangeReviewer(
   d: Draft,
   helper: EngineAgent,
-  change: EngineChange,
   reviewerNode: string,
-  direct: boolean,
-): void {
-  const role = `Review: ${helper.role}`.slice(0, ROLE_MAX_CHARS);
+  role: string,
+): EngineAgent {
   const reviewer: EngineAgent = {
     id: d.freshId(),
     runId: d.run.id,
@@ -402,11 +425,19 @@ function startChangeReviewer(
   };
   d.agents.push(reviewer);
   d.setAgentStatus(reviewer, 'STARTING');
-  change.state = 'reviewing';
-  change.reviewer = 'agent';
-  change.reviewerAgentRunId = reviewer.id;
-  change.verdict = null;
-  emitRound(d, helper);
+  return reviewer;
+}
+
+/** The checkout and `start-agent` effects of a change reviewer. */
+function launchChangeReviewer(
+  d: Draft,
+  reviewer: EngineAgent,
+  helper: EngineAgent,
+  change: EngineChange,
+  reviewerNode: string,
+  direct: boolean,
+  reviewers: number,
+): void {
   d.effects.push({
     type: 'create-review-checkout',
     agentRunId: reviewer.id,
@@ -417,14 +448,172 @@ function startChangeReviewer(
     type: 'start-agent',
     agentRunId: reviewer.id,
     kind: 'reviewer',
-    role,
+    role: reviewer.role,
     ...launchFieldsFor(
       d.program(),
       reviewerNode,
-      changeReviewerBrief(d, helper, change.round, direct),
+      withHandoffs(d, reviewer, changeReviewerBrief(d, helper, change.round, direct, reviewers)),
     ),
     reviewScope: 'change',
   });
+}
+
+function startChangeReviewer(
+  d: Draft,
+  helper: EngineAgent,
+  change: EngineChange,
+  reviewerNode: string,
+  direct: boolean,
+): void {
+  const role = `Review: ${helper.role}`.slice(0, ROLE_MAX_CHARS);
+  const reviewer = newChangeReviewer(d, helper, reviewerNode, role);
+  change.state = 'reviewing';
+  change.reviewer = 'agent';
+  change.reviewerAgentRunId = reviewer.id;
+  change.verdict = null;
+  emitRound(d, helper);
+  launchChangeReviewer(d, reviewer, helper, change, reviewerNode, direct, 1);
+}
+
+// ------------------------------------------------------------------ review fan-out (ADR-0037 §5)
+
+/** The label of a change reviewer node, for the lead's notice and role names. */
+function reviewerLabel(d: Draft, nodeId: string): string {
+  return d.program().changeReviewers.find((n) => n.id === nodeId)?.label ?? nodeId;
+}
+
+/**
+ * Starts the fan-out's reviewers that still wait, in route order, while helper slots are free and
+ * no custom arrow holds one back. `change.reviewerAgentRunId` is the first one started.
+ */
+function startPendingReviewers(d: Draft, helper: EngineAgent, change: EngineChange): void {
+  const route = reviewRouteOf(d.program(), helper);
+  const direct = route.by === 'agent' && route.then === 'direct';
+  const { maxConcurrentHelpers } = runLimits(d);
+  let fan = change.fanOut;
+  if (fan === undefined) return;
+  const total = fan.pending.length + fan.reviews.length;
+  for (const nodeId of fan.pending) {
+    if (activeHelperCount(d) >= maxConcurrentHelpers) break;
+    if (heldByHandoff(d, nodeId)) continue;
+    const role = `Review (${reviewerLabel(d, nodeId)}): ${helper.role}`.slice(0, ROLE_MAX_CHARS);
+    const reviewer = newChangeReviewer(d, helper, nodeId, role);
+    fan = {
+      pending: fan.pending.filter((n) => n !== nodeId),
+      reviews: [...fan.reviews, { nodeId, agentRunId: reviewer.id, verdict: null, findings: null }],
+    };
+    change.fanOut = fan;
+    if (change.reviewerAgentRunId === null) change.reviewerAgentRunId = reviewer.id;
+    launchChangeReviewer(d, reviewer, helper, change, nodeId, direct, total);
+  }
+}
+
+/**
+ * Every reviewer of the fan-out started and gave its verdict or ended without one (a review whose
+ * verdict is null and whose agent is no longer live is "no verdict").
+ */
+export function fanOutComplete(d: Draft, change: EngineChange): boolean {
+  const fan = change.fanOut;
+  if (fan === undefined || fan.pending.length > 0 || fan.reviews.length === 0) return false;
+  return fan.reviews.every((r) => {
+    if (r.verdict !== null) return true;
+    const agent = d.agent(r.agentRunId);
+    return agent === undefined || !isLiveAgentStatus(agent.status);
+  });
+}
+
+/**
+ * The fan-out's decision (ADR-0037 §5), once every reviewer gave its verdict or ended: any
+ * `rework` means rework. On a route the reviewers rework themselves ("direct", the compiled
+ * smallest rounds) the change goes back to the helper with every rework finding, while rounds,
+ * budget and a slot allow; otherwise the lead decides, told every verdict (and every "no verdict")
+ * in one notice. Without a live lead the change goes to the owner.
+ */
+export function decideFanOut(d: Draft, helper: EngineAgent): void {
+  const change = helper.change;
+  const fan = change?.fanOut;
+  if (change === undefined || fan === undefined) return;
+  const verdicts = fan.reviews.map((r) => r.verdict);
+  const verdict = verdicts.includes('rework')
+    ? 'rework'
+    : verdicts.includes('approve')
+      ? 'approve'
+      : null;
+  change.verdict = verdict;
+  const route = reviewRouteOf(d.program(), helper);
+  const directRounds =
+    route.by === 'agent' && route.then === 'direct' ? route.reviewerRounds : null;
+  const reviewers = fan.reviews
+    .map((r) => d.agent(r.agentRunId))
+    .filter((a): a is EngineAgent => a !== undefined);
+  const reworkDirect =
+    directRounds !== null &&
+    verdict === 'rework' &&
+    directReworkAllowed(d, helper, reviewers, directRounds);
+  change.state = reworkDirect ? 'decision' : leadCanDecide(d) ? 'decision' : 'needs-owner';
+  emitRound(d, helper);
+  if (reworkDirect) {
+    const comments = fan.reviews
+      .filter((r) => r.verdict === 'rework')
+      .map((r) => `${reviewerLabel(d, r.nodeId)}:\n${r.findings ?? ''}`)
+      .join('\n\n');
+    applyDecision(d, helper, { decision: 'rework', by: 'reviewer', comments });
+    return;
+  }
+  const lines = fan.reviews.map((r) =>
+    r.verdict === null
+      ? `${reviewerLabel(d, r.nodeId)}: no verdict (it ended without submitting its review).`
+      : `${reviewerLabel(d, r.nodeId)}: ${r.verdict}.\nFindings:\n${r.findings ?? ''}`,
+  );
+  notifyLead(
+    d,
+    [
+      `${fan.reviews.length} review agents reviewed ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}). ${
+        verdict === 'rework'
+          ? 'Verdict: rework (at least one asks for rework).'
+          : verdict === 'approve'
+            ? 'Verdict: approve (none asks for rework).'
+            : 'None of them gave a verdict.'
+      }`,
+      ...lines,
+      directRounds !== null && verdict === 'rework'
+        ? `The review agents have no rework round left for it (${directRounds} used or not allowed now), so you decide.`
+        : null,
+      'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.',
+    ]
+      .filter((l) => l !== null)
+      .join('\n\n'),
+  );
+}
+
+/**
+ * Whether the change reviewers on route "direct" may send the change back themselves (ADR-0023
+ * §4): rounds left, the run is going, the helper waits for its review within its budget, and a
+ * helper slot is free (the reviewers themselves are done, so they hold none) as well as room in
+ * the helper's node.
+ */
+export function directReworkAllowed(
+  d: Draft,
+  helper: EngineAgent,
+  reviewers: readonly EngineAgent[],
+  rounds: number,
+): boolean {
+  const change = helper.change;
+  if (change === undefined || (change.reviewerRounds ?? 0) >= rounds) return false;
+  if (!['RUNNING', 'BLOCKED', 'REVIEW'].includes(d.run.status)) return false;
+  if (helper.status !== 'AWAITING_REVIEW' || change.merging) return false;
+  if (isOverBudget(helper.budgetTokensUsed, helper.budgetLimit)) return false;
+  const busy = reviewers.filter((r) => isActiveAgentStatus(r.status)).length;
+  if (activeHelperCount(d) - busy >= runLimits(d).maxConcurrentHelpers) return false;
+  const node = editingNodeOf(d.program(), helper);
+  if (node !== undefined && node.type !== 'tester') {
+    const id = stageOf(helper);
+    const live = d.agents.filter(
+      (a) => a.kind === helper.kind && stageOf(a) === id && isActiveAgentStatus(a.status),
+    ).length;
+    if (live >= node.maxInstances) return false;
+  }
+  return true;
 }
 
 // ------------------------------------------------------------------ decisions
@@ -740,6 +929,7 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       }
       change.round += 1;
       if (input.by === 'reviewer') change.reviewerRounds = (change.reviewerRounds ?? 0) + 1;
+      delete change.fanOut;
       change.state = 'rework';
       change.verdict = null;
       change.reviewer = null;
@@ -754,7 +944,12 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
           : input.by === 'reviewer' && route.by === 'agent' && route.then === 'direct'
             ? `round ${change.reviewerRounds ?? 0} of ${route.reviewerRounds}`
             : `round ${change.round}`;
-      const prompt = reworkPrompt(agent, change, input.by, comments, branch, roundText);
+      // ADR-0037 §2: plus hand-offs that reached the helper's node while it waited.
+      const prompt = withHandoffs(
+        d,
+        agent,
+        reworkPrompt(agent, change, input.by, comments, branch, roundText),
+      );
       change.conflictFiles = [];
       d.setAgentStatus(agent, 'STARTING');
       // Same helper, same worktree, same budget; a rework turn never starts helpers (ADR-0021 §3).
