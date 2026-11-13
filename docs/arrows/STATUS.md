@@ -7,9 +7,9 @@ Coordinator-owned. Plan: [README.md](README.md).
 | AR-0 | ADR-0037, plan                             | done        | `feature/workflow/arrows` |        |
 | AR-1 | Core: v3 graph, roles, validator, compile  | done        | `feature/workflow/arrows` |        |
 | AR-2 | Researcher role                            | done        | `feature/workflow/arrows` |        |
-| AR-3 | Engine: research, hand-offs, plans, review | in-progress | `feature/workflow/arrows` |        |
+| AR-3 | Engine: research, hand-offs, plans, review | done        | `feature/workflow/arrows` |        |
 | AR-4 | Server and DB                              | not started |                           |        |
-| AR-5 | Web editor and plan approval               | not started |                           |        |
+| AR-5 | Web editor and plan approval               | in-progress | `feature/workflow/arrows` |        |
 | AR-6 | Safety, docs, real run                     | not started |                           |        |
 
 ## Resume here (paused 2026-11-09)
@@ -67,3 +67,6 @@ Paused on the owner's request while AR-3 was starting. To resume:
   told to the lead). Deferred: storing plan drafts and serving v3 run graphs (AR-4,
   `runGraphOf` throws `RunGraphVersionError` for a v3-only run graph), `researcherPrompt` wiring
   in the server (AR-4).
+- 2026-11-13 Coordinator: AR-3 accepted; AR-5a (editor on v3, `84e6373`) merged from
+  `feature/workflow/arrows-editor`. Full check green except load timeouts (Microsoft Defender at
+  ~270% CPU) that pass alone. Next: AR-4 with AR-5b (plan picker) in one pass.
