@@ -357,24 +357,21 @@ test('an Agent block from the menu, linked by dragging; a refused drag; fix and 
   await expect(page.getByTestId('saved')).toHaveText('Saved');
   expect(served.puts).toHaveLength(1);
   const graph = served.puts[0]?.body['graph'] as GraphJson;
-  // The PUT body is a whole version 2 graph with the helper wired as drawn. (The browser checked
-  // it with core's validator before Save was enabled; workflow-editor.test.tsx re-validates a PUT
-  // body with core too.)
-  expect(graph.version).toBe(2);
+  // The PUT body is a whole version 3 graph (ADR-0037, AR-4) with the agent wired as drawn. (The
+  // browser checked it with core's validator before Save was enabled; workflow-editor.test.tsx
+  // re-validates a PUT body with core too.)
+  expect(graph.version).toBe(3);
   expect(graph.template).toBe('custom');
-  expect(graph.legacyV1).toBeDefined();
   for (const x of [...graph.nodes, ...graph.edges]) expect(x.id).toMatch(/^[a-z][a-z0-9-]{0,39}$/);
-  // The editor's version 3 agent goes out as a version 2 helper until the API takes version 3.
+  // One Agent block: no role is stored, its arrows make it a helper.
   expect(graph.nodes.find((n) => n.id === 'agent-1')).toMatchObject({
-    type: 'helper',
+    type: 'agent',
     label: 'Frontend helper',
-    approvalMode: null,
-    maxInstances: 1,
   });
   const edges = graph.edges.map((e) => `${e.type}:${e.from}>${e.to}`);
   expect(edges).toEqual(
     expect.arrayContaining([
-      'assigns:orchestrate>agent-1',
+      'implement:orchestrate>agent-1',
       'review:agent-1>review',
       'rework:review>agent-1',
     ]),
@@ -498,11 +495,16 @@ test('the block panel: modes on editing blocks only, missing files flagged, keyb
   await expect(panel(page)).toHaveCount(0);
   await expect(issues(page)).toBeVisible();
 
-  // Delete removes the selected block (the final chain joins around the tester)…
+  // Delete removes the selected block (the final chain joins around the tester): no new problem.
+  // (The Tester added from the menu above still has no review arrow: its own problem stays.)
+  const errorsBefore = await page.getByTestId('problems-button').getAttribute('data-errors');
   await block(page, 'unit-tests').click();
   await page.keyboard.press('Delete');
   await expect(block(page, 'unit-tests')).toHaveCount(0);
-  await expect(page.getByTestId('problems-button')).toHaveAttribute('data-errors', '0');
+  await expect(page.getByTestId('problems-button')).toHaveAttribute(
+    'data-errors',
+    errorsBefore ?? '0',
+  );
   // …but never the lead or a step every workflow has.
   await block(page, 'orchestrate').click();
   await page.keyboard.press('Delete');
