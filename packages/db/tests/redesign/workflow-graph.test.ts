@@ -183,6 +183,26 @@ describe('run snapshot: graph and graphContext (ADR-0023)', () => {
     expect(audit.getRunSnapshot(run.id)?.graphContext).toEqual(codex);
   });
 
+  it('stores a version 3 graph snapshot as it is (ADR-0037) and refuses a broken one', () => {
+    const store = setup();
+    const { run } = ticketWithRun(store);
+    const audit = store.redesign.runAudit;
+    const v3 = workflowTemplateV3('reviewer-helper-loop');
+    const snapshot: StoredRunSnapshot = {
+      maxConcurrentHelpers: 3,
+      maxDepth: 1,
+      graph: v3,
+      graphContext: CONTEXT,
+    };
+    audit.setRunSnapshot(run.id, snapshot);
+    expect(audit.getRunSnapshot(run.id)).toEqual(snapshot);
+    expect(audit.getRunSnapshot(run.id)?.graph?.version).toBe(3);
+    const broken = { ...snapshot, graph: { ...v3, nodes: [] } };
+    expect(
+      thrown(() => audit.setRunSnapshot(run.id, broken as unknown as StoredRunSnapshot)),
+    ).toMatchObject({ code: 'invalid_input' });
+  });
+
   it('refuses a graph without its context, a bad context, or a helper limit not the run’s', () => {
     const store = setup();
     const { run } = ticketWithRun(store);
