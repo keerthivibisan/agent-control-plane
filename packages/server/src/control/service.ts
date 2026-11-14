@@ -34,6 +34,7 @@ import {
   type AnyWorkflowGraph,
   type TicketPlan,
 } from '@acp/core';
+import { failureRoutedComment } from './failure-routing.js';
 import {
   ApprovalDecisionRequestSchema,
   ChatRequestSchema,
@@ -1116,6 +1117,16 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
         case 'record-findings':
           // ADR-0037 §3: stored in the same transaction (RunStore.commit); no text is logged.
           logger.log('info', 'research findings stored', { runId, agentRunId: effect.agentRunId });
+          break;
+        case 'failure-routed':
+          // ADR-0038 §4 (FR-5): a one-line app comment from the app's own records; ids and the
+          // kind only in the log.
+          appComment(live, failureRoutedComment(live.state, effect));
+          logger.log('info', 'failure routed', {
+            runId,
+            ...(effect.fixerAgentRunId !== null ? { agentRunId: effect.fixerAgentRunId } : {}),
+            code: effect.kind,
+          });
           break;
         case 'record-test-results':
           // ADR-0038 §1: stored in the same transaction (RunStore.commit); no text is logged.
