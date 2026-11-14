@@ -76,8 +76,21 @@ describe('lead tools', () => {
         'report_findings',
         // ADR-0038 §1: the tester's structured test results
         'report_test_results',
+        // ADR-0038 §4-§5: the lead's fix rerouting and workflow view
+        'reroute_fix',
+        'view_workflow',
       ].sort(),
     );
+    // ADR-0038 §4: reroute_fix names a fix by exactly one of fixId and changeId.
+    const rr = LeadToolInputs.reroute_fix;
+    expect(rr.safeParse({ fixId: 'f-1', to: 'lead' }).success).toBe(true);
+    expect(rr.safeParse({ changeId: 'a-1', to: 'Frontend helper', note: 'CSS' }).success).toBe(
+      true,
+    );
+    expect(rr.safeParse({ to: 'lead' }).success).toBe(false);
+    expect(rr.safeParse({ fixId: 'f-1', changeId: 'a-1', to: 'lead' }).success).toBe(false);
+    expect(rr.safeParse({ fixId: 'f-1', to: '' }).success).toBe(false);
+    expect(LeadToolInputs.view_workflow.safeParse({}).success).toBe(true);
     const cm = LeadToolInputs.code_map;
     expect(cm.safeParse({ action: 'find_symbol', query: 'createApp' }).success).toBe(true);
     expect(cm.safeParse({ action: 'neighbors', path: 'src/a.ts', depth: 2 }).success).toBe(true);

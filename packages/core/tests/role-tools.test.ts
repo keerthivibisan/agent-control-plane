@@ -29,6 +29,9 @@ describe('managedToolNames', () => {
     expect(LEAD_ROLE_TOOL_NAMES).not.toContain('ask_lead');
     expect(LEAD_ROLE_TOOL_NAMES).toContain('get_review_findings');
     expect(LEAD_ROLE_TOOL_NAMES).toContain('code_map');
+    // ADR-0038 §4-§5: the lead's own failure-routing tools.
+    expect(LEAD_ROLE_TOOL_NAMES).toContain('reroute_fix');
+    expect(LEAD_ROLE_TOOL_NAMES).toContain('view_workflow');
     expect(managedToolNames({ kind: 'planner' })).toEqual(['submit_plan', 'code_map']);
     expect(managedToolNames({ kind: 'reviewer' })).toEqual(['post_review', 'ask_lead', 'code_map']);
     expect(managedToolNames({ kind: 'reviewer', reviewScope: 'change' })).toEqual([

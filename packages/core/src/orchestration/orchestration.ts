@@ -414,6 +414,34 @@ export const LeadToolInputs = {
    */
   get_review_findings: z.object({ agentId: z.string().min(1) }),
   /**
+   * ADR-0038 §4 (FR-5): the lead moves a fix the workflow started along a When arrow. `fixId` names
+   * the fix (from the engine's notice), or `changeId` the agent whose change is being fixed or the
+   * fixer itself; exactly one of them. `to` is a helper block's id or label, `lead` (the lead takes
+   * it over) or `author` (whoever wrote the failing code). The running fix turn is stopped first.
+   * `note` is the lead's own words for the new fixer. Refused for a fix that is not running.
+   */
+  reroute_fix: z
+    .object({
+      fixId: z.string().trim().min(1).max(100).optional(),
+      changeId: z.string().trim().min(1).max(100).optional(),
+      to: z.string().trim().min(1).max(120),
+      note: z.string().trim().min(1).max(2000).optional(),
+    })
+    .superRefine((v, issue) => {
+      if ((v.fixId === undefined) === (v.changeId === undefined)) {
+        issue.addIssue({
+          code: 'custom',
+          path: ['fixId'],
+          message: 'give either fixId or changeId',
+        });
+      }
+    }),
+  /**
+   * ADR-0038 §5 (FR-5): the run's workflow in words (every agent and every arrow as a sentence),
+   * read-only; the same text as the lead's "Your workflow" brief section.
+   */
+  view_workflow: z.object({}),
+  /**
    * ADR-0034 §4: a read-only lookup in the project code map at the run's base commit, for every
    * role. Answers are paths, names and line numbers, never file content. `query` is a symbol name
    * (`find_symbol`) or a search text (`search`); `path` a repository path (`file`, `neighbors`);
@@ -503,6 +531,8 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   report_findings: 'Reported its findings',
   report_test_results: 'Reported its test results',
   get_review_findings: "Read a change's review findings",
+  reroute_fix: 'Moved a fix to another agent',
+  view_workflow: 'Read the workflow',
   code_map: 'Looked up the code map',
   ticket_status: 'Checked the tickets',
   project_info: 'Read the project settings',
