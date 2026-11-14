@@ -3,6 +3,7 @@ import type { ChangeVerdict } from '@acp/core';
 import { findingsNoteBlocks } from './arrow-notes.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
+import { renderFailureContext, reviewReworkContext } from './failure-context.js';
 import { recordOutputNote } from './handoffs.js';
 import {
   applyDecision,
@@ -11,6 +12,8 @@ import {
   emitRound,
   fanOutComplete,
   leadCanDecide,
+  leadRoundLimit,
+  leadRoundsUsed,
   notifyLead,
 } from './loop.js';
 import { reviewRouteOf } from './program.js';
@@ -215,6 +218,20 @@ export function submitReview(
         `Findings:\n${body}`,
         // ADR-0037 §2 (amended 2026-11-14): the owner's note on this reviewer's findings arrow.
         ...findingsNoteBlocks(d.program(), stageOf(reviewer)),
+        // ADR-0038 §2: a rework verdict is a failure event; the lead gets its context.
+        input.verdict === 'rework'
+          ? renderFailureContext(
+              reviewReworkContext(
+                d,
+                helper,
+                [{ agent: reviewer, label: reviewer.role }],
+                body,
+                directRounds !== null
+                  ? { used: change.reviewerRounds ?? 0, max: directRounds }
+                  : { used: leadRoundsUsed(change), max: leadRoundLimit(d, helper) },
+              ),
+            )
+          : null,
         outOfRounds,
         'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.',
       ]

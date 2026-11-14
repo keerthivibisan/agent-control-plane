@@ -3,6 +3,8 @@ import type { LeadToolInputs } from '@acp/core';
 import type { z } from 'zod';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
+import { renderFailureContext, testsFailedContext } from './failure-context.js';
+import { notifyLead } from './loop.js';
 import type {
   EngineAgent,
   EngineContext,
@@ -109,6 +111,16 @@ export function reportTestResults(
       status: results.status,
       text: testResultsText(results),
     });
+    // ADR-0038 §2: the lead always gets a failure with its context (the likely authors).
+    if (results.status === 'failed') {
+      notifyLead(
+        d,
+        testsFailedNotice(
+          agent,
+          renderFailureContext(testsFailedContext(d, agent, results.failed)),
+        ),
+      );
+    }
     return {
       value:
         results.status === 'passed'
@@ -116,4 +128,12 @@ export function reportTestResults(
           : 'Your test results are recorded and go to the lead, who decides who fixes the failures. Do not change product code. Call report_work, then end your turn.',
     };
   });
+}
+
+/** The lead's notice of a tester's failing tests (ADR-0038 §2, §3). */
+function testsFailedNotice(tester: EngineAgent, context: string): string {
+  return [
+    `${tester.role} (agentId ${tester.id}) reported failing tests. The tester never fixes product code: you decide who fixes them, for example the likely author below.`,
+    context,
+  ].join('\n\n');
 }

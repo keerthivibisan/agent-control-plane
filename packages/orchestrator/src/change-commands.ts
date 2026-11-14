@@ -6,6 +6,12 @@ import { applyCommand } from './commands.js';
 import { hasMergeChecks } from './program.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
+import {
+  MAX_CHANGE_FILES,
+  checksFailedContext,
+  mergeConflictContext,
+  renderFailureContext,
+} from './failure-context.js';
 import type { Refusal } from './errors.js';
 import {
   applyDecision,
@@ -141,6 +147,8 @@ export function changeSealed(
     changed: boolean;
     headCommit: string | null;
     changedFiles: number | null;
+    /** ADR-0038 §2: the paths the change touches, for the failure context's authors. */
+    files?: readonly string[];
     failure?: SealFailure;
   },
   ctx: EngineContext,
@@ -165,6 +173,11 @@ export function changeSealed(
       return done;
     }
     change.changedFiles = files;
+    const paths = (result.files ?? [])
+      .filter((p) => typeof p === 'string' && p !== '' && p.length <= 1024)
+      .slice(0, MAX_CHANGE_FILES);
+    if (paths.length > 0) change.files = paths;
+    else delete change.files;
     if (result.failure === 'branch-changed') {
       change.sealFailure = 'branch-changed';
       change.headCommit = null;
@@ -299,6 +312,23 @@ function mergeFailureRoute(d: Draft): 'lead' | 'owner' | 'helper' {
   return d.program().checkBlocks.merge?.onFailure ?? 'lead';
 }
 
+/**
+ * ADR-0038 §2: the failure context of the checks before the merge, which report check names only
+ * (the output is on the change's checks).
+ */
+function mergeChecksContext(d: Draft, agent: EngineAgent, failed: readonly string[]): string {
+  const block = d.program().checkBlocks.merge;
+  return renderFailureContext(
+    checksFailedContext(
+      d,
+      agent,
+      block === null ? null : { nodeId: block.nodeId, label: block.label },
+      failed.map((name) => ({ name, how: 'failed', outputTail: '' })),
+      false,
+    ),
+  );
+}
+
 /** The change goes to the owner after a failed merge block; returns the lead's reply. */
 function toOwner(d: Draft, agent: EngineAgent, change: NonNullable<EngineAgent['change']>): string {
   change.merging = false;
@@ -373,7 +403,11 @@ export function changeMergeBlocked(
         const files = blocked.files.slice(0, MAX_LISTED);
         change.conflictFiles = files;
         return {
-          value: `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.join(', ')}` : ''}. Ask for rework to resolve it, discard it, or ask the owner.`,
+          value: [
+            `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.join(', ')}` : ''}. Ask for rework to resolve it, discard it, or ask the owner.`,
+            // ADR-0038 §2: the context names the helpers whose merged changes touched those files.
+            renderFailureContext(mergeConflictContext(d, agent, `the merge into ${branch}`, files)),
+          ].join('\n\n'),
         };
       }
       case 'checks-pending':
@@ -385,11 +419,12 @@ export function changeMergeBlocked(
         change.checks = 'failed';
         const failed = blocked.failed.slice(0, MAX_LISTED);
         const text = `Required checks failed on ${role}'s change${failed.length > 0 ? `: ${failed.join(', ')}` : ''}.`;
+        const context = mergeChecksContext(d, agent, failed);
         // ADR-0027 §5: the block before the merge may send a failed change to the owner.
         if (mergeFailureRoute(d) === 'owner' && change.state !== 'needs-owner') {
-          return { value: `${text} ${toOwner(d, agent, change)}` };
+          return { value: `${text} ${toOwner(d, agent, change)}\n\n${context}` };
         }
-        return { value: `${text} Ask for rework, discard it, or ask the owner.` };
+        return { value: `${text} Ask for rework, discard it, or ask the owner.\n\n${context}` };
       }
       case 'ticket-branch-moved':
         // F-2: permanent until the owner resets the branch (F-1's reset) or discards it.
@@ -465,7 +500,7 @@ export function checksFinished(
       // ADR-0027 §5: the block before the merge sends a failed change to the owner.
       notifyLead(
         d,
-        `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. ${toOwner(d, agent, change)}`,
+        `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. ${toOwner(d, agent, change)}\n\n${mergeChecksContext(d, agent, failed)}`,
       );
       return done;
     }
@@ -473,7 +508,7 @@ export function checksFinished(
       d,
       result.requiredPassed
         ? `The required checks passed on ${agent.role}'s change (agentId ${agent.id}, commit ${result.commit}). Call merge_change to merge it.`
-        : `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. Ask for rework, discard it, or ask the owner.`,
+        : `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. Ask for rework, discard it, or ask the owner.\n\n${mergeChecksContext(d, agent, failed)}`,
     );
     return done;
   });

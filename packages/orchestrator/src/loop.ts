@@ -20,6 +20,7 @@ import {
   reworkNoteBlocks,
   withOwnerNotes,
 } from './arrow-notes.js';
+import { renderFailureContext, reviewReworkContext } from './failure-context.js';
 import { heldByHandoff, withHandoffs } from './handoffs.js';
 import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -604,6 +605,25 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
       }`,
       ...lines,
       ...notes,
+      // ADR-0038 §2: a rework verdict is a failure event; the lead gets its context.
+      verdict === 'rework'
+        ? renderFailureContext(
+            reviewReworkContext(
+              d,
+              helper,
+              fan.reviews
+                .filter((r) => r.verdict === 'rework')
+                .map((r) => ({ agent: d.agent(r.agentRunId), label: reviewerLabel(d, r.nodeId) })),
+              fan.reviews
+                .filter((r) => r.verdict === 'rework')
+                .map((r) => `${reviewerLabel(d, r.nodeId)}:\n${r.findings ?? ''}`)
+                .join('\n\n'),
+              directRounds !== null
+                ? { used: change.reviewerRounds ?? 0, max: directRounds }
+                : { used: leadRoundsUsed(change), max: leadRoundLimit(d, helper) },
+            ),
+          )
+        : null,
       directRounds !== null && verdict === 'rework'
         ? `The review agents have no rework round left for it (${directRounds} used or not allowed now), so you decide.`
         : null,
@@ -1012,9 +1032,25 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       if (byOwner) notifyLead(d, `The owner decided: ${done}`);
       else if (input.by === 'reviewer') {
         // ADR-0023 §4, route "direct": the lead is told each round (no findings, no content).
+        // ADR-0038 §2: with the failure context (the lead always gets it).
         notifyLead(
           d,
-          `The review agent sent ${role}'s change (agentId ${agent.id}) back to it for rework (${roundText}). You get the change once the review agent approves it or its rounds run out.`,
+          [
+            `The review agent sent ${role}'s change (agentId ${agent.id}) back to it for rework (${roundText}). You get the change once the review agent approves it or its rounds run out.`,
+            renderFailureContext(
+              reviewReworkContext(
+                d,
+                agent,
+                route.by === 'agent'
+                  ? route.reviewers.map((id) => ({ agent: undefined, label: reviewerLabel(d, id) }))
+                  : [],
+                comments,
+                route.by === 'agent' && route.then === 'direct'
+                  ? { used: change.reviewerRounds ?? 0, max: route.reviewerRounds }
+                  : undefined,
+              ),
+            ),
+          ].join('\n\n'),
         );
       } else leadActivity(d, done.replace(/\.$/, ''));
       return `${done} Its change is reviewed again when it finishes.`;

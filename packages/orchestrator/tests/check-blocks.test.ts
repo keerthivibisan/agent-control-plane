@@ -172,6 +172,37 @@ describe('a Checks block on a helper change (ADR-0027 §5)', () => {
     expect(leadMessages(owner.effects).join('\n')).toMatch(/sends it to the owner/);
   });
 
+  it('ADR-0038 §2: the lead gets the failure context; a harness that cannot run is told apart', () => {
+    const lead = ok(finished(ok(sealed(sealedHelper(blockGraph('lead')), W, 'rv')).state, false));
+    const note = leadMessages(lead.effects).join('\n');
+    expect(note).toContain('Event: checks failed, at "Fast checks" (node fast-checks).');
+    expect(note).toContain('> - Lint (exit 1), last output:\n> src/a.ts: missing semicolon');
+    expect(note).toContain(`Likely authors (helpers whose changes touched the failing files):`);
+    const s = ok(sealed(sealedHelper(blockGraph('lead')), W, 'rv')).state;
+    const harness = ok(
+      changeChecksFinished(
+        s,
+        W,
+        {
+          commit: COMMIT,
+          passed: false,
+          failed: [
+            { name: 'Lint', status: 'error', exitCode: null, outputTail: 'not valid' },
+            { name: 'Unit', status: 'skipped', exitCode: null, outputTail: '' },
+          ],
+        },
+        makeCtx(6000, 'h'),
+      ),
+    );
+    expect(leadMessages(harness.effects).join('\n')).toContain(
+      'Event: the checks could not run (the harness failed, not the code)',
+    );
+    const round = ok(
+      finished(ok(sealed(sealedHelper(blockGraph('helper', 1)), W, 'rv')).state, false),
+    );
+    expect(leadMessages(round.effects).join('\n')).toContain('Rounds: 1 of 1 used.');
+  });
+
   it('a change with no changes never runs its block', () => {
     const r = ok(sealed(sealedHelper(blockGraph('helper')), W, 'rv', false, null));
     expect(types(r.effects)).not.toContain('run-change-checks');

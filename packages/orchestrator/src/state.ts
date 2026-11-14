@@ -192,6 +192,13 @@ export interface EngineChange {
   /** The sealed commit; null before sealing (or for a stopped helper's unsealed work). */
   headCommit: string | null;
   changedFiles: number | null;
+  /**
+   * ADR-0038 §2: the repository paths the sealed change touches (at most `MAX_CHANGE_FILES`), as
+   * the server reported them with the seal; the failure context matches failing files against
+   * them to name the likely authors. Absent before the seal, or when the server sent none. In
+   * memory with the live run.
+   */
+  files?: readonly string[];
   /** When the change became `ready`: reviewers take the oldest first. */
   readyAt: string | null;
   /** The required harness checks on the change, as the server last reported them. */

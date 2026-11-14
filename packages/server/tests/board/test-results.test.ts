@@ -90,3 +90,25 @@ describe('report_test_results through the server (ADR-0038 §1)', () => {
     expect((await s.detail(ticket.id)).comments.some((c) => c.kind === 'test-results')).toBe(false);
   }, 60_000);
 });
+
+describe('the failure context through the server (ADR-0038 §2)', () => {
+  it('a seal reports the changed paths; failing tests name the helper that changed the file', async () => {
+    const s = await setupBoard({ files: FILES });
+    const { lead, worker, tester } = await testerRunning(s, {
+      'src/theme.ts': 'export const t = 1;\n',
+      'fixed.txt': 'ok\n',
+    });
+    const before = lead.sent.length;
+    await tester.callLead('report_test_results', {
+      status: 'failed',
+      failed: [{ test: 'toggles', file: 'src/theme.test.ts', message: 'expected dark' }],
+      summary: '1 failed.',
+    });
+    await s.settle();
+    const notice = lead.sent.slice(before).join('\n');
+    expect(notice).toContain('reported failing tests');
+    expect(notice).toContain('Likely authors (helpers whose changes touched the failing files):');
+    expect(notice).toContain(`(agentId ${worker.id}, node`);
+    expect(notice).toContain('> src/theme.ts');
+  }, 60_000);
+});

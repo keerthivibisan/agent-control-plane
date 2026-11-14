@@ -2,6 +2,8 @@ import { GitCommitSchema } from '@acp/core';
 import type { CheckRunStatus, ProgramChangeCheckBlock } from '@acp/core';
 import { AGENT_NOTE_LINE } from './agent-note.js';
 import { editorNoteBlocks, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
+import { checksFailedContext, renderFailureContext } from './failure-context.js';
+import type { FailureCheck } from '@acp/core';
 import { isOverBudget } from './budget.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
@@ -105,6 +107,47 @@ export function failureDetails(failed: readonly FailedCheck[]): string {
   return lines.join('\n\n');
 }
 
+/** The failing checks as the failure context lists them (ADR-0038 §2), output capped as above. */
+export function failureChecks(failed: readonly FailedCheck[]): FailureCheck[] {
+  return failed.slice(0, MAX_FAILED_QUOTED).map((f) => ({
+    name: f.name,
+    how: how(f),
+    outputTail: lastUtf8(f.outputTail, CHECK_FAILURE_TAIL_MAX_BYTES),
+  }));
+}
+
+/**
+ * ADR-0038 §2: a harness that cannot run, as opposed to failing checks: no failing check ran to
+ * an exit (each one `could not run` or `not run`: invalid, its command could not start, no
+ * checkout, no result), and at least one could not run.
+ */
+export function isHarnessFailure(failed: readonly FailedCheck[]): boolean {
+  return (
+    failed.some((f) => f.status === 'error') &&
+    failed.every((f) => f.status === 'error' || f.status === 'skipped')
+  );
+}
+
+/** The rendered failure context of a failed Checks block on the agent's change. */
+function blockContext(
+  d: Draft,
+  agent: EngineAgent,
+  block: ProgramChangeCheckBlock,
+  failed: readonly FailedCheck[],
+  rounds?: { used: number; max: number },
+): string {
+  return renderFailureContext(
+    checksFailedContext(
+      d,
+      agent,
+      { nodeId: block.nodeId, label: block.label },
+      failureChecks(failed),
+      isHarnessFailure(failed),
+      rounds,
+    ),
+  );
+}
+
 const DECIDE_LINE =
   'Decide with request_rework (with comments), discard_change (with a reason), ask_owner (with a question) or merge_change; view_change shows the change.';
 
@@ -197,7 +240,7 @@ function routeFailure(
         d,
         [
           `The checks on ${who} failed${names(failed)}, and ${why}, so you decide.`,
-          failureDetails(failed),
+          blockContext(d, agent, block, failed, { used, max: limit }),
           DECIDE_LINE,
         ].join('\n\n'),
       );
@@ -209,7 +252,7 @@ function routeFailure(
         d,
         [
           `The checks on ${who} failed${names(failed)}. You decide.`,
-          failureDetails(failed),
+          blockContext(d, agent, block, failed),
           DECIDE_LINE,
         ].join('\n\n'),
       );
@@ -218,7 +261,10 @@ function routeFailure(
       change.state = 'needs-owner';
       notifyLead(
         d,
-        `The checks on ${who} failed${names(failed)}. This workflow sends it to the owner, who decides; you will get a message when they do.`,
+        [
+          `The checks on ${who} failed${names(failed)}. This workflow sends it to the owner, who decides; you will get a message when they do.`,
+          blockContext(d, agent, block, failed),
+        ].join('\n\n'),
       );
       return;
   }
@@ -296,10 +342,17 @@ function reworkForChecks(
       ? { startingPoints: agent.startingPoints }
       : {}),
   });
-  // Like the reviewer loop's direct route: the lead is told each round (names only).
+  // Like the reviewer loop's direct route: the lead is told each round, with the failure context
+  // (ADR-0038 §2: the lead always gets it).
+  const block = changeCheckBlockOf(d.program(), agent);
   notifyLead(
     d,
-    `The checks on ${agent.role}'s change (agentId ${agent.id}) failed${names(failed)}; it went back to ${agent.role} for rework (${roundText}). You get the change once its checks pass and it is reviewed, or its rounds run out.`,
+    [
+      `The checks on ${agent.role}'s change (agentId ${agent.id}) failed${names(failed)}; it went back to ${agent.role} for rework (${roundText}). You get the change once its checks pass and it is reviewed, or its rounds run out.`,
+      ...(block === undefined
+        ? []
+        : [blockContext(d, agent, block, failed, { used: round, max: limit })]),
+    ].join('\n\n'),
   );
 }
 

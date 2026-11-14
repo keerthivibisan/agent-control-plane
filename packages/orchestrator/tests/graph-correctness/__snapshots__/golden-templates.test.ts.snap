@@ -93,7 +93,7 @@ exports[`template traces > lead-only failed-check 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #11 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=reviewing/r0/checks:failed
 #12 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -314,7 +314,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #12 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=reviewing/r0/checks:failed
 #13 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -558,7 +558,7 @@ exports[`template traces > reviewer-helper-loop failed-check 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #14 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #15 lead "discard_change {\\"agentId\\":\\"W1\\",\\"reason\\":…"#27f11e3c/54 -> ok
   = "Discarded Store's change."
@@ -627,7 +627,7 @@ exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy="reviewer" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#2e97b5ce/383 rework={"resumeSessionId":"sess:W1"} role="Store"
-  > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#0b61260f/163
+  > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#a7e61174/639
   ~ W1 STARTING change=rework/r1
 #12 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -818,7 +818,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #15 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #16 lead "discard_change {\\"agentId\\":\\"W1\\",\\"reason\\":…"#27f11e3c/54 -> ok
   = "Discarded Store's change."
@@ -895,7 +895,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy="reviewer" decision="rework" reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
   > start-agent agentRunId=W1 kind="worker" prompt="The review agent reviewed your change an…"#2e97b5ce/383 rework={"resumeSessionId":"sess:W1"} role="Store"
-  > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#0b61260f/163
+  > send-to-agent agentRunId=L text="The review agent sent Store's change (ag…"#a7e61174/639
   ~ W1 STARTING change=rework/r1
 #13 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -1072,7 +1072,7 @@ exports[`template traces > todays-setup failed-check 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #14 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #15 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -1171,7 +1171,7 @@ exports[`template traces > todays-setup rework-then-approve 1`] = `
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #12 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -1368,7 +1368,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   = "Merging Store's change into acp/WEB-12…"
   > merge-change agentRunId=W1 anyway=false by="lead"
 #15 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #16 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -1475,7 +1475,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #13 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1

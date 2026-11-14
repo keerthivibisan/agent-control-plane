@@ -21,3 +21,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   gate, Codex dynamic tool, engine `testResultsByAgent` and `record-test-results`, server
   `test-results` comments split like research findings, web "Test results" box with the status);
   the tester's brief asks for one call and no product-code fix.
+- 2026-11-14 FR-2 done: core `FailureContext` and `findAuthors` (file match; none → all helpers,
+  flagged unknown); seals report changed paths (`EngineChange.files`); one renderer quotes every
+  agent or tool text; the lead gets it on failing tests, change and merge checks (a harness that
+  could not run is `harness-failed`), review rework (all routes), merge conflicts and ADR-0030
+  resolutions.

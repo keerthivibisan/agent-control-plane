@@ -2,6 +2,7 @@ import { GitCommitSchema, type WorkflowNodeId } from '@acp/core';
 import { BRANCH_RULE_LINE } from './agent-note.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
+import { mergeConflictContext, renderFailureContext } from './failure-context.js';
 import { notifyLead } from './loop.js';
 import { programOf } from './program.js';
 import { launchFieldsFor, nodeProvider } from './stages.js';
@@ -139,6 +140,22 @@ export function startResolver(
       resolution: { operationId: input.operationId },
       ...d.launchModeFields(agent),
     });
+    // ADR-0038 §2: the lead always gets a failure with its context, a merge conflict included.
+    notifyLead(
+      d,
+      [
+        `${input.ticketBranch} conflicts with ${input.targetBranch}; ${RESOLVER_ROLE} (agentId ${agent.id}) is resolving it (attempt ${input.attempt} of ${input.maxAttempts}). You get its outcome when it is done.`,
+        renderFailureContext({
+          ...mergeConflictContext(
+            d,
+            undefined,
+            `the update of ${input.ticketBranch} from ${input.targetBranch}`,
+            input.conflictFiles,
+          ),
+          rounds: { used: input.attempt, max: input.maxAttempts },
+        }),
+      ].join('\n\n'),
+    );
     return { value: agent.id };
   });
 }

@@ -1070,7 +1070,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=66f744f75fb32a61/7081
+"digest=6dcf6cefb5b8e849/7082
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1094,7 +1094,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=dafd794654c77b28/6710
+"digest=3286dd4465e3ee0e/6710
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1148,7 +1148,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=397b8a8834ef5e9e/9271
+"digest=7ece646082846ea6/9272
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1176,7 +1176,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=5d1e1147eb9e938d/8900
+"digest=ef9e634168d6020f/8900
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1223,7 +1223,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=d19717fb42992d5d/6140
+"digest=689487c39e271d75/6141
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1245,7 +1245,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=d17c60c85d804636/5769
+"digest=1dafc27a262f0eb0/5769
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1295,7 +1295,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=2889893ba88cddad/8330
+"digest=8a3953f38406f355/8331
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1321,7 +1321,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=a17ceac4d25b807a/7959
+"digest=e620c3eeb7516e6c/7959
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1484,7 +1484,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=97a8218d15f4014f/9093
+"digest=ceeb7ac5dbf0af57/9094
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1509,7 +1509,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=5df0d062695b7eb0/8777
+"digest=4ded5744f6f166f6/8777
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3098,7 +3098,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut conflict 1`] = `
   = "Merging UI's change into acp/WEB-12…"
   > merge-change agentRunId=W2 anyway=false by="lead"
 #23 server "merge blocked conflict" -> ok
-  = "UI's change conflicts with acp/WEB-12 in…"#45dce106/113
+  = "UI's change conflicts with acp/WEB-12 in…"#2d90ce83/447
 #24 lead "request_rework {\\"agentId\\":\\"W2\\",\\"comments…"#c8ddb6d9/63 -> ok
   = "Asked UI to rework its change (round 1).…"#b74fd543/87
   > change-round agentRunId=W2 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
@@ -3442,7 +3442,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failed-check 1`] 
   > remove-review-checkout agentRunId=CR2
   ~ CR2 SUCCEEDED
 #21 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #22 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -4132,7 +4132,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut rework-then-appro
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #16 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -4479,7 +4479,7 @@ exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich rework-then-
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #16 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -4644,7 +4644,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=f8980ae15d0b58f3/8152
+"digest=4d1d23997522b69b/8153
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4667,7 +4667,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=50708fbaf1885c94/7836
+"digest=2d3e87c08baa6ba6/7836
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4718,7 +4718,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=c9ed328f65406321/10342
+"digest=ed40402761294f89/10343
 outcome=ended steps=42
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4745,7 +4745,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=91e4e53854529e9a/10026
+"digest=40d6c5467a1ee834/10026
 outcome=ended steps=40
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4789,7 +4789,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=a45f37a67eda568c/5091
+"digest=e0121b147851fbba/5092
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4852,7 +4852,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=5ed7048797ba6199/6277
+"digest=a8e7a501eec624c3/6278
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4912,7 +4912,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=063931d6779b58b8/4150
+"digest=f6e7c260c580b7c2/4151
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4969,7 +4969,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=5a660382d20aa10c/5336
+"digest=a6edeab49389916e/5337
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5056,7 +5056,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r1/no-cr/ut run-reviewer-ag
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #16 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -5203,7 +5203,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=c24bc9a0380555de/6120
+"digest=4451a096eeee444c/6121
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5657,7 +5657,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut conflict 1`] = `
   = "Merging UI's change into acp/WEB-12…"
   > merge-change agentRunId=W2 anyway=false by="lead"
 #17 server "merge blocked conflict" -> ok
-  = "UI's change conflicts with acp/WEB-12 in…"#45dce106/113
+  = "UI's change conflicts with acp/WEB-12 in…"#2d90ce83/447
 #18 lead "request_rework {\\"agentId\\":\\"W2\\",\\"comments…"#c8ddb6d9/63 -> ok
   = "Asked UI to rework its change (round 1).…"#b74fd543/87
   > change-round agentRunId=W2 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
@@ -5896,7 +5896,7 @@ exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failed-check 1`] =
   > send-to-agent agentRunId=L text="UI's change (agentId W2) is ready for yo…"#83b24fd9/141
   ~ W2 AWAITING_REVIEW change=reviewing/r0
 #15 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=reviewing/r0/checks:failed
 #16 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -6719,7 +6719,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=9555d31ee13f3fc0/5179
+"digest=0c7c1ed8c5a0b472/5180
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6776,7 +6776,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=386f61f61050e214/6365
+"digest=b723251cb1a19f62/6366
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6953,7 +6953,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=1fa60319ae635857/7386
+"digest=0a6f7ed782a07e35/7387
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6979,7 +6979,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=228512e3b3072b41/7015
+"digest=199b22a959a0a8e7/7015
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7037,7 +7037,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=3b1f45c53957fb4b/9576
+"digest=4e57fdcb9821e2b1/9577
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7067,7 +7067,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=e0f45153122cd661/9205
+"digest=b37e9cf90e1d23a7/9205
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7118,7 +7118,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=2c66da3eab589fe8/6445
+"digest=e2d507681f7f33da/6446
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7142,7 +7142,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=027222045d243996/6074
+"digest=90693e8ee9c292f8/6074
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7196,7 +7196,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=614429cfdbf6ccf5/8635
+"digest=dc36e8757c7ef29b/8636
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7224,7 +7224,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=267884a717d4191d/8264
+"digest=8a51a1b52dafc223/8264
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7277,7 +7277,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=c4cae9c0650dff12/9398
+"digest=acf77d92ad320d5c/9399
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7304,7 +7304,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=918c7c4db329b977/9082
+"digest=9b1b9fcf13bdd585/9082
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -8765,7 +8765,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut conflict 1`] = `
   = "Merging UI's change into acp/WEB-12…"
   > merge-change agentRunId=W2 anyway=false by="lead"
 #24 server "merge blocked conflict" -> ok
-  = "UI's change conflicts with acp/WEB-12 in…"#45dce106/113
+  = "UI's change conflicts with acp/WEB-12 in…"#2d90ce83/447
 #25 lead "request_rework {\\"agentId\\":\\"W2\\",\\"comments…"#c8ddb6d9/63 -> ok
   = "Asked UI to rework its change (round 1).…"#b74fd543/87
   > change-round agentRunId=W2 decidedBy="lead" decision="rework" reviewer="agent" reviewerAgentRunId=CR2 round=0 verdict="approve"
@@ -9125,7 +9125,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failed-check 1`] = `
   > remove-review-checkout agentRunId=CR2
   ~ CR2 SUCCEEDED
 #22 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=decision/r0/approve/checks:failed
 #23 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -9851,7 +9851,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut rework-then-approve 
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #17 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -10214,7 +10214,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich rework-then-app
   = "Submitted. Your review is done: end your…"#5e04921c/50
   > review-comment agentRunId=CR1 body="Handle the empty case." changeOf=W1 round=0 verdict="rework"
   > change-round agentRunId=W1 decidedBy=null decision=null reviewer="agent" reviewerAgentRunId=CR1 round=0 verdict="rework"
-  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#a723aed6/239
+  > send-to-agent agentRunId=L text="The review agent reviewed Store's change…"#326ad06b/742
   ~ W1 AWAITING_REVIEW change=decision/r0/rework
 #17 Review_Store "finish success" -> ok
   > remove-review-checkout agentRunId=CR1
@@ -10383,7 +10383,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=d04b2bd5f9a5f933/8457
+"digest=80c7a8b31d0282c9/8458
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10408,7 +10408,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=2592ea2cc38c3a7e/8141
+"digest=15748816fdcaf984/8141
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10463,7 +10463,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=e47752c0585fcdee/10647
+"digest=a6c4b16e4eaa50c4/10648
 outcome=ended steps=43
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10492,7 +10492,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=9bf9a51b291df16d/10331
+"digest=e4b985e59c46f013/10331
 outcome=ended steps=41
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10540,7 +10540,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=126da882588da4b8/5396
+"digest=0b42f8ecfb27e4aa/5397
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10609,7 +10609,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=b68258d6daeb6964/6582
+"digest=b32f9f904974b5ce/6583
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10675,7 +10675,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=46c5575d1891e823/4455
+"digest=fe4507af60d28d85/4456
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10738,7 +10738,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=1e30455cf86f8b6a/5641
+"digest=c1685a2e4cd63c04/5642
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10804,7 +10804,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=8df61f4d03912ee7/6425
+"digest=d697e893c748db95/6426
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -11292,7 +11292,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut conflict 1`] = `
   = "Merging UI's change into acp/WEB-12…"
   > merge-change agentRunId=W2 anyway=false by="lead"
 #18 server "merge blocked conflict" -> ok
-  = "UI's change conflicts with acp/WEB-12 in…"#45dce106/113
+  = "UI's change conflicts with acp/WEB-12 in…"#2d90ce83/447
 #19 lead "request_rework {\\"agentId\\":\\"W2\\",\\"comments…"#c8ddb6d9/63 -> ok
   = "Asked UI to rework its change (round 1).…"#b74fd543/87
   > change-round agentRunId=W2 decidedBy="lead" decision="rework" reviewer="lead" reviewerAgentRunId=null round=0 verdict=null
@@ -11547,7 +11547,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failed-check 1`] = `
   > send-to-agent agentRunId=L text="UI's change (agentId W2) is ready for yo…"#83b24fd9/141
   ~ W2 AWAITING_REVIEW change=reviewing/r0
 #16 server "merge blocked checks-failed" -> ok
-  = "Required checks failed on Store's change…"#3ed3c1f9/93
+  = "Required checks failed on Store's change…"#a0de5bcd/491
   ~ W1 AWAITING_REVIEW change=reviewing/r0/checks:failed
 #17 lead "request_rework {\\"agentId\\":\\"W1\\",\\"comments…"#714727a4/63 -> ok
   = "Asked Store to rework its change (round …"#0265c244/90
@@ -12422,7 +12422,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=455450acf080812a/5484
+"digest=bec6035604b0d764/5485
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12485,7 +12485,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=4fcc02cce123e86e/6670
+"digest=1a41c7ca7eae2714/6671
 outcome=ended steps=31
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED

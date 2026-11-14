@@ -92,6 +92,16 @@ export { reportWork } from './report-tool.js';
 export { cleanFindings, reportFindings } from './findings-tool.js';
 export { reportTestResults, testResultsText, testTurnOf } from './test-results-tool.js';
 export {
+  FAILURE_DATA_NOTE,
+  MAX_CHANGE_FILES,
+  authorCandidates,
+  checksFailedContext,
+  mergeConflictContext,
+  renderFailureContext,
+  reviewReworkContext,
+  testsFailedContext,
+} from './failure-context.js';
+export {
   HANDOFF_DATA_LINE,
   MAX_OUTPUT_NOTE_CHARS,
   agentsOfNode,
