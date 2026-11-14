@@ -8,7 +8,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | FR-1 | Structured test results                     | done        | `feature/workflow/failure-routing` |        |
 | FR-2 | Failure context and authors                 | done        | `feature/workflow/failure-routing` |        |
 | FR-3 | Tester failures to the author or the lead   | done        | `feature/workflow/failure-routing` |        |
-| FR-4 | Core: When arrows, Author block, flow words | not started |                                    |        |
+| FR-4 | Core: When arrows, Author block, flow words | done        | `feature/workflow/failure-routing` |        |
 | FR-5 | Engine: routing, fix turns, lead tools      | not started |                                    |        |
 | FR-6 | Web: When arrows and Flow in words          | not started |                                    |        |
 | FR-7 | Safety, docs, real run                      | not started |                                    |        |
