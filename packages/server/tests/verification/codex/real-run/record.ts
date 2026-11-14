@@ -15,6 +15,7 @@ import {
   type WorkflowNodeV3,
 } from '@acp/core';
 import type { AgentMessageMetaDto } from '@acp/core/api';
+import { YOUR_WORKFLOW_HEADING } from '@acp/orchestrator';
 
 /*
  * The CX real-run driver's pure parts (`drive.ts` is the command line that spends tokens): the two
@@ -33,7 +34,12 @@ export type ScenarioId = (typeof SCENARIO_IDS)[number];
  * planner, the lead, one helper and a review fan-out to two change reviewers (Claude, Codex).
  */
 export const ARROWS_SCENARIO = 'arrows';
-export type AnyScenarioId = ScenarioId | typeof ARROWS_SCENARIO;
+/**
+ * FR-7's one real run (ADR-0038): the lead-only graph with one tester after the ticket merge and
+ * a When arrow from the tester (`tests-failed`) to an Author block.
+ */
+export const FAILURE_ROUTING_SCENARIO = 'failure-routing';
+export type AnyScenarioId = ScenarioId | typeof ARROWS_SCENARIO | typeof FAILURE_ROUTING_SCENARIO;
 
 export const CODEX_MODEL = 'gpt-6.1-sol';
 export const LEAD = 'orchestrate';
@@ -85,6 +91,7 @@ export const HARNESS: Readonly<Record<string, string>> = {
 
 export function parseScenario(value: string | undefined): AnyScenarioId | null {
   if (value === ARROWS_SCENARIO) return ARROWS_SCENARIO;
+  if (value === FAILURE_ROUTING_SCENARIO) return FAILURE_ROUTING_SCENARIO;
   return (SCENARIO_IDS as readonly string[]).includes(value ?? '') ? (value as ScenarioId) : null;
 }
 
@@ -195,6 +202,10 @@ export interface StartRecord {
   followUp: boolean;
   rework: boolean;
   approvalMode: string | null;
+  /** The first prompt's length in characters (never its text). */
+  promptChars: number;
+  /** The first prompt holds the lead's "Your workflow" section (ADR-0038 §5). */
+  workflowSection: boolean;
   /** A `started` event arrived (the provider's session began). */
   started: boolean;
   /** The model the provider reported at start (a model id, never text). */
@@ -226,6 +237,8 @@ export function recordOf(provider: ManagedProviderId, spec: ManagedAgentSpec): S
     followUp: spec.followUp !== undefined,
     rework: spec.rework !== undefined,
     approvalMode: spec.approvalMode ?? null,
+    promptChars: spec.prompt.length,
+    workflowSection: spec.prompt.includes(YOUR_WORKFLOW_HEADING),
     started: false,
     startedModel: null,
     usageEvents: 0,
@@ -541,4 +554,259 @@ export function arrowsChecks(
         ),
       ),
   };
+}
+
+// ------------------------------------------------------------------ the failure-routing scenario
+
+/** The failure-routing scenario's node ids (the lead-only template's, plus two). */
+export const FR_NODES = {
+  lead: LEAD,
+  pool: POOL,
+  tester: 'tester',
+  author: 'author',
+} as const;
+
+export const FR_WHEN = {
+  label: 'Fix failing tests',
+  purpose: "Fix the code the failing tests point at; don't change the tests",
+  maxRounds: 2,
+} as const;
+
+/** The file the ticket asks for; checked on `main` after the owner's merge. */
+export const FR_TICKET_FILES = ['src/clamp.mjs'] as const;
+
+/** The seeded acceptance test the tester runs (owner-written, synthetic). */
+export const FR_TEST_FILE = 'test/clamp.test.mjs';
+/** The tester's one command: also a harness check, so Auto edits runs it without asking. */
+export const FR_TEST_COMMAND = ['node', '--test', FR_TEST_FILE] as const;
+
+/**
+ * The ticket (owner text, synthetic). The helper's first version is wrong on purpose (min and max
+ * swapped), so the tester finds failing tests deterministically and the When arrow routes them.
+ */
+export const FR_TICKET = {
+  title: 'Add a clamp function',
+  description: [
+    'Add an exported function `clamp(x, min, max)` in `src/clamp.mjs`. The test file ' +
+      `\`${FR_TEST_FILE}\` already exists and expects correct behaviour; never change it.`,
+    '',
+    'This is a synthetic test run of failure routing, so on purpose:',
+    '- Helper, first version: swap min and max, exactly this one line: ' +
+      '`export function clamp(x, min, max) { return Math.min(Math.max(x, max), min); }`. ' +
+      'Correct it only when a later fix request tells you to.',
+    '- Lead: merge that first version as it is (do not send it back), then ask for the tests. ' +
+      'The tester finds the bug and the workflow routes the fix.',
+    `- Tester: run exactly \`${FR_TEST_COMMAND.join(' ')}\` (no other command) and report ` +
+      'the result with report_test_results.',
+  ].join('\n'),
+};
+
+/**
+ * The failure-routing harness (synthetic): the required check `node check.mjs` runs the repo's
+ * `test/*.test.mjs` with `node --test` EXCEPT the seeded clamp test, so the helper's deliberately
+ * wrong first version passes the change and merge checks and only the tester finds the bug (with
+ * the clamp test in the required check, the lead would see a failed check and rework the helper
+ * itself, and the When arrow would never fire). A seeded smoke test checks that `clamp` exists.
+ * The clamp test is a second, optional check (not run by the default Checks block, which runs the
+ * required ones), so the tester's exact command runs without asking under Auto edits.
+ */
+export const FR_HARNESS: Readonly<Record<string, string>> = {
+  '.acp/harness.json': `${JSON.stringify(
+    {
+      version: 1,
+      description: 'Failure-routing real run harness (synthetic)',
+      checks: [
+        {
+          id: 'test',
+          name: 'Unit tests',
+          argv: ['node', 'check.mjs'],
+          timeoutSec: 60,
+          required: true,
+        },
+        {
+          id: 'clamp',
+          name: 'Clamp acceptance (tester)',
+          argv: [...FR_TEST_COMMAND],
+          timeoutSec: 60,
+          required: false,
+          labels: ['acceptance'],
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`,
+  'check.mjs': [
+    "import { existsSync, readdirSync } from 'node:fs';",
+    "import { spawnSync } from 'node:child_process';",
+    "const dir = 'test';",
+    "// The clamp test is the tester's (FR real run): not part of the required check.",
+    'const files = existsSync(dir)',
+    '  ? readdirSync(dir)',
+    "      .filter((f) => f.endsWith('.test.mjs') && f !== 'clamp.test.mjs')",
+    '      .map((f) => `${dir}/${f}`)',
+    '  : [];',
+    'if (files.length === 0) process.exit(0);',
+    "const r = spawnSync(process.execPath, ['--test', ...files], { stdio: 'inherit' });",
+    'process.exit(r.status ?? 1);',
+    '',
+  ].join('\n'),
+  'test/smoke.test.mjs': [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import { existsSync } from 'node:fs';",
+    '',
+    "test('src/clamp.mjs exports clamp', { skip: !existsSync('src/clamp.mjs') }, async () => {",
+    "  const m = await import('../src/clamp.mjs');",
+    "  assert.equal(typeof m.clamp, 'function');",
+    '});',
+    '',
+  ].join('\n'),
+  [FR_TEST_FILE]: [
+    "import { test } from 'node:test';",
+    "import assert from 'node:assert/strict';",
+    "import { clamp } from '../src/clamp.mjs';",
+    '',
+    "test('keeps a value inside the range', () => {",
+    '  assert.equal(clamp(5, 0, 10), 5);',
+    '});',
+    "test('raises a low value to min', () => {",
+    '  assert.equal(clamp(-3, 0, 10), 0);',
+    '});',
+    "test('lowers a high value to max', () => {",
+    '  assert.equal(clamp(42, 0, 10), 10);',
+    '});',
+    '',
+  ].join('\n'),
+};
+
+/**
+ * The failure-routing scenario (version 3): `lead-only` (the lead reviews and merges the pool's
+ * changes), then one tester after the ticket merge whose results go to the lead, and a When arrow
+ * from the tester on `tests-failed` to an Author block (2 rounds). Every agent runs `claudeModel`
+ * on Claude Code at low effort; no Codex agent.
+ */
+export function failureRoutingGraph(claudeModel: string): WorkflowGraphV3 {
+  const ids = FR_NODES;
+  const base = workflowTemplateV3('lead-only');
+  const claude = { provider: 'claude-code', model: claudeModel, effort: 'low' } as const;
+  const nodes: WorkflowNodeV3[] = base.nodes.map((n): WorkflowNodeV3 => {
+    if (n.type === 'lead' || n.type === 'agent') return { ...n, ...claude };
+    return n;
+  });
+  nodes.push(
+    {
+      type: 'agent',
+      id: ids.tester,
+      label: 'Tester',
+      skills: [],
+      agent: null,
+      ...claude,
+    },
+    { type: 'author', id: ids.author, label: 'Author' },
+  );
+  const edges: WorkflowEdgeV3[] = base.edges.filter(
+    (e) => !(e.type === 'flow' && e.from === 'ticket-merge'),
+  );
+  edges.push(
+    { type: 'test', id: 'test-tester', from: 'ticket-merge', to: ids.tester },
+    { type: 'flow', id: 'flow-tester-owner', from: ids.tester, to: 'owner-merge' },
+    { type: 'review', id: 'review-tester-lead', from: ids.tester, to: ids.lead },
+    {
+      type: 'when',
+      id: 'when-tester-author',
+      from: ids.tester,
+      to: ids.author,
+      on: ['tests-failed'],
+      maxRounds: FR_WHEN.maxRounds,
+      label: FR_WHEN.label,
+      purpose: FR_WHEN.purpose,
+    },
+  );
+  return { version: 3, template: 'custom', nodes, edges };
+}
+
+/** One step of the failure-routing run, in the order the driver saw it (content-free). */
+export type FrStep =
+  | { step: 'start' | 'finish'; kind: AgentRoleKind; rework: boolean }
+  | { step: 'test-results'; head: string; failedInTestFile: number }
+  | { step: 'app-comment'; body: string }
+  | { step: 'change'; index: number; state: string };
+
+/** The head line of a `test-results` comment (the app's own words, e.g. "Tests failed: 2 …"). */
+export function testResultsHead(body: string): string {
+  return (body.split('\n')[0] ?? '').slice(0, 80);
+}
+
+/** Lines of a `test-results` comment that name `file` as the failing test's file. */
+export function failedInFile(body: string, file: string): number {
+  return body.split('\n').filter((l) => l.startsWith('- ') && l.includes(`(${file})`)).length;
+}
+
+/**
+ * What the failure-routing scenario must show (FR-7), from the steps alone:
+ * - a helper change merged before the tester started;
+ * - the tester's first results failed with at least one failed test in the seeded test file;
+ * - a "fix started" app comment for round 1 of 2 (the When arrow, not the lead, routed it), and
+ *   the lead was told (the comment says so);
+ * - exactly one fixer (one more helper start after the failing results);
+ * - a change merged after the fix started.
+ */
+export function failureRoutingChecks(steps: readonly FrStep[]) {
+  const idx = (pred: (s: FrStep) => boolean) => steps.findIndex(pred);
+  const testerStarts = steps.flatMap((s, i) =>
+    s.step === 'start' && s.kind === 'tester' ? [i] : [],
+  );
+  const firstTester = testerStarts[0] ?? -1;
+  const firstMerge = idx((s) => s.step === 'change' && s.state === 'merged');
+  const results = steps.flatMap((s, i) => (s.step === 'test-results' ? [{ i, s }] : []));
+  const firstResults = results[0];
+  const firstFailed =
+    firstResults !== undefined &&
+    firstResults.s.head.startsWith('Tests failed') &&
+    firstResults.s.failedInTestFile >= 1;
+  const appLines = steps.flatMap((s, i) => (s.step === 'app-comment' ? [{ i, body: s.body }] : []));
+  const fixStarts = appLines.filter((l) => / is fixing it \(round \d+ of \d+\)/.test(l.body));
+  const toLead = appLines.filter((l) => /: the lead (decides|took|moved)/.test(l.body));
+  const firstFix = fixStarts[0];
+  const workerStartsAfterResults =
+    firstResults === undefined
+      ? 0
+      : steps.filter(
+          (s, i) => i > firstResults.i && s.step === 'start' && s.kind === 'worker' && !s.rework,
+        ).length;
+  const workerReworks = steps.filter(
+    (s) => s.step === 'start' && s.kind === 'worker' && s.rework,
+  ).length;
+  const mergedAfterFix =
+    firstFix !== undefined &&
+    steps.some((s, i) => i > firstFix.i && s.step === 'change' && s.state === 'merged');
+  return {
+    helperMergedBeforeTester: firstMerge !== -1 && firstTester !== -1 && firstMerge < firstTester,
+    testerFailedInTestFile: firstFailed,
+    testResults: results.map((r) => r.s),
+    fixStartedRound1Of2:
+      firstFix !== undefined && firstFix.body.includes('(round 1 of 2)') && toLead.length === 0,
+    leadTold: firstFix?.body.endsWith('The lead was told.') ?? false,
+    fixRoundsUsed: fixStarts.length,
+    routedToLead: toLead.length,
+    fixerStarts: workerStartsAfterResults,
+    workerReworks,
+    mergedAfterFix,
+    testerStarts: testerStarts.length,
+    testerRanAfterFix: firstFix !== undefined && testerStarts.some((i) => i > firstFix.i),
+  };
+}
+
+/** `budget.used` summed per role kind (the app's own counter, comparable across providers). */
+export function tokensByRole(
+  agents: readonly { kind: string; budgetUsed: number }[],
+): Record<string, { agents: number; used: number }> {
+  const out: Record<string, { agents: number; used: number }> = {};
+  for (const a of agents) {
+    const r = (out[a.kind] ??= { agents: 0, used: 0 });
+    r.agents++;
+    r.used += a.budgetUsed;
+  }
+  return out;
 }

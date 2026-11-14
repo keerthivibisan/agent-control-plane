@@ -13,19 +13,29 @@ import {
   ARROWS_NODES,
   CHANGE_REVIEWER,
   CODEX_MODEL,
+  FR_HARNESS,
+  FR_NODES,
+  FR_TEST_COMMAND,
+  FR_WHEN,
   LEAD,
   POOL,
   SCENARIO_IDS,
   arrowsChecks,
   arrowsGraph,
   codexChecks,
+  failedInFile,
+  failureRoutingChecks,
+  failureRoutingGraph,
   observeManaged,
   outboxCounts,
   parseScenario,
   recordOf,
   scenarioGraph,
   summarizeUsage,
+  testResultsHead,
   tokensByProvider,
+  tokensByRole,
+  type FrStep,
   type StartRecord,
   type TimelineEntry,
 } from './record.js';
@@ -53,6 +63,90 @@ describe('the CX real-run driver (fake adapters only)', () => {
     expect(parseScenario(undefined)).toBeNull();
     expect(parseScenario('a')).toBeNull();
     expect(parseScenario('arrows')).toBe('arrows');
+    expect(parseScenario('failure-routing')).toBe('failure-routing');
+  });
+
+  it('scenario failure-routing: a valid Claude-only graph with a When arrow to Author', () => {
+    const graph = failureRoutingGraph('haiku');
+    expect(validateWorkflowGraphV3(graph, { projectMode: 'auto-edits' })).toEqual([]);
+    const roles = deriveRoles(graph);
+    const r = roles.get(FR_NODES.tester);
+    expect(r?.ok === true ? r.role : null).toEqual({ role: 'tester' });
+    const when = graph.edges.filter((e) => e.type === 'when');
+    expect(when).toEqual([
+      {
+        type: 'when',
+        id: 'when-tester-author',
+        from: FR_NODES.tester,
+        to: FR_NODES.author,
+        on: ['tests-failed'],
+        maxRounds: 2,
+        label: FR_WHEN.label,
+        purpose: FR_WHEN.purpose,
+      },
+    ]);
+    for (const node of graph.nodes) {
+      if (node.type !== 'agent' && node.type !== 'lead') continue;
+      expect([node.provider, node.model, node.effort]).toEqual(['claude-code', 'haiku', 'low']);
+    }
+    // The tester's command is a harness check (runs without asking); the required one skips it.
+    const harness = JSON.parse(FR_HARNESS['.acp/harness.json'] ?? '{}') as {
+      checks: { argv: string[]; required: boolean }[];
+    };
+    expect(harness.checks.map((c) => [c.argv.join(' '), c.required])).toEqual([
+      ['node check.mjs', true],
+      [FR_TEST_COMMAND.join(' '), false],
+    ]);
+    expect(FR_HARNESS['check.mjs']).toContain("f !== 'clamp.test.mjs'");
+  });
+
+  it("failureRoutingChecks: the When arrow fixes the tester's failures in one round", () => {
+    const body =
+      'Tests failed: 2 failing tests.\n\nSummary:\nx\n\nFailing tests:\n' +
+      '- a (test/clamp.test.mjs): m\n- b (test/clamp.test.mjs): m';
+    expect(testResultsHead(body)).toBe('Tests failed: 2 failing tests.');
+    expect(failedInFile(body, 'test/clamp.test.mjs')).toBe(2);
+    const steps: FrStep[] = [
+      { step: 'start', kind: 'lead', rework: false },
+      { step: 'start', kind: 'worker', rework: false },
+      { step: 'change', index: 0, state: 'merged' },
+      { step: 'start', kind: 'tester', rework: false },
+      { step: 'test-results', head: 'Tests failed: 2 failing tests.', failedInTestFile: 2 },
+      {
+        step: 'app-comment',
+        body: 'When tests fail at Tester: Builder is fixing it (round 1 of 2). The lead was told.',
+      },
+      { step: 'start', kind: 'worker', rework: false },
+      { step: 'change', index: 1, state: 'merged' },
+    ];
+    const out = failureRoutingChecks(steps);
+    expect(out).toMatchObject({
+      helperMergedBeforeTester: true,
+      testerFailedInTestFile: true,
+      fixStartedRound1Of2: true,
+      leadTold: true,
+      fixRoundsUsed: 1,
+      routedToLead: 0,
+      fixerStarts: 1,
+      mergedAfterFix: true,
+      testerRanAfterFix: false,
+    });
+    const toLead = failureRoutingChecks([
+      ...steps.slice(0, 5),
+      { step: 'app-comment', body: 'When tests fail at Tester: the lead decides, as x.' },
+    ]);
+    expect([toLead.fixStartedRound1Of2, toLead.routedToLead, toLead.fixerStarts]).toEqual([
+      false,
+      1,
+      0,
+    ]);
+    expect(
+      tokensByRole([
+        { kind: 'worker', budgetUsed: 3 },
+        { kind: 'worker', budgetUsed: 4 },
+        { kind: 'lead', budgetUsed: 5 },
+      ]),
+    ).toEqual({ worker: { agents: 2, used: 7 }, lead: { agents: 1, used: 5 } });
   });
 
   it('scenario arrows: a valid version 3 graph with researchers, a planner and a fan-out', () => {
