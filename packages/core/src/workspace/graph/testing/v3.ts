@@ -1,4 +1,6 @@
+import type { FailureEvent } from '../../../orchestration/failure-context.js';
 import {
+  AUTHOR_BLOCK_LABEL,
   MAX_GRAPH_EDGES,
   MAX_GRAPH_NODES,
   type AgentNode,
@@ -8,6 +10,13 @@ import {
   type WorkflowNodeId,
   type WorkflowNodeV3,
 } from '../../workflow-graph.js';
+import { checkBlockOf } from '../check-blocks.js';
+import {
+  FAILURE_SOURCE_EVENTS,
+  derivedFailureRoutes,
+  failureSourceKind,
+  whenFailureRoutes,
+} from '../v3/failure-routes.js';
 import { agentsWithRole, indexNodesV3, roleClaimOf } from '../v3/graph-index.js';
 import { migrateWorkflowV2 } from '../v3/migrate.js';
 import type { RoleClaim } from '../v3/roles.js';
@@ -19,8 +28,8 @@ import { createGraphRng, type GraphRng } from './rng.js';
 /**
  * Version 3 test support (ADR-0037; README "Graph correctness", layers 3 and 4). A version 3
  * graph is a version 2 generated graph migrated (`migrateWorkflowV2`), then version 3 moves that
- * only version 3 can draw: researchers, more planners, review fan-outs, custom arrows, and labels
- * and purposes on arrows. Pure and seeded; never used to build a project's workflow.
+ * only version 3 can draw: researchers, more planners, review fan-outs, custom arrows, labels
+ * and purposes on arrows, and When arrows with the Author block (ADR-0038). Pure and seeded; never used to build a project's workflow.
  */
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -195,8 +204,56 @@ const labelArrow: MoveV3 = (graph, rng) => {
   };
 };
 
-/** Every version 3 move, by name. */
-export const LEGAL_GRAPH_MOVES_V3: Readonly<Record<string, MoveV3>> = Object.freeze({
+/** The failure events each block can still route: allowed for it, routed by no arrow or setting. */
+function unroutedEvents(graph: WorkflowGraphV3): Map<WorkflowNodeId, FailureEvent[]> {
+  const index = indexNodesV3(graph);
+  const routed = new Set(
+    [...whenFailureRoutes(index, graph.edges), ...derivedFailureRoutes(index, graph.edges)].flatMap(
+      (r) => r.events.map((e) => `${r.sourceNodeId} ${e}`),
+    ),
+  );
+  const out = new Map<WorkflowNodeId, FailureEvent[]>();
+  for (const node of index.unique) {
+    const kind = failureSourceKind(index, node);
+    if (kind === undefined) continue;
+    if (node.type === 'checks' && checkBlockOf(node).onFailure === 'owner') continue;
+    const free = FAILURE_SOURCE_EVENTS[kind].filter((e) => !routed.has(`${node.id} ${e}`));
+    if (free.length > 0) out.set(node.id, free);
+  }
+  return out;
+}
+
+/** A When arrow for some unrouted failure, to a helper, the lead or the Author block (added once). */
+const addWhen: MoveV3 = (graph, rng) => {
+  if (!roomFor(graph, 1, 1)) return null;
+  const free = [...unroutedEvents(graph)];
+  const lead = idOf(graph, 'lead');
+  if (free.length === 0 || lead === undefined) return null;
+  const [from, events] = rng.pick(free);
+  const picked = events.filter((_, i) => i === 0 || rng.bool());
+  let g = graph;
+  let author = idOf(g, 'author');
+  const targets = [lead, ...withRole(g, 'worker').map((n) => n.id)];
+  if (author !== undefined) targets.push(author);
+  let to = rng.pick(targets);
+  if (author === undefined && rng.bool()) {
+    author = freshIdV3(g, 'author');
+    g = addNodeV3(g, { type: 'author', id: author, label: AUTHOR_BLOCK_LABEL });
+    to = author;
+  }
+  if (g.edges.some((e) => e.type === 'when' && e.from === from && e.to === to)) return null;
+  return addArrow(g, {
+    type: 'when',
+    from,
+    to,
+    on: picked,
+    maxRounds: rng.int(5) + 1,
+    ...notes(rng),
+  });
+};
+
+/** The ADR-0037 moves, by name; the When move (ADR-0038) runs after them on its own stream. */
+const ROLE_MOVES_V3: Readonly<Record<string, MoveV3>> = Object.freeze({
   'add researcher': addResearcher,
   'add planner': addPlanner,
   'add review fan-out': addFanOut,
@@ -204,15 +261,25 @@ export const LEGAL_GRAPH_MOVES_V3: Readonly<Record<string, MoveV3>> = Object.fre
   'label an arrow': labelArrow,
 });
 
+/** Every version 3 move, by name. */
+export const LEGAL_GRAPH_MOVES_V3: Readonly<Record<string, MoveV3>> = Object.freeze({
+  ...ROLE_MOVES_V3,
+  'add when arrow': addWhen,
+});
+
 export interface GenerateGraphV3Options extends GenerateGraphOptions {
   /** Version 3 moves after the version 2 ones (default: a random number from 0 to 6). */
   v3Moves?: number;
+  /** When arrows added after them (ADR-0038; default: a random number from 0 to 2). */
+  whenMoves?: number;
 }
 
 /**
  * A random valid version 3 graph for `seed`: `generateValidGraph(seed, opts)` migrated, then
- * random version 3 moves. Deterministic for a seed; the version 3 validator must report no error
- * for it and `compileWorkflowV3` must accept it.
+ * random version 3 moves, then When arrows (with the Author block). Deterministic for a seed; the
+ * version 3 validator must report no error for it and `compileWorkflowV3` must accept it. The When
+ * arrows draw from their own random stream, so the rest of a seed's graph is what it was before
+ * ADR-0038.
  */
 export function generateValidGraphV3(
   seed: number,
@@ -221,9 +288,15 @@ export function generateValidGraphV3(
   let graph = migrateWorkflowV2(generateValidGraph(seed, opts));
   const rng = createGraphRng((seed ^ 0x5eed_0037) >>> 0);
   const moves = opts.v3Moves ?? rng.int(7);
-  const names = Object.keys(LEGAL_GRAPH_MOVES_V3);
+  const names = Object.keys(ROLE_MOVES_V3);
   for (let i = 0; i < moves; i++) {
-    const next = LEGAL_GRAPH_MOVES_V3[rng.pick(names)]?.(graph, rng) ?? null;
+    const next = ROLE_MOVES_V3[rng.pick(names)]?.(graph, rng) ?? null;
+    if (next !== null) graph = { ...next, template: 'custom' };
+  }
+  const whenRng = createGraphRng((seed ^ 0x5eed_0038) >>> 0);
+  const whens = opts.whenMoves ?? whenRng.int(3);
+  for (let i = 0; i < whens; i++) {
+    const next = addWhen(graph, whenRng);
     if (next !== null) graph = { ...next, template: 'custom' };
   }
   return graph;
@@ -391,6 +464,85 @@ export const GRAPH_MUTATIONS_V3: readonly GraphMutationV3[] = Object.freeze([
       const lead = idOf(graph, 'lead');
       if (ticket === undefined || lead === undefined) return null;
       return addArrow(graph, { type: 'research', from: ticket, to: lead });
+    },
+  },
+  {
+    name: 'a When arrow to a block that is not a helper',
+    expectedCode: 'when-target-invalid',
+    apply: (graph, rng) => {
+      const merge = idOf(graph, 'ticket-merge');
+      const others = withRole(graph, 'planner', 'change-reviewer', 'final-reviewer', 'tester');
+      if (merge === undefined || others.length === 0) return null;
+      const to = rng.pick(others).id;
+      return addArrow(graph, {
+        type: 'when',
+        from: merge,
+        to,
+        on: ['merge-conflict'],
+        maxRounds: 2,
+      });
+    },
+  },
+  {
+    name: 'two When routes for one failure',
+    expectedCode: 'when-duplicate-route',
+    apply: (graph) => {
+      const merge = idOf(graph, 'ticket-merge');
+      const lead = idOf(graph, 'lead');
+      const workers = withRole(graph, 'worker');
+      if (merge === undefined || lead === undefined || workers.length === 0) return null;
+      const on: FailureEvent[] = ['merge-conflict'];
+      // Two new arrows from the merge to targets it has no When arrow to yet.
+      const free = [lead, ...workers.map((n) => n.id)].filter(
+        (id) => !graph.edges.some((e) => e.type === 'when' && e.from === merge && e.to === id),
+      );
+      const [x, y] = free;
+      if (x === undefined || y === undefined) return null;
+      const g = addArrow(graph, { type: 'when', from: merge, to: x, on, maxRounds: 1 });
+      return addArrow(g, { type: 'when', from: merge, to: y, on, maxRounds: 2 });
+    },
+  },
+  {
+    name: 'a When arrow with an event its block never raises',
+    expectedCode: 'when-event-invalid',
+    apply: (graph, rng) => {
+      const merge = idOf(graph, 'ticket-merge');
+      const workers = withRole(graph, 'worker').filter(
+        (n) => !graph.edges.some((e) => e.type === 'when' && e.from === merge && e.to === n.id),
+      );
+      if (merge === undefined || workers.length === 0) return null;
+      return addArrow(graph, {
+        type: 'when',
+        from: merge,
+        to: rng.pick(workers).id,
+        on: [rng.pick(['tests-failed', 'review-rework', 'checks-failed'] as const)],
+        maxRounds: 2,
+      });
+    },
+  },
+  {
+    name: 'a second Author block',
+    expectedCode: 'too-many-nodes',
+    apply: (graph) => {
+      if (!roomFor(graph, 2, 0)) return null;
+      const a = freshIdV3(graph, 'author');
+      const g = addNodeV3(graph, { type: 'author', id: a, label: AUTHOR_BLOCK_LABEL });
+      return addNodeV3(g, { type: 'author', id: freshIdV3(g, 'author'), label: 'Author 2' });
+    },
+  },
+  {
+    name: 'an arrow out of the Author block',
+    expectedCode: 'edge-not-allowed',
+    apply: (graph, rng) => {
+      const merge = idOf(graph, 'ticket-merge');
+      const workers = withRole(graph, 'worker');
+      if (merge === undefined || workers.length === 0 || !roomFor(graph, 1, 2)) return null;
+      const author = idOf(graph, 'author') ?? freshIdV3(graph, 'author');
+      let g = graph.nodes.some((n) => n.id === author)
+        ? graph
+        : addNodeV3(graph, { type: 'author', id: author, label: AUTHOR_BLOCK_LABEL });
+      g = addArrow(g, { type: 'custom', from: author, to: rng.pick(workers).id });
+      return g;
     },
   },
   {

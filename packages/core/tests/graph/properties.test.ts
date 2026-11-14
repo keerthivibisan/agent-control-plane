@@ -58,6 +58,9 @@ const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {
   'agent-without-role': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
   'agent-mixed-roles': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
   'pool-not-helper': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
+  'when-target-invalid': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
+  'when-duplicate-route': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
+  'when-event-invalid': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
 };
 const STRUCTURAL_CODES = GraphIssueCodeSchema.options.filter(
   (c) =>
@@ -362,6 +365,9 @@ describe('layer 3: generated valid graphs and their mutants', () => {
         'agent-without-role',
         'agent-mixed-roles',
         'pool-not-helper',
+        'when-target-invalid',
+        'when-duplicate-route',
+        'when-event-invalid',
       ]);
     });
   });

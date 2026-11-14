@@ -82,6 +82,7 @@ export const EDITOR_COPY = {
       test: 'Test',
       custom: 'Custom',
       merge: 'Merge',
+      when: 'When',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
   },
   /** Version 3 arrows (ADR-0037 §2): the long name and one sentence per type. */
@@ -97,6 +98,7 @@ export const EDITOR_COPY = {
       test: 'Hands the ticket branch for tests',
       custom: 'Custom hand-off',
       merge: 'Merges through',
+      when: 'When it fails, sends to',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
     text: {
       flow: 'The order of the steps: the plan path, then after the ticket merge the final reviewers and the Finish block. A flow into an agent on the final chain makes it a final reviewer.',
@@ -115,6 +117,7 @@ export const EDITOR_COPY = {
         'Order and hand-off only: the target starts after the source finishes and gets the source’s output note with this arrow’s label and purpose. It gives no role.',
       merge:
         'The lead merges each reviewed change into the ticket branch, through the Checks block before the merge when the workflow has one.',
+      when: 'When a failure happens here (tests or checks fail, a reviewer asks for rework, the harness cannot run, a merge conflicts), the target fixes it: a helper, the lead or the author, up to a number of rounds; then the lead decides. It gives no role.',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
   },
   /** One Agent block (ADR-0037 §1): its role comes from its arrows. */

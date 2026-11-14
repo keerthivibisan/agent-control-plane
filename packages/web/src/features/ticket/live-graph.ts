@@ -278,6 +278,8 @@ const LINK_LOOK: Readonly<
   // ADR-0037: as on the Workflow page, dash-dotted research and dash-dot-dotted hand-offs.
   research: { stroke: 'var(--color-dim)', width: 1.75, dash: '10 3 1 3' },
   custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3' },
+  // ADR-0038: failure routing, red and dashed as in the editor.
+  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
 };
 
 /**

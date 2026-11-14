@@ -40,6 +40,13 @@ import {
   singleOfTypeV3,
   type NodeIndexV3,
 } from './graph-index.js';
+import {
+  FAILURE_EVENT_NAMES,
+  FAILURE_SOURCE_EVENTS,
+  FAILURE_SOURCE_NAMES,
+  derivedFailureRoutes,
+  failureSourceKind,
+} from './failure-routes.js';
 import { ROLE_CLAIM_NAMES, type RoleClaim } from './roles.js';
 
 /**
@@ -59,6 +66,12 @@ import { ROLE_CLAIM_NAMES, type RoleClaim } from './roles.js';
  *   or none does;
  * - research and custom arrows must not go round in a circle (`cycle`);
  * - a researcher counts as reached when an agent it researches for is.
+ *
+ * ADR-0038 §4: at most one Author block; a When arrow's target must be a helper, the Lead or the
+ * Author block (`when-target-invalid`); its events must be ones its source raises and a source
+ * whose failures go to the owner cannot route them (`when-event-invalid`); each (source, event)
+ * has one route, counting the routes read from rework arrows and "back to the helper"
+ * (`when-duplicate-route`). When arrows take no part in cycles: fix turns are bounded by rounds.
  *
  * Every path rule reads only the arrows that pass the matrix, so a refused arrow is reported once.
  */
@@ -85,6 +98,7 @@ export function validateWorkflowGraphV3(
   checkMergePath(scope);
   checkFinalChain(scope);
   checkCheckBlocks(scope);
+  checkWhenArrows(scope);
   checkCycles(scope);
   checkReachable(scope);
   const agentNodes = graph.nodes.filter(
@@ -212,6 +226,15 @@ function checkCounts({ graph, index, issues }: Scope): void {
       'too-many-nodes',
       `The workflow can have only one Checks block on the ticket branch; ${q(extraBranch)} is one too many.`,
       { nodeId: extraBranch.id },
+    );
+  }
+
+  const extraAuthor = graph.nodes.filter((n) => n.type === 'author')[1];
+  if (extraAuthor !== undefined) {
+    issues.error(
+      'too-many-nodes',
+      `The workflow can have only one Author block; ${q(extraAuthor)} is one too many.`,
+      { nodeId: extraAuthor.id },
     );
   }
 
@@ -595,6 +618,57 @@ function checkCheckBlocks({ index, valid, issues }: Scope): void {
       'many-check-blocks',
       `${q(node)} flows into ${blocks.length} Checks blocks. Keep one: a block can select every check its change needs.`,
       { nodeId: node.id, edgeId: second.id },
+    );
+  }
+}
+
+function eventList(events: readonly string[]): string {
+  return events.map((e) => `"${e}"`).join(', ');
+}
+
+/** ADR-0038 §4: the When arrows' events and one route per (source, event). */
+function checkWhenArrows({ index, valid, issues }: Scope): void {
+  const derived = new Set(
+    derivedFailureRoutes(index, valid).flatMap((r) =>
+      r.events.map((e) => `${r.sourceNodeId} ${e}`),
+    ),
+  );
+  const routed = new Set<string>();
+  for (const edge of edgesOfTypeV3(valid, 'when')) {
+    const from = index.byId.get(edge.from);
+    const kind = from === undefined ? undefined : failureSourceKind(index, from);
+    if (from === undefined || kind === undefined) continue; // refused by the matrix
+    const allowed = FAILURE_SOURCE_EVENTS[kind];
+    const foreign = edge.on.filter((e) => !allowed.includes(e));
+    if (foreign.length > 0) {
+      issues.error(
+        'when-event-invalid',
+        `${q(from)} is ${FAILURE_SOURCE_NAMES[kind]}, which never raises ${eventList(foreign)}. Its failures are ${eventList(allowed)}.`,
+        { edgeId: edge.id },
+      );
+      continue;
+    }
+    if (from.type === 'checks' && checkBlockOf(from).onFailure === 'owner') {
+      issues.error(
+        'when-event-invalid',
+        isCheckBlockAt(from, 'branch')
+          ? `${q(from)} checks the ticket branch, where every failure goes to you, so a When link cannot route it. Remove the link.`
+          : `${q(from)} sends its failures to you ("${CHECK_FAILURE_ROUTE_NAMES.owner}"), and that setting wins over links. Choose "${CHECK_FAILURE_ROUTE_NAMES.lead}" on the block to route its failures with this When link, or remove the link.`,
+        { edgeId: edge.id },
+      );
+      continue;
+    }
+    const twice = edge.on.find(
+      (e) => routed.has(`${from.id} ${e}`) || derived.has(`${from.id} ${e}`),
+    );
+    for (const e of edge.on) routed.add(`${from.id} ${e}`);
+    if (twice === undefined) continue;
+    issues.error(
+      'when-duplicate-route',
+      derived.has(`${from.id} ${twice}`)
+        ? `${q(from)} already sends this failure back to its author (${from.type === 'checks' ? `"${CHECK_FAILURE_ROUTE_NAMES.helper}"` : 'its rework link'}), so the When link for "${FAILURE_EVENT_NAMES[twice]}" is a second route. Keep one.`
+        : `${q(from)} has two When links for when ${FAILURE_EVENT_NAMES[twice]}. Each failure at a block has one route: keep one link.`,
+      { edgeId: edge.id },
     );
   }
 }

@@ -3343,6 +3343,8 @@ type LiveBlockKind =
   | 'ticket-merge'
   | 'owner-merge'
   | 'done'
+  // ADR-0038: the Author block, a routing block with no agent of its own.
+  | 'author'
   // ADR-0037: an agent block without one role; a run's validated graph never has one.
   | 'agent'
   | 'mixed';
@@ -3367,6 +3369,7 @@ export const WORKFLOW_LIVE_COPY = {
       'ticket-merge': 'Ticket branch',
       'owner-merge': 'You',
       done: 'Done',
+      author: 'Author',
       agent: 'Agent',
       mixed: 'Agent',
     } satisfies Record<LiveBlockKind, string>,
@@ -3409,6 +3412,7 @@ export const WORKFLOW_LIVE_COPY = {
       test: 'Next step',
       research: 'Sends its research',
       custom: 'Hands over its work',
+      when: 'Sends failures to',
     },
     linkName: (kind: string, from: string, to: string, purpose: string | null = null) =>
       `${kind}: from ${from} to ${to}${purpose === null ? '' : `. Why: ${purpose}`}`,
@@ -4047,7 +4051,12 @@ export type PaletteItemKey =
   'planner' | 'helper' | 'helper-pool' | 'change-reviewer' | 'final-reviewer' | 'tester';
 
 /** What a block is called by its kind; a reviewer's word depends on its scope. */
-type BlockKindKey = Exclude<WorkflowNodeType, 'reviewer'> | 'reviewer-change' | 'reviewer-final';
+type BlockKindKey =
+  | Exclude<WorkflowNodeType, 'reviewer'>
+  | 'reviewer-change'
+  | 'reviewer-final'
+  // ADR-0038: the version 3 Author block (the editor offers it from FR-6).
+  | 'author';
 
 export const WORKFLOW_GRAPH_COPY = {
   description:
@@ -4072,6 +4081,7 @@ export const WORKFLOW_GRAPH_COPY = {
     'ticket-merge': 'Ticket branch',
     'owner-merge': 'You',
     done: 'Done',
+    author: 'Author',
   } satisfies Record<BlockKindKey, string>,
   kindText: {
     planner: 'Reads the ticket and the project and writes the plan. It never changes a file.',
@@ -4094,6 +4104,8 @@ export const WORKFLOW_GRAPH_COPY = {
     'owner-merge':
       'You merge the ticket branch into its target or open a pull request, once, for the whole ticket.',
     done: 'The ticket is finished.',
+    author:
+      'Whoever wrote the failing code: ACP finds the helper whose change touched the failing files. Only a When link points to it.',
   } satisfies Record<BlockKindKey, string>,
   gateTitle: {
     'plan-approval': 'Approve the plan',

@@ -25,7 +25,7 @@ export function arrowIdFor(
 }
 
 export function arrow(
-  type: Exclude<WorkflowEdgeTypeV3, 'rework'>,
+  type: Exclude<WorkflowEdgeTypeV3, 'rework' | 'when'>,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
   id: string = arrowIdFor(type, from, to),

@@ -21,7 +21,10 @@ import type {
  * - `test`, and `flow` into an agent: that tester or final reviewer (final chain), planner or lead
  *   (plan path), in its brief;
  * - `flow` between steps (gates, Checks blocks) and `merge`: nobody (no agent at the receiving
- *   end).
+ *   end);
+ * - `when` (ADR-0038 §4): its target's fix turn, a helper or the Lead; into the Author block, the
+ *   author found at run time, so nobody here. Its notes travel in `failureRoutes`, not
+ *   `arrowNotes`.
  *
  * The note is data for that agent: it never changes a role, a mode or an approval (AGENTS.md §3.7).
  */
@@ -42,6 +45,7 @@ export function arrowNoteReceiver(
     case 'rework':
     case 'test':
     case 'flow':
+    case 'when':
       return isAgent(to) ? edge.to : null;
     case 'merge':
       return null;

@@ -51,6 +51,29 @@ export {
   type DowngradeResult,
 } from './v3/migrate.js';
 export { workflowTemplateV3 } from './v3/templates.js';
+// ADR-0038 §4–§5: failure routing (When arrows, the Author block) and the workflow in words.
+export {
+  FAILURE_EVENT_NAMES,
+  FAILURE_SOURCE_EVENTS,
+  FAILURE_SOURCE_NAMES,
+  derivedFailureRoutes,
+  failureSourceKind,
+  isWhenTarget,
+  whenFailureRoutes,
+  type DerivedRouteOptions,
+  type FailureSourceKind,
+} from './v3/failure-routes.js';
+export {
+  WORKFLOW_WORDS_NOTE,
+  describeWorkflow,
+  inlineLabel,
+  quoteInline,
+  renderWorkflowDescription,
+  type DescribeWorkflowOptions,
+  type WorkflowFailureRouting,
+  type WorkflowSentence,
+  type WorkflowSentenceSection,
+} from './v3/describe.js';
 export { graphRunDefaultsV3 } from './v3/run-defaults.js';
 
 // Test support (README "Graph correctness", layers 3 and 4): pure and seeded, shared with the

@@ -20,6 +20,7 @@ export const NODE_TYPE_NAMES_V3: Readonly<Record<WorkflowNodeTypeV3, string>> = 
   'ticket-merge': 'Ticket merge',
   'owner-merge': 'Owner merge',
   done: 'Done',
+  author: 'Author',
 });
 
 export interface NodeIndexV3 {

@@ -179,7 +179,7 @@ export function agentV3(id: WorkflowNodeId, label: string, extra: Partial<AgentN
 
 /** An arrow with the id `<type>-<from>-<to>` and the owner's label and purpose when given. */
 export function arrowV3(
-  type: Exclude<WorkflowEdgeV3['type'], 'rework'>,
+  type: Exclude<WorkflowEdgeV3['type'], 'rework' | 'when'>,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
   notes: { label?: string; purpose?: string } = {},

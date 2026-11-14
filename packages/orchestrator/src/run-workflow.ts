@@ -320,6 +320,14 @@ export function deriveRunWorkflowGraph(
           state: state.run.status === 'COMPLETED' ? 'done' : stopped(state) ? 'skipped' : 'waiting',
           agentRunIds: [],
         };
+      case 'author':
+        // ADR-0038: a routing block with no agent of its own; its fix turns (FR-5) are the
+        // author's helper's. Until then it only waits, and ends skipped.
+        return {
+          nodeId: node.id,
+          state: state.run.status === 'COMPLETED' || stopped(state) ? 'skipped' : 'waiting',
+          agentRunIds: [],
+        };
     }
   });
   return {

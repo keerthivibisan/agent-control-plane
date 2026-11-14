@@ -26,6 +26,8 @@ export const EDGE_LOOK: Readonly<
   test: { stroke: 'var(--color-ink)', width: 1.5, dash: '3 3' },
   custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3', round: true },
   merge: { stroke: 'var(--color-ink)', width: 2.5 },
+  // ADR-0038: failure routing, red and dashed.
+  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
 };
 
 /** The stroke a link is drawn with: the accent when selected, danger when the rules refuse it. */

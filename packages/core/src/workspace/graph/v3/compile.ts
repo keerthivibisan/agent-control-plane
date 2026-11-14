@@ -24,6 +24,7 @@ import {
 import { checkBlockOf, copySelection, isCheckBlockAt } from '../check-blocks.js';
 import { WorkflowGraphInvalidError } from '../compile.js';
 import { arrowNoteReceiver, isArrowNoteType } from './arrow-notes.js';
+import { derivedFailureRoutes, whenFailureRoutes } from './failure-routes.js';
 import { agentsWithRole, edgesOfTypeV3, indexNodesV3, roleClaimOf } from './graph-index.js';
 import { toWorkflowGraphV3 } from './migrate.js';
 import { isChainStepV3, validateWorkflowGraphV3 } from './validate.js';
@@ -88,6 +89,11 @@ function arrowNotes(edge: WorkflowEdgeV3): { label?: string; purpose?: string } 
  * New (ADR-0037), for the engine to use from AR-3: `planners` (every planner), `researchers` (each
  * with its research arrows, label and purpose) and `handoffs` (the custom arrows); `arrowNotes`
  * (amended 2026-11-14): the other arrows' labels and purposes, for the agent each reaches.
+ *
+ * ADR-0038 §4: `failureRoutes`, the When arrows in graph order, then the routes read from rework
+ * arrows and "back to the helper" (`derived`), which `review` and `checkBlocks` keep carrying
+ * unchanged. With `ctx.reviewer === 'lead'` no change reviewer runs, so neither its When arrows
+ * nor its rework arrows give a route. Absent when there is no route.
  */
 export function compileWorkflow(graph: AnyWorkflowGraph, ctx: CompileContext): WorkflowProgram {
   return compileWorkflowV3(toWorkflowGraphV3(graph), ctx);
@@ -259,6 +265,18 @@ export function compileWorkflowV3(graph: WorkflowGraphV3, ctx: CompileContext): 
     if (arrowNoteReceiver(e, index.byId.get(e.from), index.byId.get(e.to)) === null) return [];
     return [{ type: e.type, from: e.from, to: e.to, ...arrowNotes(e) }];
   });
+  const failureRoutes = [
+    ...whenFailureRoutes(index, edges).filter(
+      (r) =>
+        ctx.reviewer !== 'lead' ||
+        roleClaimOf(index, must(index.byId.get(r.sourceNodeId), 'a When source')) !==
+          'change-reviewer',
+    ),
+    ...derivedFailureRoutes(index, edges, {
+      ...(ctx.reviewer !== undefined ? { reviewer: ctx.reviewer } : {}),
+      ...(override !== undefined ? { maxReworkRounds: override } : {}),
+    }),
+  ];
   const gate = must(
     graph.nodes.find((n): n is WorkflowNodeV3Of<'plan-approval'> => n.type === 'plan-approval'),
     'the plan gate',
@@ -280,6 +298,7 @@ export function compileWorkflowV3(graph: WorkflowGraphV3, ctx: CompileContext): 
       branch: branchBlock,
       change,
     },
+    ...(failureRoutes.length > 0 ? { failureRoutes } : {}),
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   DEFAULT_MAX_REWORK_ROUNDS,
+  DEFAULT_WHEN_ROUNDS,
   HARD_MAX_HELPERS,
   MAX_GRAPH_NODES,
   canConnectV3,
@@ -387,9 +388,13 @@ function makeEdge(
   to: WorkflowNodeId,
 ): GraphEdge {
   const id = edgeIdFor(graph, type, from, to);
-  return type === 'rework'
-    ? { type, id, from, to, maxRounds: DEFAULT_MAX_REWORK_ROUNDS }
-    : { type, id, from, to };
+  if (type === 'rework') return { type, id, from, to, maxRounds: DEFAULT_MAX_REWORK_ROUNDS };
+  // ADR-0038: the editor does not offer When links yet (FR-6, not in EDGE_TYPE_ORDER); one made
+  // here starts with a tester's event, which the owner then changes.
+  if (type === 'when') {
+    return { type, id, from, to, on: ['tests-failed'], maxRounds: DEFAULT_WHEN_ROUNDS };
+  }
+  return { type, id, from, to };
 }
 
 /** Adds an arrow when `canConnectV3` allows it, else leaves the graph as it is. */

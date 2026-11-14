@@ -3,6 +3,7 @@ import { IsoTimestampSchema } from '../domain/time.js';
 import { ManagedProviderIdSchema, type ManagedProviderId } from '../domain/provider.js';
 import { WorkflowNodeIdSchema, type WorkflowNodeId } from './node-id.js';
 import type { RunAgentKind } from '../orchestration/orchestration.js';
+import { FAILURE_EVENTS, type FailureEvent } from '../orchestration/failure-context.js';
 import { ApprovalModeSchema, HARD_MAX_HELPERS, type ApprovalMode } from './workspace.js';
 import {
   MAX_REWORK_ROUNDS,
@@ -401,6 +402,7 @@ export const WorkflowNodeTypeV3Schema = z.enum([
   'ticket-merge',
   'owner-merge',
   'done',
+  'author',
 ]);
 export type WorkflowNodeTypeV3 = z.infer<typeof WorkflowNodeTypeV3Schema>;
 
@@ -430,6 +432,17 @@ export const AgentNodeSchema = z.object({
 });
 export type AgentNode = z.infer<typeof AgentNodeSchema>;
 
+/**
+ * ADR-0038 §4: the Author block, a routing block and not an agent: "whoever wrote the failing
+ * code". Only a `when` arrow may point to it and it has no arrow out; at most one per graph. The
+ * engine finds the author at run time (`findAuthors`: the helper whose change touched the failing
+ * files).
+ */
+export const AuthorNodeSchema = z.object({ type: z.literal('author'), ...NodeBase });
+export type AuthorNode = z.infer<typeof AuthorNodeSchema>;
+/** What the editor calls a new Author block. */
+export const AUTHOR_BLOCK_LABEL = 'Author';
+
 export const WorkflowNodeV3Schema = z.discriminatedUnion('type', [
   AgentNodeSchema,
   LeadNodeSchema,
@@ -439,6 +452,7 @@ export const WorkflowNodeV3Schema = z.discriminatedUnion('type', [
   TicketMergeGateSchema,
   OwnerMergeGateSchema,
   DoneGateSchema,
+  AuthorNodeSchema,
 ]);
 export type WorkflowNodeV3 = z.infer<typeof WorkflowNodeV3Schema>;
 export type WorkflowNodeV3Of<T extends WorkflowNodeTypeV3> = Extract<WorkflowNodeV3, { type: T }>;
@@ -453,7 +467,10 @@ export type WorkflowNodeV3Of<T extends WorkflowNodeTypeV3> = Extract<WorkflowNod
  * - `review`: from a helper or tester to the change reviewer (or the lead) of its change. Several
  *   review arrows to different reviewers fan the change out to all of them;
  * - `test`: from the final chain into a tester (version 2's flow into a tester);
- * - `custom`: from an agent to an agent: order and hand-off only, it gives no role.
+ * - `custom`: from an agent to an agent: order and hand-off only, it gives no role;
+ * - `when` (ADR-0038 §4): failure routing. From the block where a failure event happens to the
+ *   helper, the Lead or the Author block that fixes it (`validateWorkflowGraphV3` says which
+ *   events each block raises). It gives no role.
  */
 export const WorkflowEdgeTypeV3Schema = z.enum([
   'flow',
@@ -466,6 +483,7 @@ export const WorkflowEdgeTypeV3Schema = z.enum([
   'rework',
   'test',
   'custom',
+  'when',
 ]);
 export type WorkflowEdgeTypeV3 = z.infer<typeof WorkflowEdgeTypeV3Schema>;
 export const WORKFLOW_EDGE_TYPES_V3 = WorkflowEdgeTypeV3Schema.options;
@@ -481,6 +499,13 @@ const EdgeBaseV3 = {
   purpose: z.string().trim().min(1).max(MAX_EDGE_PURPOSE).optional(),
 };
 
+/** ADR-0038: the failure events a When arrow routes (`FAILURE_EVENTS`). */
+export const FailureEventSchema = z.enum(FAILURE_EVENTS);
+/** A When arrow's rounds: 1 to 5, 2 when the editor draws one. */
+export const MAX_WHEN_ROUNDS = 5;
+export const DEFAULT_WHEN_ROUNDS = 2;
+export const WhenRoundsSchema = z.number().int().min(1).max(MAX_WHEN_ROUNDS);
+
 export const WorkflowEdgeV3Schema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('flow'), ...EdgeBaseV3 }),
   z.object({ type: z.literal('merge'), ...EdgeBaseV3 }),
@@ -492,6 +517,19 @@ export const WorkflowEdgeV3Schema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('rework'), ...EdgeBaseV3, maxRounds: ReworkRoundsSchema }),
   z.object({ type: z.literal('test'), ...EdgeBaseV3 }),
   z.object({ type: z.literal('custom'), ...EdgeBaseV3 }),
+  z.object({
+    type: z.literal('when'),
+    ...EdgeBaseV3,
+    /** The events it routes: 1 to 5, each at most once. */
+    on: z
+      .array(FailureEventSchema)
+      .min(1)
+      .max(FAILURE_EVENTS.length)
+      .refine((events) => new Set(events).size === events.length, {
+        message: 'each event at most once',
+      }),
+    maxRounds: WhenRoundsSchema,
+  }),
 ]);
 export type WorkflowEdgeV3 = z.infer<typeof WorkflowEdgeV3Schema>;
 export type WorkflowEdgeV3Of<T extends WorkflowEdgeTypeV3> = Extract<WorkflowEdgeV3, { type: T }>;
@@ -587,6 +625,10 @@ export const GraphIssueCodeSchema = z.enum([
   'agent-without-role',
   'agent-mixed-roles',
   'pool-not-helper',
+  // ADR-0038 §4: When arrows
+  'when-target-invalid',
+  'when-duplicate-route',
+  'when-event-invalid',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -766,6 +808,34 @@ export interface ProgramArrowNote {
   purpose?: string;
 }
 
+/** Who fixes a routed failure (ADR-0038 §4): a helper block, the Lead, or the change's author. */
+export type FailureRouteTarget =
+  { kind: 'node'; nodeId: WorkflowNodeId } | { kind: 'lead' } | { kind: 'author' };
+
+/**
+ * One failure route (ADR-0038 §4): the failure `events` raised at `sourceNodeId` go to `target`
+ * for up to `maxRounds` fix rounds, then to the Lead.
+ *
+ * - From a `when` arrow: `edgeId`, its label and purpose;
+ * - `derived: true`: read from today's settings, which keep their meaning and engine paths: a change
+ *   reviewer's `rework` arrows (a `direct` `ReviewRoute`: review rework back to the change's author,
+ *   `editorNodeId`, with the route's `reviewerRounds`) and a change Checks block's
+ *   `onFailure: 'helper'` (its checks failing or its harness failing go back to the author, with
+ *   the block's `maxRounds`). `onFailure: 'lead'` is the default (no route); `'owner'` is a block
+ *   setting that wins over every arrow and has no route either.
+ */
+export interface ProgramFailureRoute {
+  sourceNodeId: WorkflowNodeId;
+  events: readonly FailureEvent[];
+  target: FailureRouteTarget;
+  maxRounds: number;
+  label?: string;
+  purpose?: string;
+  edgeId?: WorkflowEdgeId;
+  derived?: true;
+  editorNodeId?: WorkflowNodeId;
+}
+
 /** What `compileWorkflow` needs besides the graph: the project's settings and the run's choices. */
 export interface CompileContext {
   /** The project's approval mode, used by editing nodes without their own. */
@@ -870,4 +940,10 @@ export interface WorkflowProgram {
   nodeModes: Readonly<Record<WorkflowNodeId, EffectiveNodeMode>>;
   /** The Checks blocks (ADR-0027 §5). */
   checkBlocks: ProgramCheckBlocks;
+  /**
+   * ADR-0038 §4: the failure routes, the When arrows in graph order and then the derived ones (see
+   * `ProgramFailureRoute`). Absent when there is none, so a program without a rework arrow or a
+   * Checks block sending failures back prints as before.
+   */
+  failureRoutes?: readonly ProgramFailureRoute[];
 }
