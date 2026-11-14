@@ -3401,6 +3401,10 @@ export const WORKFLOW_LIVE_COPY = {
     selectAgent: (role: string) => `Show the ${role} in the side panel`,
     rework: (n: number) => (n > 0 ? `Rework ×${formatCount(n)}` : 'Rework'),
     directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
+    /** ADR-0038 §4: a When link's events and rounds, and the Author block's fixer. */
+    when: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
+    authorWaiting: 'Found when a fix runs',
+    authorFixing: (role: string) => `Fixing: ${role}`,
     links: {
       flow: 'Next step',
       implement: 'Assigns work',

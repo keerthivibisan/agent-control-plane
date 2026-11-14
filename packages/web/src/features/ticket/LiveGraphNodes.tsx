@@ -22,6 +22,7 @@ import {
 import { isAgentLive } from '../control/run-state';
 import {
   AgentFileIcon,
+  AuthorIcon,
   DoneIcon,
   MergeIcon,
   OwnCopyIcon,
@@ -366,6 +367,23 @@ export function LiveAgentBlock({ data }: NodeProps<LiveBlock>) {
   );
 }
 
+/**
+ * The Author block's fixer (ADR-0038 §4): the agent fixing a failure through it, when the run graph
+ * lists one on the block (the one working now, else the newest); until then, who it stands for.
+ */
+function AuthorFixer({ agents }: { agents: readonly AgentRunDto[] }) {
+  const fixer = agents.find((a) => isAgentLive(a.status)) ?? agents[agents.length - 1];
+  return (
+    <span
+      className="truncate text-caption text-dim"
+      data-testid="live-author-fixer"
+      data-agent={fixer?.id}
+    >
+      {fixer === undefined ? G.authorWaiting : G.authorFixing(fixer.role)}
+    </span>
+  );
+}
+
 /** A step: Ticket and Done as pills; plan approval and your merge as "You"; checks and the branch. */
 export function LiveGateBlock({ data }: NodeProps<LiveBlock>) {
   const { node, state } = data;
@@ -397,6 +415,8 @@ export function LiveGateBlock({ data }: NodeProps<LiveBlock>) {
   const you = node.type === 'plan-approval' || node.type === 'owner-merge';
   const icon = you ? (
     <YouIcon size={13} className="shrink-0" />
+  ) : node.type === 'author' ? (
+    <AuthorIcon size={13} className="shrink-0 text-danger" />
   ) : node.type === 'checks' ? (
     <CheckIcon size={13} className="shrink-0 text-success" />
   ) : (
@@ -426,6 +446,7 @@ export function LiveGateBlock({ data }: NodeProps<LiveBlock>) {
             {node.auto ? G.planAuto : G.planAsks}
           </span>
         ) : null}
+        {node.type === 'author' ? <AuthorFixer agents={data.agents} /> : null}
       </div>
     </StateFrame>
   );

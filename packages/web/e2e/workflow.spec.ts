@@ -882,3 +882,30 @@ test('P-C: undo and redo with the keys and the toolbar; Tidy layout', async ({ p
   expect(await flowPosition(page, 'review')).toEqual(home);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });
+
+test('FR-6: the Author block, a When arrow and the flow in words', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  // ADR-0038 §4: the Author block is a routing block in the Add block menu, once.
+  await addBlock(page, 'Author');
+  await expect(block(page, 'author')).toBeVisible();
+  await expect(panel(page).getByTestId('node-panel')).toHaveAttribute('data-kind', 'author');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('add-block').click();
+  await expect(page.getByTestId('palette-author')).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+
+  // From the change reviewer to the Author block, only When fits: it is made at once.
+  await drag(page, 'review', 'author');
+  const edge = panel(page).getByTestId('edge-panel');
+  await expect(edge).toHaveAttribute('data-type', 'when');
+  await expect(edge.getByTestId('when-event-review-rework')).toBeChecked();
+  await expect(edge.getByTestId('when-receives')).toHaveAttribute('data-receiver', 'author');
+
+  // The flow in words lists the route; the lead decides the other failures by default.
+  const words = page.getByTestId('flow-words');
+  await expect(
+    words.locator('[data-testid="flow-words-sentence"][data-routing="when"]'),
+  ).toHaveCount(1);
+  await expect(words.getByTestId('flow-words-default').first()).toBeVisible();
+});

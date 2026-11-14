@@ -1,12 +1,13 @@
-import type {
-  ApprovalMode,
-  NodePosition,
-  WorkflowEdgeTypeV3,
-  WorkflowEdgeV3,
-  WorkflowGraphV3,
-  WorkflowNodeId,
-  WorkflowNodeV3,
-  WorkflowStageId,
+import {
+  FAILURE_EVENT_NAMES,
+  type ApprovalMode,
+  type NodePosition,
+  type WorkflowEdgeTypeV3,
+  type WorkflowEdgeV3,
+  type WorkflowGraphV3,
+  type WorkflowNodeId,
+  type WorkflowNodeV3,
+  type WorkflowStageId,
 } from '@acp/core';
 import type {
   AgentRunDto,
@@ -63,7 +64,9 @@ export function isGateNode(node: WorkflowNodeV3): boolean {
     node.type === 'checks' ||
     node.type === 'ticket-merge' ||
     node.type === 'owner-merge' ||
-    node.type === 'done'
+    node.type === 'done' ||
+    // ADR-0038 §4: a routing block with no agent of its own.
+    node.type === 'author'
   );
 }
 
@@ -120,7 +123,7 @@ export function layoutLiveGraph(graph: WorkflowGraphV3): Map<WorkflowNodeId, Nod
   const finish = finishParts(graph);
   const rows: WorkflowNodeV3[][][] = [
     [of('ticket'), of('researcher'), of('planner'), of('plan-approval')],
-    [of('lead'), [...of('helper'), ...of('helper-pool')], of('reviewer-change')],
+    [of('lead'), [...of('helper'), ...of('helper-pool')], of('reviewer-change'), of('author')],
     finish === null
       ? [
           of('checks'),
@@ -362,13 +365,16 @@ export function buildLiveGraph(
     const look = LINK_LOOK[e.type];
     const isDirect = e.type === 'rework' && isReviewerNode(graph, byId.get(e.from));
     const reworks = counts.get(e.id) ?? 0;
-    // A rework link shows its rounds; any other link the owner's label (ADR-0037 §2).
+    // A rework link shows its rounds; a When link its events and rounds (ADR-0038 §4); any other
+    // link the owner's label (ADR-0037 §2).
     const label =
       e.type === 'rework'
         ? isDirect
           ? G.directRework(reworks)
           : G.rework(reworks)
-        : (e.label ?? undefined);
+        : e.type === 'when'
+          ? whenLabel(e)
+          : (e.label ?? undefined);
     const purpose = e.purpose ?? null;
     return {
       id: e.id,
@@ -421,6 +427,15 @@ export function buildLiveGraph(
     width: minX === Infinity ? 0 : maxX - minX,
     height: minY === Infinity ? 0 : maxY - minY,
   };
+}
+
+/** A When link's words: the owner's label first, then its events and rounds. */
+function whenLabel(e: Extract<WorkflowEdgeV3, { type: 'when' }>): string {
+  const words = G.when(
+    e.on.map((ev) => FAILURE_EVENT_NAMES[ev]),
+    e.maxRounds,
+  );
+  return e.label === undefined ? words : `${e.label} · ${words}`;
 }
 
 /** A block's name in a link's spoken name: the Finish block by its title. */
