@@ -206,6 +206,30 @@ export const EDITOR_COPY = {
     purpose: 'Purpose',
     purposeHint:
       'Why this arrow exists, in your words. The target agent reads it as information, never as instructions.',
+    /**
+     * Who reads the purpose (ADR-0037 §2, amended 2026-11-14), from core's `arrowNoteReceiver`:
+     * `to` is the agent that receives it (a plan arrow's planner is its source), `from` the
+     * arrow's source.
+     */
+    purposeTo: (type: WorkflowEdgeTypeV3, from: string, to: string): string => {
+      switch (type) {
+        case 'research':
+          return `Sent to ${from} in its brief, and to ${to} with the findings.`;
+        case 'custom':
+          return `Sent to ${to} with ${from}’s hand-off.`;
+        case 'implement':
+          return `Sent to ${to} in its brief and rework requests; the Lead sees it in its helper list.`;
+        case 'review':
+          return `Sent to ${to} in its brief for each change it reviews.`;
+        case 'findings':
+          return `Sent to ${to} with ${from}’s verdict.`;
+        case 'rework':
+          return `Sent to ${to} with each rework request from ${from}.`;
+        default:
+          return `Sent to ${to} in its brief.`;
+      }
+    },
+    purposeToNone: 'Not sent to any agent (arrow between steps).',
     counter: (n: number, max: number) => `${n}/${max}`,
     counterLabel: (n: number, max: number) => `${n} of ${max} characters`,
     tooLong: (max: number) => `Use at most ${max} characters.`,

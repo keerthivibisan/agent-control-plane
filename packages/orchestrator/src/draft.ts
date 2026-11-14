@@ -43,6 +43,7 @@ import {
   TESTER_TASK,
 } from './stages.js';
 import { agentLaunchMode, finalStageNode, programOf } from './program.js';
+import { stageNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { advancePrePlan, heldByHandoff, withHandoffs } from './handoffs.js';
 import { isMultiPlanner, multiPlanningGone, openPlanReviewIfReady } from './plan-options.js';
 import type {
@@ -617,7 +618,11 @@ export class Draft {
         select: branchBlock.select,
       });
     }
-    const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
+    // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its test or flow arrow.
+    const brief = withOwnerNotes(
+      kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this),
+      stageNoteBlocks(this.program(), node.id),
+    );
     const loopFields =
       loop === undefined
         ? {}

@@ -87,3 +87,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 - 2026-11-13 Coordinator: AR-6 done. Real run (owner consent) completed: two researchers (Claude,
   Codex) before the planner, review fan-out (Claude, Codex); the fan-out row bug it found is fixed
   (`e7d5d34`). Series ready for a PR to `dev`.
+- 2026-11-14 Owner requests: the block and link panels' Remove button moved to the panel heading
+  (an icon button, same action). Every arrow's label and purpose now reach the agent it concerns,
+  quoted as data (`WorkflowProgram.arrowNotes`, core `arrowNoteReceiver`, orchestrator
+  `arrow-notes.ts`); the arrow panel says who receives the purpose. ADR-0037 amended (note line).

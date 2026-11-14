@@ -41,6 +41,7 @@ export {
 export { canConnectV3 } from './v3/connect.js';
 export { validateWorkflowGraphV3 } from './v3/validate.js';
 export { compileWorkflow, compileWorkflowV3 } from './v3/compile.js';
+export { arrowNoteReceiver, isArrowNoteType } from './v3/arrow-notes.js';
 export {
   downgradeWorkflowV3,
   migrateWorkflowV1ToV3,

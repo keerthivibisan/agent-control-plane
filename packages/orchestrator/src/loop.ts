@@ -13,6 +13,13 @@ import { cleanSummary } from './summary.js';
 import type { Refusal } from './errors.js';
 import { isOverBudget } from './budget.js';
 import { runLimits } from './limits.js';
+import {
+  editorNoteBlocks,
+  findingsNoteBlocks,
+  reviewNoteBlocks,
+  reworkNoteBlocks,
+  withOwnerNotes,
+} from './arrow-notes.js';
 import { heldByHandoff, withHandoffs } from './handoffs.js';
 import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -459,7 +466,15 @@ function launchChangeReviewer(
     ...launchFieldsFor(
       d.program(),
       reviewerNode,
-      withHandoffs(d, reviewer, changeReviewerBrief(d, helper, change.round, direct, reviewers)),
+      withHandoffs(
+        d,
+        reviewer,
+        // ADR-0037 §2 (amended 2026-11-14): with the owner's note on the review arrow.
+        withOwnerNotes(
+          changeReviewerBrief(d, helper, change.round, direct, reviewers),
+          reviewNoteBlocks(d.program(), stageOf(helper), reviewerNode),
+        ),
+      ),
     ),
     reviewScope: 'change',
   });
@@ -575,6 +590,8 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
       ? `${reviewerLabel(d, r.nodeId)}: no verdict (it ended without submitting its review).`
       : `${reviewerLabel(d, r.nodeId)}: ${r.verdict}.\nFindings:\n${r.findings ?? ''}`,
   );
+  // ADR-0037 §2 (amended 2026-11-14): the owner's notes on each reviewer's findings arrow.
+  const notes = fan.reviews.flatMap((r) => findingsNoteBlocks(d.program(), r.nodeId));
   notifyLead(
     d,
     [
@@ -586,6 +603,7 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
             : 'None of them gave a verdict.'
       }`,
       ...lines,
+      ...notes,
       directRounds !== null && verdict === 'rework'
         ? `The review agents have no rework round left for it (${directRounds} used or not allowed now), so you decide.`
         : null,
@@ -958,7 +976,20 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       const prompt = withHandoffs(
         d,
         agent,
-        reworkPrompt(agent, change, input.by, comments, branch, roundText),
+        withOwnerNotes(reworkPrompt(agent, change, input.by, comments, branch, roundText), [
+          // ADR-0037 §2 (amended 2026-11-14): the notes on its role arrow and on the rework arrow
+          // from whoever decided (no arrow for the owner).
+          ...editorNoteBlocks(d.program(), stageOf(agent)),
+          ...reworkNoteBlocks(
+            d.program(),
+            stageOf(agent),
+            input.by === 'lead'
+              ? [d.program().lead.id]
+              : input.by === 'reviewer' && route.by === 'agent'
+                ? route.reviewers
+                : [],
+          ),
+        ]),
       );
       change.conflictFiles = [];
       d.setAgentStatus(agent, 'STARTING');

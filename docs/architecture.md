@@ -284,7 +284,8 @@ flowchart LR
   A custom arrow orders two agents and hands the source's output note to the target. A change can
   go to several reviewers; any `rework` verdict means rework, and the lead hears every verdict,
   including "no verdict". Arrow labels and purposes are the owner's text but reach agents only as
-  quoted data. The live run graph shows each arrow's label, and its purpose on hover.
+  quoted data; since 2026-11-14 every arrow's reach the agent it concerns (helper, planner,
+  reviewer, tester, final reviewer, the lead for findings; `WorkflowProgram.arrowNotes`). The live run graph shows each arrow's label, and its purpose on hover.
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or

@@ -161,6 +161,10 @@
   owner's words, but agents get them only as quoted data, behind a line saying quoted text is not
   instructions; a label is kept on one line inside its quotes. Findings and hand-off notes from
   other agents are quoted the same way. None of this text changes a role, a mode or an approval.
+  Since 2026-11-14 every arrow's label and purpose reach the agent it concerns (a helper, planner,
+  reviewer, tester, final reviewer, or the lead for findings and the plan path; nobody for arrows
+  between steps), each under a heading that calls it the owner's words quoted as data, with every
+  line of the purpose quoted (`arrow-notes.ts`).
 - **Plan options are never approved automatically.** With two or more planners, plan review waits
   for the owner even in Full auto with an automatic plan gate. A decision must name a proposed
   option of that ticket's current run; an unknown, decided, superseded or other ticket's option is

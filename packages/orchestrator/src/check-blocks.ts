@@ -1,6 +1,7 @@
 import { GitCommitSchema } from '@acp/core';
 import type { CheckRunStatus, ProgramChangeCheckBlock } from '@acp/core';
 import { AGENT_NOTE_LINE } from './agent-note.js';
+import { editorNoteBlocks, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { isOverBudget } from './budget.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
@@ -276,7 +277,18 @@ function reworkForChecks(
     agentRunId: agent.id,
     kind: agent.kind,
     role: agent.role,
-    ...launchFieldsFor(d.program(), stageOf(agent), checkReworkPrompt(agent, failed, roundText)),
+    ...launchFieldsFor(
+      d.program(),
+      stageOf(agent),
+      // ADR-0037 §2 (amended 2026-11-14): with the notes on its role arrow and the block's rework
+      // arrow.
+      withOwnerNotes(checkReworkPrompt(agent, failed, roundText), [
+        ...editorNoteBlocks(d.program(), stageOf(agent)),
+        ...reworkNoteBlocks(d.program(), stageOf(agent), [
+          changeCheckBlockOf(d.program(), agent)?.nodeId ?? '',
+        ]),
+      ]),
+    ),
     rework: { resumeSessionId: agent.sessionId },
     ...d.launchModeFields(agent),
     // ADR-0034 §4 (CM-3): only a fresh session needs its starting points again.

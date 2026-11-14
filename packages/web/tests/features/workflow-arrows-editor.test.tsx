@@ -9,7 +9,8 @@ import {
   WorkflowGraphV3Schema,
 } from '@acp/core';
 import { WorkflowGraphDtoSchema } from '@acp/core/api';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderPlain, screen, waitFor, within } from '@testing-library/react';
+import { EdgePanel } from '../../src/features/workflow/editor/EdgePanel';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   WF_CSRF,
@@ -20,7 +21,7 @@ import {
 } from '../../e2e/workflow-fixtures';
 import { toFlowEdges } from '../../src/features/workflow/editor/flow';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
-import { linkChoices, linkOutcome } from '../../src/features/workflow/editor/linking';
+import { drawnLabel, linkChoices, linkOutcome } from '../../src/features/workflow/editor/linking';
 import { graphRoles } from '../../src/features/workflow/editor/roles';
 import {
   editorReducer,
@@ -375,5 +376,100 @@ describe('Workflow page on version 3', () => {
     expect(sent.edges.some((e) => e.type === 'research' && e.from === 'research')).toBe(true);
     // The refetched graph equals what was sent: no "Unsaved changes".
     expect(screen.queryByTestId('unsaved')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------- the arrow panel (2026-11-14)
+
+describe('the arrow panel: who reads the purpose, and Remove at the top', () => {
+  function panelFor(graph: WorkflowGraphV3, type: string, from?: string, to?: string) {
+    const edge = graph.edges.find(
+      (e) =>
+        e.type === type &&
+        (from === undefined || e.from === from) &&
+        (to === undefined || e.to === to),
+    );
+    if (edge === undefined) throw new Error(`no ${type} arrow`);
+    const actions: EditorAction[] = [];
+    const view = renderPlain(
+      <EdgePanel
+        edge={edge}
+        graph={graph}
+        issues={[]}
+        dispatch={(a) => actions.push(a)}
+        onClose={() => undefined}
+      />,
+    );
+    return { edge, actions, hint: view.getByTestId('edge-purpose-to').textContent, view };
+  }
+
+  it('names the agent that receives each arrow type’s purpose', () => {
+    const g = base();
+    const name = (id: string) => drawnLabel(g, id);
+    const implement = panelFor(g, 'implement');
+    expect(implement.hint).toBe(
+      `Sent to ${name(implement.edge.to)} in its brief and rework requests; the Lead sees it in its helper list.`,
+    );
+    implement.view.unmount();
+    const review = panelFor(g, 'review');
+    expect(review.hint).toBe(
+      `Sent to ${name(review.edge.to)} in its brief for each change it reviews.`,
+    );
+    review.view.unmount();
+    const findings = panelFor(g, 'findings');
+    expect(findings.hint).toBe(
+      `Sent to ${name(findings.edge.to)} with ${name(findings.edge.from)}’s verdict.`,
+    );
+    findings.view.unmount();
+    const rework = panelFor(g, 'rework');
+    expect(rework.hint).toBe(
+      `Sent to ${name(rework.edge.to)} with each rework request from ${name(rework.edge.from)}.`,
+    );
+    rework.view.unmount();
+    const p = run(g, { type: 'add', item: 'planner' }).graph;
+    const plan = panelFor(p, 'plan');
+    expect(plan.hint).toBe(`Sent to ${drawnLabel(p, plan.edge.from)} in its brief.`);
+    plan.view.unmount();
+    const merge = panelFor(g, 'merge');
+    expect(merge.hint).toBe('Not sent to any agent (arrow between steps).');
+    merge.view.unmount();
+    const done = panelFor(g, 'flow', undefined, 'done');
+    expect(done.hint).toBe('Not sent to any agent (arrow between steps).');
+    done.view.unmount();
+  });
+
+  it('research, custom and test arrows', () => {
+    const g = run(base(), { type: 'add', item: 'researcher' }).graph;
+    const research = panelFor(g, 'research');
+    expect(research.hint).toBe(
+      `Sent to ${drawnLabel(g, research.edge.from)} in its brief, and to ${drawnLabel(g, research.edge.to)} with the findings.`,
+    );
+    research.view.unmount();
+    const withCustom: WorkflowGraphV3 = {
+      ...g,
+      edges: [...g.edges, { type: 'custom', id: 'c-1', from: research.edge.from, to: 'review' }],
+    };
+    const custom = panelFor(withCustom, 'custom');
+    expect(custom.hint).toBe(
+      `Sent to ${drawnLabel(g, 'review')} with ${drawnLabel(g, research.edge.from)}’s hand-off.`,
+    );
+    custom.view.unmount();
+    const t = run(base(), { type: 'add', item: 'tester' }).graph;
+    const test = panelFor(t, 'test');
+    expect(test.hint).toBe(`Sent to ${drawnLabel(t, test.edge.to)} in its brief.`);
+    test.view.unmount();
+    const f = run(base(), { type: 'add', item: 'final-reviewer' }).graph;
+    const final = panelFor(f, 'flow', 'ticket-merge', 'code-review');
+    expect(final.hint).toBe(`Sent to ${drawnLabel(f, 'code-review')} in its brief.`);
+    final.view.unmount();
+  });
+
+  it('Remove link sits in the heading, before the arrow’s ends, and removes the arrow', () => {
+    const { edge, actions, view } = panelFor(base(), 'rework');
+    const remove = view.getByRole('button', { name: 'Remove link' });
+    const ends = view.getByTestId('edge-ends');
+    expect(remove.compareDocumentPosition(ends) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(remove);
+    expect(actions).toEqual([{ type: 'remove-edge', id: edge.id }]);
   });
 });

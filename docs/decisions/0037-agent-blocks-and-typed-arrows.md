@@ -1,6 +1,8 @@
 # ADR-0037: One Agent block, roles from typed arrows (workflow graph v3)
 
 - **Status:** accepted (project owner, in chat, 2026-11-09)
+- **Amended 2026-11-14:** at the owner's request, every arrow's label and purpose (not only research
+  and custom arrows) reach the agent the arrow concerns, as quoted data.
 - **Date:** 2026-11-09
 - **Deciders:** project owner; implementing agent (draft)
 - **Amends:** ADR-0023 (editable workflow graphs: fixed block types, six untyped-data edges)

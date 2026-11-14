@@ -24,6 +24,7 @@ import {
 } from './policy.js';
 import { helperNodeOf, programOf, resolveHelper } from './program.js';
 import { helperBrief } from './agent-note.js';
+import { editorNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { reportWork } from './report-tool.js';
 import { reportFindings } from './findings-tool.js';
 import { askLead, parentOf } from './messaging.js';
@@ -403,7 +404,15 @@ export function leadToolCall(
             program,
             node.id,
             // ADR-0037 §2: plus hand-offs to the helper's node from agents already done.
-            withHandoffs(d, worker, helperBrief(task, d.run.ticketId !== null)),
+            // ADR-0037 §2 (amended 2026-11-14): with the owner's note on its implement arrow.
+            withHandoffs(
+              d,
+              worker,
+              withOwnerNotes(
+                helperBrief(task, d.run.ticketId !== null),
+                editorNoteBlocks(program, node.id),
+              ),
+            ),
           ),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),

@@ -62,6 +62,12 @@ the real runs of 2026-10-21 passed with every review route
   along a chain; the planner starts once each has reported its findings or ended. A researcher
   wired to the lead after planning is started by the lead with `start_agent`; its findings reach
   the lead as a notice. Findings and arrow purposes reach agents only as quoted data.
+- **Arrow notes** (ADR-0037 §2, amended 2026-11-14): the label and purpose of every arrow reach
+  the agent it concerns: `implement` the helper's start brief and rework prompts (and the lead's
+  helper list), `plan` and a plan-path `flow` the planner's (or lead's) brief, `review` the change
+  reviewer's brief, `findings` the lead's verdict notice, `rework` the rework prompt from that
+  reviewer, the lead or the Checks block, `test` and a final-chain `flow` the stage's brief.
+  Arrows between steps reach nobody. A program without notes briefs exactly as before.
 - **Custom hand-offs** (ADR-0037 §2): when the source agent is done, its output note goes to the
   target, in its start brief or as a notice; a target the engine starts waits for its sources.
 - **Plan approval** creates the ticket branch from its start branch: named by the project's

@@ -1,4 +1,5 @@
 import type { WorkflowProgram } from '@acp/core';
+import { arrowNotesOf, ownerNoteBlock } from './arrow-notes.js';
 import { hasNamedHelpers, helperNodeLines } from './program.js';
 
 /**
@@ -14,7 +15,17 @@ export function helperBriefLines(
   program: WorkflowProgram,
   who: 'lead' | 'planner' | 'lead-plans',
 ): string[] {
-  if (!hasNamedHelpers(program)) return [];
+  // ADR-0037 §2 (amended 2026-11-14): the owner's note on each helper's implement arrow.
+  const noteOf = (id: string): string[] =>
+    arrowNotesOf(program, ['implement'], { to: [id] }).map((n) =>
+      ownerNoteBlock("Owner's note for this helper", n),
+    );
+  if (!hasNamedHelpers(program)) {
+    // Only the pool: nothing to choose, so the brief stays as before unless the owner wrote a note.
+    const pool = program.helpers.find((h) => h.type === 'helper-pool');
+    const notes = pool === undefined ? [] : noteOf(pool.id);
+    return notes.length === 0 ? [] : [`The helper pool (helper "${pool?.id ?? ''}"):`, ...notes];
+  }
   const pool = program.helpers.some((h) => h.type === 'helper-pool');
   const plan =
     'Give every plan step the helper id of the node that should do it (the step’s `helper` field); a step no helper node can take is refused.';
@@ -25,7 +36,10 @@ export function helperBriefLines(
     .join('; ');
   return [
     'The helper nodes of this workflow:',
-    ...helperNodeLines(program),
+    ...helperNodeLines(program).flatMap((line, i) => {
+      const node = program.helpers[i];
+      return node === undefined ? [line] : [line, ...noteOf(node.id)];
+    }),
     who === 'planner' ? plan : who === 'lead-plans' ? `${plan} ${start}` : start,
     `Limits per node: ${limits}.`,
   ];

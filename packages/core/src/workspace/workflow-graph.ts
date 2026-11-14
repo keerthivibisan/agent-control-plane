@@ -750,6 +750,22 @@ export interface ProgramHandoff {
   purpose?: string;
 }
 
+/**
+ * The arrows whose owner notes reach the agent they concern besides research and custom arrows
+ * (ADR-0037 §2, amended 2026-11-14): `arrowNoteReceiver` says which node's agents read each one.
+ */
+export type ProgramArrowNoteType =
+  'plan' | 'implement' | 'review' | 'findings' | 'rework' | 'test' | 'flow';
+
+/** One such arrow with its label or purpose (at least one is set), as the engine reads it. */
+export interface ProgramArrowNote {
+  type: ProgramArrowNoteType;
+  from: WorkflowNodeId;
+  to: WorkflowNodeId;
+  label?: string;
+  purpose?: string;
+}
+
 /** What `compileWorkflow` needs besides the graph: the project's settings and the run's choices. */
 export interface CompileContext {
   /** The project's approval mode, used by editing nodes without their own. */
@@ -837,6 +853,12 @@ export interface WorkflowProgram {
   researchers: readonly ProgramResearcherNode[];
   /** ADR-0037 §2: the custom arrows, in graph order. */
   handoffs: readonly ProgramHandoff[];
+  /**
+   * ADR-0037 §2 (amended 2026-11-14): the role arrows that reach an agent and carry a label or a
+   * purpose, in graph order. Absent when there is none (every migrated version 1 or 2 graph), so
+   * those runs brief their agents exactly as before.
+   */
+  arrowNotes?: readonly ProgramArrowNote[];
   /** The plan is approved without asking the owner (the plan gate's `auto`, not tightened). */
   planAutoApprove: boolean;
   /** Named helpers in graph order, then the pool when there is one. */

@@ -4,6 +4,7 @@ import {
   type CompileContext,
   type EffectiveNodeMode,
   type ProgramAgentNode,
+  type ProgramArrowNote,
   type ProgramArrowTarget,
   type ProgramBranchCheckBlock,
   type ProgramChangeCheckBlock,
@@ -22,6 +23,7 @@ import {
 } from '../../workflow-graph.js';
 import { checkBlockOf, copySelection, isCheckBlockAt } from '../check-blocks.js';
 import { WorkflowGraphInvalidError } from '../compile.js';
+import { arrowNoteReceiver, isArrowNoteType } from './arrow-notes.js';
 import { agentsWithRole, edgesOfTypeV3, indexNodesV3, roleClaimOf } from './graph-index.js';
 import { toWorkflowGraphV3 } from './migrate.js';
 import { isChainStepV3, validateWorkflowGraphV3 } from './validate.js';
@@ -84,7 +86,8 @@ function arrowNotes(edge: WorkflowEdgeV3): { label?: string; purpose?: string } 
  *   rounds; `ctx.reviewer` and `ctx.maxReworkRounds` apply as before.
  *
  * New (ADR-0037), for the engine to use from AR-3: `planners` (every planner), `researchers` (each
- * with its research arrows, label and purpose) and `handoffs` (the custom arrows).
+ * with its research arrows, label and purpose) and `handoffs` (the custom arrows); `arrowNotes`
+ * (amended 2026-11-14): the other arrows' labels and purposes, for the agent each reaches.
  */
 export function compileWorkflow(graph: AnyWorkflowGraph, ctx: CompileContext): WorkflowProgram {
   return compileWorkflowV3(toWorkflowGraphV3(graph), ctx);
@@ -250,6 +253,12 @@ export function compileWorkflowV3(graph: WorkflowGraphV3, ctx: CompileContext): 
     to: e.to,
     ...arrowNotes(e),
   }));
+  // ADR-0037 §2 (amended 2026-11-14): the owner's words on the role arrows reach their agent.
+  const roleArrowNotes = edges.flatMap((e): ProgramArrowNote[] => {
+    if (!isArrowNoteType(e.type) || (e.label === undefined && e.purpose === undefined)) return [];
+    if (arrowNoteReceiver(e, index.byId.get(e.from), index.byId.get(e.to)) === null) return [];
+    return [{ type: e.type, from: e.from, to: e.to, ...arrowNotes(e) }];
+  });
   const gate = must(
     graph.nodes.find((n): n is WorkflowNodeV3Of<'plan-approval'> => n.type === 'plan-approval'),
     'the plan gate',
@@ -260,6 +269,7 @@ export function compileWorkflowV3(graph: WorkflowGraphV3, ctx: CompileContext): 
     planners,
     researchers,
     handoffs,
+    ...(roleArrowNotes.length > 0 ? { arrowNotes: roleArrowNotes } : {}),
     planAutoApprove: gate.auto && ctx.approvalCeilings.every((c) => c === 'full-auto'),
     helpers,
     changeReviewers,

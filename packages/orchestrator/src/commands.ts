@@ -58,6 +58,7 @@ import {
   nextStage,
 } from './stages.js';
 import { effectiveMode, programOf } from './program.js';
+import { leadNoteBlocks, plannerNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { helperBriefLines } from './briefs.js';
 import { advancePrePlan, deliverHandoffs, researcherBriefLines } from './handoffs.js';
 import { isMultiPlanner, multiPlannerLine } from './plan-options.js';
@@ -399,16 +400,20 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
           provider: nodeProvider(program, plannerNode.id),
         };
         d.agents.push(planner);
-        briefs[planner.id] = several
-          ? `${base}\n\n${multiPlannerLine(program.planners.length)}`
-          : base;
+        // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its plan and flow arrows.
+        briefs[planner.id] = withOwnerNotes(
+          several ? `${base}\n\n${multiPlannerLine(program.planners.length)}` : base,
+          plannerNoteBlocks(program, plannerNode.id),
+        );
       }
-      d.leadBrief = ticket.leadPrompt;
+      d.leadBrief = withOwnerNotes(ticket.leadPrompt, leadNoteBlocks(program));
     } else {
       const researchers = researcherBriefLines(program);
       const brief = withHelperNodes(ticket.leadPrompt, program, 'lead-plans');
-      briefs[draftLead.id] =
-        researchers.length === 0 ? brief : `${brief}\n\n${researchers.join('\n')}`;
+      briefs[draftLead.id] = withOwnerNotes(
+        researchers.length === 0 ? brief : `${brief}\n\n${researchers.join('\n')}`,
+        leadNoteBlocks(program),
+      );
     }
     d.pendingBriefs = briefs;
     advancePrePlan(d);

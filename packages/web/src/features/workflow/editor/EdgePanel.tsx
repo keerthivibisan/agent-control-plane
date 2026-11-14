@@ -1,4 +1,5 @@
 import {
+  arrowNoteReceiver,
   MAX_EDGE_LABEL,
   MAX_EDGE_PURPOSE,
   MAX_EDGE_REWORK_ROUNDS,
@@ -113,6 +114,14 @@ export function EdgePanel({
   const from = drawnLabel(graph, edge.from);
   const to = drawnLabel(graph, edge.to);
   const change = (patch: EdgePatch) => dispatch({ type: 'update-edge', id: edge.id, patch });
+  // ADR-0037 §2 (amended 2026-11-14): who reads this arrow's purpose, as the engine sends it.
+  const receiver = arrowNoteReceiver(
+    edge,
+    graph.nodes.find((n) => n.id === edge.from),
+    graph.nodes.find((n) => n.id === edge.to),
+  );
+  const purposeTo =
+    receiver === null ? W.purposeToNone : W.purposeTo(edge.type, from, drawnLabel(graph, receiver));
   return (
     <div
       className="flex flex-col"
@@ -165,6 +174,9 @@ export function EdgePanel({
           testId="edge-purpose"
           onChange={(purpose) => change({ purpose })}
         />
+        <p className="-mt-3 text-caption text-dim" data-testid="edge-purpose-to">
+          {purposeTo}
+        </p>
         {edge.type === 'rework' ? (
           <NumberChoice
             legend={E.rounds}

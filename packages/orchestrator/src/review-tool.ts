@@ -1,5 +1,6 @@
 import { redact, TicketCommentSchema } from '@acp/core';
 import type { ChangeVerdict } from '@acp/core';
+import { findingsNoteBlocks } from './arrow-notes.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { recordOutputNote } from './handoffs.js';
@@ -13,7 +14,7 @@ import {
   notifyLead,
 } from './loop.js';
 import { reviewRouteOf } from './program.js';
-import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS } from './stages.js';
+import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS, stageOf } from './stages.js';
 import type { EngineContext, EngineResult, RunState } from './state.js';
 import { cleanSummary } from './summary.js';
 import { isLiveAgentStatus } from './transitions.js';
@@ -80,7 +81,11 @@ export function postReview(
     d.effects.push({ type: 'review-comment', agentRunId: reviewer.id, body });
     // ADR-0037 §2: the posts add up to the final reviewer's output note for its custom arrows.
     recordOutputNote(d, reviewer, body, true);
-    if (loop) notifyLead(d, `Final code review finding:\n\n${body}`);
+    if (loop) {
+      // ADR-0037 §2 (amended 2026-11-14): with the owner's note on its findings arrow, if any.
+      const notes = findingsNoteBlocks(d.program(), stageOf(reviewer));
+      notifyLead(d, [`Final code review finding:`, body, ...notes].join('\n\n'));
+    }
     return { value: 'Posted to the ticket. Post more findings, or finish if you are done.' };
   });
 }
@@ -208,6 +213,8 @@ export function submitReview(
       [
         `The review agent reviewed ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}). Verdict: ${input.verdict}.`,
         `Findings:\n${body}`,
+        // ADR-0037 §2 (amended 2026-11-14): the owner's note on this reviewer's findings arrow.
+        ...findingsNoteBlocks(d.program(), stageOf(reviewer)),
         outOfRounds,
         'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.',
       ]
