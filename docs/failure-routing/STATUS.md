@@ -31,3 +31,10 @@ Coordinator-owned. Plan: [README.md](README.md).
   can start a fixer; `onFailure: helper` on a tester means the author: one known author whose
   change is merged gets a fix turn (a new helper of its node from the ticket branch); several,
   none or no room go to the lead.
+- 2026-11-14 FR-4 done: core `when` arrow (`on` 1–5 events, `maxRounds` 1–5) and Author block;
+  sources tester (tests-failed), Checks block (checks/harness-failed), change reviewer
+  (review-rework), ticket merge (merge-conflict); targets helper, Lead or Author
+  (`when-target-invalid`, `when-event-invalid`, `when-duplicate-route`; a block's "ask me" wins).
+  `program.failureRoutes`: When arrows, then routes derived from reviewer rework arrows and "back
+  to the helper" (`derived: true`; old fields unchanged, equivalence tests extended).
+  `describeWorkflow` + `renderWorkflowDescription` for the lead brief and the web panel.
