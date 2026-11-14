@@ -11,7 +11,7 @@ Coordinator-owned. Plan: [README.md](README.md).
 | FR-4 | Core: When arrows, Author block, flow words | done   | `feature/workflow/failure-routing` |        |
 | FR-5 | Engine: routing, fix turns, lead tools      | done   | `feature/workflow/failure-routing` |        |
 | FR-6 | Web: When arrows and Flow in words          | done   | `feature/workflow/failure-routing` |        |
-| FR-7 | Safety, docs, real run                      | review | `feature/workflow/failure-routing` |        |
+| FR-7 | Safety, docs, real run                      | done   | `feature/workflow/failure-routing` |        |
 
 ## Log
 
@@ -58,3 +58,7 @@ Coordinator-owned. Plan: [README.md](README.md).
   arrow on the live graph (needs a `RunWorkflowGraphDto` field, a shared contract). Docs:
   architecture §9, orchestration-lifecycle §0.4, security, provider-adapters, README, CHANGELOG,
   "How to use" above.
+- 2026-11-14 Coordinator: FR-7 done. Real run (owner consent, Claude only) completed: tests failed
+  at the tester, the When arrow sent the fix to the author (round 1 of 2), the fix merged. Follow-ups:
+  retest after a routed fix (needs an owner decision), rounds per When arrow on the live graph
+  (`RunWorkflowGraphDto.failureRounds`, shared contract).

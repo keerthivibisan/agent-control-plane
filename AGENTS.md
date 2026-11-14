@@ -36,7 +36,7 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   `feature/workflow/arrows`. One Agent block whose role comes from typed, labelled arrows
   (research, plan, implement, review, test, custom); several planners with the owner picking one;
   review fan-out; workflow graph version 3. Plan and status: [docs/arrows/](docs/arrows/README.md).
-- **Failure routing (FR series, ADR-0038 accepted 2026-11-14):** in progress on
+- **Failure routing (FR series, ADR-0038 accepted 2026-11-14):** done 2026-11-14 on
   `feature/workflow/failure-routing`. Structured test results, a failure context for the lead,
   When arrows routing tests, checks, review, harness and conflict failures to a helper, the lead or
   the code's author, and the workflow described to the lead in words. Plan and status:
