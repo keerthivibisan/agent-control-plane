@@ -213,6 +213,8 @@ export function hasWorktree(kind: AgentRoleKind): boolean {
 
 /** Order of the agent tree's roots: the flow's order (plan, orchestrate, review, tests). */
 export const ROOT_ORDER: Readonly<Record<RunAgentKind, number>> = {
+  // ADR-0037: researchers run first, for the planner or the lead.
+  researcher: -1,
   planner: 0,
   lead: 1,
   worker: 2,

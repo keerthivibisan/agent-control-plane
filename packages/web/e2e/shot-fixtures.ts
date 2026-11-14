@@ -173,7 +173,7 @@ export async function withWorkflow(page: Page): Promise<void> {
     route.fulfill({
       json: graphDto({
         graph: customGraph(),
-        stored: 'v2',
+        stored: 'v3',
         skills: ['code-review', 'plan-tickets', 'release-notes', 'unit-tests'],
         agents: ['db-migrator', 'docs-writer', 'test-writer'],
         updatedAt: '2026-10-21T09:00:00.000Z',

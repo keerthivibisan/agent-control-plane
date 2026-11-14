@@ -148,6 +148,8 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
       worker: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
       tester: ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'],
       assistant: ['Read', 'Grep', 'Glob'],
+      // ADR-0037 §3: the researcher only reads.
+      researcher: ['Read', 'Grep', 'Glob'],
     };
     for (const kind of ALL_KINDS) {
       expect(optionsFor(spec(kind)).tools).toEqual(expected[kind]);
@@ -191,20 +193,28 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
     }
   });
 
-  it('keeps disallowedTools for the planner and reviewer only, and the control tools', () => {
+  it('keeps disallowedTools for the read-only roles only, and the control tools', () => {
     const control: Record<AgentRoleKind, unknown[]> = {
       lead: [expect.arrayContaining(['submit_plan', 'start_agent'])],
       planner: [['submit_plan', 'code_map']],
       reviewer: [['post_review', 'ask_lead', 'code_map']],
       // ADR-0026 §3: the helper's and tester's note; ADR-0033 §3: their question to the lead.
       worker: [['report_work', 'ask_lead', 'code_map']],
-      tester: [['report_work', 'ask_lead', 'code_map']],
+      // ADR-0038 §1: plus the tester's structured test results.
+      tester: [['report_work', 'ask_lead', 'report_test_results', 'code_map']],
       // ADR-0035: the assistant's four tools and the code map; never a ticket control tool.
       assistant: [['code_map', 'ticket_status', 'project_info', 'propose_skill', 'propose_agent']],
+      // ADR-0037 §3: the researcher's findings note, its question to the lead and the code map.
+      researcher: [['ask_lead', 'report_findings', 'code_map']],
     };
     for (const kind of ALL_KINDS) {
       const options = optionsFor(spec(kind));
-      if (kind === 'planner' || kind === 'reviewer' || kind === 'assistant') {
+      if (
+        kind === 'planner' ||
+        kind === 'reviewer' ||
+        kind === 'assistant' ||
+        kind === 'researcher'
+      ) {
         expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
       } else if (kind === 'lead') {
         expect(options).not.toHaveProperty('disallowedTools');

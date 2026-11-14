@@ -1,6 +1,11 @@
 import { GitCommitSchema } from '@acp/core';
 import type { CheckRunStatus, ProgramChangeCheckBlock } from '@acp/core';
 import { AGENT_NOTE_LINE } from './agent-note.js';
+import { editorNoteBlocks, inlineLabel, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
+import { checksFailedContext, renderFailureContext } from './failure-context.js';
+import { reopenForFix, startAuthorFix } from './fix-turn.js';
+import { routeFailure as routeByWhen } from './failure-router.js';
+import type { FailureCheck } from '@acp/core';
 import { isOverBudget } from './budget.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
@@ -70,7 +75,7 @@ function lastUtf8(text: string, max: number): string {
 
 function names(failed: readonly FailedCheck[]): string {
   if (failed.length === 0) return '';
-  const shown = failed.slice(0, MAX_FAILED_QUOTED).map((f) => f.name);
+  const shown = failed.slice(0, MAX_FAILED_QUOTED).map((f) => inlineLabel(f.name));
   const more = failed.length - shown.length;
   return `: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`;
 }
@@ -102,6 +107,47 @@ export function failureDetails(failed: readonly FailedCheck[]): string {
     lines.push(`- and ${failed.length - MAX_FAILED_QUOTED} more failing check(s).`);
   }
   return lines.join('\n\n');
+}
+
+/** The failing checks as the failure context lists them (ADR-0038 §2), output capped as above. */
+export function failureChecks(failed: readonly FailedCheck[]): FailureCheck[] {
+  return failed.slice(0, MAX_FAILED_QUOTED).map((f) => ({
+    name: f.name,
+    how: how(f),
+    outputTail: lastUtf8(f.outputTail, CHECK_FAILURE_TAIL_MAX_BYTES),
+  }));
+}
+
+/**
+ * ADR-0038 §2: a harness that cannot run, as opposed to failing checks: no failing check ran to
+ * an exit (each one `could not run` or `not run`: invalid, its command could not start, no
+ * checkout, no result), and at least one could not run.
+ */
+export function isHarnessFailure(failed: readonly FailedCheck[]): boolean {
+  return (
+    failed.some((f) => f.status === 'error') &&
+    failed.every((f) => f.status === 'error' || f.status === 'skipped')
+  );
+}
+
+/** The rendered failure context of a failed Checks block on the agent's change. */
+function blockContext(
+  d: Draft,
+  agent: EngineAgent,
+  block: ProgramChangeCheckBlock,
+  failed: readonly FailedCheck[],
+  rounds?: { used: number; max: number },
+): string {
+  return renderFailureContext(
+    checksFailedContext(
+      d,
+      agent,
+      { nodeId: block.nodeId, label: block.label },
+      failureChecks(failed),
+      isHarnessFailure(failed),
+      rounds,
+    ),
+  );
 }
 
 const DECIDE_LINE =
@@ -179,6 +225,35 @@ function routeFailure(
   failed: readonly FailedCheck[],
 ): void {
   const who = `${agent.role}'s change (agentId ${agent.id})`;
+  // ADR-0038 §4 (FR-5): the owner's When arrow from this block routes it first ("ask me" wins:
+  // such a block has no When arrow). Without one, the block's own setting below.
+  if (block.onFailure !== 'owner') {
+    const routed = routeByWhen(d, {
+      context: checksFailedContext(
+        d,
+        agent,
+        { nodeId: block.nodeId, label: block.label },
+        failureChecks(failed),
+        isHarnessFailure(failed),
+      ),
+      sourceNodeId: block.nodeId,
+      change: agent,
+      lineage: agent.id,
+      headline: `The checks on ${who} failed${names(failed)}.`,
+      decideLine: agent.kind === 'tester' ? TESTER_FAILURE_LINE : DECIDE_LINE,
+    });
+    if (routed.kind === 'lead') {
+      change.state = 'decision';
+      if (agent.kind === 'tester') reopenForFix(d);
+      return;
+    }
+    if (routed.kind === 'fixing') return;
+  }
+  // ADR-0038 §3: a tester's failures never go back to the tester.
+  if (agent.kind === 'tester' && block.onFailure !== 'owner') {
+    testerFailure(d, agent, change, block, failed, who);
+    return;
+  }
   switch (block.onFailure) {
     case 'helper': {
       const limit = block.maxRounds ?? 0;
@@ -196,7 +271,7 @@ function routeFailure(
         d,
         [
           `The checks on ${who} failed${names(failed)}, and ${why}, so you decide.`,
-          failureDetails(failed),
+          blockContext(d, agent, block, failed, { used, max: limit }),
           DECIDE_LINE,
         ].join('\n\n'),
       );
@@ -208,7 +283,7 @@ function routeFailure(
         d,
         [
           `The checks on ${who} failed${names(failed)}. You decide.`,
-          failureDetails(failed),
+          blockContext(d, agent, block, failed),
           DECIDE_LINE,
         ].join('\n\n'),
       );
@@ -217,10 +292,87 @@ function routeFailure(
       change.state = 'needs-owner';
       notifyLead(
         d,
-        `The checks on ${who} failed${names(failed)}. This workflow sends it to the owner, who decides; you will get a message when they do.`,
+        [
+          `The checks on ${who} failed${names(failed)}. This workflow sends it to the owner, who decides; you will get a message when they do.`,
+          blockContext(d, agent, block, failed),
+        ].join('\n\n'),
       );
       return;
   }
+}
+
+/** What the lead may do about a tester's failure (ADR-0038 §3). */
+export const TESTER_FAILURE_LINE =
+  "The tester never fixes product code. To fix it, start a helper with start_agent (give it the failure context), decide that helper's change, then call request_review again. Decide the tester's change as usual: merge_change, request_rework, discard_change or ask_owner.";
+
+/**
+ * ADR-0038 §3: the checks on a tester's change failed. `onFailure: 'helper'` means the author:
+ * exactly one known author gets a fix turn (`startAuthorFix`); several, none, or a fix that
+ * cannot start now go to the lead. `lead`: the lead. Either way the lead gets the context, and
+ * the tester's change waits for its decision; the tester is never sent back.
+ */
+function testerFailure(
+  d: Draft,
+  tester: EngineAgent,
+  change: EngineChange,
+  block: ProgramChangeCheckBlock,
+  failed: readonly FailedCheck[],
+  who: string,
+): void {
+  change.state = 'decision';
+  const ctx = checksFailedContext(
+    d,
+    tester,
+    { nodeId: block.nodeId, label: block.label },
+    failureChecks(failed),
+    isHarnessFailure(failed),
+  );
+  const context = renderFailureContext(ctx);
+  let why: string | null = null;
+  if (block.onFailure === 'helper') {
+    const first = ctx.authors[0];
+    const only =
+      ctx.authorsKnown && ctx.authors.length === 1 && first !== undefined
+        ? d.agent(first.agentId)
+        : undefined;
+    if (only !== undefined) {
+      const fix = startAuthorFix(
+        d,
+        only,
+        `Fix the code that makes the checks on ${tester.role}'s tests fail; your block's earlier change touched the files they point at. The failure context below says what failed. Do not weaken or delete the tests.`,
+        context,
+      );
+      if (fix.ok) {
+        notifyLead(
+          d,
+          [
+            `The checks on ${who} failed${names(failed)}. This workflow sends a tester's failures to their author, so ${only.role} is fixing it: a new helper (agentId ${fix.agent.id}) started from the ticket branch. Decide its change as usual, then decide ${tester.role}'s change and call request_review again.`,
+            context,
+          ].join('\n\n'),
+        );
+        return;
+      }
+      why = fix.why;
+    } else {
+      why =
+        ctx.authors.length === 0
+          ? 'no helper change is known'
+          : ctx.authorsKnown
+            ? 'several helpers changed the failing files'
+            : "no helper's change matches the failing files";
+    }
+  }
+  reopenForFix(d);
+  notifyLead(
+    d,
+    [
+      why === null
+        ? `The checks on ${who} failed${names(failed)}. You decide.`
+        : `The checks on ${who} failed${names(failed)}. This workflow sends a tester's failures to their author, but ${why}, so you decide.`,
+      context,
+      TESTER_FAILURE_LINE,
+    ].join('\n\n'),
+  );
 }
 
 /**
@@ -276,7 +428,18 @@ function reworkForChecks(
     agentRunId: agent.id,
     kind: agent.kind,
     role: agent.role,
-    ...launchFieldsFor(d.program(), stageOf(agent), checkReworkPrompt(agent, failed, roundText)),
+    ...launchFieldsFor(
+      d.program(),
+      stageOf(agent),
+      // ADR-0037 §2 (amended 2026-11-14): with the notes on its role arrow and the block's rework
+      // arrow.
+      withOwnerNotes(checkReworkPrompt(agent, failed, roundText), [
+        ...editorNoteBlocks(d.program(), stageOf(agent)),
+        ...reworkNoteBlocks(d.program(), stageOf(agent), [
+          changeCheckBlockOf(d.program(), agent)?.nodeId ?? '',
+        ]),
+      ]),
+    ),
     rework: { resumeSessionId: agent.sessionId },
     ...d.launchModeFields(agent),
     // ADR-0034 §4 (CM-3): only a fresh session needs its starting points again.
@@ -284,10 +447,17 @@ function reworkForChecks(
       ? { startingPoints: agent.startingPoints }
       : {}),
   });
-  // Like the reviewer loop's direct route: the lead is told each round (names only).
+  // Like the reviewer loop's direct route: the lead is told each round, with the failure context
+  // (ADR-0038 §2: the lead always gets it).
+  const block = changeCheckBlockOf(d.program(), agent);
   notifyLead(
     d,
-    `The checks on ${agent.role}'s change (agentId ${agent.id}) failed${names(failed)}; it went back to ${agent.role} for rework (${roundText}). You get the change once its checks pass and it is reviewed, or its rounds run out.`,
+    [
+      `The checks on ${agent.role}'s change (agentId ${agent.id}) failed${names(failed)}; it went back to ${agent.role} for rework (${roundText}). You get the change once its checks pass and it is reviewed, or its rounds run out.`,
+      ...(block === undefined
+        ? []
+        : [blockContext(d, agent, block, failed, { used: round, max: limit })]),
+    ].join('\n\n'),
   );
 }
 

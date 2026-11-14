@@ -120,13 +120,18 @@
 - **Stored text:** only the owner↔lead chat, worker task texts and redacted approval summaries
   (ADR-0015); never worker conversation content. Logs never include chat text. Later phases add
   the owner-facing ticket text of ADR-0016, ADR-0019 and ADR-0021 (plans, review findings, the
-  lead's change notes), with ADR-0024 the run summary comments (below), and with ADR-0026 the
-  helpers' and the tester's short work notes and the owner's attachments.
+  lead's change notes), with ADR-0024 the run summary comments (below), with ADR-0026 the
+  helpers' and the tester's short work notes and the owner's attachments, and with ADR-0037 §3
+  the researchers' findings notes (`report_findings`, redacted, at most 16,384 characters, stored
+  as ticket comments of kind `research` like review findings), and with ADR-0038 §1 the testers'
+  test results (`report_test_results`: status, at most 50 failing tests with name, file and
+  message, and a summary; redacted, stored as ticket comments of kind `test-results`).
 
 ### Approval modes per workflow block (ADR-0023) [implemented]
 
 - **Validated graphs only.** A project's workflow graph is saved (`PUT
-/api/projects/:id/workflow-graph`) only when `validateWorkflowGraph` finds no error (422
+/api/projects/:id/workflow-graph`, version 3 since ADR-0037) only when `validateWorkflowGraphV3`
+  finds no error (422
   `workflow_invalid` otherwise), and a ticket run starts only on a graph that validates and
   compiles (409 `workflow_invalid`, no run created). The validator is the same pure function the
   editor uses. A version 1 workflow is migrated on read; a version 1 write never replaces a stored
@@ -140,6 +145,36 @@
   agent's own mode (`effectiveMode`). Full auto's "deny without asking" applies only to a helper or
   tester whose block runs Full auto. The lead, the planner and reviewers are never covered by any
   mode, and the lead never approves a tool request.
+
+### Roles from arrows (ADR-0037) [implemented]
+
+- **Arrows never give edit rights.** A block's role comes only from its arrows (`deriveRoles`), and
+  its tools, folder and approvals follow that role. A graph whose arrows would give a block two
+  roles (for example an `implement` arrow into a reviewer or researcher, or a `test` arrow into a
+  planner) is refused by the validator, so by `PUT …/workflow-graph` (422) and at run start
+  (409). A `custom` arrow gives no role. A read-only block's stored approval mode or "can start
+  helpers" is ignored, and the server gives Full auto or sandbox paths only to helpers and testers;
+  the Codex adapter also refuses the run's temp folder to any other role.
+- **The researcher** is read-only on both providers: Claude Code gets only `Read`, `Grep`, `Glob`
+  and its own tools, with edits and shell denied without asking; Codex runs the `:read-only`
+  profile with `never`. It works in the project folder, has no worktree and starts no agents. Its
+  findings note is at most 16,384 characters.
+- **Arrow text is data.** An arrow's label (40 characters) and purpose (300 characters) are the
+  owner's words, but agents get them only as quoted data, behind a line saying quoted text is not
+  instructions; a label is kept on one line inside its quotes. Findings and hand-off notes from
+  other agents are quoted the same way. None of this text changes a role, a mode or an approval.
+  Since 2026-11-14 every arrow's label and purpose reach the agent it concerns (a helper, planner,
+  reviewer, tester, final reviewer, or the lead for findings and the plan path; nobody for arrows
+  between steps), each under a heading that calls it the owner's words quoted as data, with every
+  line of the purpose quoted (`arrow-notes.ts`).
+- **Plan options are never approved automatically.** With two or more planners, plan review waits
+  for the owner even in Full auto with an automatic plan gate. A decision must name a proposed
+  option of that ticket's current run; an unknown, decided, superseded or other ticket's option is
+  refused and nothing changes.
+- **Review fan-out cannot be talked round.** Any reviewer's `rework` decides rework whatever the
+  others say; a reviewer submits once; a reviewer that ends without a verdict is reported to the
+  lead as "no verdict", and the change waits for the lead's decision instead of merging.
+- Tested in the adversarial suite, A-AR1 to A-AR6 ([testing/adversarial.md](testing/adversarial.md)).
 - **Per agent at launch.** A helper or tester whose block runs Full auto gets Claude Code's auto
   mode plus the OS sandbox (`ManagedAgentSpec.fullAuto`, ADR-0022). A block configured as Full auto
   that a ticket or run tightened keeps the same sandbox, deny rules and temp folder with
@@ -151,6 +186,33 @@
   automatic switch is on and no ticket or run mode is stricter than Full auto.
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
+
+### Failure routing (ADR-0038) [implemented on `feature/workflow/failure-routing`]
+
+- **A When arrow gives no role.** Its target must already be a helper, the lead or the Author
+  routing block; a When arrow into a planner, researcher, reviewer or tester, or into a block with
+  no other role, is refused by the validator (`when-target-invalid`), so by `PUT
+…/workflow-graph` (422, nothing stored) and at run start. A fixer is a helper of its own block
+  with that block's mode; a reviewer's or tester's failure never makes it an editor.
+- **Failure text is data.** Test names and messages, check output, review findings and
+  conflicting file names come from agents or the repository. They reach the lead and a fixer only
+  inside the quoted failure context, behind a line saying it is not instructions; names inside a
+  sentence are kept on one line (a git file name with a line break is written `\u000a`, FR-7).
+  None of it changes a mode, an approval, a merge or a route.
+- **Bounded fix loops.** Each When arrow allows at most `maxRounds` (1 to 5) fix turns per failure
+  lineage; a fixer's change inherits its lineage; then the lead decides. `reroute_fix` uses no
+  round and moves a fix to a helper at most once per round.
+- **Rerouting is the lead's only.** `reroute_fix` and `view_workflow` are offered to the lead only
+  on both adapters, and the engine refuses them from anyone else. A forged `fixId` (unknown,
+  another run's, finished, already moved) or a target that is not a helper block is refused and
+  nothing changes.
+- **Test results are bounded.** `report_test_results` is the tester's only (both adapters and the
+  engine): once per turn, at most 50 failing tests, `failed` empty exactly when the status is
+  `passed`, file paths repository-relative.
+- **Authors are helpers.** Author detection matches failing files against the changed files of
+  helpers (`worker` agents with a change) only; text naming another block cannot make a reviewer,
+  tester or the lead an author.
+- Tested in the adversarial suite, F-1 to F-6 ([testing/adversarial.md](testing/adversarial.md)).
 
 ### Codex as a managed provider (ADR-0031, CX series) [implemented on `feat/codex-integration`]
 

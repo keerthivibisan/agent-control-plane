@@ -24,15 +24,19 @@ import {
   type EngineApproval,
   type EngineChange,
   type EngineEffect,
+  type PlanOption,
   type RunState,
 } from '@acp/orchestrator';
-import type {
-  ManagedProviderId,
-  OrchestrationRun,
-  PlanStep,
-  TicketPlan,
-  WorkflowNodeId,
+import {
+  MAX_NODE_LABEL,
+  type ManagedProviderId,
+  type OrchestrationRun,
+  type PlanStep,
+  type TicketPlan,
+  type TicketPlanOption,
+  type WorkflowNodeId,
 } from '@acp/core';
+import { researchCommentBodies, testResultsCommentBodies } from './research-findings.js';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -315,18 +319,32 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     if (allowRule !== (prev?.allowRule ?? null)) loopRepos.approvalRules.set(next.id, allowRule);
   }
 
-  /** The `change_reviews` row of (agent, round), creating it when the round is new. */
+  /**
+   * The `change_reviews` row of (agent, round), creating it when the round is new. A review
+   * agent's row is its own: with a review fan-out (ADR-0037 §5) each reviewer of the round has one,
+   * keyed by its agent run.
+   */
   function roundRow(
     runId: string,
     agentRunId: string,
     round: number,
     reviewer: { kind: 'agent' | 'lead' | 'owner'; agentRunId: string | null },
   ) {
-    // The latest row of the round: a round the lead passed to the owner gets a second row.
-    const existing = loopRepos.changeReviews
+    const rows = loopRepos.changeReviews
       .listForAgentRun(agentRunId)
-      .filter((r) => r.round === round)
-      .at(-1);
+      .filter((r) => r.round === round);
+    const own =
+      reviewer.kind === 'agent' && reviewer.agentRunId !== null
+        ? rows.find((r) => r.reviewerAgentRunId === reviewer.agentRunId)
+        : undefined;
+    // Another review agent's row of the round is never this reviewer's (fan-out).
+    const othersOnly =
+      own === undefined &&
+      reviewer.kind === 'agent' &&
+      reviewer.agentRunId !== null &&
+      rows.some((r) => r.reviewerAgentRunId !== null);
+    // Otherwise the latest row of the round: a round the lead passed to the owner gets a second row.
+    const existing = own ?? (othersOnly ? undefined : rows.at(-1));
     if (existing !== undefined) return existing;
     return loopRepos.changeReviews.insert({
       runId,
@@ -378,6 +396,59 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
     }
   }
 
+  /**
+   * ADR-0037 §4: the plan options of a run with several planners (migration 0016). New options are
+   * stored with the engine's id; a decided one is written after the plans (`syncPlans`), so the
+   * chosen option's plan (`plan-option-decided`'s `planId`) already exists.
+   */
+  function syncPlanOptions(
+    prev: readonly PlanOption[],
+    next: RunState,
+    effects: readonly EngineEffect[],
+  ): void {
+    const ticketId = next.run.ticketId;
+    const options = next.planOptions ?? [];
+    if (ticketId === null || options.length === 0) return;
+    const chosenPlans = new Map<string, string>();
+    for (const effect of effects) {
+      if (
+        effect.type === 'plan-option-decided' &&
+        effect.planOptionId !== null &&
+        effect.planId !== null
+      ) {
+        chosenPlans.set(effect.planOptionId, effect.planId);
+      }
+    }
+    const before = new Map(prev.map((o) => [o.id, o]));
+    for (const option of options) {
+      const old = before.get(option.id);
+      if (old === undefined) {
+        withId(option.id, () =>
+          workspaceRepos.planOptions.insert({
+            ticketId,
+            runId: next.run.id,
+            agentRunId: option.agentRunId,
+            nodeId: option.nodeId,
+            // The planner node's label; an agent's role when the node has none (never longer).
+            label: option.label.slice(0, MAX_NODE_LABEL),
+            summary: option.summary,
+            steps: withStepHelpers(option.steps, option.stepHelpers),
+            plannedHelpers: option.plannedHelpers,
+          }),
+        );
+      }
+      if (option.status === 'proposed' || old?.status === option.status) continue;
+      const planId = chosenPlans.get(option.id);
+      if (option.status === 'chosen' && planId === undefined) {
+        throw new DbError('conflict', 'a chosen plan option without its plan');
+      }
+      workspaceRepos.planOptions.decide(option.id, option.status, {
+        ...(option.status === 'chosen' && planId !== undefined && { planId }),
+        at: next.run.updatedAt,
+      });
+    }
+  }
+
   function applyDataEffects(next: RunState, effects: readonly EngineEffect[]): void {
     const runId = next.run.id;
     for (const effect of effects) {
@@ -411,6 +482,47 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
       }
       if (effect.type === 'change-round') {
         // ADR-0021 §3: one row per review round and decision; no text (notes are comments).
+        if (effect.reviewers !== undefined) {
+          // ADR-0037 §5, a review fan-out: one row per reviewer with its own verdict; the
+          // decision gets a row of its own (below), so no reviewer's row reads as the decider's.
+          for (const r of effect.reviewers) {
+            const own = roundRow(runId, effect.agentRunId, effect.round, {
+              kind: 'agent',
+              agentRunId: r.agentRunId,
+            });
+            if (r.verdict !== null && own.verdict !== r.verdict) {
+              loopRepos.changeReviews.setVerdict(own.id, r.verdict, null);
+            }
+          }
+          if (effect.decision === null || effect.decidedBy === null) continue;
+          const latest = loopRepos.changeReviews
+            .listForAgentRun(effect.agentRunId)
+            .filter((r) => r.round === effect.round && r.reviewerAgentRunId === null)
+            .at(-1);
+          // A second decision on the round (the owner's, after the lead asked): its own row.
+          const row =
+            latest !== undefined &&
+            (latest.decision === null || latest.decision === effect.decision)
+              ? latest
+              : loopRepos.changeReviews.insert({
+                  runId,
+                  agentRunId: effect.agentRunId,
+                  round: effect.round,
+                  reviewer:
+                    effect.decidedBy === 'owner'
+                      ? 'owner'
+                      : effect.decidedBy === 'lead'
+                        ? 'lead'
+                        : 'agent',
+                });
+          if (row.decision === null) {
+            loopRepos.changeReviews.decide(row.id, {
+              decision: effect.decision,
+              decidedBy: effect.decidedBy,
+            });
+          }
+          continue;
+        }
         let row = roundRow(runId, effect.agentRunId, effect.round, {
           kind: effect.reviewer,
           agentRunId: effect.reviewerAgentRunId,
@@ -493,6 +605,37 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         });
         continue;
       }
+      if (effect.type === 'record-findings') {
+        // ADR-0037 §3: the researcher's findings, owner-facing like a reviewer's (ADR-0021 §6),
+        // already redacted and capped by the engine. A note longer than a comment body is kept
+        // whole as consecutive parts.
+        for (const body of researchCommentBodies(effect.text)) {
+          workspaceRepos.comments.insert({
+            ticketId: effect.ticketId,
+            runId: effect.runId,
+            author: 'app',
+            body,
+            kind: 'research',
+            agentRunId: effect.agentRunId,
+          });
+        }
+        continue;
+      }
+      if (effect.type === 'record-test-results') {
+        // ADR-0038 §1: the tester's structured test results, owner-facing text like review
+        // findings (ADR-0021 §6), already redacted by the engine; split when longer than a body.
+        for (const body of testResultsCommentBodies(effect.text)) {
+          workspaceRepos.comments.insert({
+            ticketId: effect.ticketId,
+            runId: effect.runId,
+            author: 'app',
+            body,
+            kind: 'test-results',
+            agentRunId: effect.agentRunId,
+          });
+        }
+        continue;
+      }
       if (effect.type === 'chat-message') {
         // ADR-0015: owner messages and lead replies only. A reply longer than the column allows
         // is cut rather than losing the whole transition.
@@ -547,6 +690,7 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
           syncApproval(prevApprovals.get(approval.id), approval);
         }
         syncPlans(prev?.plans ?? [], next.plans ?? [], next.planStepHelpers);
+        syncPlanOptions(prev?.planOptions ?? [], next, effects);
         applyDataEffects(next, effects);
       });
     },
@@ -624,6 +768,9 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
         state.plans = withPlanDeciders(workspaceRepos.plans.listForRun(runId), snapshot);
         const stepHelpers = stepHelpersOf(state.plans);
         if (stepHelpers !== undefined) state.planStepHelpers = stepHelpers;
+        // ADR-0037 §4: a run with several planners keeps its options across a restart.
+        const options = workspaceRepos.planOptions.listForRun(runId);
+        if (options.length > 0) state.planOptions = options.map(engineOption);
       }
       return state;
     },
@@ -660,6 +807,24 @@ function withStepHelpers(
     const helper = helpers?.[i];
     return helper === undefined ? { ...step } : { ...step, helper };
   });
+}
+
+/** A stored plan option as the engine holds it: the steps' helper nodes back in `stepHelpers`. */
+function engineOption(option: TicketPlanOption): PlanOption {
+  const helpers = option.steps.map((s) => s.helper);
+  const all = helpers.length > 0 && helpers.every((h): h is WorkflowNodeId => h !== undefined);
+  return {
+    id: option.id,
+    agentRunId: option.agentRunId,
+    nodeId: option.nodeId,
+    label: option.label,
+    summary: option.summary,
+    steps: option.steps.map(({ helper: _helper, ...step }) => step),
+    plannedHelpers: option.plannedHelpers,
+    ...(all && { stepHelpers: helpers }),
+    status: option.status,
+    createdAt: option.createdAt,
+  };
 }
 
 /** The engine's per-plan step nodes, from plans whose every step has a stored helper node. */

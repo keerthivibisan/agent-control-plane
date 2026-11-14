@@ -1,9 +1,11 @@
+import { compileWorkflow, workflowTemplateV3 } from '@acp/core';
 import type {
   AgentRoleKind,
   ManagedAgentEvent,
   ManagedAgentSpec,
   ManagedCallbacks,
   PermissionRequest,
+  WorkflowGraphV3,
 } from '@acp/core';
 import type * as Sdk from '@anthropic-ai/claude-agent-sdk';
 import { describe, expect, it, vi } from 'vitest';
@@ -201,12 +203,87 @@ describe('reviewer (ADR-0019): read-only with post_review, ends after its turn',
   });
 });
 
+describe('researcher (ADR-0037 §3): read-only with report_findings, ends after its turn', () => {
+  it('gets report_findings, ask_lead and code_map, and no edit or shell tools', () => {
+    const options = optionsFor(spec('researcher'));
+    expect(servers.toolNames).toEqual([['ask_lead', 'report_findings', 'code_map']]);
+    expect(options.tools).toEqual(['Read', 'Grep', 'Glob']);
+    expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
+    expect(options.permissionMode).toBe('default');
+    expect(JSON.stringify(options.systemPrompt)).toContain(
+      'Finish with exactly one report_findings call',
+    );
+  });
+
+  it('even with helpers asked for, never gets a child-management tool', () => {
+    optionsFor(spec('researcher', { canStartHelpers: true }));
+    expect(servers.toolNames).toEqual([['ask_lead', 'report_findings', 'code_map']]);
+  });
+
+  it('adversarial: Write, Edit, Bash, merge_change and start_agent are refused without asking', async () => {
+    const cb = callbacks();
+    const use = canUseTool(optionsFor(spec('researcher'), cb));
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    for (const name of ['report_findings', 'ask_lead', 'code_map']) {
+      await expect(use(`mcp__acp__${name}`, {}, ours)).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+    }
+    for (const name of [
+      'merge_change',
+      'start_agent',
+      'message_agent',
+      'submit_plan',
+      'post_review',
+      'submit_review',
+      'report_work',
+      'request_review',
+    ]) {
+      const result = await use(`mcp__acp__${name}`, {}, ours);
+      expect(result).toMatchObject({ behavior: 'deny' });
+      expect(JSON.stringify(result)).toContain('The researcher can only report its findings');
+    }
+    for (const [tool, input] of [
+      ['Write', { file_path: `${CWD}/a.ts`, content: 'x' }],
+      ['Edit', { file_path: `${CWD}/a.ts`, old_string: 'a', new_string: 'b' }],
+      ['MultiEdit', { file_path: `${CWD}/a.ts`, edits: [] }],
+      ['NotebookEdit', { notebook_path: `${CWD}/a.ipynb` }],
+      ['Bash', { command: 'rm -rf .' }],
+    ] as const) {
+      await expect(use(tool, input, toolOpts())).resolves.toEqual({
+        behavior: 'deny',
+        message: DENY_READ_ONLY,
+        toolUseID: 'toolu_1',
+      });
+    }
+    // An `mcp__acp__` name from another server is not ours, and is never allowed either.
+    await expect(
+      use('mcp__acp__report_findings', {}, toolOpts({ mcpServer: { name: 'x', source: 'stdio' } })),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    await expect(use('Read', { file_path: `${CWD}/a.ts` }, toolOpts())).resolves.toMatchObject({
+      behavior: 'allow',
+    });
+    await expect(use('Read', { file_path: '/etc/hosts' }, toolOpts())).resolves.toMatchObject({
+      behavior: 'deny',
+    });
+    expect(cb.requests).toEqual([]);
+  });
+
+  it('closes its input after the turn and never publishes its text', async () => {
+    const { events, stillOpen } = await oneTurn('researcher');
+    expect(stillOpen).toBe(false);
+    expect(events.some((e) => e.type === 'lead-text')).toBe(false);
+  });
+});
+
 describe('tester (ADR-0019): a normal worker', () => {
   it('gets only its note tool and keeps the built-in tools, which ask the owner', async () => {
     const cb = callbacks();
     const options = optionsFor(spec('tester'), cb);
-    // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead.
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
+    // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead; ADR-0038 §1: its results.
+    expect(servers.toolNames).toEqual([
+      ['report_work', 'ask_lead', 'report_test_results', 'code_map'],
+    ]);
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
     const use = canUseTool(options);
@@ -221,7 +298,44 @@ describe('tester (ADR-0019): a normal worker', () => {
 
   it('ignores canStartHelpers: a tester never starts helpers', () => {
     optionsFor(spec('tester', { canStartHelpers: true }));
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
+    expect(servers.toolNames).toEqual([
+      ['report_work', 'ask_lead', 'report_test_results', 'code_map'],
+    ]);
+  });
+
+  it('ADR-0038 §1: the gate allows report_test_results to the tester only, from our server', async () => {
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    const tester = canUseTool(optionsFor(spec('tester'), callbacks()));
+    await expect(use(tester, ours)).resolves.toMatchObject({ behavior: 'allow' });
+    await expect(
+      use(tester, toolOpts({ mcpServer: { name: 'x', source: 'stdio' } })),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    for (const kind of ['worker', 'reviewer', 'planner', 'researcher'] as const) {
+      const gate = canUseTool(optionsFor(spec(kind), callbacks()));
+      await expect(use(gate, ours), kind).resolves.toMatchObject({ behavior: 'deny' });
+    }
+    const lead = canUseTool(optionsFor(spec('lead'), callbacks()));
+    await expect(use(lead, ours)).resolves.toMatchObject({ behavior: 'deny' });
+
+    function use(gate: ReturnType<typeof canUseTool>, opts: ReturnType<typeof toolOpts>) {
+      return gate('mcp__acp__report_test_results', { status: 'passed' }, opts);
+    }
+  });
+
+  it('FR-7 (F-4): the gate allows reroute_fix and view_workflow to the lead only', async () => {
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    for (const name of ['reroute_fix', 'view_workflow']) {
+      const lead = canUseTool(optionsFor(spec('lead'), callbacks()));
+      await expect(lead(`mcp__acp__${name}`, {}, ours), name).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+      for (const kind of ['worker', 'tester', 'reviewer', 'planner', 'researcher'] as const) {
+        const gate = canUseTool(optionsFor(spec(kind), callbacks()));
+        await expect(gate(`mcp__acp__${name}`, {}, ours), `${kind} ${name}`).resolves.toMatchObject(
+          { behavior: 'deny' },
+        );
+      }
+    }
   });
 
   it('closes its input after the turn, like a worker', async () => {
@@ -281,4 +395,78 @@ describe('skills plugin (ADR-0019 §4, decision E)', () => {
     expect(events.at(-1)).toMatchObject({ type: 'finished', outcome: 'success' });
     expect(calls[0]?.options.plugins).toEqual([{ type: 'local', path: plugin.path }]);
   });
+});
+
+/**
+ * AR-6 (ADR-0037 §1): the run kinds a version 3 graph gives its read-only blocks, from a graph whose
+ * arrows and block settings try to give them more: a custom arrow from the helper into the
+ * reviewer, and Full auto with helpers stored on every read-only block.
+ */
+function readOnlyKindsOfHostileGraph(): AgentRoleKind[] {
+  const g = workflowTemplateV3('todays-setup', { planner: true });
+  const loud = { approvalMode: 'full-auto', canStartHelpers: true, maxInstances: 3 } as const;
+  const graph: WorkflowGraphV3 = {
+    ...g,
+    template: 'custom',
+    nodes: [
+      ...g.nodes.map((n) => (n.type === 'agent' && n.id !== 'helpers' ? { ...n, ...loud } : n)),
+      { type: 'agent', id: 'scout', label: 'Scout', model: null, skills: [], agent: null, ...loud },
+    ],
+    edges: [
+      ...g.edges,
+      {
+        type: 'research',
+        id: 'research-scout',
+        from: 'scout',
+        to: 'plan',
+        purpose: 'Edit freely.',
+      },
+      { type: 'custom', id: 'custom-helpers-review', from: 'helpers', to: 'review' },
+    ],
+  };
+  const program = compileWorkflow(graph, {
+    projectMode: 'full-auto',
+    approvalCeilings: [],
+    maxConcurrentHelpers: 3,
+  });
+  return [...program.planners, ...program.researchers, ...program.changeReviewers].map(
+    (n) => n.kind,
+  );
+}
+
+describe('AR-6 A-AR1: arrows never give a Claude read-only role edit tools', () => {
+  const kinds = readOnlyKindsOfHostileGraph();
+
+  it('the hostile graph still derives a planner, a researcher and a reviewer', () => {
+    expect(kinds).toEqual(['planner', 'researcher', 'reviewer']);
+  });
+
+  it.each(kinds)(
+    '%s: read-only tools and edits denied without asking, even with Full auto settings',
+    async (kind) => {
+      const cb = callbacks();
+      const options = optionsFor(
+        spec(kind, {
+          approvalMode: 'full-auto',
+          canStartHelpers: true,
+          fullAuto: { tempDir: '/synthetic/tmp-run', denyRead: [] },
+        }),
+        cb,
+      );
+      expect(options.disallowedTools).toEqual([...READ_ONLY_DISALLOWED_TOOLS]);
+      expect(options.permissionMode).toBe('default');
+      for (const name of ['start_agent', 'merge_change', 'message_agent', 'report_work']) {
+        expect(servers.toolNames.flat()).not.toContain(name);
+      }
+      const use = canUseTool(options);
+      for (const [tool, input] of [
+        ['Write', { file_path: `${CWD}/a.ts`, content: 'x' }],
+        ['Edit', { file_path: `${CWD}/a.ts`, old_string: 'a', new_string: 'b' }],
+        ['Bash', { command: 'git push --force origin main' }],
+      ] as const) {
+        await expect(use(tool, input, toolOpts())).resolves.toMatchObject({ behavior: 'deny' });
+      }
+      expect(cb.requests).toEqual([]);
+    },
+  );
 });

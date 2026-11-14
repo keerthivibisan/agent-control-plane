@@ -42,6 +42,8 @@ import {
   commentsTabParts,
 } from '../../src/features/activity/comment-kind';
 import { RichText, safeHref } from '../../src/features/activity/RichText';
+import { parseFailureRoutedLine } from '../../src/features/activity/failure-routed';
+import { testResultsStatus } from '../../src/features/activity/test-results';
 import {
   MAX_ATTACHMENTS_PER_COMMENT,
   attachmentType,
@@ -457,6 +459,153 @@ describe('the Conversation tab', () => {
     expect(out.getAttribute('rel')).toBe('noopener noreferrer');
     // The owner's comment is not repeated here.
     expect(tab.textContent).not.toContain('slow queries from last week');
+  });
+
+  it('ADR-0037 §3: shows a researcher’s findings boxed like a review, with a Research label', async () => {
+    const research = {
+      id: 'a-research',
+      type: 'research',
+      at: '2026-10-22T09:00:30.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'researcher', label: 'Claude research', agentRunId: 'r-research' },
+      title: 'Claude research reported research findings',
+      body: 'The theme is set in `src/theme.ts`.',
+      link: null,
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, research]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const li = await waitFor(() => {
+      const found = tab.querySelector<HTMLElement>('li[data-type="research"]');
+      if (found === null) throw new Error('no research item yet');
+      return found;
+    });
+    expect(within(li).getByTestId('comment-author').textContent).toBe('Claude research');
+    expect(within(li).getByTestId('research-label').textContent).toBe('Research');
+    expect(li.textContent).toContain('src/theme.ts');
+    expect(li.querySelector('article')?.className).toContain('border-l-accent');
+  });
+
+  it('reads a research comment from the ticket’s own records as research', () => {
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'rc',
+      author: 'app',
+      kind: 'research',
+      agentRunId: 'r-x',
+      body: 'Found it in src/a.ts.',
+    });
+    expect(commentKind(comment)).toBe('research');
+    const items = activityFromDetail({ ...detail, comments: [comment] });
+    const research = items.find((i) => i.type === 'research');
+    expect(research?.actor).toEqual({ kind: 'researcher', label: 'Researcher', agentRunId: 'r-x' });
+    expect(research?.title).toBe('Research findings');
+  });
+
+  it('ADR-0038 §1: shows a tester’s test results boxed, with a Test results label and status', async () => {
+    const results = {
+      id: 'a-test-results',
+      type: 'test-results',
+      at: '2026-10-22T09:00:30.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'tester', label: 'Tester', agentRunId: 't-1' },
+      title: 'Tester reported test results',
+      body: 'Tests failed: 1 failing test.\n\nSummary:\n1 of 4 failed.\n\nFailing tests:\n- dark mode toggles (src/theme.test.ts): expected dark',
+      link: { kind: 'change', agentRunId: 't-1' },
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, results]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const li = await waitFor(() => {
+      const found = tab.querySelector<HTMLElement>('li[data-type="test-results"]');
+      if (found === null) throw new Error('no test results item yet');
+      return found;
+    });
+    expect(within(li).getByTestId('comment-author').textContent).toBe('Tester');
+    expect(within(li).getByTestId('test-results-label').textContent).toBe('Test results');
+    const status = within(li).getByTestId('test-results-status');
+    expect(status.textContent).toBe('Failed');
+    expect(status.getAttribute('data-tone')).toBe('danger');
+    expect(li.textContent).toContain('src/theme.test.ts');
+    expect(li.querySelector('article')?.className).toContain('border-l-accent');
+  });
+
+  it('reads a test-results comment from the ticket’s own records; status from its first line', () => {
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'tr',
+      author: 'app',
+      kind: 'test-results',
+      agentRunId: 't-x',
+      body: 'Tests passed.\n\nSummary:\nAll green.',
+    });
+    expect(commentKind(comment)).toBe('test-results');
+    const items = activityFromDetail({ ...detail, comments: [comment] });
+    const item = items.find((i) => i.type === 'test-results');
+    expect(item?.actor).toEqual({ kind: 'tester', label: 'Tester', agentRunId: 't-x' });
+    expect(item?.title).toBe('Test results');
+    expect(testResultsStatus('Tests passed.\n\nSummary:\nok')).toBe('passed');
+    expect(testResultsStatus('(part 1 of 2)\nTests failed: 50 failing tests.')).toBe('failed');
+    expect(testResultsStatus('(part 2 of 2)\n- a: b')).toBeNull();
+  });
+
+  it('FR-7: shows a routed failure as its parts: what happened, the fixer and the round', async () => {
+    const routed = {
+      id: 'system:fr',
+      type: 'note',
+      at: '2026-10-22T09:00:40.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'app', label: 'Agent Control Plane', agentRunId: null },
+      title: 'When tests fail at Tester: Theme is fixing it (round 1 of 2). The lead was told.',
+      body: null,
+      link: null,
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, routed]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const line = await within(tab).findByTestId('failure-routed');
+    expect(line.getAttribute('data-kind')).toBe('fix-started');
+    expect(within(line).getByTestId('failure-routed-kind').textContent).toBe('Fix started');
+    expect(within(line).getByTestId('failure-routed-fixer').textContent).toBe('Theme');
+    expect(within(line).getByTestId('failure-routed-round').textContent).toBe('Round 1 of 2');
+    expect(line.textContent).toContain('When tests fail at Tester');
+  });
+
+  it('FR-7: reads every routed-failure line the server writes, and nothing else', () => {
+    expect(
+      parseFailureRoutedLine(
+        'When checks fail at Frontend checks: the lead moved the fix to Backend (round 2 of 3).',
+      ),
+    ).toEqual({
+      kind: 'rerouted',
+      when: 'When checks fail at Frontend checks',
+      who: 'Backend',
+      round: { used: 2, max: 3 },
+    });
+    expect(
+      parseFailureRoutedLine('When a merge conflicts: the lead took the fix over (round 1 of 2).'),
+    ).toMatchObject({ kind: 'taken-over', who: null, round: { used: 1, max: 2 } });
+    expect(
+      parseFailureRoutedLine(
+        'When tests fail at Tester: the lead decides, as its fix rounds are used up (round 2 of 2).',
+      ),
+    ).toMatchObject({ kind: 'to-lead', who: 'its fix rounds are used up' });
+    expect(
+      parseFailureRoutedLine(
+        'When tests fail at Tester: the lead decides, as the workflow sends it to the lead.',
+      ),
+    ).toMatchObject({ kind: 'to-lead', round: null });
+    expect(parseFailureRoutedLine('Merged Theme into acp/WEB-12.')).toBeNull();
+    expect(parseFailureRoutedLine('When x: y is fixing it.\nThe lead was told.')).toBeNull();
+    // From the ticket's own records too: a one-line system comment that is no merge is a note.
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'sys',
+      author: 'app',
+      kind: 'system',
+      body: 'When tests fail at Tester: Theme is fixing it (round 1 of 2). The lead was told.',
+    });
+    const [item] = activityFromDetail({ ...detail, comments: [comment] }).filter(
+      (i) => i.id === 'comment-sys',
+    );
+    expect(item).toMatchObject({ type: 'note', body: null });
   });
 
   it('filters by actor with pressed chips', async () => {

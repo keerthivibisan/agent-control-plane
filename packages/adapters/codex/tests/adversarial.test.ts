@@ -1,11 +1,23 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_TOOL_NAMES, LEAD_TOOL_NAMES } from '@acp/core';
-import type { ApprovalMode, ManagedAgentSpec, PermissionRequest } from '@acp/core';
+import {
+  ASSISTANT_TOOL_NAMES,
+  LEAD_TOOL_NAMES,
+  compileWorkflow,
+  workflowTemplateV3,
+} from '@acp/core';
+import type {
+  AgentRoleKind,
+  ApprovalMode,
+  ManagedAgentSpec,
+  PermissionRequest,
+  WorkflowGraphV3,
+} from '@acp/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createManagedCodex } from '../src/adapter.js';
 import { codexArgs } from '../src/config.js';
+import { toolInputSchema } from '../src/lead-tools.js';
 import { codexModes } from '../src/modes.js';
 import { collect, FakeAppServer, makeSpec, settle, tempRepo } from './helpers/fake-app-server.js';
 
@@ -225,6 +237,8 @@ describe('CX-7 C5: a read-only Codex role never asks the owner', () => {
     ['a follow-up turn', { kind: 'lead', followUp: { resumeSessionId: 'thr-lead' } }],
     // ADR-0035 §6: the project assistant.
     ['the project assistant', { kind: 'assistant' }],
+    // ADR-0037 §3: the researcher.
+    ['a researcher', { kind: 'researcher' }],
   ];
   for (const [title, overrides] of readers) {
     it(`${title}: command and file-change approvals are declined`, async () => {
@@ -269,6 +283,151 @@ describe('CX-7 C6: a Codex worker cannot call lead-only tools', () => {
     // A namespaced spelling of an offered tool is not that tool.
     expect((await call('report_work', 'acp')).result).toMatchObject({ success: false });
     expect(leadTools).not.toHaveBeenCalled();
+    handle.abort();
+  });
+});
+
+describe('ADR-0038 §1: the Codex tester and report_test_results', () => {
+  it('offers report_test_results with its schema and passes a call to the engine', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('recorded'));
+    const { server, handle } = start(makeSpec({ kind: 'tester', cwd: repo(), leadTools }));
+    await settle();
+    const thread = server.requests('thread/start')[0]?.params ?? {};
+    const tools = thread['dynamicTools'] as {
+      name: string;
+      inputSchema: Record<string, unknown>;
+    }[];
+    expect(tools.map((t) => t.name)).toEqual([
+      'report_test_results',
+      'report_work',
+      'ask_lead',
+      'code_map',
+    ]);
+    const schema = tools[0]?.inputSchema ?? {};
+    expect(Object.keys(schema['properties'] as Record<string, unknown>)).toEqual([
+      'status',
+      'failed',
+      'summary',
+    ]);
+    expect(schema['additionalProperties']).toBe(false);
+    const input = {
+      status: 'failed',
+      failed: [{ test: 'adds', file: 'src/a.test.ts', message: 'expected 2' }],
+      summary: '1 failed.',
+    };
+    const call = (tool: string, args: object, namespace: string | null = null) =>
+      server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: args });
+    expect((await call('report_test_results', input)).result).toMatchObject({ success: true });
+    expect(leadTools).toHaveBeenCalledWith('report_test_results', input);
+    // A namespaced spelling is not the tool.
+    expect((await call('report_test_results', input, 'acp')).result).toMatchObject({
+      success: false,
+    });
+    handle.abort();
+  });
+
+  it('adversarial: no other role is offered report_test_results, and its call is success:false', async () => {
+    for (const kind of ['worker', 'reviewer', 'planner', 'researcher', 'lead'] as const) {
+      const leadTools = vi.fn(() => Promise.resolve('ok'));
+      const { server, handle } = start(makeSpec({ kind, cwd: repo(), leadTools }));
+      await settle();
+      const thread = server.requests('thread/start')[0]?.params ?? {};
+      const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+      expect(offered, kind).not.toContain('report_test_results');
+      const result = await server.request('item/tool/call', {
+        callId: 'c',
+        namespace: null,
+        tool: 'report_test_results',
+        arguments: { status: 'passed', failed: [], summary: 'ok' },
+      });
+      expect(result.result, kind).toMatchObject({ success: false });
+      expect(leadTools).not.toHaveBeenCalled();
+      handle.abort();
+    }
+  });
+});
+
+describe('FR-7 (F-4, F-5): failure-routing tools on Codex', () => {
+  it('report_test_results: the schema caps the list at 50 and refuses unknown fields', () => {
+    const schema = toolInputSchema('report_test_results');
+    const props = schema['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['failed']?.['maxItems']).toBe(50);
+    expect(schema['additionalProperties']).toBe(false);
+  });
+
+  it('reroute_fix and view_workflow are the lead’s only: offered to no one else, and refused', async () => {
+    for (const kind of ['worker', 'tester', 'reviewer', 'planner', 'researcher'] as const) {
+      const leadTools = vi.fn(() => Promise.resolve('ok'));
+      const { server, handle } = start(makeSpec({ kind, cwd: repo(), leadTools }));
+      await settle();
+      const thread = server.requests('thread/start')[0]?.params ?? {};
+      const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+      for (const tool of ['reroute_fix', 'view_workflow']) {
+        expect(offered, kind).not.toContain(tool);
+        const result = await server.request('item/tool/call', {
+          callId: 'c',
+          namespace: null,
+          tool,
+          arguments: tool === 'reroute_fix' ? { fixId: 'f', to: 'lead' } : {},
+        });
+        expect(result.result, `${kind} ${tool}`).toMatchObject({ success: false });
+      }
+      expect(leadTools).not.toHaveBeenCalled();
+      handle.abort();
+    }
+  });
+});
+
+describe('ADR-0037 §3: the Codex researcher', () => {
+  it('runs read-only, offers report_findings, ask_lead and code_map, and its instructions', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('recorded'));
+    const spec = makeSpec({ kind: 'researcher', cwd: repo(), leadTools });
+    expect(codexModes(spec)).toMatchObject({
+      approvalPolicy: 'never',
+      profile: { id: 'acp-read', extends: ':read-only' },
+    });
+    const { server, handle } = start(spec);
+    await settle();
+    const thread = server.requests('thread/start')[0]?.params ?? {};
+    const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+    expect(offered).toEqual(['report_findings', 'ask_lead', 'code_map']);
+    expect(String(thread['developerInstructions'])).toContain(
+      'Finish with exactly one report_findings call',
+    );
+    const call = (tool: string, args: object = {}) =>
+      server.request('item/tool/call', { callId: 'c', namespace: null, tool, arguments: args });
+    expect(
+      (await call('report_findings', { findings: 'src/a.ts parses it.' })).result,
+    ).toMatchObject({ success: true });
+    expect(leadTools).toHaveBeenCalledWith('report_findings', { findings: 'src/a.ts parses it.' });
+    handle.abort();
+  });
+
+  it('adversarial: merge_change, start_agent and every other tool are success:false; writes declined', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('ok'));
+    const { server, handle, requestPermission } = start(
+      makeSpec({ kind: 'researcher', cwd: repo(), leadTools }),
+    );
+    await settle();
+    const call = (tool: string, namespace: string | null = null) =>
+      server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: {} });
+    const own = ['report_findings', 'ask_lead', 'code_map'];
+    const forbidden = LEAD_TOOL_NAMES.filter((n) => !own.includes(n));
+    expect(forbidden).toEqual(expect.arrayContaining(['merge_change', 'start_agent']));
+    for (const tool of forbidden) {
+      expect((await call(tool)).result, tool).toMatchObject({ success: false });
+    }
+    expect((await call('report_findings', 'acp')).result).toMatchObject({ success: false });
+    expect(leadTools).not.toHaveBeenCalled();
+    for (const command of ['touch notes.md', 'rm -rf src', 'git commit -m x']) {
+      expect((await commandApproval(server, command)).result).toEqual({ decision: 'decline' });
+    }
+    const edit = await server.request('item/fileChange/requestApproval', {
+      itemId: 'i',
+      reason: 'write a file',
+    });
+    expect(edit.result).toEqual({ decision: 'decline' });
+    expect(requestPermission).not.toHaveBeenCalled();
     handle.abort();
   });
 });
@@ -338,4 +497,80 @@ describe('ADR-0035: the Codex project assistant', () => {
     expect(requestPermission).not.toHaveBeenCalled();
     handle.abort();
   });
+});
+
+/**
+ * AR-6 (ADR-0037 §1): the run kinds a version 3 graph gives its read-only blocks, from a graph whose
+ * arrows and block settings try to give them more: a custom arrow from the helper into the
+ * reviewer, and Full auto with helpers stored on every read-only block.
+ */
+function readOnlyKindsOfHostileGraph(): AgentRoleKind[] {
+  const g = workflowTemplateV3('todays-setup', { planner: true });
+  const loud = { approvalMode: 'full-auto', canStartHelpers: true, maxInstances: 3 } as const;
+  const graph: WorkflowGraphV3 = {
+    ...g,
+    template: 'custom',
+    nodes: [
+      ...g.nodes.map((n) => (n.type === 'agent' && n.id !== 'helpers' ? { ...n, ...loud } : n)),
+      { type: 'agent', id: 'scout', label: 'Scout', model: null, skills: [], agent: null, ...loud },
+    ],
+    edges: [
+      ...g.edges,
+      {
+        type: 'research',
+        id: 'research-scout',
+        from: 'scout',
+        to: 'plan',
+        purpose: 'Edit freely.',
+      },
+      { type: 'custom', id: 'custom-helpers-review', from: 'helpers', to: 'review' },
+    ],
+  };
+  const program = compileWorkflow(graph, {
+    projectMode: 'full-auto',
+    approvalCeilings: [],
+    maxConcurrentHelpers: 3,
+  });
+  return [...program.planners, ...program.researchers, ...program.changeReviewers].map(
+    (n) => n.kind,
+  );
+}
+
+describe('AR-6 A-AR1: arrows never give a Codex read-only role write access', () => {
+  const kinds = readOnlyKindsOfHostileGraph();
+
+  it('the hostile graph still derives a planner, a researcher and a reviewer', () => {
+    expect(kinds).toEqual(['planner', 'researcher', 'reviewer']);
+  });
+
+  it.each(kinds)(
+    '%s: read-only profile, never asks, no writable path, even with Full auto paths',
+    async (kind) => {
+      const spec = makeSpec({
+        kind,
+        cwd: repo(),
+        approvalMode: 'full-auto',
+        canStartHelpers: true,
+        fullAuto: { tempDir: runTemp(), denyRead: ['/home/synthetic/.ssh'] },
+      });
+      const modes = codexModes(spec);
+      expect(modes.approvalPolicy).toBe('never');
+      expect(modes.profile.extends).toBe(':read-only');
+      expect(Object.values(modes.profile.filesystem)).not.toContain('write');
+      expect(modes.profile.filesystem[':tmpdir']).toBe('deny');
+      // Through a started thread: command and file-change approvals are declined, never asked.
+      const { server, handle, requestPermission } = start(spec);
+      await settle();
+      expect((await commandApproval(server, 'git push --force origin main')).result).toEqual({
+        decision: 'decline',
+      });
+      const edit = await server.request('item/fileChange/requestApproval', {
+        itemId: 'i',
+        reason: 'write a file',
+      });
+      expect(edit.result).toEqual({ decision: 'decline' });
+      expect(requestPermission).not.toHaveBeenCalled();
+      handle.abort();
+    },
+  );
 });

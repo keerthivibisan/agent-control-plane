@@ -9,13 +9,14 @@ import {
   TicketBranchNameSchema,
   TicketKeySchema,
   WorkflowGraphSchema,
+  WorkflowGraphV3Schema,
   WorkflowNodeIdSchema,
+  type AnyWorkflowGraph,
   type ApprovalMode,
   type ChangeReviewerMode,
   type CompileContext,
   type ProjectApprovals,
   type ProjectWorkflow,
-  type WorkflowGraph,
   type WorkflowNodeId,
 } from '@acp/core';
 import { DbError } from '../../errors.js';
@@ -73,9 +74,10 @@ export interface StoredRunSnapshot extends StoredRunLimits {
   /**
    * ADR-0023: the workflow graph the run follows (the engine's `RunState.graph`), snapshotted at
    * start, and the context it compiles with (`RunState.graphContext`). Always together. Absent for
-   * runs before it, which compile their version 1 `workflow` migrated.
+   * runs before it, which compile their version 1 `workflow` migrated. Version 2 or 3 (ADR-0037):
+   * a run keeps the version it started with.
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   graphContext?: CompileContext;
 }
 
@@ -220,7 +222,10 @@ export const StoredRunSnapshotParser: Parser<StoredRunSnapshot> = {
     }
     if (graph !== undefined || graphContext !== undefined) {
       // The program is compiled from both, so one without the other is not a graph run.
-      const parsedGraph = WorkflowGraphSchema.safeParse(graph);
+      const parsedGraph =
+        typeof graph === 'object' && graph !== null && 'version' in graph && graph.version === 3
+          ? WorkflowGraphV3Schema.safeParse(graph)
+          : WorkflowGraphSchema.safeParse(graph);
       if (!parsedGraph.success) return fail('invalid graph');
       const context = parseGraphContext(graphContext);
       if (context === null) return fail('invalid graphContext');

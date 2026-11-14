@@ -253,7 +253,9 @@ async function main(): Promise<{ ok: boolean; report: Record<string, unknown> }>
         }
         // Version 1: answers for v1 and default; a stored graph answers 409 `workflow_is_graph`.
         await get('workflow-v1', `${at}/workflow`, (s, code) =>
-          graph?.stored === 'v2' ? s === 409 && code === 'workflow_is_graph' : s === 200,
+          graph?.stored === 'v2' || graph?.stored === 'v3'
+            ? s === 409 && code === 'workflow_is_graph'
+            : s === 200,
         );
         await get('setup', `${at}/setup`);
         await get('board', `/api/board?projectId=${encodeURIComponent(p.id)}`);

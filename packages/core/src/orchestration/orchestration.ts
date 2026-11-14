@@ -2,12 +2,20 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
-import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
+import {
+  MAX_AGENT_NOTE_CHARS,
+  MAX_RESEARCH_FINDINGS_CHARS,
+  MAX_TEST_FAILURES,
+  MAX_TEST_MESSAGE_CHARS,
+  MAX_TEST_NAME_CHARS,
+  MAX_TEST_SUMMARY_CHARS,
+} from '../workspace/ticket-activity.js';
 import { MAX_AGENT_BYTES, MAX_SKILL_BYTES, SkillNameSchema } from '../workspace/workflow.js';
 import {
   MAX_CODE_MAP_PATH_LENGTH,
   StartingPointFilesSchema,
   StartingPointNotesSchema,
+  StartingPointPathSchema,
 } from '../codemap/codemap.js';
 import {
   HelperOutcomeKindSchema,
@@ -73,6 +81,11 @@ export const AgentRoleKindSchema = z.enum([
   'reviewer',
   'tester',
   'assistant',
+  /**
+   * ADR-0037 §3: a read-only agent that investigates in the project folder (like the planner) and
+   * ends with one findings note (`report_findings`), which goes to the agents it researches for.
+   */
+  'researcher',
 ]);
 export type AgentRoleKind = z.infer<typeof AgentRoleKindSchema>;
 /**
@@ -225,6 +238,21 @@ export type CodeMapToolAction = (typeof CODE_MAP_TOOL_ACTIONS)[number];
 /** Most characters in a `code_map` query. */
 export const CODE_MAP_TOOL_MAX_QUERY = 200;
 
+/** ADR-0038 §1: what a tester's test run found. */
+export const TestResultStatusSchema = z.enum(['passed', 'failed']);
+export type TestResultStatus = z.infer<typeof TestResultStatusSchema>;
+
+/**
+ * ADR-0038 §1: one failing test. `file` is the repository-relative path of the test (or of the
+ * code it points at), used to find the helpers whose changes touched it. Data, never instructions.
+ */
+export const FailedTestSchema = z.object({
+  test: z.string().trim().min(1).max(MAX_TEST_NAME_CHARS),
+  file: StartingPointPathSchema.optional(),
+  message: z.string().trim().min(1).max(MAX_TEST_MESSAGE_CHARS),
+});
+export type FailedTest = z.infer<typeof FailedTestSchema>;
+
 /** Inputs of the lead agent's tools (ADR-0012). The engine validates every call (ADR-0013). */
 export const LeadToolInputs = {
   start_agent: z.object({
@@ -345,10 +373,74 @@ export const LeadToolInputs = {
    */
   ask_lead: z.object({ question: z.string().trim().min(1).max(2000) }),
   /**
+   * ADR-0037 §3: a researcher's findings note, stored as a ticket comment of kind `research` with
+   * its agent run and kept for the agents it researches for. Calling it ends the researcher's turn,
+   * like `report_work`. Only `researcher` gets this tool; the engine refuses it from anyone else.
+   */
+  report_findings: z.object({
+    findings: z.string().trim().min(1).max(MAX_RESEARCH_FINDINGS_CHARS),
+  }),
+  /**
+   * ADR-0038 §1: a tester's structured test results, once per turn, before `report_work`. Stored
+   * as ticket comments of kind `test-results` and kept for the failure context. `failed` lists
+   * the failing tests: empty when `status` is `passed`, at least one when `failed`. Only `tester`
+   * gets this tool; the engine refuses it from anyone else.
+   */
+  report_test_results: z
+    .object({
+      status: TestResultStatusSchema,
+      failed: z.array(FailedTestSchema).max(MAX_TEST_FAILURES),
+      summary: z.string().trim().min(1).max(MAX_TEST_SUMMARY_CHARS),
+    })
+    .superRefine((v, issue) => {
+      if (v.status === 'passed' && v.failed.length > 0) {
+        issue.addIssue({
+          code: 'custom',
+          path: ['failed'],
+          message: 'must be empty when the tests passed',
+        });
+      }
+      if (v.status === 'failed' && v.failed.length === 0) {
+        issue.addIssue({
+          code: 'custom',
+          path: ['failed'],
+          message: 'must list at least one failing test when the tests failed',
+        });
+      }
+    }),
+  /**
    * ADR-0033 §5: the stored review findings of one helper's change again (verdict, findings,
    * reviewer), from the review loop's records. Refused when none are stored.
    */
   get_review_findings: z.object({ agentId: z.string().min(1) }),
+  /**
+   * ADR-0038 §4 (FR-5): the lead moves a fix the workflow started along a When arrow. `fixId` names
+   * the fix (from the engine's notice), or `changeId` the agent whose change is being fixed or the
+   * fixer itself; exactly one of them. `to` is a helper block's id or label, `lead` (the lead takes
+   * it over) or `author` (whoever wrote the failing code). The running fix turn is stopped first.
+   * `note` is the lead's own words for the new fixer. Refused for a fix that is not running.
+   */
+  reroute_fix: z
+    .object({
+      fixId: z.string().trim().min(1).max(100).optional(),
+      changeId: z.string().trim().min(1).max(100).optional(),
+      to: z.string().trim().min(1).max(120),
+      note: z.string().trim().min(1).max(2000).optional(),
+    })
+    .superRefine((v, issue) => {
+      if ((v.fixId === undefined) === (v.changeId === undefined)) {
+        issue.addIssue({
+          code: 'custom',
+          path: ['fixId'],
+          message: 'give either fixId or changeId',
+        });
+      }
+    }),
+  /**
+   * ADR-0038 §5 (FR-5): the run's workflow in words (every agent and every arrow as a sentence),
+   * read-only; the same text as the lead's "Your workflow" brief section.
+   */
+  view_workflow: z.object({}),
   /**
    * ADR-0034 §4: a read-only lookup in the project code map at the run's base commit, for every
    * role. Answers are paths, names and line numbers, never file content. `query` is a symbol name
@@ -436,7 +528,11 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   submit_review: 'Submitted a change review',
   report_work: 'Reported its work',
   ask_lead: 'Asked the lead a question',
+  report_findings: 'Reported its findings',
+  report_test_results: 'Reported its test results',
   get_review_findings: "Read a change's review findings",
+  reroute_fix: 'Moved a fix to another agent',
+  view_workflow: 'Read the workflow',
   code_map: 'Looked up the code map',
   ticket_status: 'Checked the tickets',
   project_info: 'Read the project settings',

@@ -170,11 +170,11 @@ test('the owner flow: new project → skills & agents → workflow → ticket �
   await expect(page.getByTestId('block-code-review').getByTestId('block-agent')).toHaveText(
     'reviewer',
   );
-  // The server now stores the graph (version 2).
+  // The server now stores the graph (version 3, ADR-0037).
   const stored = (await (
     await request.get(`/api/projects/${projectId}/workflow-graph`)
   ).json()) as { stored: string };
-  expect(stored.stored).toBe('v2');
+  expect(stored.stored).toBe('v3');
   // R-R visual: at 1440 × 900 the whole flow, the Finish block (with Done) included, is on
   // screen, and the zoom controls stay clear of it; Save stays on screen.
   await page.setViewportSize({ width: 1440, height: 900 });

@@ -4,6 +4,10 @@ import { createAttachmentsRepository, type AttachmentsRepository } from './attac
 import { createCheckRunsRepository, type CheckRunsRepository } from './check-runs.js';
 import { createTicketCommentsRepository, type TicketCommentsRepository } from './comments.js';
 import { createTicketPlansRepository, type TicketPlansRepository } from './plans.js';
+import {
+  createTicketPlanOptionsRepository,
+  type TicketPlanOptionsRepository,
+} from './plan-options.js';
 import { createProjectSetupRepository, type ProjectSetupRepository } from './project-setup.js';
 import { createTicketsRepository, type TicketsRepository } from './tickets.js';
 
@@ -12,6 +16,8 @@ export interface WorkspaceRepositories {
   projectSetup: ProjectSetupRepository;
   tickets: TicketsRepository;
   plans: TicketPlansRepository;
+  /** ADR-0037 §4 (migration 0016): several planners' plan options. */
+  planOptions: TicketPlanOptionsRepository;
   comments: TicketCommentsRepository;
   checkRuns: CheckRunsRepository;
   /** ADR-0026 (migration 0009): the owner's attachments. */
@@ -32,6 +38,7 @@ export function createWorkspaceRepositories(
     projectSetup: createProjectSetupRepository(ctx),
     tickets: createTicketsRepository(ctx),
     plans: createTicketPlansRepository(ctx),
+    planOptions: createTicketPlanOptionsRepository(ctx),
     comments: createTicketCommentsRepository(ctx),
     checkRuns: createCheckRunsRepository(ctx),
     attachments: createAttachmentsRepository(ctx),
@@ -47,6 +54,11 @@ export type {
   TicketUpdate,
 } from './tickets.js';
 export type { TicketPlanDecision, TicketPlanInsertInput, TicketPlansRepository } from './plans.js';
+export type {
+  TicketPlanOptionDecision,
+  TicketPlanOptionInsertInput,
+  TicketPlanOptionsRepository,
+} from './plan-options.js';
 export type {
   AgentNoteInput,
   StoredTicketComment,

@@ -13,11 +13,14 @@ import {
   FileDiff,
   FileText,
   Flag,
+  FlaskConical,
   GitMerge,
   GitPullRequest,
   MessageSquareText,
   Play,
+  Route,
   Scale,
+  Search,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -40,6 +43,8 @@ import { ACTIVITY_ID, runNumber } from '../ticket/ticket-state';
 import { activityFromDetail, actorFilters, actorKey } from './activity-from-detail';
 import { ACTIVITY_COPY } from './copy';
 import { RichText } from './RichText';
+import { parseFailureRoutedLine, type FailureRoutedLine } from './failure-routed';
+import { testResultsStatus } from './test-results';
 import { BoxHeader, Marker, Row, Thread } from './timeline-parts';
 
 const A = ACTIVITY_COPY;
@@ -55,6 +60,8 @@ const ICON: Record<Item['type'], LucideIcon> = {
   'agent-ended': CircleCheck,
   'agent-note': MessageSquareText,
   review: Eye,
+  research: Search,
+  'test-results': FlaskConical,
   note: MessageSquareText,
   decision: Scale,
   'run-facts': ClipboardList,
@@ -64,6 +71,8 @@ const ICON: Record<Item['type'], LucideIcon> = {
 
 const TONE: Partial<Record<Item['type'], MarkerTone>> = {
   review: 'accent',
+  research: 'accent',
+  'test-results': 'accent',
   merge: 'done',
   'pull-request': 'success',
 };
@@ -74,12 +83,53 @@ function ItemIcon({ item, size = 14 }: { item: Item; size?: number }) {
 }
 
 /** Item types drawn as a box with the text written for the ticket; the rest are event lines. */
-const BOXED: ReadonlySet<Item['type']> = new Set(['agent-note', 'review', 'note', 'decision']);
+const BOXED: ReadonlySet<Item['type']> = new Set([
+  'agent-note',
+  'review',
+  'research',
+  'test-results',
+  'note',
+  'decision',
+]);
 
 /** The parts of the item's title after its actor's name, so the name is said once, in bold. */
 function TitleWithActor({ item }: { item: Item }) {
   const { label } = item.actor;
   const rest = item.title.startsWith(label) ? item.title.slice(label.length) : null;
+  if (item.type === 'research') {
+    // ADR-0037 §3: a researcher's findings, drawn like a review's with a "Research" label.
+    return (
+      <>
+        <Pill tone="accent" testId="comment-author" title={A.researchTip}>
+          {label}
+        </Pill>
+        <Pill tone="neutral" testId="research-label">
+          {A.research}
+        </Pill>
+        <span className="text-ink">{rest ?? item.title}</span>
+      </>
+    );
+  }
+  if (item.type === 'test-results') {
+    // ADR-0038 §1: a tester's test results, with a "Test results" label and the status.
+    const status = item.body === null ? null : testResultsStatus(item.body);
+    return (
+      <>
+        <Pill tone="accent" testId="comment-author">
+          {label}
+        </Pill>
+        <Pill tone="neutral" testId="test-results-label" title={A.testResultsTip}>
+          {A.testResults}
+        </Pill>
+        {status !== null ? (
+          <Pill tone={status === 'passed' ? 'success' : 'danger'} testId="test-results-status">
+            {status === 'passed' ? A.testsPassed : A.testsFailed}
+          </Pill>
+        ) : null}
+        <span className="text-ink">{rest ?? item.title}</span>
+      </>
+    );
+  }
   if (item.type === 'review') {
     return (
       <>
@@ -104,6 +154,53 @@ function TitleWithActor({ item }: { item: Item }) {
       </strong>{' '}
       <span aria-hidden="true">·</span> {item.title}
     </span>
+  );
+}
+
+const ROUTED_TONE: Record<FailureRoutedLine['kind'], 'accent' | 'warning' | 'neutral'> = {
+  'fix-started': 'accent',
+  rerouted: 'accent',
+  'taken-over': 'neutral',
+  'to-lead': 'warning',
+};
+
+/**
+ * ADR-0038 §4 (FR-7): the app's line for a failure routed along a When arrow, as its parts: what
+ * happened, the fixer (or why the lead decides) and the round.
+ */
+function FailureRoutedView({ line, item }: { line: FailureRoutedLine; item: Item }) {
+  const R = A.failureRouted;
+  return (
+    <p
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-dim tabular-nums"
+      data-testid="failure-routed"
+      data-kind={line.kind}
+      title={R.tip}
+    >
+      <Pill tone={ROUTED_TONE[line.kind]} testId="failure-routed-kind">
+        {R[line.kind]}
+      </Pill>
+      <span className="font-medium text-ink">{line.when}</span>
+      {line.who !== null ? (
+        line.kind === 'to-lead' ? (
+          <span>{line.who}</span>
+        ) : (
+          <span>
+            <span className="sr-only">{R.fixer}: </span>
+            <strong className="font-semibold text-ink" data-testid="failure-routed-fixer">
+              {line.who}
+            </strong>
+          </span>
+        )
+      ) : null}
+      {line.round !== null ? (
+        <Pill tone="neutral" testId="failure-routed-round">
+          {R.round(line.round.used, line.round.max)}
+        </Pill>
+      ) : null}
+      <span aria-hidden="true">·</span>
+      <RelativeTime iso={item.at} />
+    </p>
   );
 }
 
@@ -237,7 +334,8 @@ function ItemView({
   }
 
   if (BOXED.has(item.type) && item.body !== null) {
-    const reviewer = item.type === 'review';
+    const reviewer =
+      item.type === 'review' || item.type === 'research' || item.type === 'test-results';
     return (
       <Row
         author={author}
@@ -267,6 +365,28 @@ function ItemView({
             <ItemLink item={item} detail={detail} />
           </div>
         </article>
+      </Row>
+    );
+  }
+
+  const routed =
+    item.actor.kind === 'app' && item.type === 'note' && item.body === null
+      ? parseFailureRoutedLine(item.title)
+      : null;
+  if (routed !== null) {
+    return (
+      <Row
+        event
+        author={author}
+        testId="activity-item"
+        data={{ ...data, 'data-activity': '' }}
+        badge={
+          <Marker tone={routed.kind === 'to-lead' ? 'neutral' : 'accent'}>
+            <Route size={14} strokeWidth={1.75} aria-hidden="true" focusable="false" />
+          </Marker>
+        }
+      >
+        <FailureRoutedView line={routed} item={item} />
       </Row>
     );
   }

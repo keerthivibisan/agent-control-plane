@@ -318,6 +318,39 @@ export function buildTicketActivity(input: ActivityInput): TicketActivityDto {
         link:
           comment.agentRunId === null ? null : { kind: 'change', agentRunId: comment.agentRunId },
       });
+    } else if (kind === 'research') {
+      // ADR-0037 §3: a researcher's findings (report_findings), shown like a review's findings.
+      const actor = names?.actor(comment.agentRunId, 'researcher') ?? {
+        kind: 'researcher' as const,
+        label: ROLE_WORDS.researcher,
+        agentRunId: comment.agentRunId,
+      };
+      items.push({
+        id: `research:${comment.id}`,
+        ...base,
+        type: 'research',
+        actor,
+        title: title(`${actor.label} reported research findings`),
+        body: body(comment.body),
+        link: null,
+      });
+    } else if (kind === 'test-results') {
+      // ADR-0038 §1: a tester's structured test results (report_test_results).
+      const actor = names?.actor(comment.agentRunId, 'tester') ?? {
+        kind: 'tester' as const,
+        label: ROLE_WORDS.tester,
+        agentRunId: comment.agentRunId,
+      };
+      items.push({
+        id: `test-results:${comment.id}`,
+        ...base,
+        type: 'test-results',
+        actor,
+        title: title(`${actor.label} reported test results`),
+        body: body(comment.body),
+        link:
+          comment.agentRunId === null ? null : { kind: 'change', agentRunId: comment.agentRunId },
+      });
     } else if (kind === 'review' && comment.author === 'owner') {
       // The owner's review sent from Files changed with Comment (owner decision 2026-10-22).
       items.push({

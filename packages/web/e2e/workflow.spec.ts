@@ -76,7 +76,7 @@ async function serve(page: Page, initial: Json, opts: { refuse?: boolean } = {})
         await route.fulfill({ status: 422, json: workflowInvalidError() });
         return;
       }
-      current = { ...current, graph: body['graph'], stored: 'v2' };
+      current = { ...current, graph: body['graph'], stored: 'v3' };
     }
     await route.fulfill({ json: current });
   });
@@ -277,47 +277,53 @@ test('picks each template; restores the earlier setup', async ({ page }) => {
   await expect(page.getByTestId('unsaved')).toHaveCount(0);
 });
 
-test('a named helper from the menu, linked by dragging; a refused drag; fix and save', async ({
+test('an Agent block from the menu, linked by dragging; a refused drag; fix and save', async ({
   page,
 }) => {
   const served = await serve(page, graphDto());
   await open(page);
-  await addBlock(page, 'Named helper');
-  await expect(block(page, 'helper-1')).toBeVisible();
-  await expect(panel(page).getByTestId('node-panel')).toHaveAttribute('data-node', 'helper-1');
-  // The block's own problems are at the top of its panel, and a marker sits on the block.
+  // ADR-0037: one Agent block, whose role comes from its arrows (none yet).
+  await addBlock(page, 'Agent');
+  await expect(block(page, 'agent-1')).toBeVisible();
+  await expect(panel(page).getByTestId('node-panel')).toHaveAttribute('data-node', 'agent-1');
+  // The block's own problems are at the top of its panel, and its role badge is in error.
   expect(await codesIn(panel(page).getByTestId('panel-issues'))).toEqual(
-    expect.arrayContaining(['no-review-route', 'not-assigned']),
+    expect.arrayContaining(['agent-without-role']),
   );
-  await expect(block(page, 'helper-1').getByTestId('block-problems')).toHaveAttribute(
-    'data-severity',
-    'error',
+  await expect(block(page, 'agent-1').getByTestId('block-role')).toHaveAttribute(
+    'data-problem',
+    'true',
   );
   await expect(page.getByTestId('save-workflow')).toBeDisabled();
   await expect(page.getByTestId('save-blocked')).toHaveText('Fix the problems to save.');
   await panel(page).getByRole('textbox', { name: 'Name' }).fill('Frontend helper');
-  await expect(block(page, 'helper-1').getByTestId('block-label')).toHaveText('Frontend helper');
+  await expect(block(page, 'agent-1').getByTestId('block-label')).toHaveText('Frontend helper');
 
   // The problems list, grouped (problems to fix first), after the header's Problems button.
   await page.getByTestId('problems-button').click();
   await expect(issues(page).getByTestId('issues-errors')).toBeVisible();
-  expect(await codesIn(issues(page))).toEqual(
-    expect.arrayContaining(['no-review-route', 'not-assigned']),
-  );
+  expect(await codesIn(issues(page))).toEqual(expect.arrayContaining(['agent-without-role']));
   await shoot(page, 'problems');
 
-  // An invalid drag: a helper can't send anything to the Checks block. Refused, in plain words.
-  await drag(page, 'helper-1', 'checks');
+  // An invalid drag: an agent can't link to the Checks block. Refused, in plain words.
+  await drag(page, 'agent-1', 'checks');
   await expect(page.getByTestId('link-refused')).toContainText('That link isn’t allowed');
-  await expect(page.getByTestId('link-refused')).toContainText(
-    'cannot send its change for review to "Checks"',
-  );
+  await expect(page.getByTestId('link-refused')).toContainText('cannot research for "Checks"');
   await shoot(page, 'refused');
   await page.getByRole('button', { name: 'Dismiss' }).click();
   await expect(page.getByTestId('link-refused')).toHaveCount(0);
 
-  // The lead → helper fits two kinds (assigns, rework): the owner picks assigns.
-  const dropped = await drag(page, 'orchestrate', 'helper-1');
+  // The lead → agent fits one kind (implement): made at once, and the agent is a helper.
+  await drag(page, 'orchestrate', 'agent-1');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'implement');
+  await expect(block(page, 'agent-1').getByTestId('block-role')).toHaveAttribute(
+    'data-role',
+    'helper',
+  );
+  await expect.poll(() => issueCodes(page)).not.toContain('agent-without-role');
+
+  // helper → change reviewer fits two kinds (review, custom): the owner picks review.
+  const dropped = await drag(page, 'agent-1', 'review');
   const choice = page.getByRole('dialog', { name: 'What does this link do?' });
   await expect(choice).toBeVisible();
   // The chooser opens by the drop point, not in the middle of the page.
@@ -327,20 +333,22 @@ test('a named helper from the menu, linked by dragging; a refused drag; fix and 
     expect(Math.abs(chooserBox.x - dropped.x)).toBeLessThan(340);
     expect(Math.abs(chooserBox.y - dropped.y)).toBeLessThan(80);
   }
-  await expect(choice.getByRole('button', { name: /^Assigns work/ })).toBeFocused();
-  await choice.getByRole('button', { name: /^Assigns work/ }).click();
+  const reviewButton = choice.getByRole('button', { name: /^Sends its change for review/ });
+  await expect(reviewButton).toBeFocused();
+  await expect(choice.getByRole('button', { name: /^Custom hand-off/ })).toBeVisible();
+  await reviewButton.click();
   await expect(choice).toHaveCount(0);
-  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
-  await expect.poll(() => issueCodes(page)).not.toContain('not-assigned');
-
-  // helper → change reviewer fits only "review": made at once.
-  await drag(page, 'helper-1', 'review');
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
   await expect(page.getByTestId('problems-button')).toHaveAttribute('data-errors', '0');
   await shoot(page, 'named-helper');
 
-  // A rework link straight from the reviewer, with its rounds set in the link panel.
-  await drag(page, 'review', 'helper-1');
+  // A rework link straight from the reviewer (rework or custom: the owner picks rework), with its
+  // rounds set in the link panel.
+  await drag(page, 'review', 'agent-1');
+  await page
+    .getByRole('dialog', { name: 'What does this link do?' })
+    .getByRole('button', { name: /^Sends the change back for rework/ })
+    .click();
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
   await panel(page).getByRole('radio', { name: 'No rework' }).check({ force: true });
 
@@ -349,29 +357,27 @@ test('a named helper from the menu, linked by dragging; a refused drag; fix and 
   await expect(page.getByTestId('saved')).toHaveText('Saved');
   expect(served.puts).toHaveLength(1);
   const graph = served.puts[0]?.body['graph'] as GraphJson;
-  // The PUT body is a whole version 2 graph with the helper wired as drawn. (The browser checked
-  // it with core's validator before Save was enabled; workflow-editor.test.tsx re-validates a PUT
-  // body with core too.)
-  expect(graph.version).toBe(2);
+  // The PUT body is a whole version 3 graph (ADR-0037, AR-4) with the agent wired as drawn. (The
+  // browser checked it with core's validator before Save was enabled; workflow-editor.test.tsx
+  // re-validates a PUT body with core too.)
+  expect(graph.version).toBe(3);
   expect(graph.template).toBe('custom');
-  expect(graph.legacyV1).toBeDefined();
   for (const x of [...graph.nodes, ...graph.edges]) expect(x.id).toMatch(/^[a-z][a-z0-9-]{0,39}$/);
-  expect(graph.nodes.find((n) => n.id === 'helper-1')).toMatchObject({
-    type: 'helper',
+  // One Agent block: no role is stored, its arrows make it a helper.
+  expect(graph.nodes.find((n) => n.id === 'agent-1')).toMatchObject({
+    type: 'agent',
     label: 'Frontend helper',
-    approvalMode: null,
-    maxInstances: 1,
   });
   const edges = graph.edges.map((e) => `${e.type}:${e.from}>${e.to}`);
   expect(edges).toEqual(
     expect.arrayContaining([
-      'assigns:orchestrate>helper-1',
-      'review:helper-1>review',
-      'rework:review>helper-1',
+      'implement:orchestrate>agent-1',
+      'review:agent-1>review',
+      'rework:review>agent-1',
     ]),
   );
-  expect(graph.edges.filter((e) => e.type === 'review' && e.from === 'helper-1')).toHaveLength(1);
-  expect(graph.edges.find((e) => e.id === 'rework-review-helper-1')).toMatchObject({
+  expect(graph.edges.filter((e) => e.type === 'review' && e.from === 'agent-1')).toHaveLength(1);
+  expect(graph.edges.find((e) => e.id === 'rework-review-agent-1')).toMatchObject({
     maxRounds: 0,
   });
 });
@@ -381,12 +387,12 @@ test('dragging a link lights the blocks it can end on; a drop on a block body li
 }) => {
   await serve(page, graphDto());
   await open(page);
-  await addBlock(page, 'Named helper');
+  await addBlock(page, 'Helper');
   await expect(block(page, 'helper-1')).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // From the lead: the new helper (assigns, rework) is valid; Checks (already merged through) and
-  // Ticket are not.
+  // From the lead: the new helper (rework; the preset drew implement) is valid; Checks (already
+  // merged through) and Ticket are not.
   await showCanvas(page);
   const start = await centre(page.getByTestId('handle-out-orchestrate'));
   await page.mouse.move(start.x, start.y);
@@ -412,7 +418,8 @@ test('dragging a link lights the blocks it can end on; a drop on a block body li
   await expect(block(page, 'helper-1')).not.toHaveAttribute('data-link-target', /.+/);
   await expect(page.getByTestId('edge-choice')).toHaveCount(0);
 
-  // A drop anywhere on a valid block (here the change reviewer's body) makes the one kind that fits.
+  // A drop anywhere on a valid block (here the change reviewer's body) links it: review or a
+  // custom hand-off fit, so the owner picks.
   await showCanvas(page);
   const from = await centre(page.getByTestId('handle-out-helper-1'));
   const body = await centre(block(page, 'review').getByTestId('block-label'));
@@ -420,15 +427,18 @@ test('dragging a link lights the blocks it can end on; a drop on a block body li
   await page.mouse.down();
   await page.mouse.move(body.x, body.y, { steps: 8 });
   await page.mouse.up();
+  await page
+    .getByRole('dialog', { name: 'What does this link do?' })
+    .getByRole('button', { name: /^Sends its change for review/ })
+    .click();
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
 
-  // The chooser closes on Escape without making a link, and focus goes back to the canvas.
-  await drag(page, 'orchestrate', 'helper-1');
+  // The chooser closes on Escape without making a link, and focus goes back to the canvas. A
+  // custom hand-off is the only kind between two helpers, and it always asks (ADR-0037 §2).
+  await drag(page, 'helper-1', 'helpers');
   const choice = page.getByRole('dialog', { name: 'What does this link do?' });
   await expect(choice).toBeVisible();
-  await expect(
-    choice.getByRole('button', { name: /^Sends the change back for rework/ }),
-  ).toBeVisible();
+  await expect(choice.getByRole('button', { name: /^Custom hand-off/ })).toBeVisible();
   await shoot(page, 'chooser');
   await page.keyboard.press('Escape');
   await expect(choice).toHaveCount(0);
@@ -440,11 +450,13 @@ test('the block panel: modes on editing blocks only, missing files flagged, keyb
 }) => {
   await serve(page, customGraphDto());
   await open(page);
-  // The Add block menu: a full kind stays listed, disabled, with the reason in plain sight.
+  // The Add block menu: a full kind stays listed, disabled, with the reason in plain sight. The
+  // hand-built graph has one tester; a second fills the limit of two.
+  await addBlock(page, 'Tester');
   await page.getByTestId('add-block').click();
-  const planner = page.getByRole('menuitem', { name: /^Planner/ });
-  await expect(planner).toHaveAttribute('aria-disabled', 'true');
-  await expect(planner).toContainText('it can have only one');
+  const tester = page.getByRole('menuitem', { name: /^Tester/ });
+  await expect(tester).toHaveAttribute('aria-disabled', 'true');
+  await expect(tester).toContainText('the most it can have');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('add-block')).toBeFocused();
   await expectFocusRing(page, /Add block/);
@@ -483,11 +495,16 @@ test('the block panel: modes on editing blocks only, missing files flagged, keyb
   await expect(panel(page)).toHaveCount(0);
   await expect(issues(page)).toBeVisible();
 
-  // Delete removes the selected block (the final chain joins around the tester)…
+  // Delete removes the selected block (the final chain joins around the tester): no new problem.
+  // (The Tester added from the menu above still has no review arrow: its own problem stays.)
+  const errorsBefore = await page.getByTestId('problems-button').getAttribute('data-errors');
   await block(page, 'unit-tests').click();
   await page.keyboard.press('Delete');
   await expect(block(page, 'unit-tests')).toHaveCount(0);
-  await expect(page.getByTestId('problems-button')).toHaveAttribute('data-errors', '0');
+  await expect(page.getByTestId('problems-button')).toHaveAttribute(
+    'data-errors',
+    errorsBefore ?? '0',
+  );
   // …but never the lead or a step every workflow has.
   await block(page, 'orchestrate').click();
   await page.keyboard.press('Delete');
@@ -628,7 +645,7 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
 }) => {
   await serve(page, graphDto());
   await open(page);
-  await addBlock(page, 'Named helper');
+  await addBlock(page, 'Helper');
   await expect(block(page, 'helper-1')).toBeVisible();
   await page.keyboard.press('Escape');
 
@@ -639,7 +656,7 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
     const box = await page.getByTestId(`connector-${side}-helper-1`).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
   }
-  // From the bottom connector, dropped anywhere on the change reviewer: the one kind, at once.
+  // From the bottom connector, dropped anywhere on the change reviewer: review or custom fit.
   const start = await centre(page.getByTestId('connector-bottom-helper-1'));
   const body = await bodyOf(page, 'review');
   await page.mouse.move(start.x, start.y);
@@ -648,11 +665,15 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
   await expect(page.getByTestId('link-line')).toHaveAttribute('data-snapped', 'true');
   await expect(block(page, 'review')).toHaveAttribute('data-snapped', 'true');
   await page.mouse.up();
+  await page
+    .getByRole('dialog', { name: 'What does this link do?' })
+    .getByRole('button', { name: /^Sends its change for review/ })
+    .click();
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
   await expect(page.getByTestId('edge-choice')).toHaveCount(0);
 
   // From the lead's top connector, released on empty canvas near the helper: it snaps onto it
-  // (two kinds fit, so the choice opens).
+  // (only rework fits: the preset drew implement, so it is made at once).
   await showCanvas(page);
   await block(page, 'orchestrate').hover();
   const lead = await centre(page.getByTestId('connector-top-orchestrate'));
@@ -665,11 +686,9 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
   // Invalid blocks fade while the link is dragged.
   await expect(block(page, 'ticket')).toHaveAttribute('data-link-target', 'invalid');
   await page.mouse.up();
-  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
-  await choice.getByRole('button', { name: /^Assigns work/ }).click();
-  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
 
-  // A drag from the edge strip of a block works too.
+  // A drag from the edge strip of a block works too (rework or custom: the owner picks rework).
   await showCanvas(page);
   await page.keyboard.press('Escape');
   const strip = await centre(page.getByTestId('strip-left-review'));
@@ -678,7 +697,12 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
   await page.mouse.down();
   await page.mouse.move(helper.x, helper.y, { steps: 10 });
   await page.mouse.up();
+  await page
+    .getByRole('dialog', { name: 'What does this link do?' })
+    .getByRole('button', { name: /^Sends the change back for rework/ })
+    .click();
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
+  await page.keyboard.press('ControlOrMeta+z');
   await page.keyboard.press('ControlOrMeta+z');
   await shootSnapped(page, 'orchestrate', 'helper-1');
 });
@@ -686,13 +710,13 @@ test('P-C: a link from any side connector, dropped on a block body or snapped ne
 test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', async ({ page }) => {
   await serve(page, graphDto());
   await open(page);
-  await addBlock(page, 'Named helper');
+  await addBlock(page, 'Agent');
   await page.keyboard.press('Escape');
   await showCanvas(page);
 
   // A click on a connector starts a link; the valid blocks light up; Escape cancels.
-  await page.getByTestId('handle-out-helper-1').click();
-  await expect(page.getByTestId('click-link-hint')).toContainText('Linking from Helper 1');
+  await page.getByTestId('handle-out-agent-1').click();
+  await expect(page.getByTestId('click-link-hint')).toContainText('Linking from Agent 1');
   await expect(page.getByTestId('graph-editor')).toHaveAttribute('data-link-mode', 'click');
   await expect(block(page, 'review')).toHaveAttribute('data-link-target', 'valid');
   await expect(block(page, 'checks')).toHaveAttribute('data-link-target', 'invalid');
@@ -700,22 +724,22 @@ test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', 
   await expect(page.getByTestId('click-link-hint')).toHaveCount(0);
   await expect(block(page, 'review')).not.toHaveAttribute('data-link-target', /.+/);
 
-  // Click the connector, then the block: linked.
-  await page.getByTestId('handle-out-helper-1').click();
+  // Click the connector, then the block: research or custom fit; the owner picks custom.
+  await page.getByTestId('handle-out-agent-1').click();
   await block(page, 'review').click();
   await expect(page.getByTestId('click-link-hint')).toHaveCount(0);
-  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
+  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
+  await expect(choice.getByRole('button', { name: /^Researches for/ })).toBeFocused();
+  await choice.getByRole('button', { name: /^Custom hand-off/ }).click();
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'custom');
 
-  // The keyboard: Enter on the lead's connector, then Enter on the helper; two kinds fit.
+  // The keyboard: Enter on the lead's connector, then Enter on the agent; one kind fits.
   await page.getByTestId('handle-out-orchestrate').focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('click-link-hint')).toBeVisible();
-  await page.locator('.react-flow__node[data-id="helper-1"]').focus();
+  await page.locator('.react-flow__node[data-id="agent-1"]').focus();
   await page.keyboard.press('Enter');
-  const choice = page.getByRole('dialog', { name: 'What does this link do?' });
-  await expect(choice.getByRole('button', { name: /^Assigns work/ })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'assigns');
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'implement');
 
   // Right-click a block: "Link Lead to…" lists only what core allows, with the kind.
   await block(page, 'orchestrate').click({ button: 'right' });
@@ -723,7 +747,7 @@ test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', 
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem')).toHaveCount(1);
   // The block's name, then the kind in short.
-  await expect(menu.getByTestId('link-to-helper-1-rework')).toHaveText(/^Helper 1\s*Rework$/);
+  await expect(menu.getByTestId('link-to-agent-1-rework')).toHaveText(/^Agent 1\s*Rework$/);
   await shoot(page, 'link-menu');
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
@@ -734,7 +758,7 @@ test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', 
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'rework');
-  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-edge', /helper-1/);
+  await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-edge', /agent-1/);
 
   // The block panel's "Link to…" has nothing left to offer from the lead.
   await block(page, 'orchestrate').click();
@@ -744,7 +768,7 @@ test('P-C: click-to-connect, the keyboard, and "Link to…" on the block menu', 
 test('P-C: dragging a link end moves it; an invalid drop snaps back', async ({ page }) => {
   await serve(page, graphDto());
   await open(page);
-  await addBlock(page, 'Named helper');
+  await addBlock(page, 'Helper');
   await page.keyboard.press('Escape');
   await showCanvas(page);
   const rework = page.locator('.react-flow__edge[data-id="rework-orchestrate-helpers"]');
@@ -808,12 +832,12 @@ test('P-C: undo and redo with the keys and the toolbar; Tidy layout', async ({ p
   await open(page);
   await expect(page.getByTestId('undo')).toBeDisabled();
   await expect(page.getByTestId('tidy-layout')).toBeDisabled();
-  await addBlock(page, 'Named helper');
+  await addBlock(page, 'Helper');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('unsaved')).toBeVisible();
 
-  // A link dragged, then undone and redone with the keys.
-  await drag(page, 'helper-1', 'review');
+  // A link dragged (review to the lead: the one kind that fits), then undone and redone.
+  await drag(page, 'helper-1', 'orchestrate');
   await expect(panel(page).getByTestId('edge-panel')).toHaveAttribute('data-type', 'review');
   await page.keyboard.press('ControlOrMeta+z');
   await expect(panel(page)).toHaveCount(0);
@@ -857,4 +881,31 @@ test('P-C: undo and redo with the keys and the toolbar; Tidy layout', async ({ p
   await page.getByTestId('tidy-layout').click();
   expect(await flowPosition(page, 'review')).toEqual(home);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+});
+
+test('FR-6: the Author block, a When arrow and the flow in words', async ({ page }) => {
+  await serve(page, graphDto());
+  await open(page);
+  // ADR-0038 §4: the Author block is a routing block in the Add block menu, once.
+  await addBlock(page, 'Author');
+  await expect(block(page, 'author')).toBeVisible();
+  await expect(panel(page).getByTestId('node-panel')).toHaveAttribute('data-kind', 'author');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('add-block').click();
+  await expect(page.getByTestId('palette-author')).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+
+  // From the change reviewer to the Author block, only When fits: it is made at once.
+  await drag(page, 'review', 'author');
+  const edge = panel(page).getByTestId('edge-panel');
+  await expect(edge).toHaveAttribute('data-type', 'when');
+  await expect(edge.getByTestId('when-event-review-rework')).toBeChecked();
+  await expect(edge.getByTestId('when-receives')).toHaveAttribute('data-receiver', 'author');
+
+  // The flow in words lists the route; the lead decides the other failures by default.
+  const words = page.getByTestId('flow-words');
+  await expect(
+    words.locator('[data-testid="flow-words-sentence"][data-routing="when"]'),
+  ).toHaveCount(1);
+  await expect(words.getByTestId('flow-words-default').first()).toBeVisible();
 });

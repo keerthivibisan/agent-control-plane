@@ -1,11 +1,17 @@
-import { validateWorkflowGraph, WorkflowGraphSchema, type WorkflowGraph } from '@acp/core';
+import {
+  migrateWorkflowV2,
+  validateWorkflowGraph,
+  WorkflowGraphSchema,
+  type WorkflowGraphV3,
+} from '@acp/core';
 import {
   RunDetailDtoSchema,
   RunWorkflowGraphDtoSchema,
   WorkflowGraphDtoSchema,
   type RunWorkflowGraphDto,
 } from '@acp/core/api';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as renderPlain, screen, waitFor, within } from '@testing-library/react';
+import { Position } from '@xyflow/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   LIVE_GRAPH_PATH,
@@ -35,6 +41,7 @@ import {
   reworkCounts,
   stageOfBlock,
 } from '../../src/features/ticket/live-graph';
+import { liveLinkTypes } from '../../src/features/ticket/LiveGraphNodes';
 import { TicketPage } from '../../src/features/ticket/TicketPage';
 import { fakeServer, jsonResponse, renderWithApi, type RouteTable } from '../helpers';
 
@@ -122,8 +129,8 @@ describe('the live graph model', () => {
   });
 
   it('keeps the positions the owner gave the blocks in the editor', () => {
-    const graph = WorkflowGraphSchema.parse(directLoopGraph());
-    const moved: WorkflowGraph = {
+    const graph = migrateWorkflowV2(WorkflowGraphSchema.parse(directLoopGraph()));
+    const moved: WorkflowGraphV3 = {
       ...graph,
       nodes: graph.nodes.map((n) =>
         n.id === 'review' ? { ...n, position: { x: 900, y: 10 } } : n,
@@ -167,6 +174,19 @@ describe('the live graph model', () => {
     ]);
     expect(withLead.get('rework-orchestrate-helpers')).toBe(1);
     expect(withLead.get('rework-review-helpers')).toBe(0);
+    // FR-7: an Author block listing a fixer never takes the fixer from its own block.
+    const withAuthor = {
+      graph: {
+        ...d.graph,
+        nodes: [{ type: 'author' as const, id: 'author', label: 'Author' }, ...d.graph.nodes],
+      },
+      nodes: [{ nodeId: 'author', state: 'active' as const, agentRunIds: [L_API] }, ...d.nodes],
+    };
+    expect(
+      reworkCounts(withAuthor.graph, withAuthor.nodes, runOf().changes ?? []).get(
+        'rework-review-api-helper',
+      ),
+    ).toBe(1);
   });
 
   it('carries each block’s agents, the run’s mode and the sandbox, and the direct reviewer', () => {
@@ -191,16 +211,18 @@ describe('the live graph model', () => {
   it('picks the working agent of a block, and maps blocks to the side panel', () => {
     const agents = runOf().agents.filter((a) => a.kind === 'reviewer');
     expect(agentToShow(agents)?.id).toBe(L_REV2);
-    const graph = WorkflowGraphSchema.parse(directLoopGraph());
-    const node = (id: string) => {
-      const n = graph.nodes.find((x) => x.id === id);
+    // ADR-0037: a block maps by its derived role.
+    const g = buildLiveGraph(dto(), runOf());
+    const kind = (id: string) => {
+      const n = g.nodes.find((x) => x.id === id);
       if (n === undefined) throw new Error(id);
-      return n;
+      return n.data.kind;
     };
-    expect(stageOfBlock(node('review'))).toBe('review');
-    expect(stageOfBlock(node('code-review'))).toBe('code-review');
-    expect(stageOfBlock(node('api-helper'))).toBe('helpers');
-    expect(stageOfBlock(node('orchestrate'))).toBe('orchestrate');
+    expect(stageOfBlock(kind('review'))).toBe('review');
+    expect(stageOfBlock(kind('code-review'))).toBe('code-review');
+    expect(stageOfBlock(kind('api-helper'))).toBe('helpers');
+    expect(stageOfBlock(kind('orchestrate'))).toBe('orchestrate');
+    expect(stageOfBlock('researcher')).toBe('orchestrate');
   });
 
   it('finds a held final stage only while the run waits in review with nobody on it', () => {
@@ -356,5 +378,55 @@ describe('the live graph on the ticket page', () => {
     });
     await screen.findByTestId('agent-canvas');
     expect(screen.queryByTestId('live-workflow')).toBeNull();
+  });
+});
+
+describe('arrow purpose on the live graph (ADR-0037 §2, AR-6)', () => {
+  const PURPOSE = 'Why the lead hands this over: the owner’s words.';
+
+  function withPurpose(): RunWorkflowGraphDto {
+    const d = dto();
+    const [first, ...rest] = d.graph.edges;
+    if (first === undefined) throw new Error('no edge');
+    return { ...d, graph: { ...d.graph, edges: [{ ...first, purpose: PURPOSE }, ...rest] } };
+  }
+
+  it('draws every link with the live link view, carrying the purpose', () => {
+    const d = withPurpose();
+    const g = buildLiveGraph(d, runOf());
+    expect(new Set(g.edges.map((e) => e.type))).toEqual(new Set(['link']));
+    const id = d.graph.edges[0]?.id;
+    expect(g.edges.find((e) => e.id === id)?.data?.purpose).toBe(PURPOSE);
+    expect(g.edges.find((e) => e.id === id)?.ariaLabel).toContain(PURPOSE);
+  });
+
+  it('shows the purpose as the hover text of the arrow, and nothing for an arrow without one', () => {
+    const Link = liveLinkTypes.link;
+    const props = (purpose: string | null) =>
+      ({
+        id: 'flow-a-b',
+        source: 'a',
+        target: 'b',
+        sourceX: 0,
+        sourceY: 0,
+        targetX: 100,
+        targetY: 80,
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        data: { type: 'flow', purpose, direct: false, reworks: 0 },
+      }) as unknown as Parameters<typeof Link>[0];
+    const { container, rerender } = renderPlain(
+      <svg>
+        <Link {...props(PURPOSE)} />
+      </svg>,
+    );
+    const hit = container.querySelector('[data-testid="live-link-purpose-flow-a-b"]');
+    expect(hit?.querySelector('title')?.textContent).toBe(PURPOSE);
+    rerender(
+      <svg>
+        <Link {...props(null)} />
+      </svg>,
+    );
+    expect(container.querySelector('[data-testid="live-link-purpose-flow-a-b"]')).toBeNull();
   });
 });

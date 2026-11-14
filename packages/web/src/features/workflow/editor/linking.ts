@@ -1,14 +1,17 @@
-import type { WorkflowEdgeType, WorkflowGraph, WorkflowNodeId } from '@acp/core';
+import type { WorkflowEdgeTypeV3, WorkflowGraphV3, WorkflowNodeId } from '@acp/core';
 import { FINISH_COPY } from '../../../lib/copy';
 import { finishView } from '../finish';
 import type { LinkTarget } from './nodes';
 import { refusalFor, refusalTarget, resolveLink, type LinkOption } from './state';
 
+type WorkflowEdgeType = WorkflowEdgeTypeV3;
+type WorkflowGraph = WorkflowGraphV3;
+
 /**
  * Linking blocks, the pure parts (v0.3.1 P-C): where a dropped link ends (magnetic snapping), the
  * links "Link to…" offers, and moving an end of a link. Whether a link may exist is always core's
- * `canConnect` through `resolveLink` (state.ts), so every way of linking (drag, click, the menus,
- * moving an end) makes exactly the links the server accepts.
+ * `canConnectV3` through `resolveLink` (state.ts), so every way of linking (drag, click, the
+ * menus, moving an end) makes exactly the links core accepts.
  */
 
 /** How far (screen pixels) from a valid block a dropped link still snaps onto it. */
@@ -84,9 +87,12 @@ export function anchorOn(
 
 /** What dropping (or clicking) a link from `from` onto `to`, both as drawn, does. */
 export type LinkOutcome =
-  /** Exactly one kind fits: the link is made at once. */
+  /** Exactly one kind fits, and it is not Custom: the link is made at once. */
   | { kind: 'link'; from: WorkflowNodeId; to: WorkflowNodeId; type: WorkflowEdgeType }
-  /** Several kinds fit: the owner picks one by the drop point. */
+  /**
+   * Several kinds fit, or Custom does (ADR-0037 §2: a hand-off between two agents is always the
+   * owner's choice, never made for them): the owner picks one by the drop point.
+   */
   | { kind: 'choose'; option: LinkOption }
   /** None fits: refused in `canConnect`'s own words. */
   | { kind: 'refused'; message: string }
@@ -105,7 +111,7 @@ export function linkOutcome(
     return { kind: 'refused', message: refusalFor(graph, from, refusalTarget(graph, to)) };
   }
   const [only, ...more] = option.types;
-  if (only !== undefined && more.length === 0) {
+  if (only !== undefined && more.length === 0 && only !== 'custom') {
     return { kind: 'link', from: option.from, to: option.to, type: only };
   }
   return { kind: 'choose', option };
@@ -172,12 +178,15 @@ export function reconnectTargets(
   if (edge === undefined) return null;
   const without = withoutEdge(graph, id);
   const fixed = moving === 'target' ? edge.from : edge.to;
+  const when = edge.type === 'when';
   return new Map(
     finishView(graph).graph.nodes.map((n): [WorkflowNodeId, LinkTarget] => {
       if (n.id === fixed) return [n.id, 'source'];
       const option =
         moving === 'target' ? resolveLink(without, fixed, n.id) : resolveLink(without, n.id, fixed);
-      return [n.id, option === null ? 'invalid' : 'valid'];
+      // As `resolveReconnect`: only a When arrow may end where only a When arrow fits.
+      const fits = option !== null && option.types.some((t) => when || t !== 'when');
+      return [n.id, fits ? 'valid' : 'invalid'];
     }),
   );
 }
@@ -208,7 +217,12 @@ export function resolveReconnect(
   if (option === null) {
     return { kind: 'refused', message: refusalFor(without, from, refusalTarget(without, to)) };
   }
-  // The link keeps its kind when it fits its new ends; else it takes the kinds that do.
-  const types = option.types.includes(stored.type) ? [stored.type] : option.types;
+  // The link keeps its kind when it fits its new ends; else it takes the kinds that do. A moved
+  // link never turns into a When arrow (ADR-0038 §4): failure routing is drawn on purpose.
+  const fitting = stored.type === 'when' ? option.types : option.types.filter((t) => t !== 'when');
+  if (fitting.length === 0) {
+    return { kind: 'refused', message: refusalFor(without, from, refusalTarget(without, to)) };
+  }
+  const types = fitting.includes(stored.type) ? [stored.type] : fitting;
   return { kind: 'ok', from: option.from, to: option.to, types };
 }

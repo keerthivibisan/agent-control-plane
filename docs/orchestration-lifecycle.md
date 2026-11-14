@@ -54,6 +54,22 @@ the real runs of 2026-10-21 passed with every review route
     check run unasked.
   - _Auto:_ Auto edits plus the project's command allowlist (safe tokens only, a bare first word,
     `git` read-only). Each auto-approved request is recorded with its rule (`allowRule`).
+- **Several planners** (ADR-0037 §4): every planner submits a plan option; plan review opens once
+  each has submitted or ended, and the owner approves one option (never automatically, even in
+  Full auto). It becomes the run's plan; the others are stored as not chosen.
+- **Research before planning** (ADR-0037 §2–3): read-only researchers wired to a planner (or to
+  the lead when it plans) start first, in parallel within the helper limit and in arrow order
+  along a chain; the planner starts once each has reported its findings or ended. A researcher
+  wired to the lead after planning is started by the lead with `start_agent`; its findings reach
+  the lead as a notice. Findings and arrow purposes reach agents only as quoted data.
+- **Arrow notes** (ADR-0037 §2, amended 2026-11-14): the label and purpose of every arrow reach
+  the agent it concerns: `implement` the helper's start brief and rework prompts (and the lead's
+  helper list), `plan` and a plan-path `flow` the planner's (or lead's) brief, `review` the change
+  reviewer's brief, `findings` the lead's verdict notice, `rework` the rework prompt from that
+  reviewer, the lead or the Checks block, `test` and a final-chain `flow` the stage's brief.
+  Arrows between steps reach nobody. A program without notes briefs exactly as before.
+- **Custom hand-offs** (ADR-0037 §2): when the source agent is done, its output note goes to the
+  target, in its start brief or as a notice; a target the engine starts waits for its sources.
 - **Plan approval** creates the ticket branch from its start branch: named by the project's
   branching strategy, or `acp/<KEY>` (`acp/<KEY>-r<n>` for a later run) without one (ADR-0025).
   The lead hears of the approval only once the branch exists. Helpers and the tester start
@@ -61,6 +77,10 @@ the real runs of 2026-10-21 passed with every review route
 - **A helper's turn ends:** the agent goes to `AWAITING_REVIEW` (no process, no helper slot), its
   worktree is committed (sealed) and, when the workflow places a Checks block on the change, its
   checks run on that commit (ADR-0027, ADR-0028).
+- **Review fan-out** (ADR-0037 §5): a change with several reviewers waits for every verdict. Any
+  `rework` means rework (straight back to the helper on a direct route while rounds are left);
+  otherwise the lead decides, told each verdict and each "no verdict". Nothing merges on a partial
+  set of verdicts.
 - **Review:** a read-only review agent (default; it gets a detached checkout of the sealed commit
   and a diff of at most 64 KiB in its brief, sent, never stored) or the lead reviews the oldest
   ready change first. The review agent's findings become a ticket comment.
@@ -170,6 +190,42 @@ default, else Claude, when it starts, and keeps it. Its starts, rework turns, se
 and the lead's follow-up all carry that provider; the server routes each to that provider's
 adapter only. The state machines below are the same for both providers. Details:
 [provider-adapters §12](provider-adapters.md).
+
+## 0.4 Failure routing (ADR-0038) [implemented on `feature/workflow/failure-routing`]
+
+Verified with core, engine, server, adapter and web tests (`failure-routing*.test.ts`, the
+adversarial F-1 to F-6). One consented real run is still to come.
+
+- **Events.** `tests-failed` (a tester's `report_test_results` with status `failed`),
+  `checks-failed` and `harness-failed` (a Checks block, on a change or before the merge),
+  `review-rework` (a change reviewer) and `merge-conflict` (the ticket merge, and conflicts with
+  the target branch, ADR-0030).
+- **Context.** Each event builds one `FailureContext`: where it happened, the change, the likely
+  authors, what failed (tests, a capped check output tail, findings, conflicting files) and the
+  rounds. The lead always gets it; a fixer gets the same text. All of it is quoted data.
+- **Routing.** The router looks for the owner's When arrow for that source and event:
+  - none: the path from before ADR-0038 (the lead decides; a rework arrow or "back to the helper"
+    reworks the change as before); a tester's failure never goes back to the tester;
+  - to the lead: the lead gets the context and the arrow's purpose, and decides;
+  - to a helper block: a fix turn. The failing change's own helper reworks it when it belongs to
+    that block and is not decided; otherwise a new helper of the block starts from the ticket
+    branch with the block's settings, and the failing change waits for the lead's decision;
+  - to Author: as a helper block, for the one known author; several or no known authors go to the
+    lead.
+- **Rounds.** Counted per When arrow and failure lineage. A fixer's own later failure keeps the
+  lineage of the fix it was started for, so a chain of new fixers cannot get fresh rounds. After
+  `maxRounds` fix turns the failure goes to the lead. A fix that cannot start now (no free helper
+  slot, no room in the block, the helper busy or over budget, the run not going) goes to the lead
+  with the reason; nothing is queued.
+- **The lead steps in.** Every fix notice names its `fixId`. `reroute_fix` stops the fix and moves
+  it to another helper block or the author (same round: moving uses no round; at most one move to
+  a helper per round), or the lead takes it over. `stop_agent` stops it. Refused, with nothing
+  changed, for an unknown or finished fix, a target that is not a helper block, or a caller that is
+  not the lead.
+- **The lead knows the workflow.** Its first brief has "Your workflow": every agent and arrow as a
+  sentence with the owner's labels and purposes quoted; `view_workflow` returns the same text.
+- **In memory.** Fixes and rounds live with the live run; after a restart nothing relaunches, as
+  for every other turn.
 
 ## 1. Principles
 

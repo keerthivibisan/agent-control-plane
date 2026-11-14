@@ -215,6 +215,11 @@ export function createBoardRouter(board: BoardService, csrfToken: string): Route
     const dto = board.decidePlan(param(req.params['id']), param(req.params['planId']), req.body);
     res.json(out(TicketDetailDtoSchema, dto));
   });
+  // ADR-0037 §4: several planners' plan options on the ticket's current run.
+  router.post('/tickets/:id/plan-options/decision', csrf, json, (req, res) => {
+    const dto = board.decidePlanOption(param(req.params['id']), req.body);
+    res.json(out(TicketDetailDtoSchema, dto));
+  });
 
   // Checks on a run's helpers (the control router has already required managed agents on /runs).
   router.get('/runs/:id/checks', (req, res) => {

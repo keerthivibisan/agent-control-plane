@@ -58,7 +58,7 @@ async function serveWorkflow(page: Page, initial: Json): Promise<{ puts: Json[] 
       expect(req.headers()['x-acp-csrf']).toBe(WF_CSRF);
       const body = req.postDataJSON() as Json;
       puts.push(body);
-      current = { ...current, graph: body['graph'], stored: 'v2' };
+      current = { ...current, graph: body['graph'], stored: 'v3' };
     }
     await route.fulfill({ json: current });
   });

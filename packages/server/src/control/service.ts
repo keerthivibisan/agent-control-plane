@@ -31,9 +31,10 @@ import {
   type RegisteredRoot,
   type RunBudget,
   type RunStatus,
+  type AnyWorkflowGraph,
   type TicketPlan,
-  type WorkflowGraph,
 } from '@acp/core';
+import { failureRoutedComment } from './failure-routing.js';
 import {
   ApprovalDecisionRequestSchema,
   ChatRequestSchema,
@@ -75,6 +76,7 @@ import {
   createRun,
   decideApproval,
   decidePlan,
+  decidePlanOption,
   deriveRunWorkflow,
   deriveRunWorkflowGraph,
   effectiveMode,
@@ -95,7 +97,7 @@ import {
   recordReview,
   recoverAfterRestart,
   requestPermission,
-  runGraphOf,
+  runGraphV3Of,
   runLimits,
   stopAgent,
   stopFollowUp,
@@ -107,6 +109,7 @@ import {
   type EngineEffect,
   type EngineResult,
   type CreateRunInput,
+  type PlanOption,
   type FollowUpFacts,
   type PlanDecision,
   type Refusal,
@@ -242,6 +245,9 @@ export const PLANNER_READ_ONLY_MESSAGE =
   'The planner works read-only in the project. Write the plan with submit_plan; helpers make the changes after approval.';
 export const REVIEWER_READ_ONLY_MESSAGE =
   'The reviewer only reads the merged result. Post your findings with post_review.';
+/** ADR-0037 §3: a researcher's tool use the adapter's gate did not settle: denied, never asked. */
+export const RESEARCHER_READ_ONLY_MESSAGE =
+  'The researcher works read-only in the project. Report what you found with report_findings.';
 /** A follow-up turn's tool use the adapter's gate did not settle (ADR-0020): denied, never asked. */
 export const FOLLOW_UP_READ_ONLY_MESSAGE =
   'This run has ended: you can only read the project and answer. New work needs a new run.';
@@ -323,6 +329,8 @@ export interface TicketRunInput {
   leadPrompt: string;
   /** Separate planner mode (ADR-0019): the planner's brief (`ticketRunPrompts`). */
   plannerPrompt?: string;
+  /** ADR-0037 §3: the ticket part of every researcher's brief (`ticketResearcherPrompt`). */
+  researcherPrompt?: string;
   /** The project's workflow, snapshotted with the run (ADR-0019). */
   workflow?: ProjectWorkflow;
   limits: RunLimits;
@@ -333,9 +341,10 @@ export interface TicketRunInput {
   approvals?: ProjectApprovals;
   /**
    * ADR-0023: the project's workflow graph, validated, snapshotted with the run and compiled with
-   * `graphContext` (both or neither). Absent: the version 1 `workflow` (legacy test runs).
+   * `graphContext` (both or neither); version 3 from the board (ADR-0037). Absent: the version 1
+   * `workflow` (legacy test runs).
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   graphContext?: CompileContext;
   /** Runs in the same transaction as the new run's insert (the ticket's status and current run). */
   inTransaction?: (runId: string) => void;
@@ -493,6 +502,16 @@ export interface ControlService {
   runWorkflowGraph(runId: string): RunWorkflowGraphDto;
   /** The owner's decision on the plan waiting in PLAN_REVIEW; returns the decided plan. */
   decidePlan(runId: string, planId: string, decision: PlanDecision, comment?: string): TicketPlan;
+  /**
+   * ADR-0037 §4: the owner's decision on the plan options of a run with several planners
+   * (`decidePlanOption`): approve one (`planOptionId`, required when two or more wait) or ask
+   * every planner for changes (a comment is required). Returns the chosen option, or null.
+   */
+  decidePlanOption(
+    runId: string,
+    decision: PlanDecision,
+    input: { planOptionId?: string; comment?: string },
+  ): PlanOption | null;
   /** The run's engine state if this process holds it (live or loaded); never loads it. */
   peek(runId: string): RunState | undefined;
   /** A worker's worktree, when it has one that still exists. */
@@ -1095,6 +1114,28 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // ADR-0026 §3: stored in the same transaction (RunStore.commit); no text is logged.
           logger.log('info', 'agent note stored', { runId, agentRunId: effect.agentRunId });
           break;
+        case 'record-findings':
+          // ADR-0037 §3: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'research findings stored', { runId, agentRunId: effect.agentRunId });
+          break;
+        case 'failure-routed':
+          // ADR-0038 §4 (FR-5): a one-line app comment from the app's own records; ids and the
+          // kind only in the log.
+          appComment(live, failureRoutedComment(live.state, effect));
+          logger.log('info', 'failure routed', {
+            runId,
+            ...(effect.fixerAgentRunId !== null ? { agentRunId: effect.fixerAgentRunId } : {}),
+            code: effect.kind,
+          });
+          break;
+        case 'record-test-results':
+          // ADR-0038 §1: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'test results stored', {
+            runId,
+            agentRunId: effect.agentRunId,
+            code: effect.status,
+          });
+          break;
         // ADR-0030: the resolver's report, seal and end go to its conflict-resolution operation.
         case 'helper-outcome':
           resolution.onHelperOutcome(effect.agentRunId, effect.outcome, effect.assessment);
@@ -1152,6 +1193,25 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           logger.log('info', effect.type === 'plan-submitted' ? 'plan submitted' : 'plan decided', {
             runId,
             planId: effect.planId,
+          });
+          break;
+        // ADR-0037 §4: several planners' plan options. The options live with the run until AR-4
+        // stores the drafts; the chosen plan is stored like any approved plan (`plan-decided`).
+        case 'plan-option-submitted':
+          logger.log('info', 'plan option submitted', {
+            runId,
+            planOptionId: effect.planOptionId,
+          });
+          break;
+        case 'plan-options-ready':
+          logger.log('info', 'plan options ready', { runId, count: effect.planOptionIds.length });
+          break;
+        case 'plan-option-decided':
+          logger.log('info', 'plan option decided', {
+            runId,
+            status: effect.status,
+            planId: effect.planId,
+            notChosen: effect.notChosen.length,
           });
           break;
         case 'budget-overshoot':
@@ -1288,7 +1348,8 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       model: effect.model,
       effort: effect.effort,
     };
-    if (kind === 'lead' || kind === 'planner') {
+    // ADR-0037 §3: a researcher reads the owner's tree like the planner, with no worktree.
+    if (kind === 'lead' || kind === 'planner' || kind === 'researcher') {
       if (
         hooks.agentSetup === undefined &&
         effect.skills === undefined &&
@@ -1538,7 +1599,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
   ): Promise<{ prompt: string; readOnlyDirs?: string[] }> {
     const list = ticketAttachments(live);
     if (list.length === 0) return { prompt };
-    const inRunFolder = kind === 'lead' || kind === 'planner';
+    const inRunFolder = kind === 'lead' || kind === 'planner' || kind === 'researcher';
     const dir = inRunFolder
       ? runAttachmentsDir(live.state.run.id, agentRunId)
       : join(cwd, AGENT_ATTACHMENTS_DIR);
@@ -2621,12 +2682,18 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       return Promise.resolve({ allow: false, message: LEAD_READ_ONLY_MESSAGE });
     }
     if (isReadOnlyRole(kind)) {
-      // ADR-0019: the planner and the reviewer only read; their tool uses are denied the same way.
+      // ADR-0019: the planner, the reviewer and the researcher (ADR-0037 §3) only read; their
+      // tool uses are denied the same way.
       countDiagnostic('read-only-tool-denied');
       logger.log('info', 'read-only agent tool use denied', { runId, agentRunId, kind });
       return Promise.resolve({
         allow: false,
-        message: kind === 'planner' ? PLANNER_READ_ONLY_MESSAGE : REVIEWER_READ_ONLY_MESSAGE,
+        message:
+          kind === 'planner'
+            ? PLANNER_READ_ONLY_MESSAGE
+            : kind === 'researcher'
+              ? RESEARCHER_READ_ONLY_MESSAGE
+              : REVIEWER_READ_ONLY_MESSAGE,
       });
     }
     const target = allowlistTarget(request.toolName, toolInputOf(request));
@@ -3439,6 +3506,9 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
             ticketId: input.ticketId,
             leadPrompt: input.leadPrompt,
             ...(input.plannerPrompt !== undefined && { plannerPrompt: input.plannerPrompt }),
+            ...(input.researcherPrompt !== undefined && {
+              researcherPrompt: input.researcherPrompt,
+            }),
           },
           ...(input.workflow !== undefined && { workflow: input.workflow }),
           ...(input.reviewLoop !== undefined && { reviewLoop: input.reviewLoop }),
@@ -3479,7 +3549,7 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
 
     runWorkflowGraph(runId) {
       const state = get(runId).state;
-      return { runId, graph: runGraphOf(state), ...deriveRunWorkflowGraph(state) };
+      return { runId, graph: runGraphV3Of(state), ...deriveRunWorkflowGraph(state) };
     },
 
     ticketBranch(runId) {
@@ -3557,6 +3627,17 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
       const plan = applyOrThrow(live, (s, c) => decidePlan(s, planId, decision, c, comment));
       logger.log('info', 'plan decided by owner', { runId, planId, decision });
       return plan;
+    },
+
+    decidePlanOption(runId, decision, input) {
+      const live = get(runId);
+      const option = applyOrThrow(live, (s, c) => decidePlanOption(s, decision, c, input));
+      logger.log('info', 'plan option decided by owner', {
+        runId,
+        planOptionId: option?.id ?? null,
+        decision,
+      });
+      return option;
     },
 
     peek(runId) {

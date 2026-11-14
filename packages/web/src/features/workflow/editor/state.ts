@@ -1,75 +1,92 @@
 import {
+  AUTHOR_BLOCK_LABEL,
   DEFAULT_MAX_REWORK_ROUNDS,
+  DEFAULT_WHEN_ROUNDS,
+  MAX_WHEN_ROUNDS,
   HARD_MAX_HELPERS,
   MAX_GRAPH_NODES,
-  NODE_CAPABILITIES,
-  canConnect,
+  canConnectV3,
   type AgentEffort,
-  type ManagedProviderId,
-  type AgentWorkflowNode,
   type ApprovalMode,
   type CheckBlockPlace,
   type CheckFailureRoute,
   type CheckSelection,
+  type FailureEvent,
+  type ManagedProviderId,
   type NodePosition,
-  type ReviewerScope,
   type SkillName,
-  type WorkflowEdge,
-  type WorkflowEdgeType,
-  type WorkflowGraph,
-  type WorkflowNode,
+  type WorkflowEdgeTypeV3,
+  type WorkflowEdgeV3,
+  type WorkflowGraphV3,
   type WorkflowNodeId,
+  type WorkflowNodeV3,
+  type WorkflowNodeV3Of,
 } from '@acp/core';
-import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY, type PaletteItemKey } from '../../../lib/copy';
+import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import {
   blocksWithoutChangeChecks,
   checkFailureOf,
   checkPlaceOf,
   checkedBlocks,
   checksBlocks,
+  editingIds,
   failureRoutes,
   isChangeBlockLink,
   isChecksNode,
-  isEditingBlock,
   type ChecksNode,
 } from '../check-blocks';
 import { finishParts } from '../finish';
+import { EDITOR_COPY, type PresetKey } from './copy';
+import { newWhenEvents, sourceEvents } from './failure-routing';
+import { blockKind, graphRoles, isEditingKind, isFinalKind, type BlockKind } from './roles';
 
 /**
- * The graph editor's state (ADR-0023, docs/history/workflow-graph/README.md §5): the graph being
- * edited, what is selected, and the last refused link. A pure reducer, so every editing rule is
- * tested without React Flow. Whether a link may exist is always core's `canConnect`, the same check
- * the validator and the server run, so the editor can never draw a link the server would refuse.
+ * The graph editor's state (ADR-0023, ADR-0037; docs/arrows/README.md "Web editor"): the version 3
+ * graph being edited, what is selected, and the last refused link. A pure reducer, so every editing
+ * rule is tested without React Flow. Whether an arrow may exist is always core's `canConnectV3`,
+ * the same check the validator runs, so the editor can never draw an arrow core would refuse.
  *
- * Two conveniences keep the forced wiring out of the owner's way, because there is only one valid
- * way to do it:
- * - adding or removing the planner rewires the plan path (`ticket → planner → plan approval → lead`
- *   with one, `ticket → lead → plan approval` without);
+ * There is one Agent block: its role comes from its arrows (`roles.ts`). The "Add block" menu's
+ * presets are an agent with its arrow already drawn, and they keep the forced wiring out of the
+ * owner's way where there is only one valid way to do it:
+ * - adding the first planner rewires the plan path (`ticket → planner → plan approval → lead`), a
+ *   further planner joins it (`ticket → planner`, `planner → plan approval`), and removing the last
+ *   one puts `ticket → lead → plan approval` back;
  * - a final reviewer or tester is added just before your merge on the final chain, and removing
- *   one joins the chain around it.
- * Everything else (assigns, review routes, findings, rework) is the owner's choice.
+ *   one joins the chain around it;
+ * - a researcher researches for the first planner, else the lead; a helper gets the lead's
+ *   `implement` arrow; a change reviewer reviews the selected (else the first) helper or tester
+ *   and sends its findings to the lead.
+ * Everything else (custom hand-offs, review routes, rework) is the owner's choice.
  */
 
 export type Selection = { kind: 'node'; id: WorkflowNodeId } | { kind: 'edge'; id: string } | null;
 
+type Graph = WorkflowGraphV3;
+type GraphNode = WorkflowNodeV3;
+type GraphEdge = WorkflowEdgeV3;
+type EdgeType = WorkflowEdgeTypeV3;
+type AgentBlock = WorkflowNodeV3Of<'agent'>;
+
 export interface EditorState {
-  graph: WorkflowGraph;
+  graph: Graph;
   selection: Selection;
   /** The last refused link, in the owner's words; cleared by the next change. */
   refusal: string | null;
 }
 
-/** What a palette item adds, in palette order. */
-export const PALETTE_ITEMS: readonly PaletteItemKey[] = [
+/** What the "Add block" menu adds, in its order: the Agent block, then the presets. */
+export const PRESET_ITEMS: readonly PresetKey[] = [
+  'agent',
+  'researcher',
   'planner',
   'helper',
-  'helper-pool',
   'change-reviewer',
   'final-reviewer',
   'tester',
 ];
 
-/** The fields the node panel can change; each is applied only to the kinds that have it. */
+/** The fields the node panel can change; each is applied only to the blocks that have it. */
 export interface NodePatch {
   label?: string;
   model?: string | null;
@@ -79,7 +96,8 @@ export interface NodePatch {
   description?: string;
   maxInstances?: number;
   canStartHelpers?: boolean;
-  scope?: ReviewerScope;
+  /** A helper is the helper pool (ADR-0037; at most one per workflow). */
+  pool?: boolean;
   auto?: boolean;
   /** A Checks block's selection (ADR-0027 §5); its place and failure route have their own actions. */
   select?: CheckSelection;
@@ -87,6 +105,12 @@ export interface NodePatch {
   effort?: AgentEffort | null;
   /** An agent block's provider (ADR-0031); null: the project's default (the field is dropped). */
   provider?: ManagedProviderId | null;
+}
+
+/** An arrow's words (ADR-0037 §2): empty text drops the field. */
+export interface EdgePatch {
+  label?: string;
+  purpose?: string;
 }
 
 /**
@@ -99,29 +123,32 @@ export type MovableCheckPlace = Exclude<CheckBlockPlace, 'merge'>;
 
 export type EditorAction =
   /** Load a graph (first load, a template, "restore my earlier setup", a save's answer). */
-  | { type: 'replace'; graph: WorkflowGraph }
-  | { type: 'add'; item: PaletteItemKey }
+  | { type: 'replace'; graph: Graph }
+  /** Adds the Agent block or a preset; `near` is the selected block (a change reviewer reviews it). */
+  | { type: 'add'; item: PresetKey; near?: WorkflowNodeId | undefined }
   | { type: 'remove-node'; id: WorkflowNodeId }
   | { type: 'update-node'; id: WorkflowNodeId; patch: NodePatch }
+  | { type: 'update-edge'; id: string; patch: EdgePatch }
   | { type: 'move-node'; id: WorkflowNodeId; position: NodePosition }
-  | { type: 'connect'; from: WorkflowNodeId; to: WorkflowNodeId; edgeType: WorkflowEdgeType }
+  | { type: 'connect'; from: WorkflowNodeId; to: WorkflowNodeId; edgeType: EdgeType }
   /**
    * Moves an end of a link (v0.3.1 P-C): the link `id` becomes `from → to` of `edgeType`, checked
-   * with `canConnect` on the graph without it; refused, the link stays where it was.
+   * with `canConnectV3` on the graph without it; refused, the link stays where it was.
    */
-  | {
-      type: 'reconnect';
-      id: string;
-      from: WorkflowNodeId;
-      to: WorkflowNodeId;
-      edgeType: WorkflowEdgeType;
-    }
+  | { type: 'reconnect'; id: string; from: WorkflowNodeId; to: WorkflowNodeId; edgeType: EdgeType }
   /** Tidy layout (P-C): every block back in the automatic layout (the saved positions go). */
   | { type: 'tidy' }
   | { type: 'refuse'; message: string }
   | { type: 'dismiss-refusal' }
   | { type: 'remove-edge'; id: string }
+  /** A rework arrow's rounds (0–5), or a When arrow's (1–5, ADR-0038 §4). */
   | { type: 'set-rounds'; id: string; maxRounds: number }
+  /** Adds the Author block (ADR-0038 §4), at most one; it is selected, with no arrow yet. */
+  | { type: 'add-author' }
+  /** A When arrow's events; an empty list is ignored (an arrow routes at least one). */
+  | { type: 'set-when-events'; id: string; on: readonly FailureEvent[] }
+  /** A When arrow's retest after a merged fix (ADR-0038 §4, amended 2026-11-14); on by default. */
+  | { type: 'set-when-retest'; id: string; retest: boolean }
   /** Adds a Checks block on a change (linked from `near` when it may be) or on the branch. */
   | { type: 'add-checks'; place: CheckBlockItem; near?: WorkflowNodeId | undefined }
   /** Moves a Checks block between a change and the branch, rewiring it; never the merge block. */
@@ -132,7 +159,7 @@ export type EditorAction =
   /** Clears the selection only when it is still `id` (React Flow sends deselects separately). */
   | { type: 'deselect'; id: string };
 
-export function initialEditorState(graph: WorkflowGraph): EditorState {
+export function initialEditorState(graph: Graph): EditorState {
   return { graph, selection: null, refusal: null };
 }
 
@@ -140,76 +167,58 @@ export function initialEditorState(graph: WorkflowGraph): EditorState {
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{0,39}$/;
 
-function nodeOf(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowNode | undefined {
+function nodeOf(graph: Graph, id: WorkflowNodeId): GraphNode | undefined {
   return graph.nodes.find((n) => n.id === id);
 }
 
-function single(graph: WorkflowGraph, type: WorkflowNode['type']): WorkflowNode | undefined {
+function single(graph: Graph, type: GraphNode['type']): GraphNode | undefined {
   const all = graph.nodes.filter((n) => n.type === type);
   return all.length === 1 ? all[0] : undefined;
 }
 
+function kindOf(graph: Graph, id: WorkflowNodeId): BlockKind | undefined {
+  const node = nodeOf(graph, id);
+  return node === undefined ? undefined : blockKind(graph, node);
+}
+
 /**
- * The blocks the palette adds can be removed, every Checks block included (ADR-0028 §2: none is
- * mandatory); the lead and the steps are in every workflow.
+ * Every agent block can be removed, and every Checks block (ADR-0028 §2: none is mandatory); the
+ * lead and the steps are in every workflow.
  */
-export function isRemovable(node: WorkflowNode): boolean {
-  if (isChecksNode(node)) return true;
-  return (
-    node.type === 'planner' ||
-    node.type === 'helper' ||
-    node.type === 'helper-pool' ||
-    node.type === 'reviewer' ||
-    node.type === 'tester'
-  );
+export function isRemovable(node: GraphNode): boolean {
+  return node.type === 'agent' || node.type === 'author' || isChecksNode(node);
 }
 
 /** A block on the final chain between the ticket merge and your merge (branch checks too). */
-function isFinalStage(node: WorkflowNode | undefined): boolean {
-  return (
-    node !== undefined &&
-    ((node.type === 'reviewer' && node.scope === 'final') ||
-      node.type === 'tester' ||
-      (isChecksNode(node) && checkPlaceOf(node) === 'branch'))
-  );
+function isFinalStage(graph: Graph, node: GraphNode | undefined): boolean {
+  if (node === undefined) return false;
+  if (isChecksNode(node)) return checkPlaceOf(node) === 'branch';
+  return isFinalKind(blockKind(graph, node));
 }
 
-/** How many blocks of the item's kind the graph has, and the most it may have. */
-function countFor(graph: WorkflowGraph, item: PaletteItemKey): { count: number; max: number } {
+function countKinds(graph: Graph, kinds: readonly BlockKind[]): number {
+  return graph.nodes.filter((n) => kinds.includes(blockKind(graph, n))).length;
+}
+
+/** How many blocks of the preset's role the graph has, and the most it may have (core's counts). */
+function countFor(graph: Graph, item: PresetKey): { count: number; max: number } {
   switch (item) {
-    case 'planner':
-      return {
-        count: graph.nodes.filter((n) => n.type === 'planner').length,
-        max: NODE_CAPABILITIES.planner.maxPerGraph,
-      };
     case 'helper':
-      return {
-        count: graph.nodes.filter((n) => n.type === 'helper').length,
-        max: Math.min(NODE_CAPABILITIES.helper.maxPerGraph, HARD_MAX_HELPERS),
-      };
-    case 'helper-pool':
-      return {
-        count: graph.nodes.filter((n) => n.type === 'helper-pool').length,
-        max: NODE_CAPABILITIES['helper-pool'].maxPerGraph,
-      };
+      return { count: countKinds(graph, ['helper']), max: HARD_MAX_HELPERS };
     case 'change-reviewer':
     case 'final-reviewer':
-      // Both scopes are one node type: they share the reviewer limit.
-      return {
-        count: graph.nodes.filter((n) => n.type === 'reviewer').length,
-        max: NODE_CAPABILITIES.reviewer.maxPerGraph,
-      };
+      // Both scopes share the reviewer limit.
+      return { count: countKinds(graph, ['reviewer-change', 'reviewer-final']), max: 8 };
     case 'tester':
-      return {
-        count: graph.nodes.filter((n) => n.type === 'tester').length,
-        max: NODE_CAPABILITIES.tester.maxPerGraph,
-      };
+      return { count: countKinds(graph, ['tester']), max: 2 };
+    default:
+      return { count: 0, max: MAX_GRAPH_NODES };
   }
 }
 
 /** Whether the menu may add a Checks block in this place, and why not (in plain sight). */
 export function checksAvailability(
-  graph: WorkflowGraph,
+  graph: Graph,
   place: CheckBlockItem,
 ): { ok: true } | { ok: false; reason: string } {
   const H = HARNESS_BLOCKS_COPY.palette;
@@ -221,54 +230,85 @@ export function checksAvailability(
       ? { ok: false, reason: place === 'branch' ? H.branchFull : H.mergeFull }
       : { ok: true };
   }
-  if (!graph.nodes.some(isEditingBlock)) return { ok: false, reason: H.noEditors };
+  if (editingIds(graph).size === 0) return { ok: false, reason: H.noEditors };
   return blocksWithoutChangeChecks(graph).length === 0
     ? { ok: false, reason: H.allChecked }
     : { ok: true };
 }
 
-/** Whether the palette may add the item, and why not (the palette's tooltip). */
+/** Whether the menu may add the item, and why not (shown under it). */
 export function paletteAvailability(
-  graph: WorkflowGraph,
-  item: PaletteItemKey,
+  graph: Graph,
+  item: PresetKey,
 ): { ok: true } | { ok: false; reason: string } {
   const P = WORKFLOW_GRAPH_COPY.palette;
   if (graph.nodes.length >= MAX_GRAPH_NODES) {
     return { ok: false, reason: P.tooManyBlocks(MAX_GRAPH_NODES) };
   }
   const { count, max } = countFor(graph, item);
-  if (count >= max) return { ok: false, reason: P.full(P.items[item], max) };
+  if (count >= max) return { ok: false, reason: P.full(EDITOR_COPY.palette.items[item], max) };
   return { ok: true };
 }
 
-/** The edge types `canConnect` allows from `from` to `to` in `graph`, in a fixed order. */
+/** Whether the menu may add the Author block (ADR-0038 §4: at most one per workflow). */
+export function authorAvailability(graph: Graph): { ok: true } | { ok: false; reason: string } {
+  if (graph.nodes.length >= MAX_GRAPH_NODES) {
+    return { ok: false, reason: WORKFLOW_GRAPH_COPY.palette.tooManyBlocks(MAX_GRAPH_NODES) };
+  }
+  return graph.nodes.some((n) => n.type === 'author')
+    ? { ok: false, reason: EDITOR_COPY.author.full }
+    : { ok: true };
+}
+
+/** When (ADR-0038 §4) comes last: between two blocks it is the owner's choice next to the others. */
+const EDGE_TYPE_ORDER: readonly EdgeType[] = [
+  'implement',
+  'research',
+  'plan',
+  'review',
+  'findings',
+  'rework',
+  'test',
+  'merge',
+  'flow',
+  'custom',
+  'when',
+];
+
+/** The arrow types `canConnectV3` allows from `from` to `to` in `graph`, in a fixed order. */
 export function allowedEdgeTypes(
-  graph: WorkflowGraph,
+  graph: Graph,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
-): WorkflowEdgeType[] {
-  return EDGE_TYPE_ORDER.filter((t) => canConnect(graph, from, to, t).ok);
+): EdgeType[] {
+  return EDGE_TYPE_ORDER.filter((t) => canConnectV3(graph, from, to, t).ok);
 }
 
 /** A link the owner draws on the canvas, as it is stored (the Finish block's steps resolved). */
 export interface LinkOption {
   from: WorkflowNodeId;
   to: WorkflowNodeId;
-  types: WorkflowEdgeType[];
+  types: EdgeType[];
 }
 
 /**
  * The stored ends a link drawn on the canvas stands for (ADR-0028 §3, `finish.ts`): a link to
  * the Finish block ends on the ticket merge when that is allowed, else on your merge; a link from
  * the block that feeds the ticket merge may start at the ticket merge (the next step after it).
- * The first pair `canConnect` allows wins; null when none is allowed.
+ * The first pair core allows wins; null when none is allowed.
  */
 export function resolveLink(
-  graph: WorkflowGraph,
+  graph: Graph,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
 ): LinkOption | null {
   const parts = finishParts(graph);
+  if (parts !== null && from === parts.ownerMerge) {
+    // ADR-0038 §4: the Finish block starts only the ticket merge's When arrows (merge conflicts).
+    if (to === parts.ticketMerge || to === parts.done || to === from) return null;
+    const ok = canConnectV3(graph, parts.ticketMerge, to, 'when').ok;
+    return ok ? { from: parts.ticketMerge, to, types: ['when'] } : null;
+  }
   const tos = parts !== null && to === parts.ownerMerge ? [parts.ticketMerge, to] : [to];
   const feeds =
     parts !== null && graph.edges.some((e) => e.from === from && e.to === parts.ticketMerge);
@@ -284,45 +324,47 @@ export function resolveLink(
 }
 
 /** The block a refusal names for a link drawn to `to` (the ticket merge for the Finish block). */
-export function refusalTarget(graph: WorkflowGraph, to: WorkflowNodeId): WorkflowNodeId {
+export function refusalTarget(graph: Graph, to: WorkflowNodeId): WorkflowNodeId {
   const parts = finishParts(graph);
   return parts !== null && to === parts.ownerMerge ? parts.ticketMerge : to;
 }
 
-const EDGE_TYPE_ORDER: readonly WorkflowEdgeType[] = [
-  'assigns',
-  'review',
-  'findings',
-  'rework',
-  'merge',
-  'flow',
-];
-
-/** The link kinds a block of this type can start, most likely first (for a refusal's words). */
-function outgoingTypes(node: WorkflowNode): readonly WorkflowEdgeType[] {
-  switch (node.type) {
+/** The arrows a block of this kind can start, most likely first (for a refusal's words). */
+function outgoingTypes(kind: BlockKind | undefined): readonly EdgeType[] {
+  switch (kind) {
     case 'lead':
-      return ['assigns', 'merge', 'rework', 'flow'];
+      return ['implement', 'merge', 'rework', 'flow'];
+    case 'researcher':
+      return ['research', 'custom'];
+    case 'planner':
+      return ['plan', 'custom'];
     case 'helper':
     case 'helper-pool':
-      return ['review'];
-    case 'reviewer':
-      return node.scope === 'change' ? ['findings', 'rework'] : ['flow'];
+      return ['review', 'custom'];
+    case 'reviewer-change':
+      return ['findings', 'rework', 'custom', 'when'];
+    case 'reviewer-final':
+      return ['flow', 'custom'];
     case 'tester':
-      return ['review', 'flow'];
+      return ['review', 'flow', 'custom', 'when'];
+    case 'checks':
+    case 'ticket-merge':
+      return ['flow', 'when'];
+    case 'agent':
+      return ['research', 'plan', 'review', 'custom'];
+    case 'mixed':
+      return ['custom'];
     default:
       return ['flow'];
   }
 }
 
 /**
- * Why no link fits from `from` to `to`: `canConnect`'s own message for the kind of link the
- * source block most likely meant (a duplicate first, since that is the plainest reason).
+ * Why no arrow fits from `from` to `to`: core's own message for the kind of arrow the source block
+ * most likely meant (a duplicate first, since that is the plainest reason).
  */
-export function refusalFor(graph: WorkflowGraph, from: WorkflowNodeId, to: WorkflowNodeId): string {
-  const source = nodeOf(graph, from);
-  const kinds = source === undefined ? (['flow'] as const) : outgoingTypes(source);
-  const results = kinds.map((t) => canConnect(graph, from, to, t));
+export function refusalFor(graph: Graph, from: WorkflowNodeId, to: WorkflowNodeId): string {
+  const results = outgoingTypes(kindOf(graph, from)).map((t) => canConnectV3(graph, from, to, t));
   const duplicate = results.find((r) => !r.ok && r.code === 'duplicate-edge');
   const first = duplicate ?? results.find((r) => !r.ok);
   return first !== undefined && !first.ok ? first.message : '';
@@ -331,7 +373,7 @@ export function refusalFor(graph: WorkflowGraph, from: WorkflowNodeId, to: Workf
 // ---------------------------------------------------------------- building blocks
 
 /** A free id: `base`, else `base-2`, `base-3`…; `numbered` always adds the number. */
-function freeId(graph: WorkflowGraph, base: string, numbered = false): WorkflowNodeId {
+function freeId(graph: Graph, base: string, numbered = false): WorkflowNodeId {
   const taken = new Set<string>(graph.nodes.map((n) => n.id));
   if (!numbered && !taken.has(base)) return base;
   for (let i = numbered ? 1 : 2; ; i += 1) {
@@ -341,7 +383,7 @@ function freeId(graph: WorkflowGraph, base: string, numbered = false): WorkflowN
 }
 
 /** The first label `make(n)` gives that no block has yet. */
-function freeLabel(graph: WorkflowGraph, make: (n: number) => string, first = 1): string {
+function freeLabel(graph: Graph, make: (n: number) => string, first = 1): string {
   const taken = new Set(graph.nodes.map((n) => n.label.trim().toLowerCase()));
   for (let i = first; ; i += 1) {
     const label = make(i);
@@ -349,10 +391,15 @@ function freeLabel(graph: WorkflowGraph, make: (n: number) => string, first = 1)
   }
 }
 
+/** "Planner", then "Planner 2", "Planner 3"… */
+function numbered(word: string): (n: number) => string {
+  return (n) => (n === 1 ? word : `${word} ${n}`);
+}
+
 /** A deterministic, unique link id from its ends (ids match `^[a-z][a-z0-9-]{0,39}$`). */
 export function edgeIdFor(
-  graph: WorkflowGraph,
-  type: WorkflowEdgeType,
+  graph: Graph,
+  type: EdgeType,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
 ): string {
@@ -367,90 +414,71 @@ export function edgeIdFor(
 }
 
 function makeEdge(
-  graph: WorkflowGraph,
-  type: WorkflowEdgeType,
+  graph: Graph,
+  type: EdgeType,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
-): WorkflowEdge {
+): GraphEdge {
   const id = edgeIdFor(graph, type, from, to);
-  return type === 'rework'
-    ? { type, id, from, to, maxRounds: DEFAULT_MAX_REWORK_ROUNDS }
-    : { type, id, from, to };
+  if (type === 'rework') return { type, id, from, to, maxRounds: DEFAULT_MAX_REWORK_ROUNDS };
+  // ADR-0038 §4: a When arrow starts with the events its source raises that no other When arrow
+  // from it routes yet; the owner ticks them in the link's panel.
+  if (type === 'when') {
+    return { type, id, from, to, on: newWhenEvents(graph, from), maxRounds: DEFAULT_WHEN_ROUNDS };
+  }
+  return { type, id, from, to };
 }
 
-/** Adds a link when `canConnect` allows it, else leaves the graph as it is. */
-function link(
-  graph: WorkflowGraph,
-  type: WorkflowEdgeType,
-  from: WorkflowNodeId,
-  to: WorkflowNodeId,
-): WorkflowGraph {
-  if (!canConnect(graph, from, to, type).ok) return graph;
+/** Adds an arrow when `canConnectV3` allows it, else leaves the graph as it is. */
+function link(graph: Graph, type: EdgeType, from: WorkflowNodeId, to: WorkflowNodeId): Graph {
+  if (!canConnectV3(graph, from, to, type).ok) return graph;
   return { ...graph, edges: [...graph.edges, makeEdge(graph, type, from, to)] };
 }
 
-function unlink(graph: WorkflowGraph, keep: (e: WorkflowEdge) => boolean): WorkflowGraph {
+function unlink(graph: Graph, keep: (e: GraphEdge) => boolean): Graph {
   return { ...graph, edges: graph.edges.filter(keep) };
 }
 
-function isFlow(e: WorkflowEdge, from: string, to: string): boolean {
+function isFlow(e: GraphEdge, from: string, to: string): boolean {
   return e.type === 'flow' && e.from === from && e.to === to;
 }
 
 const NO_CONFIG = { model: null, skills: [] as SkillName[], agent: null };
 
-/** The new block for a palette item, with a free id and label and no position (laid out). */
-function newNode(graph: WorkflowGraph, item: PaletteItemKey): WorkflowNode {
-  const L = WORKFLOW_GRAPH_COPY.newLabels;
+/** The new agent block for a menu item, with a free id and label and no position (laid out). */
+function newAgent(graph: Graph, item: PresetKey): AgentBlock {
+  const L = EDITOR_COPY.palette.newLabels;
+  const base = (id: string, label: string): AgentBlock => ({
+    type: 'agent',
+    id,
+    label,
+    ...NO_CONFIG,
+  });
   switch (item) {
+    case 'agent':
+      return base(
+        freeId(graph, 'agent', true),
+        freeLabel(graph, (n) => `${L.agent} ${n}`),
+      );
+    case 'researcher':
+      return base(freeId(graph, 'research'), freeLabel(graph, numbered(L.researcher)));
     case 'planner':
-      return { type: 'planner', id: freeId(graph, 'plan'), label: L.planner, ...NO_CONFIG };
+      return base(freeId(graph, 'plan'), freeLabel(graph, numbered(L.planner)));
     case 'helper':
       return {
-        type: 'helper',
-        id: freeId(graph, 'helper', true),
-        label: freeLabel(graph, L.helper),
-        ...NO_CONFIG,
+        ...base(freeId(graph, 'helper', true), freeLabel(graph, L.helper)),
         approvalMode: null,
         description: '',
         maxInstances: 1,
         canStartHelpers: false,
       };
-    case 'helper-pool':
-      return {
-        type: 'helper-pool',
-        id: freeId(graph, 'helpers'),
-        label: L['helper-pool'],
-        ...NO_CONFIG,
-        approvalMode: null,
-        canStartHelpers: true,
-      };
     case 'change-reviewer':
-      return {
-        type: 'reviewer',
-        id: freeId(graph, 'review'),
-        label: freeLabel(graph, (n) =>
-          n === 1 ? L['change-reviewer'] : `${L['change-reviewer']} ${n}`,
-        ),
-        scope: 'change',
-        ...NO_CONFIG,
-      };
+      return base(freeId(graph, 'review'), freeLabel(graph, numbered(L['change-reviewer'])));
     case 'final-reviewer':
-      return {
-        type: 'reviewer',
-        id: freeId(graph, 'code-review'),
-        label: freeLabel(graph, (n) =>
-          n === 1 ? L['final-reviewer'] : `${L['final-reviewer']} ${n}`,
-        ),
-        scope: 'final',
-        ...NO_CONFIG,
-      };
+      return base(freeId(graph, 'code-review'), freeLabel(graph, numbered(L['final-reviewer'])));
     case 'tester':
       return {
-        type: 'tester',
-        id: freeId(graph, 'unit-tests'),
-        label: freeLabel(graph, (n) => (n === 1 ? L.tester : `${L.tester} ${n}`)),
-        ...NO_CONFIG,
+        ...base(freeId(graph, 'unit-tests'), freeLabel(graph, numbered(L.tester))),
         approvalMode: null,
       };
   }
@@ -458,20 +486,28 @@ function newNode(graph: WorkflowGraph, item: PaletteItemKey): WorkflowNode {
 
 // ---------------------------------------------------------------- the forced wiring
 
-/** With a planner: `ticket → planner → plan approval → lead`, replacing the lead's plan path. */
-function wirePlanner(graph: WorkflowGraph, planner: WorkflowNodeId): WorkflowGraph {
+function hasPlanner(graph: Graph): boolean {
+  return [...graphRoles(graph).kinds.values()].includes('planner');
+}
+
+/**
+ * Makes `planner` a planner on the plan path: its `plan` arrow to Plan approval and the ticket's
+ * flow into it; the first planner also replaces the lead's plan path with `plan approval → lead`.
+ */
+function wirePlanner(graph: Graph, planner: WorkflowNodeId): Graph {
   const ticket = single(graph, 'ticket');
   const gate = single(graph, 'plan-approval');
   const lead = single(graph, 'lead');
   if (ticket === undefined || gate === undefined || lead === undefined) return graph;
   let g = unlink(graph, (e) => !isFlow(e, ticket.id, lead.id) && !isFlow(e, lead.id, gate.id));
+  g = link(g, 'plan', planner, gate.id);
   g = link(g, 'flow', ticket.id, planner);
-  g = link(g, 'flow', planner, gate.id);
+  if (g.edges.some((e) => isFlow(e, gate.id, lead.id))) return g;
   return link(g, 'flow', gate.id, lead.id);
 }
 
 /** Without a planner: `ticket → lead → plan approval`, the lead writes the plan. */
-function unwirePlanner(graph: WorkflowGraph): WorkflowGraph {
+function unwirePlanner(graph: Graph): Graph {
   const ticket = single(graph, 'ticket');
   const gate = single(graph, 'plan-approval');
   const lead = single(graph, 'lead');
@@ -482,54 +518,110 @@ function unwirePlanner(graph: WorkflowGraph): WorkflowGraph {
   return g;
 }
 
-/** Puts a new final stage just before your merge: `last → stage → owner merge`. */
-function insertFinalStage(graph: WorkflowGraph, stage: WorkflowNodeId): WorkflowGraph {
+/** A researcher researches for the first planner, else for the lead. */
+function wireResearcher(graph: Graph, researcher: WorkflowNodeId): Graph {
+  const roles = graphRoles(graph);
+  const planner = graph.nodes.find((n) => roles.kinds.get(n.id) === 'planner');
+  const target = planner ?? single(graph, 'lead');
+  return target === undefined ? graph : link(graph, 'research', researcher, target.id);
+}
+
+/** The lead gives the new helper work. */
+function wireHelper(graph: Graph, helper: WorkflowNodeId): Graph {
+  const lead = single(graph, 'lead');
+  return lead === undefined ? graph : link(graph, 'implement', lead.id, helper);
+}
+
+/**
+ * A change reviewer reviews `near` when it is a helper or tester, else the first one, and sends its
+ * findings to the lead. The change no longer goes to the lead first (a change goes to the lead or
+ * to reviewers, never both), so its review arrow to the lead goes.
+ */
+function wireChangeReviewer(graph: Graph, reviewer: WorkflowNodeId, near?: WorkflowNodeId): Graph {
+  const lead = single(graph, 'lead');
+  const editing = editingIds(graph);
+  const author =
+    near !== undefined && editing.has(near)
+      ? near
+      : graph.nodes.find((n) => n.id !== reviewer && editing.has(n.id))?.id;
+  if (lead === undefined || author === undefined) return graph;
+  const reviewed = link(graph, 'review', author, reviewer);
+  if (reviewed === graph) return graph;
+  const g = unlink(
+    reviewed,
+    (e) => !(e.type === 'review' && e.from === author && e.to === lead.id),
+  );
+  return link(g, 'findings', reviewer, lead.id);
+}
+
+/**
+ * Puts a new final stage just before your merge: `last → stage → owner merge`, the arrow in of
+ * `inType` (`test` makes a tester, `flow` a final reviewer or a branch Checks block).
+ */
+function insertFinalStage(graph: Graph, stage: WorkflowNodeId, inType: EdgeType = 'flow'): Graph {
   const ownerMerge = single(graph, 'owner-merge');
   if (ownerMerge === undefined) return graph;
   const into = graph.edges.find(
     (e) =>
       e.type === 'flow' &&
       e.to === ownerMerge.id &&
-      (nodeOf(graph, e.from)?.type === 'ticket-merge' || isFinalStage(nodeOf(graph, e.from))),
+      (nodeOf(graph, e.from)?.type === 'ticket-merge' ||
+        isFinalStage(graph, nodeOf(graph, e.from))),
   );
   if (into === undefined) return graph;
   const g = unlink(graph, (e) => e.id !== into.id);
-  const first = link(g, 'flow', into.from, stage);
+  const first = link(g, inType, into.from, stage);
   const both = link(first, 'flow', stage, ownerMerge.id);
   // Only when both links are allowed: a half-made chain would break your merge's path.
   return both.edges.length === g.edges.length + 2 ? both : graph;
+}
+
+/** A block's arrows onward on the final chain (a tester's link to its change block is not). */
+function chainLinksFrom(graph: Graph, id: WorkflowNodeId): GraphEdge[] {
+  return graph.edges.filter(
+    (e) =>
+      (e.type === 'flow' || e.type === 'test') && e.from === id && !isChangeBlockLink(graph, e),
+  );
+}
+
+/** The arrows into a block on the final chain. */
+function chainLinksInto(graph: Graph, id: WorkflowNodeId): GraphEdge[] {
+  return graph.edges.filter((e) => (e.type === 'flow' || e.type === 'test') && e.to === id);
+}
+
+/** Joins the final chain around a block that left it: `prev → next`, with the next one's type. */
+function rejoinChain(
+  graph: Graph,
+  before: readonly GraphEdge[],
+  after: readonly GraphEdge[],
+): Graph {
+  const prev = before.length === 1 ? before[0] : undefined;
+  const next = after.length === 1 ? after[0] : undefined;
+  if (prev === undefined || next === undefined) return graph;
+  return link(graph, next.type === 'test' ? 'test' : 'flow', prev.from, next.to);
 }
 
 /**
  * Takes a block off the graph's links (keeps the block): every link to or from it goes, and a
  * final stage's neighbours on the chain are joined again, as when it is removed.
  */
-function detach(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
-  const node = nodeOf(graph, id);
-  const before = graph.edges.filter((e) => e.type === 'flow' && e.to === id);
+function detach(graph: Graph, id: WorkflowNodeId): Graph {
+  const final = isFinalStage(graph, nodeOf(graph, id));
+  const before = chainLinksInto(graph, id);
   const after = chainLinksFrom(graph, id);
-  let g = unlink(graph, (e) => e.from !== id && e.to !== id);
-  if (isFinalStage(node)) {
-    const prev = before.length === 1 ? before[0] : undefined;
-    const next = after.length === 1 ? after[0] : undefined;
-    if (prev !== undefined && next !== undefined) g = link(g, 'flow', prev.from, next.to);
-  }
-  return g;
+  const g = unlink(graph, (e) => e.from !== id && e.to !== id);
+  return final ? rejoinChain(g, before, after) : g;
 }
 
 /** Links a change block from an editing block without one: `near` when it may, else the first. */
-function wireChangeBlock(
-  graph: WorkflowGraph,
-  block: WorkflowNodeId,
-  near?: WorkflowNodeId,
-): WorkflowGraph {
+function wireChangeBlock(graph: Graph, block: WorkflowNodeId, near?: WorkflowNodeId): Graph {
   const free = blocksWithoutChangeChecks(graph);
   const from = free.find((n) => n.id === near) ?? free[0];
   return from === undefined ? graph : link(graph, 'flow', from.id, block);
 }
 
 /** A new Checks block: every required check, the place's default failure route. */
-function newChecksNode(graph: WorkflowGraph, place: CheckBlockItem): ChecksNode {
+function newChecksNode(graph: Graph, place: CheckBlockItem): ChecksNode {
   const L = HARNESS_BLOCKS_COPY.newLabels;
   return {
     type: 'checks',
@@ -545,7 +637,7 @@ function newChecksNode(graph: WorkflowGraph, place: CheckBlockItem): ChecksNode 
  * Puts a block before the lead's merge: `lead → block → ticket merge`, in place of the lead's
  * merge straight into the ticket branch. Only when both links are allowed, as for a final stage.
  */
-function insertMergeBlock(graph: WorkflowGraph, block: WorkflowNodeId): WorkflowGraph {
+function insertMergeBlock(graph: Graph, block: WorkflowNodeId): Graph {
   const lead = single(graph, 'lead');
   const ticketMerge = single(graph, 'ticket-merge');
   if (lead === undefined || ticketMerge === undefined) return graph;
@@ -559,7 +651,7 @@ function insertMergeBlock(graph: WorkflowGraph, block: WorkflowNodeId): Workflow
  * Without a block before the lead's merge, the lead merges straight into the ticket branch: the
  * link is added when core allows it (ADR-0028 §2), else the problems list says what is missing.
  */
-function rejoinLeadMerge(graph: WorkflowGraph): WorkflowGraph {
+function rejoinLeadMerge(graph: Graph): Graph {
   const lead = single(graph, 'lead');
   const ticketMerge = single(graph, 'ticket-merge');
   if (lead === undefined || ticketMerge === undefined) return graph;
@@ -568,12 +660,12 @@ function rejoinLeadMerge(graph: WorkflowGraph): WorkflowGraph {
 }
 
 function addChecks(
-  graph: WorkflowGraph,
+  graph: Graph,
   place: CheckBlockItem,
   near?: WorkflowNodeId,
-): { graph: WorkflowGraph; id: string } {
+): { graph: Graph; id: string } {
   const node = newChecksNode(graph, place);
-  const g: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
+  const g: Graph = { ...graph, nodes: [...graph.nodes, node] };
   return {
     graph:
       place === 'branch'
@@ -585,16 +677,12 @@ function addChecks(
   };
 }
 
-function replaceNode(graph: WorkflowGraph, node: WorkflowNode): WorkflowGraph {
+function replaceNode(graph: Graph, node: GraphNode): Graph {
   return { ...graph, nodes: graph.nodes.map((n) => (n.id === node.id ? node : n)) };
 }
 
 /** Moves a change or branch block to the other place, with the other place's wiring. */
-function setCheckPlace(
-  graph: WorkflowGraph,
-  id: WorkflowNodeId,
-  place: MovableCheckPlace,
-): WorkflowGraph {
+function setCheckPlace(graph: Graph, id: WorkflowNodeId, place: MovableCheckPlace): Graph {
   const node = nodeOf(graph, id);
   if (!isChecksNode(node) || checkPlaceOf(node) === 'merge' || checkPlaceOf(node) === place) {
     return graph;
@@ -610,11 +698,7 @@ function setCheckPlace(
 }
 
 /** Sets the failure route; "back to the helper" links the block back to the helper it checks. */
-function setCheckFailure(
-  graph: WorkflowGraph,
-  id: WorkflowNodeId,
-  onFailure: CheckFailureRoute,
-): WorkflowGraph {
+function setCheckFailure(graph: Graph, id: WorkflowNodeId, onFailure: CheckFailureRoute): Graph {
   const node = nodeOf(graph, id);
   if (!isChecksNode(node) || !failureRoutes(checkPlaceOf(node)).includes(onFailure)) return graph;
   let g = replaceNode(graph, { ...node, onFailure });
@@ -627,25 +711,20 @@ function setCheckFailure(
   return g;
 }
 
-/** A block's flow links onward on the final chain (a tester's link to its change block is not). */
-function chainLinksFrom(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowEdge[] {
-  return graph.edges.filter(
-    (e) => e.type === 'flow' && e.from === id && !isChangeBlockLink(graph, e),
-  );
-}
-
 /** Removes a block and its links; a final stage's neighbours on the chain are joined again. */
-function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
+function removeNode(graph: Graph, id: WorkflowNodeId): Graph {
   const node = nodeOf(graph, id);
   if (node === undefined || !isRemovable(node)) return graph;
-  const before = graph.edges.filter((e) => e.type === 'flow' && e.to === id);
+  const kind = blockKind(graph, node);
+  const final = isFinalStage(graph, node);
+  const before = chainLinksInto(graph, id);
   const after = chainLinksFrom(graph, id);
-  let g: WorkflowGraph = {
+  let g: Graph = {
     ...graph,
     nodes: graph.nodes.filter((n) => n.id !== id),
     edges: graph.edges.filter((e) => e.from !== id && e.to !== id),
   };
-  if (isEditingBlock(node)) {
+  if (isEditingKind(kind)) {
     // Its change checks block checked only it: it goes too, rather than staying unlinked.
     const orphans = checksBlocks(graph).filter((b) => {
       const checked = checkedBlocks(graph, b);
@@ -653,120 +732,118 @@ function removeNode(graph: WorkflowGraph, id: WorkflowNodeId): WorkflowGraph {
     });
     for (const b of orphans) g = removeNode(g, b.id);
   }
-  if (node.type === 'planner' && !g.nodes.some((n) => n.type === 'planner')) {
+  if (kind === 'planner' && !hasPlanner(g)) {
     g = unwirePlanner(g);
   } else if (isChecksNode(node) && checkPlaceOf(node) === 'merge') {
     g = rejoinLeadMerge(g);
-  } else if (isFinalStage(node)) {
-    const prev = before.length === 1 ? before[0] : undefined;
-    const next = after.length === 1 ? after[0] : undefined;
-    if (prev !== undefined && next !== undefined) g = link(g, 'flow', prev.from, next.to);
+  } else if (final) {
+    g = rejoinChain(g, before, after);
   }
   return g;
 }
 
-function addNode(graph: WorkflowGraph, item: PaletteItemKey): { graph: WorkflowGraph; id: string } {
-  const node = newNode(graph, item);
-  let g: WorkflowGraph = { ...graph, nodes: [...graph.nodes, node] };
-  if (node.type === 'planner') g = wirePlanner(g, node.id);
-  if (isFinalStage(node)) g = insertFinalStage(g, node.id);
-  return { graph: g, id: node.id };
+function addNode(
+  graph: Graph,
+  item: PresetKey,
+  near?: WorkflowNodeId,
+): { graph: Graph; id: string } {
+  const node = newAgent(graph, item);
+  const g: Graph = { ...graph, nodes: [...graph.nodes, node] };
+  switch (item) {
+    case 'agent':
+      return { graph: g, id: node.id };
+    case 'researcher':
+      return { graph: wireResearcher(g, node.id), id: node.id };
+    case 'planner':
+      return { graph: wirePlanner(g, node.id), id: node.id };
+    case 'helper':
+      return { graph: wireHelper(g, node.id), id: node.id };
+    case 'change-reviewer':
+      return { graph: wireChangeReviewer(g, node.id, near), id: node.id };
+    case 'final-reviewer':
+      return { graph: insertFinalStage(g, node.id, 'flow'), id: node.id };
+    case 'tester':
+      return { graph: insertFinalStage(g, node.id, 'test'), id: node.id };
+  }
 }
 
 // ---------------------------------------------------------------- node fields
 
-/** An agent block with the patch's effort: set, or dropped for the model's default. */
-function withEffort<N extends AgentWorkflowNode>(
+type LaunchNode = WorkflowNodeV3Of<'agent' | 'lead'>;
+
+/** A launch field set, or dropped when null (the project's or model's default). */
+function withOptional<N extends LaunchNode, K extends 'effort' | 'provider'>(
   node: N,
-  effort: AgentEffort | null | undefined,
+  key: K,
+  value: N[K] | null | undefined,
 ): N {
-  if (effort === undefined) return node;
-  const { effort: _old, ...rest } = node;
-  return (effort === null ? rest : { ...rest, effort }) as N;
+  if (value === undefined) return node;
+  const copy = { ...node };
+  delete copy[key];
+  return value === null ? copy : { ...copy, [key]: value };
 }
 
-/** An agent block with the patch's provider: set, or dropped for the project's default. */
-function withProvider<N extends AgentWorkflowNode>(
-  node: N,
-  provider: ManagedProviderId | null | undefined,
-): N {
-  if (provider === undefined) return node;
-  const { provider: _old, ...rest } = node;
-  return (provider === null ? rest : { ...rest, provider }) as N;
+/** The launch fields every agent and the lead have. */
+function patchLaunch<N extends LaunchNode>(node: N, patch: NodePatch): N {
+  const next: N = {
+    ...node,
+    label: patch.label ?? node.label,
+    model: patch.model !== undefined ? patch.model : node.model,
+    skills: patch.skills ?? node.skills,
+    agent: patch.agent !== undefined ? patch.agent : node.agent,
+  };
+  return withOptional(withOptional(next, 'effort', patch.effort), 'provider', patch.provider);
 }
 
-/** Applies the patch's fields that the node's kind has; the others are ignored. */
-export function patchNode(node: WorkflowNode, patch: NodePatch): WorkflowNode {
-  const next = patchFields(node, patch);
-  return 'skills' in next ? withProvider(withEffort(next, patch.effort), patch.provider) : next;
-}
-
-function patchFields(node: WorkflowNode, patch: NodePatch): WorkflowNode {
-  const label = patch.label ?? node.label;
+/** Applies the patch's fields that the node has; the others are ignored. */
+export function patchNode(node: GraphNode, patch: NodePatch): GraphNode {
   switch (node.type) {
-    case 'planner':
     case 'lead':
-      return {
-        ...node,
-        label,
-        model: patch.model !== undefined ? patch.model : node.model,
-        skills: patch.skills ?? node.skills,
-        agent: patch.agent !== undefined ? patch.agent : node.agent,
+      return patchLaunch(node, patch);
+    case 'agent': {
+      const next: AgentBlock = {
+        ...patchLaunch(node, patch),
+        ...(patch.approvalMode !== undefined ? { approvalMode: patch.approvalMode } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.maxInstances !== undefined ? { maxInstances: patch.maxInstances } : {}),
+        ...(patch.canStartHelpers !== undefined ? { canStartHelpers: patch.canStartHelpers } : {}),
       };
-    case 'reviewer':
-      return {
-        ...node,
-        label,
-        model: patch.model !== undefined ? patch.model : node.model,
-        skills: patch.skills ?? node.skills,
-        agent: patch.agent !== undefined ? patch.agent : node.agent,
-        scope: patch.scope ?? node.scope,
-      };
-    case 'tester':
-      return {
-        ...node,
-        label,
-        model: patch.model !== undefined ? patch.model : node.model,
-        skills: patch.skills ?? node.skills,
-        agent: patch.agent !== undefined ? patch.agent : node.agent,
-        approvalMode: patch.approvalMode !== undefined ? patch.approvalMode : node.approvalMode,
-      };
-    case 'helper-pool':
-      return {
-        ...node,
-        label,
-        model: patch.model !== undefined ? patch.model : node.model,
-        skills: patch.skills ?? node.skills,
-        agent: patch.agent !== undefined ? patch.agent : node.agent,
-        approvalMode: patch.approvalMode !== undefined ? patch.approvalMode : node.approvalMode,
-        canStartHelpers: patch.canStartHelpers ?? node.canStartHelpers,
-      };
-    case 'helper':
-      return {
-        ...node,
-        label,
-        model: patch.model !== undefined ? patch.model : node.model,
-        skills: patch.skills ?? node.skills,
-        agent: patch.agent !== undefined ? patch.agent : node.agent,
-        approvalMode: patch.approvalMode !== undefined ? patch.approvalMode : node.approvalMode,
-        description: patch.description ?? node.description,
-        maxInstances: patch.maxInstances ?? node.maxInstances,
-        canStartHelpers: patch.canStartHelpers ?? node.canStartHelpers,
-      };
+      if (patch.pool === undefined) return next;
+      // The pool flag is stored only when set, as core's migration writes it.
+      const { pool: _old, ...rest } = next;
+      return patch.pool ? { ...rest, pool: true } : rest;
+    }
     case 'plan-approval':
       return { ...node, auto: patch.auto ?? node.auto };
     case 'checks':
-      return { ...node, label, ...(patch.select !== undefined ? { select: patch.select } : {}) };
+      return {
+        ...node,
+        label: patch.label ?? node.label,
+        ...(patch.select !== undefined ? { select: patch.select } : {}),
+      };
     default:
       // The other steps have nothing the owner sets.
       return node;
   }
 }
 
+/** An arrow with the patch's words: set as typed, or dropped when empty. */
+export function patchEdge(edge: GraphEdge, patch: EdgePatch): GraphEdge {
+  let next: GraphEdge = edge;
+  for (const key of ['label', 'purpose'] as const) {
+    const value = patch[key];
+    if (value === undefined) continue;
+    const copy = { ...next };
+    delete copy[key];
+    next = value.trim() === '' ? copy : { ...copy, [key]: value };
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------- the reducer
 
 /** The selection, while what it names is still in the graph. */
-export function stillThere(graph: WorkflowGraph, selection: Selection): Selection {
+export function stillThere(graph: Graph, selection: Selection): Selection {
   if (selection === null) return null;
   const exists =
     selection.kind === 'node'
@@ -776,12 +853,12 @@ export function stillThere(graph: WorkflowGraph, selection: Selection): Selectio
 }
 
 /** A change by hand makes the graph `custom` (`WorkflowGraph.template`); moving a block doesn't. */
-function custom(graph: WorkflowGraph): WorkflowGraph {
+function custom(graph: Graph): Graph {
   return graph.template === 'custom' ? graph : { ...graph, template: 'custom' };
 }
 
 /** The graph with every block in the automatic layout: the same blocks and links, no positions. */
-export function tidyGraph(graph: WorkflowGraph): WorkflowGraph {
+export function tidyGraph(graph: Graph): Graph {
   if (!graph.nodes.some((n) => n.position !== undefined)) return graph;
   return {
     ...graph,
@@ -794,22 +871,48 @@ export function tidyGraph(graph: WorkflowGraph): WorkflowGraph {
   };
 }
 
-/** Moves a link's ends: the same place in the list, a fresh id for its new ends, its rounds kept. */
+/**
+ * A moved link keeps its rounds when it keeps its kind; a When arrow also keeps the events its
+ * (maybe new) source still raises.
+ */
+function keepRounds(graph: Graph, made: GraphEdge, old: GraphEdge): GraphEdge {
+  if (made.type === 'rework' && old.type === 'rework') return { ...made, maxRounds: old.maxRounds };
+  if (made.type === 'when' && old.type === 'when') {
+    const raised = sourceEvents(graph, made.from);
+    const on = old.on.filter((e) => raised.includes(e));
+    return {
+      ...made,
+      maxRounds: old.maxRounds,
+      ...(on.length > 0 ? { on } : {}),
+      ...(old.retest === false ? { retest: false } : {}),
+    };
+  }
+  return made;
+}
+
+/**
+ * Moves a link's ends: the same place in the list, a fresh id for its new ends, its rounds and its
+ * label and purpose kept.
+ */
 function reconnect(
-  graph: WorkflowGraph,
+  graph: Graph,
   id: string,
   from: WorkflowNodeId,
   to: WorkflowNodeId,
-  edgeType: WorkflowEdgeType,
-): { graph: WorkflowGraph; edge: WorkflowEdge } | { refusal: string } | null {
+  edgeType: EdgeType,
+): { graph: Graph; edge: GraphEdge } | { refusal: string } | null {
   const old = graph.edges.find((e) => e.id === id);
   if (old === undefined) return null;
   const without = unlink(graph, (e) => e.id !== id);
-  const result = canConnect(without, from, to, edgeType);
+  const result = canConnectV3(without, from, to, edgeType);
   if (!result.ok) return { refusal: result.message };
   const made = makeEdge(without, edgeType, from, to);
-  const edge =
-    made.type === 'rework' && old.type === 'rework' ? { ...made, maxRounds: old.maxRounds } : made;
+  const rounds = keepRounds(without, made, old);
+  const edge: GraphEdge = {
+    ...rounds,
+    ...(old.label !== undefined ? { label: old.label } : {}),
+    ...(old.purpose !== undefined ? { purpose: old.purpose } : {}),
+  };
   return { graph: { ...graph, edges: graph.edges.map((e) => (e.id === id ? edge : e)) }, edge };
 }
 
@@ -820,7 +923,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return { graph: action.graph, selection: null, refusal: null };
     case 'add': {
       if (!paletteAvailability(g, action.item).ok) return state;
-      const added = addNode(g, action.item);
+      const added = addNode(g, action.item, action.near);
       return {
         graph: custom(added.graph),
         selection: { kind: 'node', id: added.id },
@@ -836,10 +939,28 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     case 'update-node': {
       const node = nodeOf(g, action.id);
       if (node === undefined) return state;
+      // At most one helper pool: a second one is not made.
+      if (
+        action.patch.pool === true &&
+        g.nodes.some((n) => n.id !== action.id && n.type === 'agent' && n.pool === true)
+      ) {
+        return state;
+      }
       const next = patchNode(node, action.patch);
       return {
         ...state,
         graph: custom({ ...g, nodes: g.nodes.map((n) => (n.id === action.id ? next : n)) }),
+        refusal: null,
+      };
+    }
+    case 'update-edge': {
+      if (!g.edges.some((e) => e.id === action.id)) return state;
+      return {
+        ...state,
+        graph: custom({
+          ...g,
+          edges: g.edges.map((e) => (e.id === action.id ? patchEdge(e, action.patch) : e)),
+        }),
         refusal: null,
       };
     }
@@ -852,7 +973,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     }
     case 'connect': {
-      const result = canConnect(g, action.from, action.to, action.edgeType);
+      const result = canConnectV3(g, action.from, action.to, action.edgeType);
       if (!result.ok) return { ...state, refusal: result.message };
       const edge = makeEdge(g, action.edgeType, action.from, action.to);
       return {
@@ -888,15 +1009,62 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     }
     case 'set-rounds': {
-      const maxRounds = Math.max(0, Math.min(5, Math.round(action.maxRounds)));
+      const rounds = Math.round(action.maxRounds);
       return {
         ...state,
         graph: custom({
           ...g,
-          edges: g.edges.map((e) =>
-            e.id === action.id && e.type === 'rework' ? { ...e, maxRounds } : e,
-          ),
+          edges: g.edges.map((e) => {
+            if (e.id !== action.id) return e;
+            if (e.type === 'rework') return { ...e, maxRounds: Math.max(0, Math.min(5, rounds)) };
+            if (e.type === 'when') {
+              return { ...e, maxRounds: Math.max(1, Math.min(MAX_WHEN_ROUNDS, rounds)) };
+            }
+            return e;
+          }),
         }),
+      };
+    }
+    case 'set-when-events': {
+      const edge = g.edges.find((e) => e.id === action.id);
+      // Each event at most once, and at least one (the schema's rule).
+      const on = [...new Set(action.on)];
+      if (edge?.type !== 'when' || on.length === 0) return state;
+      return {
+        ...state,
+        graph: custom({
+          ...g,
+          edges: g.edges.map((e) => (e.id === action.id && e.type === 'when' ? { ...e, on } : e)),
+        }),
+        refusal: null,
+      };
+    }
+    case 'set-when-retest': {
+      const edge = g.edges.find((e) => e.id === action.id);
+      if (edge?.type !== 'when') return state;
+      // Absent means on, so switching it back on drops the field.
+      const { retest: _old, ...rest } = edge;
+      const next = action.retest ? rest : { ...rest, retest: false };
+      return {
+        ...state,
+        graph: custom({
+          ...g,
+          edges: g.edges.map((e) => (e.id === action.id ? next : e)),
+        }),
+        refusal: null,
+      };
+    }
+    case 'add-author': {
+      if (!authorAvailability(g).ok) return state;
+      const node: GraphNode = {
+        type: 'author',
+        id: freeId(g, 'author'),
+        label: freeLabel(g, numbered(AUTHOR_BLOCK_LABEL)),
+      };
+      return {
+        graph: custom({ ...g, nodes: [...g.nodes, node] }),
+        selection: { kind: 'node', id: node.id },
+        refusal: null,
       };
     }
     case 'add-checks': {
@@ -939,6 +1107,6 @@ function stable(value: unknown): string {
 }
 
 /** True when the two graphs hold the same blocks, links and settings. */
-export function sameGraph(a: WorkflowGraph, b: WorkflowGraph): boolean {
+export function sameGraph(a: Graph, b: Graph): boolean {
   return stable(a) === stable(b);
 }

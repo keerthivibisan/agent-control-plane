@@ -48,6 +48,7 @@ describe('review routes', () => {
     expect(program.helpers[0]?.review).toEqual({
       by: 'agent',
       reviewer: 'review',
+      reviewers: ['review'],
       then: 'lead',
       leadRounds: 2,
     });
@@ -58,6 +59,7 @@ describe('review routes', () => {
     expect(routeOf(base('reviewer-helper-loop'), 'helpers')).toEqual({
       by: 'agent',
       reviewer: 'review',
+      reviewers: ['review'],
       then: 'direct',
       reviewerRounds: 2,
       leadRounds: 0,
@@ -108,6 +110,7 @@ describe('overrides', () => {
     expect(routeOf(base('reviewer-helper-loop'), 'helpers', c)).toEqual({
       by: 'agent',
       reviewer: 'review',
+      reviewers: ['review'],
       then: 'direct',
       reviewerRounds: 4,
       leadRounds: 0,

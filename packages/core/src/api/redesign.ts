@@ -15,6 +15,7 @@ import {
 import {
   GraphIssueSchema,
   WorkflowGraphSchema,
+  WorkflowGraphV3Schema,
   WorkflowNodeIdSchema,
 } from '../workspace/workflow-graph.js';
 import { ApprovalModeSchema, RepoRelativePathSchema } from '../workspace/workspace.js';
@@ -92,14 +93,15 @@ export type RunWorkflowDto = z.infer<typeof RunWorkflowDtoSchema>;
 // ---------------------------------------------------------------- workflow graph (ADR-0023)
 
 /**
- * GET and PUT `/api/projects/:id/workflow-graph`. A project without a stored graph answers its
- * version 1 workflow migrated (`stored: 'v1'`) or the default (`stored: 'default'`); the first PUT
- * stores version 2. `issues` is `validateWorkflowGraph`'s answer for `graph` with the project's
- * skills and agent files. The editor also validates locally with the same function from core.
+ * GET and PUT `/api/projects/:id/workflow-graph` (ADR-0023; version 3 since ADR-0037). The graph is
+ * always version 3: a stored version 3 graph (`stored: 'v3'`), a stored version 2 graph migrated
+ * (`'v2'`), or the project's version 1 workflow migrated (`'v1'`) or the default (`'default'`); a
+ * PUT stores version 3. `issues` is `validateWorkflowGraphV3`'s answer for `graph` with the
+ * project's skills and agent files. The editor also validates locally with the same function.
  */
 export const WorkflowGraphDtoSchema = z.object({
-  graph: WorkflowGraphSchema,
-  stored: z.enum(['v2', 'v1', 'default']),
+  graph: WorkflowGraphV3Schema,
+  stored: z.enum(['v3', 'v2', 'v1', 'default']),
   issues: z.array(GraphIssueSchema),
   setup: ProjectAgentSetupDtoSchema,
   /** Project skills and agent files, so nodes can offer them and flag one that is gone. */
@@ -109,8 +111,14 @@ export const WorkflowGraphDtoSchema = z.object({
 });
 export type WorkflowGraphDto = z.infer<typeof WorkflowGraphDtoSchema>;
 
-/** PUT body. The server answers 422 `workflow_invalid` with the issues when it has an error. */
-export const UpdateWorkflowGraphRequestSchema = z.object({ graph: WorkflowGraphSchema });
+/**
+ * PUT and validate body: a version 3 graph, or a version 2 graph from an older client, which the
+ * server migrates to version 3 (`migrateWorkflowV2`, lossless) before checking and storing it.
+ * The server answers 422 `workflow_invalid` with the issues when it has an error.
+ */
+export const UpdateWorkflowGraphRequestSchema = z.object({
+  graph: z.discriminatedUnion('version', [WorkflowGraphV3Schema, WorkflowGraphSchema]),
+});
 export type UpdateWorkflowGraphRequest = z.infer<typeof UpdateWorkflowGraphRequestSchema>;
 
 /** POST `/api/projects/:id/workflow-graph/validate`: checks a graph without saving it. */
@@ -121,12 +129,13 @@ export const ValidateWorkflowGraphResultDtoSchema = z.object({
 export type ValidateWorkflowGraphResultDto = z.infer<typeof ValidateWorkflowGraphResultDtoSchema>;
 
 /**
- * GET `/api/runs/:id/workflow-graph`: the graph the run snapshotted at start (read-only) and each
- * node's live state. Version 1 runs answer their workflow migrated.
+ * GET `/api/runs/:id/workflow-graph`: the graph the run snapshotted at start (read-only), as
+ * version 3 (ADR-0037: a version 2 snapshot or a version 1 run's workflow migrated), and each
+ * node's live state.
  */
 export const RunWorkflowGraphDtoSchema = z.object({
   runId: z.string().min(1),
-  graph: WorkflowGraphSchema,
+  graph: WorkflowGraphV3Schema,
   nodes: z.array(
     z.object({
       nodeId: WorkflowNodeIdSchema,
@@ -140,6 +149,20 @@ export const RunWorkflowGraphDtoSchema = z.object({
     }),
   ),
   review: RunWorkflowDtoSchema.shape.review,
+  /**
+   * ADR-0038 §4 (amended 2026-11-14): the fix rounds each When arrow has used in this run (its
+   * most used failure lineage) out of its `maxRounds`. Only arrows that started a fix; empty after
+   * a restart, as the engine's fixes live with the run.
+   */
+  whenRounds: z
+    .array(
+      z.object({
+        edgeId: z.string().min(1),
+        used: z.number().int().min(1),
+        maxRounds: z.number().int().min(1),
+      }),
+    )
+    .optional(),
 });
 export type RunWorkflowGraphDto = z.infer<typeof RunWorkflowGraphDtoSchema>;
 

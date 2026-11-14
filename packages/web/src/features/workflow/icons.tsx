@@ -3,6 +3,7 @@ import {
   Bot,
   CircleAlert,
   CircleCheck,
+  CircleDashed,
   CircleHelp,
   ClipboardList,
   Compass,
@@ -18,9 +19,11 @@ import {
   MousePointerClick,
   Redo2,
   ScanSearch,
+  Telescope,
   Trash,
   Undo2,
   UserCheck,
+  UserPen,
   WandSparkles,
   Users,
   X,
@@ -77,6 +80,11 @@ export const UndoIcon = icon(Undo2, 'UndoIcon');
 export const RedoIcon = icon(Redo2, 'RedoIcon');
 export const TidyIcon = icon(WandSparkles, 'TidyIcon');
 export const LinkIcon = icon(Link2, 'LinkIcon');
+/** ADR-0037: a researcher, and an agent block whose arrows give it no single role yet. */
+export const ResearcherIcon = icon(Telescope, 'ResearcherIcon');
+export const AgentBlockIcon = icon(CircleDashed, 'AgentBlockIcon');
+/** ADR-0038 §4: the Author block, "whoever wrote the failing code". */
+export const AuthorIcon = icon(UserPen, 'AuthorIcon');
 
 /** One icon per agent role, so a node reads at a glance (the role's word is always next to it). */
 export const ROLE_ICON: Record<WorkflowRole, ReturnType<typeof icon>> = {

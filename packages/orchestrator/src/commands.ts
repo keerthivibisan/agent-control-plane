@@ -11,6 +11,7 @@ import {
   addToolUse,
   WorkflowGraphInvalidError,
   WorkflowGraphSchema,
+  WorkflowGraphV3Schema,
   redact,
 } from '@acp/core';
 import type {
@@ -23,7 +24,7 @@ import type {
   ProjectApprovals,
   ProjectWorkflow,
   RunBudget,
-  WorkflowGraph,
+  AnyWorkflowGraph,
   WorkflowProgram,
 } from '@acp/core';
 import { recordUsage, EMPTY_LEDGER } from './budget.js';
@@ -53,12 +54,14 @@ import {
   hasReviewableChange,
   isReadOnlyRole,
   isStageAgent,
-  launchFieldsFor,
   nodeProvider,
   nextStage,
 } from './stages.js';
 import { effectiveMode, programOf } from './program.js';
-import { helperBriefLines } from './briefs.js';
+import { leadNoteBlocks, plannerNoteBlocks, withOwnerNotes } from './arrow-notes.js';
+import { helperBriefLines, withWorkflowSection } from './briefs.js';
+import { advancePrePlan, deliverHandoffs, researcherBriefLines } from './handoffs.js';
+import { isMultiPlanner, multiPlannerLine } from './plan-options.js';
 import type {
   EngineAgent,
   EngineApproval,
@@ -90,6 +93,8 @@ export function applyCommand<T>(
     const outcome = body(draft);
     if (isRefusal(outcome)) return { ok: false, refusal: outcome };
     draft.reconcile();
+    // ADR-0037 §2: hand-offs from agents that became done reach the targets already working.
+    deliverHandoffs(draft);
     finishNotices(draft, draft.activeAtStart);
     draft.trackOwnerWait();
     draft.flushCheckoutRemovals();
@@ -128,8 +133,21 @@ export interface CreateRunInput {
    *   (required; `ticketPlannerPrompt`). `leadPrompt` is the lead's brief
    *   (`ticketOrchestratorPrompt`); the lead starts with it, plus the approved plan, on approval.
    * `ticketRunPrompts` builds both for a workflow.
+   * - `researcherPrompt` (ADR-0037 §3, `ticketResearcherPrompt`): the ticket part of every
+   *   researcher's brief, for a workflow with researchers; absent, a researcher gets the run's
+   *   title only.
+   *
+   * ADR-0037 (graph version 3): the researchers that run before planning start first (in arrow
+   * order, in parallel within the helper limit), and the planners, or the lead when it plans, wait
+   * (QUEUED) until their researchers and custom-arrow sources are done (`handoffs.ts`). Every
+   * planner of a workflow with several gets `plannerPrompt`.
    */
-  ticket?: { ticketId: string; leadPrompt: string; plannerPrompt?: string };
+  ticket?: {
+    ticketId: string;
+    leadPrompt: string;
+    plannerPrompt?: string;
+    researcherPrompt?: string;
+  };
   /**
    * The project's workflow (ADR-0019), snapshotted with the run. Ticket runs only. Absent, or
    * `defaultProjectWorkflow()`, gives exactly the Phase 4 flow.
@@ -150,9 +168,10 @@ export interface CreateRunInput {
   /**
    * The project's workflow graph (ADR-0023), validated, snapshotted with the run and compiled with
    * `graphContext` into the program the engine follows. Ticket runs only. Absent: the version 1
-   * `workflow` (or the default) is migrated and compiled, so the run behaves as before.
+   * `workflow` (or the default) is migrated and compiled, so the run behaves as before. Version 2
+   * or 3 (ADR-0037); the run keeps the version it was given.
    */
-  graph?: WorkflowGraph;
+  graph?: AnyWorkflowGraph;
   /**
    * What `graph` compiles with: the project's mode, the ticket's and run's mode ceilings, the
    * reviewer and rounds overrides, and the helper limit (which must equal `limits`). Required
@@ -201,7 +220,7 @@ function checkLoopInputs(
 function checkWorkflow(
   input: CreateRunInput,
   limits: RunLimits,
-): Refusal | { workflow: ProjectWorkflow | undefined; graph: WorkflowGraph | undefined } {
+): Refusal | { workflow: ProjectWorkflow | undefined; graph: AnyWorkflowGraph | undefined } {
   const ticket = input.ticket;
   let workflow: ProjectWorkflow | undefined;
   if (input.workflow !== undefined) {
@@ -215,12 +234,15 @@ function checkWorkflow(
       return refusal('invalid-input', 'A workflow applies to ticket runs only.');
     }
   }
-  let graph: WorkflowGraph | undefined;
+  let graph: AnyWorkflowGraph | undefined;
   if (input.graph !== undefined || input.graphContext !== undefined) {
     if (ticket === undefined) {
       return refusal('invalid-input', 'A workflow graph applies to ticket runs only.');
     }
-    const parsed = WorkflowGraphSchema.safeParse(input.graph);
+    const parsed =
+      input.graph?.version === 3
+        ? WorkflowGraphV3Schema.safeParse(input.graph)
+        : WorkflowGraphSchema.safeParse(input.graph);
     if (!parsed.success || input.graphContext === undefined) {
       return refusal('invalid-input', 'The workflow graph is not valid.');
     }
@@ -359,45 +381,49 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
     d.setRunStatus('PLANNING');
     const draftLead = d.lead();
     if (draftLead === undefined) return refusal('unknown-agent', 'The run has no lead agent.');
-    const plannerNode = program.planner;
-    if (plannerNode !== null) {
-      // ADR-0019: the planner plans; the lead waits (QUEUED) for the approved plan.
-      const planner: EngineAgent = {
-        ...draftLead,
-        id: d.freshId(),
-        kind: 'planner',
-        role: 'Planner',
-        stage: plannerNode.id,
-        provider: nodeProvider(program, plannerNode.id),
-      };
-      d.agents.push(planner);
-      d.setAgentStatus(planner, 'STARTING');
-      d.leadBrief = ticket.leadPrompt;
-      d.effects.push({
-        type: 'start-agent',
-        agentRunId: planner.id,
-        kind: 'planner',
-        role: planner.role,
-        ...launchFieldsFor(
-          program,
-          plannerNode.id,
-          withHelperNodes(ticket.plannerPrompt ?? '', program, 'planner'),
-        ),
-      });
-      return done;
+    if (program.researchers.length > 0 && ticket.researcherPrompt !== undefined) {
+      d.researchBrief = ticket.researcherPrompt;
     }
-    d.setAgentStatus(draftLead, 'STARTING');
-    d.effects.push({
-      type: 'start-agent',
-      agentRunId: draftLead.id,
-      kind: 'lead',
-      role: draftLead.role,
-      ...launchFieldsFor(
-        program,
-        program.lead.id,
-        withHelperNodes(ticket.leadPrompt, program, 'lead-plans'),
-      ),
-    });
+    const briefs: Record<string, string> = {};
+    if (program.planners.length > 0) {
+      // ADR-0019: the planner plans; the lead waits (QUEUED) for the approved plan. ADR-0037: each
+      // planner waits (QUEUED) for its researchers, then starts (`advancePrePlan`).
+      const several = program.planners.length > 1;
+      const base = withHelperNodes(ticket.plannerPrompt ?? '', program, 'planner');
+      for (const plannerNode of program.planners) {
+        const planner: EngineAgent = {
+          ...draftLead,
+          id: d.freshId(),
+          kind: 'planner',
+          role: several ? plannerNode.label.slice(0, 60) : 'Planner',
+          stage: plannerNode.id,
+          provider: nodeProvider(program, plannerNode.id),
+        };
+        d.agents.push(planner);
+        // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its plan and flow arrows.
+        briefs[planner.id] = withOwnerNotes(
+          several ? `${base}\n\n${multiPlannerLine(program.planners.length)}` : base,
+          plannerNoteBlocks(program, plannerNode.id),
+        );
+      }
+      d.leadBrief = withWorkflowSection(
+        withOwnerNotes(ticket.leadPrompt, leadNoteBlocks(program)),
+        d,
+      );
+    } else {
+      const researchers = researcherBriefLines(program);
+      const brief = withHelperNodes(ticket.leadPrompt, program, 'lead-plans');
+      // ADR-0038 §5: with the workflow in words, once, at the lead's start.
+      briefs[draftLead.id] = withWorkflowSection(
+        withOwnerNotes(
+          researchers.length === 0 ? brief : `${brief}\n\n${researchers.join('\n')}`,
+          leadNoteBlocks(program),
+        ),
+        d,
+      );
+    }
+    d.pendingBriefs = briefs;
+    advancePrePlan(d);
     return done;
   });
   if (!started.ok) return started;
@@ -436,8 +462,23 @@ export function ownerChat(state: RunState, text: string, ctx: EngineContext): En
       const runRefusal = checkRunActive(d.run.status);
       if (runRefusal !== null) return runRefusal;
     }
+    // ADR-0037 §4: several planners plan at once; the owner speaks to them through the plan
+    // decision (a request for changes), not the chat.
+    if (planning && isMultiPlanner(d)) {
+      return refusal(
+        'invalid-input',
+        'Several planners are planning. Comment on their plans when they are ready: ask for changes there.',
+      );
+    }
     const target = planning ? d.planningAgent() : lead;
     if (target === undefined) return refusal('unknown-agent', 'The run has no planner.');
+    // ADR-0037 §2: a planner (or planning lead) waits for its research before it starts.
+    if (target.status === 'QUEUED') {
+      return refusal(
+        'agent-not-live',
+        `${target.kind === 'planner' ? 'The planner' : 'The lead agent'} starts once its research is done; write again then.`,
+      );
+    }
     const who = target.kind === 'planner' ? 'The planner' : 'The lead agent';
     if (!isLiveAgentStatus(target.status)) {
       return refusal('agent-not-live', `${who} has ended.`);

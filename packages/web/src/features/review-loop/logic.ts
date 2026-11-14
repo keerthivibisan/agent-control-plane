@@ -7,7 +7,8 @@ import {
   RUN_OPTION_KEYS,
   approvalsOf,
   checkRunWasInterrupted,
-  graphRunDefaults,
+  deriveRoles,
+  graphRunDefaultsV3,
   isEditorNode,
   isModeWithin,
   isSafeCommandToken,
@@ -21,6 +22,7 @@ import {
   type RunOptions,
   type TicketRunOptions,
   type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import type {
   ChangeReviewDto,
@@ -301,12 +303,12 @@ export function shortCommit(commit: string): string {
 
 /**
  * The project's run settings a ticket's "Project default" follows: its approval mode, and what its
- * graph amounts to (`graphRunDefaults`, the same core function the server's run start uses). The
+ * graph amounts to (`graphRunDefaultsV3`, the same core function the server's run start uses). The
  * graph comes from `GET /workflow-graph`, which answers for every project, stored as a graph or
  * not (WG-F: the version 1 `GET /workflow` answers 409 once a project stores a graph).
  */
 export function projectRunDefaults(dto: Pick<WorkflowGraphDto, 'setup' | 'graph'>): RunOptions {
-  return { approvalMode: approvalsOf(dto.setup).mode, ...graphRunDefaults(dto.graph) };
+  return { approvalMode: approvalsOf(dto.setup).mode, ...graphRunDefaultsV3(dto.graph) };
 }
 
 /**
@@ -361,15 +363,32 @@ export interface BlockModes {
   loosest: ApprovalMode | null;
 }
 
+/** Each editing block's own mode (null or absent: the project's), for either graph version. */
+function editingModes(
+  graph: Pick<WorkflowGraph, 'nodes'> | Pick<WorkflowGraphV3, 'version' | 'nodes' | 'edges'>,
+): (ApprovalMode | null | undefined)[] {
+  if ('version' in graph && graph.version === 3) {
+    // ADR-0037: an agent block edits when its arrows make it a helper or a tester.
+    const roles = deriveRoles(graph);
+    return graph.nodes.flatMap((n) => {
+      const r = n.type === 'agent' ? roles.get(n.id) : undefined;
+      const edits = r?.ok === true && (r.role.role === 'worker' || r.role.role === 'tester');
+      return n.type === 'agent' && edits ? [n.approvalMode] : [];
+    });
+  }
+  return (graph as Pick<WorkflowGraph, 'nodes'>).nodes
+    .filter(isEditorNode)
+    .map((n) => n.approvalMode);
+}
+
 /** The loosest mode of the graph's editing blocks: each block's own, else the project's. */
 export function loosestBlockMode(
-  graph: Pick<WorkflowGraph, 'nodes'>,
+  graph: Pick<WorkflowGraph, 'nodes'> | Pick<WorkflowGraphV3, 'version' | 'nodes' | 'edges'>,
   projectMode: ApprovalMode,
 ): ApprovalMode | null {
   let loosest: ApprovalMode | null = null;
-  for (const node of graph.nodes) {
-    if (!isEditorNode(node)) continue;
-    const mode = node.approvalMode ?? projectMode;
+  for (const own of editingModes(graph)) {
+    const mode = own ?? projectMode;
     if (loosest === null || !isModeWithin(mode, loosest)) loosest = mode;
   }
   return loosest;

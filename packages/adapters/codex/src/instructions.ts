@@ -4,6 +4,7 @@ import {
   MAX_AGENT_BYTES,
   MAX_CONTEXT_BYTES,
   MAX_REPO_MAP_BYTES,
+  RESEARCHER_INSTRUCTIONS,
   SkillNameSchema,
 } from '@acp/core';
 import type { ManagedAgentSpec } from '@acp/core';
@@ -32,6 +33,8 @@ const ROLE_LINES: Readonly<Record<ManagedAgentSpec['kind'], string>> = {
   tester: 'You are the tester. Check the work and fix tests by changing files in this folder only.',
   // ADR-0035: the project assistant's own instructions, the same words the Claude adapter gives.
   assistant: ASSISTANT_INSTRUCTIONS,
+  // ADR-0037 §3: the researcher's limits and its one findings call, as the Claude adapter gives.
+  researcher: RESEARCHER_INSTRUCTIONS,
 };
 
 /** The F-1 rule in the wording of the git guard's refusal (`gitGuardMessage` in core). */

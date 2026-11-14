@@ -20,6 +20,7 @@ import {
   loopWorkingScenario,
   type LoopScenario,
 } from './review-loop-fixtures.js';
+import { asServerGraph } from './graph-v3.js';
 import { PROJECT_GRAPH_PATH, projectWorkflow } from './ticket-fixtures.js';
 
 type Json = Record<string, unknown>;
@@ -149,7 +150,8 @@ export function directLoopRunGraph(): Json {
   });
   return {
     runId: LOOP_RUN_ID,
-    graph: directLoopGraph(),
+    // ADR-0037: the run graph is served as version 3.
+    graph: asServerGraph(directLoopGraph()),
     nodes: [
       node('ticket', 'done'),
       node('orchestrate', 'active', [L_LEAD]),
@@ -200,8 +202,8 @@ export function directLoopScenario(): LoopScenario {
 export function projectGraphDto(graph: Json): Json {
   const wf = projectWorkflow();
   return {
-    graph,
-    stored: 'v2',
+    graph: asServerGraph(graph),
+    stored: 'v3',
     issues: [],
     setup: wf['setup'],
     skills: ['api-design', 'code-review', 'plan-tickets'],

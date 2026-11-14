@@ -33,6 +33,18 @@ function actorOf(
       agentRunId: id,
     };
   }
+  if (kind === 'research') {
+    // ADR-0037 §3: a researcher's findings, named after its agent when the run on screen lists it.
+    const id = comment.agentRunId ?? null;
+    const agent = id === null ? undefined : agents.find((a) => a.id === id);
+    return { kind: 'researcher', label: agent?.role ?? A.actor.researcher, agentRunId: id };
+  }
+  if (kind === 'test-results') {
+    // ADR-0038 §1: a tester's test results, named after its agent when the run on screen lists it.
+    const id = comment.agentRunId ?? null;
+    const agent = id === null ? undefined : agents.find((a) => a.id === id);
+    return { kind: 'tester', label: agent?.role ?? A.actor.tester, agentRunId: id };
+  }
   switch (comment.author) {
     case 'owner':
       return { kind: 'owner', label: A.actor.owner, agentRunId: null };
@@ -64,14 +76,23 @@ function itemOf(
       return { ...base, type: 'agent-note', title: D.agentNote(actor.label) };
     case 'review':
       return { ...base, type: 'review', title: D.review };
+    case 'research':
+      return { ...base, type: 'research', title: D.research };
+    case 'test-results':
+      return { ...base, type: 'test-results', title: D.testResults };
     case 'run-facts':
       return { ...base, type: 'run-facts', title: D.runFacts };
     case 'system': {
       const note = parseMergeLine(comment.body);
+      const line = comment.body.trim();
+      // FR-7: a one-line system comment that is no merge (a routed failure) is a note, as the
+      // server's activity reads it, so the timeline shows it as a routed failure.
+      const plain = note === null && !line.includes('\n');
       return {
         ...base,
-        type: note?.kind === 'pr-pushed' ? 'pull-request' : 'merge',
-        title: comment.body.trim().slice(0, 300) || D.system,
+        type: plain ? 'note' : note?.kind === 'pr-pushed' ? 'pull-request' : 'merge',
+        title: line.slice(0, 300) || D.system,
+        body: plain ? null : base.body,
       };
     }
     // `note`; the Comments tab kinds never reach here.

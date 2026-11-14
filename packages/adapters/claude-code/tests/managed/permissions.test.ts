@@ -210,6 +210,10 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'ask_lead' &&
+          // ADR-0037 §3: the researcher's findings note.
+          n !== 'report_findings' &&
+          // ADR-0038 §1: the tester's test results.
+          n !== 'report_test_results' &&
           // ADR-0035: the project assistant's own tools.
           !ASSISTANT_CONTROL_TOOL_NAMES.includes(n),
       ),
@@ -222,6 +226,8 @@ describe('P3-B canUseTool (ADR-0013 §4)', () => {
       'submit_review',
       'report_work',
       'ask_lead',
+      'report_findings',
+      'report_test_results',
       ...ASSISTANT_CONTROL_TOOL_NAMES,
     ]) {
       await expect(

@@ -1,11 +1,11 @@
-import type { TicketPlanDto } from '@acp/core/api';
+import type { TicketPlanDto, TicketPlanOptionDto } from '@acp/core/api';
 import { useId, useState } from 'react';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { inputClass } from '../../components/Input';
 import { Badge } from '../../components/Pill';
 import { RelativeTime } from '../../components/RelativeTime';
-import { decidePlan } from '../../lib/api';
+import { decidePlan, decidePlanOption } from '../../lib/api';
 import { PLAN_STATUS_COPY, REVIEW_LOOP_COPY, TICKET_COPY } from '../../lib/copy';
 import { ActionError } from '../control/bits';
 import { useTicketAction } from './actions';
@@ -13,8 +13,8 @@ import { useTicketAction } from './actions';
 const C = TICKET_COPY.plan;
 const MAX_COMMENT = 8000;
 
-/** Summary and numbered steps (title, who does it, detail) of one plan version. */
-export function PlanBody({ plan }: { plan: TicketPlanDto }) {
+/** Summary and numbered steps (title, who does it, detail) of one plan version or option. */
+export function PlanBody({ plan }: { plan: Pick<TicketPlanDto, 'summary' | 'steps'> }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="whitespace-pre-wrap">{plan.summary}</p>
@@ -92,26 +92,9 @@ function PlanMeta({ plan }: { plan: TicketPlanDto }) {
  */
 export function PlanCard({ ticketId, plan }: { ticketId: string; plan: TicketPlanDto }) {
   const decide = useTicketAction(decidePlan);
-  const [comment, setComment] = useState('');
-  const [missing, setMissing] = useState(false);
-  const inputId = useId();
-  const hintId = useId();
-  const tooLong = comment.length > MAX_COMMENT;
-
   const approve = () => void decide.run(ticketId, plan.id, { decision: 'approve' });
-  const requestChanges = async () => {
-    const text = comment.trim();
-    if (text.length === 0) {
-      setMissing(true);
-      return;
-    }
-    if (tooLong) return;
-    const done = await decide.run(ticketId, plan.id, {
-      decision: 'request-changes',
-      comment: text,
-    });
-    if (done !== null) setComment('');
-  };
+  const requestChanges = (comment: string) =>
+    decide.run(ticketId, plan.id, { decision: 'request-changes', comment });
 
   return (
     <Card
@@ -123,42 +106,163 @@ export function PlanCard({ ticketId, plan }: { ticketId: string; plan: TicketPla
       <div className="flex flex-col gap-5">
         <PlanMeta plan={plan} />
         <PlanBody plan={plan} />
-        <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <label htmlFor={inputId} className="text-caption font-medium">
-            {C.commentLabel}
-          </label>
-          <textarea
-            id={inputId}
-            rows={3}
-            value={comment}
-            onChange={(e) => {
-              setComment(e.target.value);
-              if (missing) setMissing(false);
-            }}
-            placeholder={C.commentPlaceholder}
-            aria-describedby={hintId}
-            aria-invalid={missing || tooLong ? true : undefined}
-            className={inputClass('resize-y px-3 py-2')}
-          />
-          <span id={hintId} className="text-caption text-dim">
-            {missing ? (
-              <span className="text-danger">{C.commentRequired}</span>
-            ) : tooLong ? (
-              <span className="text-danger">{TICKET_COPY.canvas.tooLong}</span>
-            ) : (
-              C.commentHint
-            )}
-          </span>
-          <div className="mt-1 flex flex-wrap gap-2">
-            <Button variant="primary" disabled={decide.pending} onClick={approve}>
-              {decide.pending ? C.approving : C.approve}
-            </Button>
-            <Button disabled={decide.pending} onClick={() => void requestChanges()}>
-              {decide.pending ? C.sending : C.requestChanges}
-            </Button>
-          </div>
-          <ActionError error={decide.error} message={C.failed} />
-        </div>
+        <DecisionBox
+          pending={decide.pending}
+          error={decide.error}
+          hint={C.commentHint}
+          approve={{ label: C.approve, run: approve }}
+          requestChanges={requestChanges}
+        />
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * The comment box under a plan, and its buttons: Approve (when the card has one) and Request
+ * changes, which needs a comment of at most 8,000 characters. `requestChanges` answers null when
+ * the decision failed, so the comment stays for another try.
+ */
+function DecisionBox({
+  pending,
+  error,
+  hint,
+  approve,
+  requestChanges,
+}: {
+  pending: boolean;
+  error: ReturnType<typeof useTicketAction>['error'];
+  hint: string;
+  approve?: { label: string; run: () => void };
+  requestChanges: (comment: string) => Promise<unknown>;
+}) {
+  const [comment, setComment] = useState('');
+  const [missing, setMissing] = useState(false);
+  const inputId = useId();
+  const hintId = useId();
+  const tooLong = comment.length > MAX_COMMENT;
+  const send = async () => {
+    const text = comment.trim();
+    if (text.length === 0) {
+      setMissing(true);
+      return;
+    }
+    if (tooLong) return;
+    const done = await requestChanges(text);
+    if (done !== null) setComment('');
+  };
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-4">
+      <label htmlFor={inputId} className="text-caption font-medium">
+        {C.commentLabel}
+      </label>
+      <textarea
+        id={inputId}
+        rows={3}
+        value={comment}
+        onChange={(e) => {
+          setComment(e.target.value);
+          if (missing) setMissing(false);
+        }}
+        placeholder={C.commentPlaceholder}
+        aria-describedby={hintId}
+        aria-invalid={missing || tooLong ? true : undefined}
+        className={inputClass('resize-y px-3 py-2')}
+      />
+      <span id={hintId} className="text-caption text-dim">
+        {missing ? (
+          <span className="text-danger">{C.commentRequired}</span>
+        ) : tooLong ? (
+          <span className="text-danger">{TICKET_COPY.canvas.tooLong}</span>
+        ) : (
+          hint
+        )}
+      </span>
+      <div className="mt-1 flex flex-wrap gap-2">
+        {approve !== undefined ? (
+          <Button variant="primary" disabled={pending} onClick={approve.run}>
+            {pending ? C.approving : approve.label}
+          </Button>
+        ) : null}
+        <Button disabled={pending} onClick={() => void send()} data-testid="plan-request-changes">
+          {pending ? C.sending : C.requestChanges}
+        </Button>
+      </div>
+      <ActionError error={error} message={C.failed} />
+    </div>
+  );
+}
+
+/** The plan options waiting for the owner: `proposed` ones while the run is in plan review. */
+export function optionsUnderReview(
+  runStatus: string | undefined,
+  options: readonly TicketPlanOptionDto[] | undefined,
+): TicketPlanOptionDto[] {
+  if (runStatus !== 'PLAN_REVIEW') return [];
+  return (options ?? []).filter((o) => o.status === 'proposed');
+}
+
+/**
+ * ADR-0037 §4: several planners' plans side by side (stacked on narrow screens), each with its
+ * planner's name and "Approve this plan"; Request changes goes to every planner, with the comment.
+ */
+export function PlanOptionsCard({
+  ticketId,
+  options,
+}: {
+  ticketId: string;
+  options: readonly TicketPlanOptionDto[];
+}) {
+  const decide = useTicketAction(decidePlanOption);
+  const requestChanges = (comment: string) =>
+    decide.run(ticketId, { decision: 'request-changes', comment });
+  return (
+    <Card
+      title={C.optionsTitle}
+      description={C.optionsIntro(options.length)}
+      testId="plan-options-card"
+      className="border-accent/35! ring-3 ring-accent/10"
+    >
+      <div className="flex flex-col gap-5">
+        <ul
+          className={`grid grid-cols-1 gap-4 ${options.length > 1 ? 'lg:grid-cols-2' : ''}`}
+          aria-label={C.optionsLabel}
+        >
+          {options.map((o) => (
+            <li
+              key={o.id}
+              className="flex min-w-0 flex-col gap-4 rounded-card border border-line p-4"
+              data-testid="plan-option"
+              data-option={o.id}
+            >
+              <div className="flex flex-col gap-1">
+                <h3 className="text-title font-semibold">{C.optionBy(o.label)}</h3>
+                <span className="text-caption text-dim tabular-nums">
+                  {C.helpers(o.plannedHelpers)}
+                </span>
+              </div>
+              <PlanBody plan={o} />
+              <Button
+                variant="primary"
+                className="mt-auto w-fit"
+                disabled={decide.pending}
+                aria-label={C.approveThisLabel(o.label)}
+                onClick={() =>
+                  void decide.run(ticketId, { decision: 'approve', planOptionId: o.id })
+                }
+                data-testid="plan-option-approve"
+              >
+                {decide.pending ? C.approving : C.approveThis}
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <DecisionBox
+          pending={decide.pending}
+          error={decide.error}
+          hint={C.optionsCommentHint}
+          requestChanges={requestChanges}
+        />
       </div>
     </Card>
   );

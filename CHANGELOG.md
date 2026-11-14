@@ -9,6 +9,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Failure routing with When arrows** (ADR-0038). A tester reports structured test results
+  (`report_test_results`, shown as a "Test results" box). Every failure (tests, checks, a harness
+  that cannot run, review rework, a merge conflict) comes with a failure context naming the likely
+  authors, which the lead always gets. A new When arrow sends a failure to a helper, the lead or
+  the new Author block, for a set number of fix rounds; the lead is told about every fix and can
+  move it (`reroute_fix`). The lead's brief describes the whole workflow in words, and the editor
+  shows the same "Flow in words". Existing rework arrows and Checks settings work as before.
+  After a routed fix of a tester's failure is merged, the tester runs again ("Test again after
+  the fix", on by default per When arrow), and the live graph shows the rounds each When arrow
+  used.
+- **Flexible workflows: one Agent block, roles from typed arrows** (ADR-0037). Every agent except
+  the lead is an Agent block whose role comes from its arrows, with presets for researcher,
+  planner, helper, reviewer and tester. New arrows: `research` (read-only researchers run before
+  the planner or the lead they feed, on Claude Code or Codex, and their findings go into its
+  brief), `custom` (order and hand-off) and labels and reasons on any arrow, given to agents as
+  quoted data. Two or more planners each write a plan, shown side by side on the ticket page;
+  you approve one (never automatically). A change can go to several reviewers; any rework verdict
+  wins. Workflows are now stored as version 3; saved graphs migrate on read. This release adds
+  database migration 0016; back up first.
 - **Code map** (ADR-0034). ACP indexes each project's repository locally (paths, symbols, imports
   and tests; no source text; no AI model) at a ticket's base commit, re-reading only changed files.
   Every agent gets a short repository map and a read-only `code_map` tool; plan steps can name

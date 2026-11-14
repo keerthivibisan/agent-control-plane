@@ -1,4 +1,4 @@
-import { approvalsOf, type WorkflowGraph } from '@acp/core';
+import { approvalsOf, type WorkflowGraphV3 } from '@acp/core';
 import type { WorkflowGraphDto } from '@acp/core/api';
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { Button } from '../../components/Button';
@@ -25,6 +25,7 @@ import { refusalMessage } from './draft';
 import { finishIssues, finishView, isHiddenByFinish } from './finish';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
+import { FlowWords } from './editor/FlowWords';
 import type { BlockContext } from './editor/flow';
 import { GraphEditor, type FocusRequest } from './editor/GraphEditor';
 import { editorIssues, hasErrors } from './editor/issues';
@@ -44,7 +45,7 @@ const H = EDITOR_COPY.header;
 /** The last save the server refused: its error, and its issues for the graph that was sent. */
 interface Refused {
   error: ApiError;
-  graph: WorkflowGraph;
+  graph: WorkflowGraphV3;
   issues: EditorIssue[] | null;
 }
 
@@ -108,13 +109,15 @@ function EditorHeader({ actions, status }: { actions: ReactNode; status: ReactNo
  */
 function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGraphDto }) {
   const store = useQueryStore();
-  const [state, dispatch] = useReducer(historyReducer, dto.graph, initialHistoryState);
+  // The editor and the server both work on version 3 (ADR-0037).
+  const saved = dto.graph;
+  const [state, dispatch] = useReducer(historyReducer, saved, initialHistoryState);
   const [templates, setTemplates] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const [pending, setPending] = useState(false);
   const [refused, setRefused] = useState<Refused | null>(null);
   /** The graph the last save stored, until the refetch brings it back as `dto.graph`. */
-  const [stored, setStored] = useState<WorkflowGraph | null>(null);
+  const [stored, setStored] = useState<WorkflowGraphV3 | null>(null);
   const agentFiles = useApiQuery(workflowPaths.agents(projectId), workflowSchemas.agents).data;
   // The harness's checks, for the Checks blocks' picks (ADR-0027); unknown while it loads.
   const harness = useApiQuery(
@@ -166,7 +169,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
   const blocked = hasErrors(issues);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warningCount = issues.length - errorCount;
-  const dirty = !sameGraph(graph, dto.graph) && !(stored !== null && sameGraph(graph, stored));
+  const dirty = !sameGraph(graph, saved) && !(stored !== null && sameGraph(graph, stored));
   useUnsavedGuard(dirty, S.leave);
 
   const agentModels = useMemo(
@@ -316,7 +319,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
               <Button
                 onClick={() => {
                   setRefused(null);
-                  dispatch({ type: 'replace', graph: dto.graph });
+                  dispatch({ type: 'replace', graph: saved });
                 }}
                 disabled={pending}
                 data-testid="discard-workflow"
@@ -407,6 +410,12 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           )}
         </div>
       </div>
+      <FlowWords
+        graph={graph}
+        projectProvider={projectProvider}
+        selection={selection}
+        onSelect={focusOn}
+      />
       <ProjectDefaults projectId={projectId} setup={dto.setup} />
       {templates ? (
         <TemplatePicker

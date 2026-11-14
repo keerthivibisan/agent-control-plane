@@ -7,6 +7,7 @@ import {
   LeadToolInputs,
   MAX_CONCURRENT_CHILD_AGENTS,
   MAX_DELEGATION_DEPTH,
+  MAX_RESEARCH_FINDINGS_CHARS,
   budgetTokens,
 } from '../src/index.js';
 import {
@@ -71,8 +72,25 @@ describe('lead tools', () => {
         'project_info',
         'propose_skill',
         'propose_agent',
+        // ADR-0037 §3: the researcher's findings note
+        'report_findings',
+        // ADR-0038 §1: the tester's structured test results
+        'report_test_results',
+        // ADR-0038 §4-§5: the lead's fix rerouting and workflow view
+        'reroute_fix',
+        'view_workflow',
       ].sort(),
     );
+    // ADR-0038 §4: reroute_fix names a fix by exactly one of fixId and changeId.
+    const rr = LeadToolInputs.reroute_fix;
+    expect(rr.safeParse({ fixId: 'f-1', to: 'lead' }).success).toBe(true);
+    expect(rr.safeParse({ changeId: 'a-1', to: 'Frontend helper', note: 'CSS' }).success).toBe(
+      true,
+    );
+    expect(rr.safeParse({ to: 'lead' }).success).toBe(false);
+    expect(rr.safeParse({ fixId: 'f-1', changeId: 'a-1', to: 'lead' }).success).toBe(false);
+    expect(rr.safeParse({ fixId: 'f-1', to: '' }).success).toBe(false);
+    expect(LeadToolInputs.view_workflow.safeParse({}).success).toBe(true);
     const cm = LeadToolInputs.code_map;
     expect(cm.safeParse({ action: 'find_symbol', query: 'createApp' }).success).toBe(true);
     expect(cm.safeParse({ action: 'neighbors', path: 'src/a.ts', depth: 2 }).success).toBe(true);
@@ -82,6 +100,45 @@ describe('lead tools', () => {
     expect(cm.safeParse({ action: 'search', query: '  ' }).success).toBe(false);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'Which token?' }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: ' ' }).success).toBe(false);
+    // ADR-0037 §3: one findings note of 1 to 16,384 characters (after trimming).
+    const rf = LeadToolInputs.report_findings;
+    expect(MAX_RESEARCH_FINDINGS_CHARS).toBe(16384);
+    expect(rf.safeParse({ findings: 'src/a.ts:3 parses the config.' }).success).toBe(true);
+    expect(rf.safeParse({ findings: 'x'.repeat(16384) }).success).toBe(true);
+    expect(rf.safeParse({ findings: 'x'.repeat(16385) }).success).toBe(false);
+    expect(rf.safeParse({ findings: '' }).success).toBe(false);
+    expect(rf.safeParse({ findings: '   ' }).success).toBe(false);
+    expect(rf.safeParse({}).success).toBe(false);
+    // ADR-0038 §1: status, failing tests (empty when passed, at least one when failed), summary.
+    const tr = LeadToolInputs.report_test_results;
+    const failure = { test: 'parses dates', file: 'src/date.test.ts', message: 'expected 1' };
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: '12 passed.' }).success).toBe(
+      true,
+    );
+    expect(
+      tr.safeParse({ status: 'failed', failed: [failure], summary: '1 failed.' }).success,
+    ).toBe(true);
+    expect(tr.safeParse({ status: 'failed', failed: [], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [failure], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'flaky', failed: [], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: ' ' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: 'x'.repeat(2001) }).success).toBe(
+      false,
+    );
+    const many = Array.from({ length: 51 }, () => failure);
+    expect(tr.safeParse({ status: 'failed', failed: many, summary: 'x' }).success).toBe(false);
+    expect(
+      tr.safeParse({ status: 'failed', failed: many.slice(0, 50), summary: 'x' }).success,
+    ).toBe(true);
+    const bad = (f: Record<string, unknown>) =>
+      tr.safeParse({ status: 'failed', failed: [{ ...failure, ...f }], summary: 'x' }).success;
+    expect(bad({ test: 'x'.repeat(201) })).toBe(false);
+    expect(bad({ message: 'x'.repeat(501) })).toBe(false);
+    expect(bad({ message: ' ' })).toBe(false);
+    expect(bad({ file: '/etc/passwd' })).toBe(false);
+    expect(bad({ file: '../outside.ts' })).toBe(false);
+    expect(bad({ file: 'a/'.repeat(150) + 'b.ts' })).toBe(false);
+    expect(bad({ file: undefined })).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2000) }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2001) }).success).toBe(false);
     expect(LeadToolInputs.get_review_findings.safeParse({ agentId: 'a' }).success).toBe(true);

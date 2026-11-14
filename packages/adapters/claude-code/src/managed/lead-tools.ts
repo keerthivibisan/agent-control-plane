@@ -48,10 +48,18 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     'Submit your review of this change: a verdict (approve or rework) and your findings as plain text. The lead decides what happens next.',
   report_work:
     'Report what you did, in 2 to 4 plain sentences (what changed, how you checked it). It becomes your note on the ticket; a later report replaces it.',
+  report_findings:
+    'Report your research findings once, as plain text (at most 16,384 characters): what you found, with the file paths that show it. They become a research note on the ticket and go to the agents you research for. Then end your turn.',
+  report_test_results:
+    'Report the result of your test run once per turn, before report_work: status passed or failed, the failing tests (up to 50, each with its name, the repository-relative file and a short message; none when passed, at least one when failed) and a short summary. It becomes the test results on the ticket and goes to the lead, which decides who fixes a failure.',
   ask_lead:
     'Ask the agent that started you (the lead, or your parent helper) one short question. It gets it as a message and answers with a message to you; keep working meanwhile. The reply says whether it was delivered, queued or dropped. At most 5 open questions at a time.',
   get_review_findings:
     "Get the stored review findings of one helper's change again: the review agent's verdict and findings text. Refused when no review agent has reviewed it.",
+  reroute_fix:
+    "Move a fix the workflow started along a When arrow: pass fixId (from the notice) or changeId (the agent whose change is being fixed, or the fixer), and to: a helper block's id or label, author (whoever wrote the failing code) or lead (you take it over). The running fix turn is stopped first; note is your own words for the new fixer. Refused for a fix that is not running.",
+  view_workflow:
+    'Read this run\'s workflow in words: every agent block with its role, and every arrow as a sentence, the When arrows that route failures included. Read-only; the same text as the "Your workflow" part of your brief.',
   code_map:
     "Look up the project's code map at the run's base commit: paths, symbol names and line numbers, never file content. action find_symbol (query: a symbol name) says where it is declared; file (path) lists its exports, imports, importers and tests; neighbors (path, depth 1 or 2) lists files linked to it by imports; search (query) matches symbol names and paths. Use it before broad searches, then read only the files you need. Refused when no map is built yet.",
   // ADR-0035: the project assistant's tools, answered by the server.
@@ -178,6 +186,18 @@ export function leadToolDefinitions(
       i.report_work.shape,
       run(handler, 'report_work'),
     ),
+    report_findings: tool(
+      'report_findings',
+      d.report_findings,
+      i.report_findings.shape,
+      run(handler, 'report_findings'),
+    ),
+    report_test_results: tool(
+      'report_test_results',
+      d.report_test_results,
+      i.report_test_results.shape,
+      run(handler, 'report_test_results'),
+    ),
     ask_lead: tool('ask_lead', d.ask_lead, i.ask_lead.shape, run(handler, 'ask_lead')),
     get_review_findings: tool(
       'get_review_findings',
@@ -186,6 +206,18 @@ export function leadToolDefinitions(
       run(handler, 'get_review_findings'),
     ),
     code_map: tool('code_map', d.code_map, i.code_map.shape, run(handler, 'code_map')),
+    reroute_fix: tool(
+      'reroute_fix',
+      d.reroute_fix,
+      i.reroute_fix.shape,
+      run(handler, 'reroute_fix'),
+    ),
+    view_workflow: tool(
+      'view_workflow',
+      d.view_workflow,
+      i.view_workflow.shape,
+      run(handler, 'view_workflow'),
+    ),
     ticket_status: tool(
       'ticket_status',
       d.ticket_status,

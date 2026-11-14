@@ -1,4 +1,4 @@
-import type { WorkflowEdgeType } from '@acp/core';
+import type { WorkflowEdgeTypeV3 } from '@acp/core';
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
 import { memo } from 'react';
 import type { LinkEdge } from './flow';
@@ -8,29 +8,37 @@ import { labelPoint, pathOf, routePoints } from './routing';
 /**
  * How each kind of link looks (DESIGN.md, "Agent views"): neutral lines that differ by weight and
  * dashes, never by the accent, which marks only the selected link. Calm on purpose: the forward
- * links are solid (the lead's assigns and merge darker, the merge heavier), the review route is
- * dashed, findings dotted, rework long-dashed with its rounds on a small label.
+ * links are solid (the lead's implement and merge darker, the merge heavier, a plan heavier still
+ * in the step tone), the review route is dashed, findings dotted, rework long-dashed with its
+ * rounds on a small label; research is dash-dotted, test short-dashed and a custom hand-off
+ * dash-dot-dotted (ADR-0037 §2), so every type reads apart without colour.
  */
 export const EDGE_LOOK: Readonly<
-  Record<WorkflowEdgeType, { stroke: string; width: number; dash?: string; round?: boolean }>
+  Record<WorkflowEdgeTypeV3, { stroke: string; width: number; dash?: string; round?: boolean }>
 > = {
   flow: { stroke: 'var(--color-dim)', width: 1.5 },
-  assigns: { stroke: 'var(--color-ink)', width: 1.5 },
+  research: { stroke: 'var(--color-dim)', width: 1.75, dash: '10 3 1 3', round: true },
+  plan: { stroke: 'var(--color-dim)', width: 2.25 },
+  implement: { stroke: 'var(--color-ink)', width: 1.5 },
   review: { stroke: 'var(--color-dim)', width: 1.5, dash: '6 4' },
   findings: { stroke: 'var(--color-dim)', width: 2, dash: '0.5 5', round: true },
   rework: { stroke: 'var(--color-ink)', width: 1.5, dash: '9 4' },
+  test: { stroke: 'var(--color-ink)', width: 1.5, dash: '3 3' },
+  custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3', round: true },
   merge: { stroke: 'var(--color-ink)', width: 2.5 },
+  // ADR-0038: failure routing, red and dashed.
+  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
 };
 
 /** The stroke a link is drawn with: the accent when selected, danger when the rules refuse it. */
-export function linkStroke(type: WorkflowEdgeType, selected: boolean, refused: boolean): string {
+export function linkStroke(type: WorkflowEdgeTypeV3, selected: boolean, refused: boolean): string {
   if (selected) return 'var(--color-accent)';
   if (refused) return 'var(--color-danger)';
   return EDGE_LOOK[type].stroke;
 }
 
 /** A short sample of a link kind's line, for the legend, the link chooser and the panel. */
-export function LinkSample({ type, width = 28 }: { type: WorkflowEdgeType; width?: number }) {
+export function LinkSample({ type, width = 28 }: { type: WorkflowEdgeTypeV3; width?: number }) {
   const { stroke, dash, round } = EDGE_LOOK[type];
   const end = width - 6;
   return (
@@ -54,7 +62,8 @@ export function LinkSample({ type, width = 28 }: { type: WorkflowEdgeType; width
  * A link on the canvas: the route `routing.ts` planned (its kind and lane), drawn from the handles'
  * live positions, so it follows a block the owner drags. The selected link is drawn in the accent
  * over a soft halo; while a block is selected or a link is being dragged, the links that don't
- * touch it fade back. Rework links carry a small "Rework ×n" label on their lower run.
+ * touch it fade back. Rework links carry a small "Rework ×n" label on their lower run, and an
+ * arrow with the owner's label (ADR-0037 §2) shows it there; its purpose is the hover text.
  */
 export const LinkEdgeView = memo(function LinkEdgeView({
   id,
@@ -79,6 +88,7 @@ export const LinkEdgeView = memo(function LinkEdgeView({
   const at = labelPoint(points);
   return (
     <g opacity={dim ? 0.3 : 1} data-link={data.type} className="transition-opacity">
+      {data.purpose !== undefined ? <title>{data.purpose}</title> : null}
       {isSelected ? (
         <path
           d={d}
@@ -113,6 +123,7 @@ export const LinkEdgeView = memo(function LinkEdgeView({
               opacity: dim ? 0.3 : 1,
             }}
             data-testid="link-label"
+            title={data.purpose}
           >
             {label}
           </div>
