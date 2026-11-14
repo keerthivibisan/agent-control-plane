@@ -178,12 +178,15 @@ export function reconnectTargets(
   if (edge === undefined) return null;
   const without = withoutEdge(graph, id);
   const fixed = moving === 'target' ? edge.from : edge.to;
+  const when = edge.type === 'when';
   return new Map(
     finishView(graph).graph.nodes.map((n): [WorkflowNodeId, LinkTarget] => {
       if (n.id === fixed) return [n.id, 'source'];
       const option =
         moving === 'target' ? resolveLink(without, fixed, n.id) : resolveLink(without, n.id, fixed);
-      return [n.id, option === null ? 'invalid' : 'valid'];
+      // As `resolveReconnect`: only a When arrow may end where only a When arrow fits.
+      const fits = option !== null && option.types.some((t) => when || t !== 'when');
+      return [n.id, fits ? 'valid' : 'invalid'];
     }),
   );
 }
@@ -214,7 +217,12 @@ export function resolveReconnect(
   if (option === null) {
     return { kind: 'refused', message: refusalFor(without, from, refusalTarget(without, to)) };
   }
-  // The link keeps its kind when it fits its new ends; else it takes the kinds that do.
-  const types = option.types.includes(stored.type) ? [stored.type] : option.types;
+  // The link keeps its kind when it fits its new ends; else it takes the kinds that do. A moved
+  // link never turns into a When arrow (ADR-0038 §4): failure routing is drawn on purpose.
+  const fitting = stored.type === 'when' ? option.types : option.types.filter((t) => t !== 'when');
+  if (fitting.length === 0) {
+    return { kind: 'refused', message: refusalFor(without, from, refusalTarget(without, to)) };
+  }
+  const types = fitting.includes(stored.type) ? [stored.type] : fitting;
   return { kind: 'ok', from: option.from, to: option.to, types };
 }

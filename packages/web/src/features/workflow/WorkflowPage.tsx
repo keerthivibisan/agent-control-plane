@@ -25,6 +25,7 @@ import { refusalMessage } from './draft';
 import { finishIssues, finishView, isHiddenByFinish } from './finish';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
+import { FlowWords } from './editor/FlowWords';
 import type { BlockContext } from './editor/flow';
 import { GraphEditor, type FocusRequest } from './editor/GraphEditor';
 import { editorIssues, hasErrors } from './editor/issues';
@@ -409,6 +410,12 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           )}
         </div>
       </div>
+      <FlowWords
+        graph={graph}
+        projectProvider={projectProvider}
+        selection={selection}
+        onSelect={focusOn}
+      />
       <ProjectDefaults projectId={projectId} setup={dto.setup} />
       {templates ? (
         <TemplatePicker

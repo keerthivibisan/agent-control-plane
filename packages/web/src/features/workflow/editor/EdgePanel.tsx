@@ -1,8 +1,11 @@
 import {
   arrowNoteReceiver,
+  FAILURE_EVENT_NAMES,
   MAX_EDGE_LABEL,
   MAX_EDGE_PURPOSE,
   MAX_EDGE_REWORK_ROUNDS,
+  MAX_WHEN_ROUNDS,
+  type FailureEvent,
   type WorkflowEdgeV3,
   type WorkflowGraphV3,
 } from '@acp/core';
@@ -12,6 +15,7 @@ import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { NumberChoice } from '../../project-setup/fields';
 import { EDITOR_COPY } from './copy';
 import { LinkSample } from './edges';
+import { sourceEvents, toggledEvents } from './failure-routing';
 import type { EditorIssue } from './IssuesList';
 import { drawnLabel } from './linking';
 import { PanelHeading, PanelIssues } from './NodePanel';
@@ -20,10 +24,111 @@ import type { EditorAction, EdgePatch } from './state';
 const E = WORKFLOW_GRAPH_COPY.edgePanel;
 const A = EDITOR_COPY.arrows;
 const W = EDITOR_COPY.edgePanel;
+const WN = EDITOR_COPY.when;
 const ROUND_CHOICES: readonly number[] = Array.from(
   { length: MAX_EDGE_REWORK_ROUNDS + 1 },
   (_, i) => i,
 );
+const WHEN_ROUND_CHOICES: readonly number[] = Array.from(
+  { length: MAX_WHEN_ROUNDS },
+  (_, i) => i + 1,
+);
+
+type WhenEdge = Extract<WorkflowEdgeV3, { type: 'when' }>;
+
+/**
+ * A When arrow's settings (ADR-0038 §4): the failures it routes, as checkboxes limited to what its
+ * source raises (an event the source never raises stays listed, flagged, so it can be unticked),
+ * its rounds (1–5), and who receives a routed failure.
+ */
+function WhenFields({
+  edge,
+  graph,
+  dispatch,
+}: {
+  edge: WhenEdge;
+  graph: WorkflowGraphV3;
+  dispatch: Dispatch<EditorAction>;
+}) {
+  const hintId = useId();
+  const raised = sourceEvents(graph, edge.from);
+  const foreign = edge.on.filter((e) => !raised.includes(e));
+  const shown: readonly FailureEvent[] = [...raised, ...foreign];
+  const target = graph.nodes.find((n) => n.id === edge.to);
+  const receiver =
+    target?.type === 'lead'
+      ? ({ kind: 'lead' } as const)
+      : target?.type === 'author'
+        ? ({ kind: 'author' } as const)
+        : ({ kind: 'node', label: drawnLabel(graph, edge.to) } as const);
+  return (
+    <>
+      <fieldset
+        className="flex min-w-0 flex-col gap-1.5"
+        aria-describedby={hintId}
+        data-testid="when-events"
+      >
+        <legend className={`mb-1.5 ${labelClass}`}>{WN.events}</legend>
+        {shown.map((event) => {
+          const checked = edge.on.includes(event);
+          const bad = foreign.includes(event);
+          // The last ticked event stays: an arrow routes at least one.
+          const last = checked && edge.on.length === 1;
+          return (
+            <label
+              key={event}
+              className={`flex items-start gap-2.5 text-body ${last ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <input
+                type="checkbox"
+                className="mt-1 accent-accent"
+                checked={checked}
+                disabled={last}
+                onChange={(e) =>
+                  dispatch({
+                    type: 'set-when-events',
+                    id: edge.id,
+                    on: toggledEvents(edge, event, e.target.checked, raised),
+                  })
+                }
+                data-testid={`when-event-${event}`}
+              />
+              <span className="flex flex-col">
+                <span className={bad ? 'text-danger' : 'text-ink'}>
+                  {WN.event(FAILURE_EVENT_NAMES[event])}
+                </span>
+                {bad ? (
+                  <span className="text-caption text-danger" data-testid={`when-foreign-${event}`}>
+                    {WN.foreign}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
+        <span id={hintId} className={hintClass}>
+          {WN.eventsHint}
+        </span>
+      </fieldset>
+      <NumberChoice
+        legend={WN.rounds}
+        hint={WN.roundsHint}
+        name={`when-rounds-${edge.id}`}
+        value={edge.maxRounds}
+        choices={WHEN_ROUND_CHOICES}
+        onChange={(maxRounds) => dispatch({ type: 'set-rounds', id: edge.id, maxRounds })}
+        valueText={WN.roundsValue}
+      />
+      <p
+        className="rounded-control border border-line bg-sunken px-3 py-2.5 text-caption text-dim"
+        data-testid="when-receives"
+        data-receiver={receiver.kind}
+      >
+        {WN.receives(receiver)} {receiver.kind === 'lead' ? null : WN.roundsOut}
+      </p>
+    </>
+  );
+}
 
 /**
  * One of an arrow's words (ADR-0037 §2) with a live count of its characters against the limit. The
@@ -95,7 +200,8 @@ function WordsField({
 
 /**
  * The selected arrow: its type and ends, its label and purpose (ADR-0037 §2), its rework rounds
- * (0–5) when it is a rework arrow, and Remove (in the heading).
+ * (0–5) when it is a rework arrow, its events, rounds (1–5) and receiver when it is a When arrow
+ * (ADR-0038 §4), and Remove (in the heading).
  */
 export function EdgePanel({
   edge,
@@ -174,9 +280,12 @@ export function EdgePanel({
           testId="edge-purpose"
           onChange={(purpose) => change({ purpose })}
         />
-        <p className="-mt-3 text-caption text-dim" data-testid="edge-purpose-to">
-          {purposeTo}
-        </p>
+        {edge.type === 'when' ? null : (
+          // A When arrow says who receives it below, with its rounds (the Author is found at run time).
+          <p className="-mt-3 text-caption text-dim" data-testid="edge-purpose-to">
+            {purposeTo}
+          </p>
+        )}
         {edge.type === 'rework' ? (
           <NumberChoice
             legend={E.rounds}
@@ -188,6 +297,7 @@ export function EdgePanel({
             valueText={E.roundsValue}
           />
         ) : null}
+        {edge.type === 'when' ? <WhenFields edge={edge} graph={graph} dispatch={dispatch} /> : null}
       </div>
     </div>
   );

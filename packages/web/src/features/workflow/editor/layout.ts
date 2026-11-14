@@ -58,7 +58,9 @@ export function isGateType(type: WorkflowNode['type']): boolean {
     type === 'checks' ||
     type === 'ticket-merge' ||
     type === 'owner-merge' ||
-    type === 'done'
+    type === 'done' ||
+    // ADR-0038 §4: a routing block, drawn as a step (it runs no agent of its own).
+    type === 'author'
   );
 }
 
@@ -102,6 +104,7 @@ export function rowOf(node: WorkflowNode, roles: GraphRoles): 0 | 1 | 2 {
     case 'reviewer-change':
     case 'agent':
     case 'mixed':
+    case 'author':
       return 1;
     default:
       return 2;
@@ -145,6 +148,8 @@ function columnRows(graph: WorkflowGraph, roles: GraphRoles): WorkflowNode[][][]
     graph.nodes.filter(isChangeChecks),
     kind('reviewer-change'),
     kind('agent', 'mixed'),
+    // The Author block sits with the work, after the blocks whose failures it fixes.
+    of('author'),
   ].filter((c) => c.length > 0);
   return [planRow, workRow];
 }

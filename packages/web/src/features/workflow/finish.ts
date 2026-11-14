@@ -68,7 +68,9 @@ export function finishView<G extends AnyGraph>(graph: G): FinishView<G> {
       continue;
     }
     if (e.from === tm) {
-      if (source !== undefined && source !== e.to) edges.push({ ...e, from: source });
+      // ADR-0038 §4: a When arrow from the ticket merge (merge conflicts) leaves the Finish block.
+      if (e.type === 'when') edges.push({ ...e, from: om });
+      else if (source !== undefined && source !== e.to) edges.push({ ...e, from: source });
       continue;
     }
     edges.push(e.to === done ? { ...e, to: om } : e);

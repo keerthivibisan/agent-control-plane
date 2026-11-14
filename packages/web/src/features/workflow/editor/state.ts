@@ -1,6 +1,8 @@
 import {
+  AUTHOR_BLOCK_LABEL,
   DEFAULT_MAX_REWORK_ROUNDS,
   DEFAULT_WHEN_ROUNDS,
+  MAX_WHEN_ROUNDS,
   HARD_MAX_HELPERS,
   MAX_GRAPH_NODES,
   canConnectV3,
@@ -9,6 +11,7 @@ import {
   type CheckBlockPlace,
   type CheckFailureRoute,
   type CheckSelection,
+  type FailureEvent,
   type ManagedProviderId,
   type NodePosition,
   type SkillName,
@@ -34,6 +37,7 @@ import {
 } from '../check-blocks';
 import { finishParts } from '../finish';
 import { EDITOR_COPY, type PresetKey } from './copy';
+import { newWhenEvents, sourceEvents } from './failure-routing';
 import { blockKind, graphRoles, isEditingKind, isFinalKind, type BlockKind } from './roles';
 
 /**
@@ -137,7 +141,12 @@ export type EditorAction =
   | { type: 'refuse'; message: string }
   | { type: 'dismiss-refusal' }
   | { type: 'remove-edge'; id: string }
+  /** A rework arrow's rounds (0–5), or a When arrow's (1–5, ADR-0038 §4). */
   | { type: 'set-rounds'; id: string; maxRounds: number }
+  /** Adds the Author block (ADR-0038 §4), at most one; it is selected, with no arrow yet. */
+  | { type: 'add-author' }
+  /** A When arrow's events; an empty list is ignored (an arrow routes at least one). */
+  | { type: 'set-when-events'; id: string; on: readonly FailureEvent[] }
   /** Adds a Checks block on a change (linked from `near` when it may be) or on the branch. */
   | { type: 'add-checks'; place: CheckBlockItem; near?: WorkflowNodeId | undefined }
   /** Moves a Checks block between a change and the branch, rewiring it; never the merge block. */
@@ -175,7 +184,7 @@ function kindOf(graph: Graph, id: WorkflowNodeId): BlockKind | undefined {
  * lead and the steps are in every workflow.
  */
 export function isRemovable(node: GraphNode): boolean {
-  return node.type === 'agent' || isChecksNode(node);
+  return node.type === 'agent' || node.type === 'author' || isChecksNode(node);
 }
 
 /** A block on the final chain between the ticket merge and your merge (branch checks too). */
@@ -239,6 +248,17 @@ export function paletteAvailability(
   return { ok: true };
 }
 
+/** Whether the menu may add the Author block (ADR-0038 §4: at most one per workflow). */
+export function authorAvailability(graph: Graph): { ok: true } | { ok: false; reason: string } {
+  if (graph.nodes.length >= MAX_GRAPH_NODES) {
+    return { ok: false, reason: WORKFLOW_GRAPH_COPY.palette.tooManyBlocks(MAX_GRAPH_NODES) };
+  }
+  return graph.nodes.some((n) => n.type === 'author')
+    ? { ok: false, reason: EDITOR_COPY.author.full }
+    : { ok: true };
+}
+
+/** When (ADR-0038 §4) comes last: between two blocks it is the owner's choice next to the others. */
 const EDGE_TYPE_ORDER: readonly EdgeType[] = [
   'implement',
   'research',
@@ -250,6 +270,7 @@ const EDGE_TYPE_ORDER: readonly EdgeType[] = [
   'merge',
   'flow',
   'custom',
+  'when',
 ];
 
 /** The arrow types `canConnectV3` allows from `from` to `to` in `graph`, in a fixed order. */
@@ -280,6 +301,12 @@ export function resolveLink(
   to: WorkflowNodeId,
 ): LinkOption | null {
   const parts = finishParts(graph);
+  if (parts !== null && from === parts.ownerMerge) {
+    // ADR-0038 §4: the Finish block starts only the ticket merge's When arrows (merge conflicts).
+    if (to === parts.ticketMerge || to === parts.done || to === from) return null;
+    const ok = canConnectV3(graph, parts.ticketMerge, to, 'when').ok;
+    return ok ? { from: parts.ticketMerge, to, types: ['when'] } : null;
+  }
   const tos = parts !== null && to === parts.ownerMerge ? [parts.ticketMerge, to] : [to];
   const feeds =
     parts !== null && graph.edges.some((e) => e.from === from && e.to === parts.ticketMerge);
@@ -313,11 +340,14 @@ function outgoingTypes(kind: BlockKind | undefined): readonly EdgeType[] {
     case 'helper-pool':
       return ['review', 'custom'];
     case 'reviewer-change':
-      return ['findings', 'rework', 'custom'];
+      return ['findings', 'rework', 'custom', 'when'];
     case 'reviewer-final':
       return ['flow', 'custom'];
     case 'tester':
-      return ['review', 'flow', 'custom'];
+      return ['review', 'flow', 'custom', 'when'];
+    case 'checks':
+    case 'ticket-merge':
+      return ['flow', 'when'];
     case 'agent':
       return ['research', 'plan', 'review', 'custom'];
     case 'mixed':
@@ -389,10 +419,10 @@ function makeEdge(
 ): GraphEdge {
   const id = edgeIdFor(graph, type, from, to);
   if (type === 'rework') return { type, id, from, to, maxRounds: DEFAULT_MAX_REWORK_ROUNDS };
-  // ADR-0038: the editor does not offer When links yet (FR-6, not in EDGE_TYPE_ORDER); one made
-  // here starts with a tester's event, which the owner then changes.
+  // ADR-0038 §4: a When arrow starts with the events its source raises that no other When arrow
+  // from it routes yet; the owner ticks them in the link's panel.
   if (type === 'when') {
-    return { type, id, from, to, on: ['tests-failed'], maxRounds: DEFAULT_WHEN_ROUNDS };
+    return { type, id, from, to, on: newWhenEvents(graph, from), maxRounds: DEFAULT_WHEN_ROUNDS };
   }
   return { type, id, from, to };
 }
@@ -840,6 +870,20 @@ export function tidyGraph(graph: Graph): Graph {
 }
 
 /**
+ * A moved link keeps its rounds when it keeps its kind; a When arrow also keeps the events its
+ * (maybe new) source still raises.
+ */
+function keepRounds(graph: Graph, made: GraphEdge, old: GraphEdge): GraphEdge {
+  if (made.type === 'rework' && old.type === 'rework') return { ...made, maxRounds: old.maxRounds };
+  if (made.type === 'when' && old.type === 'when') {
+    const raised = sourceEvents(graph, made.from);
+    const on = old.on.filter((e) => raised.includes(e));
+    return { ...made, maxRounds: old.maxRounds, ...(on.length > 0 ? { on } : {}) };
+  }
+  return made;
+}
+
+/**
  * Moves a link's ends: the same place in the list, a fresh id for its new ends, its rounds and its
  * label and purpose kept.
  */
@@ -856,8 +900,7 @@ function reconnect(
   const result = canConnectV3(without, from, to, edgeType);
   if (!result.ok) return { refusal: result.message };
   const made = makeEdge(without, edgeType, from, to);
-  const rounds =
-    made.type === 'rework' && old.type === 'rework' ? { ...made, maxRounds: old.maxRounds } : made;
+  const rounds = keepRounds(without, made, old);
   const edge: GraphEdge = {
     ...rounds,
     ...(old.label !== undefined ? { label: old.label } : {}),
@@ -959,15 +1002,47 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       };
     }
     case 'set-rounds': {
-      const maxRounds = Math.max(0, Math.min(5, Math.round(action.maxRounds)));
+      const rounds = Math.round(action.maxRounds);
       return {
         ...state,
         graph: custom({
           ...g,
-          edges: g.edges.map((e) =>
-            e.id === action.id && e.type === 'rework' ? { ...e, maxRounds } : e,
-          ),
+          edges: g.edges.map((e) => {
+            if (e.id !== action.id) return e;
+            if (e.type === 'rework') return { ...e, maxRounds: Math.max(0, Math.min(5, rounds)) };
+            if (e.type === 'when') {
+              return { ...e, maxRounds: Math.max(1, Math.min(MAX_WHEN_ROUNDS, rounds)) };
+            }
+            return e;
+          }),
         }),
+      };
+    }
+    case 'set-when-events': {
+      const edge = g.edges.find((e) => e.id === action.id);
+      // Each event at most once, and at least one (the schema's rule).
+      const on = [...new Set(action.on)];
+      if (edge?.type !== 'when' || on.length === 0) return state;
+      return {
+        ...state,
+        graph: custom({
+          ...g,
+          edges: g.edges.map((e) => (e.id === action.id && e.type === 'when' ? { ...e, on } : e)),
+        }),
+        refusal: null,
+      };
+    }
+    case 'add-author': {
+      if (!authorAvailability(g).ok) return state;
+      const node: GraphNode = {
+        type: 'author',
+        id: freeId(g, 'author'),
+        label: freeLabel(g, numbered(AUTHOR_BLOCK_LABEL)),
+      };
+      return {
+        graph: custom({ ...g, nodes: [...g.nodes, node] }),
+        selection: { kind: 'node', id: node.id },
+        refusal: null,
       };
     }
     case 'add-checks': {

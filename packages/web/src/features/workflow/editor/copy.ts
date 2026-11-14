@@ -263,6 +263,54 @@ export const EDITOR_COPY = {
   chooser: {
     title: 'What does this link do?',
   },
+  /** ADR-0038 §4: the Author block, a routing block in the "Add block" menu. */
+  author: {
+    group: 'Routing',
+    item: 'Author',
+    hint: 'Whoever wrote the failing code: ACP finds the helper whose change touched the failing files. Point a When arrow at it.',
+    full: 'The workflow already has its Author block.',
+  },
+  /** ADR-0038 §4: a When arrow's settings in the link's panel. */
+  when: {
+    events: 'When',
+    eventsHint: 'The failures at this block that this arrow routes. Each failure has one route.',
+    /** An event name after "When" ("tests fail"), as a checkbox label. */
+    event: (name: string) => `${name.charAt(0).toUpperCase()}${name.slice(1)}`,
+    foreign: 'This block never raises it: untick it.',
+    rounds: 'Fix rounds',
+    roundsHint: 'How many times the fixer may try before the lead decides.',
+    roundsValue: (n: number) => countOf(n, 'fix round', 'fix rounds'),
+    /** Who receives a routed failure (FR-D "Run time"), by the arrow's target. */
+    receives: (target: { kind: 'lead' } | { kind: 'author' } | { kind: 'node'; label: string }) => {
+      switch (target.kind) {
+        case 'lead':
+          return 'The lead gets the failure with its context and decides who fixes it.';
+        case 'author':
+          return 'The helper whose change touched the failing files gets a fix turn with the failure’s context and this arrow’s purpose. The lead is told and can step in.';
+        case 'node':
+          return `${target.label} gets a fix turn with the failure’s context and this arrow’s purpose. The lead is told and can step in.`;
+      }
+    },
+    roundsOut: 'When the rounds run out, the lead decides.',
+    /** The arrow's words on the canvas: its events, then its rounds. */
+    canvas: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
+  },
+  /** ADR-0038 §5: the workflow in words, the same sentences the lead reads. */
+  words: {
+    title: 'Flow in words',
+    show: 'Show the flow in words',
+    hide: 'Hide the flow in words',
+    intro:
+      'The lead reads exactly these sentences. Words in double quotes are yours. Select a sentence to select its block or link.',
+    sections: {
+      agents: 'Agents',
+      links: 'Links',
+      failures: 'When something fails',
+    },
+    defaultMark: 'Lead decides (default)',
+    defaultHint: 'No route: draw a When arrow from this block to choose who fixes it.',
+    empty: 'Nothing to describe yet.',
+  },
   issues: {
     errors: 'Fix these to save',
     warnings: 'Warnings (you can still save)',
