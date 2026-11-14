@@ -87,6 +87,7 @@ export function whenFailureRoutes(
         events: [...e.on],
         target: targetOf(index.byId.get(e.to), e.to),
         maxRounds: e.maxRounds,
+        ...(e.retest === false ? { retest: false as const } : {}),
         ...(e.label !== undefined ? { label: e.label } : {}),
         ...(e.purpose !== undefined ? { purpose: e.purpose } : {}),
         edgeId: e.id,

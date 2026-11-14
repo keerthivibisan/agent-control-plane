@@ -188,10 +188,14 @@ function linkSentence(index: NodeIndexV3, edge: WorkflowEdgeV3): WorkflowSentenc
   return { section: 'links', edgeId: edge.id, text: `${text}${notesText(edge)}` };
 }
 
-function fixText(index: NodeIndexV3, route: ProgramFailureRoute): string {
+/** `tester`: the tester whose failures it routes, which runs again after a merged fix. */
+function fixText(index: NodeIndexV3, route: ProgramFailureRoute, tester?: WorkflowNodeId): string {
   const target = route.target;
   if (target.kind === 'lead' || route.maxRounds === 0) return 'Lead decides';
   const who = target.kind === 'author' ? 'Author' : nameOf(index, target.nodeId);
+  if (tester !== undefined && route.retest !== false) {
+    return `${who} fixes and ${nameOf(index, tester)} tests again (${rounds(route.maxRounds)}), then the lead decides`;
+  }
   return `${who} fixes (${rounds(route.maxRounds)}), then the lead decides`;
 }
 
@@ -234,6 +238,8 @@ function failureSentences(
       } else add('default', event, { routing: 'default' });
     }
     const at = nameOf(index, source.id);
+    // ADR-0038 §4 (amended 2026-11-14): a tester runs again after a merged fix of its failures.
+    const tester = kind === 'tester' ? source.id : undefined;
     for (const g of groups) {
       const when = `When ${eventsText(g.events)} at ${at}`;
       const r = g.route;
@@ -243,7 +249,7 @@ function failureSentences(
       } else if (g.routing === 'default' || r === undefined) {
         text = `${when} → Lead decides (default).`;
       } else if (g.routing === 'when') {
-        text = `${when} → ${fixText(index, r)}.${notesText(r)}`;
+        text = `${when} → ${fixText(index, r, tester)}.${notesText(r)}`;
       } else {
         const on =
           r.editorNodeId === undefined ? '' : ` on ${nameOf(index, r.editorNodeId)}'s change`;
@@ -251,7 +257,7 @@ function failureSentences(
           source.type === 'checks'
             ? `the block's setting "${CHECK_FAILURE_ROUTE_NAMES.helper}"`
             : 'its rework link';
-        text = `${when}${on} → ${fixText(index, r)} (${why}).`;
+        text = `${when}${on} → ${fixText(index, r, tester)} (${why}).`;
       }
       out.push({
         section: 'failures',

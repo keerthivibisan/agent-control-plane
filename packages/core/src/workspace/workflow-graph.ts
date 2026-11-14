@@ -529,6 +529,11 @@ export const WorkflowEdgeV3Schema = z.discriminatedUnion('type', [
         message: 'each event at most once',
       }),
     maxRounds: WhenRoundsSchema,
+    /**
+     * ADR-0038 §4 (amended 2026-11-14): after a routed fix of a tester's failure is merged, the
+     * tester runs again on the ticket branch. Absent means on; `false` switches it off.
+     */
+    retest: z.boolean().optional(),
   }),
 ]);
 export type WorkflowEdgeV3 = z.infer<typeof WorkflowEdgeV3Schema>;
@@ -829,6 +834,8 @@ export interface ProgramFailureRoute {
   events: readonly FailureEvent[];
   target: FailureRouteTarget;
   maxRounds: number;
+  /** A When arrow switched off its retest (absent: the tester runs again after the fix). */
+  retest?: false;
   label?: string;
   purpose?: string;
   edgeId?: WorkflowEdgeId;

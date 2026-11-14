@@ -23,7 +23,13 @@ function when(
   from: string,
   to: string,
   on: FailureEvent[],
-  extra: Partial<{ maxRounds: number; label: string; purpose: string; id: string }> = {},
+  extra: Partial<{
+    maxRounds: number;
+    label: string;
+    purpose: string;
+    id: string;
+    retest: boolean;
+  }> = {},
 ): WorkflowEdgeV3 {
   const { id, maxRounds, ...notes } = extra;
   return {
@@ -78,6 +84,13 @@ describe('schema', () => {
     expect(
       WorkflowEdgeV3Schema.safeParse({ ...base, on: ['tests-failed'], label: 'Fix it' }).success,
     ).toBe(true);
+  });
+
+  it('retest is an optional switch (absent: on)', () => {
+    const on = ['tests-failed'];
+    expect(WorkflowEdgeV3Schema.safeParse({ ...base, on, retest: false }).success).toBe(true);
+    expect(WorkflowEdgeV3Schema.safeParse({ ...base, on, retest: true }).success).toBe(true);
+    expect(WorkflowEdgeV3Schema.safeParse({ ...base, on, retest: 'no' }).success).toBe(false);
   });
 
   it('the Author block has only the base fields', () => {
@@ -374,9 +387,21 @@ describe('describeWorkflow', () => {
         '- When a reviewer asks for rework at "Change reviewer" → Lead decides (default).',
         '- When checks fail or the harness cannot run at "Checks" → Lead decides (default).',
         '- When a merge conflicts at "Ticket branch" → Lead decides (default).',
-        '- When tests fail at "Tester" → Author fixes (up to 2 rounds), then the lead decides. Link "Fix tests".',
+        '- When tests fail at "Tester" → Author fixes and "Tester" tests again (up to 2 rounds), then the lead decides. Link "Fix tests".',
       ].join('\n'),
     );
+  });
+
+  it('a When arrow with its retest switched off: compiled and said so', () => {
+    const g = finals(when('unit-tests', 'author', ['tests-failed'], { retest: false }));
+    expect(compileWorkflowV3(g, CTX).failureRoutes?.[0]).toMatchObject({ retest: false });
+    const text = renderWorkflowDescription(describeWorkflow(g));
+    expect(text).toContain(
+      '- When tests fail at "Tester" → Author fixes (up to 2 rounds), then the lead decides.',
+    );
+    // On by default, so the program prints as before.
+    const on = finals(when('unit-tests', 'author', ['tests-failed']));
+    expect(compileWorkflowV3(on, CTX).failureRoutes?.[0]).not.toHaveProperty('retest');
   });
 
   it('structured items carry the block, the arrow, the events and the routing', () => {
