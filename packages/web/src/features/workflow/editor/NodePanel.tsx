@@ -37,7 +37,7 @@ import {
 import { FullAutoWarning } from '../../review-loop/ApprovalsEditor';
 import { isChecksNode } from '../check-blocks';
 import { finishParts, finishView } from '../finish';
-import { LinkIcon, RemoveIcon } from '../icons';
+import { DeleteIcon, LinkIcon, RemoveIcon } from '../icons';
 import { CheckBlockFields } from './CheckBlockFields';
 import { LinkSample } from './edges';
 import { EDITOR_COPY } from './copy';
@@ -642,6 +642,15 @@ export function NodePanel({
         }
         text={kindText(node, kind)}
         onClose={onClose}
+        {...(isRemovable(node)
+          ? {
+              remove: {
+                label: P.remove,
+                testId: 'remove-block',
+                onClick: () => dispatch({ type: 'remove-node', id: node.id }),
+              },
+            }
+          : {})}
       />
       <PanelIssues issues={issues} title={E.blockTitle} />
       <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
@@ -664,21 +673,13 @@ export function NodePanel({
           />
         ) : null}
         <LinksSection key={node.id} node={node} graph={graph} dispatch={dispatch} />
-        <div className="-mx-4 border-t border-line px-4 pt-4">
-          {isRemovable(node) ? (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => dispatch({ type: 'remove-node', id: node.id })}
-            >
-              {P.remove}
-            </Button>
-          ) : (
+        {isRemovable(node) ? null : (
+          <div className="-mx-4 border-t border-line px-4 pt-4">
             <p className="text-caption text-dim" data-testid="block-fixed">
               {P.fixed}
             </p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -728,18 +729,25 @@ function FinishPanel({
   );
 }
 
-/** The panel's heading, GitHub's Box header: the kind, the name and a close button; one sentence. */
+/**
+ * The panel's heading, GitHub's Box header: the kind, the name, the remove button (when the block or
+ * link can be removed: at the top, so it is found without scrolling past the settings) and a close
+ * button; one sentence.
+ */
 export function PanelHeading({
   icon,
   eyebrow,
   title,
   text,
+  remove,
   onClose,
 }: {
   icon?: ReactNode;
   eyebrow: string;
   title: string;
   text: string;
+  /** Removes the selected block or link; `label` is the button's accessible name and tooltip. */
+  remove?: { label: string; testId: string; onClick: () => void };
   onClose: () => void;
 }) {
   return (
@@ -752,12 +760,24 @@ export function PanelHeading({
           </span>
           <h3 className="truncate text-title font-semibold">{title.trim() === '' ? '—' : title}</h3>
         </div>
+        {remove !== undefined ? (
+          <button
+            type="button"
+            onClick={remove.onClick}
+            aria-label={remove.label}
+            title={remove.label}
+            data-testid={remove.testId}
+            className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-danger transition-colors hover:bg-danger-emphasis hover:text-on-emphasis"
+          >
+            <DeleteIcon size={16} />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onClose}
           aria-label={P.close}
           title={P.close}
-          className="-mr-1.5 ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink"
+          className={`-mr-1.5 ${remove !== undefined ? '' : 'ml-auto '}inline-flex size-7 shrink-0 items-center justify-center rounded-control text-dim transition-colors hover:bg-hover hover:text-ink`}
         >
           <RemoveIcon size={16} />
         </button>

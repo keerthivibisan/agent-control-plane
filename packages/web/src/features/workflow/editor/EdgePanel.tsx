@@ -6,7 +6,6 @@ import {
   type WorkflowGraphV3,
 } from '@acp/core';
 import { useId, type Dispatch } from 'react';
-import { Button } from '../../../components/Button';
 import { TextArea, TextInput, hintClass, labelClass } from '../../../components/Input';
 import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { NumberChoice } from '../../project-setup/fields';
@@ -95,7 +94,7 @@ function WordsField({
 
 /**
  * The selected arrow: its type and ends, its label and purpose (ADR-0037 §2), its rework rounds
- * (0–5) when it is a rework arrow, and Remove.
+ * (0–5) when it is a rework arrow, and Remove (in the heading).
  */
 export function EdgePanel({
   edge,
@@ -126,6 +125,11 @@ export function EdgePanel({
         eyebrow={A.names[edge.type]}
         title={edge.label ?? `${from} → ${to}`}
         text={A.text[edge.type]}
+        remove={{
+          label: E.remove,
+          testId: 'remove-link',
+          onClick: () => dispatch({ type: 'remove-edge', id: edge.id }),
+        }}
         onClose={onClose}
       />
       <PanelIssues issues={issues} title={EDITOR_COPY.issues.linkTitle} />
@@ -172,16 +176,6 @@ export function EdgePanel({
             valueText={E.roundsValue}
           />
         ) : null}
-        <div className="-mx-4 border-t border-line px-4 pt-4">
-          <Button
-            variant="danger"
-            size="sm"
-            className="w-fit"
-            onClick={() => dispatch({ type: 'remove-edge', id: edge.id })}
-          >
-            {E.remove}
-          </Button>
-        </div>
       </div>
     </div>
   );
