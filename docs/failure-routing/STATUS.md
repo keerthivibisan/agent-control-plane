@@ -9,8 +9,8 @@ Coordinator-owned. Plan: [README.md](README.md).
 | FR-2 | Failure context and authors                 | done        | `feature/workflow/failure-routing` |        |
 | FR-3 | Tester failures to the author or the lead   | done        | `feature/workflow/failure-routing` |        |
 | FR-4 | Core: When arrows, Author block, flow words | done        | `feature/workflow/failure-routing` |        |
-| FR-5 | Engine: routing, fix turns, lead tools      | not started |                                    |        |
-| FR-6 | Web: When arrows and Flow in words          | not started |                                    |        |
+| FR-5 | Engine: routing, fix turns, lead tools      | done        | `feature/workflow/failure-routing` |        |
+| FR-6 | Web: When arrows and Flow in words          | done        | `feature/workflow/failure-routing` |        |
 | FR-7 | Safety, docs, real run                      | not started |                                    |        |
 
 ## Log
@@ -47,3 +47,5 @@ Coordinator-owned. Plan: [README.md](README.md).
   is told every fix with its fixId; `reroute_fix` (stop, move in the same round, or take over) and
   `view_workflow`; "Your workflow" in the lead's first brief. Server: one-line app comment
   (`failure-routed`), ids and kind in logs.
+- 2026-11-14 Coordinator: FR-5 and FR-6 accepted; FR-6 merged from
+  `feature/workflow/failure-routing-web`. Full check green: 6921 tests.
