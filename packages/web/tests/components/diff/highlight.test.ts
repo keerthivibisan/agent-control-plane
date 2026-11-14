@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { tokenize } from '../../../src/components/diff/highlight';
 import type { SyntaxLang } from '../../../src/components/diff/language';
 
@@ -7,6 +7,13 @@ import type { SyntaxLang } from '../../../src/components/diff/language';
  * no network and no WASM. Token colors are the CSS-variables theme's `var(--shiki-…)`.
  */
 describe('tokenize (real Shiki)', () => {
+  // Shiki stops tokenizing a line after 500 ms and leaves the rest plain. The first call compiles
+  // the TypeScript grammar's patterns, which on a slow CI runner can take longer than that, so warm
+  // it up before asserting colors.
+  beforeAll(async () => {
+    await tokenize('const a = 1;', 'typescript');
+  }, 30_000);
+
   it('highlights TypeScript line by line with CSS-variable colors', async () => {
     const lines = await tokenize(
       'const pageSize = 50; // cap\nexport function f() {}',
