@@ -16,6 +16,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the new Author block, for a set number of fix rounds; the lead is told about every fix and can
   move it (`reroute_fix`). The lead's brief describes the whole workflow in words, and the editor
   shows the same "Flow in words". Existing rework arrows and Checks settings work as before.
+  After a routed fix of a tester's failure is merged, the tester runs again ("Test again after
+  the fix", on by default per When arrow), and the live graph shows the rounds each When arrow
+  used.
 - **Flexible workflows: one Agent block, roles from typed arrows** (ADR-0037). Every agent except
   the lead is an Agent block whose role comes from its arrows, with presets for researcher,
   planner, helper, reviewer and tester. New arrows: `research` (read-only researchers run before

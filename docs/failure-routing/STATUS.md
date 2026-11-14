@@ -62,3 +62,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   at the tester, the When arrow sent the fix to the author (round 1 of 2), the fix merged. Follow-ups:
   retest after a routed fix (needs an owner decision), rounds per When arrow on the live graph
   (`RunWorkflowGraphDto.failureRounds`, shared contract).
+- 2026-11-14 Coordinator: both follow-ups done by owner decision (ADR-0038 §4 amended). A routed
+  fix of a tester's failure makes the tester run again once the fix is merged (the When arrow's
+  `retest` switch, on by default; a failing retest keeps the fix's rounds, and the last fixer is
+  its author). The live graph shows the rounds each When arrow used
+  (`RunWorkflowGraphDto.whenRounds`, the shared contract change the owner approved).

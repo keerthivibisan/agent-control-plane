@@ -34,6 +34,17 @@ send a failure straight to an agent or to the lead, and the flow to stay easy to
    the arrow's purpose, notifies the lead, which may reroute (`reroute_fix`) or stop it, and sends
    the failure to the lead when the rounds run out. Existing `rework` arrows and `onFailure` settings
    are read as When arrows.
+
+   **Amended 2026-11-14 (owner, in chat): retest after a routed fix.** When a routed fix of a
+   tester's failure (its tests, or a Checks block on its change) is merged and the lead hands over
+   again, that tester runs again on the ticket branch, with the failure context quoted. A When
+   arrow's `retest` switch (optional, absent means on) turns it off. A failing retest keeps the
+   fix's lineage, so it uses the arrow's next round and never gets fresh rounds; its author is the
+   last fixer when that fixer touched the failing files. A discarded fix, a fix the lead took over
+   and a fix that is moved (its successor carries the retest) start no retest. Like the fixes, a
+   pending retest lives with the run and is lost on a restart. The live run graph shows the rounds
+   each When arrow used (`RunWorkflowGraphDto.whenRounds`, the most used failure lineage).
+
 5. **The lead knows the workflow.** Its brief has a generated "Your workflow" section (every agent
    and every arrow as a sentence, with the owner's labels and purposes quoted), also available with
    the read-only `view_workflow` tool. The editor shows the same sentences ("Flow in words").

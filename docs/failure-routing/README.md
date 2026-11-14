@@ -105,13 +105,16 @@ A new read-only lead tool, `view_workflow`, returns the same section. The text i
 2. Draw a link from it to who should fix it: a helper block, the **Lead**, or the **Author** block
    from the palette ("whoever wrote the failing code"; one per workflow). Choose **When** as the
    link type, tick the events and set the rounds (1 to 5). A label and a reason are optional; the
-   fixer and the lead read them as your note.
+   fixer and the lead read them as your note. On a tester's When link, **Test again after the
+   fix** (on by default) makes the tester run again once the fix is merged; a failing retest uses
+   the next round.
 3. Read **Flow in words** beside the canvas. Each link is one sentence, for example "When tests
    fail at Tester → Author fixes (2 rounds), then the lead decides". An event without a route says
    "Lead decides (default)". The lead gets exactly these sentences.
 4. In a run, a routed failure shows on the ticket's Conversation tab ("Fix started", the fixer and
-   "Round 1 of 2"), and the live graph's Author block shows its fixer. The lead is told about every
-   fix and can move it or stop it; when the rounds are used up, the lead decides.
+   "Round 1 of 2"), the live graph's Author block shows its fixer, and the When link shows the
+   rounds it used ("round 1 of 2"). The lead is told about every fix and can move it or stop it;
+   when the rounds are used up, the lead decides.
 
 A When link never gives its target a role: only helpers, the lead and Author can be targets.
 

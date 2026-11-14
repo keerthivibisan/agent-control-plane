@@ -287,7 +287,7 @@ flowchart LR
   quoted data; since 2026-11-14 every arrow's reach the agent it concerns (helper, planner,
   reviewer, tester, final reviewer, the lead for findings; `WorkflowProgram.arrowNotes`). The live run graph shows each arrow's label, and its purpose on hover.
 - **Failure routing (ADR-0038, FR series)** [implemented on `feature/workflow/failure-routing`;
-  real run pending]. A tester ends with `report_test_results` (stored as a `test-results` ticket
+  real run done 2026-11-14]. A tester ends with `report_test_results` (stored as a `test-results` ticket
   comment). Every failure (tests, checks, a harness that cannot run, review rework, a merge
   conflict) gets a `FailureContext` (core) with the likely authors (helpers whose changes touched
   the failing files) and the rounds, rendered as quoted data for the lead, which always gets it.
@@ -297,8 +297,11 @@ flowchart LR
   the lead, which may move it (`reroute_fix`) or stop it. Rework arrows and a Checks block's
   "back to the helper" are read as derived routes and behave as before. The lead's brief has
   "Your workflow" (`describeWorkflow`, also the `view_workflow` tool and the editor's "Flow in
-  words"). The live run graph lists the Author block's fixers; each routed failure is a one-line
-  app comment on the Conversation tab.
+  words"). The live run graph lists the Author block's fixers and the rounds each When arrow used
+  (`RunWorkflowGraphDto.whenRounds`); each routed failure is a one-line app comment on the
+  Conversation tab. Once a routed fix of a tester's failure is merged, `nextStage` runs that tester
+  again (`EngineFix.retestNodeId`; a When arrow's `retest: false` switches it off), and the
+  retest's own failures keep the fix's lineage and rounds (ADR-0038 §4, amended 2026-11-14).
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or
