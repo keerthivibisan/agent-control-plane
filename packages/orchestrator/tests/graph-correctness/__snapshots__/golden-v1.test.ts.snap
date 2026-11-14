@@ -97,7 +97,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=41ec680a82c57ef4/2999
+"digest=bbce13fe373e0808/3000
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -107,7 +107,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut legacy-discard 1`] = `
-"digest=8b1fde5a6f058b70/3008
+"digest=99203bdec9543f44/3009
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -117,7 +117,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/no-ut legacy-failing-helper 1`] = `
-"digest=5eee888a29ff482c/2997
+"digest=18e51286217393f8/2998
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -128,7 +128,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -207,7 +207,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve interrupt-restart 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -273,7 +273,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut approve interrupt-stop-all 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -311,7 +311,7 @@ final run=CANCELLED
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-discard 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -390,7 +390,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/cr/ut legacy-failing-helper 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -468,7 +468,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=7e1ef12ed9ec6bfc/2288
+"digest=b718940335ddc241/2289
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -477,7 +477,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut legacy-discard 1`] = `
-"digest=d7d94cab4cf97129/2297
+"digest=d90bdaf84f7e5a86/2298
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -486,7 +486,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/no-ut legacy-failing-helper 1`] = `
-"digest=50733f4d96190f7f/2286
+"digest=522b5668c032fd1a/2287
 outcome=ended steps=13
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -495,7 +495,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=10febeb1f762232f/2864
+"digest=f0d3139eb69c113c/2865
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -505,7 +505,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut legacy-discard 1`] = `
-"digest=c9fa7d1800e244fe/2873
+"digest=1798da4511158b03/2874
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -515,7 +515,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy lead-plans/rev-agent/r2/no-cr/ut legacy-failing-helper 1`] = `
-"digest=e1fba4065ff370b0/2862
+"digest=1720c2b50531e657/2863
 outcome=ended steps=16
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -526,7 +526,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy no-workflow approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -580,7 +580,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > legacy no-workflow mode-auto-edits approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -677,7 +677,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=be77e25707485ec5/3303
+"digest=93d47172d711f544/3304
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -688,7 +688,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut legacy-discard 1`] = `
-"digest=6ae72d0587b1340f/3312
+"digest=4127ffee91dab82c/3313
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -699,7 +699,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/no-ut legacy-failing-helper 1`] = `
-"digest=956fbd9d3bd7053b/3301
+"digest=77d41ac062f05a2a/3302
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -725,7 +725,7 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut approve 1`] = `
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#0bc66172/527 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#a2f60c49/2130 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -812,7 +812,7 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-discard 1`]
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#0bc66172/527 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#a2f60c49/2130 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -899,7 +899,7 @@ exports[`golden v1 traces > legacy planner/rev-agent/r2/cr/ut legacy-failing-hel
 #4 owner "plan approve" -> ok
   > plan-decided planId=plan1 status="approved"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#0bc66172/527 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#a2f60c49/2130 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -971,7 +971,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=5cb691405b3460aa/2592
+"digest=9a81531a466ab654/2593
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -981,7 +981,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut legacy-discard 1`] = `
-"digest=c66946158c696bcf/2601
+"digest=9424be7fff687e89/2602
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -991,7 +991,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/no-ut legacy-failing-helper 1`] = `
-"digest=039b44bdf17d6463/2590
+"digest=12da9b1370b19af9/2591
 outcome=ended steps=14
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1001,7 +1001,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=2925cdba22660614/3168
+"digest=9b75d94ce52c1e8a/3169
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1012,7 +1012,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut legacy-discard 1`] = `
-"digest=df98a2856ff1acef/3177
+"digest=f3d99f376079d495/3178
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1023,7 +1023,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > legacy planner/rev-agent/r2/no-cr/ut legacy-failing-helper 1`] = `
-"digest=0b899d6f773d984d/3166
+"digest=6eff3a35aa2fa1ff/3167
 outcome=ended steps=17
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1034,7 +1034,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=a2f4659523416317/6706
+"digest=a826ad87366294bd/6707
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1046,7 +1046,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=c31474a7efc4465d/7192
+"digest=458ff3ed6a34a6df/7193
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1058,7 +1058,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=e2cd933769445195/6731
+"digest=e571596566115b6f/6732
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1070,7 +1070,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=6dcf6cefb5b8e849/7082
+"digest=3be911b95187ac97/7083
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1082,7 +1082,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=78b14a393495d523/6729
+"digest=9495dc133de66221/6730
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1094,7 +1094,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=3286dd4465e3ee0e/6710
+"digest=68e469de9d9be4dc/6711
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1106,7 +1106,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut approve 1`] = `
-"digest=99b0447ae60faa58/8896
+"digest=bfddde8a682277a8/8897
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1120,7 +1120,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=d2b9c17331a26f21/9382
+"digest=6ca9c1a3ee7e2791/9383
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1134,7 +1134,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut discard 1`] = `
-"digest=50609eaebaedf530/8921
+"digest=7ee5afde666784e0/8922
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1148,7 +1148,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=7ece646082846ea6/9272
+"digest=f7382bb04661c2b6/9273
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1162,7 +1162,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=164242c4b53f075a/8919
+"digest=73e15054c761712a/8920
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1176,7 +1176,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=ef9e634168d6020f/8900
+"digest=a351d671213f7cff/8901
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1190,7 +1190,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut approve 1`] = `
-"digest=d0d224c9fc6559d7/5765
+"digest=69f12e15fe1baa87/5766
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1201,7 +1201,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=21fda04e246e2af0/6251
+"digest=230d54eae05754c0/6252
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1212,7 +1212,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut discard 1`] = `
-"digest=7107bb8dd2a2a87f/5790
+"digest=365919b97ac4ceaf/5791
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1223,7 +1223,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=689487c39e271d75/6141
+"digest=fde8b7e7e1c3e885/6142
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1234,7 +1234,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=1e36043379188a89/5788
+"digest=62bcb82f216e5d99/5789
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1245,7 +1245,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=1dafc27a262f0eb0/5769
+"digest=389d32469f77ac40/5770
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1256,7 +1256,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut approve 1`] = `
-"digest=a1877fe12677bdb7/7955
+"digest=0290a0ce80dec2f8/7956
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1269,7 +1269,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut ask-owner 1`] = `
-"digest=cf8773bff4014e0d/8441
+"digest=463c44e079435282/8442
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1282,7 +1282,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut discard 1`] = `
-"digest=2774b4c9fa5850f3/7980
+"digest=87f784d4ca464a62/7981
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1295,7 +1295,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=8a3953f38406f355/8331
+"digest=1f9d84c47af9fc7a/8332
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1308,7 +1308,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut failing-helper 1`] = `
-"digest=495b3057f7bb0a75/7978
+"digest=5d5b924ed10ed460/7979
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1321,7 +1321,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=e620c3eeb7516e6c/7959
+"digest=75e164c12d7752cb/7960
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1335,7 +1335,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r1/no-cr/ut run-reviewer-lead rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#0fe1c628/2064 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1448,7 +1448,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=a2f4659523416317/6706
+"digest=c3818d09cc2e7c6b/6707
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1460,7 +1460,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=c31474a7efc4465d/7192
+"digest=570c719392181229/7193
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1472,7 +1472,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=e2cd933769445195/6731
+"digest=3f09f6239eb39d21/6732
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1484,7 +1484,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=ceeb7ac5dbf0af57/9094
+"digest=c57d8059bd8eda3b/9095
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1497,7 +1497,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=78b14a393495d523/6729
+"digest=36a841b5c9b3a01f/6730
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1509,7 +1509,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=4ded5744f6f166f6/8777
+"digest=cd0926b84736b9ca/8778
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -1523,7 +1523,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1681,7 +1681,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt-restart 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1811,7 +1811,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve interrupt-stop-all 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1873,7 +1873,7 @@ final run=CANCELLED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -2067,7 +2067,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-auto-edits 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -2269,7 +2269,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-full-auto 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#641a3acf/949 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#62319e55/2452 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -2437,7 +2437,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut approve mode-manual 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -2655,7 +2655,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -2819,7 +2819,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut ask-owner-rework 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3014,7 +3014,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut conflict 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3208,7 +3208,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut discard 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3365,7 +3365,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failed-check 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3560,7 +3560,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut failing-helper 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3717,7 +3717,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut no-changes 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -3851,7 +3851,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=088c80e68962fe1c/10465
+"digest=039923291b281077/10466
 outcome=ended steps=50
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3865,7 +3865,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=cd2dd665d32a5ed3/10679
+"digest=77eb47ea8761f808/10680
 outcome=ended steps=52
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3879,7 +3879,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=02e004f5fb58f8cb/9611
+"digest=534b3bf5e4ed1b83/9612
 outcome=ended steps=45
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3893,7 +3893,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=f49ddc0db23f98e3/11107
+"digest=0c3ad006771d239c/11108
 outcome=ended steps=56
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -3908,7 +3908,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut plan-changes 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -4076,7 +4076,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8ba857fb/2390 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -4265,7 +4265,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#6eb60b1a/989 role="Lead" skills=["skill-plan","skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#91d4b982/2542 role="Lead" skills=["skill-plan","skill-orchestrate"]
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -4423,7 +4423,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/cr/ut/rich rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#6eb60b1a/989 role="Lead" skills=["skill-plan","skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#91d4b982/2542 role="Lead" skills=["skill-plan","skill-orchestrate"]
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -4611,7 +4611,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=d0d224c9fc6559d7/5765
+"digest=80347cd66d84b2fc/5766
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4622,7 +4622,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=21fda04e246e2af0/6251
+"digest=bff7e655857a7d7f/6252
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4633,7 +4633,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut discard 1`] = `
-"digest=7107bb8dd2a2a87f/5790
+"digest=adeac6e406a91ff6/5791
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4644,7 +4644,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=4d1d23997522b69b/8153
+"digest=d9f797c2332d316c/8154
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4656,7 +4656,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=1e36043379188a89/5788
+"digest=126e71fe3dcaf1e4/5789
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4667,7 +4667,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=2d3e87c08baa6ba6/7836
+"digest=3f368ec9e628ada7/7837
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4679,7 +4679,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=a1877fe12677bdb7/7955
+"digest=aa78c37416b81f82/7956
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4692,7 +4692,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut ask-owner 1`] = `
-"digest=cf8773bff4014e0d/8441
+"digest=8240ef4622e11b5c/8442
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4705,7 +4705,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut discard 1`] = `
-"digest=2774b4c9fa5850f3/7980
+"digest=694ee0be831662e8/7981
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4718,7 +4718,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=ed40402761294f89/10343
+"digest=3e7dcb3abad43714/10344
 outcome=ended steps=42
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4732,7 +4732,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut failing-helper 1`] = `
-"digest=495b3057f7bb0a75/7978
+"digest=3218916c889b78f2/7979
 outcome=ended steps=32
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4745,7 +4745,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=40d6c5467a1ee834/10026
+"digest=0712323138b61f27/10027
 outcome=ended steps=40
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4759,7 +4759,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=065f433ae7a6d484/4723
+"digest=9cb4e214bec5343a/4724
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4769,7 +4769,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=b2f653b6cde2c958/5196
+"digest=f5986fc86216d6b6/5197
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4779,7 +4779,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=17bb6a4820f24a1a/4748
+"digest=c069440a78706d48/4749
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4789,7 +4789,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=e0121b147851fbba/5092
+"digest=0f92422a26b73e14/5093
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4799,7 +4799,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=1debb326ee60d4bc/4746
+"digest=1ca2cd0c6e1e7e26/4747
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4809,7 +4809,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=065f433ae7a6d484/4723
+"digest=9cb4e214bec5343a/4724
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4819,7 +4819,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut approve 1`] = `
-"digest=b3255a33ea839765/5909
+"digest=9a1c4e87e58f0ab5/5910
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4830,7 +4830,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=17e64c3009512232/6382
+"digest=819b757cf4b99aa2/6383
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4841,7 +4841,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut discard 1`] = `
-"digest=870c59e71e518e39/5934
+"digest=1a8f889b086ea6e9/5935
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4852,7 +4852,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=a8e7a501eec624c3/6278
+"digest=caab12455cfcff73/6279
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4863,7 +4863,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=c3c7f38d0c7ca743/5932
+"digest=d3f672a170a6f493/5933
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4874,7 +4874,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=b3255a33ea839765/5909
+"digest=9a1c4e87e58f0ab5/5910
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4885,7 +4885,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut approve 1`] = `
-"digest=c4fe3d57dc3221d1/3782
+"digest=91a5df2b0ed814e5/3783
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4894,7 +4894,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=36db6f0bc3874535/4255
+"digest=369b908f61faaca9/4256
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4903,7 +4903,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut discard 1`] = `
-"digest=2e1a62ac2738f7c6/3807
+"digest=88b902a8e6512462/3808
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4912,7 +4912,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=f6e7c260c580b7c2/4151
+"digest=b94e785c184b130e/4152
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4921,7 +4921,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=1729cf2a2999bc18/3805
+"digest=d40d6256a0423ca4/3806
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4930,7 +4930,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=c4fe3d57dc3221d1/3782
+"digest=91a5df2b0ed814e5/3783
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4939,7 +4939,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut approve 1`] = `
-"digest=ee6c96540cc9e8b6/4968
+"digest=8dbe05284cfa5682/4969
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4949,7 +4949,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut ask-owner 1`] = `
-"digest=a7faa3ca2e52c948/5441
+"digest=274085566678f51c/5442
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4959,7 +4959,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut discard 1`] = `
-"digest=069ec9721eb89730/4993
+"digest=0aaca2a61ab2efdc/4994
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4969,7 +4969,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=a6edeab49389916e/5337
+"digest=bfa6cb40c7b768c2/5338
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4979,7 +4979,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut failing-helper 1`] = `
-"digest=f28bf15c7a3cb836/4991
+"digest=2d96102075a140e2/4992
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -4989,7 +4989,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=ee6c96540cc9e8b6/4968
+"digest=8dbe05284cfa5682/4969
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5000,7 +5000,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r1/no-cr/ut run-reviewer-agent rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9590574e/2283 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5173,7 +5173,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=065f433ae7a6d484/4723
+"digest=0fbc6dea5e0294b8/4724
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5183,7 +5183,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=b2f653b6cde2c958/5196
+"digest=6cfed306669aa21c/5197
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5193,7 +5193,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=17bb6a4820f24a1a/4748
+"digest=5b8c24d8d2831f2e/4749
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5203,7 +5203,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=4451a096eeee444c/6121
+"digest=c848a9261c523b78/6122
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5213,7 +5213,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=1debb326ee60d4bc/4746
+"digest=e152e7d668f48cb0/4747
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5223,7 +5223,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=5e248dea9f3171f8/5805
+"digest=d1045cfa1e9961e4/5806
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -5234,7 +5234,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5347,7 +5347,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5466,7 +5466,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut ask-owner-rework 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5601,7 +5601,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut conflict 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5735,7 +5735,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut discard 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5847,7 +5847,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failed-check 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -5982,7 +5982,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut failing-helper 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6094,7 +6094,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut no-changes 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6199,7 +6199,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut plan-changes 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6322,7 +6322,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#06c6554d/2171 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6451,7 +6451,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#6eb60b1a/989 role="Lead" skills=["skill-plan","skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9cb8c257/2316 role="Lead" skills=["skill-plan","skill-orchestrate"]
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6564,7 +6564,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/cr/ut/rich rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#6eb60b1a/989 role="Lead" skills=["skill-plan","skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#9cb8c257/2316 role="Lead" skills=["skill-plan","skill-orchestrate"]
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6692,7 +6692,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut approve 1`] = `
-"digest=c4fe3d57dc3221d1/3782
+"digest=8402984822caf816/3783
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6701,7 +6701,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=36db6f0bc3874535/4255
+"digest=6bdae6ca94daebb0/4256
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6710,7 +6710,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut discard 1`] = `
-"digest=2e1a62ac2738f7c6/3807
+"digest=0d4b769da04d80eb/3808
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6719,7 +6719,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=0c7c1ed8c5a0b472/5180
+"digest=2a1ba41bf8ba2b59/5181
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6728,7 +6728,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=1729cf2a2999bc18/3805
+"digest=afbe2313e903cb0d/3806
 outcome=ended steps=18
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6737,7 +6737,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=0b735b36d5bc1494/4864
+"digest=8b39c7bd650b1287/4865
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6746,7 +6746,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut approve 1`] = `
-"digest=ee6c96540cc9e8b6/4968
+"digest=7f0fd07735c32af1/4969
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6756,7 +6756,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut ask-owner 1`] = `
-"digest=a7faa3ca2e52c948/5441
+"digest=97ea9457c0e58e45/5442
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6766,7 +6766,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut discard 1`] = `
-"digest=069ec9721eb89730/4993
+"digest=779c4957184113ed/4994
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6776,7 +6776,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=b723251cb1a19f62/6366
+"digest=1e23415fcc47cba5/6367
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6786,7 +6786,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut failing-helper 1`] = `
-"digest=f28bf15c7a3cb836/4991
+"digest=cbe301f1d3d370eb/4992
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6796,7 +6796,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop lead-plans/rev-lead/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=2884844cfc562efa/6050
+"digest=598af1c71454b4dd/6051
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6807,7 +6807,7 @@ final run=COMPLETED
 
 exports[`golden v1 traces > loop no-workflow approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -6914,7 +6914,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut approve 1`] = `
-"digest=d1b5f07a5ffd8b68/7011
+"digest=6f70a427265ff6ed/7011
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6927,7 +6927,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut ask-owner 1`] = `
-"digest=99344fb757b9f981/7497
+"digest=6cd50346d716a560/7497
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6940,7 +6940,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut discard 1`] = `
-"digest=5f2872fbb3116569/7036
+"digest=d3b059ac28d47dd2/7036
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6953,7 +6953,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failed-check 1`] = `
-"digest=0a6f7ed782a07e35/7387
+"digest=a8fcee2acdd14a60/7387
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6966,7 +6966,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut failing-helper 1`] = `
-"digest=152cd33128bcdcf3/7034
+"digest=23b2ed96429de7b0/7034
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6979,7 +6979,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=199b22a959a0a8e7/7015
+"digest=9c96cf4056dd074e/7015
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -6992,7 +6992,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut approve 1`] = `
-"digest=25db8bf6bf8e6164/9201
+"digest=3cd6175225141c3c/9201
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7007,7 +7007,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut ask-owner 1`] = `
-"digest=5e1ea6180e86a706/9687
+"digest=21a22574458d86be/9687
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7022,7 +7022,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut discard 1`] = `
-"digest=b66c7d73e606e0d1/9226
+"digest=4852a41fd8c99409/9226
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7037,7 +7037,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failed-check 1`] = `
-"digest=4e57fdcb9821e2b1/9577
+"digest=9ad4b7ffcb6d16a9/9577
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7052,7 +7052,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut failing-helper 1`] = `
-"digest=9ccc0b090144f99b/9224
+"digest=f5516cb5e3ff7043/9224
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7067,7 +7067,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/cr/ut rework-then-approve 1`] = `
-"digest=b37e9cf90e1d23a7/9205
+"digest=958c6065c3cfd98f/9205
 outcome=ended steps=37
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7082,7 +7082,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut approve 1`] = `
-"digest=728c6a3995e99663/6070
+"digest=fbed1b75d28ffe2b/6070
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7094,7 +7094,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=a61d10294d5c021b/6556
+"digest=fe38ffc5f5cafb83/6556
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7106,7 +7106,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut discard 1`] = `
-"digest=ee1eca7aa6b6b4f8/6095
+"digest=aad23d46ffd88410/6095
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7118,7 +7118,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut failed-check 1`] = `
-"digest=e2d507681f7f33da/6446
+"digest=3d78f0ccec590e72/6446
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7130,7 +7130,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=c99b30a05ee315f2/6093
+"digest=0aab4f9c3c2d747a/6093
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7142,7 +7142,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=90693e8ee9c292f8/6074
+"digest=874d279ae8ec8c90/6074
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7154,7 +7154,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut approve 1`] = `
-"digest=8e821008ed1cd906/8260
+"digest=c805cb775e46bd99/8260
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7168,7 +7168,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut ask-owner 1`] = `
-"digest=6bffd5ad54eeae4f/8746
+"digest=f7644e6ee0054b4c/8746
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7182,7 +7182,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut discard 1`] = `
-"digest=36fa6e070047a721/8285
+"digest=e256dc1aa6fe15c8/8285
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7196,7 +7196,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut failed-check 1`] = `
-"digest=dc36e8757c7ef29b/8636
+"digest=e63e85b62f0e5f88/8636
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7210,7 +7210,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut failing-helper 1`] = `
-"digest=19ef53f977c3ebaf/8283
+"digest=58f9efc0b53f781a/8283
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7224,7 +7224,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=8a51a1b52dafc223/8264
+"digest=14045946699636f0/8264
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7238,7 +7238,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut approve 1`] = `
-"digest=d1b5f07a5ffd8b68/7011
+"digest=129fb7aff26835e9/7011
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7251,7 +7251,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut ask-owner 1`] = `
-"digest=99344fb757b9f981/7497
+"digest=102acfde649d0bd4/7497
 outcome=ended steps=30
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7264,7 +7264,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut discard 1`] = `
-"digest=5f2872fbb3116569/7036
+"digest=f3af8f945a314f2e/7036
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7277,7 +7277,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failed-check 1`] = `
-"digest=acf77d92ad320d5c/9399
+"digest=9cf7227fa0ad11dd/9399
 outcome=ended steps=38
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7291,7 +7291,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut failing-helper 1`] = `
-"digest=152cd33128bcdcf3/7034
+"digest=c8392dee8216bc6c/7034
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7304,7 +7304,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=9b1b9fcf13bdd585/9082
+"digest=2bedecf0802f1bfa/9082
 outcome=ended steps=36
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -7334,7 +7334,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7500,7 +7500,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto 1`
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7702,7 +7702,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-auto-ed
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -7908,7 +7908,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-full-au
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#cc0fc9f2/1597 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#afe6c5b5/3200 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8088,7 +8088,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut approve mode-manual 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8314,7 +8314,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8486,7 +8486,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut ask-owner-rework 1`]
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8689,7 +8689,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut conflict 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -8891,7 +8891,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut discard 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9056,7 +9056,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9259,7 +9259,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut failing-helper 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9424,7 +9424,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut no-changes 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9551,7 +9551,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto 1`] = `
-"digest=59a1c282d4d00610/10770
+"digest=28e1bb99c3902e87/10770
 outcome=ended steps=51
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9566,7 +9566,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-auto-edits 1`] = `
-"digest=602d5911aa937423/10984
+"digest=d68ef9dad1d0838c/10984
 outcome=ended steps=53
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9581,7 +9581,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-full-auto 1`] = `
-"digest=f3f9d4654427de73/9916
+"digest=8bf1230136db564b/9916
 outcome=ended steps=46
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9596,7 +9596,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut owner-denies mode-manual 1`] = `
-"digest=7567dd7b324c4c05/11412
+"digest=2c1cc96011146532/11412
 outcome=ended steps=57
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -9637,7 +9637,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut plan-changes 1`] = `
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#363892d7/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5f930944/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -9803,7 +9803,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut rework-then-approve 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#8733b053/2906 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10000,7 +10000,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#3d97eec9/1358 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#c0eaa9b0/3016 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10166,7 +10166,7 @@ exports[`golden v1 traces > loop planner/rev-agent/r2/cr/ut/rich rework-then-app
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#3d97eec9/1358 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#c0eaa9b0/3016 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10347,7 +10347,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut approve 1`] = `
-"digest=728c6a3995e99663/6070
+"digest=16810406b74b4ec4/6070
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10359,7 +10359,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=a61d10294d5c021b/6556
+"digest=f322e0f2f6979150/6556
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10371,7 +10371,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut discard 1`] = `
-"digest=ee1eca7aa6b6b4f8/6095
+"digest=3f8e228bc61eee45/6095
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10383,7 +10383,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut failed-check 1`] = `
-"digest=80c7a8b31d0282c9/8458
+"digest=c27c235ca753f056/8458
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10396,7 +10396,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=c99b30a05ee315f2/6093
+"digest=4292933de9d778fb/6093
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10408,7 +10408,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=15748816fdcaf984/8141
+"digest=bb6c31c7da400749/8141
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10421,7 +10421,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut approve 1`] = `
-"digest=8e821008ed1cd906/8260
+"digest=b32e41b8b6a8a3f6/8260
 outcome=ended steps=34
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10435,7 +10435,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut ask-owner 1`] = `
-"digest=6bffd5ad54eeae4f/8746
+"digest=fe85993d58b87c9f/8746
 outcome=ended steps=35
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10449,7 +10449,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut discard 1`] = `
-"digest=36fa6e070047a721/8285
+"digest=6e9c203755036bd1/8285
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10463,7 +10463,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut failed-check 1`] = `
-"digest=a6c4b16e4eaa50c4/10648
+"digest=2370343e5c17bf94/10648
 outcome=ended steps=43
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10478,7 +10478,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut failing-helper 1`] = `
-"digest=19ef53f977c3ebaf/8283
+"digest=89e1a8099a2f25ff/8283
 outcome=ended steps=33
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10492,7 +10492,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-agent/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=e4b985e59c46f013/10331
+"digest=e7774675c7ad8b63/10331
 outcome=ended steps=41
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10507,7 +10507,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut approve 1`] = `
-"digest=4f1ddc27b6313431/5028
+"digest=35c522e8e65129d6/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10518,7 +10518,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut ask-owner 1`] = `
-"digest=ad66a3cea8125d20/5501
+"digest=4a64cfbf1566bf45/5501
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10529,7 +10529,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut discard 1`] = `
-"digest=655c416456573c2a/5053
+"digest=8dfa06a9c54d27d3/5053
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10540,7 +10540,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failed-check 1`] = `
-"digest=0b42f8ecfb27e4aa/5397
+"digest=3ec94e7ded9dc697/5397
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10551,7 +10551,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut failing-helper 1`] = `
-"digest=84a16672b1a06efc/5051
+"digest=b72e7b53d2fca0a1/5051
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10562,7 +10562,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/no-ut rework-then-approve 1`] = `
-"digest=4f1ddc27b6313431/5028
+"digest=35c522e8e65129d6/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10573,7 +10573,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut approve 1`] = `
-"digest=9332c4c1ae7cedbb/6214
+"digest=4eb981e46bc6ed3a/6214
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10585,7 +10585,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut ask-owner 1`] = `
-"digest=d0443dcd0a6c87ab/6687
+"digest=f2c65f524dfde30c/6687
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10597,7 +10597,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut discard 1`] = `
-"digest=0b5b78baf00d0714/6239
+"digest=2a8c61ad2f5fcdf3/6239
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10609,7 +10609,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failed-check 1`] = `
-"digest=b32f9f904974b5ce/6583
+"digest=9fa51967eff5c509/6583
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10621,7 +10621,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut failing-helper 1`] = `
-"digest=9682c81ce416dd52/6237
+"digest=dbb60207c9932c31/6237
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10633,7 +10633,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/cr/ut rework-then-approve 1`] = `
-"digest=9332c4c1ae7cedbb/6214
+"digest=4eb981e46bc6ed3a/6214
 outcome=ended steps=28
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10645,7 +10645,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut approve 1`] = `
-"digest=85238c00c93bc7b2/4087
+"digest=7cc49b0623c10254/4087
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10655,7 +10655,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut ask-owner 1`] = `
-"digest=0df34a288a78cd56/4560
+"digest=fbe5202a9b71855c/4560
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10665,7 +10665,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut discard 1`] = `
-"digest=9628636421b3399e/4112
+"digest=39be9f5a2d1126c0/4112
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10675,7 +10675,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut failed-check 1`] = `
-"digest=fe4507af60d28d85/4456
+"digest=d2ef7661371e20cb/4456
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10685,7 +10685,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut failing-helper 1`] = `
-"digest=a8d231d6c9d18fcc/4110
+"digest=e489fa1845e2fbb2/4110
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10695,7 +10695,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/no-ut rework-then-approve 1`] = `
-"digest=85238c00c93bc7b2/4087
+"digest=7cc49b0623c10254/4087
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10705,7 +10705,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut approve 1`] = `
-"digest=e54c85253435b61b/5273
+"digest=e602756ac5e1bd78/5273
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10716,7 +10716,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut ask-owner 1`] = `
-"digest=f89f9adc9b10ded6/5746
+"digest=3622bb59578fc053/5746
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10727,7 +10727,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut discard 1`] = `
-"digest=4a47f71a63424230/5298
+"digest=dc9594d3f2e33369/5298
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10738,7 +10738,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut failed-check 1`] = `
-"digest=c1685a2e4cd63c04/5642
+"digest=7713cc339da46421/5642
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10749,7 +10749,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut failing-helper 1`] = `
-"digest=c79900d845f5f852/5296
+"digest=34efc88134954e13/5296
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10760,7 +10760,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r0/no-cr/ut rework-then-approve 1`] = `
-"digest=e54c85253435b61b/5273
+"digest=e602756ac5e1bd78/5273
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10771,7 +10771,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut approve 1`] = `
-"digest=4f1ddc27b6313431/5028
+"digest=ddded44f1da46531/5028
 outcome=ended steps=23
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10782,7 +10782,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut ask-owner 1`] = `
-"digest=ad66a3cea8125d20/5501
+"digest=d57882369c726020/5501
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10793,7 +10793,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut discard 1`] = `
-"digest=655c416456573c2a/5053
+"digest=fec253fcff1bbf2a/5053
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10804,7 +10804,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failed-check 1`] = `
-"digest=d697e893c748db95/6426
+"digest=8bc6ce6b0cd08495/6426
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10815,7 +10815,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut failing-helper 1`] = `
-"digest=84a16672b1a06efc/5051
+"digest=7f9d437ab1d0b9fc/5051
 outcome=ended steps=22
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10826,7 +10826,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/cr/no-ut rework-then-approve 1`] = `
-"digest=73177cebadc9e291/6110
+"digest=9a752cd360d0db91/6110
 outcome=ended steps=27
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -10853,7 +10853,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -10974,7 +10974,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11101,7 +11101,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut ask-owner-rework 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11244,7 +11244,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut conflict 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11386,7 +11386,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut discard 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11506,7 +11506,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11649,7 +11649,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut failing-helper 1`] = 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11769,7 +11769,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut no-changes 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -11892,7 +11892,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut plan-changes 1`] = `
   > plan-decided planId=plan2 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#363892d7/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#93437cf0/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12013,7 +12013,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut rework-then-approve 1
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#5d363898/1303 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#11f7cfaf/2687 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12150,7 +12150,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#3d97eec9/1358 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#f0db1de7/2790 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12271,7 +12271,7 @@ exports[`golden v1 traces > loop planner/rev-lead/r2/cr/ut/rich rework-then-appr
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#3d97eec9/1358 role="Lead" skills=["skill-orchestrate"]
+  > start-agent agent="agent-orchestrate" agentRunId=L kind="lead" model="model-orchestrate" prompt="Ticket WEB-12 (feature, medium priority)…"#f0db1de7/2790 role="Lead" skills=["skill-orchestrate"]
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -12392,7 +12392,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut approve 1`] = `
-"digest=85238c00c93bc7b2/4087
+"digest=0e5925a8f7fe317e/4087
 outcome=ended steps=20
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12402,7 +12402,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut ask-owner 1`] = `
-"digest=0df34a288a78cd56/4560
+"digest=623047d0643e7722/4560
 outcome=ended steps=21
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12412,7 +12412,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut discard 1`] = `
-"digest=9628636421b3399e/4112
+"digest=4d392ccc19fd01f2/4112
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12422,7 +12422,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut failed-check 1`] = `
-"digest=bec6035604b0d764/5485
+"digest=3e0b889ed6bd4278/5485
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12432,7 +12432,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut failing-helper 1`] = `
-"digest=a8d231d6c9d18fcc/4110
+"digest=2c530b8e738a57e0/4110
 outcome=ended steps=19
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12442,7 +12442,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/no-ut rework-then-approve 1`] = `
-"digest=f59624acd9385ada/5169
+"digest=c66a2ff473cbe96e/5169
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12452,7 +12452,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut approve 1`] = `
-"digest=e54c85253435b61b/5273
+"digest=11146c782fab3946/5273
 outcome=ended steps=25
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12463,7 +12463,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut ask-owner 1`] = `
-"digest=f89f9adc9b10ded6/5746
+"digest=00b65d537bfbfd2d/5746
 outcome=ended steps=26
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12474,7 +12474,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut discard 1`] = `
-"digest=4a47f71a63424230/5298
+"digest=590ad069702bc547/5298
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12485,7 +12485,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut failed-check 1`] = `
-"digest=1a41c7ca7eae2714/6671
+"digest=c985122fda3d86c9/6671
 outcome=ended steps=31
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12496,7 +12496,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut failing-helper 1`] = `
-"digest=c79900d845f5f852/5296
+"digest=05486313cf0bd485/5296
 outcome=ended steps=24
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED
@@ -12507,7 +12507,7 @@ final run=COMPLETED
 `;
 
 exports[`golden v1 traces > loop planner/rev-lead/r2/no-cr/ut rework-then-approve 1`] = `
-"digest=68cd78612915f52b/6355
+"digest=ee1fb0744da2514e/6355
 outcome=ended steps=29
 final run=COMPLETED
   L lead stage=orchestrate CANCELLED

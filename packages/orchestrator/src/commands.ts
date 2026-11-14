@@ -59,7 +59,7 @@ import {
 } from './stages.js';
 import { effectiveMode, programOf } from './program.js';
 import { leadNoteBlocks, plannerNoteBlocks, withOwnerNotes } from './arrow-notes.js';
-import { helperBriefLines } from './briefs.js';
+import { helperBriefLines, withWorkflowSection } from './briefs.js';
 import { advancePrePlan, deliverHandoffs, researcherBriefLines } from './handoffs.js';
 import { isMultiPlanner, multiPlannerLine } from './plan-options.js';
 import type {
@@ -406,13 +406,20 @@ export function createRun(input: CreateRunInput, ctx: EngineContext): EngineResu
           plannerNoteBlocks(program, plannerNode.id),
         );
       }
-      d.leadBrief = withOwnerNotes(ticket.leadPrompt, leadNoteBlocks(program));
+      d.leadBrief = withWorkflowSection(
+        withOwnerNotes(ticket.leadPrompt, leadNoteBlocks(program)),
+        d,
+      );
     } else {
       const researchers = researcherBriefLines(program);
       const brief = withHelperNodes(ticket.leadPrompt, program, 'lead-plans');
-      briefs[draftLead.id] = withOwnerNotes(
-        researchers.length === 0 ? brief : `${brief}\n\n${researchers.join('\n')}`,
-        leadNoteBlocks(program),
+      // ADR-0038 §5: with the workflow in words, once, at the lead's start.
+      briefs[draftLead.id] = withWorkflowSection(
+        withOwnerNotes(
+          researchers.length === 0 ? brief : `${brief}\n\n${researchers.join('\n')}`,
+          leadNoteBlocks(program),
+        ),
+        d,
       );
     }
     d.pendingBriefs = briefs;

@@ -4,6 +4,7 @@ import { findingsNoteBlocks } from './arrow-notes.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { renderFailureContext, reviewReworkContext } from './failure-context.js';
+import { routeFailure as routeByWhen } from './failure-router.js';
 import { recordOutputNote } from './handoffs.js';
 import {
   applyDecision,
@@ -21,6 +22,10 @@ import { isChangeReviewer, MAX_REVIEW_POSTS, REVIEW_POST_MAX_CHARS, stageOf } fr
 import type { EngineContext, EngineResult, RunState } from './state.js';
 import { cleanSummary } from './summary.js';
 import { isLiveAgentStatus } from './transitions.js';
+
+/** What the lead may do with a reviewed change. */
+export const REVIEW_DECIDE_LINE =
+  'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.';
 
 /**
  * The reviewer's one control-plane tool (ADR-0019 §2, decision B): `post_review` turns its
@@ -200,6 +205,27 @@ export function submitReview(
     // ADR-0037 §2: the verdict and findings are the reviewer's output note for its custom arrows.
     recordOutputNote(d, reviewer, `Verdict: ${input.verdict}\n\n${body}`);
     emitRound(d, helper);
+    // ADR-0038 §4 (FR-5): without the reviewer's own rework arrows, the owner's When arrow from
+    // this reviewer routes a rework verdict (a fix turn, or the lead with the context).
+    if (input.verdict === 'rework' && directRounds === null) {
+      const routed = routeByWhen(d, {
+        context: reviewReworkContext(d, helper, [{ agent: reviewer, label: reviewer.role }], body),
+        sourceNodeId: stageOf(reviewer),
+        change: helper,
+        lineage: helper.id,
+        headline: `The review agent asked for rework of ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}).`,
+        decideLine: REVIEW_DECIDE_LINE,
+      });
+      if (routed.kind === 'fixing') {
+        return {
+          value:
+            'Submitted. This workflow sends your findings to a fixer, and the lead is told. Your review is done: end your turn now.',
+        };
+      }
+      if (routed.kind === 'lead') {
+        return { value: 'Submitted. Your review is done: end your turn now.' };
+      }
+    }
     if (reworkDirect) {
       applyDecision(d, helper, { decision: 'rework', by: 'reviewer', comments: body });
       return {
@@ -233,7 +259,7 @@ export function submitReview(
             )
           : null,
         outOfRounds,
-        'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner; view_change shows the change.',
+        REVIEW_DECIDE_LINE,
       ]
         .filter((l) => l !== null)
         .join('\n\n'),

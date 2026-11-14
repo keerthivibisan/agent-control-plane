@@ -52,6 +52,7 @@ import type {
   EngineApproval,
   EngineContext,
   EngineEffect,
+  EngineFix,
   EngineTestResults,
   FollowUpState,
   OwnerWait,
@@ -113,6 +114,10 @@ export class Draft {
   researchBrief: string | undefined;
   /** Plan options of a run with several planners (`RunState.planOptions`, ADR-0037 §4). */
   planOptions: PlanOption[] | undefined;
+  /** Fixes along When arrows (`RunState.fixes`, ADR-0038 §4). */
+  fixes: EngineFix[] | undefined;
+  /** Fix rounds per When arrow and lineage (`RunState.failureRounds`, ADR-0038 §4). */
+  failureRounds: Record<string, number> | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -160,6 +165,8 @@ export class Draft {
     this.pendingBriefs = state.pendingBriefs === undefined ? undefined : { ...state.pendingBriefs };
     this.researchBrief = state.researchBrief;
     this.planOptions = state.planOptions?.map((o) => ({ ...o }));
+    this.fixes = state.fixes?.map((f) => ({ ...f }));
+    this.failureRounds = state.failureRounds === undefined ? undefined : { ...state.failureRounds };
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.activeAtStart = new Set(
       state.agents.filter((a) => isActiveAgentStatus(a.status)).map((a) => a.id),
@@ -681,6 +688,8 @@ export class Draft {
     if (this.pendingBriefs !== undefined) state.pendingBriefs = this.pendingBriefs;
     if (this.researchBrief !== undefined) state.researchBrief = this.researchBrief;
     if (this.planOptions !== undefined) state.planOptions = this.planOptions;
+    if (this.fixes !== undefined) state.fixes = this.fixes;
+    if (this.failureRounds !== undefined) state.failureRounds = this.failureRounds;
     return state;
   }
 

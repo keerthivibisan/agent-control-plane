@@ -133,7 +133,14 @@ export function stepInvariants(step: StepRecord): string[] {
     if (r.decidedBy === 'lead' && leadRoundsUsed(change) >= route.leadRounds) {
       out.push(`the lead reworked ${a.role} past its ${route.leadRounds} rounds`);
     }
-    if (r.decidedBy === 'reviewer') {
+    // ADR-0038 §4: a review rework sent along a When arrow is a fix of this step (bounded below).
+    const viaWhen = (after.fixes ?? []).some(
+      (f) =>
+        f.fixerAgentRunId === a.id &&
+        f.mode === 'rework' &&
+        !(before.fixes ?? []).some((b) => b.id === f.id),
+    );
+    if (r.decidedBy === 'reviewer' && !viaWhen) {
       const limit = route.by === 'agent' && route.then === 'direct' ? route.reviewerRounds : 0;
       if ((change.reviewerRounds ?? 0) >= limit) {
         out.push(`the reviewer reworked ${a.role} past its ${limit} rounds`);
@@ -165,6 +172,26 @@ export function stepInvariants(step: StepRecord): string[] {
     if (a === undefined || changeCheckBlockOf(program, a)?.nodeId !== e.blockNodeId) {
       out.push(`checks of the wrong block on ${a?.role ?? 'an unknown agent'}`);
     }
+  }
+
+  // 6b. ADR-0038 §4: fixes along When arrows stay within each arrow's rounds per failure lineage
+  //     (moving a fix uses no round), and only a When arrow (never a derived route) starts one.
+  const fixes = after.fixes ?? [];
+  for (const f of fixes) {
+    if (f.round > f.maxRounds) out.push(`a fix went past its ${f.maxRounds} rounds`);
+    const started = fixes.filter((g) => g.roundsKey === f.roundsKey && g.status !== 'rerouted');
+    if (started.length > f.maxRounds) {
+      out.push(`${started.length} fixes on one When arrow past its ${f.maxRounds} rounds`);
+    }
+    if (f.round > (after.failureRounds?.[f.roundsKey] ?? 0)) {
+      out.push('a fix round was not counted');
+    }
+  }
+  for (const f of fixes.filter((g) => !(before.fixes ?? []).some((b) => b.id === g.id))) {
+    const routed = (program.failureRoutes ?? []).some(
+      (r) => r.derived !== true && r.events.includes(f.event),
+    );
+    if (!routed) out.push(`a fix for ${f.event} without a When arrow`);
   }
 
   // 7. Final stages start in the program's order, each at most once.

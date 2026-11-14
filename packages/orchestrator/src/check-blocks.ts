@@ -4,6 +4,7 @@ import { AGENT_NOTE_LINE } from './agent-note.js';
 import { editorNoteBlocks, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { checksFailedContext, renderFailureContext } from './failure-context.js';
 import { reopenForFix, startAuthorFix } from './fix-turn.js';
+import { routeFailure as routeByWhen } from './failure-router.js';
 import type { FailureCheck } from '@acp/core';
 import { isOverBudget } from './budget.js';
 import { applyCommand } from './commands.js';
@@ -224,6 +225,30 @@ function routeFailure(
   failed: readonly FailedCheck[],
 ): void {
   const who = `${agent.role}'s change (agentId ${agent.id})`;
+  // ADR-0038 §4 (FR-5): the owner's When arrow from this block routes it first ("ask me" wins:
+  // such a block has no When arrow). Without one, the block's own setting below.
+  if (block.onFailure !== 'owner') {
+    const routed = routeByWhen(d, {
+      context: checksFailedContext(
+        d,
+        agent,
+        { nodeId: block.nodeId, label: block.label },
+        failureChecks(failed),
+        isHarnessFailure(failed),
+      ),
+      sourceNodeId: block.nodeId,
+      change: agent,
+      lineage: agent.id,
+      headline: `The checks on ${who} failed${names(failed)}.`,
+      decideLine: agent.kind === 'tester' ? TESTER_FAILURE_LINE : DECIDE_LINE,
+    });
+    if (routed.kind === 'lead') {
+      change.state = 'decision';
+      if (agent.kind === 'tester') reopenForFix(d);
+      return;
+    }
+    if (routed.kind === 'fixing') return;
+  }
   // ADR-0038 §3: a tester's failures never go back to the tester.
   if (agent.kind === 'tester' && block.onFailure !== 'owner') {
     testerFailure(d, agent, change, block, failed, who);

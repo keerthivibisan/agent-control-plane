@@ -155,6 +155,14 @@ export type { ChangeChecksResult, FailedCheck, SetupFailure } from './check-bloc
 export { TESTER_FAILURE_LINE } from './check-blocks.js';
 export { reopenForFix, startAuthorFix } from './fix-turn.js';
 export {
+  YOUR_WORKFLOW_HEADING,
+  helperBriefLines,
+  withWorkflowSection,
+  workflowWords,
+} from './briefs.js';
+export { findFix, isRunningFix, rerouteFix, routeFailure, whenRouteFor } from './failure-router.js';
+export type { FailureInput, RerouteInput, RouteOutcome } from './failure-router.js';
+export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,
   changeSummary,
@@ -188,7 +196,6 @@ export {
   testerNodeOf,
 } from './program.js';
 export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';
-export { helperBriefLines } from './briefs.js';
 export {
   MAX_REVIEW_POSTS,
   REVIEW_POST_MAX_CHARS,

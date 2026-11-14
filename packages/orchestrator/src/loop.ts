@@ -21,6 +21,8 @@ import {
   withOwnerNotes,
 } from './arrow-notes.js';
 import { renderFailureContext, reviewReworkContext } from './failure-context.js';
+import { routeFailure, whenRouteFor } from './failure-router.js';
+import { REVIEW_DECIDE_LINE } from './review-tool.js';
 import { heldByHandoff, withHandoffs } from './handoffs.js';
 import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -578,6 +580,30 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
     directReworkAllowed(d, helper, reviewers, directRounds);
   change.state = reworkDirect ? 'decision' : leadCanDecide(d) ? 'decision' : 'needs-owner';
   emitRound(d, helper);
+  // ADR-0038 §4 (FR-5): without the reviewers' own rework arrows, the owner's When arrow from the
+  // first reviewer asking for rework that has one routes the verdict.
+  if (verdict === 'rework' && directRounds === null) {
+    const asking = fan.reviews.filter((r) => r.verdict === 'rework');
+    const routedFrom = asking.find(
+      (r) => whenRouteFor(d.program(), 'review-rework', r.nodeId) !== undefined,
+    );
+    if (routedFrom !== undefined) {
+      routeFailure(d, {
+        context: reviewReworkContext(
+          d,
+          helper,
+          asking.map((r) => ({ agent: d.agent(r.agentRunId), label: reviewerLabel(d, r.nodeId) })),
+          asking.map((r) => `${reviewerLabel(d, r.nodeId)}:\n${r.findings ?? ''}`).join('\n\n'),
+        ),
+        sourceNodeId: routedFrom.nodeId,
+        change: helper,
+        lineage: helper.id,
+        headline: `${fan.reviews.length} review agents reviewed ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}); at least one asks for rework.`,
+        decideLine: REVIEW_DECIDE_LINE,
+      });
+      return;
+    }
+  }
   if (reworkDirect) {
     const comments = fan.reviews
       .filter((r) => r.verdict === 'rework')

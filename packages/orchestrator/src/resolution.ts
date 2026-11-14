@@ -1,9 +1,13 @@
 import { GitCommitSchema, type WorkflowNodeId } from '@acp/core';
+import type { FailureContext, ProgramFailureRoute } from '@acp/core';
 import { BRANCH_RULE_LINE } from './agent-note.js';
 import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { mergeConflictContext, renderFailureContext } from './failure-context.js';
+import { purposeBlocks, whenRouteFor } from './failure-router.js';
 import { notifyLead } from './loop.js';
+import { withOwnerNotes } from './arrow-notes.js';
+import type { Draft } from './draft.js';
 import { programOf } from './program.js';
 import { launchFieldsFor, nodeProvider } from './stages.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
@@ -99,15 +103,29 @@ export function startResolver(
       return refusal('invalid-input', 'The pinned commits are not valid.');
     }
     const program = programOf(d);
+    const conflict = mergeConflictContext(
+      d,
+      undefined,
+      `the update of ${input.ticketBranch} from ${input.targetBranch}`,
+      input.conflictFiles,
+    );
+    // ADR-0038 §4 (FR-5): without a block from the policy, the owner's When arrow for merge
+    // conflicts picks the resolver's block (a helper block, or the one known author's); the
+    // operation's attempts are its rounds, as before. A route to the lead changes nothing here:
+    // the lead is told in any case.
+    const route =
+      input.helperNode === null ? whenRouteFor(program, 'merge-conflict', undefined) : undefined;
+    const routed = route === undefined ? undefined : resolverNodeOf(d, route, conflict);
     const node =
       input.helperNode === null
-        ? program.helpers[0]
+        ? (program.helpers.find((h) => h.id === routed) ?? program.helpers[0])
         : program.helpers.find((h) => h.id === input.helperNode);
     if (node === undefined) {
       return refusal('invalid-input', 'The workflow has no helper block for the resolver.');
     }
     const lead = d.lead();
-    const brief = resolverBrief(input);
+    const viaArrow = route !== undefined && node.id === routed;
+    const brief = withOwnerNotes(resolverBrief(input), viaArrow ? purposeBlocks(route) : []);
     const agent: EngineAgent = {
       id: d.freshId(),
       runId: d.run.id,
@@ -144,20 +162,30 @@ export function startResolver(
     notifyLead(
       d,
       [
-        `${input.ticketBranch} conflicts with ${input.targetBranch}; ${RESOLVER_ROLE} (agentId ${agent.id}) is resolving it (attempt ${input.attempt} of ${input.maxAttempts}). You get its outcome when it is done.`,
+        `${input.ticketBranch} conflicts with ${input.targetBranch}; ${RESOLVER_ROLE} (agentId ${agent.id}) is resolving it (attempt ${input.attempt} of ${input.maxAttempts})${viaArrow ? ` in ${node.label}, as this workflow's When arrow for merge conflicts says` : ''}. You get its outcome when it is done.`,
         renderFailureContext({
-          ...mergeConflictContext(
-            d,
-            undefined,
-            `the update of ${input.ticketBranch} from ${input.targetBranch}`,
-            input.conflictFiles,
-          ),
+          ...conflict,
           rounds: { used: input.attempt, max: input.maxAttempts },
         }),
       ].join('\n\n'),
     );
     return { value: agent.id };
   });
+}
+
+/** The helper block a merge-conflict When route names: its target, or the one known author's. */
+function resolverNodeOf(
+  d: Draft,
+  route: ProgramFailureRoute,
+  conflict: FailureContext,
+): WorkflowNodeId | undefined {
+  if (route.target.kind === 'node') return route.target.nodeId;
+  if (route.target.kind === 'lead') return undefined;
+  const only =
+    conflict.authorsKnown && conflict.authors.length === 1 ? conflict.authors[0] : undefined;
+  if (only === undefined) return undefined;
+  const agent = d.agent(only.agentId);
+  return agent?.stage ?? only.nodeId;
 }
 
 export type ResolverSealOutcome = 'resolved' | 'no-change' | 'markers-left' | 'failed';

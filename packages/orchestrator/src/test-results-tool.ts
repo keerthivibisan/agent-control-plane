@@ -7,6 +7,9 @@ import { renderFailureContext, testsFailedContext } from './failure-context.js';
 import { notifyLead } from './loop.js';
 import { TESTER_FAILURE_LINE } from './check-blocks.js';
 import { reopenForFix } from './fix-turn.js';
+import { routeFailure } from './failure-router.js';
+import type { RouteOutcome } from './failure-router.js';
+import { stageOf } from './stages.js';
 import type {
   EngineAgent,
   EngineContext,
@@ -114,17 +117,30 @@ export function reportTestResults(
       text: testResultsText(results),
     });
     // ADR-0038 §2: the lead always gets a failure with its context (the likely authors).
-    // ADR-0038 §3: without a route (When arrows, FR-4/5) the lead decides who fixes them; the
-    // handover is undone so it can start a helper for the fix.
+    // ADR-0038 §4 (FR-5): a When arrow from the tester routes it (a fix turn, or the lead);
+    // without one the lead decides who fixes them (§3); the handover is undone so it can start a
+    // helper for the fix.
+    let routed: RouteOutcome = { kind: 'none' };
     if (results.status === 'failed') {
-      reopenForFix(d);
-      notifyLead(
-        d,
-        testsFailedNotice(
-          agent,
-          renderFailureContext(testsFailedContext(d, agent, results.failed)),
-        ),
-      );
+      const context = testsFailedContext(d, agent, results.failed);
+      routed = routeFailure(d, {
+        context,
+        sourceNodeId: stageOf(agent),
+        change: agent,
+        lineage: agent.id,
+        headline: `${agent.role} (agentId ${agent.id}) reported failing tests.`,
+        decideLine: TESTER_FAILURE_LINE,
+      });
+      if (routed.kind !== 'fixing') reopenForFix(d);
+      if (routed.kind === 'none') {
+        notifyLead(d, testsFailedNotice(agent, renderFailureContext(context)));
+      }
+    }
+    if (routed.kind === 'fixing') {
+      return {
+        value:
+          'Your test results are recorded. This workflow sends the failures to a fixer, and the lead is told. Do not change product code. Call report_work, then end your turn.',
+      };
     }
     return {
       value:

@@ -11,6 +11,7 @@ import {
   ticketPlannerPrompt,
   ticketOrchestratorPrompt,
   ticketRunPrompts,
+  withWorkflowSection,
 } from '../src/index.js';
 import { LEAD, REGISTERED, event, makeCtx, ok, refused, statusOf, agentOf } from './helpers.js';
 import {
@@ -50,7 +51,7 @@ describe('separate planner: start', () => {
         prompt: PLANNER_PROMPT,
       },
     ]);
-    expect(r.state.leadBrief).toBe(LEAD_BRIEF);
+    expect(r.state.leadBrief).toBe(withWorkflowSection(LEAD_BRIEF, r.state));
     expect(r.state.workflow).toEqual(SEPARATE);
   });
 

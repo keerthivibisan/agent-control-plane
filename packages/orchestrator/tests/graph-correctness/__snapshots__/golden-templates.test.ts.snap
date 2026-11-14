@@ -2,7 +2,7 @@
 
 exports[`template traces > lead-only approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9e027b08/1782 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -58,7 +58,7 @@ final run=COMPLETED
 
 exports[`template traces > lead-only failed-check 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9e027b08/1782 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -136,7 +136,7 @@ final run=COMPLETED
 
 exports[`template traces > lead-only rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#9e027b08/1782 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -223,7 +223,7 @@ exports[`template traces > lead-only with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#7d9d3aec/2249 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -287,7 +287,7 @@ exports[`template traces > lead-only with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#7d9d3aec/2249 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -373,7 +373,7 @@ exports[`template traces > lead-only with a planner rework-then-approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#7d9d3aec/2249 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -438,7 +438,7 @@ final run=COMPLETED
 
 exports[`template traces > reviewer-helper-loop approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fccc71f1/2071 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -509,7 +509,7 @@ final run=COMPLETED
 
 exports[`template traces > reviewer-helper-loop failed-check 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fccc71f1/2071 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -585,7 +585,7 @@ final run=COMPLETED
 
 exports[`template traces > reviewer-helper-loop rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#fccc71f1/2071 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -698,7 +698,7 @@ exports[`template traces > reviewer-helper-loop with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#f41b7e55/2538 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -777,7 +777,7 @@ exports[`template traces > reviewer-helper-loop with a planner failed-check 1`] 
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#f41b7e55/2538 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -861,7 +861,7 @@ exports[`template traces > reviewer-helper-loop with a planner rework-then-appro
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#f41b7e55/2538 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -952,7 +952,7 @@ final run=COMPLETED
 
 exports[`template traces > todays-setup approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1023,7 +1023,7 @@ final run=COMPLETED
 
 exports[`template traces > todays-setup failed-check 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1131,7 +1131,7 @@ final run=COMPLETED
 
 exports[`template traces > todays-setup rework-then-approve 1`] = `
 "#1 owner "create run" -> ok
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#600b4441/887 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#411fb095/1990 role="Lead"
   ~ +L lead role="Lead" stage=orchestrate STARTING
 #2 Lead "started" -> ok
   > link-session agentRunId=L provider="claude-code" providerSessionId="sess:L"
@@ -1248,7 +1248,7 @@ exports[`template traces > todays-setup with a planner approve 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#370d92cf/2457 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1327,7 +1327,7 @@ exports[`template traces > todays-setup with a planner failed-check 1`] = `
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#370d92cf/2457 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED
@@ -1443,7 +1443,7 @@ exports[`template traces > todays-setup with a planner rework-then-approve 1`] =
   > plan-decided planId=plan1 status="approved"
   > create-ticket-branch ticketKey="WEB-12"
   > abort-agent agentRunId=P1
-  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#3ffd7d78/1254 role="Lead"
+  > start-agent agentRunId=L kind="lead" prompt="Ticket WEB-12 (feature, medium priority)…"#370d92cf/2457 role="Lead"
   ~ run RUNNING
   ~ L STARTING
   ~ P1 SUCCEEDED

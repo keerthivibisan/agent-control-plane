@@ -9,6 +9,7 @@ import {
   programOf,
   recordChangeDecision,
   requestPermission,
+  withWorkflowSection,
 } from '../src/index.js';
 import type { RunState } from '../src/index.js';
 import {
@@ -108,8 +109,10 @@ describe('graph runs: the program', () => {
     const prompt = effectsOf(withNamed, 'start-agent')[0]?.prompt ?? '';
     expect(prompt).toContain('Frontend helper (helper "frontend"): Builds the UI.');
     expect(prompt).toContain('Helpers (helper "helpers")');
-    const poolOnly = ok(createGraphRun(valid({ named: false }))).effects;
-    expect(effectsOf(poolOnly, 'start-agent')[0]?.prompt).toBe('Ticket WEB-12: plan first');
+    const poolOnly = ok(createGraphRun(valid({ named: false })));
+    expect(effectsOf(poolOnly.effects, 'start-agent')[0]?.prompt).toBe(
+      withWorkflowSection('Ticket WEB-12: plan first', poolOnly.state),
+    );
   });
 
   it('lists the helper nodes in the planner’s brief, and the step nodes in the lead’s', () => {
