@@ -14,7 +14,8 @@ import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
  * tester. An author whose change is already merged gets a fix turn as a new helper of its node,
  * from the ticket branch, with its node's settings (model, skills, agent file, approval mode)
  * and the failure context; the handover is undone, as with the owner's "Request changes", so the
- * lead decides the fix's change and hands over again. The final stages do not run again.
+ * lead decides the fix's change and hands over again. Once that change is merged, the tester runs
+ * again unless the When arrow switched its retest off (ADR-0038 §4, amended 2026-11-14).
  */
 
 /** Why no fix may start in this run now, or null. */

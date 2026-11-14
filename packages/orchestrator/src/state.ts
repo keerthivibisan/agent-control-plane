@@ -219,6 +219,13 @@ export interface EngineFix {
   /** The When arrow's label and purpose (owner text), when it has them. */
   label?: string;
   purpose?: string;
+  /**
+   * ADR-0038 §4 (amended 2026-11-14): the tester node that runs again once the fixer's change is
+   * merged (the failure was that tester's, and the arrow's retest is on); absent: no retest.
+   */
+  retestNodeId?: string;
+  /** The tester started for that retest (its failures keep this fix's lineage and rounds). */
+  retestAgentRunId?: string;
 }
 
 export interface EngineChange {

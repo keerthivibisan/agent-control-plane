@@ -194,7 +194,16 @@ export function stepInvariants(step: StepRecord): string[] {
     if (!routed) out.push(`a fix for ${f.event} without a When arrow`);
   }
 
-  // 7. Final stages start in the program's order, each at most once.
+  // 7. Final stages start in the program's order, each at most once; a tester may run again only
+  // as the retest of routed fixes merged before it started (ADR-0038 §4, amended 2026-11-14).
+  const retestOf = (id: string, stage: string | undefined) =>
+    (after.fixes ?? []).filter((f) => f.retestAgentRunId === id).length > 0 &&
+    (after.fixes ?? [])
+      .filter((f) => f.retestAgentRunId === id)
+      .every(
+        (f) =>
+          f.retestNodeId === stage && agent(before, f.fixerAgentRunId)?.change?.state === 'merged',
+      );
   const order = program.finalStages.map((n) => n.id);
   for (const e of effectsOf(effects, 'start-agent')) {
     if (e.rework !== undefined) continue;
@@ -211,7 +220,8 @@ export function stepInvariants(step: StepRecord): string[] {
       out.push(`final stage ${a.stage ?? ''} out of order`);
     if (ran(order[k] ?? '')) {
       const prev = before.agents.filter((b) => isFinalStageAgent(b) && b.stage === a.stage);
-      if (!prev.every((b) => b.kind === 'reviewer' && b.status === 'NEEDS_REVIEW')) {
+      const restart = prev.every((b) => b.kind === 'reviewer' && b.status === 'NEEDS_REVIEW');
+      if (!restart && !(a.kind === 'tester' && retestOf(a.id, a.stage))) {
         out.push(`final stage ${a.stage ?? ''} ran twice`);
       }
     }

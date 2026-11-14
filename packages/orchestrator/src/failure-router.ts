@@ -114,7 +114,9 @@ export function purposeBlocks(route: Pick<ProgramFailureRoute, 'label' | 'purpos
 function lineageOf(d: Draft, input: FailureInput): string {
   const changeId = input.change?.id;
   if (changeId === undefined) return input.lineage;
-  const fix = d.fixes?.find((f) => f.fixerAgentRunId === changeId);
+  const fix = d.fixes?.find(
+    (f) => f.fixerAgentRunId === changeId || f.retestAgentRunId === changeId,
+  );
   return fix?.lineage ?? input.lineage;
 }
 
@@ -160,12 +162,32 @@ function toLead(
 }
 
 /** The one known author's block and role, when there is exactly one. */
+/**
+ * The one known author of the failure, or undefined. A retest's failure (ADR-0038 §4, amended
+ * 2026-11-14) is the last fix's when its fixer touched the failing files: the code it fixed was
+ * also the earlier author's, so "several helpers" would always send a retest to the lead.
+ */
+function soleAuthor(
+  d: Draft,
+  input: Pick<FailureInput, 'context' | 'change'>,
+): FailureContext['authors'][number] | undefined {
+  const { authors, authorsKnown } = input.context;
+  if (!authorsKnown) return undefined;
+  if (authors.length === 1) return authors[0];
+  const changeId = input.change?.id;
+  const fix =
+    changeId === undefined
+      ? undefined
+      : [...(d.fixes ?? [])].reverse().find((f) => f.retestAgentRunId === changeId);
+  return fix === undefined ? undefined : authors.find((a) => a.agentId === fix.fixerAgentRunId);
+}
+
 function soleAuthorOf(
   d: Draft,
-  context: FailureContext,
+  input: Pick<FailureInput, 'context' | 'change'>,
 ): { soleAuthor?: NonNullable<EngineFix['soleAuthor']> } {
-  const first = context.authors[0];
-  if (!context.authorsKnown || context.authors.length !== 1 || first === undefined) return {};
+  const first = soleAuthor(d, input);
+  if (first === undefined) return {};
   const agent = d.agent(first.agentId);
   return {
     soleAuthor: {
@@ -191,8 +213,8 @@ function resolveTarget(d: Draft, input: FailureInput, route: ProgramFailureRoute
     return { ok: true, nodeId, role: node.label };
   }
   const { authors, authorsKnown } = input.context;
-  const first = authors[0];
-  if (!authorsKnown || authors.length !== 1 || first === undefined) {
+  const first = soleAuthor(d, input);
+  if (first === undefined) {
     return {
       ok: false,
       reason: 'author-unclear',
@@ -327,7 +349,8 @@ export function routeFailure(d: Draft, input: FailureInput): RouteOutcome {
     maxRounds: route.maxRounds,
     status: 'running',
     context: renderFailureContext(input.context),
-    ...soleAuthorOf(d, input.context),
+    ...soleAuthorOf(d, input),
+    ...retestOf(d, input, route),
     ...(route.target.kind === 'author' ? { viaAuthor: true as const } : {}),
     ...(route.label !== undefined ? { label: route.label } : {}),
     ...(route.purpose !== undefined ? { purpose: route.purpose } : {}),
@@ -349,6 +372,25 @@ export function routeFailure(d: Draft, input: FailureInput): RouteOutcome {
   return { kind: 'fixing', fix, fixer };
 }
 
+/**
+ * ADR-0038 §4 (amended 2026-11-14): the tester that runs again after the fix is merged: the failure
+ * is a tester's own (its tests, or a Checks block on its change), and the arrow's retest is on.
+ */
+function retestOf(
+  d: Draft,
+  input: FailureInput,
+  route: ProgramFailureRoute,
+): Pick<EngineFix, 'retestNodeId'> {
+  if (route.retest === false) return {};
+  const testers = programOf(d).finalStages.filter((n) => n.kind === 'tester');
+  const own = input.change;
+  const nodeId =
+    own?.kind === 'tester' ? stageOf(own) : testers.find((n) => n.id === input.sourceNodeId)?.id;
+  return nodeId !== undefined && testers.some((n) => n.id === nodeId)
+    ? { retestNodeId: nodeId }
+    : {};
+}
+
 /** The lead's notice of a fix under way (ADR-0038 §4: the lead is told about every fix). */
 function fixingNotice(
   headline: string,
@@ -367,6 +409,9 @@ function fixingNotice(
     fix.mode === 'rework'
       ? 'You get the change again once it is checked and reviewed.'
       : "Decide the fixer's change as usual once it is reviewed; the failing change waits for your decision.",
+    ...(fix.retestNodeId !== undefined
+      ? ['Once the fix is merged and you hand over again, the tester runs again.']
+      : []),
     'To move the fix, call reroute_fix (fixId, to: a helper block, author or lead); stop_agent stops it.',
     context,
     ...notes,

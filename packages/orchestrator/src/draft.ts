@@ -38,6 +38,8 @@ import {
   launchFieldsFor,
   nodeProvider,
   nextStage,
+  pendingRetests,
+  retestBlock,
   reviewerBrief,
   testerBrief,
   TESTER_TASK,
@@ -607,6 +609,9 @@ export class Draft {
       provider: nodeProvider(this.program(), node.id),
     };
     if (kind === 'reviewer') agent.reviewPosts = 0;
+    // ADR-0038 §4 (amended 2026-11-14): a tester running again after merged fixes of its failures.
+    const retests = kind === 'tester' ? pendingRetests(this, node.id) : [];
+    for (const fix of retests) fix.retestAgentRunId = agent.id;
     this.agents.push(agent);
     this.setAgentStatus(agent, 'STARTING');
     if (kind === 'reviewer') {
@@ -632,7 +637,9 @@ export class Draft {
     }
     // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its test or flow arrow.
     const brief = withOwnerNotes(
-      kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this),
+      kind === 'reviewer'
+        ? reviewerBrief(this)
+        : [testerBrief(this), ...retests.slice(0, 1).map((f) => retestBlock(f))].join('\n\n'),
       stageNoteBlocks(this.program(), node.id),
     );
     const loopFields =

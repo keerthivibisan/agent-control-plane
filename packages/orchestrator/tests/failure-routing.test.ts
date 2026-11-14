@@ -45,7 +45,7 @@ function when(
   to: string,
   on: FailureEvent[],
   maxRounds = 2,
-  notes: { label?: string; purpose?: string } = {},
+  notes: { label?: string; purpose?: string; retest?: boolean } = {},
 ): WorkflowEdgeV3 {
   return { type: 'when', id, from, to, on, maxRounds, ...notes };
 }
@@ -142,7 +142,7 @@ function testerRunning(graph: WorkflowGraphV3, helpers: [string, string[]][]) {
   return { s, tester: tester.id };
 }
 
-function failingTests(s: RunState, tester: string, file = 'src/theme.ts') {
+function failingTests(s: RunState, tester: string, file = 'src/theme.ts', seed = 'tr') {
   return leadTool(
     s,
     'report_test_results',
@@ -151,7 +151,7 @@ function failingTests(s: RunState, tester: string, file = 'src/theme.ts') {
       failed: [{ test: 'toggles the theme', file, message: INJECTION }],
       summary: '1 of 12 failed.',
     },
-    'tr',
+    seed,
     tester,
     4200,
   );
@@ -310,6 +310,179 @@ describe('tests fail at a tester (ADR-0038 §4)', () => {
     expect(notice).toContain('Rounds: 1 of 1 used.');
     expect(routed(r.effects)).toEqual([
       expect.objectContaining({ kind: 'to-lead', reason: 'rounds-used' }),
+    ]);
+  });
+});
+
+/** The tester ends with no change of its own. */
+function testerEnds(s: RunState, tester: string, at: number): RunState {
+  s = ok(finishTurn(s, tester, 'success', at)).state;
+  return ok(
+    changeSealed(
+      s,
+      tester,
+      { changed: false, headCommit: null, changedFiles: 0 },
+      makeCtx(at + 10, `te${at}`),
+    ),
+  ).state;
+}
+
+/** The fixer runs, seals `src/theme.ts`, and the lead merges it. */
+function fixMerged(s: RunState, fixer: string, at: number): RunState {
+  s = ok(
+    event(s, fixer, { type: 'started', providerSessionId: `sess-${fixer}`, model: null }, at),
+  ).state;
+  s = ok(finishTurn(s, fixer, 'success', at + 10)).state;
+  s = ok(
+    changeSealed(
+      s,
+      fixer,
+      { changed: true, headCommit: COMMIT, changedFiles: 1, files: ['src/theme.ts'] },
+      makeCtx(at + 20, `fs${at}`),
+    ),
+  ).state;
+  s = ok(leadTool(s, 'merge_change', { agentId: fixer }, `fm${at}`, LEAD, at + 30)).state;
+  return ok(
+    recordChangeDecision(
+      s,
+      fixer,
+      { decision: 'merge', by: 'lead', outcome: 'merged', headCommit: 'def5678' },
+      makeCtx(at + 40, `fd${at}`),
+    ),
+  ).state;
+}
+
+describe('the tester runs again after a routed fix (ADR-0038 §4, amended 2026-11-14)', () => {
+  it('by default: the fix merged and handed over, the tester runs again with the context', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2)] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    const r = ok(failingTests(s, tester));
+    const fix = r.state.fixes?.[0];
+    expect(fix?.retestNodeId).toBe(TESTER);
+    expect(leadMessages(r.effects).join('\n')).toContain('the tester runs again');
+    let next = testerEnds(r.state, tester, 4300);
+    next = fixMerged(next, fix?.fixerAgentRunId ?? '', 5000);
+    // Not before the lead hands over again.
+    expect(next.agents.filter((a) => a.kind === 'tester')).toHaveLength(1);
+    const handed = ok(leadTool(next, 'request_review', {}, 'h2', LEAD, 6000));
+    const testers = handed.state.agents.filter((a) => a.kind === 'tester');
+    expect(testers).toHaveLength(2);
+    const retest = testers[1];
+    const [start] = started(handed.effects).filter((e) => e.agentRunId === retest?.id);
+    expect(start).toMatchObject({ kind: 'tester', fromBranch: BRANCH });
+    expect(start?.prompt).toContain('This is a retest');
+    // The failure text reaches it quoted, never as a plain line.
+    expect(start?.prompt).toContain(`> - toggles the theme (src/theme.ts): ${INJECTION}`);
+    expect(start?.prompt).not.toMatch(new RegExp(`^${INJECTION}$`, 'm'));
+    expect(handed.state.fixes?.[0]?.retestAgentRunId).toBe(retest?.id);
+    // Once only: the retest started, nothing else is pending.
+    expect(started(handed.effects).filter((e) => e.kind === 'tester')).toHaveLength(1);
+  });
+
+  it('a failing retest keeps the fix’s rounds: round 2, then the lead decides', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2)] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    let state = ok(failingTests(s, tester)).state;
+    for (const [round, at] of [
+      [2, 10000],
+      [3, 20000],
+    ] as const) {
+      const fix = state.fixes?.[state.fixes.length - 1];
+      const prev = state.agents.filter((a) => a.kind === 'tester').at(-1)?.id ?? '';
+      state = testerEnds(state, prev, at);
+      state = fixMerged(state, fix?.fixerAgentRunId ?? '', at + 1000);
+      state = ok(leadTool(state, 'request_review', {}, `h${at}`, LEAD, at + 2000)).state;
+      const retest = state.agents.filter((a) => a.kind === 'tester').at(-1)?.id ?? '';
+      expect(retest).not.toBe(prev);
+      state = ok(
+        agentEvent(
+          state,
+          retest,
+          { type: 'started', providerSessionId: `sess-${retest}`, model: null },
+          makeCtx(at + 2100),
+        ),
+      ).state;
+      const r = ok(failingTests(state, retest, 'src/theme.ts', `tr${at}`));
+      state = r.state;
+      if (round === 2) {
+        expect(routed(r.effects)).toEqual([
+          expect.objectContaining({ kind: 'fix-started', round: 2, maxRounds: 2 }),
+        ]);
+      } else {
+        // The rounds were never reset by the new tester: the lead decides.
+        expect(routed(r.effects)).toEqual([
+          expect.objectContaining({ kind: 'to-lead', reason: 'rounds-used' }),
+        ]);
+      }
+    }
+    expect(state.failureRounds).toEqual({ [`w-t#${tester}`]: 2 });
+  });
+
+  it('switched off on the arrow: no retest, the run goes to review', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2, { retest: false })] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    const r = ok(failingTests(s, tester));
+    expect(r.state.fixes?.[0]?.retestNodeId).toBeUndefined();
+    expect(leadMessages(r.effects).join('\n')).not.toContain('the tester runs again');
+    let next = testerEnds(r.state, tester, 4300);
+    next = fixMerged(next, r.state.fixes?.[0]?.fixerAgentRunId ?? '', 5000);
+    const handed = ok(leadTool(next, 'request_review', {}, 'h2', LEAD, 6000));
+    expect(handed.state.agents.filter((a) => a.kind === 'tester')).toHaveLength(1);
+    expect(handed.state.run.status).toBe('REVIEW');
+  });
+
+  it('a discarded fix gives no retest', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2)] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    const r = ok(failingTests(s, tester));
+    const fixer = r.state.fixes?.[0]?.fixerAgentRunId ?? '';
+    let next = testerEnds(r.state, tester, 4300);
+    next = ok(
+      event(next, fixer, { type: 'started', providerSessionId: 'sess-f', model: null }, 5000),
+    ).state;
+    next = ok(finishTurn(next, fixer, 'success', 5010)).state;
+    next = ok(
+      changeSealed(
+        next,
+        fixer,
+        { changed: true, headCommit: COMMIT, changedFiles: 1, files: ['src/theme.ts'] },
+        makeCtx(5020, 'fs'),
+      ),
+    ).state;
+    next = ok(
+      leadTool(next, 'discard_change', { agentId: fixer, reason: 'Wrong fix.' }, 'dc', LEAD, 5030),
+    ).state;
+    const handed = ok(leadTool(next, 'request_review', {}, 'h2', LEAD, 6000));
+    expect(handed.state.agents.filter((a) => a.kind === 'tester')).toHaveLength(1);
+  });
+
+  it('the live graph shows the rounds each When arrow used', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2)] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    expect(deriveRunWorkflowGraph(s).whenRounds).toBeUndefined();
+    const r = ok(failingTests(s, tester));
+    expect(deriveRunWorkflowGraph(r.state).whenRounds).toEqual([
+      { edgeId: 'w-t', used: 1, maxRounds: 2 },
+    ]);
+    // The most used lineage counts; routes read from settings have no arrow.
+    const more = { ...r.state, failureRounds: { 'w-t#a': 1, 'w-t#b': 2, 'fe-checks:x#c': 1 } };
+    expect(deriveRunWorkflowGraph(more).whenRounds).toEqual([
+      { edgeId: 'w-t', used: 2, maxRounds: 2 },
     ]);
   });
 });

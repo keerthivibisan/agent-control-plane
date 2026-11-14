@@ -339,7 +339,30 @@ export function deriveRunWorkflowGraph(
   return {
     nodes,
     ...(state.integration !== undefined ? { review: reviewCounts(state) } : {}),
+    ...whenRoundsOf(state, program),
   };
+}
+
+/**
+ * ADR-0038 §4 (amended 2026-11-14): the rounds each When arrow used (`RunState.failureRounds`,
+ * keyed `<edgeId>#<lineage>`), its most used lineage; routes read from settings have no arrow.
+ */
+function whenRoundsOf(
+  state: RunState,
+  program: ReturnType<typeof programOf>,
+): Pick<RunWorkflowGraphDto, 'whenRounds'> {
+  const used = new Map<string, number>();
+  for (const [key, rounds] of Object.entries(state.failureRounds ?? {})) {
+    const edgeId = key.slice(0, key.lastIndexOf('#'));
+    used.set(edgeId, Math.max(used.get(edgeId) ?? 0, rounds));
+  }
+  const whenRounds = (program.failureRoutes ?? []).flatMap((r) => {
+    const n = r.edgeId === undefined ? undefined : used.get(r.edgeId);
+    return r.edgeId === undefined || n === undefined || n < 1
+      ? []
+      : [{ edgeId: r.edgeId, used: n, maxRounds: r.maxRounds }];
+  });
+  return whenRounds.length > 0 ? { whenRounds } : {};
 }
 
 const ids = (agents: readonly EngineAgent[]) => agents.map((a) => a.id);
