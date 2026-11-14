@@ -5,9 +5,9 @@ Coordinator-owned. Plan: [README.md](README.md).
 | WP   | Title                                       | Status      | Branch                             | Merged |
 | ---- | ------------------------------------------- | ----------- | ---------------------------------- | ------ |
 | FR-0 | ADR-0038, plan                              | done        | `feature/workflow/failure-routing` |        |
-| FR-1 | Structured test results                     | not started |                                    |        |
-| FR-2 | Failure context and authors                 | not started |                                    |        |
-| FR-3 | Tester failures to the author or the lead   | not started |                                    |        |
+| FR-1 | Structured test results                     | done        | `feature/workflow/failure-routing` |        |
+| FR-2 | Failure context and authors                 | done        | `feature/workflow/failure-routing` |        |
+| FR-3 | Tester failures to the author or the lead   | done        | `feature/workflow/failure-routing` |        |
 | FR-4 | Core: When arrows, Author block, flow words | not started |                                    |        |
 | FR-5 | Engine: routing, fix turns, lead tools      | not started |                                    |        |
 | FR-6 | Web: When arrows and Flow in words          | not started |                                    |        |
