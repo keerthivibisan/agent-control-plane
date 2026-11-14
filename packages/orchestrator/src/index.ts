@@ -152,6 +152,8 @@ export {
   failureDetails,
 } from './check-blocks.js';
 export type { ChangeChecksResult, FailedCheck, SetupFailure } from './check-blocks.js';
+export { TESTER_FAILURE_LINE } from './check-blocks.js';
+export { reopenForFix, startAuthorFix } from './fix-turn.js';
 export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,

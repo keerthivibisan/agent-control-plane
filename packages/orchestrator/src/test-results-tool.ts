@@ -5,6 +5,8 @@ import { applyCommand } from './commands.js';
 import { refusal } from './errors.js';
 import { renderFailureContext, testsFailedContext } from './failure-context.js';
 import { notifyLead } from './loop.js';
+import { TESTER_FAILURE_LINE } from './check-blocks.js';
+import { reopenForFix } from './fix-turn.js';
 import type {
   EngineAgent,
   EngineContext,
@@ -112,7 +114,10 @@ export function reportTestResults(
       text: testResultsText(results),
     });
     // ADR-0038 §2: the lead always gets a failure with its context (the likely authors).
+    // ADR-0038 §3: without a route (When arrows, FR-4/5) the lead decides who fixes them; the
+    // handover is undone so it can start a helper for the fix.
     if (results.status === 'failed') {
+      reopenForFix(d);
       notifyLead(
         d,
         testsFailedNotice(
@@ -133,7 +138,8 @@ export function reportTestResults(
 /** The lead's notice of a tester's failing tests (ADR-0038 §2, §3). */
 function testsFailedNotice(tester: EngineAgent, context: string): string {
   return [
-    `${tester.role} (agentId ${tester.id}) reported failing tests. The tester never fixes product code: you decide who fixes them, for example the likely author below.`,
+    `${tester.role} (agentId ${tester.id}) reported failing tests. You decide who fixes them, for example the likely author below.`,
     context,
+    TESTER_FAILURE_LINE,
   ].join('\n\n');
 }

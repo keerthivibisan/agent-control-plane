@@ -26,3 +26,8 @@ Coordinator-owned. Plan: [README.md](README.md).
   agent or tool text; the lead gets it on failing tests, change and merge checks (a harness that
   could not run is `harness-failed`), review rework (all routes), merge conflicts and ADR-0030
   resolutions.
+- 2026-11-14 FR-3 done: a tester's failures never rework the tester. Failing test results and a
+  tester's Checks block (`lead`) go to the lead with the context, and the handover is undone so it
+  can start a fixer; `onFailure: helper` on a tester means the author: one known author whose
+  change is merged gets a fix turn (a new helper of its node from the ticket branch); several,
+  none or no room go to the lead.

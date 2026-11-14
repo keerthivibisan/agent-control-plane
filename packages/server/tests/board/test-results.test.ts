@@ -110,5 +110,10 @@ describe('the failure context through the server (ADR-0038 §2)', () => {
     expect(notice).toContain('Likely authors (helpers whose changes touched the failing files):');
     expect(notice).toContain(`(agentId ${worker.id}, node`);
     expect(notice).toContain('> src/theme.ts');
+    // ADR-0038 §3: the tester is not sent back; the lead may start a helper to fix it.
+    expect(s.fake.agents.filter((a) => a.spec.kind === 'tester')).toHaveLength(1);
+    expect(
+      await lead.callLead('start_agent', { role: 'Builder', task: 'Fix the theme toggle' }),
+    ).toContain('Started agent');
   }, 60_000);
 });

@@ -3,6 +3,7 @@ import type { CheckRunStatus, ProgramChangeCheckBlock } from '@acp/core';
 import { AGENT_NOTE_LINE } from './agent-note.js';
 import { editorNoteBlocks, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { checksFailedContext, renderFailureContext } from './failure-context.js';
+import { reopenForFix, startAuthorFix } from './fix-turn.js';
 import type { FailureCheck } from '@acp/core';
 import { isOverBudget } from './budget.js';
 import { applyCommand } from './commands.js';
@@ -223,6 +224,11 @@ function routeFailure(
   failed: readonly FailedCheck[],
 ): void {
   const who = `${agent.role}'s change (agentId ${agent.id})`;
+  // ADR-0038 §3: a tester's failures never go back to the tester.
+  if (agent.kind === 'tester' && block.onFailure !== 'owner') {
+    testerFailure(d, agent, change, block, failed, who);
+    return;
+  }
   switch (block.onFailure) {
     case 'helper': {
       const limit = block.maxRounds ?? 0;
@@ -268,6 +274,80 @@ function routeFailure(
       );
       return;
   }
+}
+
+/** What the lead may do about a tester's failure (ADR-0038 §3). */
+export const TESTER_FAILURE_LINE =
+  "The tester never fixes product code. To fix it, start a helper with start_agent (give it the failure context), decide that helper's change, then call request_review again. Decide the tester's change as usual: merge_change, request_rework, discard_change or ask_owner.";
+
+/**
+ * ADR-0038 §3: the checks on a tester's change failed. `onFailure: 'helper'` means the author:
+ * exactly one known author gets a fix turn (`startAuthorFix`); several, none, or a fix that
+ * cannot start now go to the lead. `lead`: the lead. Either way the lead gets the context, and
+ * the tester's change waits for its decision; the tester is never sent back.
+ */
+function testerFailure(
+  d: Draft,
+  tester: EngineAgent,
+  change: EngineChange,
+  block: ProgramChangeCheckBlock,
+  failed: readonly FailedCheck[],
+  who: string,
+): void {
+  change.state = 'decision';
+  const ctx = checksFailedContext(
+    d,
+    tester,
+    { nodeId: block.nodeId, label: block.label },
+    failureChecks(failed),
+    isHarnessFailure(failed),
+  );
+  const context = renderFailureContext(ctx);
+  let why: string | null = null;
+  if (block.onFailure === 'helper') {
+    const first = ctx.authors[0];
+    const only =
+      ctx.authorsKnown && ctx.authors.length === 1 && first !== undefined
+        ? d.agent(first.agentId)
+        : undefined;
+    if (only !== undefined) {
+      const fix = startAuthorFix(
+        d,
+        only,
+        `Fix the code that makes the checks on ${tester.role}'s tests fail; your block's earlier change touched the files they point at. The failure context below says what failed. Do not weaken or delete the tests.`,
+        context,
+      );
+      if (fix.ok) {
+        notifyLead(
+          d,
+          [
+            `The checks on ${who} failed${names(failed)}. This workflow sends a tester's failures to their author, so ${only.role} is fixing it: a new helper (agentId ${fix.agent.id}) started from the ticket branch. Decide its change as usual, then decide ${tester.role}'s change and call request_review again.`,
+            context,
+          ].join('\n\n'),
+        );
+        return;
+      }
+      why = fix.why;
+    } else {
+      why =
+        ctx.authors.length === 0
+          ? 'no helper change is known'
+          : ctx.authorsKnown
+            ? 'several helpers changed the failing files'
+            : "no helper's change matches the failing files";
+    }
+  }
+  reopenForFix(d);
+  notifyLead(
+    d,
+    [
+      why === null
+        ? `The checks on ${who} failed${names(failed)}. You decide.`
+        : `The checks on ${who} failed${names(failed)}. This workflow sends a tester's failures to their author, but ${why}, so you decide.`,
+      context,
+      TESTER_FAILURE_LINE,
+    ].join('\n\n'),
+  );
 }
 
 /**
