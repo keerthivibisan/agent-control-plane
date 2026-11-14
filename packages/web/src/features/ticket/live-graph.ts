@@ -250,9 +250,13 @@ export function reworkCounts(
   nodes: RunWorkflowGraphDto['nodes'],
   changes: readonly ChangeReviewDto[],
 ): Map<string, number> {
-  const nodeOfAgent = new Map<string, WorkflowNodeId>();
-  for (const n of nodes) for (const id of n.agentRunIds) nodeOfAgent.set(id, n.nodeId);
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const nodeOfAgent = new Map<string, WorkflowNodeId>();
+  for (const n of nodes) {
+    // The Author block lists fixers that belong to their own helper block (ADR-0038 §4).
+    if (byId.get(n.nodeId)?.type === 'author') continue;
+    for (const id of n.agentRunIds) nodeOfAgent.set(id, n.nodeId);
+  }
   const out = new Map<string, number>();
   for (const e of graph.edges) {
     if (e.type !== 'rework') continue;

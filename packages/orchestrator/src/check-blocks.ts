@@ -1,7 +1,7 @@
 import { GitCommitSchema } from '@acp/core';
 import type { CheckRunStatus, ProgramChangeCheckBlock } from '@acp/core';
 import { AGENT_NOTE_LINE } from './agent-note.js';
-import { editorNoteBlocks, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
+import { editorNoteBlocks, inlineLabel, reworkNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { checksFailedContext, renderFailureContext } from './failure-context.js';
 import { reopenForFix, startAuthorFix } from './fix-turn.js';
 import { routeFailure as routeByWhen } from './failure-router.js';
@@ -75,7 +75,7 @@ function lastUtf8(text: string, max: number): string {
 
 function names(failed: readonly FailedCheck[]): string {
   if (failed.length === 0) return '';
-  const shown = failed.slice(0, MAX_FAILED_QUOTED).map((f) => f.name);
+  const shown = failed.slice(0, MAX_FAILED_QUOTED).map((f) => inlineLabel(f.name));
   const more = failed.length - shown.length;
   return `: ${shown.join(', ')}${more > 0 ? ` and ${more} more` : ''}`;
 }

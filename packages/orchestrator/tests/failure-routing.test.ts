@@ -11,6 +11,7 @@ import {
   changeMergeBlocked,
   changeSealed,
   decidePlan,
+  deriveRunWorkflowGraph,
   recordChangeDecision,
   startResolver,
   ticketBranchCreated,
@@ -201,6 +202,40 @@ describe('tests fail at a tester (ADR-0038 §4)', () => {
     ]);
     expect(r.state.fixes).toHaveLength(1);
     expect(r.value).toContain('sends the failures to a fixer');
+  });
+
+  it('the live graph’s Author block lists the fixer found as the author (FR-7)', () => {
+    const g = graphOf(
+      { finals: ['tester'] },
+      { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'])] },
+    );
+    const { s, tester } = testerRunning(g, [['Theme', ['src/theme.ts']]]);
+    expect(deriveRunWorkflowGraph(s).nodes.find((n) => n.nodeId === AUTHOR)).toMatchObject({
+      state: 'waiting',
+      agentRunIds: [],
+    });
+    const r = ok(failingTests(s, tester));
+    const fixer = r.state.fixes?.[0]?.fixerAgentRunId ?? '';
+    const nodes = deriveRunWorkflowGraph(r.state).nodes;
+    expect(nodes.find((n) => n.nodeId === AUTHOR)).toEqual({
+      nodeId: AUTHOR,
+      state: 'active',
+      agentRunIds: [fixer],
+    });
+    // The fixer is still its own block's agent.
+    expect(nodes.find((n) => n.nodeId === POOL)?.agentRunIds).toContain(fixer);
+    // Moved to a helper block, the new fixer is not the author's.
+    const moved = ok(
+      leadTool(
+        r.state,
+        'reroute_fix',
+        { fixId: r.state.fixes?.[0]?.id, to: 'Frontend helper' },
+        'rr',
+      ),
+    );
+    expect(
+      deriveRunWorkflowGraph(moved.state).nodes.find((n) => n.nodeId === AUTHOR)?.agentRunIds,
+    ).toEqual([fixer]);
   });
 
   it('to Author with several authors: the lead decides, with the reason', () => {

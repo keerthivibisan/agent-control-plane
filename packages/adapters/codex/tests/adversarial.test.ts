@@ -17,6 +17,7 @@ import type {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createManagedCodex } from '../src/adapter.js';
 import { codexArgs } from '../src/config.js';
+import { toolInputSchema } from '../src/lead-tools.js';
 import { codexModes } from '../src/modes.js';
 import { collect, FakeAppServer, makeSpec, settle, tempRepo } from './helpers/fake-app-server.js';
 
@@ -340,6 +341,37 @@ describe('ADR-0038 §1: the Codex tester and report_test_results', () => {
         arguments: { status: 'passed', failed: [], summary: 'ok' },
       });
       expect(result.result, kind).toMatchObject({ success: false });
+      expect(leadTools).not.toHaveBeenCalled();
+      handle.abort();
+    }
+  });
+});
+
+describe('FR-7 (F-4, F-5): failure-routing tools on Codex', () => {
+  it('report_test_results: the schema caps the list at 50 and refuses unknown fields', () => {
+    const schema = toolInputSchema('report_test_results');
+    const props = schema['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['failed']?.['maxItems']).toBe(50);
+    expect(schema['additionalProperties']).toBe(false);
+  });
+
+  it('reroute_fix and view_workflow are the lead’s only: offered to no one else, and refused', async () => {
+    for (const kind of ['worker', 'tester', 'reviewer', 'planner', 'researcher'] as const) {
+      const leadTools = vi.fn(() => Promise.resolve('ok'));
+      const { server, handle } = start(makeSpec({ kind, cwd: repo(), leadTools }));
+      await settle();
+      const thread = server.requests('thread/start')[0]?.params ?? {};
+      const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+      for (const tool of ['reroute_fix', 'view_workflow']) {
+        expect(offered, kind).not.toContain(tool);
+        const result = await server.request('item/tool/call', {
+          callId: 'c',
+          namespace: null,
+          tool,
+          arguments: tool === 'reroute_fix' ? { fixId: 'f', to: 'lead' } : {},
+        });
+        expect(result.result, `${kind} ${tool}`).toMatchObject({ success: false });
+      }
       expect(leadTools).not.toHaveBeenCalled();
       handle.abort();
     }

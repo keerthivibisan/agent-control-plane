@@ -320,14 +320,20 @@ export function deriveRunWorkflowGraph(
           state: state.run.status === 'COMPLETED' ? 'done' : stopped(state) ? 'skipped' : 'waiting',
           agentRunIds: [],
         };
-      case 'author':
-        // ADR-0038: a routing block with no agent of its own; its fix turns (FR-5) are the
-        // author's helper's. Until then it only waits, and ends skipped.
+      case 'author': {
+        // ADR-0038: a routing block with no agent of its own. It lists the fixers the router
+        // found as the author (FR-7, from the live run's fixes; a reloaded run has none) and is
+        // active while one of them works; otherwise it waits, and ends skipped.
+        const fixers = authorFixers(state);
+        if (fixers.some((a) => isLiveAgentStatus(a.status))) {
+          return { nodeId: node.id, state: 'active', agentRunIds: ids(fixers) };
+        }
         return {
           nodeId: node.id,
           state: state.run.status === 'COMPLETED' || stopped(state) ? 'skipped' : 'waiting',
-          agentRunIds: [],
+          agentRunIds: ids(fixers),
         };
+      }
     }
   });
   return {
@@ -337,6 +343,14 @@ export function deriveRunWorkflowGraph(
 }
 
 const ids = (agents: readonly EngineAgent[]) => agents.map((a) => a.id);
+
+/** The fixers started as the author of a failure (ADR-0038 §4), oldest first, once each. */
+function authorFixers(state: RunState): EngineAgent[] {
+  const wanted = new Set(
+    (state.fixes ?? []).filter((f) => f.viaAuthor === true).map((f) => f.fixerAgentRunId),
+  );
+  return state.agents.filter((a) => wanted.has(a.id));
+}
 
 function ofNode(state: RunState, kind: EngineAgent['kind'], id: string): EngineAgent[] {
   return state.agents.filter((a) => a.kind === kind && stageOf(a) === id);

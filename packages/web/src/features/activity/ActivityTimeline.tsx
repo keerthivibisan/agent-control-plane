@@ -18,6 +18,7 @@ import {
   GitPullRequest,
   MessageSquareText,
   Play,
+  Route,
   Scale,
   Search,
   UserRound,
@@ -42,6 +43,7 @@ import { ACTIVITY_ID, runNumber } from '../ticket/ticket-state';
 import { activityFromDetail, actorFilters, actorKey } from './activity-from-detail';
 import { ACTIVITY_COPY } from './copy';
 import { RichText } from './RichText';
+import { parseFailureRoutedLine, type FailureRoutedLine } from './failure-routed';
 import { testResultsStatus } from './test-results';
 import { BoxHeader, Marker, Row, Thread } from './timeline-parts';
 
@@ -152,6 +154,53 @@ function TitleWithActor({ item }: { item: Item }) {
       </strong>{' '}
       <span aria-hidden="true">·</span> {item.title}
     </span>
+  );
+}
+
+const ROUTED_TONE: Record<FailureRoutedLine['kind'], 'accent' | 'warning' | 'neutral'> = {
+  'fix-started': 'accent',
+  rerouted: 'accent',
+  'taken-over': 'neutral',
+  'to-lead': 'warning',
+};
+
+/**
+ * ADR-0038 §4 (FR-7): the app's line for a failure routed along a When arrow, as its parts: what
+ * happened, the fixer (or why the lead decides) and the round.
+ */
+function FailureRoutedView({ line, item }: { line: FailureRoutedLine; item: Item }) {
+  const R = A.failureRouted;
+  return (
+    <p
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-dim tabular-nums"
+      data-testid="failure-routed"
+      data-kind={line.kind}
+      title={R.tip}
+    >
+      <Pill tone={ROUTED_TONE[line.kind]} testId="failure-routed-kind">
+        {R[line.kind]}
+      </Pill>
+      <span className="font-medium text-ink">{line.when}</span>
+      {line.who !== null ? (
+        line.kind === 'to-lead' ? (
+          <span>{line.who}</span>
+        ) : (
+          <span>
+            <span className="sr-only">{R.fixer}: </span>
+            <strong className="font-semibold text-ink" data-testid="failure-routed-fixer">
+              {line.who}
+            </strong>
+          </span>
+        )
+      ) : null}
+      {line.round !== null ? (
+        <Pill tone="neutral" testId="failure-routed-round">
+          {R.round(line.round.used, line.round.max)}
+        </Pill>
+      ) : null}
+      <span aria-hidden="true">·</span>
+      <RelativeTime iso={item.at} />
+    </p>
   );
 }
 
@@ -316,6 +365,28 @@ function ItemView({
             <ItemLink item={item} detail={detail} />
           </div>
         </article>
+      </Row>
+    );
+  }
+
+  const routed =
+    item.actor.kind === 'app' && item.type === 'note' && item.body === null
+      ? parseFailureRoutedLine(item.title)
+      : null;
+  if (routed !== null) {
+    return (
+      <Row
+        event
+        author={author}
+        testId="activity-item"
+        data={{ ...data, 'data-activity': '' }}
+        badge={
+          <Marker tone={routed.kind === 'to-lead' ? 'neutral' : 'accent'}>
+            <Route size={14} strokeWidth={1.75} aria-hidden="true" focusable="false" />
+          </Marker>
+        }
+      >
+        <FailureRoutedView line={routed} item={item} />
       </Row>
     );
   }

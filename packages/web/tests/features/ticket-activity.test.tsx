@@ -42,6 +42,7 @@ import {
   commentsTabParts,
 } from '../../src/features/activity/comment-kind';
 import { RichText, safeHref } from '../../src/features/activity/RichText';
+import { parseFailureRoutedLine } from '../../src/features/activity/failure-routed';
 import { testResultsStatus } from '../../src/features/activity/test-results';
 import {
   MAX_ATTACHMENTS_PER_COMMENT,
@@ -544,6 +545,67 @@ describe('the Conversation tab', () => {
     expect(testResultsStatus('Tests passed.\n\nSummary:\nok')).toBe('passed');
     expect(testResultsStatus('(part 1 of 2)\nTests failed: 50 failing tests.')).toBe('failed');
     expect(testResultsStatus('(part 2 of 2)\n- a: b')).toBeNull();
+  });
+
+  it('FR-7: shows a routed failure as its parts: what happened, the fixer and the round', async () => {
+    const routed = {
+      id: 'system:fr',
+      type: 'note',
+      at: '2026-10-22T09:00:40.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'app', label: 'Agent Control Plane', agentRunId: null },
+      title: 'When tests fail at Tester: Theme is fixing it (round 1 of 2). The lead was told.',
+      body: null,
+      link: null,
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, routed]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const line = await within(tab).findByTestId('failure-routed');
+    expect(line.getAttribute('data-kind')).toBe('fix-started');
+    expect(within(line).getByTestId('failure-routed-kind').textContent).toBe('Fix started');
+    expect(within(line).getByTestId('failure-routed-fixer').textContent).toBe('Theme');
+    expect(within(line).getByTestId('failure-routed-round').textContent).toBe('Round 1 of 2');
+    expect(line.textContent).toContain('When tests fail at Tester');
+  });
+
+  it('FR-7: reads every routed-failure line the server writes, and nothing else', () => {
+    expect(
+      parseFailureRoutedLine(
+        'When checks fail at Frontend checks: the lead moved the fix to Backend (round 2 of 3).',
+      ),
+    ).toEqual({
+      kind: 'rerouted',
+      when: 'When checks fail at Frontend checks',
+      who: 'Backend',
+      round: { used: 2, max: 3 },
+    });
+    expect(
+      parseFailureRoutedLine('When a merge conflicts: the lead took the fix over (round 1 of 2).'),
+    ).toMatchObject({ kind: 'taken-over', who: null, round: { used: 1, max: 2 } });
+    expect(
+      parseFailureRoutedLine(
+        'When tests fail at Tester: the lead decides, as its fix rounds are used up (round 2 of 2).',
+      ),
+    ).toMatchObject({ kind: 'to-lead', who: 'its fix rounds are used up' });
+    expect(
+      parseFailureRoutedLine(
+        'When tests fail at Tester: the lead decides, as the workflow sends it to the lead.',
+      ),
+    ).toMatchObject({ kind: 'to-lead', round: null });
+    expect(parseFailureRoutedLine('Merged Theme into acp/WEB-12.')).toBeNull();
+    expect(parseFailureRoutedLine('When x: y is fixing it.\nThe lead was told.')).toBeNull();
+    // From the ticket's own records too: a one-line system comment that is no merge is a note.
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'sys',
+      author: 'app',
+      kind: 'system',
+      body: 'When tests fail at Tester: Theme is fixing it (round 1 of 2). The lead was told.',
+    });
+    const [item] = activityFromDetail({ ...detail, comments: [comment] }).filter(
+      (i) => i.id === 'comment-sys',
+    );
+    expect(item).toMatchObject({ type: 'note', body: null });
   });
 
   it('filters by actor with pressed chips', async () => {

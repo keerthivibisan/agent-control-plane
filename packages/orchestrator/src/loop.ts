@@ -16,6 +16,7 @@ import { runLimits } from './limits.js';
 import {
   editorNoteBlocks,
   findingsNoteBlocks,
+  inlinePath,
   reviewNoteBlocks,
   reworkNoteBlocks,
   withOwnerNotes,
@@ -898,7 +899,7 @@ function reworkPrompt(
     `${who} reviewed your change and asks for rework (${roundText}):`,
     comments,
     change.conflictFiles.length > 0
-      ? `Your change also conflicts with ${branch} in: ${change.conflictFiles.join(', ')}. Bring those files in line with ${branch}.`
+      ? `Your change also conflicts with ${branch} in: ${change.conflictFiles.map(inlinePath).join(', ')}. Bring those files in line with ${branch}.`
       : null,
     `Work in the same copy of the project as before. Your task was: ${agent.task ?? '(no task text)'}`,
     'When you are done, end your turn: your change is reviewed again.',
@@ -1197,7 +1198,9 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
   }
   lines.push(`Required checks: ${checks}.`);
   if (change.conflictFiles.length > 0) {
-    lines.push(`Conflicting files on the last merge attempt: ${change.conflictFiles.join(', ')}.`);
+    lines.push(
+      `Conflicting files on the last merge attempt: ${change.conflictFiles.map(inlinePath).join(', ')}.`,
+    );
   }
   lines.push(
     'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner (with a question).',

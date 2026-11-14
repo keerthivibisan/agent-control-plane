@@ -1,6 +1,7 @@
 import { GitCommitSchema, TicketBranchNameSchema } from '@acp/core';
 import type { ChangeDecider } from '@acp/core';
 import type { TicketBranchActionRequest } from '@acp/core/api';
+import { inlineLabel, inlinePath } from './arrow-notes.js';
 import { startChangeChecks } from './check-blocks.js';
 import { routeFailure as routeByWhen } from './failure-router.js';
 import type { RouteOutcome } from './failure-router.js';
@@ -440,7 +441,7 @@ export function changeMergeBlocked(
         const files = blocked.files.slice(0, MAX_LISTED);
         change.conflictFiles = files;
         // ADR-0038 §4 (FR-5): the owner's When arrow for merge conflicts routes it first.
-        const head = `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.join(', ')}` : ''}.`;
+        const head = `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.map(inlinePath).join(', ')}` : ''}.`;
         const routed = routeByWhen(d, {
           context: mergeConflictContext(d, agent, `the merge into ${branch}`, files),
           sourceNodeId: undefined,
@@ -452,7 +453,7 @@ export function changeMergeBlocked(
         if (routed.kind !== 'none') return { value: routedReply(head, routed) };
         return {
           value: [
-            `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.join(', ')}` : ''}. Ask for rework to resolve it, discard it, or ask the owner.`,
+            `${role}'s change conflicts with ${branch}${files.length > 0 ? ` in: ${files.map(inlinePath).join(', ')}` : ''}. Ask for rework to resolve it, discard it, or ask the owner.`,
             // ADR-0038 §2: the context names the helpers whose merged changes touched those files.
             renderFailureContext(mergeConflictContext(d, agent, `the merge into ${branch}`, files)),
           ].join('\n\n'),
@@ -466,7 +467,7 @@ export function changeMergeBlocked(
       case 'checks-failed': {
         change.checks = 'failed';
         const failed = blocked.failed.slice(0, MAX_LISTED);
-        const text = `Required checks failed on ${role}'s change${failed.length > 0 ? `: ${failed.join(', ')}` : ''}.`;
+        const text = `Required checks failed on ${role}'s change${failed.length > 0 ? `: ${failed.map(inlineLabel).join(', ')}` : ''}.`;
         const routed = routeMergeChecks(d, agent, text, failed);
         if (routed.kind !== 'none') return { value: routedReply(text, routed) };
         const context = mergeChecksContext(d, agent, failed);
@@ -550,12 +551,12 @@ export function checksFinished(
       // ADR-0027 §5: the block before the merge sends a failed change to the owner.
       notifyLead(
         d,
-        `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. ${toOwner(d, agent, change)}\n\n${mergeChecksContext(d, agent, failed)}`,
+        `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.map(inlineLabel).join(', ')}` : ''}. ${toOwner(d, agent, change)}\n\n${mergeChecksContext(d, agent, failed)}`,
       );
       return done;
     }
     if (!result.requiredPassed) {
-      const text = `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}.`;
+      const text = `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.map(inlineLabel).join(', ')}` : ''}.`;
       // ADR-0038 §4 (FR-5): the router tells the lead itself.
       if (routeMergeChecks(d, agent, text, failed).kind !== 'none') return done;
     }
@@ -563,7 +564,7 @@ export function checksFinished(
       d,
       result.requiredPassed
         ? `The required checks passed on ${agent.role}'s change (agentId ${agent.id}, commit ${result.commit}). Call merge_change to merge it.`
-        : `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.join(', ')}` : ''}. Ask for rework, discard it, or ask the owner.\n\n${mergeChecksContext(d, agent, failed)}`,
+        : `Required checks failed on ${agent.role}'s change (agentId ${agent.id})${failed.length > 0 ? `: ${failed.map(inlineLabel).join(', ')}` : ''}. Ask for rework, discard it, or ask the owner.\n\n${mergeChecksContext(d, agent, failed)}`,
     );
     return done;
   });

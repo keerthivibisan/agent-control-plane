@@ -6,7 +6,7 @@ import { refusal } from './errors.js';
 import { mergeConflictContext, renderFailureContext } from './failure-context.js';
 import { purposeBlocks, whenRouteFor } from './failure-router.js';
 import { notifyLead } from './loop.js';
-import { withOwnerNotes } from './arrow-notes.js';
+import { inlinePath, withOwnerNotes } from './arrow-notes.js';
 import type { Draft } from './draft.js';
 import { programOf } from './program.js';
 import { launchFieldsFor, nodeProvider } from './stages.js';
@@ -65,7 +65,7 @@ export function resolverBrief(input: StartResolverInput): string {
       : `\n\nThe previous result failed these checks; fix the cause: ${input.failedChecks.join(', ')}.`;
   return [
     `Resolve a merge conflict (attempt ${input.attempt} of ${input.maxAttempts}). The app merged ${input.targetBranch} (${input.targetCommit.slice(0, 12)}) into the ticket branch ${input.ticketBranch} (${input.ticketCommit.slice(0, 12)}) in this folder, and git left conflicts in:`,
-    `${files.map((f) => `- ${f}`).join('\n')}${more}`,
+    `${files.map((f) => `- ${inlinePath(f)}`).join('\n')}${more}`,
     "Edit each file so it keeps both the ticket's intended behaviour and the target's: do not simply take one side, do not restore what the target deliberately removed, and leave no conflict markers (<<<<<<<, =======, >>>>>>>). You may adjust neighbouring files when the combination needs it. Read both sides with `git diff`, `git log` or `git show <commit>:<path>`." +
       previous +
       failed,

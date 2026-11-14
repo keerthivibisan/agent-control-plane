@@ -99,6 +99,16 @@ export const ACTIVITY_COPY = {
     'What the tester reported after running the tests: the status, each failing test with its file, and a summary. The lead decides who fixes a failure; the tester never fixes product code.',
   testsPassed: 'Passed',
   testsFailed: 'Failed',
+  /** ADR-0038 §4 (FR-7): a failure routed along a When arrow. */
+  failureRouted: {
+    'fix-started': 'Fix started',
+    rerouted: 'Fix moved',
+    'taken-over': 'Lead took over',
+    'to-lead': 'Lead decides',
+    fixer: 'Fixer',
+    round: (used: number, max: number) => `Round ${formatCount(used)} of ${formatCount(max)}`,
+    tip: 'A failure travelled along a When arrow of this workflow. The lead is told about every fix and may move or stop it.',
+  },
   /** Labels the page uses for actors in what it reads from the ticket's own comments. */
   actor: {
     owner: 'You',

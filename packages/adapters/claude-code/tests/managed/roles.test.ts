@@ -322,6 +322,22 @@ describe('tester (ADR-0019): a normal worker', () => {
     }
   });
 
+  it('FR-7 (F-4): the gate allows reroute_fix and view_workflow to the lead only', async () => {
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    for (const name of ['reroute_fix', 'view_workflow']) {
+      const lead = canUseTool(optionsFor(spec('lead'), callbacks()));
+      await expect(lead(`mcp__acp__${name}`, {}, ours), name).resolves.toMatchObject({
+        behavior: 'allow',
+      });
+      for (const kind of ['worker', 'tester', 'reviewer', 'planner', 'researcher'] as const) {
+        const gate = canUseTool(optionsFor(spec(kind), callbacks()));
+        await expect(gate(`mcp__acp__${name}`, {}, ours), `${kind} ${name}`).resolves.toMatchObject(
+          { behavior: 'deny' },
+        );
+      }
+    }
+  });
+
   it('closes its input after the turn, like a worker', async () => {
     const { events, stillOpen } = await oneTurn('tester');
     expect(stillOpen).toBe(false);

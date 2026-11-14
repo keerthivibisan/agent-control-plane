@@ -193,6 +193,11 @@ export interface EngineFix {
   sourceNodeId: string | null;
   /** The route's rounds key (`failureRounds`): the When arrow and the failure's lineage. */
   roundsKey: string;
+  /**
+   * The failure's lineage: the first failing change's agent id (or `ticket`). A fixer's own later
+   * failures keep it, so a chain of new fixers never gets fresh rounds (FR-7).
+   */
+  lineage: string;
   /** The agent whose change failed, when the failure is about one. */
   changeAgentId?: string;
   /** The agent doing the fix: the change's own helper (`rework`) or a new helper (`new`). */
@@ -203,6 +208,10 @@ export interface EngineFix {
   maxRounds: number;
   /** `running` until the lead moves it (`reroute_fix`): `rerouted` or `taken-over`. */
   status: 'running' | 'rerouted' | 'taken-over';
+  /** The lead already moved this round's fix to a helper once (`reroute_fix`; FR-7 bound). */
+  moved?: true;
+  /** The fixer was found as the author (a route or a move to Author): the live graph's Author block. */
+  viaAuthor?: true;
   /** The rendered failure context (quoted data), for a reroute. */
   context: string;
   /** The one known author's block and role at the failure, for a reroute to `author`. */

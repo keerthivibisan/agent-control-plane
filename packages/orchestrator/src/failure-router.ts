@@ -39,11 +39,12 @@ import { isActiveAgentStatus } from './transitions.js';
  * - Target the Lead: the lead gets the context and the arrow's purpose, and decides.
  *
  * Rounds count per When arrow and failure lineage (the failing change, or the ticket branch for a
- * merge conflict without one): a fix turn uses one; once `maxRounds` are used the failure goes to
- * the lead ("rounds used up"). A fix that cannot start now (no helper slot, no room in the block,
- * the helper over budget or busy, the run not going) is not queued: it goes to the lead with the
- * reason, like today's direct rework. The lead is told about every fix with the context, and may
- * move it (`reroute_fix`) or stop it.
+ * merge conflict without one; a fixer's change keeps the lineage of the fix it was started for):
+ * a fix turn uses one; once `maxRounds` are used the failure goes to the lead ("rounds used up").
+ * A fix that cannot start now (no helper slot, no room in the block, the helper over budget or
+ * busy, the run not going) is not queued: it goes to the lead with the reason, like today's direct
+ * rework. The lead is told about every fix with the context, and may move it (`reroute_fix`, once
+ * per round to a helper; moving uses no round) or stop it.
  */
 
 /** The owner's When route for `event` at `sourceNodeId` (any source when undefined), if any. */
@@ -103,6 +104,18 @@ export function purposeBlocks(route: Pick<ProgramFailureRoute, 'label' | 'purpos
   return [
     `Owner's note on this ${arrowName(route)} (${OWNER_NOTE_DATA}):\n${quote(route.purpose)}`,
   ];
+}
+
+/**
+ * The failure's lineage for rounds (FR-7): a fixer's own change inherits the lineage of the fix
+ * it was started for, so a chain of fixers (a fixer's change failing again, moved or not) keeps
+ * counting the same rounds instead of starting fresh ones.
+ */
+function lineageOf(d: Draft, input: FailureInput): string {
+  const changeId = input.change?.id;
+  if (changeId === undefined) return input.lineage;
+  const fix = d.fixes?.find((f) => f.fixerAgentRunId === changeId);
+  return fix?.lineage ?? input.lineage;
 }
 
 function roundsKeyOf(route: ProgramFailureRoute, lineage: string): string {
@@ -218,7 +231,8 @@ export function routeFailure(d: Draft, input: FailureInput): RouteOutcome {
       undefined,
     );
   }
-  const roundsKey = roundsKeyOf(route, input.lineage);
+  const lineage = lineageOf(d, input);
+  const roundsKey = roundsKeyOf(route, lineage);
   const used = d.failureRounds?.[roundsKey] ?? 0;
   if (used >= route.maxRounds) {
     return toLead(
@@ -304,6 +318,7 @@ export function routeFailure(d: Draft, input: FailureInput): RouteOutcome {
     event: eventOf(input),
     sourceNodeId: input.sourceNodeId ?? null,
     roundsKey,
+    lineage,
     ...(own !== undefined ? { changeAgentId: own.id } : {}),
     fixerAgentRunId: fixer.id,
     targetNodeId: target.nodeId,
@@ -313,6 +328,7 @@ export function routeFailure(d: Draft, input: FailureInput): RouteOutcome {
     status: 'running',
     context: renderFailureContext(input.context),
     ...soleAuthorOf(d, input.context),
+    ...(route.target.kind === 'author' ? { viaAuthor: true as const } : {}),
     ...(route.label !== undefined ? { label: route.label } : {}),
     ...(route.purpose !== undefined ? { purpose: route.purpose } : {}),
   };
@@ -416,6 +432,14 @@ export function rerouteFix(
     }
     const program = programOf(d);
     const to = input.to.trim();
+    // FR-7: moving uses no round, so a fix moves to a helper at most once per round; otherwise
+    // moves could start fixers without end. Taking it over stays possible.
+    if (fix.moved === true && to.toLowerCase() !== 'lead') {
+      return refusal(
+        'invalid-input',
+        'This fix was already moved once in this round. Take it over (to: lead), stop it, or let it finish.',
+      );
+    }
     let target: { nodeId: WorkflowNodeId; role: string } | 'lead';
     if (to.toLowerCase() === 'lead') target = 'lead';
     else if (to.toLowerCase() === 'author') {
@@ -483,13 +507,16 @@ export function rerouteFix(
       ],
     );
     if (self !== undefined) self.status = 'rerouted';
+    const { viaAuthor: _was, ...rest } = fix;
     const next: EngineFix = {
-      ...fix,
+      ...rest,
+      ...(to.toLowerCase() === 'author' ? { viaAuthor: true as const } : {}),
       id: d.freshId(),
       fixerAgentRunId: moved.id,
       targetNodeId: target.nodeId,
       mode: 'new',
       status: 'running',
+      moved: true,
     };
     d.fixes = [...(d.fixes ?? []), next];
     d.effects.push({

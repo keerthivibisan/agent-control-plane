@@ -98,6 +98,11 @@ describe('P3-B lead tools (ADR-0012)', () => {
         summary: 'x',
       }).success,
     ).toBe(false);
+    // FR-7 (F-5): at most 50 failing tests.
+    const item = { test: 't', file: 'src/a.test.ts', message: 'm' };
+    const many = (n: number) => ({ status: 'failed', failed: Array(n).fill(item), summary: 'x' });
+    expect(fields.safeParse(many(50)).success).toBe(true);
+    expect(fields.safeParse(many(51)).success).toBe(false);
     const input = {
       status: 'failed',
       failed: [{ test: 'adds', file: 'src/a.test.ts', message: 'expected 2' }],

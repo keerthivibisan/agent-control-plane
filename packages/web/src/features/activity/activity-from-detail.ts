@@ -84,10 +84,15 @@ function itemOf(
       return { ...base, type: 'run-facts', title: D.runFacts };
     case 'system': {
       const note = parseMergeLine(comment.body);
+      const line = comment.body.trim();
+      // FR-7: a one-line system comment that is no merge (a routed failure) is a note, as the
+      // server's activity reads it, so the timeline shows it as a routed failure.
+      const plain = note === null && !line.includes('\n');
       return {
         ...base,
-        type: note?.kind === 'pr-pushed' ? 'pull-request' : 'merge',
-        title: comment.body.trim().slice(0, 300) || D.system,
+        type: plain ? 'note' : note?.kind === 'pr-pushed' ? 'pull-request' : 'merge',
+        title: line.slice(0, 300) || D.system,
+        body: plain ? null : base.body,
       };
     }
     // `note`; the Comments tab kinds never reach here.
