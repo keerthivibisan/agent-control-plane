@@ -292,6 +292,10 @@ export const EDITOR_COPY = {
       }
     },
     roundsOut: 'When the rounds run out, the lead decides.',
+    /** ADR-0038 §4 (amended 2026-11-14): the tester runs again after a merged fix. */
+    retest: 'Test again after the fix',
+    retestHint:
+      'Once the fixer’s change is merged, this tester runs again. A failing retest uses the next fix round.',
     /** The arrow's words on the canvas: its events, then its rounds. */
     canvas: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
   },

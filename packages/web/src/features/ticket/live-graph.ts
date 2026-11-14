@@ -331,6 +331,7 @@ export function buildLiveGraph(
   const view = finishView(graph);
   const byId = new Map(view.graph.nodes.map((n) => [n.id, n]));
   const target = run.ticketBranch?.baseBranch ?? null;
+  const whenUsed = new Map((dto.whenRounds ?? []).map((r) => [r.edgeId, r]));
 
   const nodes = view.graph.nodes.map((node): LiveBlock => {
     const live = states.get(node.id);
@@ -377,7 +378,7 @@ export function buildLiveGraph(
           ? G.directRework(reworks)
           : G.rework(reworks)
         : e.type === 'when'
-          ? whenLabel(e)
+          ? whenLabel(e, whenUsed.get(e.id))
           : (e.label ?? undefined);
     const purpose = e.purpose ?? null;
     return {
@@ -433,13 +434,20 @@ export function buildLiveGraph(
   };
 }
 
-/** A When link's words: the owner's label first, then its events and rounds. */
-function whenLabel(e: Extract<WorkflowEdgeV3, { type: 'when' }>): string {
+/**
+ * A When link's words: the owner's label first, then its events and rounds, and the rounds it
+ * used in this run once it started a fix (`RunWorkflowGraphDto.whenRounds`).
+ */
+function whenLabel(
+  e: Extract<WorkflowEdgeV3, { type: 'when' }>,
+  used: { used: number; maxRounds: number } | undefined,
+): string {
   const words = G.when(
     e.on.map((ev) => FAILURE_EVENT_NAMES[ev]),
     e.maxRounds,
   );
-  return e.label === undefined ? words : `${e.label} · ${words}`;
+  const all = used === undefined ? words : `${words} · ${G.whenUsed(used.used, used.maxRounds)}`;
+  return e.label === undefined ? all : `${e.label} · ${all}`;
 }
 
 /** A block's name in a link's spoken name: the Finish block by its title. */

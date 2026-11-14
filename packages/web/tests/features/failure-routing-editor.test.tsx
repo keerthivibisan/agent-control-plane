@@ -544,5 +544,93 @@ describe('the live run graph', () => {
     expect(link?.label).toBe('checks fail ×3');
     expect(link?.className).toBe('live-link-when');
     expect(link?.style?.stroke).toBe('var(--color-danger)');
+    // ADR-0038 §4 (amended 2026-11-14): the rounds it used in this run, once it started a fix.
+    const used = buildLiveGraph(
+      {
+        ...raw,
+        graph: withRoute,
+        whenRounds: [{ edgeId: 'when-checks-author', used: 1, maxRounds: 3 }],
+      },
+      runDto,
+    );
+    expect(used.edges.find((e) => e.id === 'when-checks-author')?.label).toBe(
+      'checks fail ×3 · round 1 of 3',
+    );
+  });
+});
+
+describe('the tester runs again after a routed fix (ADR-0038 §4, amended 2026-11-14)', () => {
+  function testerArrow() {
+    const g = withTesterAndAuthor();
+    const linked = run(
+      g,
+      { type: 'connect', from: testerId(g), to: 'author', edgeType: 'when' },
+      { type: 'connect', from: 'checks', to: 'helpers', edgeType: 'when' },
+    );
+    const [fromTester, fromChecks] = whenEdges(linked.graph);
+    if (fromTester === undefined || fromChecks === undefined) throw new Error('arrows missing');
+    return { linked, fromTester, fromChecks };
+  }
+
+  it('the switch is on by default; off stores retest false, on drops it again', () => {
+    const { linked, fromTester } = testerArrow();
+    expect(fromTester).not.toHaveProperty('retest');
+    const off = editorReducer(linked, {
+      type: 'set-when-retest',
+      id: fromTester.id,
+      retest: false,
+    });
+    expect(whenEdges(off.graph)[0]?.retest).toBe(false);
+    expect(errorCodes(off.graph)).toEqual(errorCodes(linked.graph));
+    const on = editorReducer(off, { type: 'set-when-retest', id: fromTester.id, retest: true });
+    expect(whenEdges(on.graph)[0]).not.toHaveProperty('retest');
+    // Only a When arrow has it.
+    const flow = linked.graph.edges.find((e) => e.type !== 'when');
+    if (flow === undefined) throw new Error('no other link');
+    expect(editorReducer(linked, { type: 'set-when-retest', id: flow.id, retest: false })).toBe(
+      linked,
+    );
+  });
+
+  it('the panel offers it on a tester’s When arrow only, and the words follow it', () => {
+    const { linked, fromTester, fromChecks } = testerArrow();
+    const actions: EditorAction[] = [];
+    const view = render(
+      <EdgePanel
+        edge={fromTester}
+        graph={linked.graph}
+        issues={[]}
+        dispatch={(a) => actions.push(a)}
+        onClose={() => undefined}
+      />,
+    );
+    const box = screen.getByTestId<HTMLInputElement>('when-retest');
+    expect(box.checked).toBe(true);
+    expect(screen.getByLabelText(/Test again after the fix/)).toBe(box);
+    fireEvent.click(box);
+    expect(actions).toEqual([{ type: 'set-when-retest', id: fromTester.id, retest: false }]);
+    view.unmount();
+    render(
+      <EdgePanel
+        edge={fromChecks}
+        graph={linked.graph}
+        issues={[]}
+        dispatch={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.queryByTestId('when-retest')).toBeNull();
+    const words = (g: WorkflowGraphV3) =>
+      describeWorkflow(g)
+        .filter((x) => x.section === 'failures' && x.edgeId === fromTester.id)
+        .map((x) => x.text)
+        .join('\n');
+    expect(words(linked.graph)).toContain('tests again');
+    const off = editorReducer(linked, {
+      type: 'set-when-retest',
+      id: fromTester.id,
+      retest: false,
+    });
+    expect(words(off.graph)).not.toContain('tests again');
   });
 });

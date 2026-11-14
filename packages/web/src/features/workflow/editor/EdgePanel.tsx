@@ -119,6 +119,23 @@ function WhenFields({
         onChange={(maxRounds) => dispatch({ type: 'set-rounds', id: edge.id, maxRounds })}
         valueText={WN.roundsValue}
       />
+      {raised.includes('tests-failed') && receiver.kind !== 'lead' ? (
+        <label className="flex cursor-pointer items-start gap-2.5 text-body">
+          <input
+            type="checkbox"
+            className="mt-1 accent-accent"
+            checked={edge.retest !== false}
+            onChange={(e) =>
+              dispatch({ type: 'set-when-retest', id: edge.id, retest: e.target.checked })
+            }
+            data-testid="when-retest"
+          />
+          <span className="flex flex-col">
+            <span className="text-ink">{WN.retest}</span>
+            <span className={hintClass}>{WN.retestHint}</span>
+          </span>
+        </label>
+      ) : null}
       <p
         className="rounded-control border border-line bg-sunken px-3 py-2.5 text-caption text-dim"
         data-testid="when-receives"

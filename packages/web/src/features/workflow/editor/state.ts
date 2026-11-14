@@ -147,6 +147,8 @@ export type EditorAction =
   | { type: 'add-author' }
   /** A When arrow's events; an empty list is ignored (an arrow routes at least one). */
   | { type: 'set-when-events'; id: string; on: readonly FailureEvent[] }
+  /** A When arrow's retest after a merged fix (ADR-0038 §4, amended 2026-11-14); on by default. */
+  | { type: 'set-when-retest'; id: string; retest: boolean }
   /** Adds a Checks block on a change (linked from `near` when it may be) or on the branch. */
   | { type: 'add-checks'; place: CheckBlockItem; near?: WorkflowNodeId | undefined }
   /** Moves a Checks block between a change and the branch, rewiring it; never the merge block. */
@@ -878,7 +880,12 @@ function keepRounds(graph: Graph, made: GraphEdge, old: GraphEdge): GraphEdge {
   if (made.type === 'when' && old.type === 'when') {
     const raised = sourceEvents(graph, made.from);
     const on = old.on.filter((e) => raised.includes(e));
-    return { ...made, maxRounds: old.maxRounds, ...(on.length > 0 ? { on } : {}) };
+    return {
+      ...made,
+      maxRounds: old.maxRounds,
+      ...(on.length > 0 ? { on } : {}),
+      ...(old.retest === false ? { retest: false } : {}),
+    };
   }
   return made;
 }
@@ -1028,6 +1035,21 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
         graph: custom({
           ...g,
           edges: g.edges.map((e) => (e.id === action.id && e.type === 'when' ? { ...e, on } : e)),
+        }),
+        refusal: null,
+      };
+    }
+    case 'set-when-retest': {
+      const edge = g.edges.find((e) => e.id === action.id);
+      if (edge?.type !== 'when') return state;
+      // Absent means on, so switching it back on drops the field.
+      const { retest: _old, ...rest } = edge;
+      const next = action.retest ? rest : { ...rest, retest: false };
+      return {
+        ...state,
+        graph: custom({
+          ...g,
+          edges: g.edges.map((e) => (e.id === action.id ? next : e)),
         }),
         refusal: null,
       };

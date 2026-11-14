@@ -3403,6 +3403,8 @@ export const WORKFLOW_LIVE_COPY = {
     directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
     /** ADR-0038 §4: a When link's events and rounds, and the Author block's fixer. */
     when: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
+    /** ADR-0038 §4 (amended 2026-11-14): the fix rounds a When link used in this run. */
+    whenUsed: (used: number, max: number) => `round ${used} of ${max}`,
     authorWaiting: 'Found when a fix runs',
     authorFixing: (role: string) => `Fixing: ${role}`,
     links: {
