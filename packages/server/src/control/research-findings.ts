@@ -36,3 +36,12 @@ export function researchCommentBodies(text: string): string[] {
   if (rest.length > 0) chunks.push(rest);
   return chunks.map((chunk, i) => `(part ${i + 1} of ${chunks.length})\n${chunk}`);
 }
+
+/**
+ * ADR-0038 §1: a tester's test results (status line, summary, up to 50 failing tests) as the
+ * bodies of its ticket comments of kind `test-results`, split the same way when longer than one
+ * comment body.
+ */
+export function testResultsCommentBodies(text: string): string[] {
+  return researchCommentBodies(text);
+}

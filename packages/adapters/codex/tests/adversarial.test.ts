@@ -286,6 +286,66 @@ describe('CX-7 C6: a Codex worker cannot call lead-only tools', () => {
   });
 });
 
+describe('ADR-0038 §1: the Codex tester and report_test_results', () => {
+  it('offers report_test_results with its schema and passes a call to the engine', async () => {
+    const leadTools = vi.fn(() => Promise.resolve('recorded'));
+    const { server, handle } = start(makeSpec({ kind: 'tester', cwd: repo(), leadTools }));
+    await settle();
+    const thread = server.requests('thread/start')[0]?.params ?? {};
+    const tools = thread['dynamicTools'] as {
+      name: string;
+      inputSchema: Record<string, unknown>;
+    }[];
+    expect(tools.map((t) => t.name)).toEqual([
+      'report_test_results',
+      'report_work',
+      'ask_lead',
+      'code_map',
+    ]);
+    const schema = tools[0]?.inputSchema ?? {};
+    expect(Object.keys(schema['properties'] as Record<string, unknown>)).toEqual([
+      'status',
+      'failed',
+      'summary',
+    ]);
+    expect(schema['additionalProperties']).toBe(false);
+    const input = {
+      status: 'failed',
+      failed: [{ test: 'adds', file: 'src/a.test.ts', message: 'expected 2' }],
+      summary: '1 failed.',
+    };
+    const call = (tool: string, args: object, namespace: string | null = null) =>
+      server.request('item/tool/call', { callId: 'c', namespace, tool, arguments: args });
+    expect((await call('report_test_results', input)).result).toMatchObject({ success: true });
+    expect(leadTools).toHaveBeenCalledWith('report_test_results', input);
+    // A namespaced spelling is not the tool.
+    expect((await call('report_test_results', input, 'acp')).result).toMatchObject({
+      success: false,
+    });
+    handle.abort();
+  });
+
+  it('adversarial: no other role is offered report_test_results, and its call is success:false', async () => {
+    for (const kind of ['worker', 'reviewer', 'planner', 'researcher', 'lead'] as const) {
+      const leadTools = vi.fn(() => Promise.resolve('ok'));
+      const { server, handle } = start(makeSpec({ kind, cwd: repo(), leadTools }));
+      await settle();
+      const thread = server.requests('thread/start')[0]?.params ?? {};
+      const offered = (thread['dynamicTools'] as { name: string }[]).map((t) => t.name);
+      expect(offered, kind).not.toContain('report_test_results');
+      const result = await server.request('item/tool/call', {
+        callId: 'c',
+        namespace: null,
+        tool: 'report_test_results',
+        arguments: { status: 'passed', failed: [], summary: 'ok' },
+      });
+      expect(result.result, kind).toMatchObject({ success: false });
+      expect(leadTools).not.toHaveBeenCalled();
+      handle.abort();
+    }
+  });
+});
+
 describe('ADR-0037 §3: the Codex researcher', () => {
   it('runs read-only, offers report_findings, ask_lead and code_map, and its instructions', async () => {
     const leadTools = vi.fn(() => Promise.resolve('recorded'));

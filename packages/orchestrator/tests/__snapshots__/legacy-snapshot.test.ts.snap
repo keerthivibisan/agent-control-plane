@@ -2122,7 +2122,9 @@ The approved plan (v1): Add a theme store and a settings toggle.
 Merged work:
 - UI: Do the thing
 
-You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.
+You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast, then run the tests.
+
+Do not change product code: a failing test is a finding for the lead, not something for you to fix. When the tests have run, call report_test_results once with the result: status passed or failed, each failing test with its repository-relative file and a short message, and a short summary. Then call report_work and end your turn.
 
 The owner reviews and merges your change like the helpers’ changes, after the project’s checks.
 
@@ -2314,6 +2316,7 @@ Before you finish, call report_work with 2 to 4 plain sentences on what you did 
   },
   {
     "result": [
+      "report_test_results",
       "report_work",
       "ask_lead",
       "code_map",

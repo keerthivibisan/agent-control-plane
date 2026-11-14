@@ -90,6 +90,7 @@ export {
 export { noChangeLine } from './change-commands.js';
 export { reportWork } from './report-tool.js';
 export { cleanFindings, reportFindings } from './findings-tool.js';
+export { reportTestResults, testResultsText, testTurnOf } from './test-results-tool.js';
 export {
   HANDOFF_DATA_LINE,
   MAX_OUTPUT_NOTE_CHARS,
@@ -182,6 +183,7 @@ export {
   ROLE_STAGE,
   SKILLS_PLUGIN_NAME,
   TESTER_TASK,
+  TEST_RESULTS_LINE,
   changeReviewerBrief,
   changeReviewerLaunchFields,
   finalStageRole,

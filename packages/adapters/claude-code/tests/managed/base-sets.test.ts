@@ -200,7 +200,8 @@ describe('role base sets: the SDK tools option (ADR-0019 §7)', () => {
       reviewer: [['post_review', 'ask_lead', 'code_map']],
       // ADR-0026 §3: the helper's and tester's note; ADR-0033 §3: their question to the lead.
       worker: [['report_work', 'ask_lead', 'code_map']],
-      tester: [['report_work', 'ask_lead', 'code_map']],
+      // ADR-0038 §1: plus the tester's structured test results.
+      tester: [['report_work', 'ask_lead', 'report_test_results', 'code_map']],
       // ADR-0035: the assistant's four tools and the code map; never a ticket control tool.
       assistant: [['code_map', 'ticket_status', 'project_info', 'propose_skill', 'propose_agent']],
       // ADR-0037 §3: the researcher's findings note, its question to the lead and the code map.

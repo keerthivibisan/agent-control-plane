@@ -1,6 +1,7 @@
 import { LEAD_TOOL_NAMES } from '@acp/core';
 import type { LeadToolName } from '@acp/core';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createLeadToolServer, leadToolDefinitions } from '../../src/managed/lead-tools.js';
 
 // createSdkMcpServer and tool() build an in-process MCP server; neither starts Claude.
@@ -70,6 +71,42 @@ describe('P3-B lead tools (ADR-0012)', () => {
     const text = JSON.stringify(res);
     expect(text).toContain('limit reached');
     expect(text).not.toContain('sk-ant-');
+  });
+
+  it('ADR-0038 §1: report_test_results takes status, failed and summary', async () => {
+    const calls: [LeadToolName, unknown][] = [];
+    const tools = leadToolDefinitions(
+      (name, input) => {
+        calls.push([name, input]);
+        return Promise.resolve('recorded');
+      },
+      ['report_test_results'],
+    );
+    const t = tools[0];
+    expect(t?.name).toBe('report_test_results');
+    expect(t?.description).toContain('before report_work');
+    const shape = (t?.inputSchema ?? {}) as Record<string, z.ZodType>;
+    expect(Object.keys(shape)).toEqual(['status', 'failed', 'summary']);
+    // The SDK checks each field with these schemas; the engine checks the whole call again.
+    const fields = z.object(shape);
+    expect(fields.safeParse({ status: 'failed', failed: [], summary: 'x' }).success).toBe(true);
+    expect(fields.safeParse({ status: 'broken', failed: [], summary: 'x' }).success).toBe(false);
+    expect(
+      fields.safeParse({
+        status: 'failed',
+        failed: [{ test: 't', file: '../../etc/passwd', message: 'm' }],
+        summary: 'x',
+      }).success,
+    ).toBe(false);
+    const input = {
+      status: 'failed',
+      failed: [{ test: 'adds', file: 'src/a.test.ts', message: 'expected 2' }],
+      summary: '1 of 3 failed.',
+    };
+    await expect(t?.handler(input, {})).resolves.toEqual({
+      content: [{ type: 'text', text: 'recorded' }],
+    });
+    expect(calls).toEqual([['report_test_results', input]]);
   });
 
   it('builds an in-process SDK server named "acp"', () => {

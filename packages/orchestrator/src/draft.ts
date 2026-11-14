@@ -52,6 +52,7 @@ import type {
   EngineApproval,
   EngineContext,
   EngineEffect,
+  EngineTestResults,
   FollowUpState,
   OwnerWait,
   PlanOption,
@@ -102,6 +103,8 @@ export class Draft {
   planStepHelpers: Record<string, readonly WorkflowNodeId[]> | undefined;
   /** Researchers' findings notes by agent run (`RunState.findingsByAgent`, ADR-0037 §3). */
   findingsByAgent: Record<string, string> | undefined;
+  /** Testers' structured test results (`RunState.testResultsByAgent`, ADR-0038 §1). */
+  testResultsByAgent: Record<string, EngineTestResults> | undefined;
   /** Output notes for custom arrows (`RunState.outputNotes`, ADR-0037 §2). */
   outputNotes: Record<string, string> | undefined;
   /** Held agents' first messages (`RunState.pendingBriefs`, ADR-0037 §2). */
@@ -151,6 +154,8 @@ export class Draft {
       state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
     this.findingsByAgent =
       state.findingsByAgent === undefined ? undefined : { ...state.findingsByAgent };
+    this.testResultsByAgent =
+      state.testResultsByAgent === undefined ? undefined : { ...state.testResultsByAgent };
     this.outputNotes = state.outputNotes === undefined ? undefined : { ...state.outputNotes };
     this.pendingBriefs = state.pendingBriefs === undefined ? undefined : { ...state.pendingBriefs };
     this.researchBrief = state.researchBrief;
@@ -671,6 +676,7 @@ export class Draft {
     if (this.graphContext !== undefined) state.graphContext = this.graphContext;
     if (this.planStepHelpers !== undefined) state.planStepHelpers = this.planStepHelpers;
     if (this.findingsByAgent !== undefined) state.findingsByAgent = this.findingsByAgent;
+    if (this.testResultsByAgent !== undefined) state.testResultsByAgent = this.testResultsByAgent;
     if (this.outputNotes !== undefined) state.outputNotes = this.outputNotes;
     if (this.pendingBriefs !== undefined) state.pendingBriefs = this.pendingBriefs;
     if (this.researchBrief !== undefined) state.researchBrief = this.researchBrief;

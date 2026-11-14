@@ -280,8 +280,10 @@ describe('tester (ADR-0019): a normal worker', () => {
   it('gets only its note tool and keeps the built-in tools, which ask the owner', async () => {
     const cb = callbacks();
     const options = optionsFor(spec('tester'), cb);
-    // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead.
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
+    // ADR-0026 §3, ADR-0033 §3: its note and its question to the lead; ADR-0038 §1: its results.
+    expect(servers.toolNames).toEqual([
+      ['report_work', 'ask_lead', 'report_test_results', 'code_map'],
+    ]);
     expect(Object.keys(options.mcpServers ?? {})).toEqual(['acp']);
     expect(options.disallowedTools).toEqual([...GIT_DENY_RULES]);
     const use = canUseTool(options);
@@ -296,7 +298,28 @@ describe('tester (ADR-0019): a normal worker', () => {
 
   it('ignores canStartHelpers: a tester never starts helpers', () => {
     optionsFor(spec('tester', { canStartHelpers: true }));
-    expect(servers.toolNames).toEqual([['report_work', 'ask_lead', 'code_map']]);
+    expect(servers.toolNames).toEqual([
+      ['report_work', 'ask_lead', 'report_test_results', 'code_map'],
+    ]);
+  });
+
+  it('ADR-0038 §1: the gate allows report_test_results to the tester only, from our server', async () => {
+    const ours = toolOpts({ mcpServer: { name: 'acp', source: 'sdk' } });
+    const tester = canUseTool(optionsFor(spec('tester'), callbacks()));
+    await expect(use(tester, ours)).resolves.toMatchObject({ behavior: 'allow' });
+    await expect(
+      use(tester, toolOpts({ mcpServer: { name: 'x', source: 'stdio' } })),
+    ).resolves.toMatchObject({ behavior: 'deny' });
+    for (const kind of ['worker', 'reviewer', 'planner', 'researcher'] as const) {
+      const gate = canUseTool(optionsFor(spec(kind), callbacks()));
+      await expect(use(gate, ours), kind).resolves.toMatchObject({ behavior: 'deny' });
+    }
+    const lead = canUseTool(optionsFor(spec('lead'), callbacks()));
+    await expect(use(lead, ours)).resolves.toMatchObject({ behavior: 'deny' });
+
+    function use(gate: ReturnType<typeof canUseTool>, opts: ReturnType<typeof toolOpts>) {
+      return gate('mcp__acp__report_test_results', { status: 'passed' }, opts);
+    }
   });
 
   it('closes its input after the turn, like a worker', async () => {

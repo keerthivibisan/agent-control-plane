@@ -447,13 +447,24 @@ export function reviewerBrief(state: BriefView): string {
   ].join('\n\n');
 }
 
+/**
+ * ADR-0038 §1, §3: how a ticket run's tester reports. A failing test goes to the lead (or, later,
+ * along a When arrow) with the authors of the failing code; the tester never fixes product code.
+ */
+export const TEST_RESULTS_LINE =
+  'Do not change product code: a failing test is a finding for the lead, not something for you to fix. When the tests have run, call report_test_results once with the result: status passed or failed, each failing test with its repository-relative file and a short message, and a short summary. Then call report_work and end your turn.';
+
 /** The tester's fixed brief (ADR-0019 §2): unit tests for the merged change, in its own copy. */
 export function testerBrief(state: BriefView): string {
   return [
     `${TESTER_TASK} Ticket: "${state.run.title}".`,
     ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
-    'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.',
+    'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast, then run the tests.',
+    // ADR-0038 §1, §3: a failing test is a finding for the lead, never a fix by the tester.
+    (state.run.ticketId ?? null) === null
+      ? 'Do not change product code; if a test shows a bug, say so in your final message.'
+      : TEST_RESULTS_LINE,
     (state.integration?.ticketBranch ?? null) === null
       ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
       : hasMergeChecks(state)

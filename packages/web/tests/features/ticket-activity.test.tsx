@@ -42,6 +42,7 @@ import {
   commentsTabParts,
 } from '../../src/features/activity/comment-kind';
 import { RichText, safeHref } from '../../src/features/activity/RichText';
+import { testResultsStatus } from '../../src/features/activity/test-results';
 import {
   MAX_ATTACHMENTS_PER_COMMENT,
   attachmentType,
@@ -497,6 +498,52 @@ describe('the Conversation tab', () => {
     const research = items.find((i) => i.type === 'research');
     expect(research?.actor).toEqual({ kind: 'researcher', label: 'Researcher', agentRunId: 'r-x' });
     expect(research?.title).toBe('Research findings');
+  });
+
+  it('ADR-0038 §1: shows a tester’s test results boxed, with a Test results label and status', async () => {
+    const results = {
+      id: 'a-test-results',
+      type: 'test-results',
+      at: '2026-10-22T09:00:30.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'tester', label: 'Tester', agentRunId: 't-1' },
+      title: 'Tester reported test results',
+      body: 'Tests failed: 1 failing test.\n\nSummary:\n1 of 4 failed.\n\nFailing tests:\n- dark mode toggles (src/theme.test.ts): expected dark',
+      link: { kind: 'change', agentRunId: 't-1' },
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, results]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const li = await waitFor(() => {
+      const found = tab.querySelector<HTMLElement>('li[data-type="test-results"]');
+      if (found === null) throw new Error('no test results item yet');
+      return found;
+    });
+    expect(within(li).getByTestId('comment-author').textContent).toBe('Tester');
+    expect(within(li).getByTestId('test-results-label').textContent).toBe('Test results');
+    const status = within(li).getByTestId('test-results-status');
+    expect(status.textContent).toBe('Failed');
+    expect(status.getAttribute('data-tone')).toBe('danger');
+    expect(li.textContent).toContain('src/theme.test.ts');
+    expect(li.querySelector('article')?.className).toContain('border-l-accent');
+  });
+
+  it('reads a test-results comment from the ticket’s own records; status from its first line', () => {
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'tr',
+      author: 'app',
+      kind: 'test-results',
+      agentRunId: 't-x',
+      body: 'Tests passed.\n\nSummary:\nAll green.',
+    });
+    expect(commentKind(comment)).toBe('test-results');
+    const items = activityFromDetail({ ...detail, comments: [comment] });
+    const item = items.find((i) => i.type === 'test-results');
+    expect(item?.actor).toEqual({ kind: 'tester', label: 'Tester', agentRunId: 't-x' });
+    expect(item?.title).toBe('Test results');
+    expect(testResultsStatus('Tests passed.\n\nSummary:\nok')).toBe('passed');
+    expect(testResultsStatus('(part 1 of 2)\nTests failed: 50 failing tests.')).toBe('failed');
+    expect(testResultsStatus('(part 2 of 2)\n- a: b')).toBeNull();
   });
 
   it('filters by actor with pressed chips', async () => {

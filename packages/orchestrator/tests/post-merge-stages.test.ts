@@ -153,8 +153,13 @@ describe('unit tests stage', () => {
     const start = startOf(r.effects);
     expect(start).toMatchObject({ kind: 'tester', agentRunId: TESTER });
     expect(start.prompt.startsWith(TESTER_TASK)).toBe(true);
-    // ADR-0026 §3: the tester's one tool is its note.
-    expect(controlToolsFor(r.state, TESTER)).toEqual(['report_work', 'ask_lead', 'code_map']);
+    // ADR-0026 §3: its note; ADR-0038 §1: its structured test results.
+    expect(controlToolsFor(r.state, TESTER)).toEqual([
+      'report_test_results',
+      'report_work',
+      'ask_lead',
+      'code_map',
+    ]);
     expect(start.prompt.endsWith(AGENT_NOTE_LINE)).toBe(true);
   });
 

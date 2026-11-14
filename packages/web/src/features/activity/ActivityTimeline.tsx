@@ -13,6 +13,7 @@ import {
   FileDiff,
   FileText,
   Flag,
+  FlaskConical,
   GitMerge,
   GitPullRequest,
   MessageSquareText,
@@ -41,6 +42,7 @@ import { ACTIVITY_ID, runNumber } from '../ticket/ticket-state';
 import { activityFromDetail, actorFilters, actorKey } from './activity-from-detail';
 import { ACTIVITY_COPY } from './copy';
 import { RichText } from './RichText';
+import { testResultsStatus } from './test-results';
 import { BoxHeader, Marker, Row, Thread } from './timeline-parts';
 
 const A = ACTIVITY_COPY;
@@ -57,6 +59,7 @@ const ICON: Record<Item['type'], LucideIcon> = {
   'agent-note': MessageSquareText,
   review: Eye,
   research: Search,
+  'test-results': FlaskConical,
   note: MessageSquareText,
   decision: Scale,
   'run-facts': ClipboardList,
@@ -67,6 +70,7 @@ const ICON: Record<Item['type'], LucideIcon> = {
 const TONE: Partial<Record<Item['type'], MarkerTone>> = {
   review: 'accent',
   research: 'accent',
+  'test-results': 'accent',
   merge: 'done',
   'pull-request': 'success',
 };
@@ -81,6 +85,7 @@ const BOXED: ReadonlySet<Item['type']> = new Set([
   'agent-note',
   'review',
   'research',
+  'test-results',
   'note',
   'decision',
 ]);
@@ -99,6 +104,26 @@ function TitleWithActor({ item }: { item: Item }) {
         <Pill tone="neutral" testId="research-label">
           {A.research}
         </Pill>
+        <span className="text-ink">{rest ?? item.title}</span>
+      </>
+    );
+  }
+  if (item.type === 'test-results') {
+    // ADR-0038 §1: a tester's test results, with a "Test results" label and the status.
+    const status = item.body === null ? null : testResultsStatus(item.body);
+    return (
+      <>
+        <Pill tone="accent" testId="comment-author">
+          {label}
+        </Pill>
+        <Pill tone="neutral" testId="test-results-label" title={A.testResultsTip}>
+          {A.testResults}
+        </Pill>
+        {status !== null ? (
+          <Pill tone={status === 'passed' ? 'success' : 'danger'} testId="test-results-status">
+            {status === 'passed' ? A.testsPassed : A.testsFailed}
+          </Pill>
+        ) : null}
         <span className="text-ink">{rest ?? item.title}</span>
       </>
     );
@@ -260,7 +285,8 @@ function ItemView({
   }
 
   if (BOXED.has(item.type) && item.body !== null) {
-    const reviewer = item.type === 'review' || item.type === 'research';
+    const reviewer =
+      item.type === 'review' || item.type === 'research' || item.type === 'test-results';
     return (
       <Row
         author={author}

@@ -27,6 +27,7 @@ import { helperBrief } from './agent-note.js';
 import { editorNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { reportWork } from './report-tool.js';
 import { reportFindings } from './findings-tool.js';
+import { reportTestResults } from './test-results-tool.js';
 import { askLead, parentOf } from './messaging.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
@@ -78,7 +79,8 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester' | 'resear
     planner: 'The planner can only submit the plan (submit_plan).',
     researcher: 'The researcher can only report its findings (report_findings) or ask the lead.',
     reviewer: 'The reviewer can only post its findings (post_review).',
-    tester: 'The tester can only report its work (report_work).',
+    tester:
+      'The tester can only report its test results (report_test_results) and its work (report_work).',
   });
 
 /**
@@ -90,7 +92,7 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester' | 'resear
  *   reviewers also `ask_lead` (ADR-0033 §3);
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
  *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
- * - tester: `report_work` in a ticket run, and `ask_lead`;
+ * - tester: `report_test_results` (ADR-0038 §1) and `report_work` in a ticket run, and `ask_lead`;
  * - researcher (ADR-0037 §3): `report_findings` in a ticket run, and `ask_lead`;
  * - every agent: the read-only `code_map` (ADR-0034 §4).
  */
@@ -111,6 +113,7 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'report_findings' &&
+          n !== 'report_test_results' &&
           n !== 'ask_lead' &&
           n !== 'code_map' &&
           !ASSISTANT_CONTROL_TOOL_NAMES.includes(n) &&
@@ -133,7 +136,9 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
         : [...children, 'report_work', 'ask_lead'];
     }
     case 'tester':
-      return state.run.ticketId === null ? ['ask_lead'] : ['report_work', 'ask_lead'];
+      return state.run.ticketId === null
+        ? ['ask_lead']
+        : ['report_test_results', 'report_work', 'ask_lead'];
     case 'researcher':
       return state.run.ticketId === null ? ['ask_lead'] : ['report_findings', 'ask_lead'];
   }
@@ -214,6 +219,18 @@ export function leadToolCall(
     if (!parsed.success) return invalid(parsed.error);
     return reportFindings(state, caller.id, parsed.data.findings, ctx);
   }
+  if (call.name === 'report_test_results') {
+    // ADR-0038 §1: the tester's structured test results; nobody else has them.
+    if (caller.kind !== 'tester') {
+      return {
+        ok: false,
+        refusal: refusal('not-lead', 'Only the tester reports test results.'),
+      };
+    }
+    const parsed = LeadToolInputs.report_test_results.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return reportTestResults(state, caller.id, parsed.data, ctx);
+  }
   if (call.name === 'report_work') {
     // ADR-0026 §3: the helper's and tester's note; nobody else has it.
     if (caller.kind !== 'worker' && caller.kind !== 'tester') {
@@ -241,7 +258,8 @@ export function leadToolCall(
   ) {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
     // reviewer's (ADR-0021) is submit_review. A researcher (ADR-0037 §3) has no tool left here:
-    // `report_findings`, `ask_lead` and `code_map` were answered above.
+    // `report_findings`, `ask_lead` and `code_map` were answered above, and the tester's
+    // `report_test_results` and `report_work` (ADR-0038 §1).
     const changeReviewer = isChangeReviewer(caller);
     const own =
       (caller.kind === 'planner' && call.name === 'submit_plan') ||

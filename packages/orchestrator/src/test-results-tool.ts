@@ -1,0 +1,119 @@
+import { redact } from '@acp/core';
+import type { LeadToolInputs } from '@acp/core';
+import type { z } from 'zod';
+import { applyCommand } from './commands.js';
+import { refusal } from './errors.js';
+import type {
+  EngineAgent,
+  EngineContext,
+  EngineResult,
+  EngineTestResults,
+  RunState,
+} from './state.js';
+import { isLiveAgentStatus } from './transitions.js';
+
+/**
+ * The tester's structured test results (ADR-0038 §1): `report_test_results` keeps the status, the
+ * failing tests and the summary in `testResultsByAgent` (for the failure context, FR-2) and emits
+ * `record-test-results`, which the server stores as ticket comments of kind `test-results` (text
+ * written for the ticket, like review findings, ADR-0021 §6). Once per tester turn: a rework turn
+ * may report again, and its results replace the earlier ones. The input is validated with
+ * `LeadToolInputs.report_test_results` in `leadToolCall`.
+ */
+
+/**
+ * The tester's turn: 0 for its first, then one more for each rework (by the lead, the owner, a
+ * reviewer, or its Checks block, which counts its own rounds apart from the review's).
+ */
+export function testTurnOf(agent: Pick<EngineAgent, 'change'>): number {
+  return (agent.change?.round ?? 0) + (agent.change?.checkRounds ?? 0);
+}
+
+function clean(text: string): string {
+  return redact(text).trim();
+}
+
+/** The comment text: a status line, the summary, then one line per failing test. */
+export function testResultsText(
+  results: Pick<EngineTestResults, 'status' | 'failed' | 'summary'>,
+): string {
+  const n = results.failed.length;
+  const head =
+    results.status === 'passed'
+      ? 'Tests passed.'
+      : `Tests failed: ${n} failing test${n === 1 ? '' : 's'}.`;
+  const lines = results.failed.map(
+    (f) =>
+      `- ${oneLine(f.test)}${f.file === undefined ? '' : ` (${f.file})`}: ${oneLine(f.message)}`,
+  );
+  return [
+    head,
+    `Summary:\n${results.summary}`,
+    ...(n > 0 ? [`Failing tests:\n${lines.join('\n')}`] : []),
+  ].join('\n\n');
+}
+
+/** Line breaks and runs of white space become one space, so each test stays on its own line. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A tester's `report_test_results`: allowed while it is live in a ticket run that is not being
+ * stopped, once per turn. Emits `record-test-results`.
+ */
+export function reportTestResults(
+  state: RunState,
+  callerAgentRunId: string,
+  input: z.infer<(typeof LeadToolInputs)['report_test_results']>,
+  ctx: EngineContext,
+): EngineResult<string> {
+  return applyCommand(state, ctx, (d) => {
+    const agent = d.agent(callerAgentRunId);
+    if (agent === undefined || agent.kind !== 'tester') {
+      return refusal('not-lead', 'Only the tester reports test results.');
+    }
+    const ticketId = d.run.ticketId;
+    if (ticketId === null) {
+      return refusal('invalid-input', 'This run has no ticket to report to.');
+    }
+    if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
+      return refusal('run-cancelling', 'The run is being stopped.');
+    }
+    if (!isLiveAgentStatus(agent.status) || agent.status === 'AWAITING_REVIEW') {
+      return refusal('agent-not-live', 'Your turn is over.');
+    }
+    const turn = testTurnOf(agent);
+    if (d.testResultsByAgent?.[agent.id]?.turn === turn) {
+      return refusal(
+        'invalid-input',
+        'You already reported your test results this turn. Call report_work, then end your turn.',
+      );
+    }
+    const results: EngineTestResults = {
+      status: input.status,
+      failed: input.failed.map((f) => ({
+        test: clean(f.test),
+        ...(f.file !== undefined ? { file: f.file } : {}),
+        message: clean(f.message),
+      })),
+      summary: clean(input.summary),
+      turn,
+    };
+    d.testResultsByAgent = { ...(d.testResultsByAgent ?? {}), [agent.id]: results };
+    d.effects.push({
+      type: 'record-test-results',
+      agentRunId: agent.id,
+      ticketId,
+      runId: d.run.id,
+      status: results.status,
+      text: testResultsText(results),
+    });
+    return {
+      value:
+        results.status === 'passed'
+          ? 'Your test results are recorded. Call report_work, then end your turn.'
+          : 'Your test results are recorded and go to the lead, who decides who fixes the failures. Do not change product code. Call report_work, then end your turn.',
+    };
+  });
+}

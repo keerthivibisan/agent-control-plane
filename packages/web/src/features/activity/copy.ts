@@ -93,12 +93,19 @@ export const ACTIVITY_COPY = {
   research: 'Research',
   researchTip:
     'Findings of a read-only researcher agent, written for the agents it researches for. It never edits files.',
+  /** ADR-0038 §1: the label on a tester's structured test results, and their status. */
+  testResults: 'Test results',
+  testResultsTip:
+    'What the tester reported after running the tests: the status, each failing test with its file, and a summary. The lead decides who fixes a failure; the tester never fixes product code.',
+  testsPassed: 'Passed',
+  testsFailed: 'Failed',
   /** Labels the page uses for actors in what it reads from the ticket's own comments. */
   actor: {
     owner: 'You',
     lead: 'Lead',
     reviewer: 'Reviewer',
     researcher: 'Researcher',
+    tester: 'Tester',
     app: 'Agent Control Plane',
     agent: 'Agent',
   },
@@ -110,6 +117,7 @@ export const ACTIVITY_COPY = {
     agentNote: (who: string) => `${who} reported what it did`,
     review: 'Reviewer findings',
     research: 'Research findings',
+    testResults: 'Test results',
     note: 'Note from the lead',
     runFacts: 'Run facts',
     system: 'Agent Control Plane',

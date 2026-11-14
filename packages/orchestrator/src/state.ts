@@ -16,6 +16,7 @@ import type {
   ChangeReviewerMode,
   ChangeState,
   ChangeVerdict,
+  FailedTest,
   OrchestrationRun,
   PermissionDecision,
   ProjectApprovals,
@@ -24,6 +25,7 @@ import type {
   ReviewState,
   CompileContext,
   StartingPoints,
+  TestResultStatus,
   TicketPlan,
   ToolUseCounts,
   AnyWorkflowGraph,
@@ -168,6 +170,15 @@ export interface PlanOption {
  * `headCommit` are persisted (`managed_workspaces`); the rest lives with the live run, since a
  * restart puts every undecided change in `needs-owner` (ADR-0013 §7).
  */
+/** ADR-0038 §1: what one tester reported with `report_test_results`, redacted. */
+export interface EngineTestResults {
+  status: TestResultStatus;
+  failed: readonly FailedTest[];
+  summary: string;
+  /** The tester's turn when it reported (`testTurnOf`): one report per turn. */
+  turn: number;
+}
+
 export interface EngineChange {
   state: ChangeState;
   /** Rework rounds used so far; also the current review round (0 = the first review). */
@@ -375,6 +386,12 @@ export interface RunState {
    * comment of kind `research` by the server. In memory with the live run; one note per researcher.
    */
   findingsByAgent?: Readonly<Record<string, string>>;
+  /**
+   * ADR-0038 §1: each tester's latest structured test results (`report_test_results`), by agent
+   * run id, redacted. Kept for the failure context (FR-2); stored as ticket comments of kind
+   * `test-results` by the server. In memory with the live run; one report per tester turn.
+   */
+  testResultsByAgent?: Readonly<Record<string, EngineTestResults>>;
   /**
    * ADR-0037 §2: the output note of agents whose node hands off along a custom arrow (a planner's
    * plan, a change reviewer's verdict and findings, a final reviewer's posts, a helper's or
@@ -698,6 +715,19 @@ export type EngineEffect =
    * with the agent run (owner-facing findings, like a reviewer's, ADR-0021 §6).
    */
   | { type: 'record-findings'; agentRunId: string; ticketId: string; runId: string; text: string }
+  /**
+   * ADR-0038 §1: a tester's `report_test_results`, redacted, as the comment text (status line,
+   * summary, failing tests). Stored with the transition as ticket comments of kind `test-results`
+   * with the agent run (split into parts when longer than a comment body).
+   */
+  | {
+      type: 'record-test-results';
+      agentRunId: string;
+      ticketId: string;
+      runId: string;
+      status: TestResultStatus;
+      text: string;
+    }
   /**
    * ADR-0030 §5: the helper's reported outcome (and a resolver's assessment). The server records it
    * on the agent's conflict-resolution operation when it has one; nothing else is stored.

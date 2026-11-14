@@ -74,6 +74,8 @@ describe('lead tools', () => {
         'propose_agent',
         // ADR-0037 §3: the researcher's findings note
         'report_findings',
+        // ADR-0038 §1: the tester's structured test results
+        'report_test_results',
       ].sort(),
     );
     const cm = LeadToolInputs.code_map;
@@ -94,6 +96,36 @@ describe('lead tools', () => {
     expect(rf.safeParse({ findings: '' }).success).toBe(false);
     expect(rf.safeParse({ findings: '   ' }).success).toBe(false);
     expect(rf.safeParse({}).success).toBe(false);
+    // ADR-0038 §1: status, failing tests (empty when passed, at least one when failed), summary.
+    const tr = LeadToolInputs.report_test_results;
+    const failure = { test: 'parses dates', file: 'src/date.test.ts', message: 'expected 1' };
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: '12 passed.' }).success).toBe(
+      true,
+    );
+    expect(
+      tr.safeParse({ status: 'failed', failed: [failure], summary: '1 failed.' }).success,
+    ).toBe(true);
+    expect(tr.safeParse({ status: 'failed', failed: [], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [failure], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'flaky', failed: [], summary: 'x' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: ' ' }).success).toBe(false);
+    expect(tr.safeParse({ status: 'passed', failed: [], summary: 'x'.repeat(2001) }).success).toBe(
+      false,
+    );
+    const many = Array.from({ length: 51 }, () => failure);
+    expect(tr.safeParse({ status: 'failed', failed: many, summary: 'x' }).success).toBe(false);
+    expect(
+      tr.safeParse({ status: 'failed', failed: many.slice(0, 50), summary: 'x' }).success,
+    ).toBe(true);
+    const bad = (f: Record<string, unknown>) =>
+      tr.safeParse({ status: 'failed', failed: [{ ...failure, ...f }], summary: 'x' }).success;
+    expect(bad({ test: 'x'.repeat(201) })).toBe(false);
+    expect(bad({ message: 'x'.repeat(501) })).toBe(false);
+    expect(bad({ message: ' ' })).toBe(false);
+    expect(bad({ file: '/etc/passwd' })).toBe(false);
+    expect(bad({ file: '../outside.ts' })).toBe(false);
+    expect(bad({ file: 'a/'.repeat(150) + 'b.ts' })).toBe(false);
+    expect(bad({ file: undefined })).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2000) }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2001) }).success).toBe(false);
     expect(LeadToolInputs.get_review_findings.safeParse({ agentId: 'a' }).success).toBe(true);

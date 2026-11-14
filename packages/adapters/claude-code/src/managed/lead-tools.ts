@@ -50,6 +50,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     'Report what you did, in 2 to 4 plain sentences (what changed, how you checked it). It becomes your note on the ticket; a later report replaces it.',
   report_findings:
     'Report your research findings once, as plain text (at most 16,384 characters): what you found, with the file paths that show it. They become a research note on the ticket and go to the agents you research for. Then end your turn.',
+  report_test_results:
+    'Report the result of your test run once per turn, before report_work: status passed or failed, the failing tests (up to 50, each with its name, the repository-relative file and a short message; none when passed, at least one when failed) and a short summary. It becomes the test results on the ticket and goes to the lead, which decides who fixes a failure.',
   ask_lead:
     'Ask the agent that started you (the lead, or your parent helper) one short question. It gets it as a message and answers with a message to you; keep working meanwhile. The reply says whether it was delivered, queued or dropped. At most 5 open questions at a time.',
   get_review_findings:
@@ -185,6 +187,12 @@ export function leadToolDefinitions(
       d.report_findings,
       i.report_findings.shape,
       run(handler, 'report_findings'),
+    ),
+    report_test_results: tool(
+      'report_test_results',
+      d.report_test_results,
+      i.report_test_results.shape,
+      run(handler, 'report_test_results'),
     ),
     ask_lead: tool('ask_lead', d.ask_lead, i.ask_lead.shape, run(handler, 'ask_lead')),
     get_review_findings: tool(

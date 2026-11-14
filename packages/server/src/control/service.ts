@@ -1117,6 +1117,14 @@ export function createControlService(deps: ControlServiceDeps): ControlService {
           // ADR-0037 §3: stored in the same transaction (RunStore.commit); no text is logged.
           logger.log('info', 'research findings stored', { runId, agentRunId: effect.agentRunId });
           break;
+        case 'record-test-results':
+          // ADR-0038 §1: stored in the same transaction (RunStore.commit); no text is logged.
+          logger.log('info', 'test results stored', {
+            runId,
+            agentRunId: effect.agentRunId,
+            code: effect.status,
+          });
+          break;
         // ADR-0030: the resolver's report, seal and end go to its conflict-resolution operation.
         case 'helper-outcome':
           resolution.onHelperOutcome(effect.agentRunId, effect.outcome, effect.assessment);

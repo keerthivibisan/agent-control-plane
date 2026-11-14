@@ -123,7 +123,9 @@
   lead's change notes), with ADR-0024 the run summary comments (below), with ADR-0026 the
   helpers' and the tester's short work notes and the owner's attachments, and with ADR-0037 §3
   the researchers' findings notes (`report_findings`, redacted, at most 16,384 characters, stored
-  as ticket comments of kind `research` like review findings).
+  as ticket comments of kind `research` like review findings), and with ADR-0038 §1 the testers'
+  test results (`report_test_results`: status, at most 50 failing tests with name, file and
+  message, and a summary; redacted, stored as ticket comments of kind `test-results`).
 
 ### Approval modes per workflow block (ADR-0023) [implemented]
 
