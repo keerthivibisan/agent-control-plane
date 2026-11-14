@@ -44,6 +44,8 @@ const DESCRIPTIONS: Record<LeadToolName, string> = {
     'Submit your review of this change: a verdict (approve or rework) and your findings as plain text. The lead decides what happens next.',
   report_work:
     'Report what you did, in 2 to 4 plain sentences (what changed, how you checked it). It becomes your note on the ticket; a later report replaces it.',
+  report_findings:
+    'Report your research findings once, as plain text (at most 16,384 characters): what you found, with the file paths that show it. They become a research note on the ticket and go to the agents you research for. Then end your turn.',
   ask_lead:
     'Ask the agent that started you (the lead, or your parent helper) one short question. It gets it as a message and answers with a message to you; keep working meanwhile. The reply says whether it was delivered, queued or dropped. At most 5 open questions at a time.',
   get_review_findings:

@@ -46,9 +46,16 @@ export function askLead(
     const asker = d.agent(callerAgentRunId);
     if (
       asker === undefined ||
-      (asker.kind !== 'worker' && asker.kind !== 'tester' && asker.kind !== 'reviewer')
+      (asker.kind !== 'worker' &&
+        asker.kind !== 'tester' &&
+        asker.kind !== 'reviewer' &&
+        asker.kind !== 'researcher')
     ) {
-      return refusal('not-lead', 'Only helpers, the tester and reviewers can ask the lead.');
+      // ADR-0037 §3: a researcher asks the lead too (its tools list `ask_lead`).
+      return refusal(
+        'not-lead',
+        'Only helpers, the tester, reviewers and researchers can ask the lead.',
+      );
     }
     if (d.isStopping()) return refusal('run-cancelling', 'The run is being stopped.');
     if (!isActiveAgentStatus(asker.status)) {
@@ -91,6 +98,9 @@ export function finishNotices(d: Draft, activeAtStart: ReadonlySet<string>): voi
   for (const agent of d.agents) {
     if (!activeAtStart.has(agent.id) || isActiveAgentStatus(agent.status)) continue;
     if (agent.kind === 'lead' || agent.kind === 'planner') continue;
+    // ADR-0037 §2: a researcher's findings reach the agents it researches for (`handoffs.ts`);
+    // one the engine started has no parent to tell.
+    if (agent.kind === 'researcher' && agent.parentAgentRunId === null) continue;
     // A restart ends every live agent (NEEDS_REVIEW); no process is left to tell.
     if (agent.status === 'NEEDS_REVIEW') continue;
     // ADR-0030: a resolver's end belongs to its conflict-resolution operation.
@@ -123,6 +133,11 @@ function finishNoticeText(d: Draft, agent: EngineAgent): string {
         : agent.review === 'pending'
           ? "its change waits for the owner's review"
           : 'see agent_status for where it stands';
+  } else if (agent.kind === 'researcher') {
+    where =
+      d.findingsByAgent?.[agent.id] !== undefined
+        ? 'its findings went to the agents it researches for'
+        : 'it reported no findings';
   } else if (agent.kind === 'reviewer') {
     where =
       (agent.reviewPosts ?? 0) > 0 ? 'see its findings on the ticket' : 'it posted no findings';

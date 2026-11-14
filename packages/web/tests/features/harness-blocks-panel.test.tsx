@@ -1,4 +1,5 @@
-import { WorkflowGraphSchema, type HarnessStatus } from '@acp/core';
+import { type HarnessStatus, WorkflowGraphV3Schema } from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -80,8 +81,8 @@ function render(graphOver?: (g: Record<string, unknown>) => Record<string, unkno
     [`${BASE}/harness`]: HARNESS,
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const g = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph: g, stored: 'v2' };
+      const g = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph: g, stored: 'v3' };
       return jsonResponse(200, current);
     },
   });
@@ -220,7 +221,7 @@ describe('Workflow editor: the Checks block panel', () => {
     fireEvent.click(screen.getByTestId('save-workflow'));
     await waitFor(() => expect(server.calls.some((c) => c.method === 'PUT')).toBe(true));
     const put = server.calls.find((c) => c.method === 'PUT');
-    const sent = WorkflowGraphSchema.parse((put?.body as { graph: unknown }).graph);
+    const sent = sentAsV2((put?.body as { graph: unknown }).graph);
     expect(sent.nodes.find((n) => n.id === 'change-checks')).toMatchObject({
       type: 'checks',
       place: 'change',

@@ -318,6 +318,22 @@ export function buildTicketActivity(input: ActivityInput): TicketActivityDto {
         link:
           comment.agentRunId === null ? null : { kind: 'change', agentRunId: comment.agentRunId },
       });
+    } else if (kind === 'research') {
+      // ADR-0037 §3: a researcher's findings (report_findings), shown like a review's findings.
+      const actor = names?.actor(comment.agentRunId, 'researcher') ?? {
+        kind: 'researcher' as const,
+        label: ROLE_WORDS.researcher,
+        agentRunId: comment.agentRunId,
+      };
+      items.push({
+        id: `research:${comment.id}`,
+        ...base,
+        type: 'research',
+        actor,
+        title: title(`${actor.label} reported research findings`),
+        body: body(comment.body),
+        link: null,
+      });
     } else if (kind === 'review' && comment.author === 'owner') {
       // The owner's review sent from Files changed with Comment (owner decision 2026-10-22).
       items.push({

@@ -251,7 +251,7 @@ blocks and the Finish block (stored as `ticket-merge`, `owner-merge` and `done`)
 
 ```mermaid
 flowchart LR
-  G["Project graph<br/>(project_workflow, version 2)"] --> V["validateWorkflowGraph<br/>(@acp/core, pure)"]
+  G["Project graph<br/>(project_workflow, version 3)"] --> V["validateWorkflowGraphV3<br/>(@acp/core, pure)"]
   V -->|"problems: refuse save or start"| X["422 / 409 workflow_invalid"]
   V -->|valid| C["compileWorkflow<br/>(@acp/core, pure)"]
   C --> P["Program<br/>agents, links, check blocks,<br/>modes, models, effort"]
@@ -264,6 +264,28 @@ flowchart LR
   tester edit, only the lead merges into the ticket branch, and only the owner finishes.
 - A version 1 workflow is migrated on read; a run snapshots its graph and compile context, so a
   restart compiles the same program.
+- **Version 3 (ADR-0037, AR-4).** The workflow API (`GET`/`PUT /api/projects/:id/workflow-graph`,
+  `POST …/validate`) and the run graph (`GET /api/runs/:id/workflow-graph`) carry version 3: one
+  Agent block whose role comes from its arrows, research and custom arrows, labels and purposes,
+  several planners and review fan-out. A stored version 2 graph and a version 1 workflow are served
+  migrated (lossless); a `PUT` stores version 3, and still takes a version 2 graph from an older
+  client, migrated first. New runs snapshot version 3; older runs keep their own snapshot.
+- **Several planners (ADR-0037 §4).** Each planner's plan is stored as a plan option
+  (`ticket_plan_options`, migration 0016) and shown side by side on the ticket page. The owner
+  approves one (`POST /api/tickets/:id/plan-options/decision` with `planOptionId`), which becomes
+  the run's plan in `ticket_plans` exactly like a single planner's; the others are kept as not
+  chosen. Request changes goes to every planner. A run with one planner is decided as before.
+- **Roles from arrows (ADR-0037 §1–3, §5).** `deriveRoles` (core, pure) gives each Agent block one
+  role from its arrows; a block with none or two is a validation error. The role is the agent's
+  run `kind`, so tools, worktree, approvals and read-only rules follow it as before: no arrow,
+  block setting or run mode gives a planner, researcher or reviewer edit rights. Researchers run
+  read-only in the project folder before the planner (or planning lead) they research for, or
+  when the lead starts one wired to it; their `report_findings` note reaches the target's brief.
+  A custom arrow orders two agents and hands the source's output note to the target. A change can
+  go to several reviewers; any `rework` verdict means rework, and the lead hears every verdict,
+  including "no verdict". Arrow labels and purposes are the owner's text but reach agents only as
+  quoted data; since 2026-11-14 every arrow's reach the agent it concerns (helper, planner,
+  reviewer, tester, final reviewer, the lead for findings; `WorkflowProgram.arrowNotes`). The live run graph shows each arrow's label, and its purpose on hover.
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or

@@ -11,6 +11,7 @@ import { applyCommand, requestReview, stopAgent } from './commands.js';
 import { formatTokens } from './draft.js';
 import { refusal } from './errors.js';
 import { changeSummary } from './loop.js';
+import { agentsOfNode, researcherForStart, startResearcher, withHandoffs } from './handoffs.js';
 import { checkStepAttempts } from './step-attempts.js';
 import { planStepStartingPoints, startingPointsOf } from './starting-points.js';
 import { submitPlan } from './plan.js';
@@ -23,7 +24,9 @@ import {
 } from './policy.js';
 import { helperNodeOf, programOf, resolveHelper } from './program.js';
 import { helperBrief } from './agent-note.js';
+import { editorNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { reportWork } from './report-tool.js';
+import { reportFindings } from './findings-tool.js';
 import { askLead, parentOf } from './messaging.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
@@ -36,7 +39,7 @@ import {
 } from './stages.js';
 import type { Draft } from './draft.js';
 import type { EngineAgent, EngineContext, EngineResult, RunState } from './state.js';
-import { isLiveAgentStatus } from './transitions.js';
+import { isActiveAgentStatus, isLiveAgentStatus } from './transitions.js';
 import { runLimits } from './limits.js';
 import { agentDepth } from './tree.js';
 
@@ -70,11 +73,13 @@ export const CHILD_MANAGEMENT_TOOLS: readonly LeadToolName[] = Object.freeze([
 ]);
 
 /** What the planner, reviewer and tester are told when they call a tool that is not theirs. */
-const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>> = Object.freeze({
-  planner: 'The planner can only submit the plan (submit_plan).',
-  reviewer: 'The reviewer can only post its findings (post_review).',
-  tester: 'The tester can only report its work (report_work).',
-});
+const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester' | 'researcher', string>> =
+  Object.freeze({
+    planner: 'The planner can only submit the plan (submit_plan).',
+    researcher: 'The researcher can only report its findings (report_findings) or ask the lead.',
+    reviewer: 'The reviewer can only post its findings (post_review).',
+    tester: 'The tester can only report its work (report_work).',
+  });
 
 /**
  * The control-plane tools one agent may use, for its `ManagedAgentSpec` (ADR-0019; the engine
@@ -86,6 +91,7 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester', string>>
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
  *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
  * - tester: `report_work` in a ticket run, and `ask_lead`;
+ * - researcher (ADR-0037 §3): `report_findings` in a ticket run, and `ask_lead`;
  * - every agent: the read-only `code_map` (ADR-0034 §4).
  */
 export function controlToolsFor(state: RunState, agentRunId: string): readonly string[] {
@@ -104,6 +110,7 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
           n !== 'post_review' &&
           n !== 'submit_review' &&
           n !== 'report_work' &&
+          n !== 'report_findings' &&
           n !== 'ask_lead' &&
           n !== 'code_map' &&
           !ASSISTANT_CONTROL_TOOL_NAMES.includes(n) &&
@@ -127,6 +134,8 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
     }
     case 'tester':
       return state.run.ticketId === null ? ['ask_lead'] : ['report_work', 'ask_lead'];
+    case 'researcher':
+      return state.run.ticketId === null ? ['ask_lead'] : ['report_findings', 'ask_lead'];
   }
 }
 
@@ -193,6 +202,18 @@ export function leadToolCall(
     if (!parsed.success) return invalid(parsed.error);
     return askLead(state, caller.id, parsed.data.question, ctx);
   }
+  if (call.name === 'report_findings') {
+    // ADR-0037 §3: the researcher's findings note; nobody else has it.
+    if (caller.kind !== 'researcher') {
+      return {
+        ok: false,
+        refusal: refusal('not-lead', 'Only a researcher reports findings.'),
+      };
+    }
+    const parsed = LeadToolInputs.report_findings.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return reportFindings(state, caller.id, parsed.data.findings, ctx);
+  }
   if (call.name === 'report_work') {
     // ADR-0026 §3: the helper's and tester's note; nobody else has it.
     if (caller.kind !== 'worker' && caller.kind !== 'tester') {
@@ -212,9 +233,15 @@ export function leadToolCall(
     if (!parsed.success) return invalid(parsed.error);
     return reportWork(state, caller.id, parsed.data, ctx);
   }
-  if (caller.kind === 'planner' || caller.kind === 'reviewer' || caller.kind === 'tester') {
+  if (
+    caller.kind === 'planner' ||
+    caller.kind === 'reviewer' ||
+    caller.kind === 'tester' ||
+    caller.kind === 'researcher'
+  ) {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
-    // reviewer's (ADR-0021) is submit_review.
+    // reviewer's (ADR-0021) is submit_review. A researcher (ADR-0037 §3) has no tool left here:
+    // `report_findings`, `ask_lead` and `code_map` were answered above.
     const changeReviewer = isChangeReviewer(caller);
     const own =
       (caller.kind === 'planner' && call.name === 'submit_plan') ||
@@ -289,6 +316,31 @@ export function leadToolCall(
       if (policyRefusal !== null) return { ok: false, refusal: policyRefusal };
       // ADR-0023 §7: the helper node to start. A helper's own helpers belong to its node.
       const program = programOf(state);
+      // ADR-0037 §3: the lead starts the researchers that do not run before planning.
+      const research =
+        caller.kind === 'lead' ? researcherForStart(program, { helper, role }) : null;
+      if (research !== null) {
+        if (!research.ok) {
+          return { ok: false, refusal: refusal('invalid-input', research.message) };
+        }
+        const node = research.node;
+        if (agentsOfNode(state, node.id).some((a) => isActiveAgentStatus(a.status))) {
+          return {
+            ok: false,
+            refusal: refusal(
+              'too-many-agents',
+              `${node.label} is already researching; wait for its findings.`,
+            ),
+          };
+        }
+        return applyCommand(state, ctx, (d) => {
+          const agent = startResearcher(d, node, { parentAgentRunId: caller.id, task });
+          if (d.integration !== undefined) humanized(`Started ${node.label}`)(d);
+          return {
+            value: `Started researcher ${agent.id} (${node.label}). Its findings reach the agents it researches for${node.targets.some((t) => t.nodeId === program.lead.id) ? ', you included, as a message' : ''}.`,
+          };
+        });
+      }
       const resolved =
         caller.kind === 'worker'
           ? (() => {
@@ -348,7 +400,20 @@ export function leadToolCall(
           kind: 'worker',
           role,
           // ADR-0026 §3: a ticket run's helper ends with its note (`report_work`).
-          ...launchFieldsFor(program, node.id, helperBrief(task, d.run.ticketId !== null)),
+          ...launchFieldsFor(
+            program,
+            node.id,
+            // ADR-0037 §2: plus hand-offs to the helper's node from agents already done.
+            // ADR-0037 §2 (amended 2026-11-14): with the owner's note on its implement arrow.
+            withHandoffs(
+              d,
+              worker,
+              withOwnerNotes(
+                helperBrief(task, d.run.ticketId !== null),
+                editorNoteBlocks(program, node.id),
+              ),
+            ),
+          ),
           ...(canStartHelpers ? { canStartHelpers: true } : {}),
           ...(branch !== null ? { fromBranch: branch } : {}),
           ...d.launchModeFields(worker),

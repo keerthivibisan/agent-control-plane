@@ -354,6 +354,7 @@ against the fake `query` only.
   tools: for the lead every lead tool except `post_review`, `submit_review`, `report_work` and
   `ask_lead` (`LEAD_ROLE_TOOL_NAMES`, which includes `get_review_findings`, ADR-0033); `submit_plan`
   for the planner; `post_review` for a final reviewer; `submit_review` for a change reviewer;
+  `report_findings` and `ask_lead` for a researcher (ADR-0037 §3);
   `report_work` for helpers and the tester (ADR-0026); `ask_lead` for helpers, the tester and both
   reviewers (ADR-0033); plus `start_agent`, `list_agents`, `message_agent`, `stop_agent` and
   `agent_status` for a helper with `canStartHelpers` (a depth-2 parent helper; the engine scopes
@@ -382,11 +383,11 @@ against the fake `query` only.
 - **Role tool base sets** (ADR-0019 §7) **[implemented; real run checked]**: every
   managed agent gets an explicit SDK `tools` list (`agentToolNames`):
 
-  | Role                      | `tools`                                                                |
-  | ------------------------- | ---------------------------------------------------------------------- |
-  | lead, planner, reviewer   | `Read`, `Grep`, `Glob` (`READ_ONLY_BASE_TOOLS`)                        |
-  | worker, tester            | `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash` (`EDITING_BASE_TOOLS`) |
-  | follow-up turn (ADR-0020) | `Read`, `Grep`, `Glob` (unchanged)                                     |
+  | Role                                | `tools`                                                                |
+  | ----------------------------------- | ---------------------------------------------------------------------- |
+  | lead, planner, reviewer, researcher | `Read`, `Grep`, `Glob` (`READ_ONLY_BASE_TOOLS`)                        |
+  | worker, tester                      | `Read`, `Grep`, `Glob`, `Edit`, `Write`, `Bash` (`EDITING_BASE_TOOLS`) |
+  | follow-up turn (ADR-0020)           | `Read`, `Grep`, `Glob` (unchanged)                                     |
   - `Skill` is appended exactly when the run has a skills plugin (never for a follow-up turn).
   - Why: without a base set, the R-V real run's `system/init` listed 28–37 tools for the planner,
     lead, worker and tester, including `SendMessage`, `ListAgents`, `CronCreate`,
@@ -399,7 +400,7 @@ against the fake `query` only.
     background shells), the older `LS` name, and everything ADR-0019 §7 lists as never in a base
     set (subagents, web, cron, messaging, remote triggers, notifications, artifacts, worktree and
     plan-mode tools).
-  - The planner and reviewer keep `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`; the lead,
+  - The planner, reviewer and researcher keep `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`; the lead,
     worker and tester set none (the base set already excludes the lead's edit and shell tools).
   - Verified in a real run (the R-K re-check, docs/research/r-v-real-run-2026-10-16.md): each
     role's `system/init` tools were exactly its base set, plus `Skill` for the planner with the
@@ -417,10 +418,18 @@ against the fake `query` only.
   - The system prompt's `append` is the repository map (when one is ready) and then
     `ASSISTANT_INSTRUCTIONS` from core.
   - Its text is `lead-text`, and its input stays open after a turn, like the lead's chat.
+- **The researcher** (`kind: 'researcher'`, ADR-0037 §3) **[implemented; fake-query and
+  scripted app-server tests]**: on Claude Code, `tools: ['Read', 'Grep', 'Glob']`,
+  `disallowedTools` = `READ_ONLY_DISALLOWED_TOOLS`, `permissionMode: 'default'`, and an `acp`
+  server with `ask_lead`, `report_findings` and `code_map`; on Codex, the `:read-only` profile with
+  `never` and the same dynamic tools. It works in the project folder (no worktree). Its kind comes
+  from the workflow's arrows (`deriveRoles`), and no arrow, block setting or run mode changes these
+  options (adversarial A-AR1, [testing/adversarial.md](testing/adversarial.md)). Not yet checked in
+  a real run.
 - `canUseTool`:
   - Denies, without asking, any built-in (non-`mcp__`) tool outside the agent's effective set
     (`agentToolNames`), a second layer behind the SDK `tools` list: "This tool is not part of
-    this agent's role.", or for an edit or shell tool of the lead, planner or reviewer "This agent
+    this agent's role.", or for an edit or shell tool of the lead, planner, reviewer or researcher "This agent
     only reads files inside its folder.". So the lead is never asked about edits or commands.
   - A `Skill` call (in the set only with a plugin) is allowed without asking only when its input
     parses as `{ skill: string }` and names one of the run's `acp-skills:*` skills (a leading `/`
@@ -434,7 +443,8 @@ against the fake `query` only.
     keyed on `source`, not on the name.
   - Denies a worker any other `mcp__acp__*` without asking: every one for a plain worker, and
     `submit_plan`, `request_review`, unknown names or another server's tools for a parent helper.
-  - The planner and reviewer are denied anything else without asking.
+  - The planner, reviewer and researcher are denied anything else without asking (a researcher's
+    other `mcp__acp__*` tools with "The researcher can only report its findings …").
   - Everything else (a worker's or tester's `Edit`, `Write` or `Bash`, a lead's read outside its
     folder, another MCP server's tool) goes to `requestPermission`, with a summary of the tool name
     plus its target path (or, for `Bash`, only the command name), redacted and at most 200
@@ -587,13 +597,13 @@ must be checked against the note before it is trusted.
 
 ### 12.2 Approval modes
 
-| Agent                                  | Profile extends | Codex approval policy |
-| -------------------------------------- | --------------- | --------------------- |
-| lead, planner, reviewer, any follow-up | `:read-only`    | `never`               |
-| worker or tester, `manual` (or absent) | `:read-only`    | `on-request`          |
-| worker or tester, `auto-edits`         | `:workspace`    | `untrusted`           |
-| worker or tester, `auto`               | `:workspace`    | `on-request`          |
-| worker or tester, Full auto            | `:workspace`    | `never`               |
+| Agent                                              | Profile extends | Codex approval policy |
+| -------------------------------------------------- | --------------- | --------------------- |
+| lead, planner, reviewer, researcher, any follow-up | `:read-only`    | `never`               |
+| worker or tester, `manual` (or absent)             | `:read-only`    | `on-request`          |
+| worker or tester, `auto-edits`                     | `:workspace`    | `untrusted`           |
+| worker or tester, `auto`                           | `:workspace`    | `on-request`          |
+| worker or tester, Full auto                        | `:workspace`    | `never`               |
 
 `codexModes` (`src/modes.ts`) builds this from the spec. A `full-auto` mode without its Full auto
 spec (`spec.fullAuto`, the run's temp folder) is read as `auto`, never as unprotected.
@@ -608,8 +618,8 @@ Requests from the app-server (`src/approvals.ts`):
 - `item/fileChange/requestApproval`: the server's gate as `Edit`, with a short reason. **The
   request carries no path**, so the gate cannot tell an edit inside the worktree from one outside.
   The profile keeps writes inside the worktree and the run's temp folder.
-- A reading role (lead, planner, reviewer) and a follow-up never ask the owner: every approval is
-  declined.
+- A reading role (lead, planner, reviewer, researcher) and a follow-up never ask the owner: every
+  approval is declined.
 - `item/permissions/requestApproval` grants nothing; `item/tool/requestUserInput` gets no answers;
   MCP elicitation is declined; the legacy `applyPatchApproval` and `execCommandApproval` are
   denied; anything else is "method not found".
@@ -634,7 +644,9 @@ Each agent gets one profile, defined at spawn and selected by `thread/start` (CX
    the agent's `TMPDIR`, the host's temp folders by path);
 3. `read`: the repository's git directories (F-1) and the read-only folders (ADR-0026 §4);
 4. the agent's folder: `write` with its `.git` kept `read` for `:workspace`, else `read`;
-5. `write`: the run's temp folder.
+5. `write`: the run's temp folder, for a worker or tester only (AR-6, `tempDirOf`). Any other
+   role is treated as having no temp folder (`:tmpdir` denied), even if its spec carried Full auto
+   or sandbox paths; the server sets those only for editing roles anyway.
 
 The more specific entry wins in Codex, so the worktree and the temp folder (inside the denied data
 folder) stay usable. On the same exact path, the first entry stays, so a deny is never loosened.

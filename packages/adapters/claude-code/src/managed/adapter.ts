@@ -9,6 +9,7 @@ import type {
 } from '@acp/core';
 import {
   ASSISTANT_INSTRUCTIONS,
+  RESEARCHER_INSTRUCTIONS,
   MAX_AGENT_BYTES,
   MAX_CONTEXT_BYTES,
   MAX_REPO_MAP_BYTES,
@@ -123,7 +124,8 @@ export function agentFileHeading(name: string): string {
  * - the project context when there is any (ADR-0012 amendment), capped at `MAX_CONTEXT_BYTES`;
  * - the stage agent file's instructions (ADR-0019 §6) under a heading naming the file, capped at
  *   `MAX_AGENT_BYTES`;
- * - for the project assistant (ADR-0035), its role instructions (`ASSISTANT_INSTRUCTIONS`).
+ * - for the project assistant (ADR-0035), its role instructions (`ASSISTANT_INSTRUCTIONS`); for a
+ *   researcher (ADR-0037 §3), `RESEARCHER_INSTRUCTIONS`.
  * The stage brief is the first user message, so it follows both.
  */
 export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['systemPrompt']> {
@@ -139,6 +141,8 @@ export function systemPromptFor(spec: ManagedAgentSpec): NonNullable<Options['sy
     );
   }
   if (spec.kind === 'assistant') parts.push(ASSISTANT_INSTRUCTIONS);
+  // ADR-0037 §3: the researcher's limits and its one findings call, in the same words on Codex.
+  if (spec.kind === 'researcher') parts.push(RESEARCHER_INSTRUCTIONS);
   if (parts.length === 0) return { type: 'preset', preset: 'claude_code' };
   return { type: 'preset', preset: 'claude_code', append: parts.join('\n\n') };
 }

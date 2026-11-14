@@ -91,7 +91,7 @@ export const RESERVED_HELPER_LABELS: readonly string[] = Object.freeze([
   'pool',
 ]);
 
-function normalLabel(label: string): string {
+export function normalLabel(label: string): string {
   return label.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
@@ -100,7 +100,7 @@ export function isReservedHelperLabel(label: string): boolean {
 }
 
 /** Builds issues with optional ids, which `exactOptionalPropertyTypes` wants left out, not undefined. */
-class Issues {
+export class Issues {
   readonly list: GraphIssue[] = [];
   error(code: GraphIssueCode, message: string, ids: { nodeId?: string; edgeId?: string } = {}) {
     this.push('error', code, message, ids);
@@ -593,15 +593,38 @@ function checkCheckBlocks({ index, valid, issues }: Scope): void {
  * its bounds are the rework rounds and the review-route rules.
  */
 function checkCycles({ index, valid, issues }: Scope): void {
-  const order = new Map(index.unique.map((n, i) => [n.id, i]));
+  const steps = valid.filter((e) => e.type === 'flow' || e.type === 'merge');
+  for (const component of cycleComponents(
+    index.unique.map((n) => n.id),
+    steps,
+  )) {
+    const first = component[0];
+    if (first === undefined) continue;
+    const labels = component.map((id) => q(index.byId.get(id) ?? { label: id })).join(', ');
+    issues.error(
+      'cycle',
+      `These steps go round in a circle: ${labels}. Only rework links may go back.`,
+      { nodeId: first },
+    );
+  }
+}
+
+/**
+ * The cycles of the directed graph `ids` and `links`, as strongly connected components of two or
+ * more nodes (Tarjan's algorithm, iterating in `ids` order so the answer is deterministic). Each
+ * component is sorted in `ids` order, and the components by their first node.
+ */
+export function cycleComponents(
+  ids: readonly WorkflowNodeId[],
+  links: readonly { from: WorkflowNodeId; to: WorkflowNodeId }[],
+): WorkflowNodeId[][] {
+  const order = new Map(ids.map((id, i) => [id, i]));
   const next = new Map<WorkflowNodeId, WorkflowNodeId[]>();
-  for (const e of valid) {
-    if (e.type !== 'flow' && e.type !== 'merge') continue;
+  for (const e of links) {
     const list = next.get(e.from) ?? [];
     list.push(e.to);
     next.set(e.from, list);
   }
-  // Tarjan's strongly connected components, iterating nodes in graph order (deterministic).
   let counter = 0;
   const num = new Map<WorkflowNodeId, number>();
   const low = new Map<WorkflowNodeId, number>();
@@ -634,20 +657,10 @@ function checkCycles({ index, valid, issues }: Scope): void {
       if (component.length > 1) components.push(component);
     }
   };
-  for (const node of index.unique) if (!num.has(node.id)) visit(node.id);
-  const sorted = components
+  for (const id of ids) if (!num.has(id)) visit(id);
+  return components
     .map((c) => c.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)))
     .sort((a, b) => (order.get(a[0] ?? '') ?? 0) - (order.get(b[0] ?? '') ?? 0));
-  for (const component of sorted) {
-    const first = component[0];
-    if (first === undefined) continue;
-    const labels = component.map((id) => q(index.byId.get(id) ?? { label: id })).join(', ');
-    issues.error(
-      'cycle',
-      `These steps go round in a circle: ${labels}. Only rework links may go back.`,
-      { nodeId: first },
-    );
-  }
 }
 
 function checkReachable({ graph, index, valid, issues }: Scope): void {
@@ -674,11 +687,24 @@ function checkReachable({ graph, index, valid, issues }: Scope): void {
   }
 }
 
-function checkFiles(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues): void {
+/** The launch fields of an agent block, version 2 or 3. */
+export interface AgentLike {
+  id: WorkflowNodeId;
+  label: string;
+  model: string | null;
+  skills: readonly string[];
+  agent: string | null;
+  provider?: ManagedProviderId | undefined;
+}
+
+export function checkFiles(
+  agentNodes: readonly AgentLike[],
+  ctx: ValidateGraphContext,
+  issues: Issues,
+): void {
   const skills = ctx.skills;
   const agents = ctx.agents;
-  for (const node of graph.nodes) {
-    if (!isAgentNode(node)) continue;
+  for (const node of agentNodes) {
     if (skills !== undefined) {
       for (const skill of node.skills) {
         if (!skills.includes(skill)) {
@@ -724,7 +750,7 @@ function checkModes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Iss
   }
 }
 
-const PROVIDER_NAMES: Readonly<Record<ManagedProviderId, string>> = Object.freeze({
+export const PROVIDER_NAMES: Readonly<Record<ManagedProviderId, string>> = Object.freeze({
   'claude-code': 'Claude',
   codex: 'Codex',
 });
@@ -733,9 +759,13 @@ const PROVIDER_NAMES: Readonly<Record<ManagedProviderId, string>> = Object.freez
  * ADR-0031: a node whose model looks like the other provider's gets a warning, never a refusal
  * (the name is only a hint; the provider decides). Unknown names are not flagged.
  */
-function checkModelProviders(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
-  for (const node of graph.nodes) {
-    if (!isAgentNode(node) || node.model === null) continue;
+export function checkModelProviders(
+  agentNodes: readonly AgentLike[],
+  ctx: ValidateGraphContext,
+  issues: Issues,
+) {
+  for (const node of agentNodes) {
+    if (node.model === null) continue;
     const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
     if (modelMatchesProvider(node.model, provider) !== false) continue;
     issues.warning(
@@ -752,9 +782,12 @@ function checkModelProviders(graph: WorkflowGraph, ctx: ValidateGraphContext, is
  * narrowing) is an error; project skills, which Codex leaves out, are a warning. Full auto runs on
  * Codex since CX-3b (its permission profiles deny reads of private files).
  */
-function checkCodexNodes(graph: WorkflowGraph, ctx: ValidateGraphContext, issues: Issues) {
-  for (const node of graph.nodes) {
-    if (!isAgentNode(node)) continue;
+export function checkCodexNodes(
+  agentNodes: readonly AgentLike[],
+  ctx: ValidateGraphContext,
+  issues: Issues,
+) {
+  for (const node of agentNodes) {
     const provider = node.provider ?? ctx.projectProvider ?? DEFAULT_MANAGED_PROVIDER;
     if (provider !== 'codex') continue;
     const narrowing = ctx.toolNarrowingAgents;
@@ -827,11 +860,12 @@ export function validateWorkflowGraph(
   checkCheckBlocks(scope);
   checkCycles(scope);
   checkReachable(scope);
-  checkCodexNodes(graph, ctx, issues);
-  checkFiles(graph, ctx, issues);
+  const agentNodes = graph.nodes.filter(isAgentNode);
+  checkCodexNodes(agentNodes, ctx, issues);
+  checkFiles(agentNodes, ctx, issues);
   checkModes(graph, ctx, issues);
   checkInstances(graph, ctx, issues);
-  checkModelProviders(graph, ctx, issues);
+  checkModelProviders(agentNodes, ctx, issues);
   checkNoChecks(graph, issues);
   if (ctx.harness !== undefined) issues.list.push(...checkSelectionIssues(graph, ctx.harness));
   return issues.list;

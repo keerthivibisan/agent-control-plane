@@ -371,11 +371,159 @@ export const ProjectWorkflowGraphSchema = z.object({
 });
 export type ProjectWorkflowGraph = z.infer<typeof ProjectWorkflowGraphSchema>;
 
+/** The version 2 names, explicit (ADR-0037): the unversioned names above are version 2. */
+export const WorkflowGraphV2Schema = WorkflowGraphSchema;
+export type WorkflowGraphV2 = WorkflowGraph;
+export type WorkflowNodeV2 = WorkflowNode;
+export type WorkflowEdgeV2 = WorkflowEdge;
+
+// ---------------------------------------------------------------- version 3 (ADR-0037)
+
 /**
- * What `project_workflow.workflow` may hold: a version 2 graph, or a version 1 workflow saved
- * before ADR-0023 (no `version` field), which the server migrates when it reads it.
+ * Workflow graph version 3 (ADR-0037, docs/arrows/README.md): one generic `agent` block whose role
+ * comes from its arrows (`deriveRoles`), the lead, the same gates, and typed arrows that may carry
+ * a label and a purpose. It is the current version: saved version 2 graphs and version 1
+ * workflows migrate to it without loss (`migrateWorkflowV2`, `migrateWorkflowV1ToV3`).
+ *
+ * Until the editor (AR-5) and the API (AR-4) move to it, the unversioned names in this module stay
+ * the version 2 ones, so their consumers keep working unchanged.
+ */
+export const WORKFLOW_GRAPH_VERSION = 3;
+export const MAX_EDGE_LABEL = 40;
+export const MAX_EDGE_PURPOSE = 300;
+
+export const WorkflowNodeTypeV3Schema = z.enum([
+  'agent',
+  'lead',
+  'ticket',
+  'plan-approval',
+  'checks',
+  'ticket-merge',
+  'owner-merge',
+  'done',
+]);
+export type WorkflowNodeTypeV3 = z.infer<typeof WorkflowNodeTypeV3Schema>;
+
+/**
+ * Every agent except the lead. What it is (planner, researcher, helper, reviewer or tester) is
+ * never stored: `deriveRoles` reads it from the arrows, and tools, worktree and approvals follow
+ * that role exactly as they followed the block type in version 2.
+ *
+ * The fields only some roles use are optional, so a migrated version 2 block keeps exactly the
+ * fields it had:
+ * - `description`, `maxInstances`, `canStartHelpers`: a helper's (absent: empty, 1, false);
+ * - `approvalMode`: an editing role's (helper or tester; absent or null: the project's mode). A
+ *   read-only role ignores it, so an arrow can never give a reviewer a mode;
+ * - `pool`: this helper is the helper pool (the version 2 `helper-pool` block): the lead starts it
+ *   for any step no named helper takes, up to the project's helper limit (its `maxInstances` is
+ *   ignored). At most one per graph, and only on a helper (`pool-not-helper`).
+ */
+export const AgentNodeSchema = z.object({
+  type: z.literal('agent'),
+  ...NodeBase,
+  ...AgentConfig,
+  description: z.string().trim().max(MAX_NODE_DESCRIPTION).optional(),
+  maxInstances: z.number().int().min(1).max(HARD_MAX_HELPERS).optional(),
+  approvalMode: ApprovalModeSchema.nullable().optional(),
+  canStartHelpers: z.boolean().optional(),
+  pool: z.boolean().optional(),
+});
+export type AgentNode = z.infer<typeof AgentNodeSchema>;
+
+export const WorkflowNodeV3Schema = z.discriminatedUnion('type', [
+  AgentNodeSchema,
+  LeadNodeSchema,
+  TicketGateSchema,
+  PlanApprovalGateSchema,
+  ChecksGateSchema,
+  TicketMergeGateSchema,
+  OwnerMergeGateSchema,
+  DoneGateSchema,
+]);
+export type WorkflowNodeV3 = z.infer<typeof WorkflowNodeV3Schema>;
+export type WorkflowNodeV3Of<T extends WorkflowNodeTypeV3> = Extract<WorkflowNodeV3, { type: T }>;
+
+/**
+ * Version 3 arrows (ADR-0037 §2):
+ * - `flow`, `merge`, `findings`, `rework`: as in version 2. A `flow` from the ticket merge, a
+ *   final stage or the Checks block on the ticket branch into an agent makes it a final reviewer;
+ * - `research`: from a researcher to the agent (or the lead) it researches for; it runs first;
+ * - `plan`: from a planner to Plan approval (version 2's planner → plan approval flow);
+ * - `implement`: from the lead to a helper (version 2's `assigns`);
+ * - `review`: from a helper or tester to the change reviewer (or the lead) of its change. Several
+ *   review arrows to different reviewers fan the change out to all of them;
+ * - `test`: from the final chain into a tester (version 2's flow into a tester);
+ * - `custom`: from an agent to an agent: order and hand-off only, it gives no role.
+ */
+export const WorkflowEdgeTypeV3Schema = z.enum([
+  'flow',
+  'merge',
+  'research',
+  'plan',
+  'implement',
+  'review',
+  'findings',
+  'rework',
+  'test',
+  'custom',
+]);
+export type WorkflowEdgeTypeV3 = z.infer<typeof WorkflowEdgeTypeV3Schema>;
+export const WORKFLOW_EDGE_TYPES_V3 = WorkflowEdgeTypeV3Schema.options;
+
+/**
+ * Every arrow may carry a short `label` (shown on the canvas) and a `purpose`: the owner's words
+ * on what flows and why, given to the target agent as data (never as instructions, AGENTS.md
+ * §3.7).
+ */
+const EdgeBaseV3 = {
+  ...EdgeBase,
+  label: z.string().trim().min(1).max(MAX_EDGE_LABEL).optional(),
+  purpose: z.string().trim().min(1).max(MAX_EDGE_PURPOSE).optional(),
+};
+
+export const WorkflowEdgeV3Schema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('flow'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('merge'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('research'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('plan'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('implement'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('review'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('findings'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('rework'), ...EdgeBaseV3, maxRounds: ReworkRoundsSchema }),
+  z.object({ type: z.literal('test'), ...EdgeBaseV3 }),
+  z.object({ type: z.literal('custom'), ...EdgeBaseV3 }),
+]);
+export type WorkflowEdgeV3 = z.infer<typeof WorkflowEdgeV3Schema>;
+export type WorkflowEdgeV3Of<T extends WorkflowEdgeTypeV3> = Extract<WorkflowEdgeV3, { type: T }>;
+
+/** The shape of a version 3 graph; whether it may run is `validateWorkflowGraphV3`'s answer. */
+export const WorkflowGraphV3Schema = z.object({
+  version: z.literal(3),
+  template: z.union([WorkflowTemplateIdSchema, z.literal('custom')]),
+  nodes: z.array(WorkflowNodeV3Schema).min(1).max(MAX_GRAPH_NODES),
+  edges: z.array(WorkflowEdgeV3Schema).max(MAX_GRAPH_EDGES),
+  legacyV1: LegacyWorkflowV1Schema.optional(),
+});
+export type WorkflowGraphV3 = z.infer<typeof WorkflowGraphV3Schema>;
+
+/** A graph of either saved version; `compileWorkflow` and `toWorkflowGraphV3` take both. */
+export type AnyWorkflowGraph = WorkflowGraph | WorkflowGraphV3;
+
+/** A project's stored version 3 workflow. */
+export const ProjectWorkflowGraphV3Schema = z.object({
+  projectId: z.string().min(1),
+  graph: WorkflowGraphV3Schema,
+  updatedAt: IsoTimestampSchema,
+});
+export type ProjectWorkflowGraphV3 = z.infer<typeof ProjectWorkflowGraphV3Schema>;
+
+/**
+ * What `project_workflow.workflow` may hold: a version 3 or version 2 graph, or a version 1
+ * workflow saved before ADR-0023 (no `version` field), which the server migrates when it reads
+ * it. `storedWorkflowGraphV3` turns any of them into a version 3 graph.
  */
 export const StoredWorkflowJsonSchema = z.union([
+  z.object({ version: z.literal(3), graph: WorkflowGraphV3Schema }),
   z.object({ version: z.literal(2), graph: WorkflowGraphSchema }),
   LegacyWorkflowV1Schema,
 ]);
@@ -435,6 +583,10 @@ export const GraphIssueCodeSchema = z.enum([
   // ADR-0031 §5 (CX-4): what a Codex node cannot run with, as the run start refuses it
   'codex-agent-tools',
   'codex-skills-ignored',
+  // ADR-0037 (version 3): an agent's role comes from its arrows
+  'agent-without-role',
+  'agent-mixed-roles',
+  'pool-not-helper',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 
@@ -513,14 +665,25 @@ export const MAX_EDGE_REWORK_ROUNDS = MAX_REWORK_ROUNDS;
  */
 export type ReviewRoute =
   | { by: 'lead'; leadRounds: number }
-  | { by: 'agent'; reviewer: WorkflowNodeId; then: 'lead'; leadRounds: number }
   | {
       by: 'agent';
       reviewer: WorkflowNodeId;
+      reviewers: readonly WorkflowNodeId[];
+      then: 'lead';
+      leadRounds: number;
+    }
+  | {
+      by: 'agent';
+      reviewer: WorkflowNodeId;
+      reviewers: readonly WorkflowNodeId[];
       then: 'direct';
       reviewerRounds: number;
       leadRounds: number;
     };
+// `reviewers` (ADR-0037 §5): every change reviewer of the change, in arrow order; more than one is
+// a review fan-out. `reviewer` is the first of them, so code that knows one reviewer keeps working.
+// With a fan-out the route is `direct` only when every reviewer sends the change back itself, and
+// `reviewerRounds` is the smallest of their rounds.
 
 /** An agent node as the engine launches it. Model, skill and agent-file precedence is unchanged. */
 export interface ProgramAgentNode {
@@ -559,6 +722,48 @@ export interface ProgramTesterNode extends ProgramAgentNode {
 
 export interface ProgramFinalReviewerNode extends ProgramAgentNode {
   type: 'reviewer';
+}
+
+/**
+ * A researcher (ADR-0037 §3): a read-only agent that runs before the agents it researches for and
+ * whose findings go into their prompts. Its `kind` is the read-only `researcher` run kind.
+ */
+export interface ProgramResearcherNode extends Omit<ProgramAgentNode, 'type' | 'kind'> {
+  type: 'researcher';
+  kind: 'researcher';
+  /** The research arrows out of it, in graph order. */
+  targets: readonly ProgramArrowTarget[];
+}
+
+/** Where an arrow goes, with the owner's label and purpose when it has them. */
+export interface ProgramArrowTarget {
+  nodeId: WorkflowNodeId;
+  label?: string;
+  purpose?: string;
+}
+
+/** A custom arrow (ADR-0037 §2): `to` starts after `from` finishes and gets its output note. */
+export interface ProgramHandoff {
+  from: WorkflowNodeId;
+  to: WorkflowNodeId;
+  label?: string;
+  purpose?: string;
+}
+
+/**
+ * The arrows whose owner notes reach the agent they concern besides research and custom arrows
+ * (ADR-0037 §2, amended 2026-11-14): `arrowNoteReceiver` says which node's agents read each one.
+ */
+export type ProgramArrowNoteType =
+  'plan' | 'implement' | 'review' | 'findings' | 'rework' | 'test' | 'flow';
+
+/** One such arrow with its label or purpose (at least one is set), as the engine reads it. */
+export interface ProgramArrowNote {
+  type: ProgramArrowNoteType;
+  from: WorkflowNodeId;
+  to: WorkflowNodeId;
+  label?: string;
+  purpose?: string;
 }
 
 /** What `compileWorkflow` needs besides the graph: the project's settings and the run's choices. */
@@ -637,8 +842,23 @@ export interface ProgramCheckBlocks {
  */
 export interface WorkflowProgram {
   lead: ProgramAgentNode;
-  /** Null: the lead writes the plan itself. */
+  /** Null: the lead writes the plan itself. The first of `planners`. */
   planner: ProgramAgentNode | null;
+  /**
+   * ADR-0037 §4: every planner, in graph order (each has a `plan` arrow into Plan approval). With
+   * two or more, each submits a plan and the owner approves one. Empty when the lead plans.
+   */
+  planners: readonly ProgramAgentNode[];
+  /** ADR-0037 §3: the researchers, in graph order, each with its research arrows. */
+  researchers: readonly ProgramResearcherNode[];
+  /** ADR-0037 §2: the custom arrows, in graph order. */
+  handoffs: readonly ProgramHandoff[];
+  /**
+   * ADR-0037 §2 (amended 2026-11-14): the role arrows that reach an agent and carry a label or a
+   * purpose, in graph order. Absent when there is none (every migrated version 1 or 2 graph), so
+   * those runs brief their agents exactly as before.
+   */
+  arrowNotes?: readonly ProgramArrowNote[];
   /** The plan is approved without asking the owner (the plan gate's `auto`, not tightened). */
   planAutoApprove: boolean;
   /** Named helpers in graph order, then the pool when there is one. */

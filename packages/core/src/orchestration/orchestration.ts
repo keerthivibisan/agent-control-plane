@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { IsoTimestampSchema } from '../domain/time.js';
 import { WorkflowNodeIdSchema } from '../workspace/node-id.js';
 import { GitBranchNameSchema } from '../workspace/branching.js';
-import { MAX_AGENT_NOTE_CHARS } from '../workspace/ticket-activity.js';
+import { MAX_AGENT_NOTE_CHARS, MAX_RESEARCH_FINDINGS_CHARS } from '../workspace/ticket-activity.js';
 import { MAX_AGENT_BYTES, MAX_SKILL_BYTES, SkillNameSchema } from '../workspace/workflow.js';
 import {
   MAX_CODE_MAP_PATH_LENGTH,
@@ -73,6 +73,11 @@ export const AgentRoleKindSchema = z.enum([
   'reviewer',
   'tester',
   'assistant',
+  /**
+   * ADR-0037 §3: a read-only agent that investigates in the project folder (like the planner) and
+   * ends with one findings note (`report_findings`), which goes to the agents it researches for.
+   */
+  'researcher',
 ]);
 export type AgentRoleKind = z.infer<typeof AgentRoleKindSchema>;
 /**
@@ -345,6 +350,14 @@ export const LeadToolInputs = {
    */
   ask_lead: z.object({ question: z.string().trim().min(1).max(2000) }),
   /**
+   * ADR-0037 §3: a researcher's findings note, stored as a ticket comment of kind `research` with
+   * its agent run and kept for the agents it researches for. Calling it ends the researcher's turn,
+   * like `report_work`. Only `researcher` gets this tool; the engine refuses it from anyone else.
+   */
+  report_findings: z.object({
+    findings: z.string().trim().min(1).max(MAX_RESEARCH_FINDINGS_CHARS),
+  }),
+  /**
    * ADR-0033 §5: the stored review findings of one helper's change again (verdict, findings,
    * reviewer), from the review loop's records. Refused when none are stored.
    */
@@ -436,6 +449,7 @@ export const CONTROL_TOOL_LABELS: Readonly<Record<LeadToolName, string>> = Objec
   submit_review: 'Submitted a change review',
   report_work: 'Reported its work',
   ask_lead: 'Asked the lead a question',
+  report_findings: 'Reported its findings',
   get_review_findings: "Read a change's review findings",
   code_map: 'Looked up the code map',
   ticket_status: 'Checked the tickets',

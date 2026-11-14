@@ -21,6 +21,10 @@ import {
   createRun,
   decideApproval,
   decidePlan,
+  decidePlanOption,
+  leadStartedResearchers,
+  programOf,
+  proposedOptions,
   evaluateAllowlist,
   hasMergeChecks,
   isActiveAgentStatus,
@@ -260,6 +264,18 @@ export function simulate(
         .filter((p) => p.status === 'pending')
         .map((p) => [id(p.agentRunId), p.kind]),
       plans: (state.plans ?? []).map((p) => p.status),
+      // ADR-0037: plan options, findings and hand-offs received.
+      options: (state.planOptions ?? []).map((o) => [id(o.agentRunId), o.status]),
+      findings: Object.keys(state.findingsByAgent ?? {}).map((k) => id(k)),
+      received: kept.map((a) => (a.receivedFrom ?? []).map((x) => id(x))),
+      fan: kept.map((a) =>
+        a.change?.fanOut === undefined
+          ? null
+          : [
+              a.change.fanOut.pending,
+              a.change.fanOut.reviews.map((r) => [r.nodeId, id(r.agentRunId), r.verdict]),
+            ],
+      ),
       loop:
         state.integration === undefined
           ? null
@@ -478,6 +494,26 @@ export function simulate(
     // 3. Start the next helper the plan needs.
     const planned = config.controlPanel === true || approvedPlan(state) !== undefined;
     const active = status === 'RUNNING' || status === 'BLOCKED';
+    // ADR-0037 §3: the lead starts each researcher it may start once, before the helpers.
+    if (
+      active &&
+      planned &&
+      state.integration?.handedOver !== true &&
+      state.run.ticketId !== null
+    ) {
+      const node = leadStartedResearchers(programOf(state)).find(
+        (r) => !state.agents.some((a) => a.kind === 'researcher' && a.stage === r.id),
+      );
+      if (node !== undefined) {
+        const r = tool(l, 'lead', 'start_agent', {
+          role: node.label,
+          task: 'Look into the ticket.',
+          helper: node.id,
+        });
+        if (r.ok) enqueue({ k: 'lead' });
+        return;
+      }
+    }
     if (active && planned && state.integration?.handedOver !== true) {
       const started = startedRoles();
       const role = helperRoles().find((r) => !started.has(r));
@@ -516,6 +552,18 @@ export function simulate(
   };
 
   const plannerAct = (): void => {
+    // ADR-0037 §4: with several planners each submits its own option once per planning round.
+    const planners = state.agents.filter((a) => a.kind === 'planner');
+    if (planners.length > 1 || programOf(state).planners.length > 1) {
+      for (const p of planners) {
+        const now = agentOf(p.id);
+        if (now === undefined || now.status !== 'RUNNING' || state.run.status !== 'PLANNING')
+          continue;
+        if (proposedOptions(state).some((o) => o.agentRunId === p.id)) continue;
+        tool(now, roleKey(now), 'submit_plan', planInput());
+      }
+      return;
+    }
     const p = planner();
     if (p === undefined || p.status !== 'RUNNING') return;
     if (state.run.status === 'PLANNING' && pendingPlan(state) === undefined) {
@@ -622,16 +670,53 @@ export function simulate(
         workTurn(id, first && a.kind === 'worker' ? (config.permissions ?? []) : []);
         return;
       }
+      case 'researcher': {
+        // ADR-0037 §3: findings, none, or a failed turn.
+        const outcome = choose(ask, `research:${a.stage ?? 'unknown'}:0`, [
+          'findings',
+          'none',
+          'error',
+        ]);
+        if (outcome === 'findings') {
+          tool(a, roleKey(a), 'report_findings', { findings: 'The theme lives in src/theme.ts.' });
+        }
+        const now = agentOf(id);
+        if (now !== undefined && now.status === 'RUNNING') {
+          apply(roleKey(now), `finish ${outcome}`, (s, c) =>
+            agentEvent(
+              s,
+              id,
+              {
+                type: 'finished',
+                outcome: outcome === 'error' ? 'error' : 'success',
+                reportedCostUsd: null,
+              },
+              c,
+            ),
+          );
+        }
+        return;
+      }
       case 'reviewer': {
         if (a.reviewsAgentRunId !== undefined) {
           const helper = agentOf(a.reviewsAgentRunId);
           const round = helper?.change?.round ?? 0;
           const role = helper === undefined ? 'unknown' : roleKey(helper);
-          const verdict = choose(ask, `verdict:${role}:${round}`, ['approve', 'rework']);
-          tool(a, roleKey(a), 'submit_review', {
-            verdict,
-            findings: verdict === 'approve' ? 'Looks right.' : 'Handle the empty case.',
-          });
+          // ADR-0037 §5: a reviewer of a fan-out may also end without a verdict.
+          const fanOut = helper?.change?.fanOut !== undefined;
+          const verdict = fanOut
+            ? choose(ask, `verdict:${role}:${round}:${a.stage ?? ''}`, [
+                'approve',
+                'rework',
+                'none',
+              ])
+            : choose(ask, `verdict:${role}:${round}`, ['approve', 'rework']);
+          if (verdict !== 'none') {
+            tool(a, roleKey(a), 'submit_review', {
+              verdict,
+              findings: verdict === 'approve' ? 'Looks right.' : 'Handle the empty case.',
+            });
+          }
         } else {
           tool(a, roleKey(a), 'post_review', { text: 'Consider a test for the toggle.' });
         }
@@ -762,6 +847,19 @@ export function simulate(
       const d = choose(ask, `approval:${role}:${p.toolName ?? ''}`, ['approve', 'deny']);
       apply('owner', `${d} ${p.toolName ?? ''}`, (s, c) =>
         decideApproval(s, p.id, d === 'approve' ? 'approve' : 'deny', c),
+      );
+      return true;
+    }
+    // ADR-0037 §4: the owner picks one of several plans, or asks every planner for changes.
+    const waiting = proposedOptions(state);
+    if (status === 'PLAN_REVIEW' && waiting.length > 0) {
+      const picks = waiting.map((_, i) => `option-${i + 1}`);
+      const d = choose(ask, `plans:${waiting.length}`, [...picks, 'request-changes']);
+      const pick = waiting[picks.indexOf(d)];
+      apply('owner', `plans ${d}`, (s, c) =>
+        pick !== undefined
+          ? decidePlanOption(s, 'approve', c, { planOptionId: pick.id })
+          : decidePlanOption(s, 'request-changes', c, { comment: 'Split the work differently.' }),
       );
       return true;
     }

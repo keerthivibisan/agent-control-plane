@@ -1,11 +1,16 @@
 import {
   NO_CHECKS_MESSAGE,
   WorkflowGraphSchema,
-  canConnect,
+  canConnectV3,
+  migrateWorkflowV2,
   validateWorkflowGraph,
+  validateWorkflowGraphV3,
   workflowTemplate,
   type WorkflowGraph,
+  type WorkflowGraphV3,
+  WorkflowGraphV3Schema,
 } from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { WorkflowGraphDtoSchema, type WorkflowGraphDto } from '@acp/core/api';
 import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -60,7 +65,9 @@ beforeAll(() => {
 const BASE = `/api/projects/${WF_PROJECT_ID}`;
 const GRAPH = `${BASE}/workflow-graph`;
 const parse = (dto: unknown): WorkflowGraphDto => WorkflowGraphDtoSchema.parse(dto);
-const graphOf = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
+/** A fixture graph (version 2), or a graph the page sent (version 3) in its version 2 form. */
+const graphOf = (g: unknown): WorkflowGraph =>
+  (g as { version?: unknown }).version === 3 ? sentAsV2(g) : WorkflowGraphSchema.parse(g);
 
 const GIT_FLOW = {
   preset: 'git-flow',
@@ -77,8 +84,8 @@ function server(initial: unknown) {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
   });
@@ -96,7 +103,7 @@ async function select(id: string) {
   await waitFor(() => expect(panel().querySelector(`[data-node="${id}"]`)).not.toBeNull());
 }
 
-function run(graph: WorkflowGraph, ...actions: EditorAction[]) {
+function run(graph: WorkflowGraphV3, ...actions: EditorAction[]) {
   return actions.reduce(editorReducer, initialEditorState(graph));
 }
 
@@ -148,7 +155,7 @@ describe('effort per agent block', () => {
   });
 
   it('patchNode sets and clears effort on agent blocks only', () => {
-    const g = graphOf(customGraph());
+    const g = migrateWorkflowV2(graphOf(customGraph()));
     const lead = g.nodes.find((n) => n.id === 'orchestrate');
     const ticket = g.nodes.find((n) => n.id === 'ticket');
     if (lead === undefined || ticket === undefined) throw new Error('fixture');
@@ -163,7 +170,7 @@ describe('effort per agent block', () => {
 
 describe('Checks blocks are optional (ADR-0028 §2)', () => {
   it('the merge block can be removed and added back in the same place', () => {
-    const g = workflowTemplate('todays-setup');
+    const g = migrateWorkflowV2(workflowTemplate('todays-setup'));
     const merge = g.nodes.find((n) => n.type === 'checks');
     expect(merge !== undefined && isRemovable(merge)).toBe(true);
     const removed = run(g, { type: 'remove-node', id: 'checks' }).graph;
@@ -174,12 +181,12 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
       e.from === 'orchestrate' && e.to === 'ticket-merge';
     const unlinked = { ...removed, edges: removed.edges.filter((e) => !isDirect(e)) };
     expect(removed.edges.some(isDirect)).toBe(
-      canConnect(unlinked, 'orchestrate', 'ticket-merge', 'merge').ok,
+      canConnectV3(unlinked, 'orchestrate', 'ticket-merge', 'merge').ok,
     );
     // ADR-0028 §2: without a merge block the lead merges straight into the ticket branch, and the
     // graph saves with one warning and no error.
     expect(removed.edges.filter(isDirect).map((e) => e.type)).toEqual(['merge']);
-    const after = validateWorkflowGraph(removed);
+    const after = validateWorkflowGraphV3(removed);
     expect(after.filter((i) => i.severity === 'error')).toEqual([]);
     expect(after.filter((i) => i.code === 'no-checks')).toEqual([
       { code: 'no-checks', severity: 'warning', message: NO_CHECKS_MESSAGE },
@@ -201,19 +208,19 @@ describe('Checks blocks are optional (ADR-0028 §2)', () => {
       false,
     );
     // Back as valid as the template it came from.
-    const errors = (graph: WorkflowGraph) =>
-      validateWorkflowGraph(graph)
+    const errors = (graph: WorkflowGraphV3) =>
+      validateWorkflowGraphV3(graph)
         .filter((i) => i.severity === 'error')
         .map((i) => i.code);
     expect(errors(back.graph)).toEqual(errors(g));
     expect(errors(back.graph)).toEqual([]);
-    expect(validateWorkflowGraph(back.graph).some((i) => i.code === 'no-checks')).toBe(false);
+    expect(validateWorkflowGraphV3(back.graph).some((i) => i.code === 'no-checks')).toBe(false);
     // Only one block before the merge.
     expect(run(back.graph, { type: 'add-checks', place: 'merge' }).graph).toBe(back.graph);
   });
 
   it('Add block → Checks offers the three places; the merge block’s panel can remove it', async () => {
-    const { server: s } = render(graphDto({ graph: customGraph(), stored: 'v2' }));
+    const { server: s } = render(graphDto({ graph: customGraph(), stored: 'v3' }));
     await screen.findByTestId('graph-editor');
     fireEvent.click(screen.getByTestId('add-block'));
     const merge = screen.getByTestId('palette-checks-merge');
@@ -309,9 +316,10 @@ describe('the Finish block (ADR-0028 §3)', () => {
   });
 
   it('a link drawn to the Finish block is stored on the ticket merge or your merge', () => {
-    const g = graphOf(customGraph());
-    // The tester flows into your merge.
-    expect(resolveLink({ ...g, edges: [] }, 'unit-tests', 'owner-merge')).toMatchObject({
+    const g = migrateWorkflowV2(graphOf(customGraph()));
+    // The tester (its test arrow in makes it one) flows into your merge.
+    const open = { ...g, edges: g.edges.filter((e) => e.to !== 'owner-merge') };
+    expect(resolveLink(open, 'unit-tests', 'owner-merge')).toMatchObject({
       to: 'owner-merge',
       types: ['flow'],
     });
@@ -329,7 +337,7 @@ describe('the Finish block (ADR-0028 §3)', () => {
     const { server: s } = render(
       graphDto({
         graph: customGraph(),
-        stored: 'v2',
+        stored: 'v3',
         setup: setupFixture({
           approvals: { mode: 'auto-edits', commands: [] },
           branching: GIT_FLOW,

@@ -481,6 +481,65 @@ describe('ticket page: a review-loop run at work', () => {
     expect(rows[1]?.textContent).toContain('Synthetic note.');
   });
 
+  it('a review fan-out shows each reviewer’s verdict and findings, and the decision once (ADR-0037 §5)', async () => {
+    // The server stores one row per reviewer of the round and the lead's decision on its own row.
+    const sc = loopWorkingScenario();
+    const detail = sc.routes[LOOP_TICKET_PATH] as Record<string, unknown>;
+    const run = detail['currentRun'] as Record<string, unknown>;
+    const changes = run['changes'] as Record<string, unknown>[];
+    const api = changes[0] as Record<string, unknown>;
+    const first = (api['reviews'] as Record<string, unknown>[])[0] as Record<string, unknown>;
+    const reviewerRow = { ...first, decision: null, decidedBy: null, decidedAt: null };
+    const second = {
+      ...reviewerRow,
+      id: 'cr-api-0-second',
+      reviewerAgentRunId: 'rv-second',
+      verdict: 'approve',
+      commentId: 'c-second-1',
+    };
+    const decided = {
+      ...first,
+      id: 'cr-api-0-decision',
+      reviewer: 'lead',
+      reviewerAgentRunId: null,
+      verdict: null,
+      commentId: null,
+    };
+    const edited = {
+      ...run,
+      changes: [{ ...api, reviews: [reviewerRow, second, decided] }, ...changes.slice(1)],
+    };
+    const comments = [
+      ...(detail['comments'] as unknown[]),
+      {
+        id: 'c-second-1',
+        ticketId: LOOP_TICKET_ID,
+        runId: LOOP_RUN_ID,
+        planId: null,
+        author: 'reviewer',
+        body: 'Looks right to me. Synthetic second review.',
+        createdAt: '2026-10-17T09:21:00.000Z',
+      },
+    ];
+    render({
+      routes: {
+        ...sc.routes,
+        [LOOP_TICKET_PATH]: { ...detail, currentRun: edited, comments },
+        [LOOP_RUN_PATH]: edited,
+      },
+    });
+    const card = await openChange('API builder');
+    const rows = within(within(card).getByTestId('change-history')).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Review agent asked for rework'),
+      expect.stringContaining('Review agent approved'),
+      expect.stringContaining('Lead sent it back for rework'),
+    ]);
+    expect(rows[0]?.textContent).toContain('Cap pageSize at 100');
+    expect(rows[1]?.textContent).toContain('Synthetic second review.');
+    expect(rows.filter((r) => (r.textContent ?? '').includes('Lead sent it back')).length).toBe(1);
+  });
+
   it('a helper waiting for review says so, and "Latest" words control tools', async () => {
     render(loopWorkingScenario(), {}, 'agents');
     const canvas = await screen.findByTestId('agent-canvas');

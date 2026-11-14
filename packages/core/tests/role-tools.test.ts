@@ -8,6 +8,9 @@ import {
   keepsInputOpen,
   LEAD_ROLE_TOOL_NAMES,
   managedToolNames,
+  RESEARCHER_INSTRUCTIONS,
+  RESEARCHER_TOOL_NAMES,
+  RunAgentKindSchema,
   specKeepsInputOpen,
 } from '../src/index.js';
 
@@ -60,17 +63,37 @@ describe('managedToolNames', () => {
       { kind: 'worker' },
       { kind: 'worker', canStartHelpers: true },
       { kind: 'tester' },
+      { kind: 'researcher' },
       { kind: 'lead', followUp: { resumeSessionId: 's' } },
     ] as const;
     for (const spec of specs) expect(managedToolNames(spec)).toContain('code_map');
   });
 
   it('ADR-0033: ask_lead for helpers, the tester and reviewers; get_review_findings for the lead', () => {
-    const kinds = ['lead', 'planner', 'reviewer', 'worker', 'tester'] as const;
+    const kinds = ['lead', 'planner', 'reviewer', 'worker', 'tester', 'researcher'] as const;
     const withTool = (tool: string) =>
       kinds.filter((kind) => managedToolNames({ kind }).includes(tool as 'ask_lead'));
-    expect(withTool('ask_lead')).toEqual(['reviewer', 'worker', 'tester']);
+    expect(withTool('ask_lead')).toEqual(['reviewer', 'worker', 'tester', 'researcher']);
     expect(withTool('get_review_findings')).toEqual(['lead']);
+  });
+
+  it('ADR-0037 §3: the researcher gets report_findings, ask_lead and code_map, and only it', () => {
+    expect(RunAgentKindSchema.options).toContain('researcher');
+    expect(managedToolNames({ kind: 'researcher' })).toEqual([
+      'report_findings',
+      'ask_lead',
+      'code_map',
+    ]);
+    expect(managedToolNames({ kind: 'researcher' })).toBe(RESEARCHER_TOOL_NAMES);
+    // Asking for helpers or a change review scope never widens it.
+    expect(
+      managedToolNames({ kind: 'researcher', canStartHelpers: true, reviewScope: 'change' }),
+    ).toEqual(['report_findings', 'ask_lead', 'code_map']);
+    for (const kind of ['lead', 'planner', 'reviewer', 'worker', 'tester', 'assistant'] as const) {
+      expect(managedToolNames({ kind })).not.toContain('report_findings');
+    }
+    expect(managedToolNames({ kind: 'researcher' })).not.toContain('start_agent');
+    expect(managedToolNames({ kind: 'researcher' })).not.toContain('merge_change');
   });
 
   it('gives a follow-up only the read-only code_map (ADR-0034 §4)', () => {
@@ -85,10 +108,14 @@ describe('role facts', () => {
     expect(isChangeReviewer({ kind: 'reviewer', reviewScope: 'change' })).toBe(true);
     expect(isChangeReviewer({ kind: 'reviewer' })).toBe(false);
     expect(
-      ['lead', 'planner', 'reviewer', 'worker', 'tester'].filter((k) =>
+      ['lead', 'planner', 'reviewer', 'worker', 'tester', 'researcher'].filter((k) =>
         isReadOnlyRole(k as 'lead'),
       ),
-    ).toEqual(['planner', 'reviewer']);
+    ).toEqual(['planner', 'reviewer', 'researcher']);
+    // ADR-0037 §3: a researcher's input closes after its turn, and its text is not chat.
+    expect(keepsInputOpen('researcher') || emitsChatText('researcher')).toBe(false);
+    expect(RESEARCHER_INSTRUCTIONS).toContain('report_findings');
+    expect(RESEARCHER_INSTRUCTIONS).toContain('cannot change files');
     expect(keepsInputOpen('lead') && keepsInputOpen('planner') && !keepsInputOpen('worker')).toBe(
       true,
     );

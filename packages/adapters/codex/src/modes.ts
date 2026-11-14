@@ -41,7 +41,8 @@ export interface CodexModes {
  *
  * | Agent                                   | Profile extends | Approval policy |
  * | --------------------------------------- | --------------- | --------------- |
- * | lead, planner, reviewer, any follow-up  | `:read-only`    | `never`         |
+ * | lead, planner, reviewer, researcher,    | `:read-only`    | `never`         |
+ * | any follow-up                           |                 |                 |
  * | worker or tester, `manual` (or absent)  | `:read-only`    | `on-request`    |
  * | worker or tester, `auto-edits`          | `:workspace`    | `untrusted`     |
  * | worker or tester, `auto`                | `:workspace`    | `on-request`    |
@@ -99,9 +100,21 @@ function effectiveMode(spec: Pick<ManagedAgentSpec, 'approvalMode' | 'fullAuto'>
   return mode === 'full-auto' ? 'auto' : mode;
 }
 
-/** The run's temp folder of a Full auto or tightened agent, if any. */
-export function tempDirOf(spec: Pick<ManagedAgentSpec, 'fullAuto' | 'sandbox'>): string | null {
+/**
+ * The run's temp folder of a Full auto or tightened agent, if any. Only an editing role (helper or
+ * tester) ever gets it (AR-6): the server sets `fullAuto` and `sandbox` for those alone, and a
+ * read-only role (planner, researcher, reviewer, lead) that somehow carried one must not gain a
+ * writable folder from it, whatever its arrows say (ADR-0037 §1).
+ */
+export function tempDirOf(
+  spec: Pick<ManagedAgentSpec, 'kind' | 'fullAuto' | 'sandbox'>,
+): string | null {
+  if (!isEditingKind(spec.kind)) return null;
   return spec.fullAuto?.tempDir ?? spec.sandbox?.tempDir ?? null;
+}
+
+function isEditingKind(kind: ManagedAgentSpec['kind']): boolean {
+  return kind === 'worker' || kind === 'tester';
 }
 
 /**
@@ -117,12 +130,16 @@ export function tempDirOf(spec: Pick<ManagedAgentSpec, 'fullAuto' | 'sandbox'>):
  * 5. the agent's folder: `write` (with its `.git` kept `read`) for a `:workspace` profile, else
  *    `read`. Workers' worktrees and reviewers' checkouts live in the app's data folder, which is
  *    denied, so the folder is re-opened by a more specific entry, as Claude's `allowRead` does;
- * 6. `write`: the run's temp folder, which also lives in the app's data folder.
+ * 6. `write`: the run's temp folder, which also lives in the app's data folder. Editing roles
+ *    only (`tempDirOf`); any other role is treated as having no temp folder.
  * Codex applies the most specific entry, so 3 to 6 win over a broader deny. On the same exact path
  * the first entry stays, so a deny is never loosened.
  */
 export function profileFilesystem(
-  spec: Pick<ManagedAgentSpec, 'cwd' | 'fullAuto' | 'sandbox' | 'denyRead' | 'readOnlyDirs'>,
+  spec: Pick<
+    ManagedAgentSpec,
+    'kind' | 'cwd' | 'fullAuto' | 'sandbox' | 'denyRead' | 'readOnlyDirs'
+  >,
   base: CodexProfileBase,
   hostTmpDirs: readonly string[] = [],
 ): Record<string, CodexFsAccess> {

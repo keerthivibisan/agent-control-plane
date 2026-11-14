@@ -263,6 +263,8 @@ export function CheckboxField({
   checked,
   onChange,
   note,
+  disabled,
+  testId,
 }: {
   label: string;
   hint: ReactNode;
@@ -270,18 +272,22 @@ export function CheckboxField({
   onChange: (v: boolean) => void;
   /** An extra line, e.g. why the setting has no effect yet. */
   note?: ReactNode;
+  disabled?: boolean;
+  testId?: string;
 }) {
   const id = useId();
   return (
     <div
       className={`flex items-start gap-3 rounded-control border px-3 py-3 transition-colors ${
         checked ? 'border-accent/50 bg-accent-soft/40' : 'border-line-strong bg-panel'
-      }`}
+      } ${disabled === true ? 'opacity-60' : ''}`}
     >
       <input
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
+        data-testid={testId}
         onChange={(e) => onChange(e.target.checked)}
         aria-describedby={`${id}-hint`}
         className="mt-1 size-4 shrink-0 accent-accent"

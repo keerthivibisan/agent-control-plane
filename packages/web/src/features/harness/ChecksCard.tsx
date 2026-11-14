@@ -1,4 +1,4 @@
-import type { WorkflowGraph } from '@acp/core';
+import type { WorkflowGraph, WorkflowGraphV3 } from '@acp/core';
 import type { HarnessStatusDto } from '@acp/core/api';
 import { useMemo } from 'react';
 import { Card } from '../../components/Card';
@@ -86,7 +86,7 @@ const LABELS: Column<Check> = {
 };
 
 /** Where each check runs: the workflow's Checks blocks that pick it, by place and name. */
-function whereColumn(graph: WorkflowGraph): Column<Check> {
+function whereColumn(graph: WorkflowGraph | WorkflowGraphV3): Column<Check> {
   return {
     key: 'where',
     label: WH.column,
@@ -123,7 +123,7 @@ export function ChecksCard({
 }: {
   harness: HarnessStatusDto;
   /** The project's workflow graph; undefined while unknown or on a server without graphs. */
-  graph?: WorkflowGraph | undefined;
+  graph?: WorkflowGraph | WorkflowGraphV3 | undefined;
   className?: string;
 }) {
   const columns = useMemo(() => {

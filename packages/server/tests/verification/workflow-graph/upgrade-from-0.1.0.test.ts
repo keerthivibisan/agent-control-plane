@@ -1,6 +1,12 @@
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { migrateWorkflowV1, type ProjectWorkflow, type WorkflowGraph } from '@acp/core';
+import {
+  migrateWorkflowV1,
+  migrateWorkflowV1ToV3,
+  toWorkflowGraphV3,
+  type ProjectWorkflow,
+  type WorkflowGraph,
+} from '@acp/core';
 import {
   BoardDtoSchema,
   ProjectWorkflowDtoSchema,
@@ -137,7 +143,9 @@ describe('upgrade from v0.1.0 (RESUME.md Step 4b item 3)', { timeout: 120_000 },
       if (p.workflow !== undefined) {
         // The stored version 1 workflow, migrated with the project's mode.
         expect(dto.graph, p.name).toEqual(
-          migrateWorkflowV1(p.workflow, { projectMode: dto.setup.approvals?.mode ?? 'manual' }),
+          migrateWorkflowV1ToV3(p.workflow, {
+            projectMode: dto.setup.approvals?.mode ?? 'manual',
+          }),
         );
       }
       if (p.workflow?.stages.helpers.skill === 'gone-skill') {
@@ -170,7 +178,8 @@ describe('upgrade from v0.1.0 (RESUME.md Step 4b item 3)', { timeout: 120_000 },
       ok(await b.get(`/api/runs/${r.id}/workflow`));
       RunWorkflowDtoSchema.parse((await b.get(`/api/runs/${r.id}/workflow`)).body);
       if (r.ticketId !== null) {
-        expect(graph.graph, r.flow).toEqual(expectedRunGraph(r.id));
+        // ADR-0037: served as version 3 (the version 1 workflow migrated, then to version 3).
+        expect(graph.graph, r.flow).toEqual(toWorkflowGraphV3(expectedRunGraph(r.id)));
         // Every agent sits on a node of that graph, under its version 1 stage id.
         const onNodes = new Set(graph.nodes.flatMap((n) => n.agentRunIds));
         for (const a of detail.agents) expect(onNodes.has(a.id), `${r.flow} ${a.kind}`).toBe(true);
@@ -273,7 +282,8 @@ describe('upgrade from v0.1.0 (RESUME.md Step 4b item 3)', { timeout: 120_000 },
     const saved = WorkflowGraphDtoSchema.parse(
       ok(await b.put(`/api/projects/${project.id}/workflow-graph`, { graph: before.graph })),
     );
-    expect(saved.stored).toBe('v2');
+    // ADR-0037: a graph is saved as version 3.
+    expect(saved.stored).toBe('v3');
     const v1Get = await b.get(`/api/projects/${project.id}/workflow`);
     expect([v1Get.status, errorCode(v1Get)]).toEqual([409, 'workflow_is_graph']);
     const v1Put = await b.put(`/api/projects/${project.id}/workflow`, project.workflow);
@@ -281,7 +291,7 @@ describe('upgrade from v0.1.0 (RESUME.md Step 4b item 3)', { timeout: 120_000 },
     const again = WorkflowGraphDtoSchema.parse(
       ok(await b.get(`/api/projects/${project.id}/workflow-graph`)),
     );
-    expect([again.stored, again.graph]).toEqual(['v2', before.graph]);
+    expect([again.stored, again.graph]).toEqual(['v3', before.graph]);
   });
 });
 

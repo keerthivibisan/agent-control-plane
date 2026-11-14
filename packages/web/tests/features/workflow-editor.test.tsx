@@ -1,4 +1,10 @@
-import { WorkflowGraphSchema, validateWorkflowGraph, type GraphIssue } from '@acp/core';
+import {
+  validateWorkflowGraph,
+  type GraphIssue,
+  WorkflowGraphV3Schema,
+  validateWorkflowGraphV3,
+} from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { WorkflowGraphDtoSchema, type WorkflowGraphDto } from '@acp/core/api';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -58,8 +64,8 @@ function server(initial: unknown, extra: RouteTable = {}) {
     [`${BASE}/agents`]: agentFilesFixture(),
     [GRAPH]: () => jsonResponse(200, current),
     [`PUT ${GRAPH}`]: (body: unknown) => {
-      const graph = WorkflowGraphSchema.parse((body as { graph: unknown }).graph);
-      current = { ...current, graph, stored: 'v2', issues: validateWorkflowGraph(graph) };
+      const graph = WorkflowGraphV3Schema.parse((body as { graph: unknown }).graph);
+      current = { ...current, graph, stored: 'v3', issues: validateWorkflowGraphV3(graph) };
       return jsonResponse(200, current);
     },
     ...extra,
@@ -182,14 +188,17 @@ describe('Workflow page: the graph editor', () => {
     expect(within(block('helper-1')).getByTestId('block-skills').textContent).toBe('3 skills');
   });
 
-  it('Add block: a named helper, linked from the lead and to a review; problems update; saves', async () => {
+  it('Add block: the Helper preset comes with the lead’s arrow; link its review; saves as v2', async () => {
     const { server: s } = render();
     await screen.findByTestId('graph-editor');
-    addBlock(/^Named helper/);
+    addBlock(/^Helper/);
     await waitFor(() => expect(panel().querySelector('[data-node="helper-1"]')).not.toBeNull());
-    // The new block's own problems are at the top of its panel.
-    expect(panelCodes()).toEqual(expect.arrayContaining(['no-review-route', 'not-assigned']));
-    expect(Number(problemsButton().dataset.errors)).toBeGreaterThanOrEqual(2);
+    // The preset drew the lead's implement arrow (ADR-0037): it is a helper already, and its own
+    // remaining problem is at the top of its panel.
+    expect(within(block('helper-1')).getByTestId('block-role').dataset.role).toBe('helper');
+    expect(panelCodes()).toContain('no-review-route');
+    expect(panelCodes()).not.toContain('not-assigned');
+    expect(Number(problemsButton().dataset.errors)).toBeGreaterThanOrEqual(1);
     expect(saveButton().hasAttribute('disabled')).toBe(true);
     expect(screen.getByTestId('save-blocked').textContent).toBe('Fix the problems to save.');
 
@@ -200,16 +209,13 @@ describe('Workflow page: the graph editor', () => {
     addLink('review', 'review');
     await select('helper-1');
     expect(panelCodes()).not.toContain('no-review-route');
-    // …and the lead assigns it work.
-    await select('orchestrate');
-    addLink('helper-1', 'assigns');
     await waitFor(() => expect(problemsButton().dataset.errors).toBe('0'));
     expect(within(issues()).getByTestId('issues-none')).toBeTruthy();
 
     fireEvent.click(saveButton());
     await screen.findByTestId('saved');
     const body = puts(s)[0]?.body as { graph: unknown };
-    const graph = WorkflowGraphSchema.parse(body.graph);
+    const graph = sentAsV2(body.graph);
     expect(validateWorkflowGraph(graph).filter((i) => i.severity === 'error')).toEqual([]);
     expect(graph.template).toBe('custom');
     expect(graph.nodes.find((n) => n.id === 'helper-1')).toMatchObject({
@@ -224,17 +230,21 @@ describe('Workflow page: the graph editor', () => {
   it('an Add block item at its limit stays listed, says why in plain sight, and adds nothing', async () => {
     render(customGraphDto());
     await screen.findByTestId('graph-editor');
+    // The hand-built graph has one tester; a second one fills the limit of two.
+    addBlock(/^Tester/);
+    await waitFor(() => expect(screen.getByTestId('unsaved')).toBeTruthy());
     fireEvent.click(screen.getByTestId('add-block'));
-    const planner = screen.getByRole('menuitem', { name: /^Planner/ });
-    expect(planner.getAttribute('aria-disabled')).toBe('true');
-    expect(planner.textContent).toContain('it can have only one');
+    const tester = screen.getByRole('menuitem', { name: /^Tester/ });
+    expect(tester.getAttribute('aria-disabled')).toBe('true');
+    expect(tester.textContent).toContain('the most it can have');
     // The others say what they add.
-    expect(screen.getByRole('menuitem', { name: /^Tester/ }).textContent).toContain(
-      'Writes unit tests',
+    expect(screen.getByRole('menuitem', { name: /^Researcher/ }).textContent).toContain(
+      'Reads first',
     );
-    fireEvent.click(planner);
-    expect(screen.getAllByTestId('block-plan')).toHaveLength(1);
-    expect(screen.queryByTestId('unsaved')).toBeNull();
+    fireEvent.click(tester);
+    expect(
+      document.querySelectorAll('[data-testid="block-role"][data-role="tester"]'),
+    ).toHaveLength(2);
   });
 
   it('a click on a problem selects its block and opens its settings', async () => {
@@ -420,19 +430,19 @@ describe('Workflow page: the graph editor', () => {
   it('"Link to…" lists only the blocks core allows; Undo and Redo (buttons and keys)', async () => {
     render();
     await screen.findByTestId('graph-editor');
-    addBlock(/^Named helper/);
+    addBlock(/^Agent/);
     await select('orchestrate');
     fireEvent.click(within(panel()).getByTestId('link-to'));
     const menu = screen.getByTestId('link-to-menu');
     const items = within(menu)
       .getAllByRole('menuitem')
       .map((i) => i.dataset.testid);
-    // The new helper takes two kinds from the lead; the existing helpers and checks are linked
-    // already, and the ticket is never an end.
-    expect(items).toEqual(['link-to-helper-1-assigns', 'link-to-helper-1-rework']);
-    fireEvent.click(screen.getByTestId('link-to-helper-1-assigns'));
+    // The new agent takes the lead's implement arrow, which makes it a helper; the existing
+    // helpers and checks are linked already, and the ticket is never an end.
+    expect(items).toEqual(['link-to-agent-1-implement']);
+    fireEvent.click(screen.getByTestId('link-to-agent-1-implement'));
     await waitFor(() => expect(screen.queryByTestId('link-to-menu')).toBeNull());
-    expect(within(panel()).getByTestId('edge-panel').dataset.type).toBe('assigns');
+    expect(within(panel()).getByTestId('edge-panel').dataset.type).toBe('implement');
 
     const undo = screen.getByTestId('undo');
     const redo = screen.getByTestId('redo');
@@ -442,21 +452,21 @@ describe('Workflow page: the graph editor', () => {
     expect(redo.hasAttribute('disabled')).toBe(false);
     fireEvent.click(redo);
     await select('orchestrate');
-    expect(within(panel()).getByTestId('node-links').textContent).toContain('Helper 1');
+    expect(within(panel()).getByTestId('node-links').textContent).toContain('Agent 1');
     // ⌘Z / Ctrl+Z outside a text field; back past the added block to the saved graph.
     fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
     fireEvent.keyDown(document.body, { key: 'z', metaKey: true });
-    expect(screen.queryByTestId('block-helper-1')).toBeNull();
+    expect(screen.queryByTestId('block-agent-1')).toBeNull();
     expect(screen.queryByTestId('unsaved')).toBeNull();
     expect(undo.hasAttribute('disabled')).toBe(true);
     fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true, shiftKey: true });
-    expect(screen.getByTestId('block-helper-1')).toBeTruthy();
+    expect(screen.getByTestId('block-agent-1')).toBeTruthy();
     expect(screen.getByTestId('unsaved')).toBeTruthy();
     // In a text field the key is the field's own undo.
-    await select('helper-1');
+    await select('agent-1');
     const name = within(panel()).getByRole('textbox', { name: 'Name' });
     fireEvent.keyDown(name, { key: 'z', metaKey: true });
-    expect(screen.getByTestId('block-helper-1')).toBeTruthy();
+    expect(screen.getByTestId('block-agent-1')).toBeTruthy();
   });
 });
 
