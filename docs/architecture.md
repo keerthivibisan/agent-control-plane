@@ -286,6 +286,19 @@ flowchart LR
   including "no verdict". Arrow labels and purposes are the owner's text but reach agents only as
   quoted data; since 2026-11-14 every arrow's reach the agent it concerns (helper, planner,
   reviewer, tester, final reviewer, the lead for findings; `WorkflowProgram.arrowNotes`). The live run graph shows each arrow's label, and its purpose on hover.
+- **Failure routing (ADR-0038, FR series)** [implemented on `feature/workflow/failure-routing`;
+  real run pending]. A tester ends with `report_test_results` (stored as a `test-results` ticket
+  comment). Every failure (tests, checks, a harness that cannot run, review rework, a merge
+  conflict) gets a `FailureContext` (core) with the likely authors (helpers whose changes touched
+  the failing files) and the rounds, rendered as quoted data for the lead, which always gets it.
+  A `when` arrow (graph version 3) from the block where the failure happens to a helper, the lead
+  or the **Author** routing block sends it on: the compiler gives `program.failureRoutes`, and the
+  engine's one router (`orchestrator/src/failure-router.ts`) starts a bounded fix turn and tells
+  the lead, which may move it (`reroute_fix`) or stop it. Rework arrows and a Checks block's
+  "back to the helper" are read as derived routes and behave as before. The lead's brief has
+  "Your workflow" (`describeWorkflow`, also the `view_workflow` tool and the editor's "Flow in
+  words"). The live run graph lists the Author block's fixers; each routed failure is a one-line
+  app comment on the Conversation tab.
 - Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or

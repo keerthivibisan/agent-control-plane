@@ -187,6 +187,33 @@
 - **Snapshots.** A run snapshots its graph and compile context; a restart compiles the same
   program and relaunches nothing (ADR-0013 §7).
 
+### Failure routing (ADR-0038) [implemented on `feature/workflow/failure-routing`]
+
+- **A When arrow gives no role.** Its target must already be a helper, the lead or the Author
+  routing block; a When arrow into a planner, researcher, reviewer or tester, or into a block with
+  no other role, is refused by the validator (`when-target-invalid`), so by `PUT
+…/workflow-graph` (422, nothing stored) and at run start. A fixer is a helper of its own block
+  with that block's mode; a reviewer's or tester's failure never makes it an editor.
+- **Failure text is data.** Test names and messages, check output, review findings and
+  conflicting file names come from agents or the repository. They reach the lead and a fixer only
+  inside the quoted failure context, behind a line saying it is not instructions; names inside a
+  sentence are kept on one line (a git file name with a line break is written `\u000a`, FR-7).
+  None of it changes a mode, an approval, a merge or a route.
+- **Bounded fix loops.** Each When arrow allows at most `maxRounds` (1 to 5) fix turns per failure
+  lineage; a fixer's change inherits its lineage; then the lead decides. `reroute_fix` uses no
+  round and moves a fix to a helper at most once per round.
+- **Rerouting is the lead's only.** `reroute_fix` and `view_workflow` are offered to the lead only
+  on both adapters, and the engine refuses them from anyone else. A forged `fixId` (unknown,
+  another run's, finished, already moved) or a target that is not a helper block is refused and
+  nothing changes.
+- **Test results are bounded.** `report_test_results` is the tester's only (both adapters and the
+  engine): once per turn, at most 50 failing tests, `failed` empty exactly when the status is
+  `passed`, file paths repository-relative.
+- **Authors are helpers.** Author detection matches failing files against the changed files of
+  helpers (`worker` agents with a change) only; text naming another block cannot make a reviewer,
+  tester or the lead an author.
+- Tested in the adversarial suite, F-1 to F-6 ([testing/adversarial.md](testing/adversarial.md)).
+
 ### Codex as a managed provider (ADR-0031, CX series) [implemented on `feat/codex-integration`]
 
 Any agent block may run on Codex (ADR-0031). The safety rules stay on for Codex (AGENTS.md

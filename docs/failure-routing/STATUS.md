@@ -2,16 +2,16 @@
 
 Coordinator-owned. Plan: [README.md](README.md).
 
-| WP   | Title                                       | Status      | Branch                             | Merged |
-| ---- | ------------------------------------------- | ----------- | ---------------------------------- | ------ |
-| FR-0 | ADR-0038, plan                              | done        | `feature/workflow/failure-routing` |        |
-| FR-1 | Structured test results                     | done        | `feature/workflow/failure-routing` |        |
-| FR-2 | Failure context and authors                 | done        | `feature/workflow/failure-routing` |        |
-| FR-3 | Tester failures to the author or the lead   | done        | `feature/workflow/failure-routing` |        |
-| FR-4 | Core: When arrows, Author block, flow words | done        | `feature/workflow/failure-routing` |        |
-| FR-5 | Engine: routing, fix turns, lead tools      | done        | `feature/workflow/failure-routing` |        |
-| FR-6 | Web: When arrows and Flow in words          | done        | `feature/workflow/failure-routing` |        |
-| FR-7 | Safety, docs, real run                      | not started |                                    |        |
+| WP   | Title                                       | Status | Branch                             | Merged |
+| ---- | ------------------------------------------- | ------ | ---------------------------------- | ------ |
+| FR-0 | ADR-0038, plan                              | done   | `feature/workflow/failure-routing` |        |
+| FR-1 | Structured test results                     | done   | `feature/workflow/failure-routing` |        |
+| FR-2 | Failure context and authors                 | done   | `feature/workflow/failure-routing` |        |
+| FR-3 | Tester failures to the author or the lead   | done   | `feature/workflow/failure-routing` |        |
+| FR-4 | Core: When arrows, Author block, flow words | done   | `feature/workflow/failure-routing` |        |
+| FR-5 | Engine: routing, fix turns, lead tools      | done   | `feature/workflow/failure-routing` |        |
+| FR-6 | Web: When arrows and Flow in words          | done   | `feature/workflow/failure-routing` |        |
+| FR-7 | Safety, docs, real run                      | review | `feature/workflow/failure-routing` |        |
 
 ## Log
 
@@ -49,3 +49,12 @@ Coordinator-owned. Plan: [README.md](README.md).
   (`failure-routed`), ids and kind in logs.
 - 2026-11-14 Coordinator: FR-5 and FR-6 accepted; FR-6 merged from
   `feature/workflow/failure-routing-web`. Full check green: 6921 tests.
+- 2026-11-14 FR-7 (no real run; the coordinator does it): adversarial F-1 to F-6 (core, engine,
+  server, both adapters). Fixed: a fixer's own failure got fresh rounds (fixes now keep their
+  lineage), `reroute_fix` could move a fix without end (once per round to a helper), and
+  conflicting file names with line breaks could start a line of their own in the lead's notice
+  (`inlinePath`). Gaps: routed-failure lines shown as parts on the Conversation tab; the live
+  graph's Author block lists its fixers (`EngineFix.viaAuthor`). Deferred: rounds used per When
+  arrow on the live graph (needs a `RunWorkflowGraphDto` field, a shared contract). Docs:
+  architecture §9, orchestration-lifecycle §0.4, security, provider-adapters, README, CHANGELOG,
+  "How to use" above.

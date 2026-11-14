@@ -97,6 +97,24 @@ A new read-only lead tool, `view_workflow`, returns the same section. The text i
 - **Live run graph:** a failure that travels along a When arrow lights it, with the round count.
 - **Ticket activity:** shows the failure context and who is fixing it.
 
+## How to use (for the owner)
+
+1. Open the project's **Workflow** page. Pick the block where the failure happens: a tester (tests
+   fail), a Checks block (checks fail, or the harness cannot run), a change reviewer (it asks for
+   rework) or the merge step (a merge conflicts).
+2. Draw a link from it to who should fix it: a helper block, the **Lead**, or the **Author** block
+   from the palette ("whoever wrote the failing code"; one per workflow). Choose **When** as the
+   link type, tick the events and set the rounds (1 to 5). A label and a reason are optional; the
+   fixer and the lead read them as your note.
+3. Read **Flow in words** beside the canvas. Each link is one sentence, for example "When tests
+   fail at Tester → Author fixes (2 rounds), then the lead decides". An event without a route says
+   "Lead decides (default)". The lead gets exactly these sentences.
+4. In a run, a routed failure shows on the ticket's Conversation tab ("Fix started", the fixer and
+   "Round 1 of 2"), and the live graph's Author block shows its fixer. The lead is told about every
+   fix and can move it or stop it; when the rounds are used up, the lead decides.
+
+A When link never gives its target a role: only helpers, the lead and Author can be targets.
+
 ## Work packages (in order; `pnpm check` green and a commit at each)
 
 | WP   | Scope                                                                                                                                                                                                                    |

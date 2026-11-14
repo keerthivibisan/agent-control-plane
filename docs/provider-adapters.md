@@ -356,7 +356,8 @@ against the fake `query` only.
   for the planner; `post_review` for a final reviewer; `submit_review` for a change reviewer;
   `report_findings` and `ask_lead` for a researcher (ADR-0037 §3);
   `report_work` for helpers and the tester (ADR-0026); `report_test_results` for the tester
-  (ADR-0038 §1); `ask_lead` for helpers, the tester and both
+  (ADR-0038 §1); `reroute_fix` and `view_workflow` for the lead only (ADR-0038 §4–5, part of the
+  lead's set on both adapters); `ask_lead` for helpers, the tester and both
   reviewers (ADR-0033); plus `start_agent`, `list_agents`, `message_agent`, `stop_agent` and
   `agent_status` for a helper with `canStartHelpers` (a depth-2 parent helper; the engine scopes
   each call to its own children); nothing for a follow-up turn. The Codex adapter offers the same

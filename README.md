@@ -133,6 +133,11 @@ allowed them.
   feed a planner or the lead, several planners whose plans you compare side by side and pick from,
   several reviewers per change (any "rework" wins), and custom arrows that hand one agent's output
   to another. Each arrow can carry a label and your reason, which agents get as quoted data.
+- Decide where failures go: draw a When arrow from a tester, a Checks block, a change reviewer or
+  the ticket merge to a helper, the lead or the Author block ("whoever wrote the failing code"),
+  with a number of fix rounds. The lead always gets the failure's context and can move a fix.
+  "Flow in words" beside the canvas reads the workflow back as sentences, the same ones the lead
+  gets.
 - Each agent block has its own model, effort (Low, Medium, High), skills, agent file and approval
   mode. A ticket's or run's mode can only make a block more careful, never less.
 - Links that make no sense are refused, and no workflow can switch off a safety rule: only helpers
@@ -253,6 +258,8 @@ automatically on start; back up your data folder before an upgrade). What works 
 - projects, the board, plan-first ticket runs with a lead, helpers, reviewers and a tester;
 - editable workflow graphs (one Agent block with roles from its arrows, researchers, several
   planners, review fan-out), approval modes up to Full auto, effort per agent;
+- structured test results and failure routing with When arrows (on the
+  `feature/workflow/failure-routing` branch; real run pending);
 - the harness (setup steps and checks), Checks blocks in the workflow;
 - the pull-request-like ticket page, attachments, agent notes and run summaries;
 - GitHub (create or connect a repository, push, open and merge pull requests) and branching
