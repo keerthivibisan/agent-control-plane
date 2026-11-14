@@ -38,3 +38,12 @@ Coordinator-owned. Plan: [README.md](README.md).
   `program.failureRoutes`: When arrows, then routes derived from reviewer rework arrows and "back
   to the helper" (`derived: true`; old fields unchanged, equivalence tests extended).
   `describeWorkflow` + `renderWorkflowDescription` for the lead brief and the web panel.
+- 2026-11-14 FR-5 done (engine and server): one failure router (`failure-router.ts`) asked first
+  by every failure (tester results, change and merge Checks blocks, change review incl. fan-out,
+  merge conflicts incl. ADR-0030); only the owner's When arrows route, derived routes keep today's
+  paths. Helper target: rework of the failing change when it is that block's helper's, else a new
+  helper from the ticket branch; Author: the one known author, else the lead; Lead: context and
+  purpose. Rounds per arrow and failing change; no free slot or room → lead (no queue). The lead
+  is told every fix with its fixId; `reroute_fix` (stop, move in the same round, or take over) and
+  `view_workflow`; "Your workflow" in the lead's first brief. Server: one-line app comment
+  (`failure-routed`), ids and kind in logs.
