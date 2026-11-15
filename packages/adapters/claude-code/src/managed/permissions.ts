@@ -12,6 +12,7 @@ import {
   LEAD_TOOL_NAMES,
   managedToolNames,
   PLANNER_TOOL_NAMES,
+  RESEARCHER_TOOL_NAMES,
   REVIEWER_TOOL_NAMES,
   specKeepsInputOpen,
 } from '@acp/core';
@@ -38,7 +39,7 @@ const LEAD_TOOL_SET: ReadonlySet<string> = new Set(LEAD_TOOL_NAMES);
  * The role tool sets and role facts are provider-neutral and live in core
  * (`orchestration/role-tools.ts`, shared with the Codex adapter); re-exported here for this
  * adapter's callers and tests. How they reach Claude (the `mcp__acp__` server, the gate) stays here.
- * Read-only roles (`isReadOnlyRole`: planner, reviewer) get no edit or shell tools at all
+ * Read-only roles (`isReadOnlyRole`: planner, reviewer, researcher) get no edit or shell tools at all
  * (`READ_ONLY_DISALLOWED_TOOLS`), and anything but an in-folder read is denied without asking.
  */
 export {
@@ -53,6 +54,7 @@ export {
   LEAD_ROLE_TOOL_NAMES,
   managedToolNames,
   PLANNER_TOOL_NAMES,
+  RESEARCHER_TOOL_NAMES,
   REVIEWER_TOOL_NAMES,
   specKeepsInputOpen,
 };
@@ -70,7 +72,7 @@ export const READ_ONLY_DISALLOWED_TOOLS: readonly string[] = [
 
 /**
  * The built-in base set of a reading role (ADR-0019 §7): the lead (read-only in the project root,
- * ADR-0013 §2), the planner and the reviewer. No edit or shell tool is in their context at all.
+ * ADR-0013 §2), the planner, the reviewer and the researcher (ADR-0037 §3). No edit or shell tool is in their context at all.
  */
 export const READ_ONLY_BASE_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
 
@@ -171,9 +173,10 @@ export function isRunSkillCall(spec: ManagedAgentSpec, input: Record<string, unk
   return plugin.skills.includes(raw.startsWith('/') ? raw.slice(1) : raw);
 }
 
-const DENY_ROLE_TOOL: Readonly<Record<'planner' | 'reviewer', string>> = {
+const DENY_ROLE_TOOL: Readonly<Record<'planner' | 'reviewer' | 'researcher', string>> = {
   planner: 'The planner can only submit the plan.',
   reviewer: 'The reviewer can only post its findings.',
+  researcher: 'The researcher can only report its findings (report_findings) or ask the lead.',
 };
 export const DENY_CHANGE_REVIEWER_TOOL = 'The change reviewer can only submit its review.';
 
@@ -263,7 +266,7 @@ function outsideSetMessage(spec: ManagedAgentSpec, toolName: string): string {
  *   tools;
  * - a `Skill` call is allowed, without asking, only for one of the run's plugin skills
  *   (`isRunSkillCall`); any other skill name or input shape is denied;
- * - a read-only role (planner, reviewer) is denied anything else without asking (ADR-0019);
+ * - a read-only role (planner, reviewer, researcher) is denied anything else without asking (ADR-0019);
  * - a read in one of `spec.readOnlyDirs` (the lead's or planner's attachment copies) is allowed;
  * - everything else (an edit or `Bash` of a worker or tester, a lead's read outside its folder)
  *   asks the owner through `callbacks.requestPermission`, with a redacted summary.
@@ -287,7 +290,7 @@ export function createCanUseTool(spec: ManagedAgentSpec, callbacks: ManagedCallb
           ? DENY_CHANGE_REVIEWER_TOOL
           : kind === 'assistant'
             ? DENY_ASSISTANT_TOOL
-            : kind === 'planner' || kind === 'reviewer'
+            : kind === 'planner' || kind === 'reviewer' || kind === 'researcher'
               ? DENY_ROLE_TOOL[kind]
               : spec.canStartHelpers === true && kind === 'worker'
                 ? DENY_HELPER_LEAD_TOOL

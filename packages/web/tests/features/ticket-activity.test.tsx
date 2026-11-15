@@ -459,6 +459,46 @@ describe('the Conversation tab', () => {
     expect(tab.textContent).not.toContain('slow queries from last week');
   });
 
+  it('ADR-0037 §3: shows a researcher’s findings boxed like a review, with a Research label', async () => {
+    const research = {
+      id: 'a-research',
+      type: 'research',
+      at: '2026-10-22T09:00:30.000Z',
+      runId: LOOP_RUN_ID,
+      actor: { kind: 'researcher', label: 'Claude research', agentRunId: 'r-research' },
+      title: 'Claude research reported research findings',
+      body: 'The theme is set in `src/theme.ts`.',
+      link: null,
+    };
+    renderPage(withActivity(loopReviewScenario(), [...ACTIVITY_ITEMS, research]), 'conversation');
+    const tab = await screen.findByTestId('activity');
+    const li = await waitFor(() => {
+      const found = tab.querySelector<HTMLElement>('li[data-type="research"]');
+      if (found === null) throw new Error('no research item yet');
+      return found;
+    });
+    expect(within(li).getByTestId('comment-author').textContent).toBe('Claude research');
+    expect(within(li).getByTestId('research-label').textContent).toBe('Research');
+    expect(li.textContent).toContain('src/theme.ts');
+    expect(li.querySelector('article')?.className).toContain('border-l-accent');
+  });
+
+  it('reads a research comment from the ticket’s own records as research', () => {
+    const detail = TicketDetailDtoSchema.parse(loopReviewScenario().routes[LOOP_TICKET_PATH]);
+    const comment = c({
+      id: 'rc',
+      author: 'app',
+      kind: 'research',
+      agentRunId: 'r-x',
+      body: 'Found it in src/a.ts.',
+    });
+    expect(commentKind(comment)).toBe('research');
+    const items = activityFromDetail({ ...detail, comments: [comment] });
+    const research = items.find((i) => i.type === 'research');
+    expect(research?.actor).toEqual({ kind: 'researcher', label: 'Researcher', agentRunId: 'r-x' });
+    expect(research?.title).toBe('Research findings');
+  });
+
   it('filters by actor with pressed chips', async () => {
     renderPage(withActivity(loopReviewScenario()), 'conversation');
     const tab = await screen.findByTestId('activity');

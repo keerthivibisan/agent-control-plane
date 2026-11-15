@@ -5,6 +5,8 @@
  * them. Roles, tasks, paths, outputs and the diff are invented. Never import this from src/.
  */
 
+import { asServerGraph } from './graph-v3.js';
+
 export const TICKET_ID = 't-12';
 export const PROJECT_ID = 'p-web';
 export const RUN_ID = 'run-2';
@@ -334,10 +336,10 @@ export const PROJECT_GRAPH_PATH = `/api/projects/${PROJECT_ID}/workflow-graph`;
  * `GET /api/projects/:id/workflow-graph` for the same project: `projectWorkflow(o)` migrated, as
  * the server serves a version 1 project (`stored: 'v1'`). The graph is exactly what core's
  * `migrateWorkflowV1` gives in this Auto edits project (tests/features/ticket-options.test.tsx
- * checks that). With `stored: 'v2'` it is the same graph saved in the editor.
+ * checks that). With `stored: 'v3'` it is the same graph saved in the editor.
  */
 export function projectGraph(
-  o: { separate?: boolean; postMerge?: boolean; stored?: 'v1' | 'v2' } = {},
+  o: { separate?: boolean; postMerge?: boolean; stored?: 'v1' | 'v3' } = {},
 ): Json {
   const pw = projectWorkflow(o);
   const wf = pw['workflow'] as Json;
@@ -410,13 +412,14 @@ export function projectGraph(
     legacyV1: { plannerMode: wf['plannerMode'], stages: wf['stages'] },
   };
   return {
-    graph,
+    // ADR-0037: the server sends version 3 (a version 1 project's migration, or a saved graph).
+    graph: asServerGraph(graph),
     stored: o.stored ?? 'v1',
     issues: [],
     setup: pw['setup'],
     skills: pw['skills'],
     agents: [],
-    updatedAt: o.stored === 'v2' ? '2026-10-14T08:00:00.000Z' : wf['updatedAt'],
+    updatedAt: o.stored === 'v3' ? '2026-10-14T08:00:00.000Z' : wf['updatedAt'],
   };
 }
 
@@ -454,6 +457,51 @@ function scenario(detail: Json, extra: Record<string, Json | Json[]> = {}): Tick
       ...extra,
     },
   };
+}
+
+export const OPTION_A = 'option-a';
+export const OPTION_B = 'option-b';
+
+/** ADR-0037 §4: one planner's plan option (a run with several planners). */
+function planOption(id: string, index: number, label: string, over: Json = {}): Json {
+  const base = plan(id, index === 1 ? 1 : 2, 'proposed');
+  return {
+    id,
+    ticketId: TICKET_ID,
+    runId: RUN_ID,
+    optionIndex: index,
+    agentRunId: index === 1 ? PLANNER : `${PLANNER}-2`,
+    nodeId: index === 1 ? 'plan' : 'plan-codex',
+    label,
+    summary: base['summary'],
+    steps: base['steps'],
+    plannedHelpers: base['plannedHelpers'],
+    status: 'proposed',
+    planId: null,
+    createdAt: base['createdAt'],
+    decidedAt: null,
+    ...over,
+  };
+}
+
+/**
+ * ADR-0037 §4: plan review with two planners (Claude and Codex). No plan is proposed yet: the
+ * owner approves one of the two options, which becomes the run's plan.
+ */
+export function planOptionsScenario(): TicketScenario {
+  const run = runDetail('PLAN_REVIEW', [lead('RUNNING', 18_400, 'Used tool: Read')]);
+  return scenario({
+    ticket: ticket('ACTIVE', 'PLAN_REVIEW'),
+    runs: [runSummary(RUN_ID, 'PLAN_REVIEW'), OLD_RUN],
+    currentRun: run,
+    plans: [],
+    planOptions: [
+      planOption(OPTION_A, 1, 'Claude planner'),
+      planOption(OPTION_B, 2, 'Codex planner'),
+    ],
+    comments: [],
+    checks: [],
+  });
 }
 
 /** Plan review: version 2 waits for the owner; version 1 was sent back with a comment. */

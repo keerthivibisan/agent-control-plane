@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { WorkflowGraphSchema, validateWorkflowGraph } from '@acp/core';
+import { validateWorkflowGraph } from '@acp/core';
+import { sentAsV2 } from './sent-graph';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NewProjectWizard } from '../../src/features/project-setup/NewProjectWizard';
 import { ProjectSettings } from '../../src/features/project-setup/ProjectSettings';
@@ -150,7 +151,7 @@ describe('New project wizard (#/projects/new)', () => {
           ? jsonResponse(500, { error: { code: 'internal', message: 'disk full', requestId: 'r' } })
           : jsonResponse(200, {
               graph: (body as { graph: unknown }).graph,
-              stored: 'v2',
+              stored: 'v3',
               issues: [],
               setup: setup(),
               skills: [],
@@ -197,7 +198,8 @@ describe('New project wizard (#/projects/new)', () => {
     const put = s.calls
       .filter((c) => c.method === 'PUT' && c.path === `${P}/workflow-graph`)
       .at(-1);
-    const graph = WorkflowGraphSchema.parse((put?.body as { graph: unknown }).graph);
+    // ADR-0037: the wizard saves version 3; read here in its version 2 form.
+    const graph = sentAsV2((put?.body as { graph: unknown }).graph);
     expect(graph.template).toBe('reviewer-helper-loop');
     expect(graph.nodes.some((n) => n.type === 'planner')).toBe(true);
     // A Full auto project: the plan step approves automatically, as before graphs.

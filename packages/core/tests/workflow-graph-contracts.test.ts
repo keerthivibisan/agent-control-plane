@@ -3,6 +3,7 @@
 // Synthetic data only.
 import { describe, expect, it } from 'vitest';
 import {
+  migrateWorkflowV2,
   NODE_CAPABILITIES,
   PlanStepSchema,
   StoredWorkflowJsonSchema,
@@ -167,9 +168,15 @@ describe('additive tool and API contracts', () => {
     expect(
       ValidateWorkflowGraphResultDtoSchema.safeParse({ ok: false, issues: [issue] }).success,
     ).toBe(true);
+    // ADR-0037 (AR-4): the run graph is version 3; a PUT also takes version 3.
+    const v3 = migrateWorkflowV2(graph);
+    expect(UpdateWorkflowGraphRequestSchema.parse({ graph: v3 }).graph).toEqual(v3);
+    expect(RunWorkflowGraphDtoSchema.safeParse({ runId: 'r1', graph, nodes: [] }).success).toBe(
+      false,
+    );
     const run = {
       runId: 'r1',
-      graph,
+      graph: v3,
       nodes: [
         { nodeId: 'frontend', state: 'active', agentRunIds: ['a1'], approvalMode: 'auto-edits' },
         { nodeId: 'review', state: 'waiting', agentRunIds: [] },

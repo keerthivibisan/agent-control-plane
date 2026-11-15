@@ -7,7 +7,7 @@ import type {
   ProjectWorkflow,
   RunStatus,
   TicketPlan,
-  WorkflowGraph,
+  AnyWorkflowGraph,
   WorkflowNodeId,
   WorkflowProgram,
 } from '@acp/core';
@@ -43,6 +43,9 @@ import {
   TESTER_TASK,
 } from './stages.js';
 import { agentLaunchMode, finalStageNode, programOf } from './program.js';
+import { stageNoteBlocks, withOwnerNotes } from './arrow-notes.js';
+import { advancePrePlan, heldByHandoff, withHandoffs } from './handoffs.js';
+import { isMultiPlanner, multiPlanningGone, openPlanReviewIfReady } from './plan-options.js';
 import type {
   ApprovalDecider,
   EngineAgent,
@@ -51,6 +54,7 @@ import type {
   EngineEffect,
   FollowUpState,
   OwnerWait,
+  PlanOption,
   RunIntegration,
   RunLimits,
   RunState,
@@ -92,10 +96,20 @@ export class Draft {
   /** The run's approval policy (`RunState.approvalPolicy`, ADR-0021). */
   readonly approvalPolicy: ProjectApprovals | undefined;
   /** The run's graph snapshot and its compile context (`RunState.graph`, ADR-0023). */
-  readonly graph: WorkflowGraph | undefined;
+  readonly graph: AnyWorkflowGraph | undefined;
   readonly graphContext: CompileContext | undefined;
   /** Helper nodes of each submitted plan's steps (`RunState.planStepHelpers`). */
   planStepHelpers: Record<string, readonly WorkflowNodeId[]> | undefined;
+  /** Researchers' findings notes by agent run (`RunState.findingsByAgent`, ADR-0037 §3). */
+  findingsByAgent: Record<string, string> | undefined;
+  /** Output notes for custom arrows (`RunState.outputNotes`, ADR-0037 §2). */
+  outputNotes: Record<string, string> | undefined;
+  /** Held agents' first messages (`RunState.pendingBriefs`, ADR-0037 §2). */
+  pendingBriefs: Record<string, string> | undefined;
+  /** The ticket part of researchers' briefs (`RunState.researchBrief`, ADR-0037 §3). */
+  researchBrief: string | undefined;
+  /** Plan options of a run with several planners (`RunState.planOptions`, ADR-0037 §4). */
+  planOptions: PlanOption[] | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -135,6 +149,12 @@ export class Draft {
     this.graphContext = state.graphContext;
     this.planStepHelpers =
       state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
+    this.findingsByAgent =
+      state.findingsByAgent === undefined ? undefined : { ...state.findingsByAgent };
+    this.outputNotes = state.outputNotes === undefined ? undefined : { ...state.outputNotes };
+    this.pendingBriefs = state.pendingBriefs === undefined ? undefined : { ...state.pendingBriefs };
+    this.researchBrief = state.researchBrief;
+    this.planOptions = state.planOptions?.map((o) => ({ ...o }));
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.activeAtStart = new Set(
       state.agents.filter((a) => isActiveAgentStatus(a.status)).map((a) => a.id),
@@ -172,7 +192,7 @@ export class Draft {
     return this.agents.find((a) => a.kind === 'lead');
   }
 
-  /** The separate-mode planner (ADR-0019), if the run has one. */
+  /** The separate-mode planner (ADR-0019), if the run has one; the first one with several. */
   planner(): EngineAgent | undefined {
     return this.agents.find((a) => a.kind === 'planner');
   }
@@ -197,7 +217,8 @@ export class Draft {
       id === this.run.id ||
       this.agents.some((a) => a.id === id) ||
       this.approvals.some((a) => a.id === id) ||
-      this.plans.some((p) => p.id === id)
+      this.plans.some((p) => p.id === id) ||
+      (this.planOptions ?? []).some((o) => o.id === id)
     );
   }
 
@@ -418,10 +439,16 @@ export class Draft {
 
     // Plan-first (ADR-0016): no helper exists before approval, so a planning agent that ends here
     // fails the run. In separate mode the lead waits (QUEUED) for the approved plan; if the owner
-    // stopped it, the run cannot go on either (ADR-0019).
+    // stopped it, the run cannot go on either (ADR-0019). ADR-0037: researchers before planning
+    // run first and the held planners (or planning lead) start after them; with several planners
+    // the run fails only when none is left and no plan option waits.
     if (status === 'PLANNING' || status === 'PLAN_REVIEW') {
+      advancePrePlan(this);
+      openPlanReviewIfReady(this);
       const planner = this.planningAgent();
-      const plannerGone = planner === undefined || !isLiveAgentStatus(planner.status);
+      const plannerGone = isMultiPlanner(this)
+        ? multiPlanningGone(this)
+        : planner === undefined || !isLiveAgentStatus(planner.status);
       const leadGone = lead === undefined || !isLiveAgentStatus(lead.status);
       if (plannerGone || leadGone) {
         this.setRunStatus('FAILED');
@@ -539,6 +566,8 @@ export class Draft {
   private startStage(stage: WorkflowNodeId): void {
     const node = finalStageNode(this.program(), stage);
     if (node === undefined) return;
+    // ADR-0037 §2: a stage waits while an agent it gets a custom arrow from is unfinished.
+    if (heldByHandoff(this, node.id)) return;
     // A reviewer that just ended gives back its checkout before the next stage starts.
     this.flushCheckoutRemovals();
     const lead = this.lead();
@@ -589,7 +618,11 @@ export class Draft {
         select: branchBlock.select,
       });
     }
-    const brief = kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this);
+    // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its test or flow arrow.
+    const brief = withOwnerNotes(
+      kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this),
+      stageNoteBlocks(this.program(), node.id),
+    );
     const loopFields =
       loop === undefined
         ? {}
@@ -603,7 +636,7 @@ export class Draft {
       agentRunId: agent.id,
       kind,
       role: agent.role,
-      ...launchFieldsFor(this.program(), node.id, brief),
+      ...launchFieldsFor(this.program(), node.id, withHandoffs(this, agent, brief)),
       ...loopFields,
       ...(kind === 'tester' ? this.launchModeFields(agent) : {}),
     });
@@ -637,6 +670,11 @@ export class Draft {
     if (this.graph !== undefined) state.graph = this.graph;
     if (this.graphContext !== undefined) state.graphContext = this.graphContext;
     if (this.planStepHelpers !== undefined) state.planStepHelpers = this.planStepHelpers;
+    if (this.findingsByAgent !== undefined) state.findingsByAgent = this.findingsByAgent;
+    if (this.outputNotes !== undefined) state.outputNotes = this.outputNotes;
+    if (this.pendingBriefs !== undefined) state.pendingBriefs = this.pendingBriefs;
+    if (this.researchBrief !== undefined) state.researchBrief = this.researchBrief;
+    if (this.planOptions !== undefined) state.planOptions = this.planOptions;
     return state;
   }
 

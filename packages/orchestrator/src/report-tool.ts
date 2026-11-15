@@ -1,6 +1,7 @@
 import type { HelperOutcomeKind, VerificationAssessmentInput } from '@acp/core';
 import { cleanAgentNote } from './agent-note.js';
 import { applyCommand } from './commands.js';
+import { recordOutputNote } from './handoffs.js';
 import { refusal } from './errors.js';
 import type { EngineContext, EngineResult, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
@@ -45,6 +46,8 @@ export function reportWork(
     const body = cleanAgentNote(input.note);
     if (body === '') return refusal('invalid-input', 'The note is empty.');
     d.effects.push({ type: 'agent-note', agentRunId: agent.id, body });
+    // ADR-0037 §2: the note is the agent's output for its custom arrows (a later one replaces it).
+    recordOutputNote(d, agent, body);
     // ADR-0030 §5: the outcome reaches the lead with the seal; a resolver's assessment goes to its
     // operation (advice for the policy gate, never a decision).
     const outcome = input.outcome ?? 'completed';

@@ -59,6 +59,9 @@ const RESOLUTION_TABLES = ['conflict_resolutions'];
 /** Added by 0014 (CM-1, ADR-0034: the code map). */
 const CODE_MAP_TABLES = ['code_map_blobs', 'code_map_entries', 'code_map_manifests'];
 
+/** Added by 0016 (AR-4, ADR-0037 §4: several planners' plan options). */
+const PLAN_OPTION_TABLES = ['ticket_plan_options'];
+
 function describeSchema(database: AcpDatabase) {
   const c = database.connection;
   const tables = c
@@ -148,6 +151,7 @@ describe('0001_observability schema (B3)', () => {
         ...HARNESS_TABLES,
         ...RESOLUTION_TABLES,
         ...CODE_MAP_TABLES,
+        ...PLAN_OPTION_TABLES,
       ].sort(),
     );
   });

@@ -220,7 +220,8 @@ test('the review loop: two helpers, review, rework, an owner override, one final
   const panel = page.getByRole('complementary', { name: 'Block settings' });
   await page.getByTestId('block-review').click();
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
-  await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
+  // ADR-0037: the reviewer's scope comes from its arrows; a review arrow in makes it a change reviewer.
+  await expect(panel.getByTestId('role-section')).toHaveAttribute('data-role', 'reviewer-change');
   await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
   await page.getByTestId('add-block').click();
   await page.getByRole('menuitem', { name: /^Final reviewer/ }).click();
@@ -885,4 +886,142 @@ test('ticket run options: a Manual ticket in a Full auto project, then back to t
   await expect(
     page.getByTestId('ticket-card').filter({ hasText: 'NOTES-1' }).getByTestId('card-run-options'),
   ).toHaveCount(0);
+});
+
+// ---- ADR-0037 §4 (AR-6): two planners, the owner picks one plan on the ticket page.
+
+const PICKER_TITLE = 'Pick a plan for the search box';
+
+interface GraphV3Json {
+  version: number;
+  template: string;
+  nodes: { id: string; type: string }[];
+  edges: { id: string; type: string; from: string; to: string }[];
+  [key: string]: unknown;
+}
+
+test('two planners: the plans side by side, the owner approves the second', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const token = (await (await request.get('/api/control/token')).json()) as { token: string };
+  const headers = { 'X-ACP-CSRF': token.token };
+  const { parentDir } = (await (await request.get(`${DRIVER}/parent`)).json()) as {
+    parentDir: string;
+  };
+  const created = await request.post('/api/projects/new', {
+    data: { parentDir, name: 'picker' },
+    headers,
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const projectId = ((await created.json()) as { id: string }).id;
+
+  // The project's graph with two planners (the template's, if any, plus new Agent blocks).
+  const dto = (await (await request.get(`/api/projects/${projectId}/workflow-graph`)).json()) as {
+    graph: GraphV3Json;
+  };
+  const graph = dto.graph;
+  expect(graph.version).toBe(3);
+  const planners = graph.edges.filter((e) => e.type === 'plan').length;
+  const nodes = [...graph.nodes];
+  // Without a planner the lead plans (ticket → lead → Plan approval); with planners the ticket goes
+  // to them and Plan approval to the lead.
+  const edges =
+    planners > 0
+      ? [...graph.edges]
+      : [
+          ...graph.edges.filter(
+            (e) => !(e.type === 'flow' && (e.from === 'ticket' || e.to === 'plan-approval')),
+          ),
+          { type: 'flow', id: 'flow-plan-approval-lead', from: 'plan-approval', to: 'orchestrate' },
+        ];
+  for (let i = planners; i < 2; i++) {
+    const id = `picker-planner-${i + 1}`;
+    nodes.push({
+      type: 'agent',
+      id,
+      label: i === 0 ? 'Claude planner' : 'Codex planner',
+      model: null,
+      skills: [],
+      agent: null,
+    } as GraphV3Json['nodes'][number]);
+    edges.push({ type: 'flow', id: `flow-ticket-${id}`, from: 'ticket', to: id });
+    edges.push({ type: 'plan', id: `plan-${id}`, from: id, to: 'plan-approval' });
+  }
+  const put = await request.put(`/api/projects/${projectId}/workflow-graph`, {
+    data: { graph: { ...graph, template: 'custom', nodes, edges } },
+    headers,
+  });
+  expect(put.ok(), await put.text()).toBe(true);
+
+  // A ticket started through the routes.
+  const ticketRes = await request.post(`/api/projects/${projectId}/tickets`, {
+    data: { title: PICKER_TITLE },
+    headers,
+  });
+  expect(ticketRes.ok(), await ticketRes.text()).toBe(true);
+  const ticketId = ((await ticketRes.json()) as { id: string }).id;
+  for (const [path, body] of [
+    [`/api/tickets/${ticketId}/move`, { status: 'READY' }],
+    [`/api/tickets/${ticketId}/start`, {}],
+  ] as const) {
+    const res = await request.post(path, { data: body, headers });
+    expect(res.ok(), await res.text()).toBe(true);
+  }
+
+  // Both planners submit their plans (driven like the agents above).
+  let both: DriverAgent[] = [];
+  await expect
+    .poll(async () => {
+      both = (await agents(request)).filter(
+        (a) => a.kind === 'planner' && a.prompt.includes(PICKER_TITLE),
+      );
+      return both.length;
+    })
+    .toBe(2);
+  for (const [i, p] of both.entries()) {
+    await act(request, p.id, 'started');
+    await lead(request, p.id, 'submit_plan', {
+      summary: i === 0 ? 'Plan A: a plain search box' : 'Plan B: search with suggestions',
+      steps: [{ title: i === 0 ? 'Box' : 'Suggestions', role: 'UI builder', detail: 'One step' }],
+    });
+  }
+
+  // The ticket page shows both plans side by side; the owner approves the second.
+  await page.goto(`/#/p/${projectId}/tickets/${ticketId}`);
+  const card = page.getByTestId('plan-options-card');
+  await expect(card).toBeVisible();
+  const options = card.getByTestId('plan-option');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Plan A: a plain search box');
+  await expect(options.nth(1)).toContainText('Plan B: search with suggestions');
+  const [first, second] = [await options.nth(0).boundingBox(), await options.nth(1).boundingBox()];
+  // Side by side at desktop width: the same row, the second to the right.
+  expect(Math.abs((first?.y ?? 0) - (second?.y ?? 1))).toBeLessThan(4);
+  expect(second?.x ?? 0).toBeGreaterThan(first?.x ?? 0);
+  await shootPart(page, 'plan-options', 'plan-options-card');
+  await options.nth(1).getByTestId('plan-option-approve').click();
+  await expect(card).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const t = (await (await request.get(`/api/tickets/${ticketId}`)).json()) as {
+        currentRun: { status: string } | null;
+        plans: { summary: string; status: string }[];
+        planOptions?: { status: string }[];
+      };
+      return JSON.stringify([
+        t.plans.map((p) => [p.summary, p.status]),
+        t.planOptions?.map((o) => o.status),
+      ]);
+    })
+    .toBe(
+      JSON.stringify([[['Plan B: search with suggestions', 'approved']], ['not-chosen', 'chosen']]),
+    );
+  // The lead starts with the chosen plan.
+  const leadAgent = await agentOf(
+    request,
+    (a) => a.kind === 'lead' && a.prompt.includes('Plan B: search with suggestions'),
+  );
+  expect(leadAgent.prompt).not.toContain('Plan A: a plain search box');
 });

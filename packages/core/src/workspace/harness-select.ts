@@ -3,10 +3,11 @@ import type {
   CheckSelection,
   GraphIssue,
   WorkflowGraph,
+  WorkflowGraphV3,
   WorkflowNodeOf,
 } from './workflow-graph.js';
 import { CHECK_PLACE_NAMES, checkBlockOf } from './graph/check-blocks.js';
-import { clip, indexNodes, q } from './graph/graph-index.js';
+import { clip, q } from './graph/graph-index.js';
 
 /**
  * Which of the harness file's checks a Checks block runs (ADR-0027 §4, §5). Pure: the server
@@ -63,12 +64,19 @@ function warning(
  *   change can be merged into the ticket branch without them (they still gate your merge).
  */
 export function checkSelectionIssues(
-  graph: Pick<WorkflowGraph, 'nodes'>,
+  graph: Pick<WorkflowGraph, 'nodes'> | Pick<WorkflowGraphV3, 'nodes'>,
   manifest: Pick<HarnessManifest, 'checks'> | null,
 ): GraphIssue[] {
   const issues: GraphIssue[] = [];
-  for (const node of indexNodes(graph.nodes).unique) {
-    if (node.type !== 'checks') continue;
+  // Checks blocks are the same in versions 2 and 3; the first node with an id wins, as elsewhere.
+  const seen = new Set<string>();
+  const blocks: WorkflowNodeOf<'checks'>[] = [];
+  for (const node of graph.nodes) {
+    if (seen.has(node.id)) continue;
+    seen.add(node.id);
+    if (node.type === 'checks') blocks.push(node);
+  }
+  for (const node of blocks) {
     const block = checkBlockOf(node);
     const where = CHECK_PLACE_NAMES[block.place];
     if (manifest === null) {

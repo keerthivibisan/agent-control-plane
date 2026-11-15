@@ -1,4 +1,3 @@
-import type { WorkflowNode } from '@acp/core';
 import type { AgentRunDto, RunWorkflowGraphDto } from '@acp/core/api';
 import {
   Background,
@@ -11,9 +10,15 @@ import {
 import { useEffect, useMemo } from 'react';
 import { Card } from '../../components/Card';
 import { REVIEW_LOOP_COPY, TICKET_COPY, WORKFLOW_LIVE_COPY } from '../../lib/copy';
+import type { BlockKind } from '../workflow/editor/roles';
 import { agentToShow, buildLiveGraph, heldBlock, stageOfBlock, type LiveBlock } from './live-graph';
 import { HeldNotice, ReviewerFindingsLink, type LiveWorkflowProps } from './live-parts';
-import { LiveGraphContext, liveBlockTypes, type LiveGraphActions } from './LiveGraphNodes';
+import {
+  LiveGraphContext,
+  liveBlockTypes,
+  liveLinkTypes,
+  type LiveGraphActions,
+} from './LiveGraphNodes';
 
 const G = WORKFLOW_LIVE_COPY.graph;
 
@@ -84,14 +89,14 @@ export function LiveRunGraph({
   const above = held !== null || dto.review !== undefined;
   const actions = useMemo<LiveGraphActions>(
     () => ({
-      selectAgent: (agent: AgentRunDto, node: WorkflowNode) =>
-        onSelectAgent(agent.id, stageOfBlock(node)),
+      selectAgent: (agent: AgentRunDto, kind: BlockKind) =>
+        onSelectAgent(agent.id, stageOfBlock(kind)),
     }),
     [onSelectAgent],
   );
   const onNodeClick: NodeMouseHandler<LiveBlock> = (_, block) => {
     const pick = agentToShow(block.data.agents);
-    if (pick !== undefined) onSelectAgent(pick.id, stageOfBlock(block.data.node));
+    if (pick !== undefined) onSelectAgent(pick.id, stageOfBlock(block.data.kind));
   };
 
   return (
@@ -127,6 +132,7 @@ export function LiveRunGraph({
               nodes={graph.nodes}
               edges={graph.edges}
               nodeTypes={liveBlockTypes}
+              edgeTypes={liveLinkTypes}
               onNodeClick={onNodeClick}
               nodesDraggable={false}
               nodesConnectable={false}

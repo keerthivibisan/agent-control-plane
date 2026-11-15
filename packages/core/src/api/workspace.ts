@@ -6,6 +6,7 @@ import { RunStatusSchema } from '../orchestration/orchestration.js';
 import { TokenCountsSchema } from '../usage/usage.js';
 import { ChangeReviewerModeSchema, ReworkRoundsSchema } from '../workspace/workflow.js';
 import { TicketCommentKindSchema } from '../workspace/ticket-activity.js';
+import { TicketPlanOptionSchema } from '../workspace/plan-options.js';
 import { AttachmentDtoSchema } from './activity.js';
 import { ProjectAutomationSchema } from '../workspace/conflict-resolution.js';
 import {
@@ -68,6 +69,12 @@ export const TicketCommentDtoSchema = TicketCommentSchema.extend({
 export type TicketCommentDto = z.infer<typeof TicketCommentDtoSchema>;
 export const TicketPlanDtoSchema = TicketPlanSchema;
 export type TicketPlanDto = z.infer<typeof TicketPlanDtoSchema>;
+/**
+ * ADR-0037 §4: a plan option of a run with two or more planners. The chosen one is also in `plans`
+ * as the run's plan, exactly like a single planner's plan.
+ */
+export const TicketPlanOptionDtoSchema = TicketPlanOptionSchema;
+export type TicketPlanOptionDto = z.infer<typeof TicketPlanOptionDtoSchema>;
 
 /** A board card: the ticket plus what its current run is doing. */
 export const TicketCardDtoSchema = TicketDtoSchema.extend({
@@ -104,6 +111,12 @@ export const TicketDetailDtoSchema = z.object({
   runs: z.array(RunSummaryDtoSchema),
   currentRun: RunDetailDtoSchema.nullable(),
   plans: z.array(TicketPlanDtoSchema),
+  /**
+   * ADR-0037 §4: the current run's plan options, oldest first (empty with one planner or none).
+   * While the run is in PLAN_REVIEW the `proposed` ones wait for the owner to approve one. Absent
+   * from servers before it.
+   */
+  planOptions: z.array(TicketPlanOptionDtoSchema).optional(),
   comments: z.array(TicketCommentDtoSchema),
   checks: z.array(CheckRunDtoSchema),
   /** ADR-0027: the current run's setup runs, oldest first. Absent from servers before it. */
@@ -215,6 +228,11 @@ export const PlanDecisionRequestSchema = z
   .object({
     decision: z.enum(['approve', 'request-changes']),
     comment: z.string().trim().min(1).max(8000).optional(),
+    /**
+     * ADR-0037 §4: with several planners, the plan option to approve (required when two or more
+     * wait). Without plan options it must be absent.
+     */
+    planOptionId: z.string().min(1).optional(),
   })
   .refine((r) => r.decision !== 'request-changes' || r.comment !== undefined, {
     message: 'say what should change',

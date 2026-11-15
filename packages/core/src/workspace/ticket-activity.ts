@@ -23,6 +23,8 @@ export const TicketCommentKindSchema = z.enum([
   'agent-note',
   /** A reviewer's findings (Conversation). */
   'review',
+  /** A researcher's findings note (Conversation; ADR-0037 §3, the `report_findings` tool). */
+  'research',
   /** The lead's rework, discard or ask note (Conversation). */
   'note',
   /** The facts of a run, composed by the app (Conversation). */
@@ -40,6 +42,8 @@ export const COMMENTS_TAB_KINDS: readonly TicketCommentKind[] = Object.freeze([
 
 /** Most characters in a helper's or tester's note (the `report_work` tool, ADR-0026 §3). */
 export const MAX_AGENT_NOTE_CHARS = 600;
+/** Most characters in a researcher's findings note (the `report_findings` tool, ADR-0037 §3). */
+export const MAX_RESEARCH_FINDINGS_CHARS = 16384;
 /** Most characters in the lead's ticket summary (its `request_review.summary`). */
 export const MAX_TICKET_SUMMARY_CHARS = 1500;
 
@@ -110,6 +114,8 @@ export const ActivityTypeSchema = z.enum([
   'agent-started',
   'agent-ended',
   'agent-note',
+  /** ADR-0037 §3: a researcher's findings note. */
+  'research',
   'review',
   'note',
   'decision',
@@ -126,6 +132,8 @@ export const ActivityActorKindSchema = z.enum([
   'worker',
   'tester',
   'reviewer',
+  /** ADR-0037 §3. */
+  'researcher',
   'app',
 ]);
 export type ActivityActorKind = z.infer<typeof ActivityActorKindSchema>;

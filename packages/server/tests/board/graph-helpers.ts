@@ -1,8 +1,12 @@
 import { expect } from 'vitest';
+import { workflowTemplateV3 } from '@acp/core';
 import type {
+  AgentNode,
   ApprovalMode,
   WorkflowEdge,
+  WorkflowEdgeV3,
   WorkflowGraph,
+  WorkflowGraphV3,
   WorkflowNode,
   WorkflowNodeId,
 } from '@acp/core';
@@ -10,9 +14,11 @@ import { WorkflowGraphDtoSchema, type WorkflowGraphDto } from '@acp/core/api';
 import type { Board } from './loop-helpers.js';
 
 /**
- * Graph building blocks for the server's workflow-graph tests (ADR-0023, WG-C). Synthetic graphs
- * over core's templates; node ids follow the templates (`orchestrate` is the lead, `helpers` the
- * pool, `review` the change reviewer).
+ * Graph building blocks for the server's workflow-graph tests (ADR-0023, WG-C; version 3,
+ * ADR-0037). Synthetic graphs over core's templates; node ids follow the templates (`orchestrate`
+ * is the lead, `helpers` the pool, `review` the change reviewer, `plan` the planner). The version 2
+ * builders stay for the tests that pin how an older client's graph is migrated; the server stores
+ * and serves version 3 either way.
  */
 
 export const LEAD = 'orchestrate';
@@ -32,8 +38,11 @@ export async function projectMode(s: Board, mode: ApprovalMode, commands: object
   expect((await s.send('put', `/api/projects/${s.project.id}/setup`, setup)).status).toBe(200);
 }
 
-/** Saves the graph through the route; it must be valid. */
-export async function putGraph(s: Board, graph: WorkflowGraph): Promise<WorkflowGraphDto> {
+/** Saves the graph (version 2 or 3) through the route; it must be valid. */
+export async function putGraph(
+  s: Board,
+  graph: WorkflowGraph | WorkflowGraphV3,
+): Promise<WorkflowGraphDto> {
   const res = await s.send('put', `/api/projects/${s.project.id}/workflow-graph`, { graph });
   expect(res.status, JSON.stringify(res.body).slice(0, 400)).toBe(200);
   return WorkflowGraphDtoSchema.parse(res.body);
@@ -151,4 +160,76 @@ export async function pendingApprovals(s: Board, runId: string) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return [];
+}
+
+// ---------------------------------------------------------------- version 3 (ADR-0037)
+
+/** A version 3 template as a custom graph (`planner`: the template's planner block `plan`). */
+export function templateV3(
+  id: Parameters<typeof workflowTemplateV3>[0] = 'lead-only',
+  planner = false,
+): WorkflowGraphV3 {
+  return { ...workflowTemplateV3(id, { planner }), template: 'custom' };
+}
+
+/** A generic agent block; its role comes from the arrows drawn to and from it. */
+export function agentV3(id: WorkflowNodeId, label: string, extra: Partial<AgentNode> = {}) {
+  return { type: 'agent', id, label, model: null, skills: [], agent: null, ...extra } as AgentNode;
+}
+
+/** An arrow with the id `<type>-<from>-<to>` and the owner's label and purpose when given. */
+export function arrowV3(
+  type: Exclude<WorkflowEdgeV3['type'], 'rework'>,
+  from: WorkflowNodeId,
+  to: WorkflowNodeId,
+  notes: { label?: string; purpose?: string } = {},
+): WorkflowEdgeV3 {
+  return { type, id: `${type}-${from}-${to}`.slice(0, 40), from, to, ...notes };
+}
+
+/** Adds blocks and arrows to a version 3 graph. */
+export function withV3(
+  graph: WorkflowGraphV3,
+  nodes: readonly AgentNode[],
+  edges: readonly WorkflowEdgeV3[],
+): WorkflowGraphV3 {
+  return {
+    ...graph,
+    template: 'custom',
+    nodes: [...graph.nodes, ...nodes],
+    edges: [...graph.edges, ...edges],
+  };
+}
+
+/** A researcher block with a research arrow into `to` (the lead, a planner or an agent). */
+export function withResearcherV3(
+  graph: WorkflowGraphV3,
+  id: WorkflowNodeId,
+  label: string,
+  to: WorkflowNodeId,
+  notes: { label?: string; purpose?: string } = {},
+): WorkflowGraphV3 {
+  return withV3(graph, [agentV3(id, label)], [arrowV3('research', id, to, notes)]);
+}
+
+/** One more planner: a flow from the ticket and a plan arrow into Plan approval. */
+export function withPlannerV3(
+  graph: WorkflowGraphV3,
+  id: WorkflowNodeId,
+  label: string,
+  notes: { label?: string; purpose?: string } = {},
+): WorkflowGraphV3 {
+  return withV3(
+    graph,
+    [agentV3(id, label)],
+    [arrowV3('flow', 'ticket', id), arrowV3('plan', id, 'plan-approval', notes)],
+  );
+}
+
+/** The plan gate's automatic approval switch on a version 3 graph. */
+export function planAutoV3(graph: WorkflowGraphV3, auto: boolean): WorkflowGraphV3 {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((n) => (n.type === 'plan-approval' ? { ...n, auto } : n)),
+  };
 }

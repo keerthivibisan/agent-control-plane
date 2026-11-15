@@ -11,7 +11,7 @@ import {
   resolveRunOptions,
   ticketStage,
   tightenMode,
-  validateWorkflowGraph,
+  validateWorkflowGraphV3,
   type Attachment,
   type CheckRun,
   type SetupRun,
@@ -25,7 +25,7 @@ import {
   type TicketRunOptions,
   type TicketStage,
   type TokenCounts,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
   type WorkflowProgram,
 } from '@acp/core';
 import {
@@ -77,6 +77,7 @@ import {
   deriveRunWorkflow,
   isActiveAgentStatus,
   runSettingsFromSetup,
+  ticketResearcherPrompt,
   ticketRunPrompts,
   type RunLimits,
   type RunState,
@@ -202,6 +203,12 @@ export interface BoardService {
   attachmentContent(id: string): { attachment: Attachment; path: string };
   deleteAttachment(id: string): Promise<void>;
   decidePlan(ticketId: string, planId: string, body: unknown): TicketDetailDto;
+  /**
+   * ADR-0037 §4: the owner's decision on the plan options of the ticket's current run (several
+   * planners): approve one (`planOptionId`, required when two or more wait) or ask every planner
+   * for changes (`PlanDecisionRequest`).
+   */
+  decidePlanOption(ticketId: string, body: unknown): TicketDetailDto;
   runChecks(runId: string): CheckRun[];
   runAgentChecks(runId: string, agentRunId: string): Promise<CheckRun[]>;
   /** ADR-0025: what the app can do with the project's `origin` (`gh` by exit code only). */
@@ -540,6 +547,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       runs,
       currentRun,
       plans: plansWithDeciders(ticketId),
+      // ADR-0037 §4: the current run's plan options (several planners).
+      planOptions:
+        ticket.currentRunId === null ? [] : ws.planOptions.listForRun(ticket.currentRunId),
       // ADR-0026: each with its kind (derived for older comments) and attachments.
       comments: toCommentDtos(
         ws.comments.listForTicket(ticketId),
@@ -577,11 +587,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
    * any error refuses the start with 409 `workflow_invalid` before the run is created.
    */
   function runnableProgram(
-    graph: WorkflowGraph,
+    graph: WorkflowGraphV3,
     context: CompileContext,
     setup: ProjectAgentSetup,
   ): WorkflowProgram {
-    const issues = validateWorkflowGraph(graph, {
+    const issues = validateWorkflowGraphV3(graph, {
       maxConcurrentHelpers: setup.maxConcurrentHelpers,
       projectMode: context.projectMode,
       // ADR-0031: a Codex node in Full auto is refused here too (CX-4), before the run exists.
@@ -602,7 +612,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
   /** What every ticket run gets, whichever workflow it follows. */
   function runBase(
     ticket: Ticket,
-    prompts: { leadPrompt: string; plannerPrompt?: string },
+    prompts: { leadPrompt: string; plannerPrompt?: string; researcherPrompt?: string },
     limits: RunLimits,
     budget: RunBudget,
   ) {
@@ -612,6 +622,9 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       title: `${ticket.key} ${ticket.title}`,
       leadPrompt: prompts.leadPrompt,
       ...(prompts.plannerPrompt !== undefined && { plannerPrompt: prompts.plannerPrompt }),
+      ...(prompts.researcherPrompt !== undefined && {
+        researcherPrompt: prompts.researcherPrompt,
+      }),
       limits,
       budget,
       inTransaction: (runId: string) => {
@@ -1062,13 +1075,19 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           mode: tightenMode(null, projectApprovals.mode, ...approvalCeilings).mode,
           commands: projectApprovals.commands,
         };
-        const prompts = ticketRunPrompts(
-          ticket,
-          limits,
-          { plannerMode: program.planner === null ? 'lead' : 'separate' },
-          // ADR-0022, ADR-0023 §6: the briefs say so when the plan gate approves at once.
-          { fullAuto: program.planAutoApprove },
-        );
+        const prompts = {
+          ...ticketRunPrompts(
+            ticket,
+            limits,
+            { plannerMode: program.planner === null ? 'lead' : 'separate' },
+            // ADR-0022, ADR-0023 §6: the briefs say so when the plan gate approves at once.
+            { fullAuto: program.planAutoApprove },
+          ),
+          // ADR-0037 §3: the ticket part of every researcher's brief; the engine adds the rest.
+          ...(program.researchers.length > 0 && {
+            researcherPrompt: ticketResearcherPrompt(ticket),
+          }),
+        };
         checkUnchanged(ticket);
         run = deps.control.createTicketRun({
           ...runBase(ticket, prompts, limits, budget),
@@ -1249,6 +1268,13 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
       if (plan === undefined || plan.ticketId !== ticketId) {
         throw new HttpError(404, 'plan_not_found', `Plan ${planId} not found on this ticket`);
       }
+      if (input.planOptionId !== undefined) {
+        throw new HttpError(
+          400,
+          'invalid_input',
+          'A plan option is decided on the ticket’s plan options, not on a plan',
+        );
+      }
       if (!deps.control.enabled) throw managedDisabled();
       deps.control.decidePlan(plan.runId, planId, input.decision, input.comment);
       // The engine only sends the comment to the lead; it is kept on the ticket (ADR-0016).
@@ -1262,6 +1288,33 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         });
       }
       notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId: plan.runId });
+      return detail(ticketId);
+    },
+
+    decidePlanOption(ticketId, body) {
+      const ticket = ticketOrThrow(ticketId);
+      const input = PlanDecisionRequestSchema.parse(body);
+      const runId = ticket.currentRunId;
+      if (runId === null || ws.planOptions.listForRun(runId).length === 0) {
+        throw new HttpError(409, 'plan_not_pending', 'No plan options are waiting on this ticket');
+      }
+      if (!deps.control.enabled) throw managedDisabled();
+      deps.control.decidePlanOption(runId, input.decision, {
+        ...(input.planOptionId !== undefined && { planOptionId: input.planOptionId }),
+        ...(input.comment !== undefined && { comment: input.comment }),
+      });
+      // As for a single plan, the engine only sends the comment; it is kept on the ticket.
+      if (input.comment !== undefined) {
+        ws.comments.insert({
+          ticketId,
+          runId,
+          planId: null,
+          author: 'owner',
+          body: input.comment,
+          kind: 'comment',
+        });
+      }
+      notice('tickets-changed', { projectId: ticket.projectId, ticketId, runId });
       return detail(ticketId);
     },
 

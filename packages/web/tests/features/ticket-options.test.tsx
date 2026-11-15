@@ -1,10 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  migrateWorkflowV1,
-  workflowTemplate,
+  migrateWorkflowV1ToV3,
+  workflowTemplateV3,
   type LegacyWorkflowV1,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import { projectGraph, projectWorkflow } from '../../e2e/ticket-fixtures';
 import { BoardPage } from '../../src/features/board/BoardPage';
@@ -45,13 +45,13 @@ const workflowIsGraph = () =>
   });
 
 /**
- * A project saved in the editor (`stored: 'v2'`) as "Lead only" with 4 rework rounds, in a Manual
+ * A project saved in the editor (`stored: 'v3'`) as "Lead only" with 4 rework rounds, in a Manual
  * project: every value differs from the version 1 fixture, so a screen that showed the old
  * defaults (or none) fails.
  */
 function savedGraphDto() {
-  const graph: WorkflowGraph = workflowTemplate('lead-only');
-  const dto = projectGraph({ stored: 'v2' });
+  const graph: WorkflowGraphV3 = workflowTemplateV3('lead-only');
+  const dto = projectGraph({ stored: 'v3' });
   return {
     ...dto,
     graph: {
@@ -100,7 +100,7 @@ describe('ticket run options logic (RL-H)', () => {
   it('reads the project defaults from the graph DTO, for every way it is stored', () => {
     expect(projectRunDefaults(WorkflowGraphDtoSchema.parse(projectGraph()))).toEqual(PROJECT);
     expect(
-      projectRunDefaults(WorkflowGraphDtoSchema.parse(projectGraph({ stored: 'v2' }))),
+      projectRunDefaults(WorkflowGraphDtoSchema.parse(projectGraph({ stored: 'v3' }))),
     ).toEqual(PROJECT);
     expect(projectRunDefaults(WorkflowGraphDtoSchema.parse(savedGraphDto()))).toEqual(SAVED);
   });
@@ -110,7 +110,8 @@ describe('ticket run options logic (RL-H)', () => {
       const v1 = ProjectWorkflowDtoSchema.parse(projectWorkflow(o)).workflow;
       const legacy: LegacyWorkflowV1 = { plannerMode: v1.plannerMode, stages: v1.stages };
       const dto = WorkflowGraphDtoSchema.parse(projectGraph(o));
-      expect(dto.graph).toEqual(migrateWorkflowV1(legacy, { projectMode: 'auto-edits' }));
+      // ADR-0037: served as version 3.
+      expect(dto.graph).toEqual(migrateWorkflowV1ToV3(legacy, { projectMode: 'auto-edits' }));
     }
   });
 

@@ -67,6 +67,10 @@ function agentNode(node: AgentWorkflowNode, ctx: CompileContext): ProgramAgentNo
 }
 
 /**
+ * The version 2 compiler, kept as the reference the version 3 compiler is tested against
+ * (ADR-0037: a migrated version 2 graph compiles to the same program). `compileWorkflow` takes
+ * both versions and runs the version 3 compiler.
+ *
  * A valid graph compiled for one run (ADR-0023 §4, README §3 and WG-0 refinements 3 and 5–7).
  * Pure. Throws `WorkflowGraphInvalidError` when `validateWorkflowGraph` reports any error, so it
  * can never accept a graph the validator refuses.
@@ -94,7 +98,7 @@ function agentNode(node: AgentWorkflowNode, ctx: CompileContext): ProgramAgentNo
  * - Agent nodes carry their `effort` only when it is set (ADR-0028 §1), and their `provider`
  *   (the node's, else `ctx.projectProvider`) only when one is set (ADR-0031).
  */
-export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): WorkflowProgram {
+export function compileWorkflowV2(graph: WorkflowGraph, ctx: CompileContext): WorkflowProgram {
   const errors = validateWorkflowGraph(graph, {
     projectMode: ctx.projectMode,
     maxConcurrentHelpers: ctx.maxConcurrentHelpers,
@@ -125,8 +129,15 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
     if (target.type === 'lead') return { by: 'lead', leadRounds };
     const reviewerRounds = reworkRounds(target.id, nodeId);
     return reviewerRounds === undefined
-      ? { by: 'agent', reviewer: target.id, then: 'lead', leadRounds }
-      : { by: 'agent', reviewer: target.id, then: 'direct', reviewerRounds, leadRounds };
+      ? { by: 'agent', reviewer: target.id, reviewers: [target.id], then: 'lead', leadRounds }
+      : {
+          by: 'agent',
+          reviewer: target.id,
+          reviewers: [target.id],
+          then: 'direct',
+          reviewerRounds,
+          leadRounds,
+        };
   };
 
   const nodeModes: Record<WorkflowNodeId, EffectiveNodeMode> = Object.create(null) as Record<
@@ -233,6 +244,9 @@ export function compileWorkflow(graph: WorkflowGraph, ctx: CompileContext): Work
   return {
     lead: agentNode(lead, ctx),
     planner: planner === undefined ? null : agentNode(planner, ctx),
+    planners: planner === undefined ? [] : [agentNode(planner, ctx)],
+    researchers: [],
+    handoffs: [],
     planAutoApprove: gate.auto && ctx.approvalCeilings.every((c) => c === 'full-auto'),
     helpers,
     changeReviewers,

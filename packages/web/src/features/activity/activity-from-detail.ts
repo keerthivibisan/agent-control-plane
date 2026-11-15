@@ -33,6 +33,12 @@ function actorOf(
       agentRunId: id,
     };
   }
+  if (kind === 'research') {
+    // ADR-0037 §3: a researcher's findings, named after its agent when the run on screen lists it.
+    const id = comment.agentRunId ?? null;
+    const agent = id === null ? undefined : agents.find((a) => a.id === id);
+    return { kind: 'researcher', label: agent?.role ?? A.actor.researcher, agentRunId: id };
+  }
   switch (comment.author) {
     case 'owner':
       return { kind: 'owner', label: A.actor.owner, agentRunId: null };
@@ -64,6 +70,8 @@ function itemOf(
       return { ...base, type: 'agent-note', title: D.agentNote(actor.label) };
     case 'review':
       return { ...base, type: 'review', title: D.review };
+    case 'research':
+      return { ...base, type: 'research', title: D.research };
     case 'run-facts':
       return { ...base, type: 'run-facts', title: D.runFacts };
     case 'system': {

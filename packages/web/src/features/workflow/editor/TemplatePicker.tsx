@@ -2,7 +2,7 @@ import {
   WORKFLOW_TEMPLATES,
   type ApprovalMode,
   type LegacyWorkflowV1,
-  type WorkflowGraph,
+  type WorkflowGraphV3,
   type WorkflowTemplateId,
 } from '@acp/core';
 import { useId, useState } from 'react';
@@ -11,7 +11,10 @@ import { Dialog } from '../../../components/Dialog';
 import { AlertIcon } from '../../../components/icons';
 import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { CheckboxField, ChoiceCards } from '../../project-setup/fields';
+import { graphRoles } from './roles';
 import { restoredGraph, templateGraph } from './templates';
+
+type WorkflowGraph = WorkflowGraphV3;
 
 const T = WORKFLOW_GRAPH_COPY.templates;
 
@@ -47,7 +50,9 @@ export function TemplatePicker({
   const [template, setTemplate] = useState<WorkflowTemplateId>(
     graph.template === 'custom' ? 'todays-setup' : graph.template,
   );
-  const [planner, setPlanner] = useState(graph.nodes.some((n) => n.type === 'planner'));
+  const [planner, setPlanner] = useState(() =>
+    [...graphRoles(graph).kinds.values()].includes('planner'),
+  );
   const [pending, setPending] = useState<WorkflowGraph | null>(null);
   const legacy: LegacyWorkflowV1 | undefined = graph.legacyV1;
 

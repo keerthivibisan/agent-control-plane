@@ -1,8 +1,9 @@
 import {
   WorkflowGraphSchema,
-  canConnect,
-  validateWorkflowGraph,
-  type WorkflowGraph,
+  canConnectV3,
+  migrateWorkflowV2,
+  validateWorkflowGraphV3,
+  type WorkflowGraphV3 as WorkflowGraph,
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { customGraph, migratedGraph } from '../../e2e/workflow-fixtures';
@@ -38,21 +39,26 @@ import {
 /*
  * v0.3.1 P-C: linking blocks, the pure parts. Where a dropped link ends (magnetic snapping), the
  * "Link to…" list, one fitting kind linking at once, moving a link's end, undo and redo, and Tidy
- * layout. Every rule is core's `canConnect`; these tests check that every way of linking goes
- * through it and makes only links core accepts.
+ * layout. Every rule is core's `canConnectV3`; these tests check that every way of linking goes
+ * through it and makes only links core accepts. The editor works on version 3 (ADR-0037): the
+ * version 2 fixtures are migrated first, as the page does with the server's graph.
  */
 
-const parse = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
+const parse = (g: unknown): WorkflowGraph => migrateWorkflowV2(WorkflowGraphSchema.parse(g));
 const migrated = () => parse(migratedGraph());
 const custom = () => parse(customGraph());
-const errors = (g: WorkflowGraph) => validateWorkflowGraph(g).filter((i) => i.severity === 'error');
+const errors = (g: WorkflowGraph) =>
+  validateWorkflowGraphV3(g).filter((i) => i.severity === 'error');
 const run = (graph: WorkflowGraph, ...actions: HistoryAction[]): HistoryState =>
   actions.reduce(historyReducer, initialHistoryState(graph));
 const has = (g: WorkflowGraph, type: string, from: string, to: string) =>
   g.edges.some((e) => e.type === type && e.from === from && e.to === to);
-/** The migrated graph with a named helper nobody links to yet. */
+/** The migrated graph with a named helper (the preset: the lead gives it work), no review yet. */
 const withHelper = () =>
   editorReducer(initialEditorState(migrated()), { type: 'add', item: 'helper' }).graph;
+/** The migrated graph with an Agent block nobody links to yet (no role). */
+const withAgent = () =>
+  editorReducer(initialEditorState(migrated()), { type: 'add', item: 'agent' }).graph;
 
 describe('snapTarget: where a dropped link ends', () => {
   const rects: BlockRect[] = [
@@ -130,13 +136,13 @@ describe('the link store', () => {
 
 describe('linkChoices: the "Link to…" list', () => {
   it('lists only blocks core allows, each fitting kind once, and every one connects', () => {
-    for (const graph of [migrated(), custom(), withHelper()]) {
+    for (const graph of [migrated(), custom(), withHelper(), withAgent()]) {
       const drawn = finishView(graph).graph.nodes;
       for (const from of drawn) {
         const choices = linkChoices(graph, from.id);
         for (const c of choices) {
           expect(c.to).not.toBe(from.id);
-          expect(canConnect(graph, c.link.from, c.link.to, c.type).ok).toBe(true);
+          expect(canConnectV3(graph, c.link.from, c.link.to, c.type).ok).toBe(true);
           expect(drawn.some((n) => n.id === c.to)).toBe(true);
         }
         // Every drawn block core allows is offered, and none it refuses.
@@ -154,11 +160,20 @@ describe('linkChoices: the "Link to…" list', () => {
     }
   });
 
-  it('the lead → a new helper offers both kinds that fit; Done offers nothing', () => {
-    const g = withHelper();
-    const toHelper = linkChoices(g, 'orchestrate').filter((c) => c.to === 'helper-1');
-    expect(toHelper.map((c) => c.type)).toEqual(['assigns', 'rework']);
-    expect(toHelper[0]?.label).toBe('Helper 1');
+  it('the lead → a new agent offers implement; a helper offers rework; Done offers nothing', () => {
+    const g = withAgent();
+    const toAgent = linkChoices(g, 'orchestrate').filter((c) => c.to === 'agent-1');
+    expect(toAgent.map((c) => c.type)).toEqual(['implement']);
+    expect(toAgent[0]?.label).toBe('Agent 1');
+    // The preset already has the lead's implement arrow: only rework is left.
+    const toHelper = linkChoices(withHelper(), 'orchestrate').filter((c) => c.to === 'helper-1');
+    expect(toHelper.map((c) => c.type)).toEqual(['rework']);
+    // From an agent with no role: research to the lead, and a custom hand-off to any agent.
+    const fromAgent = linkChoices(g, 'agent-1');
+    expect(fromAgent.filter((c) => c.to === 'orchestrate').map((c) => c.type)).toEqual([
+      'research',
+    ]);
+    expect(fromAgent.filter((c) => c.to === 'review').map((c) => c.type)).toContain('custom');
     expect(linkChoices(g, 'done')).toEqual([]);
     expect(linkChoices(g, 'no-such-block')).toEqual([]);
   });
@@ -166,20 +181,27 @@ describe('linkChoices: the "Link to…" list', () => {
 
 describe('linkOutcome: a drop or a click on a block', () => {
   it('one fitting kind links at once', () => {
-    const g = withHelper();
-    expect(linkOutcome(g, 'helper-1', 'review')).toEqual({
+    expect(linkOutcome(withAgent(), 'orchestrate', 'agent-1')).toEqual({
       kind: 'link',
-      from: 'helper-1',
-      to: 'review',
-      type: 'review',
+      from: 'orchestrate',
+      to: 'agent-1',
+      type: 'implement',
     });
+  });
+
+  it('Custom always asks (ADR-0037 §2), even as the only kind that fits', () => {
+    const g = withHelper();
+    // Two helpers: only a custom hand-off fits between them.
+    const only = linkOutcome(g, 'helpers', 'helper-1');
+    expect(only.kind).toBe('choose');
+    if (only.kind === 'choose') expect(only.option.types).toEqual(['custom']);
   });
 
   it('several kinds ask; none is refused in core’s words; nothing or itself does nothing', () => {
     const g = withHelper();
-    const choose = linkOutcome(g, 'orchestrate', 'helper-1');
+    const choose = linkOutcome(g, 'helper-1', 'review');
     expect(choose.kind).toBe('choose');
-    if (choose.kind === 'choose') expect(choose.option.types).toEqual(['assigns', 'rework']);
+    if (choose.kind === 'choose') expect(choose.option.types).toEqual(['review', 'custom']);
     const refused = linkOutcome(g, 'helper-1', 'checks');
     expect(refused.kind).toBe('refused');
     if (refused.kind === 'refused') {
@@ -259,20 +281,16 @@ describe('moving a link end (reconnect)', () => {
         );
       }
     }
-    // The pool already sends its review to the reviewer: moving the start there is a duplicate.
-    expect(reconnectTargets(g, link.id, 'source')?.get('helpers')).toBe('invalid');
+    // The pool already sends its review to the reviewer: there the link fits only as a custom
+    // hand-off, never as a second review.
+    expect(resolveReconnect(g, link.id, 'source', 'helpers')).toMatchObject({ types: ['custom'] });
     expect(resolveReconnect(g, link.id, 'source', 'checks').kind).toBe('refused');
     expect(reconnectTargets(g, 'no-such-link', 'source')).toBeNull();
   });
 
   it('the target end of a rework link moves to another helper, keeping its rounds', () => {
-    let g = withHelper();
-    g = editorReducer(initialEditorState(g), {
-      type: 'connect',
-      from: 'orchestrate',
-      to: 'helper-1',
-      edgeType: 'assigns',
-    }).graph;
+    // The preset gave the lead's implement arrow to the new helper already.
+    const g = withHelper();
     const rework = g.edges.find((e) => e.type === 'rework' && e.from === 'orchestrate');
     if (rework === undefined || rework.type !== 'rework') throw new Error('no rework');
     const result = resolveReconnect(g, rework.id, 'target', 'helper-1');
@@ -363,13 +381,7 @@ describe('undo and redo', () => {
   });
 
   it('a link end moved is one step; undo puts it back', () => {
-    let g = withHelper();
-    g = editorReducer(initialEditorState(g), {
-      type: 'connect',
-      from: 'orchestrate',
-      to: 'helper-1',
-      edgeType: 'assigns',
-    }).graph;
+    const g = withHelper();
     const rework = g.edges.find((e) => e.type === 'rework');
     if (rework === undefined) throw new Error('no rework');
     const s = run(g, {

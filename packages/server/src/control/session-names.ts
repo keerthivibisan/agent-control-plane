@@ -31,6 +31,7 @@ export const ROLE_WORDS: Readonly<Record<RunAgentKind, string>> = Object.freeze(
   worker: 'Helper',
   reviewer: 'Reviewer',
   tester: 'Tester',
+  researcher: 'Researcher',
 });
 
 /** The prefix of a run without a ticket. */

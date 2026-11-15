@@ -1,4 +1,9 @@
-import { WORKFLOW_STAGES, type WorkflowGraph, type WorkflowStageId } from '@acp/core';
+import {
+  WORKFLOW_STAGES,
+  type WorkflowGraph,
+  type WorkflowGraphV3,
+  type WorkflowStageId,
+} from '@acp/core';
 import type { NodeUseDto } from '@acp/core/api';
 
 /**
@@ -6,7 +11,10 @@ import type { NodeUseDto } from '@acp/core/api';
  * server sends `usedByNodes` for skills; agent files are read from the graph here, so "Used by"
  * names the same blocks for both.
  */
-export function nodesUsingAgent(graph: Pick<WorkflowGraph, 'nodes'>, name: string): NodeUseDto[] {
+export function nodesUsingAgent(
+  graph: Pick<WorkflowGraph, 'nodes'> | Pick<WorkflowGraphV3, 'nodes'>,
+  name: string,
+): NodeUseDto[] {
   return graph.nodes.flatMap((n) =>
     'agent' in n && n.agent === name ? [{ nodeId: n.id, label: n.label }] : [],
   );

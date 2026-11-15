@@ -1,9 +1,9 @@
-import { defaultProjectWorkflow, WORKFLOW_STAGES } from '@acp/core';
-import type { ProjectWorkflow, WorkflowStageId } from '@acp/core';
+import { defaultProjectWorkflow, deriveRoles, WORKFLOW_STAGES } from '@acp/core';
+import type { DerivedRole, ProjectWorkflow, WorkflowNodeV3Of, WorkflowStageId } from '@acp/core';
 import type { RunWorkflowDto, RunWorkflowGraphDto, WorkflowStageState } from '@acp/core/api';
 import { isFinalChangeState } from './loop.js';
 import { approvedPlan } from './plan-read.js';
-import { programOf, runGraphOf } from './program.js';
+import { programOf, runGraphV3Of } from './program.js';
 import {
   anyHelperMerged,
   hasReviewableChange,
@@ -161,7 +161,10 @@ function planState(state: RunState, authorKind: 'planner' | 'lead'): WorkflowSta
   if (approvedPlan(state) !== undefined) return 'done';
   if (status === 'PLAN_REVIEW') return 'needs-you';
   if (status === 'PLANNING') {
-    const author = state.agents.find((a) => a.kind === authorKind);
+    // ADR-0037 §4: with several planners, all of them (one agent otherwise, as before).
+    const authors = state.agents.filter((a) => a.kind === authorKind);
+    if (authors.length > 1) return heldGroupState(state, authors);
+    const author = authors[0];
     return author === undefined ? 'failed' : agentState(state, author);
   }
   return status === 'QUEUED' ? 'waiting' : 'failed';
@@ -265,22 +268,21 @@ type NodeState = RunWorkflowGraphDto['nodes'][number];
 
 /**
  * The live state of each node of the run's graph (ADR-0023, `RunWorkflowGraphDto` without
- * `runId` and `graph`): the snapshot graph, or a version 1 run's workflow migrated. Derived from
- * the run and agent statuses only, never stored. Agent nodes list their agents; editing nodes add
- * their mode for this run and whether they run sandboxed (runs with an approval policy). A
- * version 1 node gives the same state as its stage in `deriveRunWorkflow`.
+ * `runId` and `graph`): the snapshot graph as version 3 (ADR-0037; a version 2 snapshot or a
+ * version 1 run's workflow migrated, with the same node ids). Derived from the run and agent
+ * statuses only, never stored. An agent block's state follows its derived role; agent nodes list
+ * their agents; editing nodes add their mode for this run and whether they run sandboxed (runs
+ * with an approval policy). A version 1 node gives the same state as its stage in
+ * `deriveRunWorkflow`.
  */
 export function deriveRunWorkflowGraph(
   state: RunState,
 ): Omit<RunWorkflowGraphDto, 'runId' | 'graph'> {
-  const graph = runGraphOf(state);
+  const graph = runGraphV3Of(state);
+  const roles = deriveRoles(graph);
   const program = programOf(state);
-  const workers = state.agents.filter((a) => a.kind === 'worker');
-  const ofNode = (kind: EngineAgent['kind'], id: string) =>
-    state.agents.filter((a) => a.kind === kind && stageOf(a) === id);
-  const planner = program.planner;
+  const planned = program.planner !== null;
   const nodes = graph.nodes.map((node): NodeState => {
-    const ids = (agents: readonly EngineAgent[]) => agents.map((a) => a.id);
     switch (node.type) {
       case 'ticket':
         return {
@@ -288,56 +290,23 @@ export function deriveRunWorkflowGraph(
           state: state.run.ticketId === null ? 'skipped' : 'done',
           agentRunIds: [],
         };
-      case 'planner':
-        return {
-          nodeId: node.id,
-          state: planState(state, 'planner'),
-          agentRunIds: ids(ofNode('planner', node.id)),
-        };
       case 'plan-approval':
         return {
           nodeId: node.id,
-          state: planState(state, planner === null ? 'lead' : 'planner'),
+          state: planState(state, planned ? 'planner' : 'lead'),
           agentRunIds: [],
         };
       case 'lead':
         return {
           nodeId: node.id,
           state: orchestrateState(state),
-          agentRunIds: ids(ofNode('lead', node.id)),
+          agentRunIds: ids(ofNode(state, 'lead', node.id)),
         };
-      case 'helper':
-      case 'helper-pool': {
-        const own = workers.filter((w) => stageOf(w) === node.id);
-        return withMode(state, {
-          nodeId: node.id,
-          state: helpersState(state, own),
-          agentRunIds: ids(own),
-        });
-      }
-      case 'reviewer': {
-        if (node.scope === 'final') {
-          const own = ofNode('reviewer', node.id).filter((a) => !isChangeReviewer(a));
-          return {
-            nodeId: node.id,
-            state: finalStageState(state, node.id, 'reviewer', own),
-            agentRunIds: ids(own),
-          };
-        }
-        // A reloaded run's change reviewers have no `reviewsAgentRunId` (it lives with the live run
-        // only), so their recorded stage says which node they reviewed for.
-        const own = ofNode('reviewer', node.id).filter(
-          (a) => isChangeReviewer(a) || a.stage === node.id,
-        );
-        return { nodeId: node.id, state: changeReviewerState(state, own), agentRunIds: ids(own) };
-      }
-      case 'tester': {
-        const own = ofNode('tester', node.id);
-        return withMode(state, {
-          nodeId: node.id,
-          state: finalStageState(state, node.id, 'tester', own),
-          agentRunIds: ids(own),
-        });
+      case 'agent': {
+        const derived = roles.get(node.id);
+        // A snapshot graph was validated at start, so every agent block has one role.
+        if (derived?.ok !== true) return { nodeId: node.id, state: 'skipped', agentRunIds: [] };
+        return agentNodeState(state, node, derived.role);
       }
       case 'checks':
         return { nodeId: node.id, state: checksState(state), agentRunIds: [] };
@@ -357,6 +326,96 @@ export function deriveRunWorkflowGraph(
     nodes,
     ...(state.integration !== undefined ? { review: reviewCounts(state) } : {}),
   };
+}
+
+const ids = (agents: readonly EngineAgent[]) => agents.map((a) => a.id);
+
+function ofNode(state: RunState, kind: EngineAgent['kind'], id: string): EngineAgent[] {
+  return state.agents.filter((a) => a.kind === kind && stageOf(a) === id);
+}
+
+/** An agent block by its derived role (ADR-0037 §1). */
+function agentNodeState(
+  state: RunState,
+  node: WorkflowNodeV3Of<'agent'>,
+  role: DerivedRole,
+): NodeState {
+  switch (role.role) {
+    case 'planner': {
+      const own = ofNode(state, 'planner', node.id);
+      return { nodeId: node.id, state: plannerNodeState(state, own), agentRunIds: ids(own) };
+    }
+    case 'researcher': {
+      const own = ofNode(state, 'researcher', node.id);
+      return { nodeId: node.id, state: researcherState(state, own), agentRunIds: ids(own) };
+    }
+    case 'worker': {
+      const own = state.agents.filter((a) => a.kind === 'worker' && stageOf(a) === node.id);
+      return withMode(state, {
+        nodeId: node.id,
+        state: helpersState(state, own),
+        agentRunIds: ids(own),
+      });
+    }
+    case 'reviewer': {
+      if (role.scope === 'final') {
+        const own = ofNode(state, 'reviewer', node.id).filter((a) => !isChangeReviewer(a));
+        return {
+          nodeId: node.id,
+          state: finalStageState(state, node.id, 'reviewer', own),
+          agentRunIds: ids(own),
+        };
+      }
+      // A reloaded run's change reviewers have no `reviewsAgentRunId` (it lives with the live run
+      // only), so their recorded stage says which node they reviewed for.
+      const own = ofNode(state, 'reviewer', node.id).filter(
+        (a) => isChangeReviewer(a) || a.stage === node.id,
+      );
+      return { nodeId: node.id, state: changeReviewerState(state, own), agentRunIds: ids(own) };
+    }
+    case 'tester': {
+      const own = ofNode(state, 'tester', node.id);
+      return withMode(state, {
+        nodeId: node.id,
+        state: finalStageState(state, node.id, 'tester', own),
+        agentRunIds: ids(own),
+      });
+    }
+    case 'lead':
+      return {
+        nodeId: node.id,
+        state: orchestrateState(state),
+        agentRunIds: ids(ofNode(state, 'lead', node.id)),
+      };
+  }
+}
+
+/** A planner node: as the plan stage, from this node's own planners (ADR-0037 §4: several). */
+function plannerNodeState(state: RunState, own: readonly EngineAgent[]): WorkflowStageState {
+  if (state.run.status !== 'PLANNING' || state.run.ticketId === null) {
+    return planState(state, 'planner');
+  }
+  if (approvedPlan(state) !== undefined) return 'done';
+  return own.length === 0 ? 'failed' : heldGroupState(state, own);
+}
+
+/** `groupState`, where agents still held (QUEUED, ADR-0037 §2) and none working wait. */
+function heldGroupState(state: RunState, agents: readonly EngineAgent[]): WorkflowStageState {
+  const working = agents.filter((a) => a.status !== 'QUEUED');
+  if (working.length === agents.length) return groupState(state, agents);
+  const live = working.some((a) => isLiveAgentStatus(a.status));
+  return live ? groupState(state, working) : 'waiting';
+}
+
+/**
+ * A researcher node (ADR-0037 §3): its researchers' state; none yet waits while the run can still
+ * start one (before planning, or the lead on demand) and is skipped once the run has stopped or is
+ * past its helpers.
+ */
+function researcherState(state: RunState, own: readonly EngineAgent[]): WorkflowStageState {
+  if (own.length > 0) return heldGroupState(state, own);
+  const status = state.run.status;
+  return stopped(state) || status === 'REVIEW' || status === 'COMPLETED' ? 'skipped' : 'waiting';
 }
 
 function withMode(state: RunState, node: NodeState): NodeState {

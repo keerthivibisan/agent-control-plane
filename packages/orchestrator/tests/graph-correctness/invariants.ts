@@ -1,14 +1,20 @@
 import { isModeWithin } from '@acp/core';
-import type { ApprovalMode, WorkflowNode } from '@acp/core';
+import type { ApprovalMode } from '@acp/core';
 import {
+  agentsOfNode,
   approvedPlan,
   changeCheckBlockOf,
   effectiveMode,
+  heldByHandoff,
+  incomingArrows,
+  isHandoffDone,
   leadRoundsUsed,
+  planningNodeIds,
+  prePlanResearchers,
   programNode,
   programOf,
   reviewRouteOf,
-  runGraphOf,
+  runGraphV3Of,
   stageOf,
   undecidedChanges,
 } from '../../src/index.js';
@@ -35,9 +41,14 @@ function effectsOf<T extends EngineEffect['type']>(
 }
 
 /** The mode a node is configured with (its own, else the project's), before ceilings. */
-function configuredMode(node: WorkflowNode | undefined, projectMode: ApprovalMode): ApprovalMode {
-  if (node !== undefined && 'approvalMode' in node && node.approvalMode !== null) {
-    return node.approvalMode;
+function configuredMode(node: object | undefined, projectMode: ApprovalMode): ApprovalMode {
+  if (
+    node !== undefined &&
+    'approvalMode' in node &&
+    node.approvalMode !== null &&
+    node.approvalMode !== undefined
+  ) {
+    return node.approvalMode as ApprovalMode;
   }
   return projectMode;
 }
@@ -180,7 +191,7 @@ export function stepInvariants(step: StepRecord): string[] {
   }
 
   // 8. Modes: editing agents within their node's mode and every ceiling; the rest never get one.
-  const graph = runGraphOf(after);
+  const graph = runGraphV3Of(after);
   const projectMode = after.graphContext?.projectMode ?? after.approvalPolicy?.mode ?? 'manual';
   const ceilings = after.graphContext?.approvalCeilings ?? [];
   for (const e of effectsOf(effects, 'start-agent')) {
@@ -228,6 +239,91 @@ export function stepInvariants(step: StepRecord): string[] {
   }
   for (const e of effectsOf(effects, 'start-follow-up')) {
     if (e.effort !== program.lead.effort) out.push('the follow-up lost the lead’s effort');
+  }
+
+  // 11. ADR-0037 §2: a planner (or the planning lead) starts only after every researcher that
+  //     researches for it is done; an agent the engine starts never starts while an agent it gets
+  //     a custom arrow from is unfinished; each hand-off reaches each agent once.
+  const planning = planningNodeIds(program);
+  const pre = new Set(prePlanResearchers(program).map((r) => r.id));
+  for (const e of effectsOf(effects, 'start-agent')) {
+    if (e.rework !== undefined) continue;
+    const a = agent(after, e.agentRunId);
+    if (a === undefined || !ticketRun) continue;
+    const node = stageOf(a);
+    const firstStart =
+      agent(before, a.id) === undefined || agent(before, a.id)?.status === 'QUEUED';
+    if (!firstStart) continue;
+    if (planning.has(node) && before.run.status !== 'RUNNING' && after.run.status === 'PLANNING') {
+      for (const arrow of incomingArrows(program, node)) {
+        if (arrow.kind !== 'research' || !pre.has(arrow.from)) continue;
+        const done = agentsOfNode(after, arrow.from);
+        if (done.length === 0 || done.some((r) => !isHandoffDone(after, r))) {
+          out.push(`${a.role} started before its researcher ${arrow.from} was done`);
+        }
+      }
+    }
+    const engineStarted = !(step.actor === 'lead' && /^start_agent/.test(step.action));
+    if (engineStarted && a.kind !== 'worker' && heldByHandoff(after, node)) {
+      out.push(`${a.role} started while a custom-arrow source of ${node} was unfinished`);
+    }
+  }
+  for (const a of after.agents) {
+    const got = a.receivedFrom ?? [];
+    if (new Set(got).size !== got.length) out.push(`${a.role} got a hand-off twice`);
+  }
+
+  // 12. ADR-0037 §4: with several planners a plan is approved only by the owner, never
+  //     automatically, and only from PLAN_REVIEW after every planner submitted or ended.
+  if (program.planners.length > 1) {
+    for (const p of after.plans ?? []) {
+      const was = (before.plans ?? []).find((b) => b.id === p.id);
+      if (p.status !== 'approved' || was?.status === 'approved') continue;
+      if (step.actor !== 'owner' || p.decidedBy === 'auto') {
+        out.push('a plan of several planners was approved without the owner');
+      }
+    }
+    if (before.run.status === 'PLANNING' && after.run.status === 'PLAN_REVIEW') {
+      const waiting = after.agents.some(
+        (a) =>
+          a.kind === 'planner' &&
+          a.status !== 'SUCCEEDED' &&
+          a.status !== 'FAILED' &&
+          a.status !== 'CANCELLED' &&
+          a.status !== 'TIMED_OUT' &&
+          a.status !== 'NEEDS_REVIEW' &&
+          !(after.planOptions ?? []).some((o) => o.agentRunId === a.id && o.status === 'proposed'),
+      );
+      if (waiting) out.push('plan review opened while a planner was still planning');
+    }
+  }
+
+  // 13. ADR-0037 §5: a fan-out is decided only once every reviewer gave its verdict or ended.
+  for (const a of after.agents) {
+    const was = agent(before, a.id)?.change;
+    if (was?.state !== 'reviewing' || was.fanOut === undefined || a.change?.state === 'reviewing') {
+      continue;
+    }
+    if (a.change === undefined) continue;
+    // A direct rework drops the fan-out with the round: then only the reviewer whose verdict
+    // decided it may still look open in the state before.
+    const fan = a.change.fanOut ?? was.fanOut;
+    const openReviews = fan.reviews.filter(
+      (r) =>
+        r.verdict === null &&
+        ['QUEUED', 'STARTING', 'RUNNING', 'WAITING_APPROVAL', 'BLOCKED'].includes(
+          agent(after, r.agentRunId)?.status ?? '',
+        ),
+    ).length;
+    const open = openReviews > (a.change.fanOut === undefined ? 1 : 0);
+    if (
+      !isFinalStageAgent(a) &&
+      !['merged', 'discarded', 'no-changes'].includes(a.change.state) &&
+      (fan.pending.length > 0 || open) &&
+      !after.run.status.startsWith('CANCEL')
+    ) {
+      out.push(`${a.role}'s fan-out was decided before every reviewer was done`);
+    }
   }
 
   // 10. ADR-0028 §2: without a Checks block before the merge no check runs on a change for its

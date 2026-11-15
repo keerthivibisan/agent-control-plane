@@ -7,6 +7,7 @@ import {
   LeadToolInputs,
   MAX_CONCURRENT_CHILD_AGENTS,
   MAX_DELEGATION_DEPTH,
+  MAX_RESEARCH_FINDINGS_CHARS,
   budgetTokens,
 } from '../src/index.js';
 import {
@@ -71,6 +72,8 @@ describe('lead tools', () => {
         'project_info',
         'propose_skill',
         'propose_agent',
+        // ADR-0037 §3: the researcher's findings note
+        'report_findings',
       ].sort(),
     );
     const cm = LeadToolInputs.code_map;
@@ -82,6 +85,15 @@ describe('lead tools', () => {
     expect(cm.safeParse({ action: 'search', query: '  ' }).success).toBe(false);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'Which token?' }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: ' ' }).success).toBe(false);
+    // ADR-0037 §3: one findings note of 1 to 16,384 characters (after trimming).
+    const rf = LeadToolInputs.report_findings;
+    expect(MAX_RESEARCH_FINDINGS_CHARS).toBe(16384);
+    expect(rf.safeParse({ findings: 'src/a.ts:3 parses the config.' }).success).toBe(true);
+    expect(rf.safeParse({ findings: 'x'.repeat(16384) }).success).toBe(true);
+    expect(rf.safeParse({ findings: 'x'.repeat(16385) }).success).toBe(false);
+    expect(rf.safeParse({ findings: '' }).success).toBe(false);
+    expect(rf.safeParse({ findings: '   ' }).success).toBe(false);
+    expect(rf.safeParse({}).success).toBe(false);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2000) }).success).toBe(true);
     expect(LeadToolInputs.ask_lead.safeParse({ question: 'x'.repeat(2001) }).success).toBe(false);
     expect(LeadToolInputs.get_review_findings.safeParse({ agentId: 'a' }).success).toBe(true);

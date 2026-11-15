@@ -105,6 +105,8 @@ function agentPrefix(a: EngineAgent): string {
       return 'T';
     case 'reviewer':
       return a.reviewsAgentRunId !== undefined ? 'CR' : 'FR';
+    case 'researcher':
+      return 'R';
   }
 }
 

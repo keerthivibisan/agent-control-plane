@@ -25,9 +25,12 @@ import { managedAgentEnv } from '../../../../src/control/env.js';
 import { createLogger } from '../../../../src/logger.js';
 import { dumpDatabase, git } from '../../control/harness.js';
 import {
+  ARROWS_SCENARIO,
   HARNESS,
   TICKET,
   TICKET_FILES,
+  arrowsChecks,
+  arrowsGraph,
   codexChecks,
   count,
   observeManaged,
@@ -36,7 +39,10 @@ import {
   scenarioGraph,
   startsByProvider,
   summarizeUsage,
+  tokensByProvider,
+  type FanOutReview,
   type StartRecord,
+  type TimelineEntry,
   type UsageRow,
 } from './record.js';
 
@@ -59,6 +65,11 @@ import {
  *   Claude.
  * - `lead`: the lead runs on Codex (gpt-6.1-sol, effort low); the helper and the change reviewer
  *   on Claude.
+ * - `arrows` (AR-6, ADR-0037): a version 3 graph: two researchers (Claude and Codex) with labelled
+ *   `research` arrows into one planner, the lead, the helper pool, and the helper's change fanned
+ *   out to two change reviewers (Claude and Codex) whose findings go to the lead. Every Claude node
+ *   runs ACP_REAL_RUN_CLAUDE_MODEL (default `haiku`) at low effort. It also records the start and
+ *   finish order by role and provider, the research notes' lengths and the fan-out review rounds.
  * Claude nodes use ACP_REAL_RUN_CLAUDE_MODEL when set, else the provider default (as the RL-V
  * driver does).
  *
@@ -99,7 +110,7 @@ if (process.env['CI'] !== undefined) {
 }
 const SCENARIO = parseScenario(process.env['ACP_REAL_RUN_SCENARIO']);
 if (SCENARIO === null) {
-  console.error('Refusing: ACP_REAL_RUN_SCENARIO must be one of reviewer, lead.');
+  console.error('Refusing: ACP_REAL_RUN_SCENARIO must be one of reviewer, lead, arrows.');
   process.exit(2);
 }
 const LIMIT_MS = Number(process.env['ACP_REAL_RUN_LIMIT_MS'] ?? String(20 * 60_000));
@@ -116,6 +127,13 @@ const BUDGET = 80_000;
 const ENDED = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
 // ------------------------------------------------------------------ the temp root (under home)
+
+// This checkout's HEAD and working tree status, compared at the end: the run must not write to
+// any repository but the throwaway one.
+const acpCheckout = process.cwd();
+const checkoutState = (): string =>
+  `${git(acpCheckout, 'rev-parse', 'HEAD')}${git(acpCheckout, 'status', '--porcelain')}`;
+const checkoutBefore = checkoutState();
 
 const root = realpathSync(mkdtempSync(join(homedir(), '.acp-cx-real-run-')));
 const dataDir = join(root, 'data');
@@ -214,9 +232,10 @@ const claudeAdapter: ManagedExecutionAdapter = {
 };
 
 const starts: StartRecord[] = [];
+const timeline: TimelineEntry[] = [];
 const adapters = [
-  observeManaged(claudeAdapter, starts),
-  observeManaged(createManagedCodex({ env: process.env }), starts),
+  observeManaged(claudeAdapter, starts, timeline),
+  observeManaged(createManagedCodex({ env: process.env }), starts, timeline),
 ];
 
 // ------------------------------------------------------------------ the server
@@ -339,7 +358,12 @@ const flow = async (): Promise<Record<string, unknown>> => {
     contextFiles: [],
   });
   const saved = WorkflowGraphDtoSchema.parse(
-    await put(`${p}/workflow-graph`, { graph: scenarioGraph(SCENARIO, CLAUDE_MODEL) }),
+    await put(`${p}/workflow-graph`, {
+      graph:
+        SCENARIO === ARROWS_SCENARIO
+          ? arrowsGraph(CLAUDE_MODEL ?? 'haiku')
+          : scenarioGraph(SCENARIO, CLAUDE_MODEL),
+    }),
   );
   const graphIssues: Record<string, number> = {};
   for (const issue of saved.issues) count(graphIssues, `${issue.severity}:${issue.code}`);
@@ -533,12 +557,42 @@ const flow = async (): Promise<Record<string, unknown>> => {
     // A tiny ticket's plan may quote a line of code (CX real run 1: the test's import line).
     // Plan steps and agent tasks are stored by design (ADR-0016), so a diff line that the
     // owner-facing plan or a task already holds is not a stored diff.
+    acpCheckoutUnchanged: checkoutState() === checkoutBefore,
     noDiffTextInDatabase: !diffLines.some(
       (l) => dump.includes(l) && !plannedText.some((t) => t.includes(l)),
     ),
   };
   if (SCENARIO === 'lead') {
     assertions['codexLeadUsedLeadTools'] = Object.keys(codex.leadTools).length > 0;
+  }
+  let arrows: ReturnType<typeof arrowsChecks> | null = null;
+  if (SCENARIO === ARROWS_SCENARIO) {
+    // An agent without `provider` ran on Claude Code (servers before ADR-0031); unknown id: null.
+    const providerOf = (id: string | null) => {
+      const a = end.agents.find((x) => x.id === id);
+      return a === undefined ? null : (a.provider ?? 'claude-code');
+    };
+    const fanOut: FanOutReview[] = (end.changes ?? []).flatMap((c) =>
+      c.reviews.map((x) => ({
+        change: c.agentRunId,
+        round: x.round,
+        reviewer: x.reviewer,
+        reviewerProvider: providerOf(x.reviewerAgentRunId),
+        verdict: x.verdict,
+        decision: x.decision,
+      })),
+    );
+    const researchLengths = tEnd.comments
+      .filter((c) => c.kind === 'research')
+      .map((c) => c.body.length);
+    arrows = arrowsChecks(timeline, fanOut, researchLengths);
+    assertions['researchersOnBothProviders'] = arrows.researchersBothProviders;
+    assertions['researchersStartedBeforePlanner'] = arrows.researchersBeforePlanner;
+    assertions['researchNotes'] = arrows.researchComments >= 2;
+    assertions['planSubmittedAndApprovedByDriver'] = planDecidedByDriver && plan !== undefined;
+    assertions['reviewFanOutTwoProviders'] = arrows.fanOutRounds > 0;
+    assertions['reviewFanOutDecided'] = arrows.fanOutDecided;
+    assertions['runEnded'] = ENDED.has(end.status);
   }
 
   return {
@@ -555,6 +609,9 @@ const flow = async (): Promise<Record<string, unknown>> => {
     },
     codex,
     usageRecordsByProvider: summarizeUsage(usageRows),
+    tokensByProvider: tokensByProvider(usageRows),
+    arrows,
+    timeline,
     outbox: { seenDuringRun: outboxSeen, ...outboxCounts(outbox) },
     changes,
     decisions: { owner: ownerDecisions, deniedRequests: denied },

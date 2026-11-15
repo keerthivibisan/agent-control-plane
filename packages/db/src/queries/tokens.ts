@@ -50,6 +50,7 @@ export type TokenRole = RunAgentKind | 'external';
 
 /** Workflow order (plan → orchestrate → helpers → review → tests), then sessions outside the app. */
 export const TOKEN_ROLE_ORDER: readonly TokenRole[] = [
+  'researcher',
   'planner',
   'lead',
   'worker',

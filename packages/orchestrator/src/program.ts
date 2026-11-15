@@ -1,10 +1,15 @@
 import {
   compileWorkflow,
   defaultProjectWorkflow,
+  downgradeWorkflowV3,
   isModeWithin,
   migrateWorkflowV1,
+  toWorkflowGraphV3,
 } from '@acp/core';
 import type {
+  AnyWorkflowGraph,
+  ProgramResearcherNode,
+  WorkflowGraphV3,
   RunAgentKind,
   ApprovalMode,
   CompileContext,
@@ -39,7 +44,8 @@ import type { EngineAgent, RunIntegration, RunLimits } from './state.js';
 /** The parts of a run the program is compiled from (`RunState` and `Draft` both fit). */
 export interface ProgramView {
   readonly workflow?: ProjectWorkflow | undefined;
-  readonly graph?: WorkflowGraph | undefined;
+  /** Version 2 or 3 (ADR-0037); `compileWorkflow` takes both. */
+  readonly graph?: AnyWorkflowGraph | undefined;
   readonly graphContext?: CompileContext | undefined;
   readonly integration?: RunIntegration | undefined;
   readonly approvalPolicy?: ProjectApprovals | undefined;
@@ -47,7 +53,7 @@ export interface ProgramView {
 }
 
 interface Compiled {
-  graph: WorkflowGraph;
+  graph: AnyWorkflowGraph;
   context: CompileContext;
   program: WorkflowProgram;
 }
@@ -135,9 +141,31 @@ export function hasMergeChecks(view: ProgramView): boolean {
   return programOf(view).checkBlocks.merge !== null;
 }
 
-/** The graph the run follows: its snapshot, or its version 1 workflow migrated. */
+/** A run's version 3 graph that the version 2 run graph (`runGraphOf`) cannot show. */
+export class RunGraphVersionError extends Error {
+  override readonly name = 'RunGraphVersionError';
+  constructor(reason: string) {
+    super(`This run's workflow uses version 3 features the run graph cannot show yet: ${reason}.`);
+  }
+}
+
+/**
+ * The graph the run follows as version 2 (the run graph's API, `RunWorkflowGraphDto`): its
+ * snapshot, or its version 1 workflow migrated. A version 3 snapshot (ADR-0037) is downgraded;
+ * one that version 2 cannot say (researchers, custom arrows, several planners, a fan-out) throws
+ * `RunGraphVersionError` until the API serves version 3 (AR-4). `runGraphV3Of` reads any run.
+ */
 export function runGraphOf(view: ProgramView): WorkflowGraph {
-  return compiled(view).graph;
+  const graph = compiled(view).graph;
+  if (graph.version === 2) return graph;
+  const down = downgradeWorkflowV3(graph);
+  if (!down.ok) throw new RunGraphVersionError(down.reason);
+  return down.graph;
+}
+
+/** The graph the run follows, as version 3 (ADR-0037): every run's graph migrates to it. */
+export function runGraphV3Of(view: ProgramView): WorkflowGraphV3 {
+  return toWorkflowGraphV3(compiled(view).graph);
 }
 
 // ------------------------------------------------------------------ nodes of agents
@@ -149,6 +177,9 @@ const ROLE_NODE_FALLBACK: Readonly<Record<RunAgentKind, WorkflowNodeId>> = Objec
   worker: 'helpers',
   reviewer: 'code-review',
   tester: 'unit-tests',
+  // ADR-0037: every researcher records its own node (`handoffs.ts`), so this is never used for
+  // one; old rows hold no researcher.
+  researcher: 'plan',
 });
 
 export function agentNodeId(agent: Pick<EngineAgent, 'kind' | 'stage'>): WorkflowNodeId {
@@ -208,18 +239,30 @@ export function changeCheckBlockOf(
   return program.checkBlocks.change[node.id];
 }
 
-/** A program agent node by id (lead, planner, helpers, change reviewers, final stages). */
+/**
+ * A program agent node by id (lead, planners, helpers, change reviewers, final stages, and the
+ * researchers of ADR-0037, which carry the same launch fields).
+ */
 export function programNode(
   program: WorkflowProgram,
   id: WorkflowNodeId,
-): ProgramAgentNode | undefined {
+): ProgramAgentNode | ProgramResearcherNode | undefined {
   if (program.lead.id === id) return program.lead;
-  if (program.planner?.id === id) return program.planner;
   return (
+    program.planners.find((n) => n.id === id) ??
     program.helpers.find((n) => n.id === id) ??
     program.changeReviewers.find((n) => n.id === id) ??
-    program.finalStages.find((n) => n.id === id)
+    program.finalStages.find((n) => n.id === id) ??
+    program.researchers.find((n) => n.id === id)
   );
+}
+
+/** A researcher node (ADR-0037 §3) by id. */
+export function researcherNode(
+  program: WorkflowProgram,
+  id: WorkflowNodeId,
+): ProgramResearcherNode | undefined {
+  return program.researchers.find((n) => n.id === id);
 }
 
 /** The final stage (final reviewer or tester) of an id. */
@@ -248,7 +291,8 @@ export function helperNodeLines(program: WorkflowProgram): string[] {
   return program.helpers.map(nodeLine);
 }
 
-function sameLabel(a: string, b: string): boolean {
+/** Labels match trimmed, ignoring case and repeated spaces. */
+export function sameLabel(a: string, b: string): boolean {
   const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
   return norm(a) === norm(b);
 }

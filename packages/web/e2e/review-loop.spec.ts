@@ -301,7 +301,8 @@ test('the Workflow page: approvals with Auto’s command list, and the change re
   await page.getByTestId('block-review').click();
   const panel = page.getByRole('complementary', { name: 'Block settings' });
   await expect(panel.getByTestId('node-panel')).toHaveAttribute('data-node', 'review');
-  await expect(panel.getByRole('radio', { name: /^Each change/ })).toBeChecked();
+  // ADR-0037: the reviewer's scope comes from its arrows; a review arrow in makes it a change reviewer.
+  await expect(panel.getByTestId('role-section')).toHaveAttribute('data-role', 'reviewer-change');
   await expect(panel.getByTestId('no-mode')).toBeVisible();
   await expect(panel.getByTestId('node-links')).toContainText('Sends its findings → Lead');
   await shootPart(page, 'review-stage', 'block-panel');

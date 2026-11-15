@@ -1,4 +1,5 @@
-import type { WorkflowEdge, WorkflowGraph, WorkflowNode, WorkflowNodeId } from '@acp/core';
+import type { WorkflowNodeId } from '@acp/core';
+import type { AnyEdge, AnyGraph, AnyNode } from './check-blocks';
 
 /**
  * The Finish block (ADR-0028 §3): the editor and the live run graph draw the end of every flow,
@@ -21,19 +22,22 @@ export interface FinishParts {
   done: WorkflowNodeId;
 }
 
-/** What the canvas draws: the graph with the Finish block in place of the three end steps. */
-export interface FinishView {
-  graph: WorkflowGraph;
+/**
+ * What the canvas draws: the graph with the Finish block in place of the three end steps. Either
+ * version (the editor's version 3, the live graph's version 2): only the end steps' types matter.
+ */
+export interface FinishView<G extends AnyGraph = AnyGraph> {
+  graph: G;
   /** Null when the graph does not have exactly one of each end step: nothing is folded then. */
   finish: FinishParts | null;
 }
 
-function single(graph: Pick<WorkflowGraph, 'nodes'>, type: WorkflowNode['type']) {
+function single(graph: { nodes: readonly AnyNode[] }, type: AnyNode['type']) {
   const all = graph.nodes.filter((n) => n.type === type);
   return all.length === 1 ? all[0] : undefined;
 }
 
-export function finishParts(graph: Pick<WorkflowGraph, 'nodes'>): FinishParts | null {
+export function finishParts(graph: { nodes: readonly AnyNode[] }): FinishParts | null {
   const ticketMerge = single(graph, 'ticket-merge');
   const ownerMerge = single(graph, 'owner-merge');
   const done = single(graph, 'done');
@@ -47,14 +51,15 @@ export function isHiddenByFinish(parts: FinishParts | null, id: WorkflowNodeId):
 }
 
 /** The graph as drawn, with the Finish block (pure; the same for the editor and the live graph). */
-export function finishView(graph: WorkflowGraph): FinishView {
+export function finishView<G extends AnyGraph>(graph: G): FinishView<G> {
   const parts = finishParts(graph);
   if (parts === null) return { graph, finish: null };
   const { ticketMerge: tm, ownerMerge: om, done } = parts;
-  const straight = graph.edges.some((e) => e.from === tm && e.to === om);
-  const source = graph.edges.find((e) => e.to === tm && e.from !== tm && e.from !== om)?.from;
-  const edges: WorkflowEdge[] = [];
-  for (const e of graph.edges) {
+  const all: readonly G['edges'][number][] = graph.edges;
+  const straight = all.some((e) => e.from === tm && e.to === om);
+  const source = all.find((e) => e.to === tm && e.from !== tm && e.from !== om)?.from;
+  const edges: G['edges'][number][] = [];
+  for (const e of all) {
     // Inside the Finish block, or out of Done: not drawn.
     if (e.from === done || (e.from === tm && (e.to === om || e.to === done))) continue;
     if (e.from === om && e.to === done) continue;
@@ -68,8 +73,10 @@ export function finishView(graph: WorkflowGraph): FinishView {
     }
     edges.push(e.to === done ? { ...e, to: om } : e);
   }
+  const nodes: readonly G['nodes'][number][] = graph.nodes;
   return {
-    graph: { ...graph, nodes: graph.nodes.filter((n) => n.id !== tm && n.id !== done), edges },
+    // The same version as given: only its lists are filtered and redrawn.
+    graph: { ...graph, nodes: nodes.filter((n) => n.id !== tm && n.id !== done), edges },
     finish: parts,
   };
 }
@@ -80,11 +87,13 @@ export function finishView(graph: WorkflowGraph): FinishView {
  */
 export function finishIssues<
   T extends { nodeId?: string | undefined; edgeId?: string | undefined },
->(issues: readonly T[], graph: WorkflowGraph, view: FinishView): T[] {
+>(issues: readonly T[], graph: AnyGraph, view: FinishView): T[] {
   const parts = view.finish;
   if (parts === null) return [...issues];
-  const drawn = new Set(view.graph.edges.map((e) => e.id));
-  const stored = new Set(graph.edges.map((e) => e.id));
+  const viewEdges: readonly AnyEdge[] = view.graph.edges;
+  const storedEdges: readonly AnyEdge[] = graph.edges;
+  const drawn = new Set(viewEdges.map((e) => e.id));
+  const stored = new Set(storedEdges.map((e) => e.id));
   return issues.map((issue) => {
     let next: T = issue;
     if (next.edgeId !== undefined && stored.has(next.edgeId) && !drawn.has(next.edgeId)) {

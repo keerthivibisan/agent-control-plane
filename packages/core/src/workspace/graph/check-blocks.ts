@@ -4,6 +4,7 @@ import {
   type CheckFailureRoute,
   type CheckSelection,
   type WorkflowNode,
+  type WorkflowNodeV3,
   type WorkflowNodeOf,
 } from '../workflow-graph.js';
 
@@ -50,7 +51,10 @@ export function copySelection(select: CheckSelection): CheckSelection {
 }
 
 /** True when the node is a Checks block at `place` (a `checks` node without one is at `merge`). */
-export function isCheckBlockAt(node: WorkflowNode, place: CheckBlockPlace): boolean {
+export function isCheckBlockAt(
+  node: WorkflowNode | WorkflowNodeV3,
+  place: CheckBlockPlace,
+): boolean {
   return node.type === 'checks' && (node.place ?? 'merge') === place;
 }
 

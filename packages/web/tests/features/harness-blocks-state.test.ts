@@ -1,12 +1,15 @@
 import {
   WorkflowGraphSchema,
+  WorkflowGraphV3Schema,
   isGraphRunnable,
-  validateWorkflowGraph,
+  migrateWorkflowV2,
+  validateWorkflowGraphV3,
   workflowTemplate,
   type CheckSelection,
   type HarnessCheck,
-  type WorkflowGraph,
-  type WorkflowNode,
+  type WorkflowGraphV3 as WorkflowGraph,
+  type WorkflowNodeV3 as WorkflowNode,
+  type WorkflowTemplateId,
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { customGraph } from '../../e2e/workflow-fixtures';
@@ -20,6 +23,7 @@ import {
   type ChecksNode,
 } from '../../src/features/workflow/check-blocks';
 import { layoutGraph, rowOf } from '../../src/features/workflow/editor/layout';
+import { graphRoles } from '../../src/features/workflow/editor/roles';
 import { kindWord, selectionChip } from '../../src/features/workflow/editor/nodes';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
 import {
@@ -34,11 +38,13 @@ import {
 /*
  * H-D (ADR-0027 §5): the editor's Checks blocks, pure, against core's real rules (H-A): a helper
  * or tester flows into a change block, a change block reworks the blocks it checks, branch blocks
- * sit on the final chain. The editor only ever links through `canConnect`, so a graph built here
- * is checked with `validateWorkflowGraph`, the same check the server runs on a save.
+ * sit on the final chain. The editor only ever links through `canConnectV3`, so a graph built here
+ * is checked with `validateWorkflowGraphV3`. The editor works on version 3 (ADR-0037): the version 2
+ * fixtures are migrated first, as the page does with the server's graph.
  */
 
-const parse = (g: unknown): WorkflowGraph => WorkflowGraphSchema.parse(g);
+const parse = (g: unknown): WorkflowGraph => migrateWorkflowV2(WorkflowGraphSchema.parse(g));
+const template = (id: WorkflowTemplateId): WorkflowGraph => migrateWorkflowV2(workflowTemplate(id));
 const run = (graph: WorkflowGraph, ...actions: EditorAction[]): EditorState =>
   actions.reduce(editorReducer, initialEditorState(graph));
 const has = (g: WorkflowGraph, type: string, from: string, to: string) =>
@@ -127,11 +133,11 @@ describe('check blocks: selection', () => {
         patch: { select: { kind: 'labels', labels: ['full'] } },
       },
     );
-    const g = WorkflowGraphSchema.parse(s.graph);
+    const g = WorkflowGraphV3Schema.parse(s.graph);
     expect(has(g, 'flow', 'helper-1', 'change-checks')).toBe(true);
     expect(has(g, 'rework', 'change-checks', 'helper-1')).toBe(true);
     expect(has(g, 'flow', 'branch-checks', 'owner-merge')).toBe(true);
-    const issues = validateWorkflowGraph(g, { harness: { checks: CHECKS } });
+    const issues = validateWorkflowGraphV3(g, { harness: { checks: CHECKS } });
     expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
     expect(issues.filter((i) => i.nodeId?.endsWith('checks') === true)).toEqual([]);
     expect(isGraphRunnable(issues)).toBe(true);
@@ -177,7 +183,7 @@ describe('check blocks: selection', () => {
 
 describe('check blocks: the editor', () => {
   it('the block before the lead’s merge stays in its place, and can be removed (ADR-0028)', () => {
-    const g = workflowTemplate('todays-setup');
+    const g = template('todays-setup');
     const merge = blockOf(g, 'checks');
     expect(merge).toBeDefined();
     expect(isRemovable(merge as WorkflowNode)).toBe(true);
@@ -204,8 +210,8 @@ describe('check blocks: the editor', () => {
     });
     expect(has(s.graph, 'flow', 'helpers', 'change-checks')).toBe(true);
     expect(s.selection).toEqual({ kind: 'node', id: 'change-checks' });
-    expect(rowOf(block as WorkflowNode)).toBe(1);
-    expect(kindWord(block as WorkflowNode)).toBe('Checks on a change');
+    expect(rowOf(block as WorkflowNode, graphRoles(s.graph))).toBe(1);
+    expect(kindWord(block as WorkflowNode, 'checks')).toBe('Checks on a change');
     expect(selectionChip(block as ChecksNode)).toBe('Required checks');
   });
 
@@ -218,9 +224,13 @@ describe('check blocks: the editor', () => {
     const avail = checksAvailability(g, 'change');
     expect(avail.ok).toBe(false);
     expect(run(g, { type: 'add-checks', place: 'change' }).graph).toBe(g);
-    const lead = workflowTemplate('lead-only');
+    const lead = template('lead-only');
     const none = checksAvailability(
-      { ...lead, nodes: lead.nodes.filter((n) => n.type !== 'helper-pool') },
+      {
+        ...lead,
+        nodes: lead.nodes.filter((n) => n.id !== 'helpers'),
+        edges: lead.edges.filter((e) => e.from !== 'helpers' && e.to !== 'helpers'),
+      },
       'change',
     );
     expect(none.ok).toBe(false);

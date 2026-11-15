@@ -1,11 +1,16 @@
 import type {
   NodePosition,
-  WorkflowEdge,
-  WorkflowGraph,
-  WorkflowNode,
+  WorkflowEdgeV3,
+  WorkflowGraphV3,
   WorkflowNodeId,
+  WorkflowNodeV3,
 } from '@acp/core';
 import { rowOf, sizeOf } from './layout';
+import { graphRoles, type GraphRoles } from './roles';
+
+type WorkflowEdge = WorkflowEdgeV3;
+type WorkflowGraph = WorkflowGraphV3;
+type WorkflowNode = WorkflowNodeV3;
 
 /**
  * How the editor draws each link (v0.3.0 D-C): which side of each block it leaves and enters by,
@@ -115,9 +120,10 @@ export function linkShape(
   to: WorkflowNode,
   a: Rect,
   b: Rect,
+  roles: GraphRoles,
 ): { source: End; target: End; kind: RouteKind } {
-  const ra = rowOf(from);
-  const rb = rowOf(to);
+  const ra = rowOf(from, roles);
+  const rb = rowOf(to, roles);
   const toRight = b.x + b.w / 2 >= a.x + a.w / 2;
   if (ra === rb) {
     if (e.type === 'rework') {
@@ -333,12 +339,13 @@ interface Pending {
 function rowBands(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
+  roles: GraphRoles,
 ): Map<number, { top: number; bottom: number }> {
   const bands = new Map<number, { top: number; bottom: number }>();
   for (const node of graph.nodes) {
     const r = rectOf(node, positions);
     if (r === undefined) continue;
-    const row = rowOf(node);
+    const row = rowOf(node, roles);
     const band = bands.get(row);
     bands.set(row, {
       top: Math.min(band?.top ?? Infinity, r.y),
@@ -350,16 +357,18 @@ function rowBands(
 
 /**
  * Every link's handles and route for the blocks at `positions`. Links whose blocks are missing
- * (a refused link to an unknown block) get the side handles and no lane.
+ * (a refused link to an unknown block) get the side handles and no lane. `roles` are the stored
+ * graph's: the drawn graph (the Finish view) redraws the final chain's links.
  */
 export function planLinks(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
+  roles: GraphRoles = graphRoles(graph),
 ): Map<string, PlannedLink> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const out = new Map<string, PlannedLink>();
   const pending: Pending[] = [];
-  const bands = rowBands(graph, positions);
+  const bands = rowBands(graph, positions, roles);
   for (const e of graph.edges) {
     const from = byId.get(e.from);
     const to = byId.get(e.to);
@@ -374,9 +383,9 @@ export function planLinks(
       });
       continue;
     }
-    const shape = linkShape(e, from, to, a, b);
-    const ra = rowOf(from);
-    const rb = rowOf(to);
+    const shape = linkShape(e, from, to, a, b, roles);
+    const ra = rowOf(from, roles);
+    const rb = rowOf(to, roles);
     const group =
       shape.kind === 'loop-top'
         ? `top-${ra}`
@@ -451,6 +460,7 @@ export function drawnLinks(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
   plan: ReadonlyMap<string, PlannedLink> = planLinks(graph, positions),
+  roles: GraphRoles = graphRoles(graph),
 ): Drawn[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const out: Drawn[] = [];
@@ -461,7 +471,7 @@ export function drawnLinks(
     const a = from === undefined ? undefined : rectOf(from, positions);
     const b = to === undefined ? undefined : rectOf(to, positions);
     if (link === undefined || from === undefined || to === undefined || !a || !b) continue;
-    const shape = linkShape(e, from, to, a, b);
+    const shape = linkShape(e, from, to, a, b, roles);
     out.push({
       id: e.id,
       points: routePoints(endPoint(a, shape.source), endPoint(b, shape.target), link.route),

@@ -8,6 +8,8 @@ import type {
   WorkflowProgram,
 } from '@acp/core';
 import { helperBriefLines } from './briefs.js';
+import { planNote, recordOutputNote, researcherBriefLines, withHandoffs } from './handoffs.js';
+import { isMultiPlanner, proposedOptions, submitPlanOption } from './plan-options.js';
 import { applyCommand } from './commands.js';
 import type { Draft } from './draft.js';
 import { refusal } from './errors.js';
@@ -17,7 +19,7 @@ import { PLAN_BRANCH_REFUSAL, planBranchCommand } from './plan-branch-check.js';
 import { isAgentOverBudget } from './policy.js';
 import { hasNamedHelpers, programFullAuto, resolveHelper } from './program.js';
 import { isSeparatePlanner, launchFieldsFor } from './stages.js';
-import type { EngineContext, EngineResult, RunLimits, RunState } from './state.js';
+import type { EngineContext, EngineResult, PlanOption, RunLimits, RunState } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
@@ -72,7 +74,15 @@ export function submitPlan(
   ctx: EngineContext,
 ): EngineResult<string> {
   return applyCommand(state, ctx, (d) => {
-    const author = d.planningAgent();
+    // ADR-0037 §4: with several planners, each live planner submits its own plan option.
+    const multi = isMultiPlanner(d);
+    const caller = d.agent(callerAgentRunId);
+    const author =
+      multi && caller?.kind === 'planner' && isLiveAgentStatus(caller.status)
+        ? caller
+        : multi
+          ? undefined
+          : d.planningAgent();
     if (author === undefined || author.id !== callerAgentRunId) {
       if (!isSeparatePlanner(d)) {
         return refusal('not-lead', 'Only the lead agent can submit a plan.');
@@ -90,7 +100,9 @@ export function submitPlan(
     if (d.run.status === 'PLAN_REVIEW') {
       return refusal(
         'run-not-active',
-        'A plan is already waiting for the owner; wait for their decision.',
+        multi
+          ? 'The plans are waiting for the owner; wait for their decision.'
+          : 'A plan is already waiting for the owner; wait for their decision.',
       );
     }
     const ticketId = d.run.ticketId;
@@ -125,6 +137,20 @@ export function submitPlan(
       }
       stepHelpers.push(resolved.node.id);
     }
+    if (multi) {
+      // Never approved automatically: with several plans the owner must pick (ADR-0037 §4).
+      const value = submitPlanOption(
+        d,
+        author,
+        {
+          summary: input.summary,
+          steps: planSteps(input.steps),
+          plannedHelpers: plannedHelpers(input.steps),
+        },
+        stepHelpers,
+      );
+      return { value };
+    }
     // Defensive: a leftover proposal would make two plans wait at once.
     for (const p of d.plans) {
       if (p.status === 'proposed') {
@@ -139,20 +165,15 @@ export function submitPlan(
       runId: d.run.id,
       version,
       summary: input.summary,
-      steps: input.steps.map((s) => ({
-        title: s.title,
-        role: s.role,
-        detail: s.detail,
-        // ADR-0034 §4 (CM-3): the step's starting points, kept with the plan.
-        ...(s.files !== undefined && s.files.length > 0 ? { files: [...new Set(s.files)] } : {}),
-        ...(s.notes !== undefined && s.notes.trim() !== '' ? { notes: s.notes.trim() } : {}),
-      })),
+      steps: planSteps(input.steps),
       plannedHelpers: plannedHelpers(input.steps),
       status: 'proposed',
       createdAt: d.now,
       decidedAt: null,
     };
     d.plans.push(plan);
+    // ADR-0037 §2: the plan is the planner's output note for its custom arrows.
+    recordOutputNote(d, author, planNote(plan.summary, plan.steps));
     if (hasNamedHelpers(program)) {
       d.planStepHelpers = { ...(d.planStepHelpers ?? {}), [plan.id]: stepHelpers };
     }
@@ -173,6 +194,18 @@ export function submitPlan(
       value: `Plan v${version} submitted. Wait for the owner: you will get a message when they approve it or ask for changes.`,
     };
   });
+}
+
+/** A submitted plan's steps as stored, without the step's `helper` id. */
+function planSteps(steps: readonly (PlanStep & { helper?: string | undefined })[]): PlanStep[] {
+  return steps.map((s) => ({
+    title: s.title,
+    role: s.role,
+    detail: s.detail,
+    // ADR-0034 §4 (CM-3): the step's starting points, kept with the plan.
+    ...(s.files !== undefined && s.files.length > 0 ? { files: [...new Set(s.files)] } : {}),
+    ...(s.notes !== undefined && s.notes.trim() !== '' ? { notes: s.notes.trim() } : {}),
+  }));
 }
 
 /** True for a run whose snapshotted approval mode is Full auto (ADR-0022). */
@@ -221,6 +254,12 @@ export function decidePlan(
   comment?: string,
 ): EngineResult<TicketPlan> {
   return applyCommand(state, ctx, (d) => {
+    if (isMultiPlanner(d)) {
+      return refusal(
+        'plan-not-found',
+        'This run has several planners: decide on their plan options (decidePlanOption).',
+      );
+    }
     const plan = d.plans.find((p) => p.id === planId);
     if (plan === undefined) return refusal('plan-not-found', 'Unknown plan.');
     if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
@@ -262,6 +301,123 @@ export function decidePlan(
 }
 
 /**
+ * ADR-0037 §4: the owner's decision on the plan options of a run with several planners, waiting in
+ * PLAN_REVIEW. Approve: `planOptionId` names the option (required when more than one waits); it
+ * becomes the run's next plan version, approved, with its step nodes, and the lead starts with it
+ * as after any approval; the other waiting options become `not-chosen`. Request changes (a comment
+ * is required): every waiting option is superseded, the run goes back to PLANNING, and each live
+ * planner gets the comment and submits again. Returns the chosen option, or null.
+ */
+export function decidePlanOption(
+  state: RunState,
+  decision: PlanDecision,
+  ctx: EngineContext,
+  input: { planOptionId?: string | undefined; comment?: string | undefined } = {},
+): EngineResult<PlanOption | null> {
+  return applyCommand(state, ctx, (d) => {
+    if (!isMultiPlanner(d)) {
+      return refusal('plan-not-found', 'This run has one planner: decide its plan (decidePlan).');
+    }
+    if (d.run.status === 'CANCELLING' || d.run.status === 'CANCELLED') {
+      return refusal('run-cancelling', 'The run is being stopped.');
+    }
+    const ticketId = d.run.ticketId;
+    const waiting = proposedOptions(d);
+    if (d.run.status !== 'PLAN_REVIEW' || ticketId === null || waiting.length === 0) {
+      return refusal('plan-not-pending', 'No plans are waiting for a decision.');
+    }
+    const lead = d.lead();
+    if (lead === undefined || lead.status !== 'QUEUED') {
+      return refusal('agent-not-live', 'The lead agent has ended.');
+    }
+    const note = input.comment?.trim() ?? '';
+    const options = d.planOptions ?? [];
+
+    if (decision === 'request-changes') {
+      if (note.length === 0) return refusal('invalid-input', 'Say what should change.');
+      const planners = d.agents.filter((a) => a.kind === 'planner' && isLiveAgentStatus(a.status));
+      if (planners.length === 0) {
+        return refusal(
+          'agent-not-live',
+          'Every planner has ended, so none can revise its plan; approve one of the plans.',
+        );
+      }
+      d.planOptions = options.map((o) =>
+        o.status === 'proposed' ? { ...o, status: 'superseded' as const } : o,
+      );
+      d.setRunStatus('PLANNING');
+      d.effects.push({
+        type: 'plan-option-decided',
+        status: 'changes-requested',
+        planOptionId: null,
+        planId: null,
+        notChosen: [],
+      });
+      for (const planner of planners) {
+        d.effects.push({
+          type: 'send-to-agent',
+          agentRunId: planner.id,
+          text: `The owner asked for changes to the plans:\n\n${note}\n\nRevise your plan and call submit_plan again.`,
+        });
+      }
+      return { value: null };
+    }
+
+    let option: PlanOption | undefined;
+    if (input.planOptionId === undefined) {
+      if (waiting.length > 1) {
+        return refusal(
+          'invalid-input',
+          `${waiting.length} plans are waiting: say which one to approve (planOptionId).`,
+        );
+      }
+      option = waiting[0];
+    } else {
+      option = options.find((o) => o.id === input.planOptionId);
+      if (option === undefined) return refusal('plan-not-found', 'Unknown plan option.');
+      if (option.status !== 'proposed') {
+        return refusal('plan-not-pending', `This plan option is ${option.status}.`);
+      }
+    }
+    if (option === undefined) return refusal('plan-not-found', 'Unknown plan option.');
+    const chosen = option;
+    const plan: TicketPlan = {
+      id: d.freshId(),
+      ticketId,
+      runId: d.run.id,
+      version: d.plans.reduce((max, p) => Math.max(max, p.version), 0) + 1,
+      summary: chosen.summary,
+      steps: chosen.steps.map((s) => ({ ...s })),
+      plannedHelpers: chosen.plannedHelpers,
+      status: 'proposed',
+      createdAt: d.now,
+      decidedAt: null,
+    };
+    d.plans.push(plan);
+    if (chosen.stepHelpers !== undefined) {
+      d.planStepHelpers = { ...(d.planStepHelpers ?? {}), [plan.id]: chosen.stepHelpers };
+    }
+    const notChosen = waiting.filter((o) => o.id !== chosen.id).map((o) => o.id);
+    d.planOptions = options.map((o) =>
+      o.id === chosen.id
+        ? { ...o, status: 'chosen' as const }
+        : o.status === 'proposed'
+          ? { ...o, status: 'not-chosen' as const }
+          : o,
+    );
+    d.effects.push({
+      type: 'plan-option-decided',
+      status: 'chosen',
+      planOptionId: chosen.id,
+      planId: plan.id,
+      notChosen,
+    });
+    approvePlan(d, plan, note, 'owner');
+    return { value: { ...chosen, status: 'chosen' } };
+  });
+}
+
+/**
  * Approves the plan waiting in PLAN_REVIEW (checked by the caller with `approvalRefusal`): the run
  * goes RUNNING, the ticket branch is created (loop runs), and the lead is told to start, or, in
  * separate mode, the planner ends and the lead starts with the plan. `by: 'auto'` is Full auto's
@@ -288,9 +444,12 @@ function approvePlan(d: Draft, plan: TicketPlan, note: string, by: TicketPlanDec
   const program = d.program();
   const fullAuto = d.approvalPolicy !== undefined && programFullAuto(program);
   if (separate && lead !== undefined) {
-    // The planner's work is done (it is read-only, so it never waits for a tool decision).
-    if (author !== undefined) {
-      d.endAgent(author, author.status === 'WAITING_APPROVAL' ? 'CANCELLED' : 'SUCCEEDED', true);
+    // The planners' work is done (they are read-only, so they never wait for a tool decision).
+    // ADR-0037 §4: with several planners every one ends, the chosen plan's author too.
+    for (const planner of d.agents) {
+      if (planner.kind !== 'planner' || !isLiveAgentStatus(planner.status)) continue;
+      const done = planner.status === 'WAITING_APPROVAL' || planner.status === 'QUEUED';
+      d.endAgent(planner, done ? 'CANCELLED' : 'SUCCEEDED', planner.status !== 'QUEUED');
     }
     d.setAgentStatus(lead, 'STARTING');
     const brief = d.leadBrief ?? `Ticket run: ${d.run.title}`;
@@ -303,10 +462,15 @@ function approvePlan(d: Draft, plan: TicketPlan, note: string, by: TicketPlanDec
       ...launchFieldsFor(
         program,
         program.lead.id,
-        approvedPlanBrief(brief, plan, note, limits, loop, fullAuto, {
-          program,
-          stepHelpers: d.planStepHelpers?.[plan.id],
-        }),
+        // ADR-0037 §2: plus the hand-offs to the lead (research findings, for example).
+        withHandoffs(
+          d,
+          lead,
+          approvedPlanBrief(brief, plan, note, limits, loop, fullAuto, {
+            program,
+            stepHelpers: d.planStepHelpers?.[plan.id],
+          }),
+        ),
       ),
     });
     return;
@@ -366,6 +530,14 @@ export function ticketPlannerPrompt(
       depthLine(limits),
     ].join(' '),
   ].join('\n\n');
+}
+
+/**
+ * ADR-0037 §3: the ticket part of every researcher's brief (`CreateRunInput.ticket.researcherPrompt`).
+ * The engine adds the researcher's role, who gets its findings and how to report them.
+ */
+export function ticketResearcherPrompt(ticket: TicketBriefFields): string {
+  return ticketHeader(ticket).join('\n\n');
 }
 
 /**
@@ -436,7 +608,10 @@ function approvedPlanBrief(
     const node = nodes.program.helpers.find((h) => h.id === id);
     return named && node !== undefined ? ` \u2192 helper "${node.id}"` : '';
   };
-  const helperLines = helperBriefLines(nodes.program, 'lead');
+  const helperLines = [
+    ...helperBriefLines(nodes.program, 'lead'),
+    ...researcherBriefLines(nodes.program),
+  ];
   return [
     brief,
     `The approved plan (v${plan.version}${plan.decidedBy === 'auto' ? ', approved automatically (Full auto)' : ''}): ${plan.summary}`,

@@ -54,7 +54,11 @@ const WARNING_CODES: readonly GraphIssueCode[] = [
  */
 const PROVIDER_CODES: readonly GraphIssueCode[] = ['codex-agent-tools'];
 /** Structural error codes no generated, mutated or enumerated graph needs to reach, with why. */
-const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {};
+const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {
+  'agent-without-role': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
+  'agent-mixed-roles': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
+  'pool-not-helper': 'version 3 only (ADR-0037); covered by v3/properties.test.ts',
+};
 const STRUCTURAL_CODES = GraphIssueCodeSchema.options.filter(
   (c) =>
     !WARNING_CODES.includes(c) && !PROVIDER_CODES.includes(c) && EXCLUDED_CODES[c] === undefined,
@@ -353,7 +357,12 @@ describe('layer 3: generated valid graphs and their mutants', () => {
       // runs after the mutant and small-graph tests above (vitest runs a file's tests in order)
       const dead = STRUCTURAL_CODES.filter((c) => !seenCodes.has(c));
       expect(dead).toEqual([]);
-      expect(Object.keys(EXCLUDED_CODES)).toEqual([]);
+      // Only the version 3 codes are left out here; v3/properties.test.ts reaches them.
+      expect(Object.keys(EXCLUDED_CODES)).toEqual([
+        'agent-without-role',
+        'agent-mixed-roles',
+        'pool-not-helper',
+      ]);
     });
   });
 });

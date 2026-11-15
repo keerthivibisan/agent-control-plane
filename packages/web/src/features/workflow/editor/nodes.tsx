@@ -1,9 +1,4 @@
-import {
-  NODE_CAPABILITIES,
-  type ApprovalMode,
-  type ManagedProviderId,
-  type WorkflowNode,
-} from '@acp/core';
+import type { ApprovalMode, ManagedProviderId, WorkflowNodeV3 } from '@acp/core';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import {
   memo,
@@ -23,21 +18,26 @@ import {
 } from '../../../lib/copy';
 import { checkPlaceOf, checkSelectionOf, isChecksNode, type ChecksNode } from '../check-blocks';
 import {
+  AgentBlockIcon,
   AgentFileIcon,
   DoneIcon,
   ErrorIcon,
   MergeIcon,
   OwnCopyIcon,
   ReadOnlyIcon,
+  ResearcherIcon,
   ROLE_ICON,
   YouIcon,
 } from '../icons';
 import { EDITOR_COPY } from './copy';
 import { LinkActionsContext, useLinkState } from './link-store';
+import { isEditingKind, isRoleProblem, type AgentKind, type BlockKind } from './roles';
 import { HANDLE_SPOTS, IN_HANDLE, OUT_HANDLE, handleId } from './routing';
 
 const G = WORKFLOW_GRAPH_COPY;
 const B = EDITOR_COPY.block;
+const R = EDITOR_COPY.roles;
+type WorkflowNode = WorkflowNodeV3;
 const MODE_WORD = REVIEW_LOOP_COPY.modes.word;
 /** At most this many problem lines in a block's marker tooltip. */
 const MAX_TIP_LINES = 3;
@@ -66,6 +66,8 @@ export type LinkTarget = 'source' | 'valid' | 'invalid';
 export interface BlockData {
   [key: string]: unknown;
   node: WorkflowNode;
+  /** What the block is: an agent's role derived from its arrows (ADR-0037), else its type. */
+  kind: BlockKind;
   /** Errors and warnings that name this block, and their words (errors first). */
   problems: number;
   warnings: number;
@@ -90,39 +92,63 @@ export interface BlockData {
 
 export type BlockNode = Node<BlockData, 'agent' | 'gate' | 'finish'>;
 
-/** The word for a block's kind ("Change reviewer", "You"). */
-export function kindWord(node: WorkflowNode): string {
+/** The word for a block's kind ("Change reviewer", "You"); an agent's comes from its role. */
+export function kindWord(node: WorkflowNode, kind: BlockKind): string {
   if (isChecksNode(node)) return HARNESS_BLOCKS_COPY.kinds[checkPlaceOf(node)];
-  if (node.type === 'reviewer') {
-    return node.scope === 'change' ? G.kinds['reviewer-change'] : G.kinds['reviewer-final'];
-  }
+  if (node.type === 'agent') return R.kinds[asAgentKind(kind)];
   return G.kinds[node.type];
 }
 
 /** One sentence on what a block of this kind does. */
-export function kindText(node: WorkflowNode): string {
+export function kindText(node: WorkflowNode, kind: BlockKind): string {
   if (isChecksNode(node)) return HARNESS_BLOCKS_COPY.kindText[checkPlaceOf(node)];
-  if (node.type === 'reviewer') {
-    return node.scope === 'change' ? G.kindText['reviewer-change'] : G.kindText['reviewer-final'];
-  }
+  if (node.type === 'agent') return R.kindText[asAgentKind(kind)];
   return G.kindText[node.type];
 }
 
-/** The role's icon, the same per kind as the version 1 graph (the kind's word is next to it). */
-export function RoleIcon({ node, size = 14 }: { node: WorkflowNode; size?: number }) {
+/** An agent block's `data-kind`: its role in the version 2 block words, so selectors stay stable. */
+const KIND_ATTR: Readonly<Record<AgentKind, string>> = {
+  researcher: 'researcher',
+  planner: 'planner',
+  helper: 'helper',
+  'helper-pool': 'helper-pool',
+  'reviewer-change': 'reviewer',
+  'reviewer-final': 'reviewer',
+  tester: 'tester',
+  agent: 'agent',
+  mixed: 'agent',
+};
+
+/** An agent block's kind (a gate's or the lead's kind never reaches an agent block). */
+export function asAgentKind(kind: BlockKind): AgentKind {
+  return Object.hasOwn(R.kinds, kind) ? (kind as AgentKind) : 'agent';
+}
+
+/** The role's icon, the same per role as the version 1 graph (the role's word is next to it). */
+export function RoleIcon({
+  node,
+  kind,
+  size = 14,
+}: {
+  node: WorkflowNode;
+  kind: BlockKind;
+  size?: number;
+}) {
+  return node.type === 'agent' ? (
+    <RoleIconFor kind={asAgentKind(kind)} size={size} />
+  ) : (
+    <StepIcon node={node} size={size} />
+  );
+}
+
+/** A step's or the lead's icon. */
+function StepIcon({ node, size }: { node: WorkflowNode; size: number }) {
   const props = { size, className: 'shrink-0' };
   switch (node.type) {
-    case 'planner':
-      return <ROLE_ICON.planner {...props} />;
+    case 'agent':
+      return <AgentBlockIcon {...props} />;
     case 'lead':
       return <ROLE_ICON.lead {...props} />;
-    case 'reviewer':
-      return <ROLE_ICON.reviewer {...props} />;
-    case 'tester':
-      return <ROLE_ICON.tester {...props} />;
-    case 'helper':
-    case 'helper-pool':
-      return <ROLE_ICON.helper {...props} />;
     case 'ticket':
       return <TicketIcon {...props} />;
     case 'done':
@@ -374,9 +400,13 @@ const CHIP_TONE = {
   warning: 'border-warning/50 text-warning',
 } as const;
 
-function modeText(node: WorkflowNode, projectMode: ApprovalMode | null): string | null {
-  if (node.type !== 'helper' && node.type !== 'helper-pool' && node.type !== 'tester') return null;
-  if (node.approvalMode === null) {
+function modeText(
+  node: WorkflowNode,
+  kind: BlockKind,
+  projectMode: ApprovalMode | null,
+): string | null {
+  if (node.type !== 'agent' || !isEditingKind(kind)) return null;
+  if (node.approvalMode === null || node.approvalMode === undefined) {
     return G.modeDefaultBadge(projectMode === null ? null : MODE_WORD[projectMode]);
   }
   return G.modeBadge(MODE_WORD[node.approvalMode]);
@@ -448,36 +478,33 @@ export const AgentBlockView = memo(function AgentBlockView({
   data,
   selected,
 }: NodeProps<BlockNode>) {
-  const { node } = data;
+  const { node, kind } = data;
   const link = useBlockLink(node.id, data.linkTarget);
-  if (
-    node.type !== 'planner' &&
-    node.type !== 'lead' &&
-    node.type !== 'helper' &&
-    node.type !== 'helper-pool' &&
-    node.type !== 'reviewer' &&
-    node.type !== 'tester'
-  ) {
-    return null;
-  }
-  const edits = NODE_CAPABILITIES[node.type].edits;
-  const mode = modeText(node, data.projectMode);
+  if (node.type !== 'agent' && node.type !== 'lead') return null;
+  const edits = isEditingKind(kind);
+  const mode = modeText(node, kind, data.projectMode);
   const lead = node.type === 'lead';
+  const roleProblem = isRoleProblem(kind);
   return (
     <div
       className={cardClass(selected, lead, data.problems, link)}
       data-testid={`block-${node.id}`}
-      data-kind={node.type}
+      data-kind={node.type === 'agent' ? KIND_ATTR[asAgentKind(kind)] : 'lead'}
+      data-role={node.type === 'agent' ? kind : 'lead'}
       data-selected={selected ? 'true' : 'false'}
       data-link-target={link.target ?? undefined}
       data-snapped={link.snapped ? 'true' : undefined}
     >
       <BlockHandles node={node} label={node.label} target={link.target} />
       <div className="flex min-w-0 items-center justify-between gap-2 text-caption leading-4">
-        <span className={`flex min-w-0 items-center gap-1.5 ${lead ? 'text-ink' : 'text-dim'}`}>
-          <RoleIcon node={node} />
-          <span className="truncate">{kindWord(node)}</span>
-        </span>
+        {node.type === 'agent' ? (
+          <RoleBadge kind={asAgentKind(kind)} problem={roleProblem} />
+        ) : (
+          <span className="flex min-w-0 items-center gap-1.5 text-ink">
+            <RoleIcon node={node} kind={kind} />
+            <span className="truncate">{kindWord(node, kind)}</span>
+          </span>
+        )}
         <span className="flex shrink-0 items-center gap-1.5">
           <ProblemMarker data={data} />
           {/* The icon only; its word is the tooltip and its spoken name (the shapes differ, so
@@ -545,11 +572,11 @@ export const AgentBlockView = memo(function AgentBlockView({
           >
             <span className="truncate">{mode}</span>
           </span>
-          {node.type === 'helper' ? (
-            <Tooltip content={G.instances(node.maxInstances)} focusable={false}>
+          {node.type === 'agent' && kind === 'helper' ? (
+            <Tooltip content={G.instances(node.maxInstances ?? 1)} focusable={false}>
               <span className="text-caption text-dim tabular-nums" data-testid="block-instances">
-                <span aria-hidden="true">{B.instances(node.maxInstances)}</span>
-                <span className="sr-only">{G.instances(node.maxInstances)}</span>
+                <span aria-hidden="true">{B.instances(node.maxInstances ?? 1)}</span>
+                <span className="sr-only">{G.instances(node.maxInstances ?? 1)}</span>
               </span>
             </Tooltip>
           ) : null}
@@ -558,6 +585,55 @@ export const AgentBlockView = memo(function AgentBlockView({
     </div>
   );
 });
+
+/**
+ * An agent block's role (ADR-0037 §1), derived from its arrows, as a small badge with its icon. An
+ * agent with no role or two is in its error state: the badge in the danger tone, so the problem
+ * shows on the block and not only in the problems list.
+ */
+function RoleBadge({ kind, problem }: { kind: AgentKind; problem: boolean }) {
+  const word = R.badge[kind];
+  return (
+    <Tooltip content={R.kindText[kind]} focusable={false} className="inline-flex min-w-0">
+      <span
+        className={`${CHIP} ${
+          problem ? 'border-danger/50 bg-danger-soft text-danger' : 'border-line-strong text-dim'
+        }`}
+        data-testid="block-role"
+        data-role={kind}
+        data-problem={problem ? 'true' : 'false'}
+      >
+        {problem ? (
+          <ErrorIcon size={11} className="shrink-0" />
+        ) : (
+          <RoleIconFor kind={kind} size={11} />
+        )}
+        <span className="truncate">{word}</span>
+        <span className="sr-only">{`. ${R.badgeLabel(word)}`}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+function RoleIconFor({ kind, size }: { kind: AgentKind; size: number }) {
+  const props = { size, className: 'shrink-0' };
+  switch (kind) {
+    case 'researcher':
+      return <ResearcherIcon {...props} />;
+    case 'planner':
+      return <ROLE_ICON.planner {...props} />;
+    case 'reviewer-change':
+    case 'reviewer-final':
+      return <ROLE_ICON.reviewer {...props} />;
+    case 'tester':
+      return <ROLE_ICON.tester {...props} />;
+    case 'helper':
+    case 'helper-pool':
+      return <ROLE_ICON.helper {...props} />;
+    default:
+      return <AgentBlockIcon {...props} />;
+  }
+}
 
 /** What a Checks block runs, in a few words: "Required", "2 checks", "fast · full". */
 export function selectionChip(node: ChecksNode): string {
@@ -597,7 +673,7 @@ function ChecksBlockView({ data, selected }: { data: BlockData; selected: boolea
   return (
     <div
       className={`${STEP_FRAME} flex-col justify-center gap-0.5 rounded-control px-3 ${stepState(data, selected, link)}`}
-      title={kindText(node)}
+      title={kindText(node, data.kind)}
       data-testid={`block-${node.id}`}
       data-kind={node.type}
       data-place={checkPlaceOf(node)}
@@ -609,7 +685,7 @@ function ChecksBlockView({ data, selected }: { data: BlockData; selected: boolea
       <span className="flex min-w-0 items-center gap-1.5 text-caption leading-4 text-dim">
         <CheckIcon size={13} className="shrink-0 text-success" />
         <span className="truncate" data-testid="checks-kind">
-          {kindWord(node)}
+          {kindWord(node, data.kind)}
         </span>
         {data.problems > 0 || data.warnings > 0 ? (
           <span className="ml-auto inline-flex">
@@ -704,7 +780,7 @@ function StepView({ data, selected }: { data: BlockData; selected: boolean }) {
     >
       <BlockHandles node={node} label={stepTitle(node)} target={link.target} />
       <span className={`inline-flex ${iconTone}`}>
-        <RoleIcon node={node} size={15} />
+        <RoleIcon node={node} kind={data.kind} size={15} />
       </span>
       {you ? <span className="sr-only">{`${B.you}: `}</span> : null}
       <span className="min-w-0 truncate font-medium" data-testid="block-label">

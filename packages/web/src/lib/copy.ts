@@ -1783,6 +1783,10 @@ export const TICKET_COPY = {
       term: 'Tester agent',
       tip: 'An agent that writes unit tests for the merged change in its own copy. You review and merge them like any change.',
     },
+    researcher: {
+      term: 'Researcher agent',
+      tip: 'A read-only agent that investigates the project before others plan or work, and reports its findings with file paths. It never edits files.',
+    },
   },
   speaker: {
     owner: 'You',
@@ -1959,6 +1963,18 @@ export const TICKET_COPY = {
     earlier: (n: number) => `Earlier versions (${formatCount(n)})`,
     yourComment: 'Your comment',
     waitingNewVersion: 'A new version of the plan is being written.',
+    // ADR-0037 §4: several planners' plans, side by side.
+    optionsTitle: 'Plans',
+    optionsIntro: (n: number) =>
+      n === 1
+        ? 'The other planners ended without a plan. No helper agent starts until you approve this one.'
+        : `${formatCount(n)} planners each wrote a plan. Approve the one the lead should carry out; the others are kept as not chosen. No helper agent starts until you approve one.`,
+    optionsLabel: 'Plans to choose from',
+    optionBy: (label: string) => `By ${label}`,
+    approveThis: 'Approve this plan',
+    approveThisLabel: (label: string) => `Approve the plan by ${label}`,
+    optionsCommentHint:
+      'Required when you request changes. Every planner gets it and writes a new plan.',
   },
   ticket: {
     title: 'Ticket',
@@ -2360,7 +2376,8 @@ export const HARNESS_PAGE_COPY = {
 // --- Project Tokens page (redesign R-F, wp/r-f-tokens) -------------------------------------------
 
 export type TokensBreakdownWord = 'session' | 'ticket' | 'role' | 'model';
-export type TokensRoleWord = 'planner' | 'lead' | 'worker' | 'reviewer' | 'tester' | 'external';
+export type TokensRoleWord =
+  'researcher' | 'planner' | 'lead' | 'worker' | 'reviewer' | 'tester' | 'external';
 
 /** "94%"; below 1% keeps one decimal so a small share never reads as 0%. */
 export function formatShare(share: number): string {
@@ -2474,6 +2491,7 @@ export const TOKENS_COPY = {
     worker: { word: 'Helpers', tip: 'Do parts of the work, each in its own copy of the project.' },
     reviewer: { word: 'Reviewer', tip: 'Reviews the merged change.' },
     tester: { word: 'Tester', tip: 'Writes unit tests for the change.' },
+    researcher: { word: 'Researcher', tip: 'Investigates the project and reports findings.' },
     external: {
       word: 'Outside the app',
       tip: 'Sessions you started yourself in Claude Code, not by an agent run.',
@@ -3311,6 +3329,7 @@ export const REVIEW_LOOP_COPY = {
 
 /** What a block is called by its kind on the live graph; a reviewer's word depends on its scope. */
 type LiveBlockKind =
+  | 'researcher'
   | 'planner'
   | 'lead'
   | 'helper-pool'
@@ -3323,7 +3342,10 @@ type LiveBlockKind =
   | 'checks'
   | 'ticket-merge'
   | 'owner-merge'
-  | 'done';
+  | 'done'
+  // ADR-0037: an agent block without one role; a run's validated graph never has one.
+  | 'agent'
+  | 'mixed';
 
 export const WORKFLOW_LIVE_COPY = {
   graph: {
@@ -3331,6 +3353,7 @@ export const WORKFLOW_LIVE_COPY = {
     tip: 'The blocks and links are this run’s workflow as it was when the run started, with the models, skills and approval modes it runs with. Click a block, or an agent on it, to show that agent in the side panel.',
     label: 'This run’s workflow',
     kinds: {
+      researcher: 'Researcher',
       planner: 'Planner',
       lead: 'Lead',
       'helper-pool': 'Helper pool',
@@ -3344,6 +3367,8 @@ export const WORKFLOW_LIVE_COPY = {
       'ticket-merge': 'Ticket branch',
       'owner-merge': 'You',
       done: 'Done',
+      agent: 'Agent',
+      mixed: 'Agent',
     } satisfies Record<LiveBlockKind, string>,
     gateTitle: {
       'plan-approval': 'Approve the plan',
@@ -3375,13 +3400,18 @@ export const WORKFLOW_LIVE_COPY = {
     directRework: (n: number) => (n > 0 ? `Direct rework ×${formatCount(n)}` : 'Direct rework'),
     links: {
       flow: 'Next step',
-      assigns: 'Assigns work',
+      implement: 'Assigns work',
       review: 'Sends its change for review',
       findings: 'Sends its findings',
       rework: 'Sends the change back for rework',
       merge: 'Merges through',
+      plan: 'Sends its plan for approval',
+      test: 'Next step',
+      research: 'Sends its research',
+      custom: 'Hands over its work',
     },
-    linkName: (kind: string, from: string, to: string) => `${kind}: from ${from} to ${to}`,
+    linkName: (kind: string, from: string, to: string, purpose: string | null = null) =>
+      `${kind}: from ${from} to ${to}${purpose === null ? '' : `. Why: ${purpose}`}`,
     changes: 'Changes',
   },
   ceiling: {

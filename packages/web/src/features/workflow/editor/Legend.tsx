@@ -1,23 +1,14 @@
-import type { WorkflowEdgeType } from '@acp/core';
+import { WORKFLOW_EDGE_TYPES_V3, type WorkflowEdgeTypeV3 } from '@acp/core';
 import { useCallback, useState } from 'react';
 import { buttonClass } from '../../../components/Button';
 import { Popover } from '../../../components/Popover';
-import { WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { HelpIcon, LegendIcon, YouIcon } from '../icons';
 import { EDITOR_COPY } from './copy';
 import { LinkSample } from './edges';
 
-const G = WORKFLOW_GRAPH_COPY;
 const L = EDITOR_COPY.legend;
 const T = EDITOR_COPY.toolbar;
-const LINKS: readonly WorkflowEdgeType[] = [
-  'flow',
-  'assigns',
-  'review',
-  'findings',
-  'rework',
-  'merge',
-];
+const LINKS: readonly WorkflowEdgeTypeV3[] = WORKFLOW_EDGE_TYPES_V3;
 const STORAGE_KEY = 'acp.workflow.legend';
 
 /** Whether the legend is shown, remembered in this browser (every access guarded). */
@@ -105,7 +96,7 @@ function Shape({ kind }: { kind: 'agent' | 'lead' | 'step' }) {
 }
 
 /**
- * The legend: the block shapes and the six kinds of link, in short words, on one or two compact
+ * The legend: the block shapes and the ten kinds of arrow (ADR-0037), in short words, on one or two compact
  * lines under the canvas. The full sentence for each kind is in the link's panel.
  */
 export function Legend() {
@@ -135,7 +126,7 @@ export function Legend() {
       </ul>
       <ul className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5" aria-label={L.links}>
         {LINKS.map((t) => (
-          <li key={t} className="flex items-center gap-1.5" title={G.edges[t]}>
+          <li key={t} className="flex items-center gap-1.5" title={EDITOR_COPY.arrows.names[t]}>
             <LinkSample type={t} width={24} />
             {L.edges[t]}
           </li>

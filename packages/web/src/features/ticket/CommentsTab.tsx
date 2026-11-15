@@ -30,7 +30,7 @@ import { isReviewLoopRun, ownerMayDecide } from '../review-loop/logic';
 import { useTicketAction } from './actions';
 import { FinalStepBox } from './FinalStep';
 import { AgentsIcon, ConversationIcon, OwnerIcon } from './icons';
-import { PlanCard } from './PlanReview';
+import { optionsUnderReview, PlanCard, PlanOptionsCard } from './PlanReview';
 import type { AgentReview, TicketBranchReview } from './run-data';
 import type { PanelTab } from './SidePanel';
 import { useTicketNav } from './ticket-nav';
@@ -509,6 +509,8 @@ export function CommentsTab({
   onOpenAgent: (agentId: string, tab?: PanelTab) => void;
 }) {
   const plan = run === undefined ? null : planUnderReview(run, detail.plans);
+  // ADR-0037 §4: several planners' plans wait side by side instead of one plan.
+  const options = optionsUnderReview(run?.status, detail.planOptions);
   const all = useTicketAttachments(detail.ticket.id);
   // The comment box's files are on the ticket until the comment that carries them is posted;
   // they show in the box, not among the ticket's own.
@@ -526,6 +528,9 @@ export function CommentsTab({
         <NeedsYou run={run} reviews={reviews} checks={checks} onOpenAgent={onOpenAgent} />
       ) : null}
       {plan !== null ? <PlanCard ticketId={detail.ticket.id} plan={plan} /> : null}
+      {plan === null && options.length > 0 ? (
+        <PlanOptionsCard ticketId={detail.ticket.id} options={options} />
+      ) : null}
       <section
         id={COMMENTS_ID}
         aria-label={K.thread}

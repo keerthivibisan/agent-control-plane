@@ -2,9 +2,12 @@
 import {
   defaultProjectWorkflow,
   migrateWorkflowV1,
+  migrateWorkflowV2,
   workflowTemplate,
+  workflowTemplateV3,
   type CompileContext,
   type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,8 +29,9 @@ function setup() {
 }
 
 const LOOP: WorkflowGraph = workflowTemplate('reviewer-helper-loop');
+const LOOP_V3: WorkflowGraphV3 = workflowTemplateV3('reviewer-helper-loop');
 
-describe('project workflow repository: version 1 or 2 (ADR-0023 §9)', () => {
+describe('project workflow repository: version 1, 2 or 3 (ADR-0023 §9, ADR-0037 §6)', () => {
   it('answers the default until something is stored, and says which kind it is', () => {
     const { redesign, repos, projectId } = setup();
     const created = repos.projects.getById(projectId)?.createdAt ?? '';
@@ -46,24 +50,41 @@ describe('project workflow repository: version 1 or 2 (ADR-0023 §9)', () => {
     expect(redesign.workflow.get(projectId)).toEqual(v1);
   });
 
-  it('stores a graph as {version: 2, graph} and reads it back with its date', () => {
+  it('stores a graph as {version: 3, graph} and reads it back with its date', () => {
     const { redesign, db, projectId } = setup();
-    const saved = redesign.workflow.putGraph(projectId, LOOP);
-    expect(saved).toEqual({ projectId, graph: LOOP, updatedAt: '2026-10-18T09:00:00.000Z' });
-    expect(redesign.workflow.stored(projectId)).toEqual({ kind: 'v2', graph: saved });
+    const labelled: WorkflowGraphV3 = {
+      ...LOOP_V3,
+      edges: LOOP_V3.edges.map((e, i) =>
+        i === 0 ? { ...e, label: 'Ticket', purpose: 'What the owner wants' } : e,
+      ),
+    };
+    const saved = redesign.workflow.putGraph(projectId, labelled);
+    expect(saved).toEqual({ projectId, graph: labelled, updatedAt: '2026-10-18T09:00:00.000Z' });
+    expect(redesign.workflow.stored(projectId)).toEqual({ kind: 'v3', graph: saved });
     expect(redesign.workflow.isStored(projectId)).toBe(true);
     const raw = db.connection
       .prepare('SELECT workflow FROM project_workflow WHERE project_id = ?')
       .pluck()
       .get(projectId) as string;
-    expect(JSON.parse(raw)).toEqual({ version: 2, graph: LOOP });
+    expect(JSON.parse(raw)).toEqual({ version: 3, graph: labelled });
 
-    // A graph replaces a stored version 1 workflow, and another graph replaces it in turn.
+    // A version 2 graph is stored migrated, as version 3.
     const lead = workflowTemplate('lead-only');
-    expect(redesign.workflow.putGraph(projectId, lead).graph).toEqual(lead);
+    expect(redesign.workflow.putGraph(projectId, lead).graph).toEqual(migrateWorkflowV2(lead));
     expect(redesign.workflow.stored(projectId)).toMatchObject({
+      kind: 'v3',
+      graph: { graph: migrateWorkflowV2(lead) },
+    });
+  });
+
+  it('still reads a stored version 2 row as version 2', () => {
+    const { redesign, db, projectId } = setup();
+    db.connection
+      .prepare('INSERT INTO project_workflow (project_id, workflow, updated_at) VALUES (?, ?, ?)')
+      .run(projectId, JSON.stringify({ version: 2, graph: LOOP }), '2026-10-18T09:00:00.000Z');
+    expect(redesign.workflow.stored(projectId)).toEqual({
       kind: 'v2',
-      graph: { graph: lead },
+      graph: { projectId, graph: LOOP, updatedAt: '2026-10-18T09:00:00.000Z' },
     });
   });
 
@@ -73,7 +94,27 @@ describe('project workflow repository: version 1 or 2 (ADR-0023 §9)', () => {
     redesign.workflow.put({ projectId, plannerMode: 'lead', stages: base.stages });
     const graph = migrateWorkflowV1(base, { projectMode: 'auto-edits' });
     redesign.workflow.putGraph(projectId, graph);
-    expect(redesign.workflow.stored(projectId)).toMatchObject({ kind: 'v2' });
+    expect(redesign.workflow.stored(projectId)).toMatchObject({ kind: 'v3' });
+  });
+
+  it('reads a version 3 graph row as stored, and refuses a version 1 write over it (ADR-0037)', () => {
+    const { redesign, db, projectId } = setup();
+    const v3 = workflowTemplateV3('reviewer-helper-loop', { planner: true });
+    db.connection
+      .prepare('INSERT INTO project_workflow (project_id, workflow, updated_at) VALUES (?, ?, ?)')
+      .run(projectId, JSON.stringify({ version: 3, graph: v3 }), '2026-11-09T10:00:00.000Z');
+    expect(redesign.workflow.stored(projectId)).toEqual({
+      kind: 'v3',
+      graph: { projectId, graph: v3, updatedAt: '2026-11-09T10:00:00.000Z' },
+    });
+    expect(thrown(() => redesign.workflow.get(projectId))).toBeInstanceOf(
+      WorkflowStoredAsGraphError,
+    );
+    const base = defaultProjectWorkflow(projectId, '2026-10-18T09:00:00.000Z');
+    expect(
+      thrown(() => redesign.workflow.put({ projectId, plannerMode: 'lead', stages: base.stages })),
+    ).toBeInstanceOf(WorkflowStoredAsGraphError);
+    expect(redesign.workflow.stored(projectId)).toMatchObject({ kind: 'v3' });
   });
 
   it('refuses a version 1 read or write once a graph is stored, keeping the graph', () => {
@@ -87,8 +128,8 @@ describe('project workflow repository: version 1 or 2 (ADR-0023 §9)', () => {
     expect(write).toBeInstanceOf(DbError);
     expect(write).toMatchObject({ code: 'conflict', projectId });
     expect(redesign.workflow.stored(projectId)).toMatchObject({
-      kind: 'v2',
-      graph: { graph: LOOP },
+      kind: 'v3',
+      graph: { graph: migrateWorkflowV2(LOOP) },
     });
     expect(thrown(() => redesign.workflow.get(projectId))).toBeInstanceOf(
       WorkflowStoredAsGraphError,
@@ -160,6 +201,26 @@ describe('run snapshot: graph and graphContext (ADR-0023)', () => {
     const codex: CompileContext = { ...plain, projectProvider: 'codex' };
     audit.setRunSnapshot(run.id, { ...older, graph: LOOP, graphContext: codex });
     expect(audit.getRunSnapshot(run.id)?.graphContext).toEqual(codex);
+  });
+
+  it('stores a version 3 graph snapshot as it is (ADR-0037) and refuses a broken one', () => {
+    const store = setup();
+    const { run } = ticketWithRun(store);
+    const audit = store.redesign.runAudit;
+    const v3 = workflowTemplateV3('reviewer-helper-loop');
+    const snapshot: StoredRunSnapshot = {
+      maxConcurrentHelpers: 3,
+      maxDepth: 1,
+      graph: v3,
+      graphContext: CONTEXT,
+    };
+    audit.setRunSnapshot(run.id, snapshot);
+    expect(audit.getRunSnapshot(run.id)).toEqual(snapshot);
+    expect(audit.getRunSnapshot(run.id)?.graph?.version).toBe(3);
+    const broken = { ...snapshot, graph: { ...v3, nodes: [] } };
+    expect(
+      thrown(() => audit.setRunSnapshot(run.id, broken as unknown as StoredRunSnapshot)),
+    ).toMatchObject({ code: 'invalid_input' });
   });
 
   it('refuses a graph without its context, a bad context, or a helper limit not the run’s', () => {

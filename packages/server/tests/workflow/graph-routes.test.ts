@@ -7,10 +7,13 @@ import { describe, expect, it } from 'vitest';
 import {
   approvalsOf,
   defaultProjectWorkflow,
-  migrateWorkflowV1,
-  validateWorkflowGraph,
+  migrateWorkflowV1ToV3,
+  migrateWorkflowV2,
+  validateWorkflowGraphV3,
   workflowTemplate,
+  workflowTemplateV3,
   type WorkflowGraph,
+  type WorkflowGraphV3,
 } from '@acp/core';
 import {
   CSRF_HEADER,
@@ -70,6 +73,40 @@ function loopWithFrontend(): WorkflowGraph {
   };
 }
 
+/**
+ * ADR-0037: a researcher feeding the planner (with a labelled, explained arrow) and a second
+ * planner, on the planner template.
+ */
+function researchedTwoPlanners(): WorkflowGraphV3 {
+  const g = workflowTemplateV3('reviewer-helper-loop', { planner: true });
+  const agent = (id: string, label: string) => ({
+    type: 'agent' as const,
+    id,
+    label,
+    model: null,
+    skills: [],
+    agent: null,
+  });
+  return {
+    ...g,
+    template: 'custom',
+    nodes: [...g.nodes, agent('r1', 'Claude research'), agent('plan-2', 'Codex planner')],
+    edges: [
+      ...g.edges,
+      {
+        type: 'research',
+        id: 'research-r1-plan',
+        from: 'r1',
+        to: 'plan',
+        label: 'API notes',
+        purpose: 'Which endpoints exist today',
+      },
+      { type: 'flow', id: 'flow-ticket-plan-2', from: 'ticket', to: 'plan-2' },
+      { type: 'plan', id: 'plan-plan-2', from: 'plan-2', to: 'plan-approval', label: 'Plan B' },
+    ],
+  };
+}
+
 describe('GET /api/projects/:id/workflow-graph (ADR-0023)', () => {
   it('answers the default workflow migrated, with its issues, the setup and the files', async () => {
     const s = await setupBoard();
@@ -79,14 +116,15 @@ describe('GET /api/projects/:id/workflow-graph (ADR-0023)', () => {
     expect(res.status).toBe(200);
     const dto = WorkflowGraphDtoSchema.parse(res.body);
     const mode = approvalsOf(dto.setup).mode;
-    const expected = migrateWorkflowV1(defaultProjectWorkflow(s.project.id, s.project.createdAt), {
-      projectMode: mode,
-    });
+    const expected = migrateWorkflowV1ToV3(
+      defaultProjectWorkflow(s.project.id, s.project.createdAt),
+      { projectMode: mode },
+    );
     expect(dto).toMatchObject({ stored: 'default', updatedAt: null, graph: expected });
     expect(dto.skills).toEqual(['ui-style']);
     expect(dto.agents).toEqual(['frontend-style']);
     expect(dto.issues).toEqual(
-      validateWorkflowGraph(expected, {
+      validateWorkflowGraphV3(expected, {
         skills: ['ui-style'],
         agents: ['frontend-style'],
         maxConcurrentHelpers: dto.setup.maxConcurrentHelpers,
@@ -103,7 +141,7 @@ describe('GET /api/projects/:id/workflow-graph (ADR-0023)', () => {
     const dto = WorkflowGraphDtoSchema.parse((await s.get(path(s))).body);
     expect(dto.stored).toBe('v1');
     expect(dto.updatedAt).toBe('2026-10-16T09:00:00.000Z');
-    expect(dto.graph.nodes.some((n) => n.type === 'planner' && n.id === 'plan')).toBe(true);
+    expect(dto.graph.nodes.some((n) => n.type === 'agent' && n.id === 'plan')).toBe(true);
     expect(dto.graph.legacyV1).toEqual(v1);
   });
 
@@ -116,7 +154,7 @@ describe('GET /api/projects/:id/workflow-graph (ADR-0023)', () => {
 });
 
 describe('PUT /api/projects/:id/workflow-graph (ADR-0023)', () => {
-  it('stores a valid graph as version 2 and answers it with its warnings', async () => {
+  it('stores a version 2 graph from an older client as version 3, with its warnings', async () => {
     const s = await setupBoard();
     addSkill(s.repo, 'ui-style');
     s.notices.length = 0;
@@ -124,7 +162,11 @@ describe('PUT /api/projects/:id/workflow-graph (ADR-0023)', () => {
     const res = await s.send('put', path(s), { graph });
     expect(res.status).toBe(200);
     const dto = WorkflowGraphDtoSchema.parse(res.body);
-    expect(dto).toMatchObject({ stored: 'v2', graph, updatedAt: '2026-10-16T09:00:00.000Z' });
+    expect(dto).toMatchObject({
+      stored: 'v3',
+      graph: migrateWorkflowV2(graph),
+      updatedAt: '2026-10-16T09:00:00.000Z',
+    });
     // The agent file is not in the project: a warning, never a refusal.
     expect(dto.issues.map((i) => [i.code, i.severity])).toContainEqual([
       'missing-agent-file',
@@ -135,8 +177,46 @@ describe('PUT /api/projects/:id/workflow-graph (ADR-0023)', () => {
     ).toBe(true);
     expect(WorkflowGraphDtoSchema.parse((await s.get(path(s))).body)).toEqual(dto);
     expect(createRedesignRepositories(s.db).workflow.stored(s.project.id)).toMatchObject({
-      kind: 'v2',
+      kind: 'v3',
     });
+  });
+
+  it('round-trips a version 3 graph with researchers, two planners and labelled arrows', async () => {
+    const s = await setupBoard();
+    const graph = researchedTwoPlanners();
+    const res = await s.send('put', path(s), { graph });
+    expect(res.status, JSON.stringify(res.body).slice(0, 400)).toBe(200);
+    const dto = WorkflowGraphDtoSchema.parse(res.body);
+    expect(dto).toMatchObject({ stored: 'v3', graph });
+    expect(dto.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    const again = WorkflowGraphDtoSchema.parse((await s.get(path(s))).body);
+    expect(again.graph).toEqual(graph);
+    const research = again.graph.edges.find((e) => e.id === 'research-r1-plan');
+    expect(research).toMatchObject({ label: 'API notes', purpose: 'Which endpoints exist today' });
+    const valid = ValidateWorkflowGraphResultDtoSchema.parse(
+      (await s.post(`${path(s)}/validate`, { graph })).body,
+    );
+    expect(valid.ok).toBe(true);
+  });
+
+  it('refuses a version 3 graph with a role problem with 422', async () => {
+    const s = await setupBoard();
+    const g = workflowTemplateV3('lead-only');
+    const orphan: WorkflowGraphV3 = {
+      ...g,
+      template: 'custom',
+      nodes: [
+        ...g.nodes,
+        { type: 'agent', id: 'lonely', label: 'Lonely', model: null, skills: [], agent: null },
+      ],
+    };
+    const res = await s.send('put', path(s), { graph: orphan });
+    expect(res.status).toBe(422);
+    expect(errorOf(res).code).toBe('workflow_invalid');
+    const check = ValidateWorkflowGraphResultDtoSchema.parse(
+      (await s.post(`${path(s)}/validate`, { graph: orphan })).body,
+    );
+    expect(check.issues.map((i) => i.code)).toContain('agent-without-role');
   });
 
   it('answers 422 workflow_invalid with a plain summary for a graph with errors, saving nothing', async () => {
@@ -216,7 +296,9 @@ describe('version 1 routes once a graph is stored (ADR-0023 §9)', () => {
     });
     expect(put.status).toBe(409);
     expect(errorOf(put).code).toBe('workflow_is_graph');
-    expect(WorkflowGraphDtoSchema.parse((await s.get(path(s))).body).graph).toEqual(graph);
+    expect(WorkflowGraphDtoSchema.parse((await s.get(path(s))).body).graph).toEqual(
+      migrateWorkflowV2(graph),
+    );
   });
 
   it('keep working for a version 1 project', async () => {

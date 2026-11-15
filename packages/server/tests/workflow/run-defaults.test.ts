@@ -3,6 +3,8 @@
 // the answer is unchanged from before: `reviewStageOf(v1)` for a version 1 or default workflow,
 // and the graph's routes for a stored graph. Synthetic data only.
 import {
+  downgradeWorkflowV3,
+  type AnyWorkflowGraph,
   APPROVAL_MODES,
   MAX_REWORK_ROUNDS,
   WORKFLOW_TEMPLATE_IDS,
@@ -21,15 +23,19 @@ const NOW = '2026-10-21T09:00:00.000Z';
 
 /** The rule `board/service.ts` had before WG-F, kept here as the reference. */
 function before(
-  workflow: { v1?: ProjectWorkflow; graph: WorkflowGraph },
+  workflow: { v1?: ProjectWorkflow; graph: AnyWorkflowGraph },
   approvalMode: ApprovalMode,
 ): RunOptions {
+  // ADR-0037: the effective graph is version 3 now; the reference reads its version 2 form.
+  const v2 = workflow.graph.version === 2 ? workflow.graph : downgradeWorkflowV3(workflow.graph);
+  if (!('version' in v2) && !v2.ok) throw new Error(v2.reason);
+  const graph: WorkflowGraph = 'version' in v2 ? v2 : v2.graph;
   if (workflow.v1 !== undefined) {
     const review = reviewStageOf(workflow.v1);
     return { approvalMode, reviewer: review.reviewer, maxReworkRounds: review.maxReworkRounds };
   }
-  const reviewers = workflow.graph.nodes.some((n) => n.type === 'reviewer' && n.scope === 'change');
-  const rounds = workflow.graph.edges.reduce(
+  const reviewers = graph.nodes.some((n) => n.type === 'reviewer' && n.scope === 'change');
+  const rounds = graph.edges.reduce(
     (max, e) => (e.type === 'rework' ? Math.max(max, e.maxRounds) : max),
     0,
   );

@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   defaultProjectWorkflow,
-  migrateWorkflowV1,
+  migrateWorkflowV1ToV3,
+  migrateWorkflowV2,
   workflowTemplate,
   type WorkflowGraph,
 } from '@acp/core';
@@ -96,7 +97,8 @@ describe('starting a ticket on a workflow graph (ADR-0023)', () => {
     expect(res.status).toBe(200);
     const runId = TicketDetailDtoSchema.parse(res.body).currentRun?.id ?? '';
     const snapshot = audit(s).getRunSnapshot(runId);
-    expect(snapshot?.graph).toEqual(graph);
+    // ADR-0037: the graph is stored and snapshotted as version 3.
+    expect(snapshot?.graph).toEqual(migrateWorkflowV2(graph));
     expect(snapshot?.graphContext).toEqual({
       projectMode: 'full-auto',
       approvalCeilings: ['auto', 'auto-edits'],
@@ -141,7 +143,7 @@ describe('starting a ticket on a workflow graph (ADR-0023)', () => {
     const snapshot = audit(s).getRunSnapshot(runId);
     const v1 = defaultProjectWorkflow(s.project.id, s.project.createdAt);
     expect(snapshot?.workflow).toEqual(v1);
-    expect(snapshot?.graph).toEqual(migrateWorkflowV1(v1, { projectMode: 'auto-edits' }));
+    expect(snapshot?.graph).toEqual(migrateWorkflowV1ToV3(v1, { projectMode: 'auto-edits' }));
     expect(snapshot?.graphContext).toEqual({
       projectMode: 'auto-edits',
       approvalCeilings: [],
@@ -181,7 +183,7 @@ describe('starting a ticket on a workflow graph (ADR-0023)', () => {
     const after = RunWorkflowGraphDtoSchema.parse(
       (await again.get(`/api/runs/${x.runId}/workflow-graph`)).body,
     );
-    expect(after.graph).toEqual(graph);
+    expect(after.graph).toEqual(migrateWorkflowV2(graph));
     expect(after.nodes.map((n) => [n.nodeId, n.approvalMode, n.sandbox])).toEqual(
       before.nodes.map((n) => [n.nodeId, n.approvalMode, n.sandbox]),
     );

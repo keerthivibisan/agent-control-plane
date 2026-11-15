@@ -1,4 +1,4 @@
-import type { ApprovalMode, WorkflowGraph, WorkflowTemplateId } from '@acp/core';
+import type { ApprovalMode, WorkflowGraphV3, WorkflowTemplateId } from '@acp/core';
 import { useId } from 'react';
 import { WORKFLOW_GRAPH_COPY } from '../../lib/copy';
 import { templateOptions } from '../workflow/editor/TemplatePicker';
@@ -29,7 +29,7 @@ export function isDefaultChoice(choice: WorkflowChoice): boolean {
 }
 
 /** The graph the wizard saves for the choice, with the plan step following the project's mode. */
-export function choiceGraph(choice: WorkflowChoice, projectMode: ApprovalMode): WorkflowGraph {
+export function choiceGraph(choice: WorkflowChoice, projectMode: ApprovalMode): WorkflowGraphV3 {
   const graph = templateGraph(choice.template === 'custom' ? 'todays-setup' : choice.template, {
     planner: choice.planner,
     projectMode,
