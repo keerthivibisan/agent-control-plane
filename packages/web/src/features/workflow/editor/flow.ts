@@ -14,7 +14,7 @@ import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { effectiveProvider } from '../../../lib/providers';
 import { finishIssues, finishView } from '../finish';
 import { ARROW_SIZE, linkStroke } from './edges';
-import { isGateType, layoutGraph, sizeOf } from './layout';
+import { columnIndexOf, isGateType, layoutGraph, sizeOf } from './layout';
 import { EDITOR_COPY } from './copy';
 import { planLinks, type Route } from './routing';
 import { graphRoles, kindIn } from './roles';
@@ -209,7 +209,7 @@ export function toFlowEdges(
         : (e.label ?? rounds);
     if (label !== undefined) linkLabels.set(e.id, label);
   }
-  const plan = planLinks(view.graph, positions, graphRoles(graph), linkLabels);
+  const plan = planLinks(view.graph, positions, columnIndexOf(graph), linkLabels);
   return view.graph.edges.map((e) => {
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);

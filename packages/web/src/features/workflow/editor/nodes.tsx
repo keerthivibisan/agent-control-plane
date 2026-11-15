@@ -210,6 +210,13 @@ const SIDES = [
   { side: 'bottom', position: Position.Bottom, id: 'c-bottom' },
 ] as const;
 
+const HANDLE_POSITION = {
+  top: Position.Top,
+  bottom: Position.Bottom,
+  left: Position.Left,
+  right: Position.Right,
+} as const;
+
 function BlockHandles({
   node,
   label,
@@ -291,17 +298,18 @@ function BlockHandles({
             );
           })
         : null}
-      {(['top', 'bottom'] as const).map((side) =>
+      {(['top', 'bottom', 'left', 'right'] as const).map((side) =>
         HANDLE_SPOTS.map((at) =>
           (['source', 'target'] as const).map((kind) => (
             <Handle
               key={`${side}-${at}-${kind}`}
               type={kind}
-              position={side === 'top' ? Position.Top : Position.Bottom}
+              position={HANDLE_POSITION[side]}
               id={handleId(kind, side, at)}
               isConnectable={false}
               className={HIDDEN_HANDLE}
-              style={{ left: `${at}%` }}
+              // ADR-0040: links reach the left and right sides too, in the stage columns.
+              style={side === 'top' || side === 'bottom' ? { left: `${at}%` } : { top: `${at}%` }}
             />
           )),
         ),

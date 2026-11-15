@@ -71,6 +71,7 @@ import {
 } from './linking';
 import { blockNodeTypes, type BlockNode } from './nodes';
 import { Palette } from './Palette';
+import { StageHeaders } from './StageHeaders';
 import { tidyGraph, type EditorAction, type Selection } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
@@ -947,6 +948,7 @@ function Canvas({
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
             <FitOnChange shape={shape} />
             <FocusOn request={focus} graph={graph} />
+            <StageHeaders graph={graph} positions={positions} />
           </ReactFlow>
         </div>
         <p id="graph-editor-hint" className="sr-only">
