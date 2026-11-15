@@ -20,6 +20,7 @@ import { checkPlaceOf, checkSelectionOf, isChecksNode, type ChecksNode } from '.
 import {
   AgentBlockIcon,
   AgentFileIcon,
+  AuthorIcon,
   DoneIcon,
   ErrorIcon,
   MergeIcon,
@@ -160,6 +161,8 @@ function StepIcon({ node, size }: { node: WorkflowNode; size: number }) {
     case 'plan-approval':
     case 'owner-merge':
       return <YouIcon {...props} />;
+    case 'author':
+      return <AuthorIcon {...props} />;
   }
 }
 
@@ -210,13 +213,16 @@ function BlockHandles({
   node,
   label,
   target,
-  start = node.type !== 'done',
+  start = node.type !== 'done' && node.type !== 'author',
 }: {
   node: WorkflowNode;
   /** The block's name, for the connector's spoken name. */
   label: string;
   target: LinkTarget | null;
-  /** Whether a link can be dragged from it (not from Done or the Finish block). */
+  /**
+   * Whether a link can be dragged from it: not from Done or the Author block (ADR-0038 §4: only
+   * When arrows end on it). The Finish block starts only the ticket merge's When arrows.
+   */
   start?: boolean;
 }) {
   const actions = useContext(LinkActionsContext);
@@ -711,7 +717,8 @@ function ChecksBlockView({ data, selected }: { data: BlockData; selected: boolea
 
 /**
  * The Finish block (ADR-0028 §3): the ticket merge, your merge and Done as one fixed block. It is
- * the `owner-merge` node; links end on it, none starts from it.
+ * the `owner-merge` node; links end on it, and only the ticket merge's When arrows (ADR-0038 §4,
+ * merge conflicts) start from it.
  */
 export const FinishBlockView = memo(function FinishBlockView({
   data,
@@ -729,7 +736,7 @@ export const FinishBlockView = memo(function FinishBlockView({
       data-link-target={link.target ?? undefined}
       data-snapped={link.snapped ? 'true' : undefined}
     >
-      <BlockHandles node={node} label={FINISH_COPY.title} target={link.target} start={false} />
+      <BlockHandles node={node} label={FINISH_COPY.title} target={link.target} />
       <span className="inline-flex shrink-0 self-start pt-0.5 text-accent">
         <YouIcon size={15} />
       </span>
@@ -766,7 +773,14 @@ function StepView({ data, selected }: { data: BlockData; selected: boolean }) {
   const { node } = data;
   const link = useBlockLink(node.id, data.linkTarget);
   const you = node.type === 'plan-approval' || node.type === 'owner-merge';
-  const iconTone = node.type === 'done' ? 'text-success' : you ? 'text-accent' : 'text-dim';
+  const iconTone =
+    node.type === 'done'
+      ? 'text-success'
+      : node.type === 'author'
+        ? 'text-danger'
+        : you
+          ? 'text-accent'
+          : 'text-dim';
   return (
     <div
       className={`${STEP_FRAME} items-center gap-2 rounded-full px-3.5 ${

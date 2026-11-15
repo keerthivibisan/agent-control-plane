@@ -243,7 +243,11 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 function useAgentEffort(agent: AgentRunDto): AgentEffort | null | undefined {
   const graph = useApiQuery(runWorkflowPaths.graph(agent.runId), runWorkflowSchemas.graph).data;
   if (graph === undefined) return undefined;
-  const nodeId = graph.nodes.find((n) => n.agentRunIds.includes(agent.id))?.nodeId;
+  // The Author block also lists its fixers (ADR-0038 §4); their own block sets the effort.
+  const authors = new Set(graph.graph.nodes.filter((n) => n.type === 'author').map((n) => n.id));
+  const nodeId = graph.nodes.find(
+    (n) => !authors.has(n.nodeId) && n.agentRunIds.includes(agent.id),
+  )?.nodeId;
   const node = graph.graph.nodes.find((n) => n.id === nodeId);
   if (node === undefined || !('skills' in node)) return undefined;
   return node.effort ?? null;

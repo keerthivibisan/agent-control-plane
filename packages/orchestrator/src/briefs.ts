@@ -1,6 +1,8 @@
+import { describeWorkflow, renderWorkflowDescription } from '@acp/core';
 import type { WorkflowProgram } from '@acp/core';
 import { arrowNotesOf, ownerNoteBlock } from './arrow-notes.js';
-import { hasNamedHelpers, helperNodeLines } from './program.js';
+import { hasNamedHelpers, helperNodeLines, runGraphV3Of } from './program.js';
+import type { ProgramView } from './program.js';
 
 /**
  * The helper nodes in the lead's and planner's briefs (ADR-0023 §7). Only a workflow with named
@@ -43,4 +45,31 @@ export function helperBriefLines(
     who === 'planner' ? plan : who === 'lead-plans' ? `${plan} ${start}` : start,
     `Limits per node: ${limits}.`,
   ];
+}
+
+/**
+ * ADR-0038 §5 (FR-5): the run's workflow in words (`describeWorkflow`, the same text the editor's
+ * "Flow in words" shows), for the lead's brief and its `view_workflow` tool. Owner text in it is
+ * quoted inline under a data note.
+ */
+export function workflowWords(view: ProgramView): string {
+  const provider = view.graphContext?.projectProvider;
+  return renderWorkflowDescription(
+    describeWorkflow(
+      runGraphV3Of(view),
+      provider !== undefined ? { projectProvider: provider } : {},
+    ),
+  );
+}
+
+/** The heading of the lead's "Your workflow" brief section. */
+export const YOUR_WORKFLOW_HEADING =
+  'Your workflow (who does what and where failures go; view_workflow shows it again):';
+
+/**
+ * The lead's first brief with the "Your workflow" section, once, at its start (a version 1 run's
+ * workflow is migrated, so it reads the same as its graph run's).
+ */
+export function withWorkflowSection(brief: string, view: ProgramView): string {
+  return `${brief}\n\n${YOUR_WORKFLOW_HEADING}\n${workflowWords(view)}`;
 }

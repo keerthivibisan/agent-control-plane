@@ -16,6 +16,8 @@ import type {
   ChangeReviewerMode,
   ChangeState,
   ChangeVerdict,
+  FailedTest,
+  FailureEvent,
   OrchestrationRun,
   PermissionDecision,
   ProjectApprovals,
@@ -24,6 +26,7 @@ import type {
   ReviewState,
   CompileContext,
   StartingPoints,
+  TestResultStatus,
   TicketPlan,
   ToolUseCounts,
   AnyWorkflowGraph,
@@ -168,6 +171,63 @@ export interface PlanOption {
  * `headCommit` are persisted (`managed_workspaces`); the rest lives with the live run, since a
  * restart puts every undecided change in `needs-owner` (ADR-0013 §7).
  */
+/** ADR-0038 §1: what one tester reported with `report_test_results`, redacted. */
+export interface EngineTestResults {
+  status: TestResultStatus;
+  failed: readonly FailedTest[];
+  summary: string;
+  /** The tester's turn when it reported (`testTurnOf`): one report per turn. */
+  turn: number;
+}
+
+/**
+ * ADR-0038 §4 (FR-5): one fix the engine started along a When arrow (`failure-router.ts`). In
+ * memory with the live run, like the other engine notes; the rendered failure context is the
+ * same quoted data the lead got (test names and messages, check output tails, review findings,
+ * file names), never conversation content.
+ */
+export interface EngineFix {
+  id: string;
+  event: FailureEvent;
+  /** The block where the failure happened, or null for a merge conflict at the ticket merge. */
+  sourceNodeId: string | null;
+  /** The route's rounds key (`failureRounds`): the When arrow and the failure's lineage. */
+  roundsKey: string;
+  /**
+   * The failure's lineage: the first failing change's agent id (or `ticket`). A fixer's own later
+   * failures keep it, so a chain of new fixers never gets fresh rounds (FR-7).
+   */
+  lineage: string;
+  /** The agent whose change failed, when the failure is about one. */
+  changeAgentId?: string;
+  /** The agent doing the fix: the change's own helper (`rework`) or a new helper (`new`). */
+  fixerAgentRunId: string;
+  targetNodeId: string;
+  mode: 'rework' | 'new';
+  round: number;
+  maxRounds: number;
+  /** `running` until the lead moves it (`reroute_fix`): `rerouted` or `taken-over`. */
+  status: 'running' | 'rerouted' | 'taken-over';
+  /** The lead already moved this round's fix to a helper once (`reroute_fix`; FR-7 bound). */
+  moved?: true;
+  /** The fixer was found as the author (a route or a move to Author): the live graph's Author block. */
+  viaAuthor?: true;
+  /** The rendered failure context (quoted data), for a reroute. */
+  context: string;
+  /** The one known author's block and role at the failure, for a reroute to `author`. */
+  soleAuthor?: { nodeId: string; role: string };
+  /** The When arrow's label and purpose (owner text), when it has them. */
+  label?: string;
+  purpose?: string;
+  /**
+   * ADR-0038 §4 (amended 2026-11-14): the tester node that runs again once the fixer's change is
+   * merged (the failure was that tester's, and the arrow's retest is on); absent: no retest.
+   */
+  retestNodeId?: string;
+  /** The tester started for that retest (its failures keep this fix's lineage and rounds). */
+  retestAgentRunId?: string;
+}
+
 export interface EngineChange {
   state: ChangeState;
   /** Rework rounds used so far; also the current review round (0 = the first review). */
@@ -181,6 +241,13 @@ export interface EngineChange {
   /** The sealed commit; null before sealing (or for a stopped helper's unsealed work). */
   headCommit: string | null;
   changedFiles: number | null;
+  /**
+   * ADR-0038 §2: the repository paths the sealed change touches (at most `MAX_CHANGE_FILES`), as
+   * the server reported them with the seal; the failure context matches failing files against
+   * them to name the likely authors. Absent before the seal, or when the server sent none. In
+   * memory with the live run.
+   */
+  files?: readonly string[];
   /** When the change became `ready`: reviewers take the oldest first. */
   readyAt: string | null;
   /** The required harness checks on the change, as the server last reported them. */
@@ -376,6 +443,12 @@ export interface RunState {
    */
   findingsByAgent?: Readonly<Record<string, string>>;
   /**
+   * ADR-0038 §1: each tester's latest structured test results (`report_test_results`), by agent
+   * run id, redacted. Kept for the failure context (FR-2); stored as ticket comments of kind
+   * `test-results` by the server. In memory with the live run; one report per tester turn.
+   */
+  testResultsByAgent?: Readonly<Record<string, EngineTestResults>>;
+  /**
    * ADR-0037 §2: the output note of agents whose node hands off along a custom arrow (a planner's
    * plan, a change reviewer's verdict and findings, a final reviewer's posts, a helper's or
    * tester's `report_work` note), redacted and capped. Researchers' notes stay in
@@ -400,6 +473,16 @@ export interface RunState {
    * with the live run (AR-4 stores the drafts).
    */
   planOptions?: readonly PlanOption[];
+  /**
+   * ADR-0038 §4 (FR-5): the fixes started along When arrows, oldest first. In memory with the live
+   * run; after a restart the lead decides every failure again.
+   */
+  fixes?: readonly EngineFix[];
+  /**
+   * ADR-0038 §4 (FR-5): fix rounds used per When arrow and failure lineage (`EngineFix.roundsKey`).
+   * In memory with the live run.
+   */
+  failureRounds?: Readonly<Record<string, number>>;
 }
 
 /** `RunState.ownerWait`: the run's waits for the owner so far. */
@@ -699,9 +782,42 @@ export type EngineEffect =
    */
   | { type: 'record-findings'; agentRunId: string; ticketId: string; runId: string; text: string }
   /**
+   * ADR-0038 §1: a tester's `report_test_results`, redacted, as the comment text (status line,
+   * summary, failing tests). Stored with the transition as ticket comments of kind `test-results`
+   * with the agent run (split into parts when longer than a comment body).
+   */
+  | {
+      type: 'record-test-results';
+      agentRunId: string;
+      ticketId: string;
+      runId: string;
+      status: TestResultStatus;
+      text: string;
+    }
+  /**
    * ADR-0030 §5: the helper's reported outcome (and a resolver's assessment). The server records it
    * on the agent's conflict-resolution operation when it has one; nothing else is stored.
    */
+  /**
+   * ADR-0038 §4 (FR-5): a failure went along a When arrow. `fix-started`: `fixerAgentRunId` is
+   * fixing it (round `round` of `maxRounds`); `rerouted`: the lead moved the fix to
+   * `fixerAgentRunId` (or took it over: none); `to-lead`: the failure went to the lead (`reason`).
+   * Metadata only: the server writes a one-line app comment from its own records and the node
+   * labels; no failure text.
+   */
+  | {
+      type: 'failure-routed';
+      kind: 'fix-started' | 'rerouted' | 'to-lead';
+      event: FailureEvent;
+      fixId: string | null;
+      fixerAgentRunId: string | null;
+      /** The fixer's node, or null for the lead. */
+      targetNodeId: string | null;
+      sourceNodeId: string | null;
+      round: number | null;
+      maxRounds: number | null;
+      reason: 'target-lead' | 'rounds-used' | 'blocked' | 'author-unclear' | null;
+    }
   | {
       type: 'helper-outcome';
       agentRunId: string;

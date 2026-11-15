@@ -16,6 +16,7 @@ import {
   isFinalStageV3,
   type NodeIndexV3,
 } from './graph-index.js';
+import { failureSourceKind, isWhenTarget } from './failure-routes.js';
 import { ROLE_CLAIM_NAMES, claimOf } from './roles.js';
 
 /**
@@ -35,7 +36,10 @@ import { ROLE_CLAIM_NAMES, claimOf } from './roles.js';
  * - `rework`: change reviewer | lead | change block → helper | tester;
  * - `test`: `ticket-merge` | final stage | branch block → tester;
  * - `custom`: agent → another agent (no role either way);
- * - `merge`: lead → the block before the merge; without one, lead → the ticket merge.
+ * - `merge`: lead → the block before the merge; without one, lead → the ticket merge;
+ * - `when` (ADR-0038 §4): tester | Checks block | change reviewer | ticket merge → helper | Lead |
+ *   Author block. A target that is none of those is `when-target-invalid` (a When arrow never
+ *   gives a role); the Author block takes no other arrow and has none out.
  *
  * An arrow that would give an agent a second role is refused (`canConnectV3` asks with the arrow
  * drawn); in a stored graph that agent is `agent-mixed-roles` instead, and its arrows are checked
@@ -107,6 +111,9 @@ function allowedV3(
     case 'merge':
       if (from.type !== 'lead') return false;
       return index.hasMergeBlock ? isCheckBlockAt(to, 'merge') : to.type === 'ticket-merge';
+    case 'when':
+      // The target is checked after the matrix, so it is reported as `when-target-invalid`.
+      return failureSourceKind(index, from) !== undefined;
   }
 }
 
@@ -123,6 +130,7 @@ const EDGE_RULES_V3: Readonly<Record<WorkflowEdgeTypeV3, string>> = Object.freez
   custom: 'A custom link goes from one agent to another.',
   merge:
     'Only the Lead merges, through the Checks block before the merge, or straight into the ticket branch when the workflow has no such block.',
+  when: 'A When link goes from where a failure happens (a tester, a Checks block, a change reviewer or the ticket merge) to who fixes it (a helper, the Lead or the Author block).',
 });
 
 const EDGE_VERBS_V3: Readonly<Record<WorkflowEdgeTypeV3, string>> = Object.freeze({
@@ -136,6 +144,7 @@ const EDGE_VERBS_V3: Readonly<Record<WorkflowEdgeTypeV3, string>> = Object.freez
   test: 'hand the ticket branch for tests to',
   custom: 'hand off to',
   merge: 'merge through',
+  when: 'send failures to',
 });
 
 function edgeHintV3(
@@ -190,6 +199,12 @@ export function checkConnectionV3(
     return refuse(
       'edge-not-allowed',
       `${q(from)} cannot ${EDGE_VERBS_V3[type]} ${q(to)}. ${EDGE_RULES_V3[type]}${edgeHintV3(from, to, type, index)}`,
+    );
+  }
+  if (type === 'when' && !isWhenTarget(index, to)) {
+    return refuse(
+      'when-target-invalid',
+      `${q(to)} cannot fix the failures ${q(from)} sends. A When link goes to a helper, the Lead or the Author block, and never gives a block a role: make ${q(to)} a helper first, or choose another block.`,
     );
   }
   for (let i = 0; i < upTo; i++) {

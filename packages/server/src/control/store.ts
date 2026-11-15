@@ -36,7 +36,7 @@ import {
   type TicketPlanOption,
   type WorkflowNodeId,
 } from '@acp/core';
-import { researchCommentBodies } from './research-findings.js';
+import { researchCommentBodies, testResultsCommentBodies } from './research-findings.js';
 import { hasReviewableChange } from './roles.js';
 
 /**
@@ -616,6 +616,21 @@ export function createRunStore(deps: RunStoreDeps): RunStore {
             author: 'app',
             body,
             kind: 'research',
+            agentRunId: effect.agentRunId,
+          });
+        }
+        continue;
+      }
+      if (effect.type === 'record-test-results') {
+        // ADR-0038 §1: the tester's structured test results, owner-facing text like review
+        // findings (ADR-0021 §6), already redacted by the engine; split when longer than a body.
+        for (const body of testResultsCommentBodies(effect.text)) {
+          workspaceRepos.comments.insert({
+            ticketId: effect.ticketId,
+            runId: effect.runId,
+            author: 'app',
+            body,
+            kind: 'test-results',
             agentRunId: effect.agentRunId,
           });
         }

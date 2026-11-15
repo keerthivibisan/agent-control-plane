@@ -33,6 +33,7 @@ import {
   type WorkflowGraph,
   type WorkflowGraphV3,
 } from '../../../src/index.js';
+import { derivedRouteMismatch, oldFields } from './helpers.js';
 
 const CONTEXTS: readonly CompileContext[] = [
   { projectMode: 'auto-edits', approvalCeilings: [], maxConcurrentHelpers: 3 },
@@ -72,9 +73,18 @@ function equivalenceFailures(name: string, v2: WorkflowGraph): string[] {
   if (v2Valid && v3Codes.length > 0) out.push(`${name}: version 3 refuses (${v3Codes.join(', ')})`);
   if (!v2Valid) return out;
   for (const ctx of CONTEXTS) {
+    // ADR-0038: the version 3 program adds `failureRoutes` (only derived ones here); every other
+    // field is the version 2 program's, byte for byte, and the derived routes match them.
     const before = JSON.stringify(compileWorkflowV2(v2, ctx));
-    const after = JSON.stringify(compileWorkflowV3(v3, ctx));
-    if (before !== after) out.push(`${name}: programs differ for ${JSON.stringify(ctx)}`);
+    const program = compileWorkflowV3(v3, ctx);
+    if (before !== JSON.stringify(oldFields(program))) {
+      out.push(`${name}: programs differ for ${JSON.stringify(ctx)}`);
+    }
+    if ((program.failureRoutes ?? []).some((r) => r.derived !== true)) {
+      out.push(`${name}: a migrated graph has a When route`);
+    }
+    const mismatch = derivedRouteMismatch(program);
+    if (mismatch !== null) out.push(`${name}: ${mismatch} for ${JSON.stringify(ctx)}`);
   }
   if (JSON.stringify(graphRunDefaultsV3(v3)) !== JSON.stringify(graphRunDefaults(v2))) {
     out.push(`${name}: run defaults differ`);
@@ -152,6 +162,9 @@ describe('generated version 3 graphs', () => {
     const edges = graphs.flatMap(({ graph }) => graph.edges);
     expect(edges.some((e) => e.type === 'research')).toBe(true);
     expect(edges.some((e) => e.type === 'custom')).toBe(true);
+    // ADR-0038: When arrows, some into the Author block.
+    expect(edges.some((e) => e.type === 'when')).toBe(true);
+    expect(graphs.some(({ graph }) => graph.nodes.some((n) => n.type === 'author'))).toBe(true);
     expect(edges.some((e) => e.label !== undefined || e.purpose !== undefined)).toBe(true);
     expect(
       graphs.some(({ graph }) => graph.edges.filter((e) => e.type === 'plan').length > 1),
@@ -186,6 +199,12 @@ describe('generated version 3 graphs', () => {
       if (p.planners.length !== graph.edges.filter((e) => e.type === 'plan').length) {
         failures.push(`seed ${seed}: planners missing from the program`);
       }
+      const whens = graph.edges.filter((e) => e.type === 'when').length;
+      if ((p.failureRoutes ?? []).filter((r) => r.derived !== true).length !== whens) {
+        failures.push(`seed ${seed}: When routes missing from the program`);
+      }
+      const mismatch = derivedRouteMismatch(p);
+      if (mismatch !== null) failures.push(`seed ${seed}: ${mismatch}`);
       if (failures.length >= 3) break;
     }
     expect(failures).toEqual([]);

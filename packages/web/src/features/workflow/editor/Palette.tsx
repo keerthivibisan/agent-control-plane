@@ -5,9 +5,10 @@ import { buttonClass } from '../../../components/Button';
 import { CheckIcon, ChevronDownIcon, PlusSmallIcon } from '../../../components/icons';
 import { floatingClass } from '../../../components/Menu';
 import { HARNESS_BLOCKS_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
-import { AgentBlockIcon, ResearcherIcon, ROLE_ICON } from '../icons';
+import { AgentBlockIcon, AuthorIcon, ResearcherIcon, ROLE_ICON } from '../icons';
 import { EDITOR_COPY, type PresetKey } from './copy';
 import {
+  authorAvailability,
   checksAvailability,
   paletteAvailability,
   type CheckBlockItem,
@@ -89,6 +90,40 @@ function AddChecksItem({
 }
 
 /**
+ * The Author block (ADR-0038 §4): a routing block, not an agent, explained in its hint; disabled
+ * once the workflow has one.
+ */
+function AddAuthorItem({
+  graph,
+  dispatch,
+}: {
+  graph: WorkflowGraph;
+  dispatch: Dispatch<EditorAction>;
+}) {
+  const U = EDITOR_COPY.author;
+  const availability = authorAvailability(graph);
+  return (
+    <RadixMenu.Item
+      disabled={!availability.ok}
+      onSelect={() => dispatch({ type: 'add-author' })}
+      data-testid="palette-author"
+      title={U.hint}
+      className={ITEM_CLASS}
+    >
+      <span className="mt-0.5 flex shrink-0 text-danger group-data-[disabled]:opacity-60">
+        <AuthorIcon size={15} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="font-medium text-ink group-data-[disabled]:text-dim">{U.item}</span>
+        <span className="text-caption text-dim" data-testid="palette-hint">
+          {availability.ok ? U.hint : availability.reason}
+        </span>
+      </span>
+    </RadixMenu.Item>
+  );
+}
+
+/**
  * One block the menu can add: its name and, underneath, what it does, or why it can't be added
  * (the workflow already has the most blocks of its kind). A full item is disabled (Radix skips it
  * with the arrows) but stays readable, so the reason is in plain sight rather than in a tooltip.
@@ -127,8 +162,8 @@ function AddItem({
 }
 
 /**
- * "Add block": a menu button over the blocks the owner can add, in three groups (the Agent block;
- * the presets, an agent with its arrow drawn; checks), each limited by core's counts per role or
+ * "Add block": a menu button over the blocks the owner can add, in four groups (the Agent block;
+ * the presets, an agent with its arrow drawn; checks; routing, the Author block), each limited by core's counts per role or
  * the Checks blocks' places. The new block lands in its role's place and is selected, so its
  * settings open at once.
  */
@@ -200,6 +235,13 @@ export function Palette({
                 dispatch={dispatch}
               />
             ))}
+          </RadixMenu.Group>
+          <RadixMenu.Group>
+            <RadixMenu.Separator className="-mx-2 my-2 h-px bg-line" />
+            <RadixMenu.Label className="px-2 pt-1 pb-1 text-caption font-semibold text-dim">
+              {EDITOR_COPY.author.group}
+            </RadixMenu.Label>
+            <AddAuthorItem graph={graph} dispatch={dispatch} />
           </RadixMenu.Group>
         </RadixMenu.Content>
       </RadixMenu.Portal>

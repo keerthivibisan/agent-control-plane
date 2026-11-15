@@ -26,6 +26,7 @@ import {
   agent,
   arrow,
   baseV3,
+  oldFields,
   researchedPlan,
   withArrows,
   withNodes,
@@ -138,7 +139,7 @@ describe('version 3 templates', () => {
         const v2 = workflowTemplate(id, { planner });
         const v3 = workflowTemplateV3(id, { planner });
         expect(v3.template).toBe(id);
-        expect(compileWorkflowV3(v3, CTX)).toEqual(compileWorkflowV2(v2, CTX));
+        expect(oldFields(compileWorkflowV3(v3, CTX))).toEqual(compileWorkflowV2(v2, CTX));
         expect(graphRunDefaultsV3(v3)).toEqual(graphRunDefaults(v2));
         // Same blocks and arrow types; only the arrow ids name the version 3 types.
         const shape = (g: { edges: readonly { type: string; from: string; to: string }[] }) =>

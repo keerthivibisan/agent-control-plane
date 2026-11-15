@@ -90,6 +90,17 @@ export {
 export { noChangeLine } from './change-commands.js';
 export { reportWork } from './report-tool.js';
 export { cleanFindings, reportFindings } from './findings-tool.js';
+export { reportTestResults, testResultsText, testTurnOf } from './test-results-tool.js';
+export {
+  FAILURE_DATA_NOTE,
+  MAX_CHANGE_FILES,
+  authorCandidates,
+  checksFailedContext,
+  mergeConflictContext,
+  renderFailureContext,
+  reviewReworkContext,
+  testsFailedContext,
+} from './failure-context.js';
 export {
   HANDOFF_DATA_LINE,
   MAX_OUTPUT_NOTE_CHARS,
@@ -141,6 +152,16 @@ export {
   failureDetails,
 } from './check-blocks.js';
 export type { ChangeChecksResult, FailedCheck, SetupFailure } from './check-blocks.js';
+export { TESTER_FAILURE_LINE } from './check-blocks.js';
+export { reopenForFix, startAuthorFix } from './fix-turn.js';
+export {
+  YOUR_WORKFLOW_HEADING,
+  helperBriefLines,
+  withWorkflowSection,
+  workflowWords,
+} from './briefs.js';
+export { findFix, isRunningFix, rerouteFix, routeFailure, whenRouteFor } from './failure-router.js';
+export type { FailureInput, RerouteInput, RouteOutcome } from './failure-router.js';
 export {
   VIEW_CHANGE_MAX_BYTES,
   activeHelperCount,
@@ -175,13 +196,13 @@ export {
   testerNodeOf,
 } from './program.js';
 export type { AgentLaunchMode, HelperResolution, ProgramView } from './program.js';
-export { helperBriefLines } from './briefs.js';
 export {
   MAX_REVIEW_POSTS,
   REVIEW_POST_MAX_CHARS,
   ROLE_STAGE,
   SKILLS_PLUGIN_NAME,
   TESTER_TASK,
+  TEST_RESULTS_LINE,
   changeReviewerBrief,
   changeReviewerLaunchFields,
   finalStageRole,

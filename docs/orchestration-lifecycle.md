@@ -191,6 +191,42 @@ and the lead's follow-up all carry that provider; the server routes each to that
 adapter only. The state machines below are the same for both providers. Details:
 [provider-adapters §12](provider-adapters.md).
 
+## 0.4 Failure routing (ADR-0038) [implemented on `feature/workflow/failure-routing`]
+
+Verified with core, engine, server, adapter and web tests (`failure-routing*.test.ts`, the
+adversarial F-1 to F-6). One consented real run is still to come.
+
+- **Events.** `tests-failed` (a tester's `report_test_results` with status `failed`),
+  `checks-failed` and `harness-failed` (a Checks block, on a change or before the merge),
+  `review-rework` (a change reviewer) and `merge-conflict` (the ticket merge, and conflicts with
+  the target branch, ADR-0030).
+- **Context.** Each event builds one `FailureContext`: where it happened, the change, the likely
+  authors, what failed (tests, a capped check output tail, findings, conflicting files) and the
+  rounds. The lead always gets it; a fixer gets the same text. All of it is quoted data.
+- **Routing.** The router looks for the owner's When arrow for that source and event:
+  - none: the path from before ADR-0038 (the lead decides; a rework arrow or "back to the helper"
+    reworks the change as before); a tester's failure never goes back to the tester;
+  - to the lead: the lead gets the context and the arrow's purpose, and decides;
+  - to a helper block: a fix turn. The failing change's own helper reworks it when it belongs to
+    that block and is not decided; otherwise a new helper of the block starts from the ticket
+    branch with the block's settings, and the failing change waits for the lead's decision;
+  - to Author: as a helper block, for the one known author; several or no known authors go to the
+    lead.
+- **Rounds.** Counted per When arrow and failure lineage. A fixer's own later failure keeps the
+  lineage of the fix it was started for, so a chain of new fixers cannot get fresh rounds. After
+  `maxRounds` fix turns the failure goes to the lead. A fix that cannot start now (no free helper
+  slot, no room in the block, the helper busy or over budget, the run not going) goes to the lead
+  with the reason; nothing is queued.
+- **The lead steps in.** Every fix notice names its `fixId`. `reroute_fix` stops the fix and moves
+  it to another helper block or the author (same round: moving uses no round; at most one move to
+  a helper per round), or the lead takes it over. `stop_agent` stops it. Refused, with nothing
+  changed, for an unknown or finished fix, a target that is not a helper block, or a caller that is
+  not the lead.
+- **The lead knows the workflow.** Its first brief has "Your workflow": every agent and arrow as a
+  sentence with the owner's labels and purposes quoted; `view_workflow` returns the same text.
+- **In memory.** Fixes and rounds live with the live run; after a restart nothing relaunches, as
+  for every other turn.
+
 ## 1. Principles
 
 - The LLM plans and recommends. **The engine enforces** concurrency, budgets, permissions, workspace

@@ -394,7 +394,12 @@ describe('lead tools', () => {
     expect(names({ kind: 'planner', leadTools })).toEqual(['submit_plan', 'code_map']);
     expect(names({ kind: 'worker', leadTools })).toEqual(['report_work', 'ask_lead', 'code_map']);
     expect(names({ kind: 'worker', canStartHelpers: true, leadTools })).toContain('ask_lead');
-    expect(names({ kind: 'tester', leadTools })).toEqual(['report_work', 'ask_lead', 'code_map']);
+    expect(names({ kind: 'tester', leadTools })).toEqual([
+      'report_test_results',
+      'report_work',
+      'ask_lead',
+      'code_map',
+    ]);
     expect(names({ kind: 'reviewer', leadTools })).toEqual(['post_review', 'ask_lead', 'code_map']);
     expect(names({ kind: 'reviewer', reviewScope: 'change', leadTools })).toEqual([
       'submit_review',

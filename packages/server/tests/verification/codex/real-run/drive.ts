@@ -15,6 +15,7 @@ import {
   WorkflowGraphDtoSchema,
   type AgentMessageMetaDto,
   type RunDetailDto,
+  type TicketDetailDto,
 } from '@acp/core/api';
 import { createManagedClaudeCode, type ManagedQueryFn } from '@acp/adapter-claude-code';
 import { createManagedCodex } from '@acp/adapter-codex';
@@ -26,6 +27,11 @@ import { createLogger } from '../../../../src/logger.js';
 import { dumpDatabase, git } from '../../control/harness.js';
 import {
   ARROWS_SCENARIO,
+  FAILURE_ROUTING_SCENARIO,
+  FR_HARNESS,
+  FR_TEST_FILE,
+  FR_TICKET,
+  FR_TICKET_FILES,
   HARNESS,
   TICKET,
   TICKET_FILES,
@@ -33,14 +39,20 @@ import {
   arrowsGraph,
   codexChecks,
   count,
+  failedInFile,
+  failureRoutingChecks,
+  failureRoutingGraph,
   observeManaged,
   outboxCounts,
   parseScenario,
   scenarioGraph,
   startsByProvider,
   summarizeUsage,
+  testResultsHead,
   tokensByProvider,
+  tokensByRole,
   type FanOutReview,
+  type FrStep,
   type StartRecord,
   type TimelineEntry,
   type UsageRow,
@@ -70,6 +82,12 @@ import {
  *   out to two change reviewers (Claude and Codex) whose findings go to the lead. Every Claude node
  *   runs ACP_REAL_RUN_CLAUDE_MODEL (default `haiku`) at low effort. It also records the start and
  *   finish order by role and provider, the research notes' lengths and the fan-out review rounds.
+ * - `failure-routing` (FR-7, ADR-0038): the lead-only graph, every agent Claude at low effort (no
+ *   Codex), one tester after the ticket merge and a When arrow from the tester (`tests-failed`) to
+ *   an Author block (2 rounds). The ticket `clamp(x, min, max)` asks for a deliberately wrong first
+ *   version (min and max swapped); a seeded `test/clamp.test.mjs`, which the required check leaves
+ *   out (`FR_HARNESS`), is the tester's. It records the order of starts, test results, the app's
+ *   failure-routed comments and change merges, the fix rounds, and tokens per role.
  * Claude nodes use ACP_REAL_RUN_CLAUDE_MODEL when set, else the provider default (as the RL-V
  * driver does).
  *
@@ -110,7 +128,9 @@ if (process.env['CI'] !== undefined) {
 }
 const SCENARIO = parseScenario(process.env['ACP_REAL_RUN_SCENARIO']);
 if (SCENARIO === null) {
-  console.error('Refusing: ACP_REAL_RUN_SCENARIO must be one of reviewer, lead, arrows.');
+  console.error(
+    'Refusing: ACP_REAL_RUN_SCENARIO must be one of reviewer, lead, arrows, failure-routing.',
+  );
   process.exit(2);
 }
 const LIMIT_MS = Number(process.env['ACP_REAL_RUN_LIMIT_MS'] ?? String(20 * 60_000));
@@ -125,6 +145,8 @@ const CLAUDE_MODEL =
 const MODE = 'auto-edits';
 const BUDGET = 80_000;
 const ENDED = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
+const FR = SCENARIO === FAILURE_ROUTING_SCENARIO;
+const ticketFiles: readonly string[] = FR ? FR_TICKET_FILES : TICKET_FILES;
 
 // ------------------------------------------------------------------ the temp root (under home)
 
@@ -339,7 +361,7 @@ const flow = async (): Promise<Record<string, unknown>> => {
   );
   const repo = project.rootPath;
   // The owner commits the harness on main (test-side git: argument arrays, isolated config).
-  for (const [path, content] of Object.entries(HARNESS)) {
+  for (const [path, content] of Object.entries(FR ? FR_HARNESS : HARNESS)) {
     mkdirSync(dirname(join(repo, path)), { recursive: true });
     writeFileSync(join(repo, path), content);
   }
@@ -350,7 +372,8 @@ const flow = async (): Promise<Record<string, unknown>> => {
   const p = `/api/projects/${project.id}`;
   await put(`${p}/setup`, {
     projectKey: 'CX',
-    maxConcurrentHelpers: 1,
+    // FR: the tester holds a helper slot while it reports; the fixer needs a second one.
+    maxConcurrentHelpers: FR ? 2 : 1,
     maxDepth: 1,
     defaultBudgetTokensPerAgent: BUDGET,
     model: null,
@@ -362,14 +385,21 @@ const flow = async (): Promise<Record<string, unknown>> => {
       graph:
         SCENARIO === ARROWS_SCENARIO
           ? arrowsGraph(CLAUDE_MODEL ?? 'haiku')
-          : scenarioGraph(SCENARIO, CLAUDE_MODEL),
+          : SCENARIO === FAILURE_ROUTING_SCENARIO
+            ? failureRoutingGraph(CLAUDE_MODEL ?? 'haiku')
+            : scenarioGraph(SCENARIO, CLAUDE_MODEL),
     }),
   );
   const graphIssues: Record<string, number> = {};
   for (const issue of saved.issues) count(graphIssues, `${issue.severity}:${issue.code}`);
 
   const ticket = TicketDtoSchema.parse(
-    await post(`${p}/tickets`, { ...TICKET, type: 'feature', priority: 'medium', labels: [] }),
+    await post(`${p}/tickets`, {
+      ...(FR ? FR_TICKET : TICKET),
+      type: 'feature',
+      priority: 'medium',
+      labels: [],
+    }),
   );
   await post(`/api/tickets/${ticket.id}/move`, { status: 'READY' });
   const started = TicketDetailDtoSchema.parse(
@@ -392,6 +422,41 @@ const flow = async (): Promise<Record<string, unknown>> => {
   let planDecidedByDriver = false;
   let finalMerge: { status: 'merged' | 'refused'; code?: string } | null = null;
   let timedOut = false;
+  // FR: the order of starts, test results, app comments and change states (content-free).
+  const steps: FrStep[] = [];
+  let timelineSeen = 0;
+  const commentsSeen = new Set<string>();
+  const changeStates = new Map<string, string>();
+  const changeIndex = new Map<string, number>();
+  const recordSteps = (r: RunDetailDto, t: TicketDetailDto) => {
+    for (const c of r.changes ?? []) {
+      const key = c.agentRunId;
+      if (!changeIndex.has(key)) changeIndex.set(key, changeIndex.size);
+      if (changeStates.get(key) !== c.state) {
+        changeStates.set(key, c.state);
+        steps.push({ step: 'change', index: changeIndex.get(key) ?? -1, state: c.state });
+      }
+    }
+    for (const c of t.comments) {
+      if (commentsSeen.has(c.id)) continue;
+      commentsSeen.add(c.id);
+      if (c.kind === 'test-results') {
+        steps.push({
+          step: 'test-results',
+          head: testResultsHead(c.body),
+          failedInTestFile: failedInFile(c.body, FR_TEST_FILE),
+        });
+      } else if (c.kind === 'system' && c.author === 'app' && c.body.startsWith('When ')) {
+        // The app's own one-line failure-routed comment: labels, a role and round numbers only.
+        steps.push({ step: 'app-comment', body: c.body.slice(0, 200) });
+      }
+    }
+    for (; timelineSeen < timeline.length; timelineSeen++) {
+      const e = timeline[timelineSeen];
+      if (e === undefined) continue;
+      steps.push({ step: e.event, kind: e.kind, rework: starts[e.start]?.rework ?? false });
+    }
+  };
 
   for (;;) {
     if (Date.now() > deadline || interrupted) {
@@ -408,10 +473,11 @@ const flow = async (): Promise<Record<string, unknown>> => {
       tips.add(r.ticketBranch.headCommit);
       branchStates.add(r.ticketBranch.state);
     }
+    const t = TicketDetailDtoSchema.parse(await get(`/api/tickets/${ticket.id}`));
+    if (FR) recordSteps(r, t);
     if (ENDED.has(r.status)) break;
 
     // The plan: the owner approves it.
-    const t = TicketDetailDtoSchema.parse(await get(`/api/tickets/${ticket.id}`));
     const proposed = t.plans.find((x) => x.runId === rid && x.status === 'proposed');
     if (t.ticket.stage === 'PLAN_REVIEW' && proposed !== undefined) {
       try {
@@ -477,11 +543,12 @@ const flow = async (): Promise<Record<string, unknown>> => {
   const end = await detail();
   if (end.outbox !== undefined) for (const m of end.outbox) outbox.set(m.id, m);
   const tEnd = TicketDetailDtoSchema.parse(await get(`/api/tickets/${ticket.id}`));
+  if (FR) recordSteps(end, tEnd);
   const plan = tEnd.plans.filter((x) => x.runId === rid).at(-1);
   const branch = end.ticketBranch ?? null;
   const mainNow = git(repo, 'rev-parse', 'main').trim();
   const branchLeft = branch === null ? '' : git(repo, 'branch', '--list', branch.branch).trim();
-  const filesOnMain = TICKET_FILES.every((f) => {
+  const filesOnMain = ticketFiles.every((f) => {
     try {
       git(repo, 'cat-file', '-e', `main:${f}`);
       return true;
@@ -562,6 +629,12 @@ const flow = async (): Promise<Record<string, unknown>> => {
       (l) => dump.includes(l) && !plannedText.some((t) => t.includes(l)),
     ),
   };
+  if (FR) {
+    // A Claude-only scenario: the Codex assertions do not apply (FR real run, 2026-11-14).
+    delete assertions['everyCodexAgentStarted'];
+    delete assertions['codexWorktreeReadable'];
+    delete assertions['codexUsageRecorded'];
+  }
   if (SCENARIO === 'lead') {
     assertions['codexLeadUsedLeadTools'] = Object.keys(codex.leadTools).length > 0;
   }
@@ -595,8 +668,34 @@ const flow = async (): Promise<Record<string, unknown>> => {
     assertions['runEnded'] = ENDED.has(end.status);
   }
 
+  let failureRouting: Record<string, unknown> | null = null;
+  if (FR) {
+    const fr = failureRoutingChecks(steps);
+    const leads = starts.filter((s) => s.kind === 'lead' && !s.followUp);
+    const leadBrief = leads[0];
+    const agentTokens = end.agents.map((a) => ({ kind: a.kind, budgetUsed: a.budget.used }));
+    failureRouting = {
+      ...fr,
+      leadBrief: {
+        chars: leadBrief?.promptChars ?? null,
+        workflowSection: leadBrief?.workflowSection ?? false,
+      },
+      tokensByRole: tokensByRole(agentTokens),
+      steps,
+    };
+    assertions['helperMergedBeforeTester'] = fr.helperMergedBeforeTester;
+    assertions['testerReportedFailedInTestFile'] = fr.testerFailedInTestFile;
+    assertions['whenArrowStartedFixRound1Of2'] = fr.fixStartedRound1Of2;
+    assertions['leadTold'] = fr.leadTold;
+    assertions['exactlyOneFixer'] = fr.fixerStarts === 1;
+    assertions['fixChangeMerged'] = fr.mergedAfterFix;
+    assertions['leadBriefHasWorkflowSection'] = leadBrief?.workflowSection === true;
+    assertions['runEnded'] = ENDED.has(end.status);
+  }
+
   return {
     scenario: SCENARIO,
+    failureRouting,
     ok: Object.values(assertions).every(Boolean),
     assertions,
     graphIssues,

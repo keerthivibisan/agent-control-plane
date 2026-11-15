@@ -38,6 +38,8 @@ import {
   launchFieldsFor,
   nodeProvider,
   nextStage,
+  pendingRetests,
+  retestBlock,
   reviewerBrief,
   testerBrief,
   TESTER_TASK,
@@ -52,6 +54,8 @@ import type {
   EngineApproval,
   EngineContext,
   EngineEffect,
+  EngineFix,
+  EngineTestResults,
   FollowUpState,
   OwnerWait,
   PlanOption,
@@ -102,6 +106,8 @@ export class Draft {
   planStepHelpers: Record<string, readonly WorkflowNodeId[]> | undefined;
   /** Researchers' findings notes by agent run (`RunState.findingsByAgent`, ADR-0037 §3). */
   findingsByAgent: Record<string, string> | undefined;
+  /** Testers' structured test results (`RunState.testResultsByAgent`, ADR-0038 §1). */
+  testResultsByAgent: Record<string, EngineTestResults> | undefined;
   /** Output notes for custom arrows (`RunState.outputNotes`, ADR-0037 §2). */
   outputNotes: Record<string, string> | undefined;
   /** Held agents' first messages (`RunState.pendingBriefs`, ADR-0037 §2). */
@@ -110,6 +116,10 @@ export class Draft {
   researchBrief: string | undefined;
   /** Plan options of a run with several planners (`RunState.planOptions`, ADR-0037 §4). */
   planOptions: PlanOption[] | undefined;
+  /** Fixes along When arrows (`RunState.fixes`, ADR-0038 §4). */
+  fixes: EngineFix[] | undefined;
+  /** Fix rounds per When arrow and lineage (`RunState.failureRounds`, ADR-0038 §4). */
+  failureRounds: Record<string, number> | undefined;
   readonly effects: EngineEffect[] = [];
   private readonly nowIso: string;
   private readonly hadPlans: boolean;
@@ -151,10 +161,14 @@ export class Draft {
       state.planStepHelpers === undefined ? undefined : { ...state.planStepHelpers };
     this.findingsByAgent =
       state.findingsByAgent === undefined ? undefined : { ...state.findingsByAgent };
+    this.testResultsByAgent =
+      state.testResultsByAgent === undefined ? undefined : { ...state.testResultsByAgent };
     this.outputNotes = state.outputNotes === undefined ? undefined : { ...state.outputNotes };
     this.pendingBriefs = state.pendingBriefs === undefined ? undefined : { ...state.pendingBriefs };
     this.researchBrief = state.researchBrief;
     this.planOptions = state.planOptions?.map((o) => ({ ...o }));
+    this.fixes = state.fixes?.map((f) => ({ ...f }));
+    this.failureRounds = state.failureRounds === undefined ? undefined : { ...state.failureRounds };
     for (const a of this.agents) if (a.change !== undefined) a.change = { ...a.change };
     this.activeAtStart = new Set(
       state.agents.filter((a) => isActiveAgentStatus(a.status)).map((a) => a.id),
@@ -595,6 +609,9 @@ export class Draft {
       provider: nodeProvider(this.program(), node.id),
     };
     if (kind === 'reviewer') agent.reviewPosts = 0;
+    // ADR-0038 §4 (amended 2026-11-14): a tester running again after merged fixes of its failures.
+    const retests = kind === 'tester' ? pendingRetests(this, node.id) : [];
+    for (const fix of retests) fix.retestAgentRunId = agent.id;
     this.agents.push(agent);
     this.setAgentStatus(agent, 'STARTING');
     if (kind === 'reviewer') {
@@ -620,7 +637,9 @@ export class Draft {
     }
     // ADR-0037 §2 (amended 2026-11-14): with the owner's notes on its test or flow arrow.
     const brief = withOwnerNotes(
-      kind === 'reviewer' ? reviewerBrief(this) : testerBrief(this),
+      kind === 'reviewer'
+        ? reviewerBrief(this)
+        : [testerBrief(this), ...retests.slice(0, 1).map((f) => retestBlock(f))].join('\n\n'),
       stageNoteBlocks(this.program(), node.id),
     );
     const loopFields =
@@ -671,10 +690,13 @@ export class Draft {
     if (this.graphContext !== undefined) state.graphContext = this.graphContext;
     if (this.planStepHelpers !== undefined) state.planStepHelpers = this.planStepHelpers;
     if (this.findingsByAgent !== undefined) state.findingsByAgent = this.findingsByAgent;
+    if (this.testResultsByAgent !== undefined) state.testResultsByAgent = this.testResultsByAgent;
     if (this.outputNotes !== undefined) state.outputNotes = this.outputNotes;
     if (this.pendingBriefs !== undefined) state.pendingBriefs = this.pendingBriefs;
     if (this.researchBrief !== undefined) state.researchBrief = this.researchBrief;
     if (this.planOptions !== undefined) state.planOptions = this.planOptions;
+    if (this.fixes !== undefined) state.fixes = this.fixes;
+    if (this.failureRounds !== undefined) state.failureRounds = this.failureRounds;
     return state;
   }
 

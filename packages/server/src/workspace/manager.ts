@@ -159,7 +159,15 @@ export interface SealResult {
   headCommit: string;
   /** Files that differ from where it started. */
   changedFiles: number;
+  /**
+   * ADR-0038 §2: their repository paths, at most `SEAL_FILES_MAX` (names only, never content),
+   * for the failure context's likely authors.
+   */
+  files: string[];
 }
+
+/** Most changed paths a seal reports (`SealResult.files`). */
+export const SEAL_FILES_MAX = 500;
 
 export type IntegrateResult =
   /** The tip was merged into the helper's branch (or was already in it); `commit` is the result. */
@@ -1147,8 +1155,13 @@ export function createWorkspaceManager(deps: WorkspaceManagerDeps): WorkspaceMan
           [...DIFF_BASE, '-z', '--name-only', w.baseCommit, headCommit, '--'],
           w.path,
         );
-        const changedFiles = names.split('\0').filter((n) => n !== '').length;
-        return { changed: changedFiles > 0, headCommit, changedFiles };
+        const all = names.split('\0').filter((n) => n !== '');
+        return {
+          changed: all.length > 0,
+          headCommit,
+          changedFiles: all.length,
+          files: all.slice(0, SEAL_FILES_MAX),
+        };
       });
     },
 

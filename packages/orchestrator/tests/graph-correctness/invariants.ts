@@ -133,7 +133,14 @@ export function stepInvariants(step: StepRecord): string[] {
     if (r.decidedBy === 'lead' && leadRoundsUsed(change) >= route.leadRounds) {
       out.push(`the lead reworked ${a.role} past its ${route.leadRounds} rounds`);
     }
-    if (r.decidedBy === 'reviewer') {
+    // ADR-0038 §4: a review rework sent along a When arrow is a fix of this step (bounded below).
+    const viaWhen = (after.fixes ?? []).some(
+      (f) =>
+        f.fixerAgentRunId === a.id &&
+        f.mode === 'rework' &&
+        !(before.fixes ?? []).some((b) => b.id === f.id),
+    );
+    if (r.decidedBy === 'reviewer' && !viaWhen) {
       const limit = route.by === 'agent' && route.then === 'direct' ? route.reviewerRounds : 0;
       if ((change.reviewerRounds ?? 0) >= limit) {
         out.push(`the reviewer reworked ${a.role} past its ${limit} rounds`);
@@ -167,7 +174,36 @@ export function stepInvariants(step: StepRecord): string[] {
     }
   }
 
-  // 7. Final stages start in the program's order, each at most once.
+  // 6b. ADR-0038 §4: fixes along When arrows stay within each arrow's rounds per failure lineage
+  //     (moving a fix uses no round), and only a When arrow (never a derived route) starts one.
+  const fixes = after.fixes ?? [];
+  for (const f of fixes) {
+    if (f.round > f.maxRounds) out.push(`a fix went past its ${f.maxRounds} rounds`);
+    const started = fixes.filter((g) => g.roundsKey === f.roundsKey && g.status !== 'rerouted');
+    if (started.length > f.maxRounds) {
+      out.push(`${started.length} fixes on one When arrow past its ${f.maxRounds} rounds`);
+    }
+    if (f.round > (after.failureRounds?.[f.roundsKey] ?? 0)) {
+      out.push('a fix round was not counted');
+    }
+  }
+  for (const f of fixes.filter((g) => !(before.fixes ?? []).some((b) => b.id === g.id))) {
+    const routed = (program.failureRoutes ?? []).some(
+      (r) => r.derived !== true && r.events.includes(f.event),
+    );
+    if (!routed) out.push(`a fix for ${f.event} without a When arrow`);
+  }
+
+  // 7. Final stages start in the program's order, each at most once; a tester may run again only
+  // as the retest of routed fixes merged before it started (ADR-0038 §4, amended 2026-11-14).
+  const retestOf = (id: string, stage: string | undefined) =>
+    (after.fixes ?? []).filter((f) => f.retestAgentRunId === id).length > 0 &&
+    (after.fixes ?? [])
+      .filter((f) => f.retestAgentRunId === id)
+      .every(
+        (f) =>
+          f.retestNodeId === stage && agent(before, f.fixerAgentRunId)?.change?.state === 'merged',
+      );
   const order = program.finalStages.map((n) => n.id);
   for (const e of effectsOf(effects, 'start-agent')) {
     if (e.rework !== undefined) continue;
@@ -184,7 +220,8 @@ export function stepInvariants(step: StepRecord): string[] {
       out.push(`final stage ${a.stage ?? ''} out of order`);
     if (ran(order[k] ?? '')) {
       const prev = before.agents.filter((b) => isFinalStageAgent(b) && b.stage === a.stage);
-      if (!prev.every((b) => b.kind === 'reviewer' && b.status === 'NEEDS_REVIEW')) {
+      const restart = prev.every((b) => b.kind === 'reviewer' && b.status === 'NEEDS_REVIEW');
+      if (!restart && !(a.kind === 'tester' && retestOf(a.id, a.stage))) {
         out.push(`final stage ${a.stage ?? ''} ran twice`);
       }
     }

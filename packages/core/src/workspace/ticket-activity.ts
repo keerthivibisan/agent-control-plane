@@ -25,6 +25,11 @@ export const TicketCommentKindSchema = z.enum([
   'review',
   /** A researcher's findings note (Conversation; ADR-0037 §3, the `report_findings` tool). */
   'research',
+  /**
+   * A tester's structured test results (Conversation; ADR-0038 §1, the `report_test_results`
+   * tool): the status line, the failing tests and the summary, as text written for the ticket.
+   */
+  'test-results',
   /** The lead's rework, discard or ask note (Conversation). */
   'note',
   /** The facts of a run, composed by the app (Conversation). */
@@ -44,6 +49,14 @@ export const COMMENTS_TAB_KINDS: readonly TicketCommentKind[] = Object.freeze([
 export const MAX_AGENT_NOTE_CHARS = 600;
 /** Most characters in a researcher's findings note (the `report_findings` tool, ADR-0037 §3). */
 export const MAX_RESEARCH_FINDINGS_CHARS = 16384;
+/** ADR-0038 §1: most failing tests in one `report_test_results` call. */
+export const MAX_TEST_FAILURES = 50;
+/** ADR-0038 §1: most characters in a failing test's name. */
+export const MAX_TEST_NAME_CHARS = 200;
+/** ADR-0038 §1: most characters in a failing test's message. */
+export const MAX_TEST_MESSAGE_CHARS = 500;
+/** ADR-0038 §1: most characters in a test results summary. */
+export const MAX_TEST_SUMMARY_CHARS = 2000;
 /** Most characters in the lead's ticket summary (its `request_review.summary`). */
 export const MAX_TICKET_SUMMARY_CHARS = 1500;
 
@@ -116,6 +129,8 @@ export const ActivityTypeSchema = z.enum([
   'agent-note',
   /** ADR-0037 §3: a researcher's findings note. */
   'research',
+  /** ADR-0038 §1: a tester's structured test results. */
+  'test-results',
   'review',
   'note',
   'decision',

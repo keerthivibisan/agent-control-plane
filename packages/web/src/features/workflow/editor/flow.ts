@@ -1,11 +1,13 @@
-import type {
-  ApprovalMode,
-  ManagedProviderId,
-  NodePosition,
-  WorkflowEdgeTypeV3,
-  WorkflowGraphV3,
-  WorkflowNodeId,
-  WorkflowNodeV3,
+import {
+  FAILURE_EVENT_NAMES,
+  type ApprovalMode,
+  type ManagedProviderId,
+  type NodePosition,
+  type WorkflowEdgeTypeV3,
+  type WorkflowEdgeV3,
+  type WorkflowGraphV3,
+  type WorkflowNodeId,
+  type WorkflowNodeV3,
 } from '@acp/core';
 import { MarkerType, type Edge } from '@xyflow/react';
 import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
@@ -162,7 +164,20 @@ const REFUSED_CODES = new Set([
   'duplicate-edge',
   'self-edge',
   'edge-unknown-node',
+  'when-target-invalid',
 ]);
+
+/** What a link's rounds add to its label: a rework arrow's rounds, a When arrow's events and rounds. */
+function roundsText(e: WorkflowEdgeV3): string | undefined {
+  if (e.type === 'rework') return G.rework(e.maxRounds);
+  if (e.type === 'when') {
+    return EDITOR_COPY.when.canvas(
+      e.on.map((ev) => FAILURE_EVENT_NAMES[ev]),
+      e.maxRounds,
+    );
+  }
+  return undefined;
+}
 
 export function toFlowEdges(
   graph: WorkflowGraph,
@@ -183,7 +198,18 @@ export function toFlowEdges(
       .filter((i) => i.edgeId !== undefined && REFUSED_CODES.has(i.code))
       .map((i) => i.edgeId),
   );
-  const plan = planLinks(view.graph, positions, graphRoles(graph));
+  // The owner's label (ADR-0037 §2) on the canvas; a rework arrow keeps its rounds next to it,
+  // a When arrow its events and rounds (ADR-0038 §4).
+  const linkLabels = new Map<string, string>();
+  for (const e of view.graph.edges) {
+    const rounds = roundsText(e);
+    const label =
+      e.label !== undefined && rounds !== undefined
+        ? `${e.label} · ${rounds}`
+        : (e.label ?? rounds);
+    if (label !== undefined) linkLabels.set(e.id, label);
+  }
+  const plan = planLinks(view.graph, positions, graphRoles(graph), linkLabels);
   return view.graph.edges.map((e) => {
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);
@@ -193,12 +219,7 @@ export function toFlowEdges(
       connecting ||
       (selection?.kind === 'node' && e.from !== selection.id && e.to !== selection.id) ||
       (selection?.kind === 'edge' && !selected);
-    // The owner's label (ADR-0037 §2) on the canvas; a rework arrow keeps its rounds next to it.
-    const rounds = e.type === 'rework' ? G.rework(e.maxRounds) : undefined;
-    const label =
-      e.label !== undefined && rounds !== undefined
-        ? `${e.label} · ${rounds}`
-        : (e.label ?? rounds);
+    const label = linkLabels.get(e.id);
     return {
       id: e.id,
       source: e.from,

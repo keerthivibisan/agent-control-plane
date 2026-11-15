@@ -47,7 +47,8 @@ export const CODE_MAP_TOOL_NAMES: readonly LeadToolName[] = ['code_map'];
 /**
  * The lead's tools: every lead tool except the reviewers' own `post_review` (ADR-0019, decision
  * B) and `submit_review` (ADR-0021 §3), the helpers' `report_work` (ADR-0026 §3) and the
- * researchers' `report_findings` (ADR-0037 §3). That
+ * researchers' `report_findings` (ADR-0037 §3) and the testers' `report_test_results` (ADR-0038
+ * §1). That
  * includes the five change tools of the review loop (`view_change`, `merge_change`,
  * `request_rework`, `discard_change`, `ask_owner`); the engine refuses them in a run without the
  * loop, and refuses the other roles' tools from anyone else.
@@ -59,7 +60,8 @@ export const LEAD_ROLE_TOOL_NAMES: readonly LeadToolName[] = LEAD_TOOL_NAMES.fil
     !AGENT_NOTE_TOOL_NAMES.includes(name) &&
     !ASK_LEAD_TOOL_NAMES.includes(name) &&
     !ASSISTANT_CONTROL_TOOL_NAMES.includes(name) &&
-    name !== 'report_findings',
+    name !== 'report_findings' &&
+    name !== 'report_test_results',
 );
 
 /** A helper's and the tester's own tools: the note, the question to the parent, the code map. */
@@ -67,6 +69,15 @@ const WORKER_TOOL_NAMES: readonly LeadToolName[] = [
   ...AGENT_NOTE_TOOL_NAMES,
   ...ASK_LEAD_TOOL_NAMES,
   ...CODE_MAP_TOOL_NAMES,
+];
+
+/**
+ * The tester's tools (ADR-0038 §1): its structured test results (`report_test_results`) first,
+ * then a helper's own tools (the note, the question to the parent, the code map).
+ */
+export const TESTER_TOOL_NAMES: readonly LeadToolName[] = [
+  'report_test_results',
+  ...WORKER_TOOL_NAMES,
 ];
 
 /**
@@ -125,7 +136,8 @@ export function isChangeReviewer(spec: Pick<ManagedAgentSpec, 'kind' | 'reviewSc
  *   (`reviewScope: 'change'`, ADR-0021), and `ask_lead`;
  * - worker: `report_work` (ADR-0026 §3) and `ask_lead` (ADR-0033 §3), plus the child-management
  *   subset with `canStartHelpers` (depth 2);
- * - tester: `report_work` and `ask_lead` (it is a worker that never starts helpers);
+ * - tester: `report_test_results` (ADR-0038 §1), `report_work` and `ask_lead` (it is a worker
+ *   that never starts helpers);
  * - researcher (ADR-0037 §3): `report_findings` and `ask_lead`;
  * - assistant (ADR-0035): `ticket_status`, `project_info`, `propose_skill`, `propose_agent`;
  * - every role, and a follow-up turn, also gets the read-only `code_map` (ADR-0034 §4).
@@ -149,7 +161,7 @@ export function managedToolNames(
         ? [...HELPER_PARENT_TOOL_NAMES, ...WORKER_TOOL_NAMES]
         : WORKER_TOOL_NAMES;
     case 'tester':
-      return WORKER_TOOL_NAMES;
+      return TESTER_TOOL_NAMES;
     case 'assistant':
       return ASSISTANT_TOOL_NAMES;
     case 'researcher':

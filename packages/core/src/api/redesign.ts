@@ -149,6 +149,20 @@ export const RunWorkflowGraphDtoSchema = z.object({
     }),
   ),
   review: RunWorkflowDtoSchema.shape.review,
+  /**
+   * ADR-0038 §4 (amended 2026-11-14): the fix rounds each When arrow has used in this run (its
+   * most used failure lineage) out of its `maxRounds`. Only arrows that started a fix; empty after
+   * a restart, as the engine's fixes live with the run.
+   */
+  whenRounds: z
+    .array(
+      z.object({
+        edgeId: z.string().min(1),
+        used: z.number().int().min(1),
+        maxRounds: z.number().int().min(1),
+      }),
+    )
+    .optional(),
 });
 export type RunWorkflowGraphDto = z.infer<typeof RunWorkflowGraphDtoSchema>;
 

@@ -1,12 +1,13 @@
-import type {
-  ApprovalMode,
-  NodePosition,
-  WorkflowEdgeTypeV3,
-  WorkflowEdgeV3,
-  WorkflowGraphV3,
-  WorkflowNodeId,
-  WorkflowNodeV3,
-  WorkflowStageId,
+import {
+  FAILURE_EVENT_NAMES,
+  type ApprovalMode,
+  type NodePosition,
+  type WorkflowEdgeTypeV3,
+  type WorkflowEdgeV3,
+  type WorkflowGraphV3,
+  type WorkflowNodeId,
+  type WorkflowNodeV3,
+  type WorkflowStageId,
 } from '@acp/core';
 import type {
   AgentRunDto,
@@ -63,7 +64,9 @@ export function isGateNode(node: WorkflowNodeV3): boolean {
     node.type === 'checks' ||
     node.type === 'ticket-merge' ||
     node.type === 'owner-merge' ||
-    node.type === 'done'
+    node.type === 'done' ||
+    // ADR-0038 §4: a routing block with no agent of its own.
+    node.type === 'author'
   );
 }
 
@@ -120,7 +123,7 @@ export function layoutLiveGraph(graph: WorkflowGraphV3): Map<WorkflowNodeId, Nod
   const finish = finishParts(graph);
   const rows: WorkflowNodeV3[][][] = [
     [of('ticket'), of('researcher'), of('planner'), of('plan-approval')],
-    [of('lead'), [...of('helper'), ...of('helper-pool')], of('reviewer-change')],
+    [of('lead'), [...of('helper'), ...of('helper-pool')], of('reviewer-change'), of('author')],
     finish === null
       ? [
           of('checks'),
@@ -247,9 +250,13 @@ export function reworkCounts(
   nodes: RunWorkflowGraphDto['nodes'],
   changes: readonly ChangeReviewDto[],
 ): Map<string, number> {
-  const nodeOfAgent = new Map<string, WorkflowNodeId>();
-  for (const n of nodes) for (const id of n.agentRunIds) nodeOfAgent.set(id, n.nodeId);
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const nodeOfAgent = new Map<string, WorkflowNodeId>();
+  for (const n of nodes) {
+    // The Author block lists fixers that belong to their own helper block (ADR-0038 §4).
+    if (byId.get(n.nodeId)?.type === 'author') continue;
+    for (const id of n.agentRunIds) nodeOfAgent.set(id, n.nodeId);
+  }
   const out = new Map<string, number>();
   for (const e of graph.edges) {
     if (e.type !== 'rework') continue;
@@ -278,6 +285,8 @@ const LINK_LOOK: Readonly<
   // ADR-0037: as on the Workflow page, dash-dotted research and dash-dot-dotted hand-offs.
   research: { stroke: 'var(--color-dim)', width: 1.75, dash: '10 3 1 3' },
   custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3' },
+  // ADR-0038: failure routing, red and dashed as in the editor.
+  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
 };
 
 /**
@@ -322,6 +331,7 @@ export function buildLiveGraph(
   const view = finishView(graph);
   const byId = new Map(view.graph.nodes.map((n) => [n.id, n]));
   const target = run.ticketBranch?.baseBranch ?? null;
+  const whenUsed = new Map((dto.whenRounds ?? []).map((r) => [r.edgeId, r]));
 
   const nodes = view.graph.nodes.map((node): LiveBlock => {
     const live = states.get(node.id);
@@ -360,13 +370,16 @@ export function buildLiveGraph(
     const look = LINK_LOOK[e.type];
     const isDirect = e.type === 'rework' && isReviewerNode(graph, byId.get(e.from));
     const reworks = counts.get(e.id) ?? 0;
-    // A rework link shows its rounds; any other link the owner's label (ADR-0037 §2).
+    // A rework link shows its rounds; a When link its events and rounds (ADR-0038 §4); any other
+    // link the owner's label (ADR-0037 §2).
     const label =
       e.type === 'rework'
         ? isDirect
           ? G.directRework(reworks)
           : G.rework(reworks)
-        : (e.label ?? undefined);
+        : e.type === 'when'
+          ? whenLabel(e, whenUsed.get(e.id))
+          : (e.label ?? undefined);
     const purpose = e.purpose ?? null;
     return {
       id: e.id,
@@ -419,6 +432,22 @@ export function buildLiveGraph(
     width: minX === Infinity ? 0 : maxX - minX,
     height: minY === Infinity ? 0 : maxY - minY,
   };
+}
+
+/**
+ * A When link's words: the owner's label first, then its events and rounds, and the rounds it
+ * used in this run once it started a fix (`RunWorkflowGraphDto.whenRounds`).
+ */
+function whenLabel(
+  e: Extract<WorkflowEdgeV3, { type: 'when' }>,
+  used: { used: number; maxRounds: number } | undefined,
+): string {
+  const words = G.when(
+    e.on.map((ev) => FAILURE_EVENT_NAMES[ev]),
+    e.maxRounds,
+  );
+  const all = used === undefined ? words : `${words} · ${G.whenUsed(used.used, used.maxRounds)}`;
+  return e.label === undefined ? all : `${e.label} · ${all}`;
 }
 
 /** A block's name in a link's spoken name: the Finish block by its title. */

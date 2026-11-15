@@ -21,6 +21,7 @@ import {
   resolveAgentModel,
   skillLine,
   stageAgentFor,
+  withWorkflowSection,
 } from '../src/index.js';
 import type { EngineEffect, EngineResult, RunState } from '../src/index.js';
 import { LEAD, PROJECT, REGISTERED, RUN, TICKET, makeCtx, ok, refused } from './helpers.js';
@@ -235,9 +236,10 @@ describe('skills and models per stage', () => {
       skills: { plan: 'planning', orchestrate: 'planning' },
       models: { orchestrate: 'claude-opus' },
     });
-    const start = startOf(ok(createWithWorkflow(wf)).effects);
+    const created = ok(createWithWorkflow(wf));
+    const start = startOf(created.effects);
     expect(start.prompt).toBe(
-      'Ticket WEB-1: plan first\n\nUse the project skill `acp-skills:planning`.',
+      `${withWorkflowSection('Ticket WEB-1: plan first', created.state)}\n\nUse the project skill \`acp-skills:planning\`.`,
     );
     expect(start.skills).toEqual(['planning']);
     expect(start.model).toBe('claude-opus');
@@ -319,11 +321,12 @@ describe('agent files per stage (ADR-0019 §6)', () => {
       skills: { orchestrate: 'planning' },
       agents: { orchestrate: 'lead-file' },
     });
-    const start = startOf(ok(createWithWorkflow(wf)).effects);
+    const created = ok(createWithWorkflow(wf));
+    const start = startOf(created.effects);
     expect(start.agent).toBe('lead-file');
     expect(start.skills).toEqual(['planning']);
     expect(start.prompt).toBe(
-      'Ticket WEB-1: plan first\n\nUse the project skill `acp-skills:planning`.',
+      `${withWorkflowSection('Ticket WEB-1: plan first', created.state)}\n\nUse the project skill \`acp-skills:planning\`.`,
     );
     // No stage model: the effect leaves the model to the server (file model, then project).
     expect(start).not.toHaveProperty('model');

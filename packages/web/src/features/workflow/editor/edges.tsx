@@ -26,6 +26,8 @@ export const EDGE_LOOK: Readonly<
   test: { stroke: 'var(--color-ink)', width: 1.5, dash: '3 3' },
   custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3', round: true },
   merge: { stroke: 'var(--color-ink)', width: 2.5 },
+  // ADR-0038: failure routing, red and dashed.
+  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
 };
 
 /** The stroke a link is drawn with: the accent when selected, danger when the rules refuse it. */
@@ -83,7 +85,7 @@ export const LinkEdgeView = memo(function LinkEdgeView({
   const look = EDGE_LOOK[data.type];
   const isSelected = selected === true;
   const stroke = linkStroke(data.type, isSelected, data.refused);
-  const at = labelPoint(points);
+  const at = labelPoint(points, data.route.labelAt);
   return (
     <g opacity={dim ? 0.3 : 1} data-link={data.type} className="transition-opacity">
       {data.purpose !== undefined ? <title>{data.purpose}</title> : null}

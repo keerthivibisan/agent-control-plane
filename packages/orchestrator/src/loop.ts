@@ -16,10 +16,14 @@ import { runLimits } from './limits.js';
 import {
   editorNoteBlocks,
   findingsNoteBlocks,
+  inlinePath,
   reviewNoteBlocks,
   reworkNoteBlocks,
   withOwnerNotes,
 } from './arrow-notes.js';
+import { renderFailureContext, reviewReworkContext } from './failure-context.js';
+import { routeFailure, whenRouteFor } from './failure-router.js';
+import { REVIEW_DECIDE_LINE } from './review-tool.js';
 import { heldByHandoff, withHandoffs } from './handoffs.js';
 import { editingNodeOf, hasMergeChecks, programOf, reviewRouteOf } from './program.js';
 import type { ProgramView } from './program.js';
@@ -577,6 +581,30 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
     directReworkAllowed(d, helper, reviewers, directRounds);
   change.state = reworkDirect ? 'decision' : leadCanDecide(d) ? 'decision' : 'needs-owner';
   emitRound(d, helper);
+  // ADR-0038 §4 (FR-5): without the reviewers' own rework arrows, the owner's When arrow from the
+  // first reviewer asking for rework that has one routes the verdict.
+  if (verdict === 'rework' && directRounds === null) {
+    const asking = fan.reviews.filter((r) => r.verdict === 'rework');
+    const routedFrom = asking.find(
+      (r) => whenRouteFor(d.program(), 'review-rework', r.nodeId) !== undefined,
+    );
+    if (routedFrom !== undefined) {
+      routeFailure(d, {
+        context: reviewReworkContext(
+          d,
+          helper,
+          asking.map((r) => ({ agent: d.agent(r.agentRunId), label: reviewerLabel(d, r.nodeId) })),
+          asking.map((r) => `${reviewerLabel(d, r.nodeId)}:\n${r.findings ?? ''}`).join('\n\n'),
+        ),
+        sourceNodeId: routedFrom.nodeId,
+        change: helper,
+        lineage: helper.id,
+        headline: `${fan.reviews.length} review agents reviewed ${helper.role}'s change (agentId ${helper.id}${change.round > 0 ? `, after rework round ${change.round}` : ''}); at least one asks for rework.`,
+        decideLine: REVIEW_DECIDE_LINE,
+      });
+      return;
+    }
+  }
   if (reworkDirect) {
     const comments = fan.reviews
       .filter((r) => r.verdict === 'rework')
@@ -604,6 +632,25 @@ export function decideFanOut(d: Draft, helper: EngineAgent): void {
       }`,
       ...lines,
       ...notes,
+      // ADR-0038 §2: a rework verdict is a failure event; the lead gets its context.
+      verdict === 'rework'
+        ? renderFailureContext(
+            reviewReworkContext(
+              d,
+              helper,
+              fan.reviews
+                .filter((r) => r.verdict === 'rework')
+                .map((r) => ({ agent: d.agent(r.agentRunId), label: reviewerLabel(d, r.nodeId) })),
+              fan.reviews
+                .filter((r) => r.verdict === 'rework')
+                .map((r) => `${reviewerLabel(d, r.nodeId)}:\n${r.findings ?? ''}`)
+                .join('\n\n'),
+              directRounds !== null
+                ? { used: change.reviewerRounds ?? 0, max: directRounds }
+                : { used: leadRoundsUsed(change), max: leadRoundLimit(d, helper) },
+            ),
+          )
+        : null,
       directRounds !== null && verdict === 'rework'
         ? `The review agents have no rework round left for it (${directRounds} used or not allowed now), so you decide.`
         : null,
@@ -852,7 +899,7 @@ function reworkPrompt(
     `${who} reviewed your change and asks for rework (${roundText}):`,
     comments,
     change.conflictFiles.length > 0
-      ? `Your change also conflicts with ${branch} in: ${change.conflictFiles.join(', ')}. Bring those files in line with ${branch}.`
+      ? `Your change also conflicts with ${branch} in: ${change.conflictFiles.map(inlinePath).join(', ')}. Bring those files in line with ${branch}.`
       : null,
     `Work in the same copy of the project as before. Your task was: ${agent.task ?? '(no task text)'}`,
     'When you are done, end your turn: your change is reviewed again.',
@@ -1012,9 +1059,25 @@ export function applyDecision(d: Draft, agent: EngineAgent, input: DecisionInput
       if (byOwner) notifyLead(d, `The owner decided: ${done}`);
       else if (input.by === 'reviewer') {
         // ADR-0023 §4, route "direct": the lead is told each round (no findings, no content).
+        // ADR-0038 §2: with the failure context (the lead always gets it).
         notifyLead(
           d,
-          `The review agent sent ${role}'s change (agentId ${agent.id}) back to it for rework (${roundText}). You get the change once the review agent approves it or its rounds run out.`,
+          [
+            `The review agent sent ${role}'s change (agentId ${agent.id}) back to it for rework (${roundText}). You get the change once the review agent approves it or its rounds run out.`,
+            renderFailureContext(
+              reviewReworkContext(
+                d,
+                agent,
+                route.by === 'agent'
+                  ? route.reviewers.map((id) => ({ agent: undefined, label: reviewerLabel(d, id) }))
+                  : [],
+                comments,
+                route.by === 'agent' && route.then === 'direct'
+                  ? { used: change.reviewerRounds ?? 0, max: route.reviewerRounds }
+                  : undefined,
+              ),
+            ),
+          ].join('\n\n'),
         );
       } else leadActivity(d, done.replace(/\.$/, ''));
       return `${done} Its change is reviewed again when it finishes.`;
@@ -1135,7 +1198,9 @@ export function changeSummary(view: LoopView, agent: EngineAgent): string {
   }
   lines.push(`Required checks: ${checks}.`);
   if (change.conflictFiles.length > 0) {
-    lines.push(`Conflicting files on the last merge attempt: ${change.conflictFiles.join(', ')}.`);
+    lines.push(
+      `Conflicting files on the last merge attempt: ${change.conflictFiles.map(inlinePath).join(', ')}.`,
+    );
   }
   lines.push(
     'Decide with merge_change, request_rework (with comments), discard_change (with a reason) or ask_owner (with a question).',

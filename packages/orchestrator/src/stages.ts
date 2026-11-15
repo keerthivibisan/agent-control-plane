@@ -14,7 +14,7 @@ import { AGENT_NOTE_LINE, BRANCH_RULE_LINE } from './agent-note.js';
 import { approvedPlan } from './plan-read.js';
 import { hasMergeChecks, programNode, programOf } from './program.js';
 import type { ProgramView } from './program.js';
-import type { EngineAgent, RunIntegration } from './state.js';
+import type { EngineAgent, EngineFix, RunIntegration } from './state.js';
 import { isLiveAgentStatus } from './transitions.js';
 
 /**
@@ -129,7 +129,7 @@ export function anyHelperMerged(state: AgentsView): boolean {
  *   an interrupted tester's change too, so it is never re-run.
  * Nothing runs when no helper's change was merged: there is nothing to review or test.
  */
-export function nextStage(state: AgentsView & WorkflowView): WorkflowNodeId | null {
+export function nextStage(state: AgentsView & WorkflowView & FixesView): WorkflowNodeId | null {
   if (!anyHelperMerged(state)) return null;
   for (const node of programOf(state).finalStages) {
     const agents = state.agents.filter(
@@ -139,8 +139,29 @@ export function nextStage(state: AgentsView & WorkflowView): WorkflowNodeId | nu
     if (last === undefined) return node.id;
     if (node.type === 'reviewer' && last.status === 'NEEDS_REVIEW') return node.id;
     if (isLiveAgentStatus(last.status)) return null;
+    if (pendingRetests(state, node.id).length > 0) return node.id;
   }
   return null;
+}
+
+interface FixesView {
+  readonly fixes?: readonly EngineFix[] | undefined;
+}
+
+/**
+ * ADR-0038 §4 (amended 2026-11-14): the fixes whose tester `nodeId` should run again: routed fixes
+ * of that tester's failures (`retestNodeId`) whose fixer's change is merged, with no retest
+ * started for them yet. A fix the lead took over, or one moved away (`rerouted`, its successor
+ * carries the retest), waits for none; a discarded fix gives no retest. Bounded by the arrow's
+ * rounds: a retest's own failures keep the fix's lineage (`failure-router.ts lineageOf`).
+ */
+export function pendingRetests(state: AgentsView & FixesView, nodeId: WorkflowNodeId): EngineFix[] {
+  return (state.fixes ?? []).filter((f) => {
+    if (f.retestNodeId !== nodeId || f.retestAgentRunId !== undefined) return false;
+    if (f.status !== 'running') return false;
+    const fixer = state.agents.find((a) => a.id === f.fixerAgentRunId);
+    return fixer?.change?.state === 'merged';
+  });
 }
 
 /** Whether the workflow has an optional stage switched on (version 1 workflows). */
@@ -447,13 +468,24 @@ export function reviewerBrief(state: BriefView): string {
   ].join('\n\n');
 }
 
+/**
+ * ADR-0038 §1, §3: how a ticket run's tester reports. A failing test goes to the lead (or, later,
+ * along a When arrow) with the authors of the failing code; the tester never fixes product code.
+ */
+export const TEST_RESULTS_LINE =
+  'Do not change product code: a failing test is a finding for the lead, not something for you to fix. When the tests have run, call report_test_results once with the result: status passed or failed, each failing test with its repository-relative file and a short message, and a short summary. Then call report_work and end your turn.';
+
 /** The tester's fixed brief (ADR-0019 §2): unit tests for the merged change, in its own copy. */
 export function testerBrief(state: BriefView): string {
   return [
     `${TESTER_TASK} Ticket: "${state.run.title}".`,
     ...planLines(approvedPlan({ plans: state.plans ?? [] })),
     mergedWork(state),
-    'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast. Do not change product code; if a test shows a bug, say so in your final message.',
+    'You work in your own copy of the project, which already holds the merged change. Add or extend unit tests for the merged behaviour and keep them fast, then run the tests.',
+    // ADR-0038 §1, §3: a failing test is a finding for the lead, never a fix by the tester.
+    (state.run.ticketId ?? null) === null
+      ? 'Do not change product code; if a test shows a bug, say so in your final message.'
+      : TEST_RESULTS_LINE,
     (state.integration?.ticketBranch ?? null) === null
       ? 'The owner reviews and merges your change like the helpers’ changes, after the project’s checks.'
       : hasMergeChecks(state)
@@ -467,6 +499,17 @@ export function testerBrief(state: BriefView): string {
   ]
     .filter((l) => l !== null)
     .join('\n\n');
+}
+
+/**
+ * ADR-0038 §4 (amended 2026-11-14): the retest note after a merged fix. The failure context is the
+ * same quoted data the lead and the fixer got (test names and messages, file names).
+ */
+export function retestBlock(fix: EngineFix): string {
+  return [
+    `This is a retest: an earlier test run failed, and a fix for it (round ${fix.round} of ${fix.maxRounds}) is now merged into the ticket branch. Run the tests again, the earlier failing ones included, and report the result as usual.`,
+    fix.context,
+  ].join('\n\n');
 }
 
 /** The longest helper task quoted in a change reviewer's brief. */

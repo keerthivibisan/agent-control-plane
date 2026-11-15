@@ -12,6 +12,8 @@ import {
   type WorkflowEdgeV3,
   type WorkflowGraphV3,
   type WorkflowNodeV3,
+  type WorkflowProgram,
+  type ProgramFailureRoute,
 } from '../../../src/index.js';
 
 export const CTX: CompileContext = {
@@ -34,7 +36,7 @@ export function agent(id: string, label = id, extra: Partial<AgentNode> = {}): A
 
 /** An arrow with the id `<type>-<from>-<to>`; a rework arrow gets 2 rounds unless given. */
 export function arrow(
-  type: WorkflowEdgeV3['type'],
+  type: Exclude<WorkflowEdgeV3['type'], 'when'>,
   from: string,
   to: string,
   extra: Partial<{ label: string; purpose: string; maxRounds: number }> = {},
@@ -93,4 +95,59 @@ export function finalsV3(): WorkflowGraphV3 {
     'unit-tests': { ...v1.stages['unit-tests'], enabled: true },
   };
   return migrateWorkflowV1ToV3({ plannerMode: 'lead', stages }, { projectMode: 'auto-edits' });
+}
+
+/** A program without `failureRoutes` (ADR-0038): the fields the version 2 compiler also gives. */
+export function oldFields(program: WorkflowProgram): WorkflowProgram {
+  const { failureRoutes: _routes, ...rest } = program;
+  return rest;
+}
+
+/**
+ * Where the program's derived failure routes disagree with the fields the engine runs today
+ * (ADR-0038 §4): one `review-rework` route per reviewer of a `direct` review route, with its
+ * `reviewerRounds`, and one `checks-failed`/`harness-failed` route per change block that sends a
+ * failure back to the helper, with its `maxRounds`; nothing else is derived.
+ */
+export function derivedRouteMismatch(program: WorkflowProgram): string | null {
+  const expected: ProgramFailureRoute[] = [];
+  const editors = [
+    ...program.helpers,
+    ...program.finalStages.flatMap((s) => (s.type === 'tester' ? [s] : [])),
+  ];
+  for (const editor of editors) {
+    const r = editor.review;
+    if (r.by === 'agent' && r.then === 'direct') {
+      for (const reviewer of r.reviewers) {
+        expected.push({
+          sourceNodeId: reviewer,
+          events: ['review-rework'],
+          target: { kind: 'author' },
+          maxRounds: r.reviewerRounds,
+          derived: true,
+          editorNodeId: editor.id,
+        });
+      }
+    }
+    const block = program.checkBlocks.change[editor.id];
+    if (block !== undefined && block.onFailure === 'helper' && block.maxRounds !== null) {
+      expected.push({
+        sourceNodeId: block.nodeId,
+        events: ['checks-failed', 'harness-failed'],
+        target: { kind: 'author' },
+        maxRounds: block.maxRounds,
+        derived: true,
+        editorNodeId: editor.id,
+      });
+    }
+  }
+  const key = (r: ProgramFailureRoute) => JSON.stringify(r);
+  const want = expected.map(key).sort();
+  const got = (program.failureRoutes ?? [])
+    .filter((r) => r.derived === true)
+    .map(key)
+    .sort();
+  return JSON.stringify(want) === JSON.stringify(got)
+    ? null
+    : `derived routes ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`;
 }

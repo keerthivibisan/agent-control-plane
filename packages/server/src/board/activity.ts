@@ -334,6 +334,23 @@ export function buildTicketActivity(input: ActivityInput): TicketActivityDto {
         body: body(comment.body),
         link: null,
       });
+    } else if (kind === 'test-results') {
+      // ADR-0038 §1: a tester's structured test results (report_test_results).
+      const actor = names?.actor(comment.agentRunId, 'tester') ?? {
+        kind: 'tester' as const,
+        label: ROLE_WORDS.tester,
+        agentRunId: comment.agentRunId,
+      };
+      items.push({
+        id: `test-results:${comment.id}`,
+        ...base,
+        type: 'test-results',
+        actor,
+        title: title(`${actor.label} reported test results`),
+        body: body(comment.body),
+        link:
+          comment.agentRunId === null ? null : { kind: 'change', agentRunId: comment.agentRunId },
+      });
     } else if (kind === 'review' && comment.author === 'owner') {
       // The owner's review sent from Files changed with Comment (owner decision 2026-10-22).
       items.push({

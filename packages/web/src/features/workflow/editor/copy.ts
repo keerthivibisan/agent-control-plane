@@ -82,6 +82,7 @@ export const EDITOR_COPY = {
       test: 'Test',
       custom: 'Custom',
       merge: 'Merge',
+      when: 'When',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
   },
   /** Version 3 arrows (ADR-0037 §2): the long name and one sentence per type. */
@@ -97,6 +98,7 @@ export const EDITOR_COPY = {
       test: 'Hands the ticket branch for tests',
       custom: 'Custom hand-off',
       merge: 'Merges through',
+      when: 'When it fails, sends to',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
     text: {
       flow: 'The order of the steps: the plan path, then after the ticket merge the final reviewers and the Finish block. A flow into an agent on the final chain makes it a final reviewer.',
@@ -115,6 +117,7 @@ export const EDITOR_COPY = {
         'Order and hand-off only: the target starts after the source finishes and gets the source’s output note with this arrow’s label and purpose. It gives no role.',
       merge:
         'The lead merges each reviewed change into the ticket branch, through the Checks block before the merge when the workflow has one.',
+      when: 'When a failure happens here (tests or checks fail, a reviewer asks for rework, the harness cannot run, a merge conflicts), the target fixes it: a helper, the lead or the author, up to a number of rounds; then the lead decides. It gives no role.',
     } satisfies Record<WorkflowEdgeTypeV3, string>,
   },
   /** One Agent block (ADR-0037 §1): its role comes from its arrows. */
@@ -259,6 +262,58 @@ export const EDITOR_COPY = {
   },
   chooser: {
     title: 'What does this link do?',
+  },
+  /** ADR-0038 §4: the Author block, a routing block in the "Add block" menu. */
+  author: {
+    group: 'Routing',
+    item: 'Author',
+    hint: 'Whoever wrote the failing code: ACP finds the helper whose change touched the failing files. Point a When arrow at it.',
+    full: 'The workflow already has its Author block.',
+  },
+  /** ADR-0038 §4: a When arrow's settings in the link's panel. */
+  when: {
+    events: 'When',
+    eventsHint: 'The failures at this block that this arrow routes. Each failure has one route.',
+    /** An event name after "When" ("tests fail"), as a checkbox label. */
+    event: (name: string) => `${name.charAt(0).toUpperCase()}${name.slice(1)}`,
+    foreign: 'This block never raises it: untick it.',
+    rounds: 'Fix rounds',
+    roundsHint: 'How many times the fixer may try before the lead decides.',
+    roundsValue: (n: number) => countOf(n, 'fix round', 'fix rounds'),
+    /** Who receives a routed failure (FR-D "Run time"), by the arrow's target. */
+    receives: (target: { kind: 'lead' } | { kind: 'author' } | { kind: 'node'; label: string }) => {
+      switch (target.kind) {
+        case 'lead':
+          return 'The lead gets the failure with its context and decides who fixes it.';
+        case 'author':
+          return 'The helper whose change touched the failing files gets a fix turn with the failure’s context and this arrow’s purpose. The lead is told and can step in.';
+        case 'node':
+          return `${target.label} gets a fix turn with the failure’s context and this arrow’s purpose. The lead is told and can step in.`;
+      }
+    },
+    roundsOut: 'When the rounds run out, the lead decides.',
+    /** ADR-0038 §4 (amended 2026-11-14): the tester runs again after a merged fix. */
+    retest: 'Test again after the fix',
+    retestHint:
+      'Once the fixer’s change is merged, this tester runs again. A failing retest uses the next fix round.',
+    /** The arrow's words on the canvas: its events, then its rounds. */
+    canvas: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
+  },
+  /** ADR-0038 §5: the workflow in words, the same sentences the lead reads. */
+  words: {
+    title: 'Flow in words',
+    show: 'Show the flow in words',
+    hide: 'Hide the flow in words',
+    intro:
+      'The lead reads exactly these sentences. Words in double quotes are yours. Select a sentence to select its block or link.',
+    sections: {
+      agents: 'Agents',
+      links: 'Links',
+      failures: 'When something fails',
+    },
+    defaultMark: 'Lead decides (default)',
+    defaultHint: 'No route: draw a When arrow from this block to choose who fixes it.',
+    empty: 'Nothing to describe yet.',
   },
   issues: {
     errors: 'Fix these to save',

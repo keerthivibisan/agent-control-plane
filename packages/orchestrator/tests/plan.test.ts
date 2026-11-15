@@ -12,6 +12,7 @@ import {
   recoverAfterRestart,
   requestPermission,
   ticketLeadPrompt,
+  withWorkflowSection,
 } from '../src/index.js';
 import type { RunState } from '../src/index.js';
 import {
@@ -72,7 +73,14 @@ describe('ticket-aware createRun', () => {
     expect(r.state.plans).toEqual([]);
     expect(r.state.limits).toEqual({ maxConcurrentHelpers: 3, maxDepth: 1 });
     expect(r.effects).toEqual([
-      { type: 'start-agent', agentRunId: LEAD, kind: 'lead', role: 'Lead', prompt: 'the brief' },
+      {
+        type: 'start-agent',
+        agentRunId: LEAD,
+        kind: 'lead',
+        role: 'Lead',
+        // ADR-0038 §5: with the workflow in words.
+        prompt: withWorkflowSection('the brief', r.state),
+      },
     ]);
     expect(r.value).toBe(r.state);
   });

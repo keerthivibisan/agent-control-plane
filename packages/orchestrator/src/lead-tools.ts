@@ -27,6 +27,9 @@ import { helperBrief } from './agent-note.js';
 import { editorNoteBlocks, withOwnerNotes } from './arrow-notes.js';
 import { reportWork } from './report-tool.js';
 import { reportFindings } from './findings-tool.js';
+import { reportTestResults } from './test-results-tool.js';
+import { rerouteFix } from './failure-router.js';
+import { workflowWords } from './briefs.js';
 import { askLead, parentOf } from './messaging.js';
 import { postReview, submitReview } from './review-tool.js';
 import { cleanSummary } from './summary.js';
@@ -78,7 +81,8 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester' | 'resear
     planner: 'The planner can only submit the plan (submit_plan).',
     researcher: 'The researcher can only report its findings (report_findings) or ask the lead.',
     reviewer: 'The reviewer can only post its findings (post_review).',
-    tester: 'The tester can only report its work (report_work).',
+    tester:
+      'The tester can only report its test results (report_test_results) and its work (report_work).',
   });
 
 /**
@@ -90,7 +94,7 @@ const NOT_YOUR_TOOL: Readonly<Record<'planner' | 'reviewer' | 'tester' | 'resear
  *   reviewers also `ask_lead` (ADR-0033 §3);
  * - worker: the child-management tools when it may start helpers (depth 2), else none; none in a
  *   rework turn (ADR-0021); plus `report_work` in a ticket run (ADR-0026 §3); plus `ask_lead`;
- * - tester: `report_work` in a ticket run, and `ask_lead`;
+ * - tester: `report_test_results` (ADR-0038 §1) and `report_work` in a ticket run, and `ask_lead`;
  * - researcher (ADR-0037 §3): `report_findings` in a ticket run, and `ask_lead`;
  * - every agent: the read-only `code_map` (ADR-0034 §4).
  */
@@ -111,10 +115,15 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
           n !== 'submit_review' &&
           n !== 'report_work' &&
           n !== 'report_findings' &&
+          n !== 'report_test_results' &&
           n !== 'ask_lead' &&
           n !== 'code_map' &&
           !ASSISTANT_CONTROL_TOOL_NAMES.includes(n) &&
           (state.integration !== undefined || !CHANGE_DECISION_TOOL_NAMES.includes(n)) &&
+          // ADR-0038 §4: fixes along When arrows exist only with the review loop.
+          (state.integration !== undefined || n !== 'reroute_fix') &&
+          // ADR-0038 §5: a ticket run's workflow; a chat run (Phase 3) has none to show.
+          (state.run.ticketId !== null || n !== 'view_workflow') &&
           !(n === 'submit_plan' && isSeparatePlanner(state)),
       );
     case 'planner':
@@ -133,7 +142,9 @@ function roleControlTools(state: RunState, agent: EngineAgent): readonly string[
         : [...children, 'report_work', 'ask_lead'];
     }
     case 'tester':
-      return state.run.ticketId === null ? ['ask_lead'] : ['report_work', 'ask_lead'];
+      return state.run.ticketId === null
+        ? ['ask_lead']
+        : ['report_test_results', 'report_work', 'ask_lead'];
     case 'researcher':
       return state.run.ticketId === null ? ['ask_lead'] : ['report_findings', 'ask_lead'];
   }
@@ -214,6 +225,18 @@ export function leadToolCall(
     if (!parsed.success) return invalid(parsed.error);
     return reportFindings(state, caller.id, parsed.data.findings, ctx);
   }
+  if (call.name === 'report_test_results') {
+    // ADR-0038 §1: the tester's structured test results; nobody else has them.
+    if (caller.kind !== 'tester') {
+      return {
+        ok: false,
+        refusal: refusal('not-lead', 'Only the tester reports test results.'),
+      };
+    }
+    const parsed = LeadToolInputs.report_test_results.safeParse(call.input);
+    if (!parsed.success) return invalid(parsed.error);
+    return reportTestResults(state, caller.id, parsed.data, ctx);
+  }
   if (call.name === 'report_work') {
     // ADR-0026 §3: the helper's and tester's note; nobody else has it.
     if (caller.kind !== 'worker' && caller.kind !== 'tester') {
@@ -241,7 +264,8 @@ export function leadToolCall(
   ) {
     // ADR-0019: the planner's one tool is submit_plan; the reviewer's is post_review; a change
     // reviewer's (ADR-0021) is submit_review. A researcher (ADR-0037 §3) has no tool left here:
-    // `report_findings`, `ask_lead` and `code_map` were answered above.
+    // `report_findings`, `ask_lead` and `code_map` were answered above, and the tester's
+    // `report_test_results` and `report_work` (ADR-0038 §1).
     const changeReviewer = isChangeReviewer(caller);
     const own =
       (caller.kind === 'planner' && call.name === 'submit_plan') ||
@@ -630,6 +654,33 @@ export function leadToolCall(
       });
     }
 
+    // ADR-0038 §4-§5 (FR-5): the lead's failure-routing tools.
+    case 'reroute_fix': {
+      if (caller.kind !== 'lead') return leadOnly();
+      const parsed = LeadToolInputs.reroute_fix.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (!loop) return noLoopTool();
+      const moved = rerouteFix(state, parsed.data, ctx);
+      if (moved.ok) {
+        const lead = moved.state.agents.find((a) => a.id === caller.id);
+        if (lead !== undefined) lead.latestActivity = cleanSummary('Moved a fix', 'Working');
+      }
+      return moved;
+    }
+
+    case 'view_workflow': {
+      if (caller.kind !== 'lead') return leadOnly();
+      const parsed = LeadToolInputs.view_workflow.safeParse(call.input);
+      if (!parsed.success) return invalid(parsed.error);
+      if (state.run.ticketId === null) {
+        return {
+          ok: false,
+          refusal: refusal('invalid-input', 'This run follows no workflow; it is a chat run.'),
+        };
+      }
+      return readOnly(state, workflowWords(state));
+    }
+
     case 'submit_review': {
       if (!loop) return noLoopTool();
       const parsed = LeadToolInputs.submit_review.safeParse(call.input);
@@ -647,6 +698,11 @@ export function leadToolCall(
         refusal: refusal('not-lead', 'Only the project assistant has this tool.'),
       };
   }
+}
+
+/** A lead-only tool called by a helper allowed to start helpers (depth 2). */
+function leadOnly(): EngineResult<string> {
+  return { ok: false, refusal: refusal('not-lead', 'Only the lead agent can use this tool.') };
 }
 
 /** A review-loop tool called in a run without the loop (the same text since RL-0). */

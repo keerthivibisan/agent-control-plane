@@ -91,6 +91,7 @@ export function claimOf(
     case 'rework':
     case 'merge':
     case 'custom':
+    case 'when': // ADR-0038 §4: a When arrow never gives a role
       return null;
   }
 }

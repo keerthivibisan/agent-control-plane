@@ -172,7 +172,7 @@ function agentFields(node: Pick<AgentNode, 'model' | 'skills' | 'agent' | 'effor
  * move them (the editor and the API). The exact inverse of `migrateWorkflowV2` for every graph it
  * produced from a valid version 2 graph; refused (`ok: false`) for a graph version 2 cannot say:
  * an agent without one role, researchers, custom arrows, more than one planner, a review fan-out,
- * or arrow labels and purposes.
+ * arrow labels and purposes, or failure routing (ADR-0038: an Author block or a When arrow).
  */
 export function downgradeWorkflowV3(graph: WorkflowGraphV3): DowngradeResult {
   const roles = deriveRoles(graph);
@@ -184,6 +184,7 @@ export function downgradeWorkflowV3(graph: WorkflowGraphV3): DowngradeResult {
       label: node.label,
       ...(node.position !== undefined ? { position: { ...node.position } } : {}),
     };
+    if (node.type === 'author') return { ok: false, reason: 'the workflow has an Author block' };
     if (node.type !== 'agent') {
       nodes.push(
         node.type === 'lead'
@@ -250,6 +251,7 @@ export function downgradeWorkflowV3(graph: WorkflowGraphV3): DowngradeResult {
     switch (edge.type) {
       case 'research':
       case 'custom':
+      case 'when':
         return { ok: false, reason: `the workflow has a ${edge.type} link` };
       case 'implement':
         edges.push({ type: 'assigns', ...ends });

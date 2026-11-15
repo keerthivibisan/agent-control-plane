@@ -48,7 +48,7 @@ import {
 /** The issue codes an edge can fail `canConnect` with; the validator reports exactly these. */
 export type ConnectIssueCode = Extract<
   GraphIssueCode,
-  'edge-unknown-node' | 'self-edge' | 'edge-not-allowed' | 'duplicate-edge'
+  'edge-unknown-node' | 'self-edge' | 'edge-not-allowed' | 'duplicate-edge' | 'when-target-invalid'
 >;
 
 export type ConnectResult = { ok: true } | { ok: false; code: ConnectIssueCode; message: string };

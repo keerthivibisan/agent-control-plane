@@ -174,6 +174,19 @@ describe('the live graph model', () => {
     ]);
     expect(withLead.get('rework-orchestrate-helpers')).toBe(1);
     expect(withLead.get('rework-review-helpers')).toBe(0);
+    // FR-7: an Author block listing a fixer never takes the fixer from its own block.
+    const withAuthor = {
+      graph: {
+        ...d.graph,
+        nodes: [{ type: 'author' as const, id: 'author', label: 'Author' }, ...d.graph.nodes],
+      },
+      nodes: [{ nodeId: 'author', state: 'active' as const, agentRunIds: [L_API] }, ...d.nodes],
+    };
+    expect(
+      reworkCounts(withAuthor.graph, withAuthor.nodes, runOf().changes ?? []).get(
+        'rework-review-api-helper',
+      ),
+    ).toBe(1);
   });
 
   it('carries each block’s agents, the run’s mode and the sandbox, and the direct reviewer', () => {

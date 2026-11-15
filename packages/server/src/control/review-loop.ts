@@ -503,6 +503,7 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
           changed: boolean;
           headCommit: string | null;
           changedFiles: number | null;
+          files?: readonly string[];
           failure?: SealFailure;
         };
         try {
@@ -521,7 +522,13 @@ export function createReviewLoop(ctx: ReviewLoopContext) {
               });
             }
             result = sealed.changed
-              ? { changed: true, headCommit: sealed.headCommit, changedFiles: sealed.changedFiles }
+              ? {
+                  changed: true,
+                  headCommit: sealed.headCommit,
+                  changedFiles: sealed.changedFiles,
+                  // ADR-0038 §2: the paths, for the failure context's likely authors.
+                  files: sealed.files,
+                }
               : { changed: false, headCommit: null, changedFiles: 0 };
           }
         } catch (error) {
