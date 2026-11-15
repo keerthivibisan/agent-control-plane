@@ -302,6 +302,14 @@ flowchart LR
   Conversation tab. Once a routed fix of a tester's failure is merged, `nextStage` runs that tester
   again (`EngineFix.retestNodeId`; a When arrow's `retest: false` switches it off), and the
   retest's own failures keep the fix's lineage and rounds (ADR-0038 §4, amended 2026-11-14).
+- **The run map (ADR-0040, RM series)** [implemented on `feature/workflow/run-map`]. The lead's
+  "Your workflow" and `view_workflow` are now its playbook (`workflowPlaybook`/`renderPlaybook`,
+  core): numbered stages in run order, each failure under its stage, then the agents; the editor's
+  "Lead's playbook" panel shows the same text (it replaces "Flow in words"). Tidy layout puts blocks
+  in stage columns (`layout.ts` `columnOf`); `routing.ts` plans on the canvas turned on its side, so
+  columns route as rows did, spreads the links meeting one side of a block into bundles and sends a
+  link that skips columns round below them. Links are coloured by family (one `EDGE_LOOK` for the
+  editor and the live graph) and every Agent block shows its "When to use" (`whenToUse`).
 - **Blocks by ticket type (ADR-0039, TT series)** [implemented on `feature/workflow/ticket-types`].
   An Agent block may run only for some ticket types (`ticketTypes`). The ticket start runs
   `specialiseForTicket` (core, pure) on the project's graph for the ticket's type before it
