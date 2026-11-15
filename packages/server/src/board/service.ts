@@ -11,6 +11,7 @@ import {
   resolveRunOptions,
   ticketStage,
   tightenMode,
+  specialiseForTicket,
   validateWorkflowGraphV3,
   type Attachment,
   type CheckRun,
@@ -1042,6 +1043,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         maxReworkRounds: effective.options.maxReworkRounds,
       };
       let run: RunDetailDto;
+      let skippedBlocks: string[] = [];
       if (legacy && workflow.v1 !== undefined) {
         // Tests only: a version 1 project's legacy run stays exactly as before ADR-0021.
         const prompts = ticketRunPrompts(ticket, limits, workflow.v1, { fullAuto: false });
@@ -1068,7 +1070,11 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
             maxReworkRounds: effective.options.maxReworkRounds,
           }),
         };
-        const program = runnableProgram(workflow.graph, graphContext, setup);
+        // ADR-0039: the run follows the graph its ticket's type runs; blocks set to other ticket
+        // types are left out before validation, so the engine and the live graph never see them.
+        const forTicket = specialiseForTicket(workflow.graph, ticket.type);
+        skippedBlocks = forTicket.skipped.map((n) => n.id);
+        const program = runnableProgram(forTicket.graph, graphContext, setup);
         // The run's own mode: the project's, tightened. The engine falls back to it for an agent
         // it cannot map to a node, so that fallback is never looser than the ceilings.
         const approvals = {
@@ -1093,7 +1099,7 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
           ...runBase(ticket, prompts, limits, budget),
           // A version 1 project's runs keep its workflow too, for the version 1 live view.
           ...(workflow.v1 !== undefined && { workflow: workflow.v1 }),
-          graph: workflow.graph,
+          graph: forTicket.graph,
           graphContext,
           ...(!legacy && { reviewLoop, approvals }),
         });
@@ -1108,6 +1114,8 @@ export function createBoardService(deps: BoardServiceDeps): BoardService {
         approvalModeFrom: legacy ? null : effective.source.approvalMode,
         reviewerFrom: legacy ? null : effective.source.reviewer,
         maxReworkRoundsFrom: legacy ? null : effective.source.maxReworkRounds,
+        // ADR-0039: the ids of the blocks this ticket's type skips (ids, never labels).
+        skippedBlocks: skippedBlocks.join(' '),
         workflow: workflow.stored,
       });
       return detail(ticketId);

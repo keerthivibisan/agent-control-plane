@@ -503,6 +503,20 @@ export const GRAPH_MUTATIONS_V3: readonly GraphMutationV3[] = Object.freeze([
     },
   },
   {
+    name: 'every helper runs only for feature tickets',
+    expectedCode: 'ticket-type-breaks-workflow',
+    apply: (graph) => {
+      const workers = new Set(withRole(graph, 'worker').map((n) => n.id));
+      if (workers.size === 0) return null;
+      return {
+        ...graph,
+        nodes: graph.nodes.map((n) =>
+          n.type === 'agent' && workers.has(n.id) ? { ...n, ticketTypes: ['feature'] } : n,
+        ),
+      };
+    },
+  },
+  {
     name: 'a When arrow with an event its block never raises',
     expectedCode: 'when-event-invalid',
     apply: (graph, rng) => {

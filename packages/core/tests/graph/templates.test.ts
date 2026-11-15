@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   WORKFLOW_TEMPLATES,
   WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   WorkflowGraphSchema,
   defaultProjectWorkflow,
   migrateWorkflowV1,
@@ -20,7 +21,7 @@ describe('workflow templates', () => {
     }
   });
 
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       it(`${id}${planner ? ' with a planner' : ''}: parses and validates with no issue`, () => {
         const graph = workflowTemplate(id, { planner });

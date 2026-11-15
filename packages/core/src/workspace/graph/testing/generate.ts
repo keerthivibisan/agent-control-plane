@@ -1,7 +1,7 @@
 import { HARD_MAX_HELPERS } from '../../workspace.js';
 import {
   NODE_CAPABILITIES,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   type CheckFailureRoute,
   type CheckSelection,
   type WorkflowGraph,
@@ -539,7 +539,7 @@ export interface GenerateGraphOptions {
  */
 export function generateValidGraph(seed: number, opts: GenerateGraphOptions = {}): WorkflowGraph {
   const rng = createGraphRng(seed);
-  let graph = workflowTemplate(rng.pick(WORKFLOW_TEMPLATE_IDS), { planner: rng.bool() });
+  let graph = workflowTemplate(rng.pick(WORKFLOW_TEMPLATE_IDS_V2), { planner: rng.bool() });
   const moves = opts.moves ?? rng.int((opts.maxMoves ?? 12) + 1);
   const names =
     opts.optionalChecks === true

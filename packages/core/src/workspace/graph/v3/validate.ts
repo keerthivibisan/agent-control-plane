@@ -48,6 +48,7 @@ import {
   failureSourceKind,
 } from './failure-routes.js';
 import { ROLE_CLAIM_NAMES, type RoleClaim } from './roles.js';
+import { skippingTicketTypes, specialiseForTicket } from './ticket-types.js';
 
 /**
  * Whether a version 3 graph may run (ADR-0037), as a list of issues. Every version 2 rule keeps its
@@ -73,12 +74,40 @@ import { ROLE_CLAIM_NAMES, type RoleClaim } from './roles.js';
  * has one route, counting the routes read from rework arrows and "back to the helper"
  * (`when-duplicate-route`). When arrows take no part in cycles: fix turns are bounded by rounds.
  *
+ * ADR-0039: when the graph itself has no error, each ticket type some block leaves out must still
+ * leave a workflow that runs: an error in the graph that type runs (`specialiseForTicket`) is
+ * reported as `ticket-type-breaks-workflow` on the first block that type skips.
+ *
  * Every path rule reads only the arrows that pass the matrix, so a refused arrow is reported once.
  */
 export function validateWorkflowGraphV3(
   graph: WorkflowGraphV3,
   ctx: ValidateGraphContext = {},
 ): GraphIssue[] {
+  const list = validateOneGraph(graph, ctx);
+  if (list.some((i) => i.severity === 'error')) return list;
+  return [...list, ...ticketTypeIssues(graph)];
+}
+
+function ticketTypeIssues(graph: WorkflowGraphV3): GraphIssue[] {
+  const issues = new Issues();
+  for (const type of skippingTicketTypes(graph)) {
+    const { graph: runs, skipped } = specialiseForTicket(graph, type);
+    const first = skipped[0];
+    const names = skipped.map((n) => q(n)).join(', ');
+    const errors = validateOneGraph(runs).filter((i) => i.severity === 'error');
+    for (const error of errors.slice(0, 1)) {
+      issues.error(
+        'ticket-type-breaks-workflow',
+        `For ${type} tickets, without ${names}: ${error.message}`,
+        first !== undefined ? { nodeId: first.id } : {},
+      );
+    }
+  }
+  return issues.list;
+}
+
+function validateOneGraph(graph: WorkflowGraphV3, ctx: ValidateGraphContext = {}): GraphIssue[] {
   const issues = new Issues();
   const index = indexNodesV3(graph);
   checkIds(graph, issues);

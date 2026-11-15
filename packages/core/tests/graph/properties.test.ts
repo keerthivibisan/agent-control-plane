@@ -61,6 +61,7 @@ const EXCLUDED_CODES: Readonly<Partial<Record<GraphIssueCode, string>>> = {
   'when-target-invalid': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
   'when-duplicate-route': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
   'when-event-invalid': 'version 3 only (ADR-0038); covered by v3/properties.test.ts',
+  'ticket-type-breaks-workflow': 'version 3 only (ADR-0039); covered by v3/properties.test.ts',
 };
 const STRUCTURAL_CODES = GraphIssueCodeSchema.options.filter(
   (c) =>
@@ -368,6 +369,7 @@ describe('layer 3: generated valid graphs and their mutants', () => {
         'when-target-invalid',
         'when-duplicate-route',
         'when-event-invalid',
+        'ticket-type-breaks-workflow',
       ]);
     });
   });

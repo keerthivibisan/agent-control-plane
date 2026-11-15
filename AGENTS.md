@@ -41,6 +41,10 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   When arrows routing tests, checks, review, harness and conflict failures to a helper, the lead or
   the code's author, and the workflow described to the lead in words. Plan and status:
   [docs/failure-routing/](docs/failure-routing/README.md).
+- **Workflows by ticket type (TT series, ADR-0039 accepted 2026-11-15):** done 2026-11-15 on
+  `feature/workflow/ticket-types`. Agent blocks that run only for some ticket types, runs that
+  follow their ticket's type, and a behaviour-driven (BDD) template. Plan and status:
+  [docs/ticket-types/](docs/ticket-types/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):

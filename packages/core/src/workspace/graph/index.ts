@@ -75,6 +75,13 @@ export {
   type WorkflowSentenceSection,
 } from './v3/describe.js';
 export { graphRunDefaultsV3 } from './v3/run-defaults.js';
+// ADR-0039: blocks that run only for some ticket types.
+export {
+  runsForTicket,
+  skippingTicketTypes,
+  specialiseForTicket,
+  type SpecialisedGraph,
+} from './v3/ticket-types.js';
 
 // Test support (README "Graph correctness", layers 3 and 4): pure and seeded, shared with the
 // engine's simulator tests (WG-B). Never used to build a project's workflow.

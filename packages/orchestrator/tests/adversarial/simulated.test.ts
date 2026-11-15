@@ -1,5 +1,5 @@
 import {
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   generateValidGraph,
   withoutCheckBlocks,
   workflowTemplate,
@@ -30,7 +30,7 @@ function expectClean(name: string, graph: WorkflowGraph, mode: ApprovalMode): vo
 }
 
 describe('adversarial invariants over the templates', () => {
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       for (const mode of ['auto-edits', 'full-auto'] as const) {
         it(`${id}${planner ? ' with a planner' : ''} (${mode})`, () => {
@@ -59,7 +59,7 @@ describe('adversarial invariants over generated graphs', () => {
 // ADR-0028 §2 (v0.3.1 P-A): a workflow with no Checks block at all. The lead merges each change
 // after its review; the invariants still hold, every run ends and the owner can finish.
 describe('adversarial invariants without any Checks block', () => {
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const mode of ['auto-edits', 'full-auto'] as const) {
       it(`${id} without checks (${mode})`, () => {
         expectClean(`${id} without checks`, withoutCheckBlocks(workflowTemplate(id)), mode);

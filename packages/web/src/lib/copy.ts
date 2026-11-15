@@ -4120,6 +4120,9 @@ export const WORKFLOW_GRAPH_COPY = {
   readOnly: 'Read-only',
   ownCopy: 'Own copy',
   model: 'Model',
+  /** ADR-0039: a block that runs only for some ticket types, e.g. "Feature only". */
+  runsForChip: (words: readonly string[]) => `${words.join(', ')} only`,
+  runsForChipTip: 'Runs only for these ticket types; other tickets run the workflow without it.',
   projectModel: 'Project default',
   projectModelNamed: (model: string) => `${model} (default)`,
   fileModel: (model: string) => `${model} (agent file)`,
@@ -4245,6 +4248,10 @@ export const WORKFLOW_GRAPH_COPY = {
     maxInstancesHint: (limit: number) =>
       `The project’s helper limit (${formatCount(limit)}) still applies on top.`,
     maxInstancesValue: (n: number) => countOf(n, 'helper', 'helpers'),
+    runsFor: 'Runs for',
+    runsForHint:
+      'The ticket types this block runs for. A ticket of another type runs the workflow without it; every type must still leave a workflow that works.',
+    runsForLast: 'A block runs for at least one ticket type.',
     canStartHelpers: 'May start its own helpers',
     canStartHelpersHint:
       'Helpers from this block may start helpers of their own, within the project’s helper depth.',
@@ -4312,6 +4319,7 @@ export const WORKFLOW_GRAPH_COPY = {
       'todays-setup': 'A reviewer checks, the lead decides.',
       'reviewer-helper-loop':
         'The reviewer sends changes back to the helper, then the lead merges.',
+      bdd: 'Scenarios first, then tests and code in parallel; a tester checks them together.',
     } satisfies Record<WorkflowTemplateId, string>,
     planner: 'Add a planner',
     plannerHint:

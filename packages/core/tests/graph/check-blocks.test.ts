@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHECK_FAILURE_ROUTES,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   canConnect,
   checkBlockOf,
   compileWorkflow,
@@ -102,7 +102,7 @@ describe('checkBlockOf: the defaults', () => {
 describe('old graphs (ADR-0027: unchanged in behaviour)', () => {
   it('every template and migrated workflow validates with no issue and compiles to the default blocks', () => {
     const graphs: WorkflowGraph[] = [
-      ...WORKFLOW_TEMPLATE_IDS.flatMap((id) => [
+      ...WORKFLOW_TEMPLATE_IDS_V2.flatMap((id) => [
         workflowTemplate(id),
         workflowTemplate(id, { planner: true }),
       ]),
@@ -128,7 +128,7 @@ describe('old graphs (ADR-0027: unchanged in behaviour)', () => {
 
   it('the templates’ and the migration’s Checks block has no new fields', () => {
     const graphs = [
-      ...WORKFLOW_TEMPLATE_IDS.map((id) => workflowTemplate(id)),
+      ...WORKFLOW_TEMPLATE_IDS_V2.map((id) => workflowTemplate(id)),
       migrateWorkflowV1(defaultProjectWorkflow('p1', '2026-10-23T09:00:00.000Z'), {
         projectMode: 'manual',
       }),

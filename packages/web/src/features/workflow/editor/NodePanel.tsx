@@ -9,6 +9,7 @@ import {
   type AgentEffort,
   type ApprovalMode,
   type ManagedProviderId,
+  type TicketType,
   type WorkflowGraphV3,
   type WorkflowNodeV3,
   type WorkflowNodeV3Of,
@@ -23,6 +24,7 @@ import {
   FINISH_COPY,
   PROVIDER_COPY,
   REVIEW_LOOP_COPY,
+  TICKET_TYPE_COPY,
   WORKFLOW_GRAPH_COPY,
 } from '../../../lib/copy';
 import { MODEL_SUGGESTIONS, effectiveProvider } from '../../../lib/providers';
@@ -259,6 +261,53 @@ function SkillsField({
       )}
       <span id={`${id}-hint`} className={hintClass}>
         {full ? P.skillsFull(MAX_NODE_SKILLS) : P.skillsHint(MAX_NODE_SKILLS)}
+      </span>
+    </fieldset>
+  );
+}
+
+const TICKET_TYPES: readonly TicketType[] = ['feature', 'bug', 'chore', 'harness'];
+
+/** ADR-0039: the ticket types an agent block runs for; all ticked when the field is absent. */
+function TicketTypesField({
+  value,
+  onChange,
+}: {
+  value: readonly TicketType[] | undefined;
+  onChange: (next: TicketType[]) => void;
+}) {
+  const id = useId();
+  const chosen = value ?? TICKET_TYPES;
+  const last = chosen.length === 1;
+  return (
+    <fieldset
+      className="flex min-w-0 flex-col gap-1.5"
+      aria-describedby={`${id}-hint`}
+      data-testid="ticket-types-field"
+    >
+      <legend className={`mb-1 ${labelClass}`}>{P.runsFor}</legend>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {TICKET_TYPES.map((t) => {
+          const checked = chosen.includes(t);
+          return (
+            <label key={t} className="flex items-center gap-2" title={TICKET_TYPE_COPY[t].tip}>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={checked && last}
+                onChange={(e) =>
+                  onChange(e.target.checked ? [...chosen, t] : chosen.filter((v) => v !== t))
+                }
+                className="size-4 shrink-0 accent-accent"
+                data-testid={`ticket-type-${t}`}
+              />
+              <span className="text-caption">{TICKET_TYPE_COPY[t].word}</span>
+            </label>
+          );
+        })}
+      </div>
+      <span id={`${id}-hint`} className={hintClass}>
+        {last ? P.runsForLast : P.runsForHint}
       </span>
     </fieldset>
   );
@@ -545,6 +594,12 @@ function AgentFields({
         skills={ctx.skills}
         onChange={(skills) => change({ skills })}
       />
+      {agent !== null ? (
+        <TicketTypesField
+          value={agent.ticketTypes}
+          onChange={(ticketTypes) => change({ ticketTypes })}
+        />
+      ) : null}
       {agent !== null && worker ? (
         <CheckboxField
           label={R.pool}

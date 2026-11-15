@@ -302,7 +302,15 @@ flowchart LR
   Conversation tab. Once a routed fix of a tester's failure is merged, `nextStage` runs that tester
   again (`EngineFix.retestNodeId`; a When arrow's `retest: false` switches it off), and the
   retest's own failures keep the fix's lineage and rounds (ADR-0038 §4, amended 2026-11-14).
-- Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop".
+- **Blocks by ticket type (ADR-0039, TT series)** [implemented on `feature/workflow/ticket-types`].
+  An Agent block may run only for some ticket types (`ticketTypes`). The ticket start runs
+  `specialiseForTicket` (core, pure) on the project's graph for the ticket's type before it
+  validates and compiles, and snapshots that graph, so the engine and the live graph see only the
+  blocks that run (skipped chain steps are stepped over; researchers and change reviewers left
+  without a role go too; without planners the plan path runs through the lead). The validator
+  refuses a graph a skipped-for type cannot run (`ticket-type-breaks-workflow`).
+- Templates: "Lead only", "Today's setup", "Reviewer ↔ helper loop", "Behaviour-driven (BDD)"
+  (version 3 only: analyst and scenario tests for feature tickets, tester for every type).
 - **Linking in the editor** (v0.3.1). A link starts from a connector on any side of a block, snaps
   onto the nearest block that accepts it, or is made by clicking a connector and then a block, or
   with "Link to…" in the block's panel or menu. Every one of these, and moving a link's end, asks

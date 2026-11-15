@@ -9,7 +9,7 @@ import {
   type HarnessCheck,
   type WorkflowGraphV3 as WorkflowGraph,
   type WorkflowNodeV3 as WorkflowNode,
-  type WorkflowTemplateId,
+  type WorkflowTemplateIdV2,
 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { customGraph } from '../../e2e/workflow-fixtures';
@@ -44,7 +44,8 @@ import {
  */
 
 const parse = (g: unknown): WorkflowGraph => migrateWorkflowV2(WorkflowGraphSchema.parse(g));
-const template = (id: WorkflowTemplateId): WorkflowGraph => migrateWorkflowV2(workflowTemplate(id));
+const template = (id: WorkflowTemplateIdV2): WorkflowGraph =>
+  migrateWorkflowV2(workflowTemplate(id));
 const run = (graph: WorkflowGraph, ...actions: EditorAction[]): EditorState =>
   actions.reduce(editorReducer, initialEditorState(graph));
 const has = (g: WorkflowGraph, type: string, from: string, to: string) =>

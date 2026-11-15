@@ -144,7 +144,21 @@ function agentSentence(
     node.description !== undefined && node.description !== ''
       ? `: ${quoteInline(node.description)}`
       : '';
-  return { section: 'agents', nodeId: node.id, text: `${name} is ${role} ${how}${description}.` };
+  const only =
+    node.ticketTypes === undefined
+      ? ''
+      : ` It runs only for ${typeList(node.ticketTypes)} tickets.`;
+  return {
+    section: 'agents',
+    nodeId: node.id,
+    text: `${name} is ${role} ${how}${description}.${only}`,
+  };
+}
+
+/** "feature", "feature and bug", "feature, bug and chore" (ADR-0039). */
+function typeList(types: readonly string[]): string {
+  if (types.length <= 1) return types.join('');
+  return `${types.slice(0, -1).join(', ')} and ${types[types.length - 1] ?? ''}`;
 }
 
 function linkSentence(index: NodeIndexV3, edge: WorkflowEdgeV3): WorkflowSentence | null {

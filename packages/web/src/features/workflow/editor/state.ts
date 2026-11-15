@@ -15,6 +15,7 @@ import {
   type ManagedProviderId,
   type NodePosition,
   type SkillName,
+  type TicketType,
   type WorkflowEdgeTypeV3,
   type WorkflowEdgeV3,
   type WorkflowGraphV3,
@@ -105,7 +106,11 @@ export interface NodePatch {
   effort?: AgentEffort | null;
   /** An agent block's provider (ADR-0031); null: the project's default (the field is dropped). */
   provider?: ManagedProviderId | null;
+  /** ADR-0039: the ticket types an agent runs for; null or every type: all (the field is dropped). */
+  ticketTypes?: TicketType[] | null;
 }
+
+const TICKET_TYPE_ORDER: readonly TicketType[] = ['feature', 'bug', 'chore', 'harness'];
 
 /** An arrow's words (ADR-0037 §2): empty text drops the field. */
 export interface EdgePatch {
@@ -795,6 +800,18 @@ function patchLaunch<N extends LaunchNode>(node: N, patch: NodePatch): N {
   return withOptional(withOptional(next, 'effort', patch.effort), 'provider', patch.provider);
 }
 
+/**
+ * ADR-0039: stored in the ticket types' own order and only when some type is left out; no type
+ * at all is not a choice (the panel keeps the last one ticked), so it drops the field too.
+ */
+function withTicketTypes(node: AgentBlock, types: TicketType[] | null): AgentBlock {
+  const { ticketTypes: _old, ...rest } = node;
+  const set = TICKET_TYPE_ORDER.filter((t) => types?.includes(t));
+  return set.length === 0 || set.length === TICKET_TYPE_ORDER.length
+    ? rest
+    : { ...rest, ticketTypes: set };
+}
+
 /** Applies the patch's fields that the node has; the others are ignored. */
 export function patchNode(node: GraphNode, patch: NodePatch): GraphNode {
   switch (node.type) {
@@ -808,9 +825,11 @@ export function patchNode(node: GraphNode, patch: NodePatch): GraphNode {
         ...(patch.maxInstances !== undefined ? { maxInstances: patch.maxInstances } : {}),
         ...(patch.canStartHelpers !== undefined ? { canStartHelpers: patch.canStartHelpers } : {}),
       };
-      if (patch.pool === undefined) return next;
+      const typed =
+        patch.ticketTypes === undefined ? next : withTicketTypes(next, patch.ticketTypes);
+      if (patch.pool === undefined) return typed;
       // The pool flag is stored only when set, as core's migration writes it.
-      const { pool: _old, ...rest } = next;
+      const { pool: _old, ...rest } = typed;
       return patch.pool ? { ...rest, pool: true } : rest;
     }
     case 'plan-approval':

@@ -5,6 +5,7 @@ import type {
   WorkflowGraph,
   WorkflowNode,
   WorkflowTemplateId,
+  WorkflowTemplateIdV2,
 } from '../workflow-graph.js';
 import {
   DEFAULT_LABELS,
@@ -43,6 +44,12 @@ export const WORKFLOW_TEMPLATES: readonly WorkflowTemplateInfo[] = Object.freeze
     name: 'Reviewer ↔ helper loop',
     description:
       'A review agent sends each change straight back to its helper until it is right (up to 2 rounds), keeping the lead informed; the lead then merges.',
+  },
+  {
+    id: 'bdd',
+    name: 'Behaviour-driven (BDD)',
+    description:
+      'For a feature ticket, a behaviour analyst writes the scenarios first; then scenario tests and the code are written at the same time, merged, and a tester runs everything together. Bug and other tickets skip the analysis and the scenario tests.',
   },
 ]);
 
@@ -109,7 +116,7 @@ function mergeEdges(): WorkflowEdge[] {
  *   (2 rounds) and sends its findings to the lead, which merges.
  */
 export function workflowTemplate(
-  id: WorkflowTemplateId,
+  id: WorkflowTemplateIdV2,
   opts: WorkflowTemplateOptions = {},
 ): WorkflowGraph {
   const planner = opts.planner ?? false;
