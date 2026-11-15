@@ -6,29 +6,62 @@ import { useLinkState } from './link-store';
 import { labelPoint, pathOf, routePoints } from './routing';
 
 /**
- * How each kind of link looks (DESIGN.md, "Agent views"): neutral lines that differ by weight and
- * dashes, never by the accent, which marks only the selected link. Calm on purpose: the forward
- * links are solid (the lead's implement and merge darker, the merge heavier, a plan heavier still
- * in the step tone), the review route is dashed, findings dotted, rework long-dashed with its
- * rounds on a small label; research is dash-dotted, test short-dashed and a custom hand-off
- * dash-dot-dotted (ADR-0037 §2), so every type reads apart without colour.
+ * ADR-0040: links come in families, each with its own colour, and the dashes still tell the kinds
+ * apart, so colour is never the only signal (DESIGN.md, "Agent views"). The accent stays for the
+ * selected link only.
+ * - work (next step, plan, implement, merge): neutral and solid, the lead's darker, merge heaviest;
+ * - review (review dashed, findings dotted): teal;
+ * - fixes (rework long-dashed, orange; a When failure route dashed, red);
+ * - research (dash-dotted) and test (short-dashed): purple, what runs beside or after the work;
+ * - a custom hand-off: neutral, dash-dot-dotted.
  */
+export type LinkFamily = 'work' | 'review' | 'fix' | 'check' | 'handoff';
+
+export const LINK_FAMILY: Readonly<Record<WorkflowEdgeTypeV3, LinkFamily>> = {
+  flow: 'work',
+  plan: 'work',
+  implement: 'work',
+  merge: 'work',
+  review: 'review',
+  findings: 'review',
+  rework: 'fix',
+  when: 'fix',
+  research: 'check',
+  test: 'check',
+  custom: 'handoff',
+};
+
+/** The families in the legend's order, each with its kinds. */
+export const LINK_FAMILIES: readonly { family: LinkFamily; types: WorkflowEdgeTypeV3[] }[] = [
+  { family: 'work', types: ['flow', 'plan', 'implement', 'merge'] },
+  { family: 'review', types: ['review', 'findings'] },
+  { family: 'fix', types: ['rework', 'when'] },
+  { family: 'check', types: ['research', 'test'] },
+  { family: 'handoff', types: ['custom'] },
+];
+
+const REVIEW = 'var(--color-token-cache-read)';
+const CHECK = 'var(--color-done)';
+
 export const EDGE_LOOK: Readonly<
   Record<WorkflowEdgeTypeV3, { stroke: string; width: number; dash?: string; round?: boolean }>
 > = {
   flow: { stroke: 'var(--color-dim)', width: 1.5 },
-  research: { stroke: 'var(--color-dim)', width: 1.75, dash: '10 3 1 3', round: true },
+  research: { stroke: CHECK, width: 1.75, dash: '10 3 1 3', round: true },
   plan: { stroke: 'var(--color-dim)', width: 2.25 },
   implement: { stroke: 'var(--color-ink)', width: 1.5 },
-  review: { stroke: 'var(--color-dim)', width: 1.5, dash: '6 4' },
-  findings: { stroke: 'var(--color-dim)', width: 2, dash: '0.5 5', round: true },
-  rework: { stroke: 'var(--color-ink)', width: 1.5, dash: '9 4' },
-  test: { stroke: 'var(--color-ink)', width: 1.5, dash: '3 3' },
-  custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3', round: true },
+  review: { stroke: REVIEW, width: 1.75, dash: '6 4' },
+  findings: { stroke: REVIEW, width: 2, dash: '0.5 5', round: true },
+  rework: { stroke: 'var(--color-token-output)', width: 1.75, dash: '9 4' },
+  test: { stroke: CHECK, width: 1.75, dash: '3 3' },
+  custom: { stroke: 'var(--color-dim)', width: 1.5, dash: '8 3 1 3 1 3', round: true },
   merge: { stroke: 'var(--color-ink)', width: 2.5 },
   // ADR-0038: failure routing, red and dashed.
-  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
+  when: { stroke: 'var(--color-danger)', width: 1.75, dash: '5 4' },
 };
+
+/** The arrowhead's size on the canvas (ADR-0040: larger, so a link's direction reads at once). */
+export const ARROW_SIZE = 18;
 
 /** The stroke a link is drawn with: the accent when selected, danger when the rules refuse it. */
 export function linkStroke(type: WorkflowEdgeTypeV3, selected: boolean, refused: boolean): string {
@@ -64,9 +97,14 @@ export function LinkSample({ type, width = 28 }: { type: WorkflowEdgeTypeV3; wid
  * over a soft halo; while a block is selected or a link is being dragged, the links that don't
  * touch it fade back. Rework links carry a small "Rework ×n" label on their lower run, and an
  * arrow with the owner's label (ADR-0037 §2) shows it there; its purpose is the hover text.
+ *
+ * ADR-0040: a link the pointer is on, or one of the block under the pointer, is drawn thicker with
+ * a light dash moving along it from start to end, so its direction shows; the others fade back.
  */
 export const LinkEdgeView = memo(function LinkEdgeView({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -78,8 +116,15 @@ export const LinkEdgeView = memo(function LinkEdgeView({
 }: EdgeProps<LinkEdge>) {
   // While a link is being made the others fade back (the link store, so no remapping).
   const linking = useLinkState((s) => s.mode !== null);
+  const hover = useLinkState((s) => s.hover);
+  const focus = useLinkState((s) => s.focus);
   if (data === undefined) return null;
-  const dim = data.dim || linking;
+  // The pointer wins over a lit playbook step (ADR-0040).
+  const lit =
+    hover !== null
+      ? hover === source || hover === target || hover === `edge:${id}`
+      : focus !== null && focus.edges.includes(id);
+  const dim = data.dim || linking || ((hover !== null || focus !== null) && !lit);
   const points = routePoints({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, data.route);
   const d = pathOf(points);
   const look = EDGE_LOOK[data.type];
@@ -107,11 +152,24 @@ export const LinkEdgeView = memo(function LinkEdgeView({
         interactionWidth={18}
         style={{
           stroke,
-          strokeWidth: isSelected ? look.width + 0.75 : look.width,
+          strokeWidth: isSelected || lit ? look.width + 0.75 : look.width,
           strokeLinecap: look.round === true ? 'round' : 'butt',
           ...(look.dash !== undefined ? { strokeDasharray: look.dash } : {}),
         }}
       />
+      {lit || isSelected ? (
+        <path
+          d={d}
+          fill="none"
+          stroke="var(--color-panel)"
+          strokeOpacity={0.85}
+          strokeWidth={Math.max(1, look.width - 0.5)}
+          strokeDasharray="2 14"
+          strokeLinecap="round"
+          className="acp-link-flow pointer-events-none"
+          data-testid="link-flow"
+        />
+      ) : null}
       {typeof label === 'string' ? (
         <EdgeLabelRenderer>
           <div

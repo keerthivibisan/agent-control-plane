@@ -282,7 +282,13 @@ export function hasNamedHelpers(program: WorkflowProgram): boolean {
 
 /** One helper node as a brief or a refusal names it. */
 function nodeLine(h: ProgramHelperNode): string {
-  const what = h.type === 'helper-pool' ? 'any step no named helper takes' : h.description;
+  // ADR-0040: a named helper's description is its "When to use".
+  const what =
+    h.type === 'helper-pool'
+      ? 'any step no named helper takes'
+      : h.description.length > 0
+        ? `use for: ${h.description}`
+        : '';
   return `- ${h.label} (helper "${h.id}")${what.length > 0 ? `: ${what}` : ''}`;
 }
 

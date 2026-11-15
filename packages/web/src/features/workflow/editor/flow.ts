@@ -1,5 +1,6 @@
 import {
   FAILURE_EVENT_NAMES,
+  whenToUse,
   type ApprovalMode,
   type ManagedProviderId,
   type NodePosition,
@@ -13,14 +14,14 @@ import { MarkerType, type Edge } from '@xyflow/react';
 import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { effectiveProvider } from '../../../lib/providers';
 import { finishIssues, finishView } from '../finish';
-import { linkStroke } from './edges';
-import { isGateType, layoutGraph, sizeOf } from './layout';
+import { ARROW_SIZE, linkStroke } from './edges';
+import { columnIndexOf, isGateType, layoutGraph, sizeOf } from './layout';
 import { EDITOR_COPY } from './copy';
 import { planLinks, type Route } from './routing';
 import { graphRoles, kindIn } from './roles';
 import { isRemovable, resolveLink, type Selection } from './state';
 import type { EditorIssue } from './IssuesList';
-import { kindWord, type BlockNode, type LinkTarget } from './nodes';
+import { kindWord, type BlockData, type BlockNode, type LinkTarget } from './nodes';
 
 const G = WORKFLOW_GRAPH_COPY;
 type WorkflowGraph = WorkflowGraphV3;
@@ -153,9 +154,24 @@ export function toFlowNodes(
         helperLimit: ctx.helperLimit,
         linkTarget,
         target,
+        useWhen: useWhenOf(graph, node),
       },
     };
   });
+}
+
+/**
+ * ADR-0040: what an Agent block's line says: the owner's "When to use", else what starts it
+ * (core's `whenToUse`), else for a helper that the lead goes by its name. Null for the lead and
+ * the steps.
+ */
+function useWhenOf(graph: WorkflowGraph, node: WorkflowNode): BlockData['useWhen'] {
+  if (node.type !== 'agent') return null;
+  const own = node.description?.trim() ?? '';
+  if (own !== '') return { text: own, own: true };
+  if (node.pool === true) return { text: EDITOR_COPY.useWhen.pool, own: false };
+  const trigger = whenToUse(graph, node.id);
+  return { text: trigger ?? EDITOR_COPY.useWhen.unset, own: false };
 }
 
 /** The link kinds whose shape makes a refused link: drawn in the danger tone. */
@@ -209,7 +225,7 @@ export function toFlowEdges(
         : (e.label ?? rounds);
     if (label !== undefined) linkLabels.set(e.id, label);
   }
-  const plan = planLinks(view.graph, positions, graphRoles(graph), linkLabels);
+  const plan = planLinks(view.graph, positions, columnIndexOf(graph), linkLabels);
   return view.graph.edges.map((e) => {
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);
@@ -239,8 +255,8 @@ export function toFlowEdges(
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: linkStroke(e.type, selected, refused),
-        width: 14,
-        height: 14,
+        width: ARROW_SIZE,
+        height: ARROW_SIZE,
       },
       ...(label !== undefined ? { label } : {}),
       data: {

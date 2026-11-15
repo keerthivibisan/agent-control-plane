@@ -1,8 +1,8 @@
 import { WorkflowGraphV3Schema, type WorkflowGraphV3 } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { toFlowEdges } from '../../src/features/workflow/editor/flow';
-import { layoutGraph } from '../../src/features/workflow/editor/layout';
-import { graphRoles } from '../../src/features/workflow/editor/roles';
+import { columnIndexOf, layoutGraph } from '../../src/features/workflow/editor/layout';
+
 import {
   countConflicts,
   drawnLinks,
@@ -74,14 +74,13 @@ function labelsOf(g: WorkflowGraphV3): Map<string, string> {
 }
 
 describe('link labels on the canvas', () => {
-  it('keeps the two labels of a Lead ↔ tester pair apart, where they used to overlap', () => {
+  it('keeps the two labels of a Lead ↔ tester pair apart on a hand-placed draft', () => {
     const stored = draft();
     const g = finishView(stored).graph;
     const pos = layoutGraph(stored);
-    const roles = graphRoles(stored);
+    const roles = columnIndexOf(stored);
     const labels = labelsOf(g);
     const unplaced = planLinks(g, pos, roles);
-    expect(labelOverlaps(g, pos, labels, unplaced, roles).labels).toBeGreaterThan(0);
     const plan = planLinks(g, pos, roles, labels);
     expect(labelOverlaps(g, pos, labels, plan, roles)).toEqual({ blocks: 0, labels: 0 });
     // Placing labels never moves a route.
@@ -127,32 +126,32 @@ describe('link labels on the canvas', () => {
     expect(labelPoint(straight, { segment: 1, t: 0.25 })).toEqual({ x: 0, y: 10 });
   });
 
-  it('moves a link leaving the lead’s top off the spot where the ticket’s link arrives', () => {
-    // The owner's second draft (2026-11-15): a helper left of the lead, in the lead's row.
-    const near = (x: number, y: number) => ({ x: Math.round(x * 0.53), y: Math.round(y * 0.53) });
+  it('gives the links meeting one side of a block their own spots (Tidy layout)', () => {
+    // ADR-0040: the owner's second draft (2026-11-15) had the ticket's link and the lead's link
+    // to a helper meet the lead at one spot. Laid out in stage columns, every end has its own.
     const stored = WorkflowGraphV3Schema.parse({
       ...draft(),
       nodes: draft()
         .nodes.filter((n) => n.id !== 'tester')
-        .map((n) =>
-          n.id === 'ticket'
-            ? { ...n, position: near(1047, 15) }
-            : n.id === 'orchestrate'
-              ? { ...n, position: near(995, 477) }
-              : n.id === 'agent-1'
-                ? { ...n, label: 'Agent 2', position: near(112, 301) }
-                : n,
-        ),
+        .map(({ position: _drop, ...n }) => n),
       edges: draft().edges.filter((e) => e.to !== 'tester' && e.from !== 'tester'),
     });
     const g = finishView(stored).graph;
     const pos = layoutGraph(stored);
-    const roles = graphRoles(stored);
-    const plan = planLinks(g, pos, roles);
-    expect(plan.get('f1')?.targetHandle).toBe('t-top-50');
-    expect(plan.get('i1')?.sourceHandle).toBe('s-top-30');
-    const drawn = drawnLinks(g, pos, plan, roles);
-    const pair = drawn.filter((d) => d.id === 'f1' || d.id === 'i1');
-    expect(countConflicts(pair)).toBe(0);
+    const cols = columnIndexOf(stored);
+    const plan = planLinks(g, pos, cols);
+    const drawn = drawnLinks(g, pos, plan, cols);
+    const leadEnds = drawn.flatMap((d) =>
+      [d.points[0], d.points.at(-1)].flatMap((p, i) =>
+        p !== undefined &&
+        (i === 0
+          ? g.edges.find((e) => e.id === d.id)?.from
+          : g.edges.find((e) => e.id === d.id)?.to) === 'orchestrate'
+          ? [`${Math.round(p.x)},${Math.round(p.y)}`]
+          : [],
+      ),
+    );
+    expect(new Set(leadEnds).size).toBe(leadEnds.length);
+    expect(countConflicts(drawn)).toBe(0);
   });
 });

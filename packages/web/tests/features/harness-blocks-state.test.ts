@@ -261,9 +261,11 @@ describe('check blocks: the editor', () => {
     expect(has(s.graph, 'flow', 'branch-checks', 'owner-merge')).toBe(true);
     expect(has(s.graph, 'flow', 'unit-tests', 'owner-merge')).toBe(false);
     expect(checksAvailability(s.graph, 'branch').ok).toBe(false);
-    // On the merge chain, after the tester.
+    // In the final checks' column, under the tester (ADR-0040 stage columns), before Finish.
     const at = layoutGraph(s.graph);
-    expect(at.get('branch-checks')?.x ?? 0).toBeGreaterThan(at.get('unit-tests')?.x ?? 0);
+    expect(at.get('branch-checks')?.x).toBe(at.get('unit-tests')?.x);
+    expect(at.get('branch-checks')?.y ?? 0).toBeGreaterThan(at.get('unit-tests')?.y ?? 0);
+    expect(at.get('owner-merge')?.x ?? 0).toBeGreaterThan(at.get('branch-checks')?.x ?? 0);
     // Only the owner decides a failure on the branch.
     const helper = run(s.graph, {
       type: 'set-check-failure',

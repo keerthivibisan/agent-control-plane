@@ -1,4 +1,5 @@
 import {
+  WORKFLOW_TEMPLATE_IDS,
   WorkflowGraphSchema,
   defaultProjectWorkflow,
   isGraphRunnable,
@@ -7,9 +8,11 @@ import {
   validateWorkflowGraph,
   validateWorkflowGraphV3,
   workflowTemplate,
+  workflowTemplateV3,
   type WorkflowGraph,
   type WorkflowGraphV3,
 } from '@acp/core';
+import { finishView } from '../../src/features/workflow/finish';
 import { WorkflowGraphDtoSchema } from '@acp/core/api';
 import { describe, expect, it } from 'vitest';
 import { customGraph, customGraphDto, graphDto, migratedGraph } from '../../e2e/workflow-fixtures';
@@ -19,9 +22,9 @@ import {
   toFlowNodes,
   type BlockContext,
 } from '../../src/features/workflow/editor/flow';
-import { countConflicts, drawnLinks } from '../../src/features/workflow/editor/routing';
+import { countConflicts, drawnLinks, planLinks } from '../../src/features/workflow/editor/routing';
 import { editorIssues, shapeIssues } from '../../src/features/workflow/editor/issues';
-import { layoutGraph, sizeOf } from '../../src/features/workflow/editor/layout';
+import { columnIndexOf, layoutGraph, sizeOf } from '../../src/features/workflow/editor/layout';
 import { graphRoles } from '../../src/features/workflow/editor/roles';
 import {
   allowedEdgeTypes,
@@ -302,13 +305,15 @@ describe('issues, layout and the canvas mapping', () => {
     };
     const pos = layoutGraph(moved);
     expect(pos.get('plan')).toEqual({ x: 5, y: 6 });
-    // Three rows: the plan path, then the lead and its helpers, then the merge and final steps.
+    // ADR-0040, stage columns left to right: the ticket, the lead (with plan approval), its
+    // helpers stacked, change reviewers, the merge checks, the final checks, then Finish.
     const at = (id: string) => pos.get(id) ?? { x: NaN, y: NaN };
-    expect(at('ticket').y).toBeLessThan(at('orchestrate').y);
+    expect(at('ticket').x).toBeLessThan(at('orchestrate').x);
     expect(at('orchestrate').x).toBeLessThan(at('helper-1').x);
-    expect(at('helper-1').x).toBeLessThan(at('review').x);
+    expect(at('helper-1').x).toEqual(at('helpers').x);
     expect(at('helper-1').y).toBeLessThan(at('helpers').y);
-    expect(at('helpers').y).toBeLessThan(at('checks').y);
+    expect(at('helper-1').x).toBeLessThan(at('review').x);
+    expect(at('review').x).toBeLessThan(at('checks').x);
     expect(at('checks').x).toBeLessThan(at('unit-tests').x);
     expect(at('unit-tests').x).toBeLessThan(at('owner-merge').x);
     // The Finish block (your merge) stands for the ticket merge and Done: they share its place.
@@ -363,29 +368,25 @@ describe('issues, layout and the canvas mapping', () => {
     });
     const edges = toFlowEdges(g, issues, null);
     const rework = edges.find((e) => e.id === 'rework-review-helpers');
-    // Rework loops underneath, leaving and entering on the sides that face each other.
-    expect(rework).toMatchObject({ sourceHandle: 's-bottom-15', targetHandle: 't-bottom-85' });
-    expect(rework?.data?.route.kind).toBe('loop-bottom');
-    // Forward links: side to side to the right, bottom to top into the next row.
-    expect(edges.find((e) => e.id === 'assigns-orchestrate-helper-1')).toMatchObject({
-      sourceHandle: 'out',
-      targetHandle: 'in',
-    });
-    expect(edges.find((e) => e.id === 'merge-orchestrate-checks')).toMatchObject({
-      sourceHandle: 's-bottom-50',
-      targetHandle: 't-top-50',
-    });
+    // ADR-0040, stage columns: links run left to right between the columns' sides, and a link
+    // back to an earlier column (a reviewer's rework, findings, a tester's review) runs right to
+    // left into the facing side.
+    expect(rework?.sourceHandle).toMatch(/^s-left-/);
+    expect(rework?.targetHandle).toMatch(/^t-right-/);
+    expect(rework?.data?.route).toMatchObject({ kind: 'corridor', flip: true });
     expect(rework?.label).toBe('Rework ×2');
-    // Findings loop over the top into the lead, clear of its plan link at 50%.
-    expect(edges.find((e) => e.id === 'findings-review-orchestrate')).toMatchObject({
-      sourceHandle: 's-top-50',
-      targetHandle: 't-top-85',
-    });
-    // The tester's review goes up to the lead in the gap between the rows, not across the
-    // helpers stacked in the middle row.
+    const assigns = edges.find((e) => e.id === 'assigns-orchestrate-helper-1');
+    expect(assigns?.sourceHandle).toMatch(/^s-right-/);
+    expect(assigns?.targetHandle).toMatch(/^t-left-/);
+    const merge = edges.find((e) => e.id === 'merge-orchestrate-checks');
+    expect(merge?.sourceHandle).toMatch(/^s-right-/);
+    expect(merge?.targetHandle).toMatch(/^t-left-/);
+    expect(edges.find((e) => e.id === 'findings-review-orchestrate')?.targetHandle).toMatch(
+      /^t-right-/,
+    );
     const up = edges.find((e) => e.id === 'review-unit-tests-orchestrate');
-    expect(up).toMatchObject({ sourceHandle: 's-top-30', targetHandle: 't-bottom-70' });
-    expect(up?.data?.route.kind).toBe('corridor');
+    expect(up?.sourceHandle).toMatch(/^s-left-/);
+    expect(up?.targetHandle).toMatch(/^t-right-/);
     expect(edges.find((e) => e.id === 'merge-orchestrate-checks')?.ariaLabel).toBe(
       'Merges through: from Lead to Checks',
     );
@@ -445,18 +446,24 @@ describe('linking and drawing (v0.3.0 D-C)', () => {
     expect(toFlowEdges(g, [], null).some((e) => e.data?.dim)).toBe(false);
   });
 
-  it('draws every template without links crossing, the dense hand-built graph with one', () => {
-    const templates = [
-      v3(workflowTemplate('lead-only')),
+  it('draws every template without links crossing, the dense hand-built graph with one at most', () => {
+    const graphs = [
+      ...WORKFLOW_TEMPLATE_IDS.flatMap((id) => [
+        workflowTemplateV3(id),
+        workflowTemplateV3(id, { planner: true }),
+      ]),
       todays(),
-      v3(workflowTemplate('reviewer-helper-loop')),
-      v3(workflowTemplate('todays-setup', { planner: true })),
+      v3(parse(customGraph())),
     ];
-    for (const g of templates) expect(countConflicts(drawnLinks(g, layoutGraph(g)))).toBe(0);
-    // Two helpers stacked, the lead assigning both and reworking the first: its rework loop has to
-    // cross the line to the second (there is no way round in rows).
-    const custom = v3(parse(customGraph()));
-    expect(countConflicts(drawnLinks(custom, layoutGraph(custom)))).toBeLessThanOrEqual(1);
+    for (const g of graphs) {
+      const view = finishView(g).graph;
+      const pos = layoutGraph(g);
+      const cols = columnIndexOf(g);
+      const drawn = drawnLinks(view, pos, planLinks(view, pos, cols), cols);
+      // The hand-built graph reworks one of two stacked helpers from the lead while it assigns
+      // both: one crossing is left there; every template draws without any.
+      expect(countConflicts(drawn)).toBeLessThanOrEqual(g.template === 'custom' ? 1 : 0);
+    }
   });
 });
 

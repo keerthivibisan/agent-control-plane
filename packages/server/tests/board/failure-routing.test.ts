@@ -57,7 +57,7 @@ describe('failures routed by When arrows through the server (ADR-0038 §4)', () 
     });
     expect(await lead.callLead('merge_change', { agentId: worker.id })).toContain('Merged');
     const words = await lead.callLead('view_workflow', {});
-    expect(words).toContain('When tests fail at "Tester"');
+    expect(words).toContain('If tests fail at "Tester"');
     await lead.callLead('request_review', {});
     await s.settle();
     const tester = s.fake.agents.find((a) => a.spec.kind === 'tester');

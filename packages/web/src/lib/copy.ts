@@ -4242,8 +4242,13 @@ export const WORKFLOW_GRAPH_COPY = {
       'Ticket and run settings can only make this block more careful, never less. A block set to Full auto keeps the sandbox for its commands even then.',
     readOnlyMode:
       'This block never changes a file, so it never asks for approvals: it has no approval mode.',
-    description: 'What this helper is for',
-    descriptionHint: 'The lead and the planner read this when they hand out the plan’s steps.',
+    description: 'When to use',
+    descriptionHint:
+      'The lead and the planner read this when they pick a helper for a plan step, e.g. "UI changes and their tests".',
+    /** ADR-0040: a block that starts on its own; `trigger` is what starts it. */
+    descriptionHintAuto: (trigger: string) =>
+      `This block starts on its own: ${trigger}. Add when it matters most; the lead reads it.`,
+    descriptionHintNoRole: 'once its arrows give it a role',
     maxInstances: 'Helpers of this block at once',
     maxInstancesHint: (limit: number) =>
       `The project’s helper limit (${formatCount(limit)}) still applies on top.`,

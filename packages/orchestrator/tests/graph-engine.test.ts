@@ -107,7 +107,7 @@ describe('graph runs: the program', () => {
   it('lists the helper nodes in the lead’s brief only when there are named helpers', () => {
     const withNamed = ok(createGraphRun(valid({}))).effects;
     const prompt = effectsOf(withNamed, 'start-agent')[0]?.prompt ?? '';
-    expect(prompt).toContain('Frontend helper (helper "frontend"): Builds the UI.');
+    expect(prompt).toContain('Frontend helper (helper "frontend"): use for: Builds the UI.');
     expect(prompt).toContain('Helpers (helper "helpers")');
     const poolOnly = ok(createGraphRun(valid({ named: false })));
     expect(effectsOf(poolOnly.effects, 'start-agent')[0]?.prompt).toBe(

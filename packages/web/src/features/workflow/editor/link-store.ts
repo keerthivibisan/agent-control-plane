@@ -18,9 +18,23 @@ export interface LinkState {
   targets: ReadonlyMap<string, LinkTarget> | null;
   /** The block the link would end on if dropped now (under the pointer, or the nearest valid). */
   snap: string | null;
+  /**
+   * ADR-0040: what the pointer is over, so its links light up and show their direction: a block's
+   * id, or `edge:<id>` for a link.
+   */
+  hover: string | null;
+  /** ADR-0040: the blocks and links a selected playbook step lights. */
+  focus: { nodes: readonly string[]; edges: readonly string[] } | null;
 }
 
-export const IDLE: LinkState = { from: null, mode: null, targets: null, snap: null };
+export const IDLE: LinkState = {
+  from: null,
+  mode: null,
+  targets: null,
+  snap: null,
+  hover: null,
+  focus: null,
+};
 
 export interface LinkStore {
   get: () => LinkState;
@@ -43,7 +57,9 @@ export function createLinkStore(): LinkStore {
         next.from === state.from &&
         next.mode === state.mode &&
         next.targets === state.targets &&
-        next.snap === state.snap
+        next.snap === state.snap &&
+        next.hover === state.hover &&
+        next.focus === state.focus
       ) {
         return;
       }
@@ -51,8 +67,14 @@ export function createLinkStore(): LinkStore {
       emit();
     },
     reset: () => {
-      if (state === IDLE) return;
-      state = IDLE;
+      // A playbook step stays lit until the page clears it.
+      const next = state.focus === null ? IDLE : { ...IDLE, focus: state.focus };
+      if (
+        state === next ||
+        (state.focus !== null && state.mode === null && state.from === null && state.hover === null)
+      )
+        return;
+      state = next;
       emit();
     },
     subscribe: (listener) => {

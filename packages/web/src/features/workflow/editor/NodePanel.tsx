@@ -6,6 +6,7 @@ import {
   MAX_NODE_LABEL,
   MAX_NODE_SKILLS,
   MANAGED_PROVIDERS,
+  whenToUse,
   type AgentEffort,
   type ApprovalMode,
   type ManagedProviderId,
@@ -519,6 +520,7 @@ function AgentFields({
   node,
   kind,
   poolTaken,
+  trigger,
   ctx,
   change,
 }: {
@@ -526,6 +528,8 @@ function AgentFields({
   kind: BlockKind;
   /** Another block is the helper pool already. */
   poolTaken: boolean;
+  /** ADR-0040: what starts a block the lead does not choose (core's `whenToUse`). */
+  trigger: string | undefined;
   ctx: NodePanelContext;
   change: (patch: NodePatch) => void;
 }) {
@@ -550,10 +554,18 @@ function AgentFields({
         value={node.label}
         onChange={(label) => change({ label })}
       />
-      {agent !== null && helper ? (
+      {agent !== null && kind !== 'helper-pool' ? (
         <TextAreaField
           label={P.description}
-          hint={P.descriptionHint}
+          hint={
+            worker
+              ? P.descriptionHint
+              : P.descriptionHintAuto(
+                  trigger === undefined
+                    ? P.descriptionHintNoRole
+                    : `${trigger.charAt(0).toLowerCase()}${trigger.slice(1)}`,
+                )
+          }
           error={
             description.trim().length > MAX_NODE_DESCRIPTION
               ? P.descriptionTooLong(MAX_NODE_DESCRIPTION)
@@ -710,7 +722,14 @@ export function NodePanel({
       <PanelIssues issues={issues} title={E.blockTitle} />
       <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
         {node.type === 'agent' || node.type === 'lead' ? (
-          <AgentFields node={node} kind={kind} poolTaken={poolTaken} ctx={ctx} change={change} />
+          <AgentFields
+            node={node}
+            kind={kind}
+            poolTaken={poolTaken}
+            trigger={whenToUse(graph, node.id)}
+            ctx={ctx}
+            change={change}
+          />
         ) : isChecksNode(node) ? (
           <CheckBlockFields
             node={node}

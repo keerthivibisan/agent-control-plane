@@ -5,8 +5,7 @@ import type {
   WorkflowNodeId,
   WorkflowNodeV3,
 } from '@acp/core';
-import { rowOf, sizeOf } from './layout';
-import { graphRoles, type GraphRoles } from './roles';
+import { columnIndexOf, sizeOf } from './layout';
 
 type WorkflowEdge = WorkflowEdgeV3;
 type WorkflowGraph = WorkflowGraphV3;
@@ -35,10 +34,17 @@ type WorkflowNode = WorkflowNodeV3;
  * Labels: placed after the routes, on the first spot along the link (the middle of its longest
  * run first) that covers no block and no label placed before it, so two labelled links between
  * the same blocks never stack their labels.
+ *
+ * ADR-0040: the blocks stand in stage columns, left to right (`layout.ts`). The planner works on
+ * the canvas turned on its side (x and y swapped, `flip`): a column is a "row" above, so a forward
+ * link to a later column runs right through a lane in the gap between the columns, a link back to
+ * an earlier column runs left in its own lane, and the loops of a column go round its sides. The
+ * handles are named on the real canvas (left and right spots too), and the routes carry `flip`, so
+ * the canvas turns their points back.
  */
 
 export type Side = 'top' | 'bottom' | 'left' | 'right';
-export type RouteKind = 'side' | 'corridor' | 'loop-top' | 'loop-bottom';
+export type RouteKind = 'side' | 'corridor' | 'loop-top' | 'loop-bottom' | 'detour';
 
 export interface Route {
   kind: RouteKind;
@@ -46,6 +52,19 @@ export interface Route {
   lane: number;
   /** Where the label sits: a segment of the route and how far along it (0 to 1). */
   labelAt?: { segment: number; t: number };
+  /** ADR-0040: planned on the canvas turned on its side; its points are turned back to draw. */
+  flip?: boolean;
+  /**
+   * ADR-0040, `detour` routes: a link that skips rows with blocks in its way leaves along the gap
+   * after its source (`from`), runs round the rows between at `level`, and arrives along the gap
+   * before its target (`to`); planner coordinates.
+   */
+  detour?: { from: number; to: number; level: number };
+  /**
+   * ADR-0040: how far each end sits from its hidden handle along the block's side (planner
+   * coordinates), so the links meeting one side are spaced out evenly, not only at the handles.
+   */
+  shift?: { source: number; target: number };
 }
 
 export interface Point {
@@ -53,12 +72,12 @@ export interface Point {
   y: number;
 }
 
-/** Positions of the hidden top and bottom handles, in percent of the block's width. */
+/** Positions of the hidden handles on each side, in percent of the block's width or height. */
 export const HANDLE_SPOTS = [15, 30, 50, 70, 85] as const;
 export type Spot = (typeof HANDLE_SPOTS)[number];
 
-/** A hidden handle's id: `s-top-50` (a link leaves there) or `t-bottom-30` (one arrives). */
-export function handleId(kind: 'source' | 'target', side: 'top' | 'bottom', at: Spot): string {
+/** A hidden handle's id: `s-top-50` (a link leaves there) or `t-left-30` (one arrives). */
+export function handleId(kind: 'source' | 'target', side: Side, at: Spot): string {
   return `${kind === 'source' ? 's' : 't'}-${side}-${at}`;
 }
 
@@ -75,7 +94,15 @@ export interface PlannedLink {
 
 interface End {
   side: Side;
-  at: Spot | null;
+  /** Percent along the side (any value: `spreadEnds` spaces them out); null: a side's middle. */
+  at: number | null;
+}
+
+/** The hidden handle closest to a spot along a side. */
+function nearestSpot(at: number): Spot {
+  let best: Spot = 50;
+  for (const s of HANDLE_SPOTS) if (Math.abs(s - at) < Math.abs(best - at)) best = s;
+  return best;
 }
 
 interface Rect {
@@ -89,6 +116,26 @@ const LOOP_TOP = { first: 18, step: 12 };
 const LOOP_BOTTOM = { first: 18, step: 16 };
 const CORRIDOR_STEP = 14;
 const SIDE_STEP = 14;
+/** Detours round the same rows keep this far apart, and this far out from the blocks. */
+const DETOUR_STEP = 10;
+const DETOUR_MARGIN = 28;
+/** A detour turns this far from the blocks it leaves and reaches. */
+const EDGE_LANE = 8;
+/** How far further out the detour on the first lane turns (each later lane turns closer). */
+const DETOUR_SPAN = DETOUR_STEP;
+
+/**
+ * A detour on its lane: detours below the same rows keep apart, and the one that runs lower turns
+ * closer to the blocks, so two of them leaving one side never cross.
+ */
+function laneDetour(
+  d: { from: number; to: number; level: number },
+  lane: number,
+): { from: number; to: number; level: number } {
+  const out = Math.max(0, DETOUR_SPAN - lane);
+  const dir = d.from < d.to ? 1 : -1;
+  return { from: d.from + dir * out, to: d.to - dir * out, level: d.level + lane };
+}
 /** A label's box for placement: a 12px label is about this wide per character, plus padding. */
 const LABEL_CHAR_W = 6.6;
 const LABEL_PAD_W = 20;
@@ -97,7 +144,22 @@ const LABEL_GAP = 4;
 /** More than this many links in one group are not reordered (n! orders). */
 const MAX_PERMUTED = 6;
 
+/** A point of the canvas turned on its side, and back (the same swap). */
+const turn = (p: Point): Point => ({ x: p.y, y: p.x });
+
+/** A block's box on the canvas turned on its side (`flip`), where the planner works. */
 function rectOf(
+  node: WorkflowNode,
+  positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
+): Rect | undefined {
+  const p = positions.get(node.id);
+  if (p === undefined) return undefined;
+  const { width, height } = sizeOf(node);
+  return { x: p.y, y: p.x, w: height, h: width };
+}
+
+/** A block's box on the real canvas, for labels. */
+function realRectOf(
   node: WorkflowNode,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
 ): Rect | undefined {
@@ -106,6 +168,14 @@ function rectOf(
   const { width, height } = sizeOf(node);
   return { x: p.x, y: p.y, w: width, h: height };
 }
+
+/** A side of the turned canvas on the real one: its top is the real left, its right the bottom. */
+const REAL_SIDE: Readonly<Record<Side, Side>> = {
+  top: 'left',
+  bottom: 'right',
+  left: 'top',
+  right: 'bottom',
+};
 
 function endPoint(r: Rect, end: End): Point {
   switch (end.side) {
@@ -120,10 +190,14 @@ function endPoint(r: Rect, end: End): Point {
   }
 }
 
+/** The real handle an end of the turned canvas meets (a turned side's middle is spot 50). */
 function idOf(kind: 'source' | 'target', end: End): string {
-  if (end.side === 'right') return OUT_HANDLE;
-  if (end.side === 'left') return IN_HANDLE;
-  return handleId(kind, end.side, end.at ?? 50);
+  return handleId(kind, REAL_SIDE[end.side], nearestSpot(end.at ?? 50));
+}
+
+/** The end at the hidden handle `idOf` names, which the canvas measures. */
+function spotEnd(end: End): End {
+  return end.at === null ? end : { side: end.side, at: nearestSpot(end.at) };
 }
 
 /** Which sides a link leaves and enters by, and the kind of route between them. */
@@ -133,10 +207,10 @@ export function linkShape(
   to: WorkflowNode,
   a: Rect,
   b: Rect,
-  roles: GraphRoles,
+  rows: ReadonlyMap<WorkflowNodeId, number>,
 ): { source: End; target: End; kind: RouteKind } {
-  const ra = rowOf(from, roles);
-  const rb = rowOf(to, roles);
+  const ra = rows.get(from.id) ?? 0;
+  const rb = rows.get(to.id) ?? 0;
   const toRight = b.x + b.w / 2 >= a.x + a.w / 2;
   if (ra === rb) {
     if (e.type === 'rework') {
@@ -176,22 +250,41 @@ export function linkShape(
     };
   }
   if (rb > ra) {
+    // ADR-0040: a rework runs low on both blocks, apart from the work line through the middle.
+    const at = e.type === 'rework' ? 85 : 50;
     return {
-      source: { side: 'bottom', at: e.type === 'rework' ? (toRight ? 85 : 15) : 50 },
-      target: { side: 'top', at: 50 },
+      source: { side: 'bottom', at },
+      target: { side: 'top', at },
       kind: 'corridor',
     };
   }
-  // Up to an earlier row: off-centre on the sides that face each other, clear of the 50% lines.
+  // Back to an earlier row (a review, findings, a When route): high on both blocks, apart from the
+  // work line through the middle and the rework below it.
   return {
-    source: { side: 'top', at: toRight ? 70 : 30 },
-    target: { side: 'bottom', at: toRight ? 30 : 70 },
+    source: { side: 'top', at: 30 },
+    target: { side: 'bottom', at: 30 },
     kind: 'corridor',
   };
 }
 
-/** The route's corner points from `s` to `t` (straight when the two ends line up). */
+/**
+ * The route's corner points from `s` to `t` (straight when the two ends line up), on the real
+ * canvas: a `flip` route is laid out on the canvas turned on its side and turned back.
+ */
 export function routePoints(s: Point, t: Point, route: Route): Point[] {
+  if (route.flip !== true) return rawRoutePoints(s, t, route);
+  const a = turn(s);
+  const b = turn(t);
+  const shift = route.shift ?? { source: 0, target: 0 };
+  return rawRoutePoints(
+    { x: a.x + shift.source, y: a.y },
+    { x: b.x + shift.target, y: b.y },
+    route,
+  ).map(turn);
+}
+
+/** The route's corner points in the frame the route was planned in. */
+function rawRoutePoints(s: Point, t: Point, route: Route): Point[] {
   switch (route.kind) {
     case 'loop-top': {
       const y = Math.min(s.y, t.y) - route.lane;
@@ -210,6 +303,18 @@ export function routePoints(s: Point, t: Point, route: Route): Point[] {
       if (Math.abs(s.y - t.y) < 0.5) return [s, t];
       const x = (s.x + t.x) / 2 + route.lane;
       return [s, { x, y: s.y }, { x, y: t.y }, t];
+    }
+    case 'detour': {
+      const d = route.detour;
+      if (d === undefined) return [s, t];
+      return [
+        s,
+        { x: s.x, y: d.from },
+        { x: d.level, y: d.from },
+        { x: d.level, y: d.to },
+        { x: t.x, y: d.to },
+        t,
+      ];
     }
   }
 }
@@ -338,6 +443,8 @@ function lanesFor(kind: RouteKind, n: number): number[] {
       return Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * CORRIDOR_STEP);
     case 'side':
       return Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * SIDE_STEP);
+    case 'detour':
+      return Array.from({ length: n }, (_, i) => i * DETOUR_STEP);
   }
 }
 
@@ -351,19 +458,75 @@ interface Pending {
   group: string;
   /** Corridors: the shift that puts the lane in the middle of the gap between the two rows. */
   base: number;
+  /** Detours: the two gaps and the level round the rows between (planner coordinates). */
+  detour?: { from: number; to: number; level: number };
+  /** The two blocks' boxes (planner coordinates), to measure each end's shift from its handle. */
+  ar: Rect;
+  br: Rect;
 }
 
-/** Each row's vertical extent: from its highest block's top to its lowest block's bottom. */
+/**
+ * The gaps a link from row `ra` to row `rb` can run in, as their middles: the one just before the
+ * target's row first, then the one just after the source's (the same gap for neighbouring rows).
+ */
+function gapsBetween(
+  bands: ReadonlyMap<number, { top: number; bottom: number }>,
+  ra: number,
+  rb: number,
+): { mid: number; after: number }[] {
+  const rows = [...bands.keys()].sort((x, y) => x - y);
+  const lo = Math.min(ra, rb);
+  const hi = Math.max(ra, rb);
+  const between = rows.filter((r) => r >= lo && r <= hi);
+  const gap = (i: number) => {
+    const a = between[i];
+    const b = between[i + 1];
+    const ba = a === undefined ? undefined : bands.get(a);
+    const bb = b === undefined ? undefined : bands.get(b);
+    return a === undefined || ba === undefined || bb === undefined
+      ? undefined
+      : { mid: (ba.bottom + bb.top) / 2, after: a };
+  };
+  const last = between.length - 2;
+  // Towards the target: for a link going down that is the last gap, going up the first.
+  const nearTarget = rb > ra ? gap(last) : gap(0);
+  const nearSource = rb > ra ? gap(0) : gap(last);
+  return [nearTarget, nearSource].filter(
+    (g, i, all): g is { mid: number; after: number } =>
+      g !== undefined && all.findIndex((x) => x?.after === g.after) === i,
+  );
+}
+
+/** Whether a route runs through a block other than its own two ends. */
+function crossesBlocks(
+  points: readonly Point[],
+  blocks: readonly { id: string; r: Rect }[],
+  ends: readonly string[],
+): boolean {
+  for (const seg of segmentsOf(points)) {
+    const x1 = Math.min(seg.a.x, seg.b.x);
+    const x2 = Math.max(seg.a.x, seg.b.x);
+    const y1 = Math.min(seg.a.y, seg.b.y);
+    const y2 = Math.max(seg.a.y, seg.b.y);
+    for (const { id, r } of blocks) {
+      if (ends.includes(id)) continue;
+      if (x2 > r.x + 1 && x1 < r.x + r.w - 1 && y2 > r.y + 1 && y1 < r.y + r.h - 1) return true;
+    }
+  }
+  return false;
+}
+
+/** Each row's extent (a column's, on the turned canvas): from its first block to its last. */
 function rowBands(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
-  roles: GraphRoles,
+  rows: ReadonlyMap<WorkflowNodeId, number>,
 ): Map<number, { top: number; bottom: number }> {
   const bands = new Map<number, { top: number; bottom: number }>();
   for (const node of graph.nodes) {
     const r = rectOf(node, positions);
     if (r === undefined) continue;
-    const row = rowOf(node, roles);
+    const row = rows.get(node.id) ?? 0;
     const band = bands.get(row);
     bands.set(row, {
       top: Math.min(band?.top ?? Infinity, r.y),
@@ -375,20 +538,25 @@ function rowBands(
 
 /**
  * Every link's handles and route for the blocks at `positions`. Links whose blocks are missing
- * (a refused link to an unknown block) get the side handles and no lane. `roles` are the stored
- * graph's: the drawn graph (the Finish view) redraws the final chain's links. `labels` are the
- * links' label texts, placed so they cover no block and no other label.
+ * (a refused link to an unknown block) get the side handles and no lane. `rows` are the blocks'
+ * columns (`columnIndexOf`) of the stored graph: the drawn graph (the Finish view) redraws the
+ * final chain's links. `labels` are the links' label texts, placed so they cover no block and no
+ * other label.
  */
 export function planLinks(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
-  roles: GraphRoles = graphRoles(graph),
+  rows: ReadonlyMap<WorkflowNodeId, number> = columnIndexOf(graph),
   labels: ReadonlyMap<string, string> = new Map(),
 ): Map<string, PlannedLink> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const out = new Map<string, PlannedLink>();
   const pending: Pending[] = [];
-  const bands = rowBands(graph, positions, roles);
+  const bands = rowBands(graph, positions, rows);
+  const blocks = graph.nodes.flatMap((n) => {
+    const r = rectOf(n, positions);
+    return r === undefined ? [] : [{ id: n.id, r }];
+  });
   const shaped: {
     e: WorkflowEdge;
     from: WorkflowNode;
@@ -411,12 +579,31 @@ export function planLinks(
       });
       continue;
     }
-    shaped.push({ e, from, to, a, b, shape: linkShape(e, from, to, a, b, roles) });
+    shaped.push({ e, from, to, a, b, shape: linkShape(e, from, to, a, b, rows) });
   }
-  moveSharedSpots(shaped);
+  // The links that will go round the rows they skip (no gap between gets them through clear).
+  const detours = new Set(
+    shaped
+      .filter(({ e, a, b, shape }) => {
+        const ra = rows.get(e.from) ?? 0;
+        const rb = rows.get(e.to) ?? 0;
+        if (shape.kind !== 'corridor' || Math.abs(ra - rb) < 2) return false;
+        const s = endPoint(a, shape.source);
+        const t = endPoint(b, shape.target);
+        return gapsBetween(bands, ra, rb).every((g) =>
+          crossesBlocks(
+            rawRoutePoints(s, t, { kind: 'corridor', lane: g.mid - (s.y + t.y) / 2 }),
+            blocks,
+            [e.from, e.to],
+          ),
+        );
+      })
+      .map(({ e }) => e.id),
+  );
+  spreadEnds(shaped, detours);
   for (const { e, from, to, a, b, shape } of shaped) {
-    const ra = rowOf(from, roles);
-    const rb = rowOf(to, roles);
+    const ra = rows.get(from.id) ?? 0;
+    const rb = rows.get(to.id) ?? 0;
     const group =
       shape.kind === 'loop-top'
         ? `top-${ra}`
@@ -427,15 +614,77 @@ export function planLinks(
             : `side-${ra}`;
     const s = endPoint(a, shape.source);
     const t = endPoint(b, shape.target);
-    // A link between rows runs along the middle of the gap between them, not the middle of its
-    // own two ends: an end on a stacked block would otherwise put the lane across the stack.
-    const upper = bands.get(Math.min(ra, rb));
-    const lower = bands.get(Math.max(ra, rb));
-    const base =
-      shape.kind === 'corridor' && ra !== rb && upper !== undefined && lower !== undefined
-        ? (upper.bottom + lower.top) / 2 - (s.y + t.y) / 2
-        : 0;
-    pending.push({ edge: e, ...shape, s, t, group, base });
+    // A link between rows runs along the middle of a gap between them, not the middle of its
+    // own two ends: an end on a stacked block would otherwise put the lane across the stack. A
+    // link that skips a row (a column, on the canvas) takes the gap just before its target, or
+    // just after its source when that one crosses no block, never the middle of a row it skips.
+    let base = 0;
+    let lanes = group;
+    let kind: RouteKind = shape.kind;
+    let detour: Pending['detour'];
+    if (shape.kind === 'corridor' && ra !== rb) {
+      const gaps = gapsBetween(bands, ra, rb);
+      const pick =
+        gaps.find(
+          (g) =>
+            !crossesBlocks(
+              rawRoutePoints(s, t, { kind: 'corridor', lane: g.mid - (s.y + t.y) / 2 }),
+              blocks,
+              [e.from, e.to],
+            ),
+        ) ?? gaps[0];
+      // Decided before the ends were spread out (`detours`), so the ends and the route agree.
+      const clear = !detours.has(e.id);
+      const near = gaps[0];
+      const far = gaps[gaps.length - 1];
+      if (!clear && near !== undefined && far !== undefined && gaps.length > 1) {
+        // Every lane runs through a block of a row it skips: go round the rows between.
+        const between = blocks.filter(({ id }) => {
+          const row = rows.get(id) ?? 0;
+          return row > Math.min(ra, rb) && row < Math.max(ra, rb);
+        });
+        const lo = Math.min(...between.map((b) => b.r.x));
+        const hi = Math.max(...between.map((b) => b.r.x + b.r.w));
+        const mid = (s.x + t.x) / 2;
+        // Below the rows between, where its ends sit (`spreadEnds`).
+        const level = Math.max(hi, lo) + DETOUR_MARGIN;
+        kind = 'detour';
+        // Down close to the source's row, up close to the target's: clear of the lanes in the
+        // middle of those gaps, and of the links above it on its two sides (`spreadEnds`).
+        const sourceBand = bands.get(ra);
+        const targetBand = bands.get(rb);
+        const down = rb > ra;
+        const from =
+          sourceBand === undefined
+            ? far.mid
+            : down
+              ? sourceBand.bottom + EDGE_LANE
+              : sourceBand.top - EDGE_LANE;
+        const to =
+          targetBand === undefined
+            ? near.mid
+            : down
+              ? targetBand.top - EDGE_LANE
+              : targetBand.bottom + EDGE_LANE;
+        detour = { from, to, level };
+        lanes = `detour-${level < mid ? 'low' : 'high'}`;
+      } else if (pick !== undefined) {
+        base = pick.mid - (s.y + t.y) / 2;
+        lanes = `gap-${pick.after}`;
+      }
+    }
+    pending.push({
+      edge: e,
+      ...shape,
+      ar: a,
+      br: b,
+      kind,
+      s,
+      t,
+      group: lanes,
+      base,
+      ...(detour !== undefined ? { detour } : {}),
+    });
   }
 
   const ends = (p: Pending) => [
@@ -446,11 +695,18 @@ export function planLinks(
   const finish = (p: Pending, lane: number) => {
     // A side lane stays inside the gap between the two blocks.
     const room = Math.max(0, Math.abs(p.t.x - p.s.x) / 2 - 8);
+    const shift = {
+      source: p.s.x - endPoint(p.ar, spotEnd(p.source)).x,
+      target: p.t.x - endPoint(p.br, spotEnd(p.target)).x,
+    };
     const route: Route = {
       kind: p.kind,
       lane: p.kind === 'side' ? Math.max(-room, Math.min(room, lane)) : lane,
+      flip: true,
+      ...(Math.abs(shift.source) > 0.05 || Math.abs(shift.target) > 0.05 ? { shift } : {}),
+      ...(p.detour !== undefined ? { detour: laneDetour(p.detour, lane) } : {}),
     };
-    placed.push({ id: p.edge.id, points: routePoints(p.s, p.t, route), ends: ends(p) });
+    placed.push({ id: p.edge.id, points: rawRoutePoints(p.s, p.t, route), ends: ends(p) });
     out.set(p.edge.id, {
       id: p.edge.id,
       sourceHandle: idOf('source', p.source),
@@ -475,15 +731,19 @@ export function planLinks(
     for (const m of members.filter((x) => !bending.includes(x))) finish(m, 0);
     const lanes = lanesFor(kind, bending.length);
     const orders =
-      bending.length <= MAX_PERMUTED ? permutations(bending.length) : [bending.map((_, i) => i)];
+      bending.length <= MAX_PERMUTED
+        ? permutations(bending.length)
+        : greedyOrders(bending, lanes, kind, placed, ends);
     let best = orders[0] ?? [];
     let bestScore = Infinity;
     for (const order of orders) {
-      const drawn = bending.map((m, i) => ({
-        id: m.edge.id,
-        points: routePoints(m.s, m.t, { kind, lane: m.base + (lanes[order[i] ?? i] ?? 0) }),
-        ends: ends(m),
-      }));
+      const drawn = bending.map((m, i) => {
+        const lane = m.base + (lanes[order[i] ?? i] ?? 0);
+        const d = m.detour;
+        const route: Route =
+          d === undefined ? { kind, lane } : { kind, lane, detour: laneDetour(d, lane) };
+        return { id: m.edge.id, points: rawRoutePoints(m.s, m.t, route), ends: ends(m) };
+      });
       let score = countConflicts(drawn);
       for (const d of drawn) for (const q of placed) score += conflicts(d, q);
       if (score < bestScore) {
@@ -527,13 +787,14 @@ function placeLabels(
   out: Map<string, PlannedLink>,
   labels: ReadonlyMap<string, string>,
 ): void {
-  const blocks = graph.nodes.flatMap((n) => rectOf(n, positions) ?? []);
+  const blocks = graph.nodes.flatMap((n) => realRectOf(n, positions) ?? []);
   const taken: Box[] = [];
   for (const p of pending) {
     const text = labels.get(p.edge.id);
     const link = out.get(p.edge.id);
     if (text === undefined || link === undefined) continue;
-    const points = routePoints(p.s, p.t, link.route);
+    // Labels are read on the real canvas.
+    const points = rawRoutePoints(p.s, p.t, link.route).map(turn);
     const segments = segmentsOf(points)
       .map((seg, i) => ({ i, len: Math.abs(seg.a.x - seg.b.x) + Math.abs(seg.a.y - seg.b.y) }))
       .filter((x) => x.len > 0)
@@ -561,13 +822,18 @@ export function labelOverlaps(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
   labels: ReadonlyMap<string, string>,
-  plan: ReadonlyMap<string, PlannedLink> = planLinks(graph, positions, graphRoles(graph), labels),
-  roles: GraphRoles = graphRoles(graph),
+  plan: ReadonlyMap<string, PlannedLink> = planLinks(
+    graph,
+    positions,
+    columnIndexOf(graph),
+    labels,
+  ),
+  rows: ReadonlyMap<WorkflowNodeId, number> = columnIndexOf(graph),
 ): { blocks: number; labels: number } {
-  const blocks = graph.nodes.flatMap((n) => rectOf(n, positions) ?? []);
+  const blocks = graph.nodes.flatMap((n) => realRectOf(n, positions) ?? []);
   const boxes: Box[] = [];
   const count = { blocks: 0, labels: 0 };
-  for (const d of drawnLinks(graph, positions, plan, roles)) {
+  for (const d of drawnLinks(graph, positions, plan, rows)) {
     const text = labels.get(d.id);
     if (text === undefined) continue;
     const box = labelBox(text, labelPoint(d.points, plan.get(d.id)?.route.labelAt), 0);
@@ -578,43 +844,172 @@ export function labelOverlaps(
   return count;
 }
 
+/** Which links meeting one side of a block sit first: links back above, the work, then rework. */
+const END_RANK: Readonly<Record<WorkflowEdge['type'], number>> = {
+  review: 0,
+  findings: 0,
+  when: 0,
+  flow: 1,
+  plan: 1,
+  implement: 1,
+  merge: 1,
+  test: 1,
+  research: 1,
+  custom: 1,
+  rework: 2,
+};
+
 /**
- * A link that leaves a block where another arrives (the lead's top centre, say, with the ticket's
- * link coming in and a link to a helper on its left going out) would run over it, so the leaving
- * link moves to the nearest free spot on that side, towards where it heads.
+ * ADR-0040: the links meeting one side of a block are spaced out evenly along it, in the order of
+ * the blocks at their other ends (and links back, the work, then rework for the same block), so the
+ * links to and from one block run as a parallel bundle and no two cross where they meet a block.
  */
-function moveSharedSpots(
+function spreadEnds(
   shaped: readonly { e: WorkflowEdge; a: Rect; b: Rect; shape: { source: End; target: End } }[],
+  detours: ReadonlySet<string>,
 ): void {
-  const key = (node: string, end: End) => `${node}:${end.side}:${end.at ?? 50}`;
-  const vertical = (end: End) => end.side === 'top' || end.side === 'bottom';
-  const arriving = new Set(
-    shaped.filter((x) => vertical(x.shape.target)).map((x) => key(x.e.to, x.shape.target)),
-  );
-  for (const { e, a, b, shape } of shaped) {
-    if (!vertical(shape.source) || !arriving.has(key(e.from, shape.source))) continue;
-    const at = shape.source.at ?? 50;
-    const left = b.x + b.w / 2 < a.x + a.w / 2;
-    const towards = HANDLE_SPOTS.filter((x) => (left ? x < at : x > at));
-    const away = HANDLE_SPOTS.filter((x) => (left ? x > at : x < at));
-    const order = [
-      ...(left ? [...towards].reverse() : towards),
-      ...(left ? away : [...away].reverse()),
-    ];
-    const free = order.find((x) => !arriving.has(key(e.from, { side: shape.source.side, at: x })));
-    if (free !== undefined) shape.source = { side: shape.source.side, at: free };
+  const groups = new Map<
+    string,
+    { other: number; rank: number; skip: number; order: number; set: (at: number) => void }[]
+  >();
+  shaped.forEach(({ e, a, b, shape }, order) => {
+    for (const which of ['source', 'target'] as const) {
+      const end = shape[which];
+      if (end.side !== 'top' && end.side !== 'bottom') continue;
+      const node = which === 'source' ? e.from : e.to;
+      const other = which === 'source' ? b : a;
+      const key = `${node}:${end.side}`;
+      const list = groups.get(key) ?? [];
+      list.push({
+        other: other.x + other.w / 2,
+        rank: END_RANK[e.type],
+        // A link that goes round the rows it skips runs below them, so it sits last on its sides.
+        skip: detours.has(e.id) ? 1 : 0,
+        order,
+        set: (at) => {
+          shape[which] = { side: end.side, at };
+        },
+      });
+      groups.set(key, list);
+    }
+  });
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort(
+      (x, y) => x.skip - y.skip || x.other - y.other || x.rank - y.rank || x.order - y.order,
+    );
+    list.forEach((item, i) => item.set(12 + (76 * (i + 0.5)) / list.length));
   }
 }
 
-/** The end a stored handle id stands for (`idOf` in reverse). */
+/**
+ * Lane orders for a group too big to try every order: the greedy order (then improved by swaps)
+ * from a few starting orders of the links, along each side either way; the caller keeps the best.
+ */
+function greedyOrders(
+  members: readonly Pending[],
+  lanes: readonly number[],
+  kind: RouteKind,
+  placed: readonly Drawn[],
+  ends: (p: Pending) => string[],
+): number[][] {
+  const index = members.map((_, i) => i);
+  const starts = [
+    index,
+    [...index].sort((a, b) => (members[a]?.s.x ?? 0) - (members[b]?.s.x ?? 0)),
+    [...index].sort((a, b) => (members[b]?.s.x ?? 0) - (members[a]?.s.x ?? 0)),
+    [...index].sort((a, b) => (members[a]?.t.x ?? 0) - (members[b]?.t.x ?? 0)),
+    [...index].sort((a, b) => (members[b]?.t.x ?? 0) - (members[a]?.t.x ?? 0)),
+  ];
+  return starts.map((start) => {
+    const picked = greedyOrder(
+      start.flatMap((i) => (members[i] === undefined ? [] : [members[i]])),
+      lanes,
+      kind,
+      placed,
+      ends,
+    );
+    // Back to the members' own order.
+    const order = new Array<number>(members.length).fill(0);
+    start.forEach((i, k) => {
+      order[i] = picked[k] ?? 0;
+    });
+    return order;
+  });
+}
+
+/** Lanes for a group too big to try every order: each link takes the lane that crosses least. */
+function greedyOrder(
+  members: readonly Pending[],
+  lanes: readonly number[],
+  kind: RouteKind,
+  placed: readonly Drawn[],
+  ends: (p: Pending) => string[],
+): number[] {
+  const free = lanes.map((_, i) => i);
+  const drawn: Drawn[] = [...placed];
+  const order = members.map((m) => {
+    let pick = free[0] ?? 0;
+    let least = Infinity;
+    for (const i of free) {
+      const points = rawRoutePoints(m.s, m.t, { kind, lane: m.base + (lanes[i] ?? 0) });
+      const d = { id: m.edge.id, points, ends: ends(m) };
+      let n = 0;
+      for (const q of drawn) n += conflicts(d, q);
+      if (n < least) {
+        least = n;
+        pick = i;
+      }
+    }
+    free.splice(free.indexOf(pick), 1);
+    drawn.push({
+      id: m.edge.id,
+      points: rawRoutePoints(m.s, m.t, { kind, lane: m.base + (lanes[pick] ?? 0) }),
+      ends: ends(m),
+    });
+    return pick;
+  });
+  // Then swap two links' lanes while that crosses less.
+  const score = (order: readonly number[]) => {
+    const list = members.map((m, i) => ({
+      id: m.edge.id,
+      points: rawRoutePoints(m.s, m.t, { kind, lane: m.base + (lanes[order[i] ?? i] ?? 0) }),
+      ends: ends(m),
+    }));
+    let n = countConflicts(list);
+    for (const d of list) for (const q of placed) n += conflicts(d, q);
+    return n;
+  };
+  let best = score(order);
+  for (let improved = true; improved && best > 0;) {
+    improved = false;
+    for (let i = 0; i < order.length; i++) {
+      for (let j = i + 1; j < order.length; j++) {
+        const next = [...order];
+        [next[i], next[j]] = [next[j] ?? 0, next[i] ?? 0];
+        const n = score(next);
+        if (n < best) {
+          best = n;
+          order.splice(0, order.length, ...next);
+          improved = true;
+        }
+      }
+    }
+  }
+  return order;
+}
+
+/** The end of the turned canvas a stored handle id stands for (`idOf` in reverse). */
 function endOf(handle: string): End | undefined {
-  if (handle === OUT_HANDLE) return { side: 'right', at: null };
-  if (handle === IN_HANDLE) return { side: 'left', at: null };
-  const m = /^[st]-(top|bottom)-(\d+)$/.exec(handle);
+  if (handle === OUT_HANDLE) return { side: 'bottom', at: 50 };
+  if (handle === IN_HANDLE) return { side: 'top', at: 50 };
+  const m = /^[st]-(top|bottom|left|right)-(\d+)$/.exec(handle);
   const at = HANDLE_SPOTS.find((x) => String(x) === m?.[2]);
-  return m !== null && at !== undefined
-    ? { side: m[1] === 'top' ? 'top' : 'bottom', at }
-    : undefined;
+  const real = m?.[1] as Side | undefined;
+  if (real === undefined || at === undefined) return undefined;
+  const side = (Object.keys(REAL_SIDE) as Side[]).find((k) => REAL_SIDE[k] === real) ?? 'top';
+  // A turned side's middle (the real top or bottom) has no spot of its own.
+  return { side, at: side === 'left' || side === 'right' ? null : at };
 }
 
 /** The drawn routes of a plan, for tests that count crossings. */
@@ -622,7 +1017,7 @@ export function drawnLinks(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
   plan: ReadonlyMap<string, PlannedLink> = planLinks(graph, positions),
-  roles: GraphRoles = graphRoles(graph),
+  rows: ReadonlyMap<WorkflowNodeId, number> = columnIndexOf(graph),
 ): Drawn[] {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const out: Drawn[] = [];
@@ -633,13 +1028,17 @@ export function drawnLinks(
     const a = from === undefined ? undefined : rectOf(from, positions);
     const b = to === undefined ? undefined : rectOf(to, positions);
     if (link === undefined || from === undefined || to === undefined || !a || !b) continue;
-    const shape = linkShape(e, from, to, a, b, roles);
+    const shape = linkShape(e, from, to, a, b, rows);
     // The plan's handles, which may have moved off a shared spot.
     const source = endOf(link.sourceHandle) ?? shape.source;
     const target = endOf(link.targetHandle) ?? shape.target;
     out.push({
       id: e.id,
-      points: routePoints(endPoint(a, source), endPoint(b, target), link.route),
+      points: routePoints(
+        turn(endPoint(a, spotEnd(source))),
+        turn(endPoint(b, spotEnd(target))),
+        link.route,
+      ),
       ends: [`${e.from}:${link.sourceHandle}`, `${e.to}:${link.targetHandle}`],
     });
   }

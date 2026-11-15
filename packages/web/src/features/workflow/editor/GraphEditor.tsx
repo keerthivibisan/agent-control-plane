@@ -71,6 +71,7 @@ import {
 } from './linking';
 import { blockNodeTypes, type BlockNode } from './nodes';
 import { Palette } from './Palette';
+import { StageHeaders } from './StageHeaders';
 import { tidyGraph, type EditorAction, type Selection } from './state';
 
 const G = WORKFLOW_GRAPH_COPY;
@@ -793,14 +794,28 @@ function Canvas({
   );
   const onNodeMouseEnter = useCallback(
     (_: ReactMouseEvent, node: BlockNode) => {
-      if (store.get().mode === 'click') store.set({ snap: node.id });
+      store.set({ hover: node.id, ...(store.get().mode === 'click' ? { snap: node.id } : {}) });
     },
     [store],
   );
   const onNodeMouseLeave = useCallback(
     (_: ReactMouseEvent, node: BlockNode) => {
       const s = store.get();
-      if (s.mode === 'click' && s.snap === node.id) store.set({ snap: null });
+      store.set({
+        ...(s.hover === node.id ? { hover: null } : {}),
+        ...(s.mode === 'click' && s.snap === node.id ? { snap: null } : {}),
+      });
+    },
+    [store],
+  );
+  // ADR-0040: a link under the pointer lights up with its direction.
+  const onEdgeMouseEnter = useCallback(
+    (_: ReactMouseEvent, edge: LinkEdge) => store.set({ hover: `edge:${edge.id}` }),
+    [store],
+  );
+  const onEdgeMouseLeave = useCallback(
+    (_: ReactMouseEvent, edge: LinkEdge) => {
+      if (store.get().hover === `edge:${edge.id}`) store.set({ hover: null });
     },
     [store],
   );
@@ -910,6 +925,8 @@ function Canvas({
             onNodeClick={onNodeClick}
             onNodeMouseEnter={onNodeMouseEnter}
             onNodeMouseLeave={onNodeMouseLeave}
+            onEdgeMouseEnter={onEdgeMouseEnter}
+            onEdgeMouseLeave={onEdgeMouseLeave}
             onNodeContextMenu={onNodeContextMenu}
             onPaneClick={onPaneClick}
             connectionLineComponent={LinkConnectionLine}
@@ -931,6 +948,7 @@ function Canvas({
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
             <FitOnChange shape={shape} />
             <FocusOn request={focus} graph={graph} />
+            <StageHeaders graph={graph} positions={positions} />
           </ReactFlow>
         </div>
         <p id="graph-editor-hint" className="sr-only">
@@ -1062,11 +1080,15 @@ interface GraphEditorProps {
   dispatch: Dispatch<HistoryAction>;
   focus: FocusRequest | null;
   history: HistoryInfo;
+  /** ADR-0040: the blocks and links a selected playbook step lights. */
+  stepFocus?: { nodes: readonly string[]; edges: readonly string[] } | null;
 }
 
 function EditorBox(props: GraphEditorProps) {
   const [legendOpen, setLegendOpen] = useLegendOpen();
   const [store] = useState(createLinkStore);
+  const stepFocus = props.stepFocus ?? null;
+  useEffect(() => store.set({ focus: stepFocus }), [store, stepFocus]);
   const tidyRef = useRef<(() => void) | null>(null);
   const tidy = useCallback(() => tidyRef.current?.(), []);
   useUndoKeys(props.dispatch);

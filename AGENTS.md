@@ -45,6 +45,10 @@ agent sessions. The first provider is Claude Code. Overview: [README.md](README.
   `feature/workflow/ticket-types`. Agent blocks that run only for some ticket types, runs that
   follow their ticket's type, and a behaviour-driven (BDD) template. Plan and status:
   [docs/ticket-types/](docs/ticket-types/README.md).
+- **The run map (RM series, ADR-0040 accepted 2026-11-15):** done 2026-11-15 on
+  `feature/workflow/run-map`. The lead's playbook (the workflow in run order, in the lead's brief
+  and beside the canvas), stage columns on the canvas, link colours by family and "When to use" on
+  every block. Plan and status: [docs/run-map/](docs/run-map/README.md).
 - **How it was built:** mostly by coding agents under these rules. The plans of earlier series are
   in [docs/history/](docs/history/README.md), kept for provenance; they are not instructions.
 - **Out of scope until their phase starts** ([docs/roadmap.md](docs/roadmap.md)):

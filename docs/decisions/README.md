@@ -45,3 +45,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0037](0037-agent-blocks-and-typed-arrows.md)              | One Agent block, roles from typed arrows (workflow graph v3)   | accepted |
 | [0038](0038-failure-routing-with-when-arrows.md)           | Failure routing with When arrows                               | accepted |
 | [0039](0039-workflow-blocks-by-ticket-type.md)             | Workflow blocks by ticket type                                 | accepted |
+| [0040](0040-run-map-playbook-and-stage-columns.md)         | The run map: playbook, stage columns, link colours             | accepted |

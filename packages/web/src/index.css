@@ -380,3 +380,18 @@
   stroke: var(--color-panel);
   stroke-width: 2px;
 }
+
+/* ADR-0040: a lit workflow link shows its direction with a light dash moving from start to end. */
+@keyframes acp-link-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+.acp-link-flow {
+  animation: acp-link-flow 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .acp-link-flow {
+    animation: none;
+  }
+}

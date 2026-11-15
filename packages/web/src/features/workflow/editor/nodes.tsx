@@ -90,6 +90,11 @@ export interface BlockData {
   linkTarget: LinkTarget | null;
   /** The Finish block's target branch; null: not known ("your target branch"). */
   target: string | null;
+  /**
+   * ADR-0040: an Agent block's "When to use": the owner's text, else what starts it ("Runs before
+   * the plan"); null for the lead and the steps.
+   */
+  useWhen: { text: string; own: boolean } | null;
 }
 
 export type BlockNode = Node<BlockData, 'agent' | 'gate' | 'finish'>;
@@ -210,6 +215,13 @@ const SIDES = [
   { side: 'bottom', position: Position.Bottom, id: 'c-bottom' },
 ] as const;
 
+const HANDLE_POSITION = {
+  top: Position.Top,
+  bottom: Position.Bottom,
+  left: Position.Left,
+  right: Position.Right,
+} as const;
+
 function BlockHandles({
   node,
   label,
@@ -291,17 +303,18 @@ function BlockHandles({
             );
           })
         : null}
-      {(['top', 'bottom'] as const).map((side) =>
+      {(['top', 'bottom', 'left', 'right'] as const).map((side) =>
         HANDLE_SPOTS.map((at) =>
           (['source', 'target'] as const).map((kind) => (
             <Handle
               key={`${side}-${at}-${kind}`}
               type={kind}
-              position={side === 'top' ? Position.Top : Position.Bottom}
+              position={HANDLE_POSITION[side]}
               id={handleId(kind, side, at)}
               isConnectable={false}
               className={HIDDEN_HANDLE}
-              style={{ left: `${at}%` }}
+              // ADR-0040: links reach the left and right sides too, in the stage columns.
+              style={side === 'top' || side === 'bottom' ? { left: `${at}%` } : { top: `${at}%` }}
             />
           )),
         ),
@@ -539,6 +552,15 @@ export const AgentBlockView = memo(function AgentBlockView({
       <span className="truncate leading-5 font-semibold" data-testid="block-label">
         {node.label}
       </span>
+      {data.useWhen !== null ? (
+        <span
+          className={`-mt-1 truncate text-caption leading-4 ${data.useWhen.own ? 'text-ink' : 'text-dim italic'}`}
+          title={data.useWhen.text}
+          data-testid="block-use-when"
+        >
+          {data.useWhen.text}
+        </span>
+      ) : null}
       <p
         className="flex min-w-0 items-baseline gap-1.5 text-caption leading-4"
         data-testid="block-model"

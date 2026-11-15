@@ -441,8 +441,12 @@ family tree and the legacy control tree draw agents the way the logo does (owner
 - **The controller stands out:** the lead (and the root of a sessions graph) is framed in `ink`;
   other agents in `line`.
 - **Straight connectors:** React Flow edges are `step` (straight segments, square corners); the CSS
-  trees draw straight elbows in `line-strong`. Lines are neutral (`dim`, `ink`); kinds differ by
-  dashes, never by the accent.
+  trees draw straight elbows in `line-strong`. Workflow links (ADR-0040, amended 2026-11-15) come
+  in families with their own colour: work neutral (`dim`, `ink`), review teal (`token-cache-read`),
+  fixes orange for rework and `danger` for a When failure route (`token-output`), research and
+  tests purple (`done`). The kinds within a family still differ by dashes, so colour is never the
+  only signal, and never the accent. A link under the pointer, or one of the block under it, is
+  drawn thicker with a light dash moving from start to end (no motion under reduced motion).
 - **The accent means working or selected, nothing else** (blue since v3; it was lime): a working
   agent has an `accent-fill` top edge; the selected node an `accent-fill-edge` border with a soft
   `accent` ring (25%); the live workflow's working stage an accent outline with a soft accent

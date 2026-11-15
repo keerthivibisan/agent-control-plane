@@ -9,6 +9,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The run map** (ADR-0040). The Workflow canvas reads left to right in run order: Tidy layout
+  puts each block in its numbered stage column, links are coloured by family (work, review, rework,
+  When, research and tests) with larger arrowheads, and pointing at a block or link lights its
+  links with their direction. Every block shows when it is used ("When to use", or what starts
+  it). The "Lead's playbook" below the canvas replaces Flow in words: the workflow step by step,
+  exactly what the lead reads in its brief.
 - **Workflows by ticket type and a BDD template** (ADR-0039). An Agent block can run only for
   some ticket types ("Runs for" in its settings, shown as a chip such as "Feature only"); a
   ticket's run uses only the blocks its type runs, and the editor refuses a workflow that a ticket
