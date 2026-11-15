@@ -44,3 +44,4 @@ accepts or rejects it. Copy [0000-template.md](0000-template.md).
 | [0036](0036-removing-a-project.md)                         | Removing a project from ACP                                    | accepted |
 | [0037](0037-agent-blocks-and-typed-arrows.md)              | One Agent block, roles from typed arrows (workflow graph v3)   | accepted |
 | [0038](0038-failure-routing-with-when-arrows.md)           | Failure routing with When arrows                               | accepted |
+| [0039](0039-workflow-blocks-by-ticket-type.md)             | Workflow blocks by ticket type                                 | accepted |

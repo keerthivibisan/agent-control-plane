@@ -9,6 +9,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Workflows by ticket type and a BDD template** (ADR-0039). An Agent block can run only for
+  some ticket types ("Runs for" in its settings, shown as a chip such as "Feature only"); a
+  ticket's run uses only the blocks its type runs, and the editor refuses a workflow that a ticket
+  type could not run. New template "Behaviour-driven (BDD)": for a feature ticket a behaviour
+  analyst writes the scenarios first, then scenario tests and the code are written at the same
+  time and a tester runs everything together; bug and other tickets skip the analysis and the
+  scenario tests.
+- **Workflow canvas** labels never cover each other, and a link leaving a block never runs over
+  one arriving at the same spot.
 - **Failure routing with When arrows** (ADR-0038). A tester reports structured test results
   (`report_test_results`, shown as a "Test results" box). Every failure (tests, checks, a harness
   that cannot run, review rework, a merge conflict) comes with a failure context naming the likely
