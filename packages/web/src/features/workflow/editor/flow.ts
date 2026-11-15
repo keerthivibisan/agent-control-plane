@@ -198,7 +198,18 @@ export function toFlowEdges(
       .filter((i) => i.edgeId !== undefined && REFUSED_CODES.has(i.code))
       .map((i) => i.edgeId),
   );
-  const plan = planLinks(view.graph, positions, graphRoles(graph));
+  // The owner's label (ADR-0037 §2) on the canvas; a rework arrow keeps its rounds next to it,
+  // a When arrow its events and rounds (ADR-0038 §4).
+  const linkLabels = new Map<string, string>();
+  for (const e of view.graph.edges) {
+    const rounds = roundsText(e);
+    const label =
+      e.label !== undefined && rounds !== undefined
+        ? `${e.label} · ${rounds}`
+        : (e.label ?? rounds);
+    if (label !== undefined) linkLabels.set(e.id, label);
+  }
+  const plan = planLinks(view.graph, positions, graphRoles(graph), linkLabels);
   return view.graph.edges.map((e) => {
     const selected = selection?.kind === 'edge' && selection.id === e.id;
     const refused = refusedIds.has(e.id);
@@ -208,13 +219,7 @@ export function toFlowEdges(
       connecting ||
       (selection?.kind === 'node' && e.from !== selection.id && e.to !== selection.id) ||
       (selection?.kind === 'edge' && !selected);
-    // The owner's label (ADR-0037 §2) on the canvas; a rework arrow keeps its rounds next to it,
-    // a When arrow its events and rounds (ADR-0038 §4).
-    const rounds = roundsText(e);
-    const label =
-      e.label !== undefined && rounds !== undefined
-        ? `${e.label} · ${rounds}`
-        : (e.label ?? rounds);
+    const label = linkLabels.get(e.id);
     return {
       id: e.id,
       source: e.from,

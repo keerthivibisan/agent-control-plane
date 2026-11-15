@@ -85,7 +85,7 @@ export const LinkEdgeView = memo(function LinkEdgeView({
   const look = EDGE_LOOK[data.type];
   const isSelected = selected === true;
   const stroke = linkStroke(data.type, isSelected, data.refused);
-  const at = labelPoint(points);
+  const at = labelPoint(points, data.route.labelAt);
   return (
     <g opacity={dim ? 0.3 : 1} data-link={data.type} className="transition-opacity">
       {data.purpose !== undefined ? <title>{data.purpose}</title> : null}

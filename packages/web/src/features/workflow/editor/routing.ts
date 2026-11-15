@@ -18,7 +18,8 @@ type WorkflowNode = WorkflowNodeV3;
  * tested without a canvas; the canvas's edge view (`edges.tsx`) draws the same route from the
  * handles' live positions, so a moved block keeps its links tidy.
  *
- * - **Forward links in a row** join side to side (right edge → left edge).
+ * - **Forward links in a row** join side to side (right edge → left edge); several that bend in one
+ *   row get different lanes.
  * - **Links between rows** leave by the bottom or top and run along a lane in the gap between the
  *   rows; links that share a gap get different lanes.
  * - **Links that go back in a row** loop: findings and reviews over the top, rework underneath.
@@ -30,6 +31,10 @@ type WorkflowNode = WorkflowNodeV3;
  * Lanes: for each group (a gap between two rows, the loops over or under one row) every order of
  * its links over the group's lanes is tried, and the one with the fewest crossings with the links
  * already placed wins (the first such order on ties, so the drawing is deterministic).
+ *
+ * Labels: placed after the routes, on the first spot along the link (the middle of its longest
+ * run first) that covers no block and no label placed before it, so two labelled links between
+ * the same blocks never stack their labels.
  */
 
 export type Side = 'top' | 'bottom' | 'left' | 'right';
@@ -39,6 +44,8 @@ export interface Route {
   kind: RouteKind;
   /** Side and corridor: the shift from the midpoint; loops: how far out the loop runs. */
   lane: number;
+  /** Where the label sits: a segment of the route and how far along it (0 to 1). */
+  labelAt?: { segment: number; t: number };
 }
 
 export interface Point {
@@ -81,6 +88,12 @@ interface Rect {
 const LOOP_TOP = { first: 18, step: 12 };
 const LOOP_BOTTOM = { first: 18, step: 16 };
 const CORRIDOR_STEP = 14;
+const SIDE_STEP = 14;
+/** A label's box for placement: a 12px label is about this wide per character, plus padding. */
+const LABEL_CHAR_W = 6.6;
+const LABEL_PAD_W = 20;
+const LABEL_H = 20;
+const LABEL_GAP = 4;
 /** More than this many links in one group are not reordered (n! orders). */
 const MAX_PERMUTED = 6;
 
@@ -208,12 +221,17 @@ export function pathOf(points: readonly Point[]): string {
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-/** Where a link's label sits: the middle of its middle segment. */
-export function labelPoint(points: readonly Point[]): Point {
-  const i = Math.max(0, Math.floor((points.length - 1) / 2));
+/**
+ * Where a link's label sits: the planned spot when the route still has that segment (a dragged
+ * block can straighten a route), otherwise the middle of its middle segment.
+ */
+export function labelPoint(points: readonly Point[], at?: Route['labelAt']): Point {
+  const planned = at !== undefined && points[at.segment + 1] !== undefined ? at : undefined;
+  const i = planned?.segment ?? Math.max(0, Math.floor((points.length - 1) / 2));
+  const t = planned?.t ?? 0.5;
   const a = points[i] ?? { x: 0, y: 0 };
   const b = points[i + 1] ?? a;
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 // ---------------------------------------------------------------- crossings
@@ -319,7 +337,7 @@ function lanesFor(kind: RouteKind, n: number): number[] {
     case 'corridor':
       return Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * CORRIDOR_STEP);
     case 'side':
-      return Array.from({ length: n }, () => 0);
+      return Array.from({ length: n }, (_, i) => (i - (n - 1) / 2) * SIDE_STEP);
   }
 }
 
@@ -358,12 +376,14 @@ function rowBands(
 /**
  * Every link's handles and route for the blocks at `positions`. Links whose blocks are missing
  * (a refused link to an unknown block) get the side handles and no lane. `roles` are the stored
- * graph's: the drawn graph (the Finish view) redraws the final chain's links.
+ * graph's: the drawn graph (the Finish view) redraws the final chain's links. `labels` are the
+ * links' label texts, placed so they cover no block and no other label.
  */
 export function planLinks(
   graph: WorkflowGraph,
   positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
   roles: GraphRoles = graphRoles(graph),
+  labels: ReadonlyMap<string, string> = new Map(),
 ): Map<string, PlannedLink> {
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const out = new Map<string, PlannedLink>();
@@ -393,7 +413,7 @@ export function planLinks(
           ? `bottom-${ra}`
           : shape.kind === 'corridor'
             ? `gap-${Math.min(ra, rb)}-${Math.max(ra, rb)}`
-            : 'side';
+            : `side-${ra}`;
     const s = endPoint(a, shape.source);
     const t = endPoint(b, shape.target);
     // A link between rows runs along the middle of the gap between them, not the middle of its
@@ -413,7 +433,12 @@ export function planLinks(
   ];
   const placed: Drawn[] = [];
   const finish = (p: Pending, lane: number) => {
-    const route: Route = { kind: p.kind, lane };
+    // A side lane stays inside the gap between the two blocks.
+    const room = Math.max(0, Math.abs(p.t.x - p.s.x) / 2 - 8);
+    const route: Route = {
+      kind: p.kind,
+      lane: p.kind === 'side' ? Math.max(-room, Math.min(room, lane)) : lane,
+    };
     placed.push({ id: p.edge.id, points: routePoints(p.s, p.t, route), ends: ends(p) });
     out.set(p.edge.id, {
       id: p.edge.id,
@@ -423,14 +448,19 @@ export function planLinks(
     });
   };
 
-  // Side links first (their lane is fixed), then each group in a fixed order.
-  for (const p of pending.filter((x) => x.group === 'side')) finish(p, 0);
-  const groups = [...new Set(pending.filter((x) => x.group !== 'side').map((x) => x.group))].sort();
+  // Each group in a fixed order: the side links of each row first, then the gaps and loops.
+  const isSide = (g: string) => g.startsWith('side-');
+  const groups = [...new Set(pending.map((x) => x.group))].sort(
+    (x, y) => Number(isSide(y)) - Number(isSide(x)) || x.localeCompare(y),
+  );
   for (const group of groups) {
     const members = pending.filter((x) => x.group === group);
     const kind = members[0]?.kind ?? 'side';
     // Links that run straight need no lane; the others share the group's lanes.
-    const bending = members.filter((m) => kind !== 'corridor' || Math.abs(m.s.x - m.t.x) >= EPS);
+    const straight = (m: Pending) =>
+      (kind === 'corridor' && Math.abs(m.s.x - m.t.x) < EPS) ||
+      (kind === 'side' && Math.abs(m.s.y - m.t.y) < EPS);
+    const bending = members.filter((m) => !straight(m));
     for (const m of members.filter((x) => !bending.includes(x))) finish(m, 0);
     const lanes = lanesFor(kind, bending.length);
     const orders =
@@ -452,7 +482,89 @@ export function planLinks(
     }
     bending.forEach((m, i) => finish(m, m.base + (lanes[best[i] ?? i] ?? 0)));
   }
+  placeLabels(graph, positions, pending, out, labels);
   return out;
+}
+
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+const overlapArea = (p: Box, q: Box) =>
+  Math.max(0, Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x)) *
+  Math.max(0, Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y));
+
+/** The box a label takes centred on `at`; with `gap`, the small margin kept around it. */
+function labelBox(text: string, at: Point, gap = LABEL_GAP): Box {
+  const w = text.length * LABEL_CHAR_W + LABEL_PAD_W + gap * 2;
+  const h = LABEL_H + gap * 2;
+  return { x: at.x - w / 2, y: at.y - h / 2, w, h };
+}
+
+/**
+ * Picks each labelled link's label spot, in link order: along each segment (longest first) at its
+ * middle, then nearer its ends, the first spot that covers no block and no earlier label; with no
+ * clear spot, the one that covers least.
+ */
+function placeLabels(
+  graph: WorkflowGraph,
+  positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
+  pending: readonly Pending[],
+  out: Map<string, PlannedLink>,
+  labels: ReadonlyMap<string, string>,
+): void {
+  const blocks = graph.nodes.flatMap((n) => rectOf(n, positions) ?? []);
+  const taken: Box[] = [];
+  for (const p of pending) {
+    const text = labels.get(p.edge.id);
+    const link = out.get(p.edge.id);
+    if (text === undefined || link === undefined) continue;
+    const points = routePoints(p.s, p.t, link.route);
+    const segments = segmentsOf(points)
+      .map((seg, i) => ({ i, len: Math.abs(seg.a.x - seg.b.x) + Math.abs(seg.a.y - seg.b.y) }))
+      .filter((x) => x.len > 0)
+      .sort((x, y) => y.len - x.len || x.i - y.i);
+    let best: { segment: number; t: number; box: Box; cost: number } | undefined;
+    for (const { i } of segments) {
+      for (const t of [0.5, 0.35, 0.65, 0.2, 0.8]) {
+        const box = labelBox(text, labelPoint(points, { segment: i, t }));
+        let cost = 0;
+        for (const b of [...blocks, ...taken]) cost += overlapArea(box, b);
+        if (best === undefined || cost < best.cost) best = { segment: i, t, box, cost };
+        if (cost === 0) break;
+      }
+      if (best?.cost === 0) break;
+    }
+    if (best === undefined) continue;
+    taken.push(best.box);
+    const labelAt = { segment: best.segment, t: best.t };
+    out.set(p.edge.id, { ...link, route: { ...link.route, labelAt } });
+  }
+}
+
+/** How many times a drawn label covers a block, and another label (for tests). */
+export function labelOverlaps(
+  graph: WorkflowGraph,
+  positions: ReadonlyMap<WorkflowNodeId, NodePosition>,
+  labels: ReadonlyMap<string, string>,
+  plan: ReadonlyMap<string, PlannedLink> = planLinks(graph, positions, graphRoles(graph), labels),
+  roles: GraphRoles = graphRoles(graph),
+): { blocks: number; labels: number } {
+  const blocks = graph.nodes.flatMap((n) => rectOf(n, positions) ?? []);
+  const boxes: Box[] = [];
+  const count = { blocks: 0, labels: 0 };
+  for (const d of drawnLinks(graph, positions, plan, roles)) {
+    const text = labels.get(d.id);
+    if (text === undefined) continue;
+    const box = labelBox(text, labelPoint(d.points, plan.get(d.id)?.route.labelAt), 0);
+    count.blocks += blocks.filter((b) => overlapArea(box, b) > 0).length;
+    count.labels += boxes.filter((b) => overlapArea(box, b) > 0).length;
+    boxes.push(box);
+  }
+  return count;
 }
 
 /** The drawn routes of a plan, for tests that count crossings. */
