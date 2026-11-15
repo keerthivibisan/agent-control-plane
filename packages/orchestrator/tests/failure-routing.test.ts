@@ -1,7 +1,7 @@
 // Synthetic data only. ADR-0038 §4-§5 (FR-5): failures routed by When arrows, the lead's
 // reroute_fix and view_workflow tools, and the "Your workflow" section of its brief.
 import { describe, expect, it } from 'vitest';
-import { describeWorkflow, renderWorkflowDescription, validateWorkflowGraphV3 } from '@acp/core';
+import { renderPlaybook, validateWorkflowGraphV3 } from '@acp/core';
 import type { FailureEvent, WorkflowEdgeV3, WorkflowGraphV3, WorkflowNodeV3 } from '@acp/core';
 import type { FailedCheck, RunState } from '../src/index.js';
 import {
@@ -812,13 +812,13 @@ describe('the lead’s reroute_fix (ADR-0038 §4)', () => {
 });
 
 describe('the lead knows the workflow (ADR-0038 §5)', () => {
-  it('view_workflow returns the core rendering of the run’s graph; the brief has it once', () => {
+  it('view_workflow returns the core playbook of the run’s graph; the brief has it once', () => {
     const g = graphOf(
       { finals: ['tester'] },
       { edges: [when('w-t', TESTER, AUTHOR, ['tests-failed'], 2, { label: 'fix' })] },
     );
     const created = ok(createV3Run(g, { reviewer: 'lead' }));
-    const words = renderWorkflowDescription(describeWorkflow(g));
+    const words = renderPlaybook(g);
     expect(workflowWords(created.state)).toBe(words);
     const brief = started(created.effects)[0]?.prompt ?? '';
     expect(brief).toContain(`${YOUR_WORKFLOW_HEADING}\n${words}`);

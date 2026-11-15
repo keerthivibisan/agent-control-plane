@@ -75,6 +75,19 @@ export {
   type WorkflowSentenceSection,
 } from './v3/describe.js';
 export { graphRunDefaultsV3 } from './v3/run-defaults.js';
+// ADR-0040: the lead's playbook, the workflow in run order, and its stages.
+export {
+  PLAYBOOK_STAGES,
+  PLAYBOOK_STAGE_TITLES,
+  playbookStages,
+  renderPlaybook,
+  stageOfNode,
+  whenToUse,
+  workflowPlaybook,
+  type PlaybookStage,
+  type PlaybookStageKey,
+  type PlaybookStep,
+} from './v3/playbook.js';
 // ADR-0039: blocks that run only for some ticket types.
 export {
   runsForTicket,
