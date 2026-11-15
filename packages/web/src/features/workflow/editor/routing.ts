@@ -389,6 +389,14 @@ export function planLinks(
   const out = new Map<string, PlannedLink>();
   const pending: Pending[] = [];
   const bands = rowBands(graph, positions, roles);
+  const shaped: {
+    e: WorkflowEdge;
+    from: WorkflowNode;
+    to: WorkflowNode;
+    a: Rect;
+    b: Rect;
+    shape: ReturnType<typeof linkShape>;
+  }[] = [];
   for (const e of graph.edges) {
     const from = byId.get(e.from);
     const to = byId.get(e.to);
@@ -403,7 +411,10 @@ export function planLinks(
       });
       continue;
     }
-    const shape = linkShape(e, from, to, a, b, roles);
+    shaped.push({ e, from, to, a, b, shape: linkShape(e, from, to, a, b, roles) });
+  }
+  moveSharedSpots(shaped);
+  for (const { e, from, to, a, b, shape } of shaped) {
     const ra = rowOf(from, roles);
     const rb = rowOf(to, roles);
     const group =
@@ -567,6 +578,45 @@ export function labelOverlaps(
   return count;
 }
 
+/**
+ * A link that leaves a block where another arrives (the lead's top centre, say, with the ticket's
+ * link coming in and a link to a helper on its left going out) would run over it, so the leaving
+ * link moves to the nearest free spot on that side, towards where it heads.
+ */
+function moveSharedSpots(
+  shaped: readonly { e: WorkflowEdge; a: Rect; b: Rect; shape: { source: End; target: End } }[],
+): void {
+  const key = (node: string, end: End) => `${node}:${end.side}:${end.at ?? 50}`;
+  const vertical = (end: End) => end.side === 'top' || end.side === 'bottom';
+  const arriving = new Set(
+    shaped.filter((x) => vertical(x.shape.target)).map((x) => key(x.e.to, x.shape.target)),
+  );
+  for (const { e, a, b, shape } of shaped) {
+    if (!vertical(shape.source) || !arriving.has(key(e.from, shape.source))) continue;
+    const at = shape.source.at ?? 50;
+    const left = b.x + b.w / 2 < a.x + a.w / 2;
+    const towards = HANDLE_SPOTS.filter((x) => (left ? x < at : x > at));
+    const away = HANDLE_SPOTS.filter((x) => (left ? x > at : x < at));
+    const order = [
+      ...(left ? [...towards].reverse() : towards),
+      ...(left ? away : [...away].reverse()),
+    ];
+    const free = order.find((x) => !arriving.has(key(e.from, { side: shape.source.side, at: x })));
+    if (free !== undefined) shape.source = { side: shape.source.side, at: free };
+  }
+}
+
+/** The end a stored handle id stands for (`idOf` in reverse). */
+function endOf(handle: string): End | undefined {
+  if (handle === OUT_HANDLE) return { side: 'right', at: null };
+  if (handle === IN_HANDLE) return { side: 'left', at: null };
+  const m = /^[st]-(top|bottom)-(\d+)$/.exec(handle);
+  const at = HANDLE_SPOTS.find((x) => String(x) === m?.[2]);
+  return m !== null && at !== undefined
+    ? { side: m[1] === 'top' ? 'top' : 'bottom', at }
+    : undefined;
+}
+
 /** The drawn routes of a plan, for tests that count crossings. */
 export function drawnLinks(
   graph: WorkflowGraph,
@@ -584,9 +634,12 @@ export function drawnLinks(
     const b = to === undefined ? undefined : rectOf(to, positions);
     if (link === undefined || from === undefined || to === undefined || !a || !b) continue;
     const shape = linkShape(e, from, to, a, b, roles);
+    // The plan's handles, which may have moved off a shared spot.
+    const source = endOf(link.sourceHandle) ?? shape.source;
+    const target = endOf(link.targetHandle) ?? shape.target;
     out.push({
       id: e.id,
-      points: routePoints(endPoint(a, shape.source), endPoint(b, shape.target), link.route),
+      points: routePoints(endPoint(a, source), endPoint(b, target), link.route),
       ends: [`${e.from}:${link.sourceHandle}`, `${e.to}:${link.targetHandle}`],
     });
   }

@@ -126,4 +126,33 @@ describe('link labels on the canvas', () => {
     ];
     expect(labelPoint(straight, { segment: 1, t: 0.25 })).toEqual({ x: 0, y: 10 });
   });
+
+  it('moves a link leaving the lead’s top off the spot where the ticket’s link arrives', () => {
+    // The owner's second draft (2026-11-15): a helper left of the lead, in the lead's row.
+    const near = (x: number, y: number) => ({ x: Math.round(x * 0.53), y: Math.round(y * 0.53) });
+    const stored = WorkflowGraphV3Schema.parse({
+      ...draft(),
+      nodes: draft()
+        .nodes.filter((n) => n.id !== 'tester')
+        .map((n) =>
+          n.id === 'ticket'
+            ? { ...n, position: near(1047, 15) }
+            : n.id === 'orchestrate'
+              ? { ...n, position: near(995, 477) }
+              : n.id === 'agent-1'
+                ? { ...n, label: 'Agent 2', position: near(112, 301) }
+                : n,
+        ),
+      edges: draft().edges.filter((e) => e.to !== 'tester' && e.from !== 'tester'),
+    });
+    const g = finishView(stored).graph;
+    const pos = layoutGraph(stored);
+    const roles = graphRoles(stored);
+    const plan = planLinks(g, pos, roles);
+    expect(plan.get('f1')?.targetHandle).toBe('t-top-50');
+    expect(plan.get('i1')?.sourceHandle).toBe('s-top-30');
+    const drawn = drawnLinks(g, pos, plan, roles);
+    const pair = drawn.filter((d) => d.id === 'f1' || d.id === 'i1');
+    expect(countConflicts(pair)).toBe(0);
+  });
 });
