@@ -733,7 +733,7 @@ export function planLinks(
     const orders =
       bending.length <= MAX_PERMUTED
         ? permutations(bending.length)
-        : [greedyOrder(bending, lanes, kind, placed, ends)];
+        : greedyOrders(bending, lanes, kind, placed, ends);
     let best = orders[0] ?? [];
     let bestScore = Infinity;
     for (const order of orders) {
@@ -900,6 +900,42 @@ function spreadEnds(
     );
     list.forEach((item, i) => item.set(12 + (76 * (i + 0.5)) / list.length));
   }
+}
+
+/**
+ * Lane orders for a group too big to try every order: the greedy order (then improved by swaps)
+ * from a few starting orders of the links, along each side either way; the caller keeps the best.
+ */
+function greedyOrders(
+  members: readonly Pending[],
+  lanes: readonly number[],
+  kind: RouteKind,
+  placed: readonly Drawn[],
+  ends: (p: Pending) => string[],
+): number[][] {
+  const index = members.map((_, i) => i);
+  const starts = [
+    index,
+    [...index].sort((a, b) => (members[a]?.s.x ?? 0) - (members[b]?.s.x ?? 0)),
+    [...index].sort((a, b) => (members[b]?.s.x ?? 0) - (members[a]?.s.x ?? 0)),
+    [...index].sort((a, b) => (members[a]?.t.x ?? 0) - (members[b]?.t.x ?? 0)),
+    [...index].sort((a, b) => (members[b]?.t.x ?? 0) - (members[a]?.t.x ?? 0)),
+  ];
+  return starts.map((start) => {
+    const picked = greedyOrder(
+      start.flatMap((i) => (members[i] === undefined ? [] : [members[i]])),
+      lanes,
+      kind,
+      placed,
+      ends,
+    );
+    // Back to the members' own order.
+    const order = new Array<number>(members.length).fill(0);
+    start.forEach((i, k) => {
+      order[i] = picked[k] ?? 0;
+    });
+    return order;
+  });
 }
 
 /** Lanes for a group too big to try every order: each link takes the lane that crosses least. */

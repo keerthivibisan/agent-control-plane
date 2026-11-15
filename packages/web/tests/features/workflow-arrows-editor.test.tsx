@@ -322,7 +322,7 @@ describe('Workflow page on version 3', () => {
     addBlock(/^Helper/);
     await waitFor(() => expect(panel().querySelector('[data-node="helper-1"]')).not.toBeNull());
     expect(within(panel()).getByTestId('mode-field')).toBeTruthy();
-    expect(within(panel()).getByRole('textbox', { name: 'What this helper is for' })).toBeTruthy();
+    expect(within(panel()).getByRole('textbox', { name: 'When to use' })).toBeTruthy();
     // The project's pool is taken: this helper can't be a second pool.
     expect(within(panel()).getByTestId<HTMLInputElement>('pool-toggle').disabled).toBe(true);
     addBlock(/^Planner/);
@@ -331,6 +331,11 @@ describe('Workflow page on version 3', () => {
     expect(within(panel()).getByTestId('no-mode')).toBeTruthy();
     expect(within(panel()).getByTestId('role-section').dataset.role).toBe('planner');
     expect(within(panel()).getByTestId('provider-field')).toBeTruthy();
+    // ADR-0040: every role has a "When to use"; a planner's hint says what starts it.
+    const use = within(panel()).getByRole('textbox', { name: 'When to use' });
+    expect(use.closest('label, div')?.parentElement?.textContent).toContain(
+      'This block starts on its own: writes the plan when a ticket starts.',
+    );
   });
 
   it('an arrow’s label and purpose are edited with counters; Custom is in “Link to…”', async () => {

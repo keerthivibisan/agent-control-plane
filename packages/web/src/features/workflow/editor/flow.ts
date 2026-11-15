@@ -1,5 +1,6 @@
 import {
   FAILURE_EVENT_NAMES,
+  whenToUse,
   type ApprovalMode,
   type ManagedProviderId,
   type NodePosition,
@@ -20,7 +21,7 @@ import { planLinks, type Route } from './routing';
 import { graphRoles, kindIn } from './roles';
 import { isRemovable, resolveLink, type Selection } from './state';
 import type { EditorIssue } from './IssuesList';
-import { kindWord, type BlockNode, type LinkTarget } from './nodes';
+import { kindWord, type BlockData, type BlockNode, type LinkTarget } from './nodes';
 
 const G = WORKFLOW_GRAPH_COPY;
 type WorkflowGraph = WorkflowGraphV3;
@@ -153,9 +154,24 @@ export function toFlowNodes(
         helperLimit: ctx.helperLimit,
         linkTarget,
         target,
+        useWhen: useWhenOf(graph, node),
       },
     };
   });
+}
+
+/**
+ * ADR-0040: what an Agent block's line says: the owner's "When to use", else what starts it
+ * (core's `whenToUse`), else for a helper that the lead goes by its name. Null for the lead and
+ * the steps.
+ */
+function useWhenOf(graph: WorkflowGraph, node: WorkflowNode): BlockData['useWhen'] {
+  if (node.type !== 'agent') return null;
+  const own = node.description?.trim() ?? '';
+  if (own !== '') return { text: own, own: true };
+  if (node.pool === true) return { text: EDITOR_COPY.useWhen.pool, own: false };
+  const trigger = whenToUse(graph, node.id);
+  return { text: trigger ?? EDITOR_COPY.useWhen.unset, own: false };
 }
 
 /** The link kinds whose shape makes a refused link: drawn in the danger tone. */

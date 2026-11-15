@@ -27,10 +27,11 @@ export const AGENT_W = 216;
 /** The lead: kind, name, model, skills and agent file. */
 export const AGENT_H = 108;
 /**
- * An Agent block (ADR-0037) has one more line: its approval mode when its role edits. Every agent
- * block has the same size whatever its role, so drawing an arrow never moves the blocks around it.
+ * An Agent block (ADR-0037) has two more lines: when the lead uses it, or what starts it
+ * (ADR-0040), and its approval mode when its role edits. Every agent block has the same size
+ * whatever its role, so drawing an arrow never moves the blocks around it.
  */
-export const EDIT_H = 132;
+export const EDIT_H = 152;
 /** Steps are pills. */
 export const STEP_W = 172;
 export const STEP_H = 40;

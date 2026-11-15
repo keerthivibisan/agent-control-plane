@@ -117,9 +117,14 @@ export const LinkEdgeView = memo(function LinkEdgeView({
   // While a link is being made the others fade back (the link store, so no remapping).
   const linking = useLinkState((s) => s.mode !== null);
   const hover = useLinkState((s) => s.hover);
+  const focus = useLinkState((s) => s.focus);
   if (data === undefined) return null;
-  const lit = hover !== null && (hover === source || hover === target || hover === `edge:${id}`);
-  const dim = data.dim || linking || (hover !== null && !lit);
+  // The pointer wins over a lit playbook step (ADR-0040).
+  const lit =
+    hover !== null
+      ? hover === source || hover === target || hover === `edge:${id}`
+      : focus !== null && focus.edges.includes(id);
+  const dim = data.dim || linking || ((hover !== null || focus !== null) && !lit);
   const points = routePoints({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, data.route);
   const d = pathOf(points);
   const look = EDGE_LOOK[data.type];

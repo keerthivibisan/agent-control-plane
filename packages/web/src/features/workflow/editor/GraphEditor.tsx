@@ -1080,11 +1080,15 @@ interface GraphEditorProps {
   dispatch: Dispatch<HistoryAction>;
   focus: FocusRequest | null;
   history: HistoryInfo;
+  /** ADR-0040: the blocks and links a selected playbook step lights. */
+  stepFocus?: { nodes: readonly string[]; edges: readonly string[] } | null;
 }
 
 function EditorBox(props: GraphEditorProps) {
   const [legendOpen, setLegendOpen] = useLegendOpen();
   const [store] = useState(createLinkStore);
+  const stepFocus = props.stepFocus ?? null;
+  useEffect(() => store.set({ focus: stepFocus }), [store, stepFocus]);
   const tidyRef = useRef<(() => void) | null>(null);
   const tidy = useCallback(() => tidyRef.current?.(), []);
   useUndoKeys(props.dispatch);

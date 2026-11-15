@@ -64,6 +64,11 @@ export const EDITOR_COPY = {
     fitLabel: 'Fit the workflow to the canvas',
     level: (percent: number) => `${percent}%`,
   },
+  /** ADR-0040: an Agent block's line when the owner wrote no "When to use". */
+  useWhen: {
+    pool: 'Takes any step no named helper takes',
+    unset: 'When to use: not set yet',
+  },
   legend: {
     blocks: 'Blocks',
     links: 'Links',
@@ -306,6 +311,17 @@ export const EDITOR_COPY = {
       'Once the fixer’s change is merged, this tester runs again. A failing retest uses the next fix round.',
     /** The arrow's words on the canvas: its events, then its rounds. */
     canvas: (names: readonly string[], rounds: number) => `${names.join(', ')} ×${rounds}`,
+  },
+  /** ADR-0040: the lead's playbook, the workflow in run order, the text the lead reads. */
+  playbook: {
+    title: 'Lead’s playbook',
+    show: 'Show the lead’s playbook',
+    hide: 'Hide the lead’s playbook',
+    intro:
+      'What happens, in order, and who does it. The lead reads exactly this. Words in double quotes are yours. Select a step to light its blocks’ links on the canvas.',
+    defaultMark: 'Lead decides (default)',
+    defaultHint: 'No route: draw a When arrow from this block to choose who fixes it.',
+    empty: 'Nothing to describe yet.',
   },
   /** ADR-0038 §5: the workflow in words, the same sentences the lead reads. */
   words: {

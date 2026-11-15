@@ -25,7 +25,7 @@ import { refusalMessage } from './draft';
 import { finishIssues, finishView, isHiddenByFinish } from './finish';
 import { EDITOR_COPY } from './editor/copy';
 import { EdgePanel } from './editor/EdgePanel';
-import { FlowWords } from './editor/FlowWords';
+import { Playbook, type StepFocus } from './editor/Playbook';
 import type { BlockContext } from './editor/flow';
 import { GraphEditor, type FocusRequest } from './editor/GraphEditor';
 import { editorIssues, hasErrors } from './editor/issues';
@@ -204,6 +204,8 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
     ],
   );
 
+  // ADR-0040: the blocks and links a selected playbook step lights on the canvas.
+  const [stepFocus, setStepFocus] = useState<StepFocus | null>(null);
   const focusOn = useCallback((selection: NonNullable<Selection>) => {
     dispatch({ type: 'select', selection });
     setFocus((f) => ({ selection, nonce: (f?.nonce ?? 0) + 1 }));
@@ -368,6 +370,7 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           dispatch={dispatch}
           focus={focus}
           history={history}
+          stepFocus={stepFocus}
         />
         <div className="flex min-w-0 flex-col gap-4">
           {node !== undefined || edge !== undefined ? (
@@ -410,11 +413,11 @@ function WorkflowEditor({ projectId, dto }: { projectId: string; dto: WorkflowGr
           )}
         </div>
       </div>
-      <FlowWords
+      <Playbook
         graph={graph}
         projectProvider={projectProvider}
-        selection={selection}
-        onSelect={focusOn}
+        focus={stepFocus}
+        onFocus={setStepFocus}
       />
       <ProjectDefaults projectId={projectId} setup={dto.setup} />
       {templates ? (
