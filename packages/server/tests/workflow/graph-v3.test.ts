@@ -1,7 +1,7 @@
 // The effective workflow is version 3 (ADR-0037, AR-4): a stored version 3 graph is served as it is,
 // version 3 only parts included; a stored version 2 graph is served migrated. Synthetic data only.
 import {
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   migrateWorkflowV2,
   workflowTemplate,
   workflowTemplateV3,
@@ -17,13 +17,13 @@ function stored(graph: WorkflowGraphV3) {
 }
 
 describe('effectiveWorkflow: version 3', () => {
-  it.each(WORKFLOW_TEMPLATE_IDS)('%s: a stored version 3 graph is served as it is', (id) => {
+  it.each(WORKFLOW_TEMPLATE_IDS_V2)('%s: a stored version 3 graph is served as it is', (id) => {
     const v3 = workflowTemplateV3(id, { planner: true });
     const effective = effectiveWorkflow(stored(v3), 'manual');
     expect(effective).toEqual({ stored: 'v3', graph: v3, updatedAt: AT });
   });
 
-  it.each(WORKFLOW_TEMPLATE_IDS)('%s: a stored version 2 graph is served migrated', (id) => {
+  it.each(WORKFLOW_TEMPLATE_IDS_V2)('%s: a stored version 2 graph is served migrated', (id) => {
     const v2 = workflowTemplate(id, { planner: true });
     const effective = effectiveWorkflow(
       { kind: 'v2', graph: { projectId: 'p', graph: v2, updatedAt: AT } },

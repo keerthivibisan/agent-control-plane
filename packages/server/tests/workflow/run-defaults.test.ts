@@ -7,7 +7,7 @@ import {
   type AnyWorkflowGraph,
   APPROVAL_MODES,
   MAX_REWORK_ROUNDS,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   defaultProjectWorkflow,
   reviewStageOf,
   workflowTemplate,
@@ -117,7 +117,7 @@ describe('projectRunDefaults: parity with the rule before WG-F', () => {
 
   it('a stored graph: its routes, as before, for every template and a stale legacyV1', () => {
     const legacy = defaultProjectWorkflow('p1', NOW);
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       for (const planner of [false, true]) {
         for (const legacyV1 of [
           undefined,

@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NODE_CAPABILITIES,
   NO_CHECKS_MESSAGE,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   canConnect,
   compileWorkflow,
   validateWorkflowGraph,
@@ -49,7 +49,7 @@ describe('optional Checks blocks (ADR-0028 §2)', () => {
   });
 
   it('every template without its Checks block is valid and compiles with merge null', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       for (const planner of [false, true]) {
         const graph = withoutCheckBlocks(workflowTemplate(id, { planner }));
         expect(graph.nodes.some((n) => n.type === 'checks')).toBe(false);
@@ -72,7 +72,7 @@ describe('optional Checks blocks (ADR-0028 §2)', () => {
   });
 
   it('does not warn while any Checks block remains, nor for the templates', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       expect(warnings(workflowTemplate(id)).map((i) => i.code)).not.toContain('no-checks');
     }
     const changeOnly = withEdges(
@@ -154,7 +154,7 @@ describe('optional Checks blocks (ADR-0028 §2)', () => {
   });
 
   it('old graphs compile exactly as before: the merge block with required and lead', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       expect(compileWorkflow(workflowTemplate(id), ctx).checkBlocks.merge).toEqual({
         nodeId: 'checks',
         label: 'Checks',
@@ -179,7 +179,7 @@ describe('effort per agent block (ADR-0028 §1)', () => {
   };
 
   it('compiles each agent block’s effort into its program node; absent stays absent', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       const plain = workflowTemplate(id, { planner: true });
       for (const node of programNodes(plain)) expect(node).not.toHaveProperty('effort');
       const levels = ['low', 'medium', 'high'] as const;

@@ -2,7 +2,7 @@
 // fields (ADR-0037 §4–§6; AR-1). Synthetic data only.
 import { describe, expect, it } from 'vitest';
 import {
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   WorkflowGraphV3Schema,
   compileWorkflow,
   compileWorkflowV2,
@@ -84,7 +84,7 @@ describe('migrateWorkflowV2', () => {
   });
 
   it('downgrade gives the version 2 graph back', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       for (const planner of [false, true]) {
         const v2 = workflowTemplate(id, { planner });
         expect(downgradeWorkflowV3(migrateWorkflowV2(v2))).toEqual({ ok: true, graph: v2 });
@@ -132,7 +132,7 @@ describe('version 1 and the stored JSON', () => {
 });
 
 describe('version 3 templates', () => {
-  it.each(WORKFLOW_TEMPLATE_IDS)(
+  it.each(WORKFLOW_TEMPLATE_IDS_V2)(
     '%s compiles like version 2’s and gives the same run defaults',
     (id) => {
       for (const planner of [false, true]) {

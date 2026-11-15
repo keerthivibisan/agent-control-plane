@@ -11,7 +11,7 @@ import {
   GRAPH_MUTATIONS,
   GRAPH_MUTATIONS_V3,
   GraphIssueCodeSchema,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   WorkflowGraphV3Schema,
   canConnectV3,
   compileWorkflowV2,
@@ -103,7 +103,7 @@ function equivalenceFailures(name: string, v2: WorkflowGraph): string[] {
 
 describe('migration equivalence (version 2 → 3)', () => {
   it('every template, planner on and off', () => {
-    const failures = WORKFLOW_TEMPLATE_IDS.flatMap((id) =>
+    const failures = WORKFLOW_TEMPLATE_IDS_V2.flatMap((id) =>
       [false, true].flatMap((planner) =>
         equivalenceFailures(`${id}/${planner}`, workflowTemplate(id, { planner })),
       ),

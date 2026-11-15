@@ -1,5 +1,5 @@
 import {
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   generateValidGraph,
   withoutCheckBlocks,
   workflowTemplate,
@@ -45,7 +45,7 @@ const SETUPS: GraphRunSetup[] = [
 ];
 
 describe('the no-checks variant of each template', () => {
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       for (const setup of SETUPS) {
         it(`${id}${planner ? ' with a planner' : ''} ${JSON.stringify(setup)}`, () => {
@@ -63,7 +63,7 @@ describe('the no-checks variant of each template', () => {
   }
 
   it('runs to the owner’s merge: every change merged after review, no checks anywhere', () => {
-    for (const id of WORKFLOW_TEMPLATE_IDS) {
+    for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
       const graph = withoutCheckBlocks(workflowTemplate(id));
       const problems: string[] = [];
       const result = simulate(graphSimConfig(graph), (point) => point.options[0] ?? '', {
@@ -87,7 +87,7 @@ describe('the no-checks variant of each template', () => {
 });
 
 describe('each template with an effort on every agent block', () => {
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       it(`${id}${planner ? ' with a planner' : ''}`, () => {
         const graph = withEfforts(workflowTemplate(id, { planner }));

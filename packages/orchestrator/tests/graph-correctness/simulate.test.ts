@@ -1,4 +1,4 @@
-import { WORKFLOW_TEMPLATE_IDS, workflowTemplate } from '@acp/core';
+import { WORKFLOW_TEMPLATE_IDS_V2, workflowTemplate } from '@acp/core';
 import type { ApprovalMode } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { GOLDEN_CASES, PERMISSIONS, v1Workflow } from './cases.js';
@@ -46,7 +46,7 @@ describe('layer 2: every behaviour of each template', { timeout: EXPLORE_TIMEOUT
     { projectMode: 'auto-edits', maxReworkRounds: 0 },
     { projectMode: 'auto-edits', stepHelpers: false },
   ];
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       for (const setup of setups) {
         it(`${id}${planner ? ' with a planner' : ''} ${JSON.stringify(setup)}`, () => {

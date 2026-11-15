@@ -185,6 +185,9 @@ export function downgradeWorkflowV3(graph: WorkflowGraphV3): DowngradeResult {
       ...(node.position !== undefined ? { position: { ...node.position } } : {}),
     };
     if (node.type === 'author') return { ok: false, reason: 'the workflow has an Author block' };
+    if (node.type === 'agent' && node.ticketTypes !== undefined) {
+      return { ok: false, reason: `"${node.label}" runs only for some ticket types` };
+    }
     if (node.type !== 'agent') {
       nodes.push(
         node.type === 'lead'
@@ -276,6 +279,13 @@ export function downgradeWorkflowV3(graph: WorkflowGraphV3): DowngradeResult {
   }
   return {
     ok: true,
-    graph: { version: 2, template: graph.template, nodes, edges, ...copyLegacy(graph) },
+    graph: {
+      version: 2,
+      // A version 3 template (ADR-0039's BDD) has no version 2 form: the graph is then custom.
+      template: graph.template === 'bdd' ? 'custom' : graph.template,
+      nodes,
+      edges,
+      ...copyLegacy(graph),
+    },
   };
 }

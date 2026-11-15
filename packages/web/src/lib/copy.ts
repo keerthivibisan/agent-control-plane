@@ -4312,6 +4312,7 @@ export const WORKFLOW_GRAPH_COPY = {
       'todays-setup': 'A reviewer checks, the lead decides.',
       'reviewer-helper-loop':
         'The reviewer sends changes back to the helper, then the lead merges.',
+      bdd: 'Scenarios first, then tests and code in parallel; a tester checks them together.',
     } satisfies Record<WorkflowTemplateId, string>,
     planner: 'Add a planner',
     plannerHint:

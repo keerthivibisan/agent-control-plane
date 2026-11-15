@@ -1,4 +1,4 @@
-import { WORKFLOW_TEMPLATE_IDS, workflowTemplate } from '@acp/core';
+import { WORKFLOW_TEMPLATE_IDS_V2, workflowTemplate } from '@acp/core';
 import { describe, expect, it } from 'vitest';
 import { graphSimConfig } from './explore.js';
 import { agentModeOf, goldenTrace } from './golden.js';
@@ -12,7 +12,7 @@ import type { ScriptName } from './scripts.js';
 const SCRIPTS_PINNED: ScriptName[] = ['approve', 'rework-then-approve', 'failed-check'];
 
 describe('template traces', () => {
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       for (const script of SCRIPTS_PINNED) {
         it(`${id}${planner ? ' with a planner' : ''} ${script}`, () => {

@@ -123,7 +123,8 @@ function mergeArrows(): WorkflowEdgeV3[] {
  * - `lead-only`: the lead reviews every change of the pool and may send it back (2 rounds);
  * - `todays-setup`: today's default workflow, migrated from version 1;
  * - `reviewer-helper-loop`: a change reviewer reworks the pool's changes directly (2 rounds) and
- *   sends its findings to the lead, which merges.
+ *   sends its findings to the lead, which merges;
+ * - `bdd` (ADR-0039, version 3 only): `bddTemplate`.
  */
 export function workflowTemplateV3(
   id: WorkflowTemplateId,
@@ -154,6 +155,8 @@ export function workflowTemplateV3(
         ],
       };
     }
+    case 'bdd':
+      return bddTemplate(planner);
     case 'reviewer-helper-loop': {
       const b = base(planner);
       return {
@@ -170,4 +173,107 @@ export function workflowTemplateV3(
       };
     }
   }
+}
+
+/** The BDD template's blocks (ADR-0039), with ids that never clash with the shared ones. */
+export const BDD_NODE_IDS = Object.freeze({
+  analyst: 'behaviour',
+  scenarioTests: 'scenario-tests',
+  developer: 'developer',
+  tester: STAGE_NODE_IDS.tester,
+  author: 'author',
+});
+
+/**
+ * Behaviour-driven development (ADR-0039). For a feature ticket a read-only Behaviour analyst
+ * writes the scenarios before the plan; the lead then starts Scenario tests and Developer at the
+ * same time with the scenarios in their steps, merges both, and the Tester runs the whole suite on
+ * the ticket branch; failing tests go to their author (2 rounds, the Tester testing again). The
+ * analyst and Scenario tests run only for feature tickets, so a bug, chore or harness ticket runs
+ * Lead → Developer → Checks → Tester with the tests it already has.
+ */
+function bddTemplate(planner: boolean): WorkflowGraphV3 {
+  const gates = gateNodesV3(false);
+  const ids = STAGE_NODE_IDS;
+  const bdd = BDD_NODE_IDS;
+  const feature = { ticketTypes: ['feature' as const] };
+  const helper = { approvalMode: null, maxInstances: 1 };
+  const plans = planner ? ids.planner : ids.lead;
+  const nodes: WorkflowNodeV3[] = [
+    gates.ticket,
+    ...(planner ? [agent(ids.planner, DEFAULT_LABELS.planner)] : []),
+    agent(bdd.analyst, 'Behaviour analyst', feature),
+    gates.planApproval,
+    {
+      type: 'lead',
+      id: ids.lead,
+      label: DEFAULT_LABELS.lead,
+      model: null,
+      skills: [],
+      agent: null,
+    },
+    agent(bdd.scenarioTests, 'Scenario tests', {
+      ...helper,
+      ...feature,
+      description: 'Writes the scenarios as automated tests',
+    }),
+    agent(bdd.developer, 'Developer', {
+      ...helper,
+      description: 'Builds the behaviour or the fix',
+    }),
+    gates.checks,
+    gates.ticketMerge,
+    agent(bdd.tester, DEFAULT_LABELS.tester, { approvalMode: null }),
+    { type: 'author', id: bdd.author, label: 'Author' },
+    gates.ownerMerge,
+    gates.done,
+  ];
+  const plan: WorkflowEdgeV3[] = planner
+    ? [
+        arrow('flow', GATE_IDS.ticket, ids.planner),
+        arrow('plan', ids.planner, GATE_IDS.planApproval),
+        arrow('flow', GATE_IDS.planApproval, ids.lead),
+      ]
+    : [arrow('flow', GATE_IDS.ticket, ids.lead), arrow('flow', ids.lead, GATE_IDS.planApproval)];
+  const edges: WorkflowEdgeV3[] = [
+    ...plan,
+    {
+      ...arrow('research', bdd.analyst, plans),
+      purpose:
+        'Write the behaviour as Given/When/Then scenarios with their acceptance criteria, for the plan to hand to Scenario tests and Developer',
+    },
+    {
+      ...arrow('implement', ids.lead, bdd.scenarioTests),
+      purpose:
+        'Turn the scenarios into automated tests that fail until the behaviour exists; don’t change product code',
+    },
+    {
+      ...arrow('implement', ids.lead, bdd.developer),
+      purpose:
+        'Build what the scenarios describe (on a bug ticket: fix it), without writing the scenario tests',
+    },
+    arrow('review', bdd.scenarioTests, ids.lead),
+    arrow('review', bdd.developer, ids.lead),
+    reworkArrow(ids.lead, bdd.scenarioTests, DEFAULT_MAX_REWORK_ROUNDS),
+    reworkArrow(ids.lead, bdd.developer, DEFAULT_MAX_REWORK_ROUNDS),
+    arrow('merge', ids.lead, GATE_IDS.checks),
+    arrow('flow', GATE_IDS.checks, GATE_IDS.ticketMerge),
+    {
+      ...arrow('test', GATE_IDS.ticketMerge, bdd.tester),
+      purpose: 'Run the whole test suite on the merged work, the new scenario tests included',
+    },
+    arrow('review', bdd.tester, ids.lead),
+    arrow('flow', bdd.tester, GATE_IDS.ownerMerge),
+    arrow('flow', GATE_IDS.ownerMerge, GATE_IDS.done),
+    {
+      type: 'when',
+      id: arrowIdFor('when', bdd.tester, bdd.author),
+      from: bdd.tester,
+      to: bdd.author,
+      on: ['tests-failed'],
+      maxRounds: DEFAULT_MAX_REWORK_ROUNDS,
+      purpose: 'Fix the code the failing tests point at; change a test only when it is wrong',
+    },
+  ];
+  return { version: 3, template: 'bdd', nodes, edges };
 }

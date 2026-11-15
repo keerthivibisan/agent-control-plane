@@ -4,7 +4,12 @@ import { ManagedProviderIdSchema, type ManagedProviderId } from '../domain/provi
 import { WorkflowNodeIdSchema, type WorkflowNodeId } from './node-id.js';
 import type { RunAgentKind } from '../orchestration/orchestration.js';
 import { FAILURE_EVENTS, type FailureEvent } from '../orchestration/failure-context.js';
-import { ApprovalModeSchema, HARD_MAX_HELPERS, type ApprovalMode } from './workspace.js';
+import {
+  ApprovalModeSchema,
+  HARD_MAX_HELPERS,
+  TicketTypeSchema,
+  type ApprovalMode,
+} from './workspace.js';
 import {
   MAX_REWORK_ROUNDS,
   ProjectWorkflowSchema,
@@ -335,10 +340,20 @@ export type WorkflowEdgeOf<T extends WorkflowEdgeType> = Extract<WorkflowEdge, {
 
 // ---------------------------------------------------------------- the graph
 
-export const WorkflowTemplateIdSchema = z.enum([
+/** The templates a version 2 graph can be (`workflowTemplate`). */
+export const WorkflowTemplateIdV2Schema = z.enum([
   'lead-only',
   'todays-setup',
   'reviewer-helper-loop',
+]);
+export type WorkflowTemplateIdV2 = z.infer<typeof WorkflowTemplateIdV2Schema>;
+export const WORKFLOW_TEMPLATE_IDS_V2 = WorkflowTemplateIdV2Schema.options;
+
+/** The templates of version 3 (`workflowTemplateV3`), the editor's. */
+export const WorkflowTemplateIdSchema = z.enum([
+  ...WORKFLOW_TEMPLATE_IDS_V2,
+  // ADR-0039: behaviour first (feature tickets), then scenario tests and code in parallel.
+  'bdd',
 ]);
 export type WorkflowTemplateId = z.infer<typeof WorkflowTemplateIdSchema>;
 export const WORKFLOW_TEMPLATE_IDS = WorkflowTemplateIdSchema.options;
@@ -357,7 +372,7 @@ export type LegacyWorkflowV1 = z.infer<typeof LegacyWorkflowV1Schema>;
 export const WorkflowGraphSchema = z.object({
   version: z.literal(2),
   /** The template the graph started from; `custom` once built or changed by hand, or migrated. */
-  template: z.union([WorkflowTemplateIdSchema, z.literal('custom')]),
+  template: z.union([WorkflowTemplateIdV2Schema, z.literal('custom')]),
   nodes: z.array(WorkflowNodeSchema).min(1).max(MAX_GRAPH_NODES),
   edges: z.array(WorkflowEdgeSchema).max(MAX_GRAPH_EDGES),
   legacyV1: LegacyWorkflowV1Schema.optional(),
@@ -419,6 +434,9 @@ export type WorkflowNodeTypeV3 = z.infer<typeof WorkflowNodeTypeV3Schema>;
  * - `pool`: this helper is the helper pool (the version 2 `helper-pool` block): the lead starts it
  *   for any step no named helper takes, up to the project's helper limit (its `maxInstances` is
  *   ignored). At most one per graph, and only on a helper (`pool-not-helper`).
+ * - `ticketTypes` (ADR-0039): the ticket types this block runs for; absent: every type. A run
+ *   for another type starts without the block (`specialiseForTicket`), and every type must still
+ *   leave a working workflow (`ticket-type-breaks-workflow`).
  */
 export const AgentNodeSchema = z.object({
   type: z.literal('agent'),
@@ -429,6 +447,12 @@ export const AgentNodeSchema = z.object({
   approvalMode: ApprovalModeSchema.nullable().optional(),
   canStartHelpers: z.boolean().optional(),
   pool: z.boolean().optional(),
+  ticketTypes: z
+    .array(TicketTypeSchema)
+    .min(1)
+    .max(TicketTypeSchema.options.length)
+    .refine((types) => new Set(types).size === types.length, 'each ticket type once')
+    .optional(),
 });
 export type AgentNode = z.infer<typeof AgentNodeSchema>;
 
@@ -634,6 +658,8 @@ export const GraphIssueCodeSchema = z.enum([
   'when-target-invalid',
   'when-duplicate-route',
   'when-event-invalid',
+  // ADR-0039: a ticket type whose blocks are skipped leaves a workflow that cannot run
+  'ticket-type-breaks-workflow',
 ]);
 export type GraphIssueCode = z.infer<typeof GraphIssueCodeSchema>;
 

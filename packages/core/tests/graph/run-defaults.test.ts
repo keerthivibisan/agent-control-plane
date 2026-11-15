@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APPROVAL_MODES,
   MAX_REWORK_ROUNDS,
-  WORKFLOW_TEMPLATE_IDS,
+  WORKFLOW_TEMPLATE_IDS_V2,
   defaultProjectWorkflow,
   graphRunDefaults,
   migrateWorkflowV1,
@@ -77,7 +77,7 @@ describe('graphRunDefaults: templates', () => {
     'todays-setup': { reviewer: 'agent', maxReworkRounds: 2 },
     'reviewer-helper-loop': { reviewer: 'agent', maxReworkRounds: 2 },
   } as const;
-  for (const id of WORKFLOW_TEMPLATE_IDS) {
+  for (const id of WORKFLOW_TEMPLATE_IDS_V2) {
     for (const planner of [false, true]) {
       it(`${id}${planner ? ' with a planner' : ''}`, () => {
         expect(graphRunDefaults(workflowTemplate(id, { planner }))).toEqual(expected[id]);
