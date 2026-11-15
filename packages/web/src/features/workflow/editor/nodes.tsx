@@ -14,6 +14,7 @@ import {
   FINISH_COPY,
   HARNESS_BLOCKS_COPY,
   REVIEW_LOOP_COPY,
+  TICKET_TYPE_COPY,
   WORKFLOW_GRAPH_COPY,
 } from '../../../lib/copy';
 import { checkPlaceOf, checkSelectionOf, isChecksNode, type ChecksNode } from '../check-blocks';
@@ -568,6 +569,16 @@ export const AgentBlockView = memo(function AgentBlockView({
         ) : null}
         {node.agent !== null ? (
           <AgentFileChip name={node.agent} missing={data.agentMissing} />
+        ) : null}
+        {node.type === 'agent' && node.ticketTypes !== undefined ? (
+          <Tooltip content={G.runsForChipTip} focusable={false} className="inline-flex min-w-0">
+            <span
+              className={`${CHIP} ${CHIP_TONE.neutral} min-w-0 truncate`}
+              data-testid="block-ticket-types"
+            >
+              {G.runsForChip(node.ticketTypes.map((t) => TICKET_TYPE_COPY[t].word))}
+            </span>
+          </Tooltip>
         ) : null}
       </div>
       {mode !== null ? (
