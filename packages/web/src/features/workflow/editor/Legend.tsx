@@ -1,14 +1,12 @@
-import { WORKFLOW_EDGE_TYPES_V3, type WorkflowEdgeTypeV3 } from '@acp/core';
 import { useCallback, useState } from 'react';
 import { buttonClass } from '../../../components/Button';
 import { Popover } from '../../../components/Popover';
 import { HelpIcon, LegendIcon, YouIcon } from '../icons';
 import { EDITOR_COPY } from './copy';
-import { LinkSample } from './edges';
+import { EDGE_LOOK, LINK_FAMILIES, LinkSample } from './edges';
 
 const L = EDITOR_COPY.legend;
 const T = EDITOR_COPY.toolbar;
-const LINKS: readonly WorkflowEdgeTypeV3[] = WORKFLOW_EDGE_TYPES_V3;
 const STORAGE_KEY = 'acp.workflow.legend';
 
 /** Whether the legend is shown, remembered in this browser (every access guarded). */
@@ -124,11 +122,25 @@ export function Legend() {
           {L.you}
         </li>
       </ul>
-      <ul className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5" aria-label={L.links}>
-        {LINKS.map((t) => (
-          <li key={t} className="flex items-center gap-1.5" title={EDITOR_COPY.arrows.names[t]}>
-            <LinkSample type={t} width={24} />
-            {L.edges[t]}
+      <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5" aria-label={L.links}>
+        {LINK_FAMILIES.map(({ family, types }) => (
+          <li key={family} className="flex items-center gap-2" data-testid={`legend-${family}`}>
+            <span
+              className="flex items-center gap-1 font-medium text-ink"
+              style={{ color: types[0] !== undefined ? EDGE_LOOK[types[0]].stroke : undefined }}
+            >
+              {L.families[family]}:
+            </span>
+            {types.map((t) => (
+              <span
+                key={t}
+                className="flex items-center gap-1.5"
+                title={EDITOR_COPY.arrows.names[t]}
+              >
+                <LinkSample type={t} width={24} />
+                {L.edges[t]}
+              </span>
+            ))}
           </li>
         ))}
       </ul>

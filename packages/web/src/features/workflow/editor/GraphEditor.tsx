@@ -793,14 +793,28 @@ function Canvas({
   );
   const onNodeMouseEnter = useCallback(
     (_: ReactMouseEvent, node: BlockNode) => {
-      if (store.get().mode === 'click') store.set({ snap: node.id });
+      store.set({ hover: node.id, ...(store.get().mode === 'click' ? { snap: node.id } : {}) });
     },
     [store],
   );
   const onNodeMouseLeave = useCallback(
     (_: ReactMouseEvent, node: BlockNode) => {
       const s = store.get();
-      if (s.mode === 'click' && s.snap === node.id) store.set({ snap: null });
+      store.set({
+        ...(s.hover === node.id ? { hover: null } : {}),
+        ...(s.mode === 'click' && s.snap === node.id ? { snap: null } : {}),
+      });
+    },
+    [store],
+  );
+  // ADR-0040: a link under the pointer lights up with its direction.
+  const onEdgeMouseEnter = useCallback(
+    (_: ReactMouseEvent, edge: LinkEdge) => store.set({ hover: `edge:${edge.id}` }),
+    [store],
+  );
+  const onEdgeMouseLeave = useCallback(
+    (_: ReactMouseEvent, edge: LinkEdge) => {
+      if (store.get().hover === `edge:${edge.id}`) store.set({ hover: null });
     },
     [store],
   );
@@ -910,6 +924,8 @@ function Canvas({
             onNodeClick={onNodeClick}
             onNodeMouseEnter={onNodeMouseEnter}
             onNodeMouseLeave={onNodeMouseLeave}
+            onEdgeMouseEnter={onEdgeMouseEnter}
+            onEdgeMouseLeave={onEdgeMouseLeave}
             onNodeContextMenu={onNodeContextMenu}
             onPaneClick={onPaneClick}
             connectionLineComponent={LinkConnectionLine}

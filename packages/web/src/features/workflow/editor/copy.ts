@@ -67,6 +67,14 @@ export const EDITOR_COPY = {
   legend: {
     blocks: 'Blocks',
     links: 'Links',
+    /** ADR-0040: the link families, each in its own colour. */
+    families: {
+      work: 'Work',
+      review: 'Review',
+      fix: 'Fixes',
+      check: 'Research and tests',
+      handoff: 'Hand-off',
+    },
     agent: 'Agent',
     lead: 'Lead',
     step: 'Step',

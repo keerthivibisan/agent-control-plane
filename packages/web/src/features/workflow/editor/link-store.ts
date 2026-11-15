@@ -18,9 +18,14 @@ export interface LinkState {
   targets: ReadonlyMap<string, LinkTarget> | null;
   /** The block the link would end on if dropped now (under the pointer, or the nearest valid). */
   snap: string | null;
+  /**
+   * ADR-0040: what the pointer is over, so its links light up and show their direction: a block's
+   * id, or `edge:<id>` for a link.
+   */
+  hover: string | null;
 }
 
-export const IDLE: LinkState = { from: null, mode: null, targets: null, snap: null };
+export const IDLE: LinkState = { from: null, mode: null, targets: null, snap: null, hover: null };
 
 export interface LinkStore {
   get: () => LinkState;
@@ -43,7 +48,8 @@ export function createLinkStore(): LinkStore {
         next.from === state.from &&
         next.mode === state.mode &&
         next.targets === state.targets &&
-        next.snap === state.snap
+        next.snap === state.snap &&
+        next.hover === state.hover
       ) {
         return;
       }

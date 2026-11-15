@@ -22,6 +22,7 @@ import { isAgentLive } from '../control/run-state';
 import { reworkRoundsBy } from '../review-loop/logic';
 import { checkPlaceOf, isChecksNode } from '../workflow/check-blocks';
 import { graphRoles, isFinalKind, kindIn, type BlockKind } from '../workflow/editor/roles';
+import { EDGE_LOOK } from '../workflow/editor/edges';
 import { finishParts, finishView, type FinishParts } from '../workflow/finish';
 
 const G = WORKFLOW_LIVE_COPY.graph;
@@ -271,23 +272,8 @@ export function reworkCounts(
 
 // ---------------------------------------------------------------- links
 
-const LINK_LOOK: Readonly<
-  Record<WorkflowEdgeTypeV3, { stroke: string; width: number; dash?: string }>
-> = {
-  flow: { stroke: 'var(--color-dim)', width: 1.75 },
-  plan: { stroke: 'var(--color-dim)', width: 1.75 },
-  test: { stroke: 'var(--color-dim)', width: 1.75 },
-  implement: { stroke: 'var(--color-ink)', width: 1.5 },
-  review: { stroke: 'var(--color-dim)', width: 1.5, dash: '6 4' },
-  findings: { stroke: 'var(--color-dim)', width: 1.5, dash: '2 4' },
-  rework: { stroke: 'var(--color-ink)', width: 1.5, dash: '7 5' },
-  merge: { stroke: 'var(--color-ink)', width: 2.25 },
-  // ADR-0037: as on the Workflow page, dash-dotted research and dash-dot-dotted hand-offs.
-  research: { stroke: 'var(--color-dim)', width: 1.75, dash: '10 3 1 3' },
-  custom: { stroke: 'var(--color-ink)', width: 1.5, dash: '8 3 1 3 1 3' },
-  // ADR-0038: failure routing, red and dashed as in the editor.
-  when: { stroke: 'var(--color-danger)', width: 1.5, dash: '5 4' },
-};
+/** ADR-0040: the editor's look (family colours and dashes), so the two graphs read alike. */
+const LINK_LOOK = EDGE_LOOK;
 
 /**
  * Which sides a link leaves and enters by: the links going back to a reviewer (findings, a review

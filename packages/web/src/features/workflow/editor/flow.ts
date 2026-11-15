@@ -13,7 +13,7 @@ import { MarkerType, type Edge } from '@xyflow/react';
 import { FINISH_COPY, WORKFLOW_GRAPH_COPY } from '../../../lib/copy';
 import { effectiveProvider } from '../../../lib/providers';
 import { finishIssues, finishView } from '../finish';
-import { linkStroke } from './edges';
+import { ARROW_SIZE, linkStroke } from './edges';
 import { isGateType, layoutGraph, sizeOf } from './layout';
 import { EDITOR_COPY } from './copy';
 import { planLinks, type Route } from './routing';
@@ -239,8 +239,8 @@ export function toFlowEdges(
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: linkStroke(e.type, selected, refused),
-        width: 14,
-        height: 14,
+        width: ARROW_SIZE,
+        height: ARROW_SIZE,
       },
       ...(label !== undefined ? { label } : {}),
       data: {
